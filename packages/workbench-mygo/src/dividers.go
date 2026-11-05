@@ -177,6 +177,9 @@ func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []l
 // the next frame, so adding them gives the plane coordinate.
 func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputEvent) bool {
 	return func(event ui.InputEvent) bool {
+		if !s.drawnPlaneShown() {
+			return false
+		}
 		at := float64(event.X) + divider.X
 		if divider.Axis == "y" {
 			at = float64(event.Y) + divider.Y

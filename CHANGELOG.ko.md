@@ -17,6 +17,8 @@
 - F502-23: Go 호스트의 `diagnostics.gc.loop` `{on}`은 goroutine에서 `runtime.GC`를 쉬지 않고 돌리거나, 멈춘 뒤 goroutine이 끝나면 답한다.
 - F502-23: mygo 호스트에서 `diagnostics.page.request`, `diagnostics.page.calls`, `diagnostics.host.events`, `diagnostics.page.collect`는 `the mygo host has no main page`로, `diagnostics.modal.hold`, `diagnostics.modal.held`는 `the mygo host has no modal web views`로 답한다.
 - F502-23: `make exposure-check`는 workbench가 선언한 status나 command를 mygo workbench의 Go 소스와 view bridge 어디에서도 등록하지 않으면 실패한다.
+- F502-16: 프로젝트를 닫은 뒤 다음 프레임 전에 구분선이나 탭에 들어온 누름과 키가 mygo host를 멈추지 않고, 잡은 경계와 끌던 탭은 그 plane이 떠날 때 끝나므로 다른 space의 경계를 옮기지 않는다. 떠난 plane의 탭에 관한 질문은 닫히고, 탭이 떠난 뒤 성공한 저장은 실패를 보여 주지 않되 실패한 저장은 그대로 보여 주며, `core.card.sidebar.*`는 프로젝트가 없는 창에서 거절한다.
+- F502-16: 보이는 프로젝트를 닫은 뒤 `core.verify`를 읽어도 mygo host가 멈추지 않는다. 떠난 plane은 다음 plane의 프레임까지 행이 없으므로, 창이 그리지 않은 plane을 말하지 않는다.
 - F502-21: `setDialogBackground`가 다른 host call처럼 object `{enabled}`를 받고, framework 표의 B 행이 이 call을 mygo에만 있는 call로 나열해 host parity check가 통과한다. P 행이 `Frontend.Frames`를 나열한다.
 - F502-16: mygo workbench의 모든 모양 값은 page도 읽는 `workbench.json`에서 나온다: card foot의 caption, sidebar의 status line, placeholder와 멈춘 view의 글자, dialog의 scrim과 blur, layer의 anchor 아래 간격이다.
 - F551: Tauri host는 비동기 runtime의 worker를 processor마다 하나가 아니라 둘만 두고, 일 없는 blocking thread는 10초가 아니라 1초 뒤에 끝난다.
@@ -29,6 +31,7 @@
 - F554: Wails workbench에서 section의 view가 text 배율을 읽을 수 있다.
 - F502-12: document region의 WebContent process 표시 이름이 `soksak://plugin/<plugin id>/<region>`이 되어 활성 상태 보기와 `lsappinfo`에서 어느 plugin의 어느 region인지 보인다. 지금까지는 view만 자기 이름이 있었고 region은 앱 이름으로 보였다. Host가 이름을 만들고 `sp_document_create`가 받는다.
 - F548: 첫 window가 설정 modal과 debug view의 module을 읽지 않고, 각 화면은 처음 쓸 때 불러온다.
+- F559: mygo 앱의 정상 종료가 `window facts` 오류를 기록하지 않는다. 닫힌 창의 read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다.
 - F549: 대기 중인 창이 깨어나도 거부된 적 없는 frame event의 count를 저장하려고 log writer를 깨우지 않는다.
 - F558: 사이드카 update가 project layout이 쥔 세션을 유지한다.
 - F502-23: mygo workbench 가 `diagnostics.layout.fail` 에 답한다. 다음 surface 배치가 `diagnostic layout fault` 로 한 번 실패하고, workbench 는 그 실패를 보여 준 뒤 계속 요청에 답한다.

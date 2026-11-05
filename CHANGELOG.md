@@ -17,6 +17,8 @@
 - F502-23: `diagnostics.gc.loop` `{on}` of the Go hosts runs `runtime.GC` without pause on a goroutine, or stops it and answers after the goroutine has returned.
 - F502-23: `diagnostics.page.request`, `diagnostics.page.calls`, `diagnostics.host.events` and `diagnostics.page.collect` answer `the mygo host has no main page` on the mygo host, and `diagnostics.modal.hold` and `diagnostics.modal.held` answer `the mygo host has no modal web views`.
 - F502-23: `make exposure-check` fails on a status or a command that the workbench declares and that no Go source of the mygo workbench and no view bridge registers.
+- F502-16: A press or a key on a divider or a tab between the close of a project and the next frame no longer stops the mygo host, and a held boundary or a dragged tab ends when its plane leaves, so it moves no boundary of another space. A question about a tab of a plane that left closes, a save that succeeds after its tab left shows no failure and one that fails is still shown, and `core.card.sidebar.*` refuses in a window that shows no project.
+- F502-16: A read of `core.verify` after the close of the shown project no longer stops the mygo host. A plane that left has no rows until the frame of the next plane, so a read states no plane that the window did not draw.
 - F502-21: `setDialogBackground` takes an object `{enabled}`, as every other host call does, and a row B of the framework table lists it as the call that only mygo has, so the host parity check passes. A row P lists `Frontend.Frames`.
 - F502-16: Every look of the mygo workbench takes its value from `workbench.json`, which the page reads too: the caption of a card foot, the status line of a sidebar, the text of a placeholder and of a stopped view, the scrim of a dialog with its blur, and the gap under an anchor of a layer.
 - F551: The Tauri host holds two workers of its asynchronous runtime instead of one for each processor, and an idle blocking thread ends after one second instead of ten.
@@ -29,6 +31,7 @@
 - F554: A view of a section can read its text scale in the Wails workbench.
 - F502-12: The WebContent process of a document region has the display label `soksak://plugin/<plugin id>/<region>`, so Activity Monitor and `lsappinfo` show which plugin and region it belongs to. Before, only a view had a label of its own and a region showed the name of the application. The host composes the label and `sp_document_create` receives it.
 - F548: The first window no longer reads the modules of the settings modal and the debug view; each loads at its first use.
+- F559: A normal quit of the mygo app no longer records a `window facts` error: a read of a closed window calls no native code and shows no workbench error.
 - F549: A wake of a settled window no longer wakes the log writer to store a count of frame events that were never refused.
 - F558: An update of a sidecar keeps the sessions that a project layout holds.
 - F502-23: The mygo workbench answers `diagnostics.layout.fail`: its next placement of the surfaces fails once with `diagnostic layout fault`, and the workbench shows that failure and goes on answering.

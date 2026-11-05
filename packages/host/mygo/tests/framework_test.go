@@ -594,3 +594,27 @@ func TestAShownWindowCountsItsFramesAndThenDrawsNone(t *testing.T) {
 		t.Fatalf("a settled window went from %d frames and %d command buffers to %d and %d", *before.Frames, *before.CommandBuffers, *after.Frames, *after.CommandBuffers)
 	}
 }
+
+// A step of the workbench can read the scale after its window closed, when the framework holds no native window. Native code
+// receives no window then, because it records every such read as an error: the read gives the error of a closed window.
+func TestAScaleOfAClosedWindowCallsNoNativeCode(t *testing.T) {
+	window := 1
+	native := unsafe.Pointer(&window)
+	var read []unsafe.Pointer
+	facts := func(handle unsafe.Pointer) (string, error) {
+		read = append(read, handle)
+		return `{"scale":2}`, nil
+	}
+	invoke := func(step func()) { step() }
+	scale, err := adapter.WindowScale(invoke, "main", func() unsafe.Pointer { return native }, facts)
+	if err != nil || scale != 2 {
+		t.Fatalf("the open window has scale %v, error %v", scale, err)
+	}
+	_, err = adapter.WindowScale(invoke, "main", func() unsafe.Pointer { return nil }, facts)
+	if !host.WindowClosed(err) {
+		t.Fatalf("the closed window gave %v", err)
+	}
+	if len(read) != 1 || read[0] != native {
+		t.Fatalf("native code received %v, want only the open window", read)
+	}
+}

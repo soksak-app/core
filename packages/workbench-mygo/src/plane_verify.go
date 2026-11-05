@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/egoist/mygo/ui"
+	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -16,16 +17,26 @@ type SurfaceSlot struct{ ID string }
 
 // verifyStatus returns the value of core.verify, null before the first frame. The element tree of a frame is not readable while the
 // frame builds, so a read inside a frame has the last value, and the step after the frame gives a watcher the new one.
+// The rows state the plane of the window only while the last frame drew that plane: a plane that left with a close or a change of
+// space has no rows until the frame of the next one.
 func (s *Shell) verifyStatus() any {
 	if !s.drawn {
 		return nil
 	}
 	if !s.building {
-		if err := s.verification.Update(s.surfaces.planeDrawn, s.verifyPlane, s.surfaces.failure); err != nil {
-			s.fail(err)
+		if err := s.verification.Update(s.drawnPlaneShown(), s.verifyPlane, s.surfaces.failure); err != nil {
+			s.failWindowRead(err)
 		}
 	}
 	return s.verification.Status()
+}
+
+// failWindowRead shows err, the failure of a read of this window. A read that a step or a watcher started before the window closed
+// fails with the error of a closed window, and that window has no screen to show it.
+func (s *Shell) failWindowRead(err error) {
+	if !host.WindowClosed(err) {
+		s.fail(err)
+	}
 }
 
 // verifyWatched tells whether a watcher or a view follows core.verify.

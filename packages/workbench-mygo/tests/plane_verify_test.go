@@ -3,11 +3,13 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	host "github.com/soksak-app/core/packages/host/go/src"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -387,4 +389,142 @@ func TestTheGridStatesTheSidesOfACard(t *testing.T) {
 		return
 	}
 	t.Fatalf("core.grid has no card %s", card)
+}
+
+// The step after a frame outlives a close of the project: the window goes on and its watcher still waits for the result of that
+// frame. A window without a plane verifies nothing, as the next frame of the library will state.
+func TestTheStepAfterAFrameReadsAClosedProjectAsNoPlane(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	var last workbench.VerifyStatus
+	if _, err := f.shell.Registry().Answer("status.watch", json.RawMessage(`{"name":"core.verify"}`), func(_ string, value any) {
+		text, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = workbench.VerifyStatus{}
+		if err := json.Unmarshal(text, &last); err != nil {
+			t.Fatal(err)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(last.Rows) == 0 {
+		t.Fatalf("the plane has no rows before the close: %+v", last)
+	}
+	// The frame posts its step, and the close finishes before that step runs.
+	f.tester.Frame()
+	var posted []func()
+	for len(f.pending) > 0 {
+		posted = append(posted, <-f.pending)
+	}
+	if len(posted) == 0 {
+		t.Fatal("the frame posted no step")
+	}
+	var answered error
+	done := false
+	raw, err := json.Marshal(map[string]string{"id": f.host.projects[0]["id"].(string)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.project.close", raw, func(_ any, err error) { answered, done = err, true })
+	f.pending.drain(t)
+	if !done || answered != nil {
+		t.Fatalf("the close answered %v, done %t", answered, done)
+	}
+	for _, step := range posted {
+		step()
+	}
+	if last.Failed != 0 || len(last.Rows) != 0 {
+		t.Fatalf("core.verify without a plane is %+v", last)
+	}
+}
+
+// A read between a change of the plane and the next frame finds a frame of the plane that left, so it states no rows of it. The rows
+// come back with the frame of the new plane.
+func TestAReadBeforeTheFrameOfAnotherPlaneStatesNoRows(t *testing.T) {
+	f, _ := placingShell(t)
+	resized(f, 1000)
+	other := f.host.projects[0]["activeSpaceId"].(string)
+	f.answerText("core.space.add", nil)
+	f.settle()
+	if f.host.projects[0]["activeSpaceId"] == other {
+		t.Fatal("the new space is not active")
+	}
+	var answered error
+	done := false
+	raw, err := json.Marshal(map[string]string{"id": other})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.space.activate", raw, func(_ any, err error) { answered, done = err, true })
+	f.pending.drain(t)
+	if !done || answered != nil {
+		t.Fatalf("the activation answered %v, done %t", answered, done)
+	}
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	if verify.Failed != 0 || len(verify.Rows) != 0 {
+		t.Fatalf("core.verify before the frame of the plane is %+v", verify)
+	}
+	f.settle()
+	verifyRow(t, status[workbench.VerifyStatus](t, f, "core.verify"), "V2 ")
+}
+
+// shownError reads the error that the workbench shows, or "" when it shows none.
+func shownError(t *testing.T, f *shellFixture) string {
+	t.Helper()
+	shown, err := f.shell.Registry().Read("core.workbench.error")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text, ok := shown.(*string); ok && text != nil {
+		return *text
+	}
+	return ""
+}
+
+// A read of the verification reads the window, and the step that gives a watcher the result of a frame can run after the window
+// closed. A window that closed has no screen and nothing to verify, so the read shows no failure.
+func TestAVerificationOfAClosedWindowShowsNoFailure(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	stored.windowFailure = &host.RPCError{Code: 1003, Message: `window "main" does not exist`}
+	status[workbench.VerifyStatus](t, f, "core.verify")
+	if text := shownError(t, f); text != "" {
+		t.Fatalf("the closed window shows %q", text)
+	}
+}
+
+// The status that reads the window answers null for a window that closed, and shows no failure.
+func TestTheWorkbenchStatusOfAClosedWindowShowsNoFailure(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	stored.windowFailure = &host.RPCError{Code: 1003, Message: `window "main" does not exist`}
+	shown, err := f.shell.Registry().Read("core.window.workbench")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shown != nil {
+		t.Fatalf("the status of a closed window is %v", shown)
+	}
+	if text := shownError(t, f); text != "" {
+		t.Fatalf("the closed window shows %q", text)
+	}
+}
+
+// Any other failure to read the window stays a failure that the workbench shows.
+func TestAReadOfAnOpenWindowThatFailsIsShown(t *testing.T) {
+	for _, name := range []string{"core.verify", "core.window.workbench"} {
+		t.Run(name, func(t *testing.T) {
+			f, stored := placingShell(t)
+			resized(f, 1000)
+			stored.windowFailure = errors.New("the window state cannot be read")
+			if _, err := f.shell.Registry().Read(name); err != nil {
+				t.Fatal(err)
+			}
+			if text := shownError(t, f); text != "the window state cannot be read" {
+				t.Fatalf("the workbench shows %q", text)
+			}
+		})
+	}
 }

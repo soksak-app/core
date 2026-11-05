@@ -327,7 +327,7 @@ func (s *Shell) seatsInOrder() []SidebarSeat {
 // first frame of a plane ends the start for the sections: the start of the tabs ran before any section had a seat
 // (docs/spec/plugins.md#memory-saver).
 func (s *Shell) observeSections() {
-	if s.tabs == nil || !s.surfaces.planeDrawn || !s.tabs.started {
+	if s.tabs == nil || s.surfaces.drawnPlane == nil || !s.tabs.started {
 		return
 	}
 	lines := make([]string, 0, len(s.surfaces.seated))

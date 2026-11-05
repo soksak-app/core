@@ -75,6 +75,9 @@ func (s *Shell) registerTabDrag() {
 // frame, so adding them gives the position in the window. It leaves a press that did not move to the button of the tab.
 func (s *Shell) tabInput(card, tab string, bounds ui.Rect) func(ui.InputEvent) bool {
 	return func(event ui.InputEvent) bool {
+		if !s.drawnPlaneShown() {
+			return false
+		}
 		x, y := bounds.X+event.X, bounds.Y+event.Y
 		switch event.Kind {
 		case ui.InputPointerDown:

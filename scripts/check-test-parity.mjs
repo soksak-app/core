@@ -1171,6 +1171,33 @@ const FEATURE_LINKS = [
     ],
     expected: "In each order of the enter, the exit and the move, only the view at the point hovers, and a view that loses the pointer hovers nothing.",
     levels: ["native"],
+    levels: ["unit"],
+  },
+  {
+    id: "F559",
+    implementation: [
+      { file: "packages/host/mygo/src/frontend.go", symbol: "func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {" },
+      { file: "packages/workbench-mygo/src/plane_verify.go", symbol: "func (s *Shell) failWindowRead(err error) {" },
+    ],
+    tests: [
+      { file: "packages/host/mygo/tests/framework_test.go", id: "TestAScaleOfAClosedWindowCallsNoNativeCode" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAVerificationOfAClosedWindowShowsNoFailure" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestTheWorkbenchStatusOfAClosedWindowShowsNoFailure" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestAReadOfAnOpenWindowThatFailsIsShown" },
+    ],
+    expected: "A read of a closed window gives the error 1003 without native code and shows no workbench error, and any other failure of the read is shown.",
+    levels: ["unit"],
+  },
+  {
+    id: "F549",
+    implementation: [
+      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
+    ],
+    expected: "A closed gate leaves the summary due without a count of the gate, and the first summary after the gate opens holds the deliveries since the earlier summary.",
+    levels: ["unit"],
   },
   {
     id: "F548",

@@ -671,7 +671,7 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.picker.drawn)
 	clear(s.heads)
 	clear(s.surfaces.seated)
-	s.surfaces.planeDrawn = false
+	s.surfaces.drawnPlane = nil
 	width, height := c.Size()
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg
