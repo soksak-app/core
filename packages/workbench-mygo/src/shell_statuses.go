@@ -150,9 +150,25 @@ func (s *Shell) cardStatusText(data *layout.CardData) string {
 // cardRect is the rectangle of a card on the plane: the whole plane for a fullscreen card.
 func (s *Shell) cardRect(id string) (layout.Rect, bool) {
 	if s.fullscreen == id {
-		return layout.Rect{W: s.plane.Width(), H: s.plane.Height()}, true
+		return s.onWholePoints(layout.Rect{W: s.plane.Width(), H: s.plane.Height()}), true
 	}
-	return s.plane.Rect(id)
+	rect, ok := s.plane.Rect(id)
+	return s.onWholePoints(rect), ok
+}
+
+// onWholePoints is where a rectangle of the plane stands in the window: each edge at the nearest whole point. A line of the plane
+// may lie between points, and the card takes that place, so what the card holds touches: its head, its view and its foot.
+func (s *Shell) onWholePoints(r layout.Rect) layout.Rect {
+	origin := s.planeOrigin()
+	left, top := wholePoint(origin.X+r.X)-origin.X, wholePoint(origin.Y+r.Y)-origin.Y
+	return layout.Rect{X: left, Y: top, W: wholePoint(origin.X+r.X+r.W) - origin.X - left, H: wholePoint(origin.Y+r.Y+r.H) - origin.Y - top}
+}
+
+// wholePoint is the nearest whole point of a place of the window. The lines of the plane are sums of ratios, so a line on a half point
+// lies a rounding error beside it, and two places a whole distance apart must round the same way.
+func wholePoint(at float64) float64 {
+	const rounding = 1e6
+	return math.Round(math.Round(at*rounding) / rounding)
 }
 
 // cardActs is the state of the tools of the head that the last frame drew for a card, and nil for a card without a head.
@@ -273,7 +289,7 @@ func (s *Shell) railGroups() []railGroup {
 	}
 	rects := make([]layout.Rect, 0, len(sidebars)+1)
 	for _, id := range append([]string{s.focused}, sidebars...) {
-		if rect, ok := s.plane.Rect(id); ok && rect.W > 0 && rect.H > 0 {
+		if rect, ok := s.cardRect(id); ok && rect.W > 0 && rect.H > 0 {
 			rects = append(rects, rect)
 		}
 	}

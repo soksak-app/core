@@ -86,7 +86,8 @@ func (sides cardSides) extent(side layout.Side) float32 {
 	case current.shown.Collapsed || current.shown.ShownSize == nil:
 		return sides.divider
 	}
-	return float32(*current.shown.ShownSize)
+	// The side stands in a card on whole points, and the content beside it takes the rest of the card.
+	return float32(math.Round(*current.shown.ShownSize))
 }
 
 // heldGrip is a press on the grip of a side, in window coordinates.
@@ -306,7 +307,7 @@ func (s *Shell) sideItems(card string) ([]pickerItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	rect, _ := s.plane.Rect(card) // silent: paneCard found the card.
+	rect, _ := s.cardRect(card) // silent: paneCard found the card.
 	presented, err := s.presentCard(card, data, rect)
 	if err != nil {
 		return nil, err
@@ -361,7 +362,7 @@ func (s *Shell) registerCardSidebars() {
 		return layout.SetSidebar(id, data, value.Side, value.Set, sets)
 	})
 	change("core.card.sidebar.toggle", func(id string, data *layout.CardData, value cardSideParam) error {
-		rect, _ := s.plane.Rect(id) // silent: paneCard found the card.
+		rect, _ := s.cardRect(id) // silent: paneCard found the card.
 		presented, err := s.presentCard(id, data, rect)
 		if err != nil {
 			return err

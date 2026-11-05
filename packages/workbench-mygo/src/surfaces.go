@@ -362,17 +362,15 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 	s.holdSurface(surface)
 	ui.Box(c.Key(SurfaceSlot{ID: id})).FillWidth().FillHeight().Role(ui.RoleGroup).Children(func() {
 		if view, key, ok := s.options.Element(id); ok {
-			// A web page paints whole points only: past them a fractional view shows the window, and here the card shows instead. The
-			// framework rounds a fractional edge to the nearest device pixel, so a view off the whole points could leave its slot.
-			whole := WholePoints(box)
-			width, height := float32(whole.W), float32(whole.H)
+			// The slot stands on whole points, where a web page paints all of a view (docs/spec/hosts.md#workbench).
+			width, height := float32(box.W), float32(box.H)
 			if s.dialogOpen() {
 				// A hole paints only outside a blurred element, so the view stands over the blurred workbench in the same place.
 				ui.Spacer(c).Size(width, height)
-				s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, whole, width, height})
+				s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, box, width, height})
 				return
 			}
-			ui.NativeView(c, view, key).Absolute().Left(float32(whole.X-box.X)).Top(float32(whole.Y-box.Y)).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
+			ui.NativeView(c, view, key).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
 				// A press reaches the content here while the host holds the views of a placement out of the pointer.
 				if ev.Kind == ui.InputPointerDown {
 					s.pressSurface(id)
