@@ -1,5 +1,5 @@
 // The name of a make target decides the kind of its checks (docs/operations/examples.md#test-kinds): a target whose name starts
-// with `e2e` runs end-to-end checks, and every other target runs unit tests only. A workflow runs no `e2e` target.
+// with `test-app` or `benchmark-` runs end-to-end checks, and every other target runs unit tests only. A workflow runs no such target.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
@@ -126,5 +126,17 @@ test("no workflow runs a target or script of the end-to-end checks", { timeout: 
     const text = readFileSync(join(workflows, file), "utf8");
     const found = /\be2e\b|\btest-app\b/.exec(text);
     assert.equal(found, null, `${file} names ${found?.[0]}`);
+  }
+});
+
+test("the build and verify examples state each paragraph once and name only targets of the Makefile", { timeout: 1000 }, () => {
+  // `make release` and `make pack` are targets of a sidecar or plugin repository, and `make -C` names another Makefile.
+  const elsewhere = new Set(["release", "pack"]);
+  const targets = new Set([...read("Makefile").matchAll(/^([A-Za-z0-9_.-]+):/gm)].map((match) => match[1]));
+  for (const file of ["docs/operations/examples.md", "docs/operations/examples.ko.md"]) {
+    const lines = read(file).split("\n").filter((line) => line.length > 80 && !line.startsWith("|"));
+    assert.deepEqual(lines.filter((line, index) => lines.indexOf(line) !== index).map((line) => line.slice(0, 60)), [], `${file} repeats a paragraph`);
+    const named = [...read(file).matchAll(/`make ([a-z0-9][a-z0-9_.-]*)/g)].map((match) => match[1]);
+    assert.deepEqual(named.filter((name) => !targets.has(name) && !elsewhere.has(name)), [], `${file} names a target that the Makefile lacks`);
   }
 });
