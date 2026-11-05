@@ -350,3 +350,45 @@ func TestAPressOfTheHostFocusesTheCardOfItsView(t *testing.T) {
 		t.Fatalf("the pressed view is not the visible tab: %v %v", reply, hostCalls(stored, "notify"))
 	}
 }
+
+func TestADropOnAViewBehindTheDebugViewIsRecordedAsItsReason(t *testing.T) {
+	f, stored := surfaceShell(t)
+	x, y := middle(stored.lastSurfaces(t)[terminalSurface(t, stored)])
+	f.do("core.debug.open", nil)
+	f.shell.Event("files-dropped", []any{dropText(t, x, y)})
+	droppedWith(t, f, "drop: no surface is under the drop point")
+}
+
+func TestANotificationIsNamedAsItsTabIsNamed(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := otherCard(t, f, stored)
+	viewCall(t, f, stored, surface, "tab.title", "builds")
+	viewCall(t, f, stored, surface, "tab.modified", true)
+	viewCall(t, f, stored, surface, "tab.notify", map[string]any{"text": "the build ended", "policy": "system"})
+	posted := hostCalls(stored, "notify")
+	if len(posted) != 1 || !strings.Contains(posted[0], `"title":"● builds"`) {
+		t.Fatalf("the host took %v", posted)
+	}
+}
+
+func TestASnapshotThatAWriteOutranKeepsTheWrite(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	viewCall(t, f, stored, surface, "runtime.data.on", nil)
+	write := func(id int, key string, value any) {
+		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": id,
+			"command": "runtime.data.set", "params": map[string]any{"key": key, "value": value}}})
+	}
+	// The store answers the first write with its event, whose read stands in the order before the second write.
+	write(1, "marks", []string{"one"})
+	f.shell.Event("workspace-changed", nil)
+	write(2, "notes", "two")
+	f.settle()
+	viewCall(t, f, stored, surface, "runtime.data.set", map[string]any{"key": "marks", "value": []string{"three"}})
+	if got := storedData(t, stored); !strings.Contains(got, `"notes":{"format":2,"value":"two"}`) {
+		t.Fatalf("the project stores %s", got)
+	}
+	if got := strings.Join(dataEvents(t, stored, surface), " "); got != "marks notes marks" {
+		t.Fatalf("the view heard %s", got)
+	}
+}

@@ -9,8 +9,6 @@ import (
 	"unicode/utf16"
 
 	"github.com/egoist/mygo/ui"
-
-	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The notices of the tabs (docs/spec/plugins.md#tab-reports), as packages/workbench/tab-reports.js and
@@ -125,11 +123,8 @@ func (s *Shell) clearVisibleNotices() {
 
 // tabTitle returns the name of the tab of a notification.
 func (s *Shell) tabTitle(tab string) string {
-	if report := s.surfaces.reports[tab]; report != nil && report.Title != "" {
-		return report.Title
-	}
 	if held := s.surfaces.held[tab]; held != nil {
-		return layout.TabName(held.tab, nil, false)
+		return s.tabName(held.tab)
 	}
 	return tab
 }

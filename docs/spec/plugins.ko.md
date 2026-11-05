@@ -126,6 +126,8 @@ per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며,
 
 view는 `runtime.data.on`으로 자기 시작 프로젝트의 프로젝트 데이터 변경을 따라간다. SDK는 `runtime.data.on(listener)`에 이 call을 보낸다. 메인 페이지는 이 창의 view가 쓴 값이 저장된 뒤, 그리고 다른 창이 쓴 그 키의 저장 값을 창이 읽은 뒤 view에 event `data` `{key}`를 보내고, view는 `runtime.data.get`으로 값을 다시 읽는다. 그래서 한 프로젝트에 대한 plugin의 두 view(두 section 등)가 같은 값을 본다. 시작 값에 프로젝트가 없는 view는 `view call runtime.data.on requires a project`로 거부된다.
 
+창은 view의 쓰기를 store가 확인하기 전에 들고 있고, 한 프로젝트의 쓰기를 앞선 쓰기를 포함한 채 하나씩 차례로 store에 보낸다. 그래서 연달아 쓴 두 값의 키가 모두 남는다. 그런 쓰기보다 앞선 store 읽기는 그 프로젝트의 데이터를 창이 들고 있는 그대로 두고, host는 그 쓰기에 `workspace-changed`로 다시 답한다. store가 쓰기를 거부하면 view에 이유를 답하고 값을 되돌린다. 단, 뒤의 쓰기가 그 값 위에 있으면 되돌리지 않는다.
+
 ## 확장 지점
 
 plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한다. 제공자는 `extends`에 지점을 선언하고, 기여자는 `contributes`에 항목을 선언하며, workbench는 이 선언만으로 둘을 잇는다. 어떤 plugin도 코드에서 다른 plugin의 이름을 쓰지 않는다.

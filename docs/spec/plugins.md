@@ -126,6 +126,8 @@ A stored entry is in the current form when it is an object with exactly `format`
 
 A view follows the changes of the project data of its start project with `runtime.data.on`, which the SDK sends for `runtime.data.on(listener)`: the main page pushes the event `data` `{key}` to the view after a write of a view of this window is stored and after the window reads a stored value of the key that another window wrote, and the view reads the value again with `runtime.data.get`. Two views of the plugin for one project, such as two sections, see the same values this way. A view whose start values carry no project is refused with `view call runtime.data.on requires a project`.
 
+A window holds a write of a view before the store confirms it, and sends the writes of a project to the store one after the other, each carrying the ones before it, so two writes in a row keep both keys. A read of the store that stands before such a write leaves the project data of that project as the window holds it, and the host answers the write with `workspace-changed` again. A store that refuses a write answers the view with its reason and takes the value back out, unless a later write stands on it.
+
 ## Extension points
 
 A plugin extends another plugin through an extension point that the other plugin declares. The provider declares the point in `extends`, a contributor declares items in `contributes`, and the workbench connects them from these declarations alone; no plugin names another in its code.
