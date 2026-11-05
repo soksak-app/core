@@ -700,6 +700,16 @@ func (s *Shell) drawPickerGroup(c *ui.Context, id string, metrics pickerMetrics)
 	})
 }
 
+// pickerTakesFocus returns the index of the item that takes the keyboard as the layer opens: the active item, or the first.
+func (s *Shell) pickerTakesFocus() int {
+	for index, item := range s.picker.items {
+		if item.Active {
+			return index
+		}
+	}
+	return 0
+}
+
 // drawPickerItem draws an item of the layer.
 func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metrics pickerMetrics) {
 	name := item.Expose
@@ -711,9 +721,13 @@ func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metric
 			Padding(metrics.itemPadY, metrics.pad, metrics.itemPadY, metrics.pad+float32(s.pickerDepth(item))*metrics.indent).Radius(s.radiusSmall())
 		// The press lies over the row, since the element tree holds no element inside a button and the icon and the name are elements.
 		button := s.binder.Press(c, name, "core.picker.pick", item.Key, map[string]int{"index": index})
-		button.Absolute().Left(0).Top(0).Right(0).Bottom(0).Label(item.Name)
+		// .picker__item:focus-visible: the look of a hovered item, without an outline.
+		button.Absolute().Left(0).Top(0).Right(0).Bottom(0).Label(item.Name).FocusRing(false)
+		if index == s.pickerTakesFocus() {
+			button.AutoFocus()
+		}
 		switch {
-		case button.Hovered():
+		case button.Hovered() || button.FocusVisible():
 			row.Background(faded(s.palette.Fg, s.metrics.chipHoverMix))
 		case item.Active:
 			row.Background(faded(s.palette.Fg, s.metrics.chipSelMix))

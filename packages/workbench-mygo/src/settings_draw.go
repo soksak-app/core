@@ -22,7 +22,8 @@ type settingsPane struct {
 	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset           float32
 	swatchMinW, swatchW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder            float32
 	railW, pairLeft, pairInset, dotInset, dot                                                  float32
-	switchW, switchH, knobInset, knob, knobOn, switchOnMix, slideGap, trackH, thumb, valueW    float32
+	focusOutline, focusOffset                                                                  float32
+	switchW, switchH, knobInset, knob, knobOn, switchOnMix, slideGap, trackH, thumb            float32
 }
 
 func (s *Shell) readSettingsPane() settingsPane {
@@ -45,8 +46,8 @@ func (s *Shell) readSettingsPane() settingsPane {
 		pairLeft: metric("theme-pair-left"), pairInset: metric("theme-pair-inset"), dotInset: metric("theme-dot-inset"), dot: metric("theme-dot"),
 		switchW: metric("switch-w"), switchH: metric("switch-h"), knobInset: metric("switch-knob-inset"), knob: metric("switch-knob"), knobOn: metric("switch-knob-on"),
 		switchOnMix: s.chromePercent("switch-on-mix"), slideGap: metric("slide-gap"), trackH: metric("slide-track-h"), thumb: metric("slide-thumb"),
-		valueW:  s.chLength("slide-value-w", s.textSmall()),
-		nameGap: metric("space-1"), captionGap: metric("set-caption-gap"), lineHeight: metric("line-height"), tracking: s.sectionTracking(),
+		focusOffset: metric("switch-focus-offset"),
+		nameGap:     metric("space-1"), captionGap: metric("set-caption-gap"), lineHeight: metric("line-height"), tracking: s.sectionTracking(),
 	}
 }
 
@@ -210,6 +211,14 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		})
 		return
 	}
+	if row.list {
+		ui.Row(c).FillWidth().Wrap().Children(func() {
+			for _, control := range row.controls {
+				s.drawControl(c, control, pane)
+			}
+		})
+		return
+	}
 	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Wrap().Children(func() {
 		if row.name != "" {
 			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
@@ -343,6 +352,7 @@ func (s *Shell) drawSwitch(c *ui.Context, control *SettingsControl, pane setting
 	if on {
 		track, knob, left = faded(s.palette.Focus, pane.switchOnMix), s.palette.Focus, pane.knobOn
 	}
+	body.FocusRingOffset(pane.focusOffset)
 	body.Radius(pane.switchH).Background(track).Children(func() {
 		ui.Box(c).Absolute().Left(left).Top(pane.knobInset).Size(pane.knob, pane.knob).Radius(pane.knob / 2).Background(knob)
 	})
@@ -360,7 +370,8 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane setting
 	if selector.Trigger.Focused() {
 		edge = s.palette.Focus
 	}
-	selector.Trigger.Grow(1).Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
+	// .select-field select:focus-visible: the focus color on the border, without an outline.
+	selector.Trigger.FocusRing(false).Grow(1).Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
 		ui.Text(c, control.labels[value]).FontSize(s.textControl()).TextColor(s.palette.Fg).NoWrap().Grow(1)
 		ui.Text(c, "▾").FontSize(s.textCaption()).TextColor(s.palette.Muted)
 	})
@@ -410,7 +421,7 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 			p.Fill(ui.Rect{X: r.X, Y: r.Y + (r.H-trackH)/2, W: r.W, H: trackH}, track, trackH/2)
 			p.Fill(ui.Rect{X: r.X + (r.W-thumb)*share, Y: r.Y + (r.H-thumb)/2, W: thumb, H: thumb}, thumbColor, thumb/2)
 		})
-		ui.Text(c, *control.Value+control.unit).Width(pane.valueW).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)
+		ui.Text(c, *control.Value+control.unit).Width(s.chLength(c, "slide-value-w", s.textSmall())).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)
 	})
 }
 

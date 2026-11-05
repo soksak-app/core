@@ -111,6 +111,7 @@ fn table_titles_serve_both_languages() {
         item_ids("app"),
         [
             "about",
+            "settings",
             "services",
             "hide",
             "hide-others",
@@ -141,4 +142,17 @@ fn help_menu_has_debug() {
     assert_eq!(menu::page_command("debug"), Some("core.debug.open"));
     assert_eq!(menu::page_command("text-larger"), Some("core.text.larger"));
     assert_eq!(menu::page_command("new-window"), None);
+}
+
+// contract: menu.application.app-has-settings
+#[test]
+fn app_menu_has_settings() {
+    assert_eq!(item_ids("app")[1], "settings");
+    assert_eq!(menu::item_title("app", "settings", "ko").unwrap(), "설정…");
+    assert_eq!(
+        menu::item_title("app", "settings", "en").unwrap(),
+        "Settings…"
+    );
+    assert_eq!(menu::page_command("settings"), Some("core.settings.open"));
+    assert_eq!(accelerator("cmd+,").unwrap(), "CmdOrCtrl+,");
 }

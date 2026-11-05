@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 	"unsafe"
@@ -497,4 +498,90 @@ func TestWindowRegionCountsTheFramesThatTheHostMarkedPresented(t *testing.T) {
 	}
 	attach()
 	presentedFrames(0, "a region attached again")
+}
+
+// blurPlatform records the background of each document and image region.
+type blurPlatform struct {
+	elementPlatform
+	documents map[unsafe.Pointer]bool
+	images    map[unsafe.Pointer]bool
+}
+
+func (p *blurPlatform) SetDocumentBackground(document unsafe.Pointer, enabled bool) {
+	p.documents[document] = enabled
+}
+
+func (p *blurPlatform) SetImageBackground(image unsafe.Pointer, enabled bool) {
+	p.images[image] = enabled
+}
+
+// contract: modal.dialog-blurs-each-document-and-image-region
+func TestADialogBlursEachDocumentAndImageRegion(t *testing.T) {
+	saved := system
+	t.Cleanup(func() { system = saved })
+	recorder := &blurPlatform{documents: map[unsafe.Pointer]bool{}, images: map[unsafe.Pointer]bool{}}
+	system = recorder
+	surfaces := &Surfaces{images: NewImages(), documents: NewDocuments(), invoke: func(task func()) { task() }}
+	var region byte
+	key := ImageKey{Surface: "tab-a", Name: "viewer"}
+	if err := surfaces.images.Reserve(key, &ImageOwner{SidecarName: "viewer-sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !surfaces.images.Set(key, unsafe.Pointer(&region)) {
+		t.Fatal("the image region was not attached")
+	}
+	for _, enabled := range []bool{true, false} {
+		surfaces.setWorkbenchDialog(enabled)
+		if blurred, seen := recorder.images[unsafe.Pointer(&region)]; !seen || blurred != enabled {
+			t.Fatalf("the dialog is %t and the image region has the background %t (set: %t)", enabled, blurred, seen)
+		}
+	}
+}
+
+// contract: modal.region-under-a-dialog-starts-blurred
+func TestAnImageRegionMadeUnderADialogStartsBlurred(t *testing.T) {
+	saved := system
+	t.Cleanup(func() { system = saved })
+	recorder := &blurPlatform{documents: map[unsafe.Pointer]bool{}, images: map[unsafe.Pointer]bool{}}
+	system = recorder
+	surfaces := &Surfaces{images: NewImages(), documents: NewDocuments(), invoke: func(task func()) { task() }}
+	var region byte
+	for _, dialog := range []bool{true, false} {
+		surfaces.setWorkbenchDialog(dialog)
+		surfaces.seatImageBackground(unsafe.Pointer(&region))
+		if recorder.images[unsafe.Pointer(&region)] != dialog {
+			t.Fatalf("a region made with the dialog %t has the background %t", dialog, recorder.images[unsafe.Pointer(&region)])
+		}
+	}
+}
+
+// contract: window.facts.region-reports-its-blur
+func TestWindowRegionReportsItsNativeBlur(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "tab-a", Name: "viewer"}
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "viewer-sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	var handle byte
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("the image region was not attached")
+	}
+	for _, blurred := range []bool{true, false} {
+		facts := fmt.Sprintf(`{"frame":{"x":0,"y":0,"width":400,"height":300},"visible":true,"focused":false,"blurred":%t,"presented":null,"error":null}`, blurred)
+		region, err := windowRegion(key, facts, images)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text, err := json.Marshal(region)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var entry map[string]any
+		if err := json.Unmarshal(text, &entry); err != nil {
+			t.Fatal(err)
+		}
+		if entry["blurred"] != blurred {
+			t.Fatalf("host.window region entry %s of facts with blurred %t", text, blurred)
+		}
+	}
 }

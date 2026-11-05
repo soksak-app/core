@@ -22,6 +22,7 @@ var menuTable = []struct{ id, ko, en string }{
 // the framework title, and an item whose source is "title" uses the title of the table.
 var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"app", "about", "title", "정보", "About", ""},
+	{"app", "settings", "title", "설정…", "Settings…", "cmd+,"},
 	{"app", "services", "system", "", "", ""},
 	{"app", "hide", "title", "가리기", "Hide", "cmd+h"},
 	{"app", "hide-others", "title", "기타 가리기", "Hide Others", "opt+cmd+h"},
@@ -44,7 +45,7 @@ var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"help", "debug", "title", "디버그", "Debug", ""},
 }
 
-// menuCommands are the commands that the text size items send to the main window page (docs/spec/text-size.md).
+// menuCommands are the commands that the command items of the table send to the main window page (docs/spec/text-size.md).
 // Menu shortcuts work whichever view has the keyboard focus, so the commands also run from a native image region or a browser
 // document.
 var menuCommands = map[string]string{
@@ -52,6 +53,7 @@ var menuCommands = map[string]string{
 	"text-smaller": "core.text.smaller",
 	"text-default": "core.text.reset",
 	"debug":        "core.debug.open",
+	"settings":     "core.settings.open",
 }
 
 // MenuCommand returns the page command that the menu item id of the contract table runs, and whether it runs one.
@@ -197,7 +199,7 @@ func tableItems(menu, language string) ([]MenuItem, error) {
 		case row.id == "new-window":
 			items = append(items, MenuItem{Title: title, Key: row.key, Run: func() { menuWindowNew() }})
 		case row.source == "title" && isCommand:
-			// A text size item is a command item with the title and shortcut of the table.
+			// A command item has the title and shortcut of the table.
 			items = append(items, MenuItem{Title: title, Key: row.key, Run: func() { runMenuCommand(command) }})
 		case row.source == "title":
 			// The other items change the title of a role item to the title of the table. The role keeps the behavior, so

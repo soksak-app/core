@@ -121,6 +121,7 @@ fn host_declarations() -> Value {
                     "visible": {"type": "boolean"}, "focused": {"type": "boolean"}, "order": {"type": "integer"},
                     "process": {"type": "integer"}, "blurred": {"type": "boolean"}}}},
                 "regions": {"type": "array", "items": {"type": "object", "properties": {
+                    "blurred": {"type": "boolean"},
                     "surface": {"type": "string"}, "name": {"type": "string"}, "frame": rect,
                     "visible": {"type": "boolean"}, "drawing": {"type": "boolean"}, "focused": {"type": "boolean"},
                     "presented": {"type": ["object", "null"], "properties": {

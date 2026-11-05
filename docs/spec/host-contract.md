@@ -57,6 +57,7 @@ Items:
 | menu | id | source | ko | en | key |
 |---|---|---|---|---|---|
 | app | about | title | 정보 | About | |
+| app | settings | title | 설정… | Settings… | cmd+, |
 | app | services | system | | | |
 | app | hide | title | 가리기 | Hide | cmd+h |
 | app | hide-others | title | 기타 가리기 | Hide Others | opt+cmd+h |
@@ -115,6 +116,7 @@ Items:
 | `window.responder.closed-window-sends-nothing` | A first responder change that reaches a window after its close removed the window sends no `window-responder` event and stores no error, because no workbench receives it; a read of the responder that fails while the window is open is reported as an error. | all |
 | `window.facts.modal-order-is-above-every-webview` | `host.window` reports the `order` of an open modal as the number of native surfaces plus the number of web views of the window, which is above the `order` of every native surface and of every web view and document region, because the orders of native surfaces and of web views are indexes of two lists and the modal is attached above both. | all |
 | `window.facts.document-reports-its-blur` | `host.window` reports `blurred: true` for each document web view, the page of a view surface and a document region, that carries the native blur filter of the dialog background, and `blurred: false` for one that carries none. | all |
+| `window.facts.region-reports-its-blur` | Each image region entry of `host.window` reports `blurred: true` while the region carries the native blur filter of the dialog background, and `blurred: false` while it carries none. | all |
 | `links.open.accepts-web-and-mail-schemes` | Absolute `http`, `https`, and `mailto` URLs are accepted for opening. | all |
 | `links.open.rejects-other-schemes` | A URL with another scheme, a URL that does not parse, and a URL longer than 8192 characters are rejected. | all |
 | `notifications.request.accepts-tab-notices` | A notification with a surface and title of 1 to 256 characters and a body of 1 to 1024 characters without control characters is accepted, and a removal needs only the surface. | all |
@@ -615,6 +617,7 @@ Items:
 | `sidecars.retain.rejects-after-stop` | A retain that starts after the sidecars stop, or that a stop interrupts after the service is prepared, fails with "sidecars are stopped" and sends no retain to the service. | all |
 | `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | all |
 | `menu.application.help-has-debug` | The application menu's Help menu has the item 디버그 (Debug) without a key; it runs `core.debug.open` in the main page of the main window ([debug view](debug.md)). | all |
+| `menu.application.app-has-settings` | The application menu's app menu has the item 설정… (Settings…) right after the about item with Command `,`; it runs `core.settings.open` in the main page of the main window ([settings window](settings.md)). | all |
 | `sidecars.protocol.surface-keeps-its-first-root` | After the owning window changes project, requests and the closed notice of an open surface carry the root of its first request. | all |
 | `sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail` | A stdio sidecar message for a surface that the host closed is discarded, while a message for a surface that the host never sent to that process fails the sidecar with `unknown surface <surface>` delivered to the surfaces that sent. | all |
 | `sidecars.protocol.dropped-message-is-recorded` | A message of a sidecar that is discarded because no window owns its surface writes `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`. | all |
@@ -816,6 +819,8 @@ Items:
 | `debug.save-all.reports-progress` | The tar writer reports the listed bytes written each time at least 1 MiB more is written and once after the last file with the written bytes equal to the total. | all |
 | `overlay.pick.dropped-is-recorded` | A reply of a modal whose id and instance are not those of the open modal is dropped with the fields `{id, instance, key, open}` of its record `host.overlay.dropped`, `open` being the empty text when no modal is open; a reply of the open modal is not dropped. | all |
 | `modal.ready-visible` | A ready request of the open modal shows it, sets its visible flag and answers after both, on the main thread; a failed show answers its error and leaves the modal pending for the next ready request. A ready request whose id and instance are not those of the open modal is stale: it changes nothing, answers ok, and writes the event `host.trace.modal.stale-ready` with `modal` and `instance`. | all |
+| `modal.dialog-blurs-each-document-and-image-region` | Opening a dialog sets the native blur on each document web view and each image region of the window, and closing it clears them. | all |
+| `modal.region-under-a-dialog-starts-blurred` | An image region made while a dialog is open starts blurred, and one made while no dialog is open starts without the blur. | all |
 | `reload.timeout.names-running-calls` | A reload whose page does not report ready within its bound fails with `the reloaded page did not report ready within <bound>; running host calls: <calls>`, `<calls>` being the calls of its window that have not returned, in the order of their start, each `<name> <seconds>s` with one decimal, or `none`. | all |
 | `log.batch.requires-the-start` | An event of a batch of the workbench that does not name the start of the workbench that wrote it in `start` is refused with `start must name the start of the workbench that wrote the event`, and one that names a `page` with `page is not a member of an event of the workbench`. | all |
 | `debug.save-text.writes-the-text-to-the-destination` | Saving text writes the text of the request, with its line feeds and non-ASCII characters unchanged, to the destination. | all |

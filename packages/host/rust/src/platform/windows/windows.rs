@@ -327,6 +327,9 @@ impl Platform for Windows {
     fn image_surface_placed(&self, image: Handle) -> Result<bool, String> {
         unsupported::image_surface_placed(image)
     }
+    fn set_image_background(&self, image: Handle, enabled: bool) -> Result<(), String> {
+        unsupported::set_image_background(image, enabled)
+    }
     fn image_facts(&self, image: Handle) -> Result<String, String> {
         unsupported::image_facts(image)
     }

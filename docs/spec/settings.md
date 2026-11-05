@@ -6,6 +6,8 @@ The independent window declaration, placement, association and rail-border contr
 
 This specification defines the sections of the settings window, the settings they show, and the stored form of sidebar sets. [Projects](projects.md#settings) defines scopes and storage files, [native modals](native-modals.md) defines how the window is drawn, and [plugins](plugins.md) defines plugin declarations. [Features](../features.md) records implementation and validation.
 
+The chrome button and the item 설정… (Settings…) of the app menu, with `cmd+,`, open the window through `core.settings.open`.
+
 ## Sections
 
 Plugins are installed from separate repositories, so their number and the number of their sections grow without bound. No control of the window is repeated per plugin or per section, except rows of a list and options of a select box.

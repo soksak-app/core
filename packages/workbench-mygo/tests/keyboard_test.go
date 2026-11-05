@@ -6,8 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/egoist/mygo/ui"
 )
 
 // keyboardRing returns the card of the focus ring and the active surface of that card.
@@ -302,23 +300,5 @@ func TestAModalThatACommandOpensTakesTheKeyboardFromTheView(t *testing.T) {
 				t.Fatalf("the modal closed and the keyboard went to %s (%v), want %s", describeTarget(got), ok, *before)
 			}
 		})
-	}
-}
-
-// Cmd+, is no shortcut of the window (docs/spec/exposure.md), so it opens no modal and the keyboard stays with the view.
-func TestCommandCommaLeavesTheKeyboardWithTheView(t *testing.T) {
-	f, stored := surfaceShell(t)
-	f.settle()
-	before, ok := stored.keyboardTarget()
-	if !ok || before == nil {
-		t.Fatalf("the view does not hold the keyboard: %s (%v)", describeTarget(before), ok)
-	}
-	f.tester.Key(ui.Cmd, ui.KeyComma)
-	f.settle()
-	if f.modal().Open {
-		t.Fatal("Cmd+, opened the settings window")
-	}
-	if got, ok := stored.keyboardTarget(); !ok || got == nil || *got != *before {
-		t.Fatalf("after Cmd+, the keyboard went to %s (%v)", describeTarget(got), ok)
 	}
 }

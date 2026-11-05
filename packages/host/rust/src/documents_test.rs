@@ -232,3 +232,24 @@ fn a_failed_attach_takes_back_its_name_and_its_request_log() {
         "taking back the name of the failed attach records no error"
     );
 }
+
+// contract: modal.dialog-blurs-each-document-and-image-region
+#[test]
+fn a_dialog_blurs_each_document_and_image_region() {
+    let documents = std::cell::RefCell::new(Vec::new());
+    let images = std::cell::RefCell::new(Vec::new());
+    super::set_regions_background(
+        vec![1, 2],
+        vec![3],
+        |handle| {
+            documents.borrow_mut().push(handle);
+            Ok(())
+        },
+        |handle| {
+            images.borrow_mut().push(handle);
+            Ok(())
+        },
+    );
+    assert_eq!(*documents.borrow(), vec![1, 2]);
+    assert_eq!(*images.borrow(), vec![3]);
+}

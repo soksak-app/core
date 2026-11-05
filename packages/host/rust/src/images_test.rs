@@ -986,3 +986,44 @@ fn window_region_counts_the_frames_that_the_host_marked_presented() {
     attach();
     presented_frames(0, "a region attached again");
 }
+
+// contract: window.facts.region-reports-its-blur
+#[test]
+fn window_region_reports_its_native_blur() {
+    let images = super::Images::default();
+    let key = ("tab-1".to_string(), "view".to_string());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 100));
+    for blurred in [true, false] {
+        let facts = format!(
+            r#"{{"frame":{{"x":0,"y":0,"width":400,"height":300}},"visible":true,"focused":false,"blurred":{blurred},"presented":null,"error":null}}"#
+        );
+        let region = crate::exposure::window_region(&images, key.clone(), &facts).unwrap();
+        assert_eq!(
+            region["blurred"],
+            serde_json::json!(blurred),
+            "host.window region entry {region}"
+        );
+    }
+}
+
+// contract: modal.region-under-a-dialog-starts-blurred
+#[test]
+fn an_image_region_made_under_a_dialog_starts_blurred() {
+    let seated = |overlay: &crate::modals::Overlay| {
+        let background = std::cell::Cell::new(None);
+        super::seat_background(overlay, 7, |handle, enabled| {
+            assert_eq!(handle, 7);
+            background.set(Some(enabled));
+            Ok(())
+        })
+        .unwrap();
+        background.get()
+    };
+    let overlay = crate::modals::Overlay::default();
+    assert_eq!(seated(&overlay), Some(false), "no modal is open");
+    crate::modals::open_for_test(&overlay, "dialog");
+    assert_eq!(seated(&overlay), Some(true), "a dialog is open");
+    crate::modals::open_for_test(&overlay, "menu");
+    assert_eq!(seated(&overlay), Some(false), "a menu is open");
+}

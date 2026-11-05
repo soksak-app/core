@@ -131,3 +131,27 @@ func TestApplicationMenuHelpHasDebug(t *testing.T) {
 		t.Fatalf("the debug item runs %q (%v), want core.debug.open", command, ok)
 	}
 }
+
+// contract: menu.application.app-has-settings
+func TestApplicationMenuAppHasSettings(t *testing.T) {
+	application.New(application.Options{Name: "soksak-menu-test"})
+	for language, want := range map[string]string{"en": "Settings…", "ko": "설정…"} {
+		menu, err := adapter.ApplicationMenuFor(language)
+		if err != nil {
+			t.Fatal(err)
+		}
+		app := menu.ItemAt(0).GetSubmenu()
+		if app == nil {
+			t.Fatalf("the %s application menu has no app menu: %v", language, labels(menu))
+		}
+		if got := labels(app); len(got) < 2 || got[1] != want {
+			t.Fatalf("the %s app menu = %v, want %q right after the about item", language, got, want)
+		}
+		if got := app.ItemAt(1).GetAccelerator(); got != "Cmd+," {
+			t.Fatalf("the settings item has the key %q", got)
+		}
+	}
+	if command, ok := host.MenuCommand("settings"); !ok || command != "core.settings.open" {
+		t.Fatalf("the settings item runs %q (%v), want core.settings.open", command, ok)
+	}
+}

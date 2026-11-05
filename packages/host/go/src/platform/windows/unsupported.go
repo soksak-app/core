@@ -631,6 +631,9 @@ func (implementation) TextImage(unsafe.Pointer, string) {
 	unreachable("image text")
 }
 
+func (implementation) SetImageBackground(unsafe.Pointer, bool) {
+}
+
 func (implementation) FactsImage(unsafe.Pointer) (string, error) {
 	return "", unsupported("image facts")
 }

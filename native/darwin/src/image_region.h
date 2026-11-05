@@ -64,6 +64,9 @@ void sp_region_text(void *region, const char *utf8);
 // to out[0..5].
 void sp_region_frame(void *region, double *out);
 
+// Blurs the region with the native filter of a document while a dialog is open.
+void sp_region_background(void *region, bool enabled);
+
 // Returns all information of the region as JSON. The caller must free the malloc() allocated string.
 const char *sp_region_facts(void *region);
 

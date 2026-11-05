@@ -169,6 +169,15 @@ test("a call that a row B lists as only on mygo fails when wailsv3 has it", () =
   assert.ok(failures.includes("host.call(set_dialog_background) is listed as only on mygo and exists on wailsv3"), failures.join("\n"));
 });
 
+test("a call that only hostCalls names passes when a row B lists it in the column of mygo", () => {
+  const changed = sources();
+  changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '"windowNew": run(h.WindowNew),\n\t\t"mygoOwn": run(h.WindowNew),');
+  changed.hostsSpec = changed.hostsSpec.replace('\`setDialogBackground\`', '\`setDialogBackground\`, \`mygoOwn\`');
+  assert.deepEqual(auditHostParity(changed), []);
+  changed.hostsSpec = changed.hostsSpec.replace(', \`mygoOwn\`', '');
+  assert.deepEqual(auditHostParity(changed), ["mygo host.call(mygo_own) does not exist on wailsv3"]);
+});
+
 test("a call of wailsv3 that hostCalls does not name fails unless a row B lists it", () => {
   const changed = sources();
   changed.mygoCallsSource = changed.mygoCallsSource.replace('"windowNew": run(h.WindowNew),', '');
