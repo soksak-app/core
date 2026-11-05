@@ -185,16 +185,32 @@ int main(void) { @autoreleasepool {
     check([evaluate(view, @"getComputedStyle(document.getElementById('target')).backgroundColor") isEqual:@"rgb(255, 0, 0)"],
         @"the :hover style applies to the element under the point");
 
+    // The press of an active key window passes the application as a person's press does, and AppKit moves the first responder.
+    __block NSUInteger monitorDowns = 0, monitorUps = 0;
+    __block NSResponder *responderAtDown = nil;
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *event) {
+        if (event.type == NSEventTypeLeftMouseDown) { monitorDowns++; responderAtDown = event.window.firstResponder; }
+        else monitorUps++;
+        return event;
+    }];
+    [window makeFirstResponder:nil];
     // V5-5: Even in an active key window the injected press and release reach the page (the default check uses the same call in an inactive window).
     check(sp_input_pointer(window, 180, 120, 1, 0, 0, 0) == SP_INPUT_DELIVERED
         && sp_input_pointer(window, 180, 120, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
         @"press and release are delivered to the active key window");
+    check(monitorDowns == 1 && monitorUps == 1,
+        [NSString stringWithFormat:@"a local monitor sees the press and the release of the active key window once (%lu, %lu)", (unsigned long)monitorDowns, (unsigned long)monitorUps]);
+    check(responderAtDown == window && window.firstResponder == view,
+        [NSString stringWithFormat:@"AppKit moves the first responder, not the driver (at the press %@, after it %@)", responderAtDown, window.firstResponder]);
+    [NSEvent removeMonitor:monitor];
     until(^BOOL { return [evaluate(view, @"probe.events.some(e=>e.type==='click')") boolValue]; });
     NSArray *presses = evaluate(view, @"probe.events.filter(e=>['pointerdown','pointerup','click'].includes(e.type))");
     NSArray *types = [presses valueForKey:@"type"];
     check([types isEqual:@[@"pointerdown", @"pointerup", @"click"]] && ![[presses valueForKey:@"trusted"] containsObject:@NO]
         && [[presses valueForKey:@"x"] isEqual:@[@180, @180, @180]] && [[presses valueForKey:@"y"] isEqual:@[@120, @120, @120]],
         [NSString stringWithFormat:@"press and release reach the page of the active key window as trusted pointerdown, pointerup, and click at the point: %@", presses]);
+    check([[evaluate(view, @"probe.events.filter(e=>e.type==='pointerdown'&&e.trusted).length") description] isEqual:@"1"],
+        @"the page receives one trusted pointerdown for the press");
     [window close];
     return failures ? 1 : 0;
 }}

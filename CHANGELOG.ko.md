@@ -15,7 +15,11 @@
 - F502-16: mygo workbench의 library는 page와 같은 자리에 선다: 줄 높이, form 간격, 빈 화면 여백이 `library.css`와 같고, plugin page는 card를 열로 놓으며, project card는 project를 연 날을 보이고, library는 bar의 sidebar switch를 숨긴다.
 - F547: log batch가 진행 중이고 gate count의 보고 때가 되었을 때 mygo workbench가 쉬지 않고 step을 올리지 않는다.
 - F502-12: document region의 WebContent process 표시 이름이 `soksak://plugin/<plugin id>/<region>`이 되어 활성 상태 보기와 `lsappinfo`에서 어느 plugin의 어느 region인지 보인다. 지금까지는 view만 자기 이름이 있었고 region은 앱 이름으로 보였다. Host가 이름을 만들고 `sp_document_create`가 받는다.
+- F548: 첫 window가 설정 modal과 debug view의 module을 읽지 않고, 각 화면은 처음 쓸 때 불러온다.
+- F549: 대기 중인 창이 깨어나도 거부된 적 없는 frame event의 count를 저장하려고 log writer를 깨우지 않는다.
 - F502-23: mygo workbench 가 `diagnostics.layout.fail` 에 답한다. 다음 surface 배치가 `diagnostic layout fault` 로 한 번 실패하고, workbench 는 그 실패를 보여 준 뒤 계속 요청에 답한다.
+- F557: 포인터를 잃은 page가 추적 영역의 진입, 이탈, 이동이 어떤 순서로 와도 hover를 멈춘다.
+- F543: key window에서 `sok input pointer`의 press가 애플리케이션을 지나, local monitor가 press를 보고 AppKit이 first responder를 옮긴다.
 - F544: release가 뒤따르는 키보드 이동을 멈추지 않는다. image region이 있는 surface를 클릭한 직후에도 키보드가 다음 release를 기다리지 않고 옮겨진다.
 - F502-21: 세 host의 app 메뉴에 `cmd+,` 단축키의 설정…(Settings…)이 생겼고, settings window를 연다.
 - F502-21: Dialog는 각 document web view처럼 각 image region도 세 host에서 blur하므로, dialog 아래의 terminal이 더 이상 선명하게 남지 않는다. `host.window`는 각 image region의 `blurred`를 보고한다.

@@ -1,8 +1,10 @@
 // Creates native input events and delivers them to the views of a window.
 //
-// Key events are delivered to the responder of the window with -[NSWindow sendEvent:]. When a window is not active,
-// AppKit treats a pointer event as the first click and does not deliver it to the view, so the view at the coordinates
-// is hit-tested and receives the press, and a drag and a release are delivered to the press target. A move is
+// Key events are delivered to the responder of the window with -[NSWindow sendEvent:]. A press, drag, and release of a
+// key window pass -[NSApplication sendEvent:] as a person's press does: the local monitors see them, and AppKit moves the
+// first responder and routes the gesture. When a window is not the key window, AppKit treats a pointer event as the first
+// click and does not deliver it to the view, so the view at the coordinates is hit-tested and receives the press, and a
+// drag and a release are delivered to the press target. A move is
 // delivered to the owner of the tracking area that contains the coordinates. In every case the web view receives the
 // native event and delivers a trusted event to the page. A scroll is created as an event that carries window
 // information and is delivered with -[NSWindow sendEvent:]. The system cursor does not move, and no function except
@@ -196,6 +198,30 @@ bool sp_input_press_open(void *handle, int button) {
     return window && objc_getAssociatedObject(window, pressedViewKey(button)) != nil;
 }
 
+// The press of a window and button that passes the application: the window was the key window at the press. The gesture keeps
+// the path of its press.
+static char leftThroughApplicationKey, rightThroughApplicationKey;
+static const void *throughApplicationKey(int button) {
+    return button == 1 ? &rightThroughApplicationKey : &leftThroughApplicationKey;
+}
+
+// Delivers one event of a gesture on the path of its press.
+static void deliverGesture(NSView *hit, NSEvent *event, BOOL throughApplication) {
+    if (throughApplication) {
+        [NSApp sendEvent:event];
+        return;
+    }
+    switch (event.type) {
+        case NSEventTypeLeftMouseDown: [hit mouseDown:event]; break;
+        case NSEventTypeRightMouseDown: [hit rightMouseDown:event]; break;
+        case NSEventTypeLeftMouseDragged: [hit mouseDragged:event]; break;
+        case NSEventTypeRightMouseDragged: [hit rightMouseDragged:event]; break;
+        case NSEventTypeLeftMouseUp: [hit mouseUp:event]; break;
+        case NSEventTypeRightMouseUp: [hit rightMouseUp:event]; break;
+        default: break;
+    }
+}
+
 static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NSInteger clicks, float pressure) {
     return [NSEvent mouseEventWithType:type location:point modifierFlags:0
         timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
@@ -310,6 +336,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     if (hit.window != window) {
         objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         syntheticButtonRelease(window, button);
+        objc_setAssociatedObject(window, throughApplicationKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         uint64_t token = 0;
         if (sp_input_press_origin_point(window, button, NULL, NULL, &token)) {
             sp_input_press_origin_clear(window, button, token);
@@ -340,19 +367,22 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             // A person moves to the point before the press. A window that is not the key window hears no move.
             if (window.isKeyWindow) moveTo(window, point);
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            sp_input_press_origin_set(window, button, point.x, point.y);
+            BOOL throughApplication = window.isKeyWindow;
+            objc_setAssociatedObject(window, throughApplicationKey(button), throughApplication ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            // The monitor of the press origin records the press of the application as it records a person's press. A press
+            // delivered directly passes no monitor, so the driver records it.
+            if (!throughApplication) sp_input_press_origin_set(window, button, point.x, point.y);
             syntheticButtonPress(window, button);
-            // -[NSApplication sendEvent:] is not used because it fails to deliver a synthetic first click to an inactive
-            // window. The explicit context lets click-through native regions classify the synchronous responder change
-            // without changing NSApp.currentEvent.
+            // NSApp.currentEvent is not this event, so the explicit context lets click-through native regions classify the
+            // synchronous responder change.
             sp_input_press_context context = {0};
             sp_input_press_context_push(&context, window, point.x, point.y);
             @try {
-                // -[NSWindow sendEvent:] normally makes the pressed view first responder before the press. This path
-                // delivers directly to the view, so it follows that order without activating the window or application.
-                if (hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
-                if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, clicks, 1)];
-                else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, clicks, 1)];
+                // -[NSWindow sendEvent:] makes the pressed view first responder before the press. Direct delivery follows that
+                // order without activating the window or application.
+                if (!throughApplication && hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
+                NSEventType down = right ? NSEventTypeRightMouseDown : NSEventTypeLeftMouseDown;
+                deliverGesture(hit, mouseEvent(window, down, point, clicks, 1), throughApplication);
             } @finally {
                 sp_input_press_context_pop(&context);
             }
@@ -362,22 +392,21 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             double originX = point.x, originY = point.y;
             uint64_t originToken = 0;
             bool hasOrigin = sp_input_press_origin_point(window, button, &originX, &originY, &originToken);
+            BOOL gestureThroughApplication = objc_getAssociatedObject(window, throughApplicationKey(button)) != nil;
             sp_input_press_context context = {0};
             if (hasOrigin) sp_input_press_context_push(&context, window, originX, originY);
             @try {
-                if (phase == 2) {
-                    if (right) [hit rightMouseDragged:mouseEvent(window, NSEventTypeRightMouseDragged, point, 0, 1)];
-                    else [hit mouseDragged:mouseEvent(window, NSEventTypeLeftMouseDragged, point, 0, 1)];
-                } else {
-                    syntheticButtonRelease(window, button);
-                    if (right) [hit rightMouseUp:mouseEvent(window, NSEventTypeRightMouseUp, point, clicks, 0)];
-                    else [hit mouseUp:mouseEvent(window, NSEventTypeLeftMouseUp, point, clicks, 0)];
-                }
+                NSEvent *event = phase == 2
+                    ? mouseEvent(window, right ? NSEventTypeRightMouseDragged : NSEventTypeLeftMouseDragged, point, 0, 1)
+                    : mouseEvent(window, right ? NSEventTypeRightMouseUp : NSEventTypeLeftMouseUp, point, clicks, 0);
+                if (phase == 3) syntheticButtonRelease(window, button);
+                deliverGesture(hit, event, gestureThroughApplication);
             } @finally {
                 if (hasOrigin) sp_input_press_context_pop(&context);
                 if (phase == 3) {
                     objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                    if (hasOrigin) sp_input_press_origin_clear(window, button, originToken);
+                    objc_setAssociatedObject(window, throughApplicationKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    if (hasOrigin && !gestureThroughApplication) sp_input_press_origin_clear(window, button, originToken);
                     if (button == 0) sp_surface_press_released(window);
                 }
             }

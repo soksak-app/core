@@ -677,8 +677,6 @@ func (s *Shell) View(c *ui.Context) {
 	theme.TextMuted = s.palette.Muted
 	theme.Border = s.palette.Edge
 	theme.Danger = s.palette.No
-	// A field or a box of the framework has the look of an input of the page without a rule: the control of its color scheme.
-	theme.Surface = ui.Hex(s.options.Declared.PlainControl("bg"))
 	theme.FontSize = theme.Rem(1) * float32(s.text.Frame())
 	theme.Font = s.fontFamily()
 	// The outline of button:focus-visible of the page: inside the edge, in the focus color.

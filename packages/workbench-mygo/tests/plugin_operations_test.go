@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"image/color"
 	"slices"
 	"strings"
 	"testing"
@@ -413,6 +414,37 @@ func TestACompleteStarterJobIsNotRepeated(t *testing.T) {
 	if len(plugins.runs)+len(plugins.jobs) != 0 || f.host.reloads != 0 {
 		t.Fatalf("the operations are %v and the jobs %v", plugins.runs, plugins.jobs)
 	}
+}
+
+// The action of a tab is a .ui-button of the page: the page background, and only its edge changes under the pointer.
+func TestTheInstallOfATabHasTheLookOfAButtonOfThePage(t *testing.T) {
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"terminal": {"1.0.0"}})}
+	stored := &storedHost{plugins: plugins}
+	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
+	f := newShell(t, stored)
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	node, ok := exposedNode(f.tester.ElementTree(), "core.card.placeholder-action", "")
+	if !ok {
+		t.Fatalf("the tab offers no install: %q", f.tester.Texts())
+	}
+	palette := f.palette()
+	opaque := func(value ui.Color) color.RGBA { return color.RGBA{value.R, value.G, value.B, 255} }
+	x, y := node.Bounds.X, node.Bounds.Y+node.Bounds.H/2
+	check := func(state string, edge ui.Color) {
+		t.Helper()
+		if got := f.pixelOf(x+.5, y); got != opaque(edge) {
+			t.Fatalf("the edge %s is %v, not %v", state, got, opaque(edge))
+		}
+		if got := f.pixelOf(x+3, y); got != opaque(palette.Bg) {
+			t.Fatalf("the background %s is %v, not %v", state, got, opaque(palette.Bg))
+		}
+	}
+	check("at rest", palette.Edge)
+	f.tester.Move(x+3, y)
+	f.settle()
+	check("under the pointer", palette.Rail)
 }
 
 func TestATabOfAPluginThatIsNotLoadedOffersItsInstall(t *testing.T) {

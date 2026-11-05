@@ -1096,6 +1096,42 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F557",
+    implementation: [
+      { file: "native/darwin/src/webview_input.m", symbol: "static void pointerLeft(WKWebView *view, NSEvent *event)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move before the enter hovers the view at the point" },
+      { file: "native/darwin/tests/webview_input_test.m", id: "a move off the view on top leaves it before its exit comes" },
+    ],
+    expected: "In each order of the enter, the exit and the move, only the view at the point hovers, and a view that loses the pointer hovers nothing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F549",
+    implementation: [
+      { file: "native/darwin/src/observe.m", symbol: "if (!sp_event_enabled(SP_CLASS_FRAME, SP_EVENT_DEBUG)) return;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/observe_test.m", id: "a summary that a closed gate leaves due is no refused event" },
+    ],
+    expected: "A closed gate leaves the summary due without a count of the gate, and the first summary after the gate opens holds the deliveries since the earlier summary.",
+    levels: ["unit"],
+  },
+  {
+    id: "F548",
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "settingsScreen ??= await import(\"./settings-ui.js\");" },
+      { file: "packages/workbench/core-exposure.js", symbol: "debugScreen ??= await import(\"./debug-ui.js\");" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "the first window of a main page reads no module of the settings modal or the debug view" },
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a screen that never loaded answers its status as closed, and its first command loads it" },
+    ],
+    expected: "The first window reads no module of the settings modal or the debug view, and each screen loads at its first use.",
+    levels: ["unit"],
+  },
+  {
     id: "F538",
     implementation: [
       { file: "packages/workbench/section-surfaces.js", symbol: "export function spaceSectionSurfaces(space, cards, sets, links)" },
