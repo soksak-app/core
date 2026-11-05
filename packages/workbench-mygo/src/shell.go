@@ -277,8 +277,10 @@ type Shell struct {
 	active   string
 	// windowProjects are the projects that the window opened: their hidden tabs stay surfaces of the window (docs/spec/plugins.md#memory-saver).
 	windowProjects map[string]bool
-	plane          *layout.Grid
-	focused        string
+	// savedGeometry is the geometry that this window last stored for each project.
+	savedGeometry map[string]json.RawMessage
+	plane         *layout.Grid
+	focused       string
 	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
 	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
@@ -375,7 +377,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err := json.Unmarshal(options.Environment, &environment); err != nil {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
-	s := &Shell{windowProjects: map[string]bool{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
+	s := &Shell{windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.exposedFocus = NewFocus(options.Declared, func() { s.options.Invalidate() })

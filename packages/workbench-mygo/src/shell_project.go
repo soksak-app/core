@@ -280,7 +280,20 @@ func (s *Shell) activateThen(id string, done func()) {
 		return
 	}
 	s.keep()
-	root, identity := project.Root, project.Identity
+	s.saveGeometry(func(err error) {
+		if err != nil {
+			s.fail(err)
+			done()
+			return
+		}
+		s.openStored(id, project, done)
+	})
+}
+
+// openStored asks the host for the window of the stored project, as the rest of projects.activate does, and shows the project when
+// the window is this one.
+func (s *Shell) openStored(id string, project *projectRecord, done func()) {
+	root, identity, geometry := project.Root, project.Identity, project.Rest["geometry"]
 	s.calls.Call("projectFolder", root, func(value any, err error) {
 		if err != nil {
 			s.fail(err)
@@ -299,7 +312,7 @@ func (s *Shell) activateThen(id string, done func()) {
 			return
 		}
 		cids := s.events.BeginOperation("workbench.project.operation", map[string]any{"action": "open", "project": id})
-		s.calls.Caused(cids).Call("projectOpen", map[string]any{"id": id, "root": root, "separate": s.settings.Value("projectOpening") == "windows", "geometry": nil}, func(value any, err error) {
+		s.calls.Caused(cids).Call("projectOpen", map[string]any{"id": id, "root": root, "separate": s.settings.Value("projectOpening") == "windows", "geometry": geometry}, func(value any, err error) {
 			if err != nil {
 				s.fail(err)
 				done()
@@ -324,6 +337,45 @@ func (s *Shell) activateThen(id string, done func()) {
 			}
 			// Another window holds the project, so this window leaves the library for the project that it shows.
 			s.showThen(s.active, done)
+		})
+	})
+}
+
+// saveGeometry stores the size and position of the window for the project that it shows, as projects.saveGeometry does. The library
+// and a window without an ordinary size store nothing, and so does a geometry that the window stored last.
+func (s *Shell) saveGeometry(done func(err error)) {
+	id := s.active
+	if id == "" || s.browsing {
+		done(nil)
+		return
+	}
+	s.calls.Call("windowState", nil, func(value any, err error) {
+		if err != nil {
+			done(err)
+			return
+		}
+		geometry, err := json.Marshal(value)
+		if err != nil {
+			done(err)
+			return
+		}
+		if string(geometry) == "null" || string(s.savedGeometry[id]) == string(geometry) {
+			done(nil)
+			return
+		}
+		s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": id, "patch": map[string]any{"geometry": json.RawMessage(geometry)}}, func(_ any, err error) {
+			if err != nil {
+				done(err)
+				return
+			}
+			s.savedGeometry[id] = geometry
+			if project := s.project(id); project != nil {
+				if project.Rest == nil {
+					project.Rest = map[string]json.RawMessage{}
+				}
+				project.Rest["geometry"] = geometry
+			}
+			done(nil)
 		})
 	})
 }

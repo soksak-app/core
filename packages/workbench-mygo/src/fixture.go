@@ -57,7 +57,7 @@ func (s *Shell) prepareFixture(raw json.RawMessage, answer func(any, error)) {
 	})
 }
 
-// flushProjects writes the layout of the shown project, the tab sessions and the tab states, and runs done after the writes.
+// flushProjects writes the layout and the geometry of the shown project, the tab sessions and the tab states, and runs done after the writes.
 func (s *Shell) flushProjects(done func()) {
 	tabs := func() {
 		if s.tabs == nil {
@@ -76,7 +76,14 @@ func (s *Shell) flushProjects(done func()) {
 		tabs()
 		return
 	}
-	s.keepThen(tabs)
+	s.keepThen(func() {
+		s.saveGeometry(func(err error) {
+			if err != nil {
+				s.fail(err)
+			}
+			tabs()
+		})
+	})
 }
 
 // closeProjects removes the projects of the window one after the other.

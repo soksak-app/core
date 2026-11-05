@@ -1,6 +1,10 @@
 package workbench_test
 
-import "testing"
+import (
+	"encoding/json"
+	"slices"
+	"testing"
+)
 
 // openingShell is a shell that shows the project alpha, with the opening mode mode.
 func openingShell(t *testing.T, mode string) *shellFixture {
@@ -116,5 +120,77 @@ func TestClosingTheShownProjectLeavesAProjectOfAnotherWindow(t *testing.T) {
 	f.run("core.project.close", map[string]string{"id": f.projectOf("/work/alpha")})
 	if len(f.host.opens) != opens || f.host.located != "" {
 		t.Fatalf("the window opened %v and shows %q", f.host.opens[opens:], f.host.located)
+	}
+}
+
+var (
+	someGeometry  = map[string]any{"x": float64(10), "y": float64(20), "width": float64(800), "height": float64(600)}
+	otherGeometry = map[string]any{"x": float64(30), "y": float64(40), "width": float64(900), "height": float64(700)}
+)
+
+func wantGeometry(t *testing.T, f *shellFixture, id string, want any) {
+	t.Helper()
+	got, wanted := mustJSON(t, f.host.project(id)["geometry"]), mustJSON(t, want)
+	if got != wanted {
+		t.Fatalf("the project %s stores the geometry %s, want %s", id, got, wanted)
+	}
+}
+
+func mustJSON(t *testing.T, value any) string {
+	t.Helper()
+	text, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(text)
+}
+
+// Leaving a project stores the geometry of its window, the next open of the project carries it, and an unchanged geometry stores nothing.
+func TestAProjectKeepsTheGeometryOfItsWindow(t *testing.T) {
+	f := openingShell(t, "tabs")
+	f.openFolder("/work/beta")
+	alpha, beta := f.projectOf("/work/alpha"), f.projectOf("/work/beta")
+	if got := f.lastOpen().Geometry; string(got) != "null" {
+		t.Fatalf("a project without a stored geometry opens with %s", got)
+	}
+	f.host.geometry = someGeometry
+	f.run("core.project.activate", map[string]string{"id": alpha})
+	wantGeometry(t, f, beta, someGeometry)
+	f.run("core.project.activate", map[string]string{"id": beta})
+	wantGeometry(t, f, alpha, someGeometry)
+	if got, want := string(f.lastOpen().Geometry), mustJSON(t, someGeometry); got != want {
+		t.Fatalf("the project opens with %s, want %s", got, want)
+	}
+	delete(f.host.project(beta), "geometry")
+	f.run("core.project.activate", map[string]string{"id": alpha})
+	wantGeometry(t, f, beta, nil)
+	f.host.geometry = otherGeometry
+	f.run("core.project.activate", map[string]string{"id": beta})
+	wantGeometry(t, f, alpha, otherGeometry)
+}
+
+// The library and a window without an ordinary size store nothing.
+func TestAGeometryWithoutItsProjectStaysUnstored(t *testing.T) {
+	f := openingShell(t, "tabs")
+	f.openFolder("/work/beta")
+	beta := f.projectOf("/work/beta")
+	f.run("core.project.activate", map[string]string{"id": f.projectOf("/work/alpha")})
+	wantGeometry(t, f, beta, nil)
+	f.host.geometry = someGeometry
+	f.run("core.projects.browse", nil)
+	f.run("core.library.open", map[string]string{"id": beta})
+	wantGeometry(t, f, f.projectOf("/work/alpha"), nil)
+}
+
+// A closing window stores its geometry before the host ends it.
+func TestAClosingWindowStoresItsGeometry(t *testing.T) {
+	f := openingShell(t, "windows")
+	f.host.geometry = someGeometry
+	f.shell.Event("project-close-request", nil)
+	f.settle()
+	wantGeometry(t, f, f.projectOf("/work/alpha"), someGeometry)
+	state, closing := slices.Index(f.host.calls, "windowState"), slices.Index(f.host.calls, "windowClose")
+	if state < 0 || closing < state {
+		t.Fatalf("the calls are %v", f.host.calls)
 	}
 }
