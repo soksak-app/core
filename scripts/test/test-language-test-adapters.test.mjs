@@ -105,17 +105,17 @@ test('the Go adapter counts a failed named test as executed', { timeout: 10_000 
 });
 
 for (const [name, events, expected, status] of [
-  ['accepts a passing test beside a support package without tests', [...goSupportEvents, ...goPassingEvents], { tests: 1, skipped: 0 }, 'pass'],
-  ['rejects a named skipped test beside a passing test', [...goPassingEvents,
+  ['the Go adapter accepts a passing test beside a support package without tests', [...goSupportEvents, ...goPassingEvents], { tests: 1, skipped: 0 }, 'pass'],
+  ['the Go adapter rejects a named skipped test beside a passing test', [...goPassingEvents,
     { Action: 'run', Package: 'fixture', Test: 'TestRequired' },
     { Action: 'output', Package: 'fixture', Test: 'TestRequired', Output: '    required_test.go:5: unavailable\n' },
     { Action: 'skip', Package: 'fixture', Test: 'TestRequired', Elapsed: 0 }], { tests: 1, skipped: 1 }, 'fail'],
-  ['rejects a selection containing only support packages without tests', goSupportEvents, { tests: 0, skipped: 0 }, 'fail'],
-  ['rejects a successful package with no selected test', [
+  ['the Go adapter rejects a selection containing only support packages without tests', goSupportEvents, { tests: 0, skipped: 0 }, 'fail'],
+  ['the Go adapter rejects a successful package with no selected test', [
     { Action: 'output', Package: 'fixture', Output: 'testing: warning: no tests to run\n' },
     { Action: 'pass', Package: 'fixture', Elapsed: 0.1 }], { tests: 0, skipped: 0 }, 'fail'],
 ]) {
-  test(`the Go adapter ${name}`, { timeout: 10_000 }, async () => {
+  test(name, { timeout: 10_000 }, async () => {
     // Go emits package output and package skip as separate events. Only an event with Test names a test outcome.
     const output = events.map((event) => JSON.stringify(event)).join('\n') + '\n';
     const parsed = parseLanguageResult('go', output, '');

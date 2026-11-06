@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F503-2: Inventory와 checklist 합계를 복사한 숫자 assertion 대신 정본 입력에서 산출한다. 과거 문구 검사 세 개는 문서 gate로 옮겨 두 언어를 검증하고 소유권, coverage 누락, 실행 언어 검사는 유지한다. 추적 Red로 누락된 문서 거부를 확인했고 audit/checklist case 73개와 Go 이름 case 다섯 개가 모두 통과한다. 최종 inventory는 track 116개, 구현 file 739개, test file 1164개를 보고하며 소유자 누락과 잘못된 feature link는 없다.
+
 - F505: Publication은 두 독립 초기 상태에서 전체 로컬 application, activation, benchmark report가 두 bundle, 고정한 설치 component 조합, source 및 dependency 입력, 필수 native case, 전체 log audit와 cleanup에 일치한 뒤에만 정확한 성공 candidate attempt와 불변 artifact를 사용한다. 근거의 누락, 오래된 근거, 불일치, skip, fail을 거부한다. Collector에서 gate까지의 전송과 정확한 file fixture가 통과하며 집중 소유 case 121개와 이후 make 진입점 및 test 종류의 영향 범위 case 24개가 통과한다. Candidate make 진입점은 candidate를 다시 build하지 않는다. 실제 candidate application 승인과 publication은 수행하지 않았다.
 
 - F504-2: 변경한 layout 소유 module은 CI에서 한정된 필수 mutation 집합을 선택하며 복사본은 통과한 baseline을 재사용한다. 구조화된 failure code는 실제 assertion/runtime error를 출력한 진단 문자열 및 출처 불명 child signal과 구분한다. Runner, reporter, selector 검사와 추가 module error case 두 개가 통과한다. 최종 필수 실행은 baseline file 여섯 개를 통과하고 mutation 여덟 개를 모두 assertion으로 검출하며 생존, 오래된 위치, 모호한 위치, 무효한 결과는 없다. macOS에서 workflow 및 경계 검사도 통과한다.

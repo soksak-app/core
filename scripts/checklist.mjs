@@ -1,6 +1,53 @@
 // Compares task ID, depth, and state instead of translated sentences.
 import { checklist } from "@soksak/kit/checklist";
 
+export function checklistCounts(text, file = "docs/features.md") {
+  const errors = [];
+  const entries = checklist(text, file, errors);
+  if (errors.length) throw new Error(errors.join("\n"));
+  const counts = { waiting: 0, active: 0, complete: 0, held: 0, closed: 0, total: entries.length };
+  const names = { " ": "waiting", "~": "active", o: "complete", "!": "held", "-": "closed" };
+  for (const { state } of entries) counts[names[state]]++;
+  return counts;
+}
+
+// These are guards on retained historical records, not product behavior tests.
+// A checklist without the corresponding record has no obligation to add it.
+export function auditHistoricalScopeWording(source, file = "docs/features.md") {
+  const forbidden = file.endsWith(".ko.md") ? [
+    "통제 사이트 pixel과 복원/신규 문서 검증은 F3에서 미완료로 남아 있다.",
+    "통제 사이트 픽셀과 복원/신규 문서 검증은 F3에서 미완료로 남아 있다.",
+  ] : [
+    "Controlled-site pixel and restored/new-document application checks remain open under F3.",
+    "Controlled-site pixels and restored/new-document validation remain open under F3.",
+  ];
+  return forbidden.filter((phrase) => source.includes(phrase)).map((phrase) => `${file}: F3 scope is reported as currently open: ${phrase}`);
+}
+
+export function auditModalParitySnapshotWording(source, file = "docs/features.md") {
+  if (!/^\s*- \[[^\]]+\] F10\.2 —/m.test(source)) return [];
+  const korean = file.endsWith(".ko.md");
+  const marker = korean ? "2026-09-21 parity 감사 스냅샷 시점" : "At the 2026-09-21 audit snapshot";
+  const correction = korean ? "이후 F10.2 수정이 Wails 자식 WebView 계약을" : "The later F10.2 correction creates the Wails child-WebView contract";
+  const line = source.split("\n").find((entry) => entry.includes(marker));
+  if (!line) return [`${file}: modal parity observation is not explicitly dated as a historical snapshot`];
+  if (!line.includes(correction)) return [`${file}: modal parity observation does not state the current F10.2 correction`];
+  return [];
+}
+
+export function auditCommittedEvidenceWording(source, file = "docs/features.md") {
+  const line = source.split("\n").find((entry) => /^\s*- \[[^\]]+\] F0\.1 —/.test(entry));
+  if (!line) return [];
+  const korean = file.endsWith(".ko.md");
+  if (line.includes(korean ? "현재 미커밋 구현" : "current dirty implementation")) {
+    return [`${file}: F0.1 evidence still claims a current dirty implementation`];
+  }
+  if (!line.includes(korean ? "이 F0.1 변경" : "this F0.1 change")) {
+    return [`${file}: F0.1 evidence does not identify its build by its checklist ID`];
+  }
+  return [];
+}
+
 export function checkChecklistTranslations(english, korean) {
   const errors = [];
   const first = checklist(english, "docs/features.md", errors);

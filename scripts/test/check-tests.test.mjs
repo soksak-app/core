@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-tests.mjs";
+import { auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-tests.mjs";
 
 const files = repositoryFiles();
 
@@ -151,7 +151,9 @@ test("feature-link audit self-check detects an omitted error and response", { ti
   mkdirSync(directory);
   // Import the real audit module from an isolated copy. Its unchanged dependency
   // remains at its owning path; no implementation is extracted or re-created.
-  symlinkSync(fileURLToPath(new URL("../check-boundaries.mjs", import.meta.url)), join(directory, "check-boundaries.mjs"));
+  for (const dependency of ["check-boundaries.mjs", "checklist.mjs"]) {
+    symlinkSync(fileURLToPath(new URL(`../${dependency}`, import.meta.url)), join(directory, dependency));
+  }
   const original = readFileSync(new URL("../check-tests.mjs", import.meta.url), "utf8");
   const candidate = join(directory, "check-tests.mjs");
   const check = join(root, "check.mjs");
@@ -196,45 +198,17 @@ test("completed audit aggregates and fixture corrections are exempt while unlink
   );
 });
 
-test("recorded parity counts cannot drift from the current inventory", { timeout: 1000 }, () => {
-  const inventory = auditInventory(files);
-  assert.deepEqual(auditRecordedInventoryCounts(inventory), []);
-  const drifted = auditRecordedInventoryCounts({ ...inventory, testCount: inventory.testCount + 1 });
-  assert.equal(drifted.length, 2, "both translations must report the drift");
-  assert.ok(drifted.every((error) => /do not match current output/.test(error)));
-  assert.match(auditRecordedInventoryCounts(inventory, "no count", "no count")[0], /not recorded in the expected form/);
-  // The numbers of the completed G1.4 item are not compared.
-  const english = "The current inventory has 1 lanes, 2 implementation files, and 3 test files.";
-  const korean = "현재 목록은 lane 1개, 구현 파일 2개, 테스트 파일 3개다.";
-  assert.deepEqual(auditRecordedInventoryCounts({ trackCount: 1, implementationCount: 2, testCount: 3 }, english, korean), []);
-});
-
-test("completed F3 scope is not reported as currently open", { timeout: 1000 }, () => {
-  assert.deepEqual(auditHistoricalScopeWording(), []);
-  assert.match(
-    auditHistoricalScopeWording("Controlled-site pixels and restored/new-document validation remain open under F3." )[0],
-    /currently open/,
-  );
-});
-
-test("modal parity Red is dated and followed by current F10.2 evidence", { timeout: 1000 }, () => {
-  assert.deepEqual(auditModalParitySnapshotWording(), []);
-  assert.match(
-    auditModalParitySnapshotWording("The modal implementation has a larger confirmed gap." )[0],
-    /historical snapshot/,
-  );
-});
-
-test("F0.1 evidence identifies its build by its checklist ID", { timeout: 1000 }, () => {
-  assert.deepEqual(auditCommittedEvidenceWording(), []);
-  assert.match(
-    auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks passed for the build.")[0],
-    /by its checklist ID/,
-  );
-  assert.match(
-    auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks pass on the current dirty implementation.")[0],
-    /current dirty implementation/,
-  );
+test("inventory totals follow declared test additions without copied documentation", { timeout: 1000 }, () => {
+  const matrix = [{ capability: "unit", language: "js-ts", implementation: ["unit.js"], tests: ["*.test.mjs"], testLanguage: "js-ts" }];
+  const original = auditInventory(["unit.js", "first.test.mjs"], matrix, () => "");
+  const added = auditInventory(["unit.js", "first.test.mjs", "second.test.mjs"], matrix, () => "");
+  const checklist = "- [ ] F1 — pending\n  - [~] F1-1 — executing\n- [o] F2 — complete\n";
+  assert.match(inventorySummary(original, checklist), /^1 tracks, 1 implementation files, 1 test files\./);
+  assert.match(inventorySummary(added, checklist), /^1 tracks, 1 implementation files, 2 test files\./);
+  assert.match(inventorySummary(added, checklist), /1 waiting, 1 active, 0 held, 1 complete, 0 closed \(3 total/);
+  assert.deepEqual(added.uncoveredImplementations, []);
+  assert.deepEqual(added.uncoveredTests, []);
+  assert.match(inventorySummary(added, checklist), /Structural evidence only; behavior was not executed/);
 });
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.

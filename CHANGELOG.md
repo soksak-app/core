@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F503-2: Inventory and checklist totals now derive from canonical inputs instead of copied numeric assertions. Three historical wording checks moved to the documentation gate and validate both languages; ownership, omitted coverage and executable-language checks remain. Tracked Red demonstrates the missing documentation refusals, and all 73 audit/checklist cases plus five Go-name cases pass. Final inventory reports 116 tracks, 739 implementation files and 1164 test files with no missing owner or invalid feature link.
+
 - F505: Publication consumes the exact successful candidate attempt and immutable artifacts only after complete local application, activation and benchmark reports match both bundles, the frozen installed component cohort, source and dependency inputs, required native cases, full log audit and cleanup across two independent initial states. Missing, stale, mismatched, skipped or failed evidence is rejected. Collector-to-gate transport and exact-file fixtures pass: 121 focused owner cases, followed by 24 affected make-entrypoint and test-kind cases. The candidate make entrypoint does not rebuild the candidate. Actual candidate application acceptance and publication were not performed.
 
 - F504-2: Changed layout owners select a bounded set of required mutations in CI, and copies reuse the passing baseline. Structured failure codes distinguish real assertion/runtime errors from printed diagnostics and unattributed child signals. The runner, reporter and selector checks pass, with two additional module-error cases; the final required run passes six baseline files and catches all eight mutations by assertion, with no surviving, stale, ambiguous or invalid result. Workflow and boundary checks pass on macOS.

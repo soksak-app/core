@@ -12,7 +12,9 @@ Terminal background sample은 같은 view crop 변환을 사용하며 buffer coo
 
 작업 상태 정본은 [기능 상태](../features.ko.md)다. 소스 파일 목록은 구조적 증거일 뿐 기능 동등성이나 애플리케이션의 정상 동작을 판정하지 않는다.
 
-Audit 자체 검사는 실제 audit module을 실행한다. 변경 전 module이 같은 assertion을 통과한 뒤, 격리한 복사본에서 error를 기록하는 effect 또는 response 하나를 제거한다. 그 assertion이 실패할 때만 mutation을 검출한 것으로 판정한다. Load error, 중단 또는 baseline 실패는 검출 근거가 아니다. 이는 audit 자체의 error 계약을 검증하며 목록에 든 제품 file의 동작을 검증하지 않는다.
+Feature-link audit 자체 검사는 실제 audit module을 실행한다. 변경 전 module이 같은 assertion을 통과한 뒤, 격리한 복사본에서 error를 기록하는 effect 또는 response 하나를 제거한다. 이 두 error 누락 case는 해당 assertion의 실패를 요구한다. Load error, 중단 또는 baseline 실패는 이 두 case의 검출 근거가 아니다. 이는 audit 자체의 error 계약을 검증하며 목록에 든 제품 file의 동작을 검증하지 않는다.
+
+현재 inventory와 checklist 합계는 정본 입력에서 산출하고 문서에 수동 관리하는 개수로 반복하지 않는다. 부모와 자식 checklist row는 각각 센다. 필요한 과거 근거 문구 검사는 문서 gate에 속하며 해당 기록이 있을 때 양쪽 번역에 적용한다. 제품 동작 검증으로 세지 않는다.
 
 Core test 소유권은 독립적으로 선언된 core package를 따른다. Root `e2e` package가 window check와 `e2e/fixtures/` 아래 설치 가능한 payload를 소유한다. Fixture의 `package.json`은 설치 payload를 설명하며 별도의 core test 소유자를 만들지 않는다. E2E test는 자기 fixture manifest와 source를 읽을 수 있다. Core package test는 계속 E2E fixture 파일을 읽을 수 없고, E2E test도 다른 core package의 구현 경로를 읽을 수 없다.
 
