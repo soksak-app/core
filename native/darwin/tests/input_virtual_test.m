@@ -13,6 +13,7 @@
 #import "webview_geometry.h"
 #import "webview_input.h"
 #import "window_facts.h"
+#import "window_reveal.h"
 
 // Sets the flag when the object that holds it ends.
 @interface EndWatch : NSObject
@@ -41,7 +42,7 @@ static BOOL lastDone;
 static void onDone(void *context, sp_input_result result, const sp_input_held *held) { lastResult = result; lastDone = YES; }
 static sp_input_result pointer(NSWindow *window, double x, double y, int phase) {
     lastDone = NO;
-    sp_input_pointer_then(window, x, y, phase, 0, 0, 0, 1, 2, onDone, NULL);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, 2, onDone, NULL);
     until(^BOOL { return lastDone; });
     return lastDone ? lastResult : (sp_input_result)-1;
 }
@@ -126,8 +127,9 @@ static const SEL *applicationSelectors(void) {
     selectors[2] = @selector(mainWindow);
     return selectors;
 }
-static IMP windowMethods[5], applicationMethods[3];
+static IMP windowMethods[5], applicationMethods[3], webViewInputContext;
 static BOOL unchanged(void) {
+    if (webViewInputContext != method_getImplementation(class_getInstanceMethod(WKWebView.class, @selector(inputContext)))) return NO;
     for (int i = 0; i < 5; i++) if (windowMethods[i] != method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]))) return NO;
     for (int i = 0; i < 3; i++) if (applicationMethods[i] != method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]))) return NO;
     return YES;
@@ -146,6 +148,7 @@ int main(void) { @autoreleasepool {
 
     for (int i = 0; i < 5; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
     for (int i = 0; i < 3; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
+    webViewInputContext = method_getImplementation(class_getInstanceMethod(WKWebView.class, @selector(inputContext)));
 
     // A window that registered no page has no facts, and reading them fails the check instead of the process.
     NSWindow *bare = makeWindow(0);
@@ -286,6 +289,36 @@ int main(void) { @autoreleasepool {
     NSUInteger closed = count(^{ [window close]; }, @"closed");
     check(closed == 1, [NSString stringWithFormat:@"a window that closes ends the state with one event (%lu)", (unsigned long)closed]);
     check(!sp_input_virtual_any() && !NSApp.isActive && NSApp.keyWindow == nil && NSApp.mainWindow == nil, @"after the close AppKit answers again");
+
+    sp_input_virtual_end("no state");
+
+    // A window that the host shows while another window is the virtual key window becomes the key window of AppKit, and the
+    // application is still not active. A press and a move of that window are input of an application that is not active: a
+    // press goes directly to the view, and a move makes the window the virtual key window.
+    check(pointer(second, 30, 30, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(second), @"a move makes a window the virtual key window");
+    NSWindow *shown = makeWindow(880);
+    WKWebView *shownView = makePage(shown);
+    sp_window_show(shown);
+    pageReady(shownView);
+    check(sp_input_virtual_real_key(shown) && !sp_input_virtual_real_active(),
+        @"a window shown beside the virtual key window is the key window of AppKit in an application that is not active");
+    __block NSUInteger shownMonitored = 0;
+    id shownMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
+        handler:^NSEvent *(NSEvent *event) { shownMonitored++; return event; }];
+    evaluate(shownView, @"events.length=0;null");
+    check(pointer(shown, 100, 25, 1) == SP_INPUT_DELIVERED && pointer(shown, 100, 25, 3) == SP_INPUT_DELIVERED,
+        @"a press and a release of the shown window are delivered");
+    NSArray *shownGesture = eventTypes(shownView);
+    check([shownGesture containsObject:@"pointerdown"] && [shownGesture containsObject:@"click"],
+        [NSString stringWithFormat:@"the gesture reaches the page of the shown window (%@)", [shownGesture componentsJoinedByString:@","]]);
+    check(shownMonitored == 0, @"a press of the shown window does not pass the application");
+    [NSEvent removeMonitor:shownMonitor];
+    check(pointer(shown, 300, 250, 0) == SP_INPUT_DELIVERED && sp_input_virtual_is(shown) && !sp_input_virtual_is(second),
+        @"a move of the key window of an application that is not active makes it the virtual key window");
+    check([facts(shown)[@"virtualKey"] boolValue], @"host.window of the shown window reports the virtual key window");
+    [shown close];
+    [shown release];
+    spin(0.2);
 
     sp_input_virtual_end("no state");
     [second close];

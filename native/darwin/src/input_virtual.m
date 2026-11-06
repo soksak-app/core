@@ -3,8 +3,10 @@
 // Replacing the class of a window breaks the key-value observers of WebKit, so the methods of NSWindow and NSApplication are
 // replaced with public method_setImplementation (docs/operations/private-native-apis.md). A replaced method answers with
 // the virtual state only while the application is not really active, so a real activation wins from its first moment, before
-// its notification arrives.
+// its notification arrives. -[WKWebView inputContext] is replaced in the same way and answers differently only while a key
+// down with a stated text of the virtual key window is delivered.
 #import <Cocoa/Cocoa.h>
+#import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #include <stdatomic.h>
 #import "event_ring.h"
@@ -19,6 +21,9 @@ static bool hasPoint;
 static BOOL (*appKitIsKey)(id, SEL), (*appKitIsMain)(id, SEL), (*appKitIsActive)(id, SEL);
 static NSWindow *(*appKitKeyWindow)(id, SEL), *(*appKitMainWindow)(id, SEL);
 static void (*appKitOrderFront)(id, SEL, id), (*appKitMakeKeyAndOrderFront)(id, SEL, id), (*appKitOrderFrontRegardless)(id, SEL);
+static NSTextInputContext *(*webKitInputContext)(id, SEL);
+// The web view that takes a key down with a stated text while the key is delivered. Main thread.
+static WKWebView *statedTextView;
 
 bool sp_input_virtual_real_active(void) {
     return appKitIsActive ? appKitIsActive(NSApp, @selector(isActive)) : NSApp.isActive;
@@ -33,6 +38,10 @@ bool sp_input_virtual_real_key(void *handle) {
     NSWindow *window = (__bridge NSWindow *)handle;
     if (appKitIsKey && (__bridge void *)window == atomic_load(&current)) return appKitIsKey(window, @selector(isKeyWindow));
     return window.isKeyWindow;
+}
+
+bool sp_input_virtual_through_application(void *window) {
+    return window && sp_input_virtual_real_active() && sp_input_virtual_real_key(window);
 }
 
 bool sp_input_virtual_is(void *window) {
@@ -85,6 +94,14 @@ static void refuseOrderFrontRegardless(NSWindow *self, SEL selector) {
     appKitOrderFrontRegardless(self, selector);
 }
 
+// The input method of the system does not serve the virtual key window, so a web view that takes a key down with a stated text
+// answers without an input context while the key is delivered. WebKit then interprets the key with the key bindings, as AppKit
+// does for a view without an input context: the text of the event reaches insertText: of the web view as the command of the
+// key, and the page receives keydown, keypress, beforeinput and input as for a person's key.
+static NSTextInputContext *answerInputContext(WKWebView *self, SEL selector) {
+    return self == statedTextView ? nil : webKitInputContext(self, selector);
+}
+
 static IMP replace(Class class, SEL selector, IMP implementation) {
     return method_setImplementation(class_getInstanceMethod(class, selector), implementation);
 }
@@ -101,6 +118,7 @@ static void install(void) {
         appKitOrderFront = (void (*)(id, SEL, id))replace(window, @selector(orderFront:), (IMP)refuseOrderFront);
         appKitMakeKeyAndOrderFront = (void (*)(id, SEL, id))replace(window, @selector(makeKeyAndOrderFront:), (IMP)refuseMakeKeyAndOrderFront);
         appKitOrderFrontRegardless = (void (*)(id, SEL))replace(window, @selector(orderFrontRegardless), (IMP)refuseOrderFrontRegardless);
+        webKitInputContext = (NSTextInputContext *(*)(id, SEL))replace(WKWebView.class, @selector(inputContext), (IMP)answerInputContext);
         sp_observe_notification("input_virtual.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
             ^(NSNotification *note) { if (sp_input_virtual_real_active()) sp_input_virtual_end("activation"); });
     });
@@ -163,5 +181,24 @@ bool sp_input_virtual_point(void *window, double *x, double *y) {
     if (!sp_input_virtual_is(window) || !hasPoint) return false;
     *x = pointX;
     *y = pointY;
+    return true;
+}
+
+// The view that takes the text of a key of window: the nearest view from the first responder up that is a text input client.
+static NSView *textInputClient(NSWindow *window) {
+    NSResponder *responder = window.firstResponder;
+    NSView *view = [responder isKindOfClass:NSView.class] ? (NSView *)responder : nil;
+    while (view && ![view respondsToSelector:@selector(insertText:replacementRange:)]) view = view.superview;
+    return view;
+}
+
+bool sp_input_virtual_type_stated_text(void *handle, void *event) {
+    NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
+    NSWindow *window = (__bridge NSWindow *)handle;
+    NSView *client = textInputClient(window);
+    if (!sp_input_virtual_is(window) || ![client isKindOfClass:WKWebView.class]) return false;
+    statedTextView = (WKWebView *)client;
+    [window sendEvent:(__bridge NSEvent *)event];
+    statedTextView = nil;
     return true;
 }

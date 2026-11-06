@@ -66,3 +66,40 @@ for (const app of Object.values(APPS))
       console.info(`PASS ${app.name}: still PNG observation (${Math.round(performance.now() - started)}ms)`);
     }
   });
+
+// A still is the window as it is shown: with the settings modal open, the still holds the modal over the workbench, so most of
+// its pixels differ from a still of the same window without the modal (docs/spec/native-surfaces.md#image-regions). A modal web
+// view that the still leaves out leaves the plain workbench, the pixels of the still without the modal.
+for (const app of Object.values(APPS))
+  test(`${app.name}: a still with the settings modal open holds the modal`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    await s.request("diagnostics.window.draw-covered", { draw: true });
+    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+    const still = async () => {
+      await s.presented();
+      const { path } = await s.request("diagnostics.capture.still", {});
+      s.cleanup(() => rmdirSync(dirname(path)));
+      s.cleanup(() => unlinkSync(path));
+      return readPng(path);
+    };
+    const without = await still();
+    await s.run("core.settings.open");
+    s.cleanup(() => s.run("core.settings.close"));
+    await s.until("core.modal", (modal) => modal?.id === "settings", "the settings modal did not open");
+    if ((await s.get("core.modal")).document !== null) {
+      await s.until("core.modal", (modal) => modal.document.loaded === true, "the settings document did not load");
+    }
+    const withModal = await still();
+    assert.equal(withModal.width, without.width);
+    assert.equal(withModal.height, without.height);
+    // Every fourth device pixel in each direction, which a modal over the window changes in most places.
+    let read = 0, changed = 0;
+    for (let y = 0; y < without.height; y += 4)
+      for (let x = 0; x < without.width; x += 4) {
+        read += 1;
+        if (distance(withModal.pixel(x, y), without.pixel(x, y)) > 6) changed += 1;
+      }
+    t.diagnostic(`${changed} of ${read} sampled pixels changed with the settings modal open`);
+    assert.ok(changed / read >= 0.5, `the still with the settings modal open changed ${changed} of ${read} sampled pixels of the still without it`);
+  });

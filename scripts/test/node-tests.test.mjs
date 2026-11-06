@@ -249,7 +249,7 @@ test("the audit of the logs runs after a run of window checks and of the activat
   assert.equal(lines.at(-1), "AUDIT FAIL marks.jsonl: the run left no test marks");
 });
 
-// The push gate runs the test files of the packages whose files the push range changes, and no other package.
+// --changed runs the test files of the packages whose files the revision range changes, and no other package.
 test("a change under a package selects the test files of that package only", () => {
   const root = workspace();
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));

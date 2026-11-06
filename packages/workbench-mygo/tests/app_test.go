@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -169,6 +170,52 @@ func TestClosedWindowTakesNoEvent(t *testing.T) {
 	queue.drain(t)
 	if len(stored.calls) != 0 {
 		t.Fatalf("a closed window called %v", stored.calls)
+	}
+}
+
+// A reload ends the workbench of the window while its placement waits in presentSurfaces, and the host cancels that placement with
+// the reload and answers it with a failure. The ended workbench states nothing of that answer: core.verify of the window belongs to
+// the workbench that the reload builds.
+func TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing(t *testing.T) {
+	stored := &storedHost{installed: installedSessionView, common: map[string]any{"memorySaverDelay": 30},
+		projects: []map[string]any{storedProject(tab("tab-bbbbbb", "session"))}}
+	viewPlacements(stored)
+	presenting, release := make(chan struct{}, 8), make(chan struct{})
+	stored.extra["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
+		presenting <- struct{}{}
+		<-release
+		return nil, errors.New("surface preparation 9 is no longer current")
+	}
+	var mu sync.Mutex
+	var changes []string
+	stored.extra["exposureChanged"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		changes = append(changes, string(argument))
+		return nil, nil
+	}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=prj-a"
+	tester := ui.NewTester(app.Build(window), 1200, 800)
+	app.Shown(window)
+	queue.drain(t)
+	app.Emit(window, "exposure-request", map[string]any{"id": 1, "method": "status.watch", "params": map[string]any{"name": "core.verify"}})
+	queue.drain(t)
+	tester.Frame()
+	queue.drain(t)
+	if len(presenting) != 1 {
+		t.Fatalf("%d placements wait in presentSurfaces before the end of the workbench, want 1", len(presenting))
+	}
+	mu.Lock()
+	before := len(changes)
+	mu.Unlock()
+	app.Close(window)
+	close(release)
+	queue.drain(t)
+	mu.Lock()
+	defer mu.Unlock()
+	if after := changes[before:]; len(after) != 0 {
+		t.Fatalf("the ended workbench sent %v", after)
 	}
 }
 

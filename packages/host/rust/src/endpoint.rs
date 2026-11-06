@@ -46,8 +46,10 @@ pub const TIMED_OUT: i64 = 1005;
 pub const NOT_ACTIVE: i64 = 1006;
 /// AppKit reports a pressed mouse button, so a synthetic press or release was not delivered.
 pub const BUTTON_HELD: i64 = 1007;
-/// A synthetic press of that button is still open in that window, so the press was not delivered.
+/// The press of that button of the pointer is still open, so the press was not delivered.
 pub const PRESS_OPEN: i64 = 1008;
+/// An open press of another pointer would share the state that the input changes, so the input was not delivered.
+pub const POINTER_HELD: i64 = 1011;
 /// A registered command or state handler failed.
 pub const HANDLER_FAILED: i64 = -32000;
 

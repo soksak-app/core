@@ -185,8 +185,10 @@ pub trait Listener: Send + Sync {
 
 /// A pointer action that is delivered as native input. Coordinates are values in points relative to the upper left of
 /// the content area.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pointer {
+    /// The name of the pointer. Each pointer holds its own open presses (docs/spec/exposure.md#named-pointers).
+    pub pointer: String,
     pub x: f64,
     pub y: f64,
     /// 0 move, 1 press, 2 drag, 3 release, 4 scroll.
@@ -208,6 +210,15 @@ pub struct ButtonHeld {
     pub mask: u64,
     /// The frontmost application. It is None when AppKit reports no frontmost application.
     pub frontmost: Option<FrontmostApplication>,
+}
+
+/// The open press of another pointer that rejected an input with Delivery::PointerHeld.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PointerHeld {
+    /// The pointer that holds the press.
+    pub pointer: String,
+    /// The state that the press of that pointer holds.
+    pub reason: String,
 }
 
 /// The frontmost application.
@@ -232,8 +243,10 @@ pub enum Delivery {
     /// AppKit reports a pressed mouse button, so a synthetic press or release was not delivered. The value is the state
     /// of the rejected attempt.
     ButtonHeld(ButtonHeld),
-    /// A synthetic press of that button is still open in that window, so the press was not delivered.
+    /// The press of that button of the pointer is still open, so the press was not delivered.
     PressOpen,
+    /// An open press of another pointer would share the state that the input changes, so it was not delivered.
+    PointerHeld(PointerHeld),
 }
 
 /// A key action that is delivered as native input.
@@ -463,6 +476,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
+    /// Keeps the document of a webview shown and its rendering running while its window is occluded, for a modal webview,
+    /// which is raised only after it renders and which a still capture of a covered window shows. Call it on the main
+    /// thread.
+    fn render_occluded(&self, view: &PlatformWebview) -> Result<(), String>;
     /// Creates a logical SurfaceHost in the window composition of the window. This call does not create a DOM webview.
     fn create_surface(&self, window: Handle) -> Result<Handle, String>;
     fn close_surface(&self, surface: Handle) -> Result<(), String>;

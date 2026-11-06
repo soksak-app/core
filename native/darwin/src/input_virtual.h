@@ -29,3 +29,15 @@ bool sp_input_virtual_point(void *window, double *x, double *y);
 // What AppKit itself answers, also while the methods are replaced. A record of system state reads these.
 bool sp_input_virtual_real_active(void);
 bool sp_input_virtual_real_key(void *window);
+
+// Delivers event, a key down whose text the caller stated (SP_INPUT_STATED_TEXT of input_inject.h), to window, the virtual key
+// window, when the text input client that holds its keyboard is a web view, and reports whether it did. The input method of the
+// system does not serve the window, so the web view takes the key without its input context and inserts the text of the event
+// through its text input. Another client, such as an image region, types the stated text itself and is not served here. Main
+// thread.
+bool sp_input_virtual_type_stated_text(void *window, void *event);
+
+// Whether input of window passes -[NSApplication sendEvent:]: the application is really active and window is its key window.
+// AppKit also holds a key window in an application that is not active, such as a window that a host shows while another window
+// is the virtual key window; its input is input of an application that is not active and goes to the window or the view.
+bool sp_input_virtual_through_application(void *window);

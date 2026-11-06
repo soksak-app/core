@@ -201,14 +201,23 @@ test("a group at its limit is ended and its leftovers named while other processe
   // Three processes outside the group of the test carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB
   // output buffer of execFileSync; the names of the leftovers come only from the members of the group. The cleanup ends them and the
   // group of the test process, which a runner that stops the group and fails to read the table leaves stopped.
+  // macOS 27 takes about 3.4 ms for each KB of arguments to start a process (1.5 s for 450 KB), and the starts of the processes of one
+  // parent wait for each other. The test process of the runner, whose parent is this process too, starts only after the three, past its
+  // limit, and the runner stops it before it ran. Each of the three writes a line when it runs, and the run starts after the three lines,
+  // so the commands are in the table and the test process starts at once.
   const folder = mkdtempSync(join(tmpdir(), "runner-large-"));
   const pidFile = join(folder, "pid");
-  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: "ignore" }));
+  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "process.stdout.write('running\\n'); setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: ["ignore", "pipe", "ignore"] }));
   t.after(() => {
     for (const child of large) child.kill("SIGKILL");
     endRecordedGroup(pidFile);
     rmSync(folder, { recursive: true, force: true });
   });
+  await Promise.all(large.map((child) => new Promise((resolve, reject) => {
+    child.stdout.once("data", resolve);
+    child.once("error", reject);
+    child.once("exit", (code, signal) => reject(new Error(`a process with large arguments ended before it ran: ${code ?? signal}`)));
+  })));
   const source = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" }); setInterval(() => {}, 1000);`;
   const { results } = await run([{ ...node("large", source), timeoutMs: 2000 }], { concurrency: 1 });
   const result = results.get("large");

@@ -3,39 +3,31 @@
 // the person keeps the keyboard (docs/spec/exposure.md#virtual-key-window).
 import test from "node:test";
 
-import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-for (const app of MAIN_PAGE_APPS) {
+// A host with a main page (`pageProcess` of `host.window`) shows the picker in a modal window that becomes the virtual key window under the pointer; a host
+// without one draws the picker in the window itself, which becomes the virtual key window under the pointer over the card.
+for (const app of Object.values(APPS)) {
   test(`${app.name}: the key window closes its add picker with native Escape`, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.pane === 0).id;
-    await s.run("core.card.menu", { card, menu: "add" });
-    const window = await s.until("host.window", (state) => state.modal?.id === "picker" && state.modal.shown,
-      "the add picker did not appear");
-    const rect = window.modal.frame;
-    await s.pointer(rect.x + rect.width / 2, rect.y + rect.height / 2, "move");
-    await s.until("host.window", (state) => state.virtualKey,
-      "the picker window did not become the virtual key window");
-    await s.press("Escape");
-    await s.until("host.window", (state) => state.modal === null,
-      "native Escape did not close the add picker in the key window");
-  });
-}
-
-for (const app of Object.values(APPS).filter((item) => !MAIN_PAGE_APPS.includes(item))) {
-  test(`${app.name}: the key window closes the add picker it draws with native Escape`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const grid = await s.get("core.grid");
     const card = grid.cards.find((item) => item.pane === 0);
     await s.run("core.card.menu", { card: card.id, menu: "add" });
     await s.until("core.picker", (picker) => picker.open, "the add picker did not open");
-    await s.pointer(grid.plane.x + card.x + card.w / 2, grid.plane.y + card.y + card.h - 24, "move");
+    if ((await s.get("host.window")).pageProcess !== null) {
+      const shown = await s.until("host.window", (state) => state.modal?.id === "picker" && state.modal.shown,
+        "the add picker window did not appear");
+      const rect = shown.modal.frame;
+      await s.pointer(rect.x + rect.width / 2, rect.y + rect.height / 2, "move");
+    } else {
+      await s.pointer(grid.plane.x + card.x + card.w / 2, grid.plane.y + card.y + card.h - 24, "move");
+    }
     await s.until("host.window", (state) => state.virtualKey,
-      "the window did not become the virtual key window");
+      "the window of the picker did not become the virtual key window");
     await s.press("Escape");
     await s.until("core.picker", (picker) => !picker.open, "native Escape did not close the add picker");
+    await s.until("host.window", (state) => state.modal === null, "the add picker window stayed after native Escape");
   });
 }

@@ -221,7 +221,7 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
     NSResponder *first = window.firstResponder;
     BOOL targetOwnsResponder = first == view ||
         ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]);
-    if (window && (!window.isKeyWindow || sp_input_virtual_is((__bridge void *)window)) && !targetOwnsResponder) [window makeFirstResponder:view];
+    if (window && !sp_input_virtual_through_application((__bridge void *)window) && !targetOwnsResponder) [window makeFirstResponder:view];
     // When a timeout or an unregistration ended the wait before the drain, completion is already
     // reported, so nothing is sent.
     void (^sendAfterDrain)(void) = ^{

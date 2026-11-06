@@ -4,6 +4,7 @@
 // of the release ends by its limit.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #import "event_ring.h"
 #import "image_region.h"
 #import "input_inject.h"
@@ -32,8 +33,13 @@ static void runEvents(NSTimeInterval seconds) {
     }
 }
 
+// The real activation, which this test gives in place of AppKit.
+static BOOL reallyActive;
+static BOOL testIsActive(id self, SEL selector) { return reallyActive; }
+
 // A press and a release that reach their page answer nothing wrong, also with a hidden surface whose region lies at the point.
-// A key window passes the application, whose monitor waits for the release in the page of the region at the press.
+// The key window of the application that is really active passes the application, whose monitor waits for the release in the
+// page of the region at the press.
 @interface SPKeyWindow : NSWindow
 @end
 @implementation SPKeyWindow
@@ -49,6 +55,7 @@ static void pressDone(void *context, sp_input_result result, const sp_input_held
     *out = result + 1;
 }
 static void checkHiddenSurfaceRegion(void) {
+    reallyActive = YES;
     NSWindow *window = [[SPKeyWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -81,18 +88,20 @@ static void checkHiddenSurfaceRegion(void) {
     runEvents(0.6);
     __block int down = 0, up = 0;
     NSString *records = capturedRecords(^{
-        sp_input_pointer_then(window, 150, 175, 1, 0, 0, 0, 1, 1.5, pressDone, &down);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 1, 0, 0, 0, 1, 1.5, pressDone, &down);
         runEvents(0.3);
-        sp_input_pointer_then(window, 150, 175, 3, 0, 0, 0, 1, 1.5, pressDone, &up);
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 150, 175, 3, 0, 0, 0, 1, 1.5, pressDone, &up);
         runEvents(1.4);
     });
     check(down == SP_INPUT_DELIVERED + 1 && up == SP_INPUT_DELIVERED + 1, [NSString stringWithFormat:@"the press and the release reach their page (%d, %d)", down, up]);
     check(![records containsString:@"paired pointer release"] && ![records containsString:@"receipt of pointerup did not arrive"],
         [NSString stringWithFormat:@"the release does not wait for the page of a hidden surface (%@)", records]);
     [window close];
+    reallyActive = NO;
 }
 
 int main(void) { @autoreleasepool {
+    method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(isActive)), (IMP)testIsActive);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];

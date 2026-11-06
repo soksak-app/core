@@ -240,7 +240,7 @@ fn the_only_window_is_used_and_parameters_are_sent() {
             result("null")
         }
     });
-    let cases: [(&[&str], &str, &str); 8] = [
+    let cases: [(&[&str], &str, &str); 9] = [
         (
             &["status", "core.screen", "--surface", "tab-1"],
             "status.get",
@@ -289,6 +289,22 @@ fn the_only_window_is_used_and_parameters_are_sent() {
             ],
             "input.pointer",
             r#"{"clicks":2,"phase":"down","window":"main","x":1,"y":2}"#,
+        ),
+        (
+            &[
+                "input",
+                "pointer",
+                "--pointer",
+                "second",
+                "--x",
+                "3",
+                "--y",
+                "4",
+                "--phase",
+                "drag",
+            ],
+            "input.pointer",
+            r#"{"phase":"drag","pointer":"second","window":"main","x":3,"y":4}"#,
         ),
         (
             &[

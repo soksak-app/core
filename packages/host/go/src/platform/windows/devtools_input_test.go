@@ -40,7 +40,7 @@ func TestAPointerPhaseBecomesItsMouseEvent(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			state := pressState{open: test.open}
-			call, result := state.call(10.5, 20, test.phase, test.button, 3, -4, 2)
+			call, result := state.call("main", 10.5, 20, test.phase, test.button, 3, -4, 2)
 			if result != platform.PointerDelivered {
 				t.Fatalf("result %v", result)
 			}
@@ -72,7 +72,7 @@ func TestAPointerThatBreaksThePressRulesIsNotSent(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			state := pressState{open: test.open}
-			if _, result := state.call(1, 1, test.phase, test.button, 0, 0, test.clicks); result != test.want {
+			if _, result := state.call("main", 1, 1, test.phase, test.button, 0, 0, test.clicks); result != test.want {
 				t.Fatalf("result %v, want %v", result, test.want)
 			}
 		})
@@ -83,17 +83,40 @@ func TestAPointerThatBreaksThePressRulesIsNotSent(t *testing.T) {
 // contract: platform.windows.input.only-delivered-pointer-changes-press
 func TestOnlyADeliveredPointerChangesThePress(t *testing.T) {
 	var state pressState
-	state.delivered(phasePress, 1)
-	if state.open != [2]bool{false, true} {
-		t.Fatalf("after a press %v", state.open)
+	state.delivered("main", phasePress, 1)
+	if state.open != [2]bool{false, true} || state.holder != "main" {
+		t.Fatalf("after a press %v of %q", state.open, state.holder)
 	}
-	state.delivered(phaseDrag, 1)
+	state.delivered("main", phaseDrag, 1)
 	if state.open != [2]bool{false, true} {
 		t.Fatalf("after a drag %v", state.open)
 	}
-	state.delivered(phaseRelease, 1)
-	if state.open != [2]bool{} {
-		t.Fatalf("after a release %v", state.open)
+	state.delivered("main", phaseRelease, 1)
+	if state.open != [2]bool{} || state.holder != "" {
+		t.Fatalf("after a release %v of %q", state.open, state.holder)
+	}
+}
+
+// A page has one mouse pointer: while one pointer holds a press, the move, press, drag and release of another pointer are not sent,
+// its scroll is sent, and after the release the other pointer presses.
+// contract: platform.windows.input.pointer-held-by-another-pointer
+func TestAnotherPointerWaitsForTheReleaseOfAPage(t *testing.T) {
+	var state pressState
+	state.delivered("a", phasePress, 0)
+	for _, phase := range []int{phaseMove, phasePress, phaseDrag, phaseRelease} {
+		if _, result := state.call("b", 1, 1, phase, 1, 0, 0, 1); result != platform.PointerHeld {
+			t.Fatalf("phase %d of another pointer: result %v, want PointerHeld", phase, result)
+		}
+	}
+	if _, result := state.call("b", 1, 1, phaseScroll, 0, 0, 3, 1); result != platform.PointerDelivered {
+		t.Fatalf("scroll of another pointer: result %v", result)
+	}
+	if _, result := state.call("a", 1, 1, phaseDrag, 0, 0, 0, 1); result != platform.PointerDelivered {
+		t.Fatalf("drag of the holder: result %v", result)
+	}
+	state.delivered("a", phaseRelease, 0)
+	if _, result := state.call("b", 1, 1, phasePress, 0, 0, 0, 1); result != platform.PointerDelivered {
+		t.Fatalf("press of another pointer after the release: result %v", result)
 	}
 }
 

@@ -390,6 +390,8 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-right-button-accepted` | 오른쪽 포인터 버튼을 받아들이고 오른쪽 버튼으로 전달한다. | all |
 | `endpoint.input.pointer-phase-and-scroll-decoding` | drag와 scroll phase, deltaY, 소수 좌표를 그대로 전달한다. | all |
 | `endpoint.input.pointer-button-held-message` | 1007 메시지는 `NSEvent.pressedMouseButtons` 마스크를 16진수로, frontmost 애플리케이션을 bundle identifier와 pid로 보고하며, bundle identifier가 없는 애플리케이션은 pid로, frontmost 애플리케이션이 없으면 그 사실을 두 host에서 같은 문장으로 보고한다. | all |
+| `endpoint.input.pointer-name` | `pointer`의 기본값은 `main`이고, `a-z`, `0-9`, `-`로 된 1~32자 이름은 그대로 전달하며, 빈 이름, 다른 문자가 있는 이름, 더 긴 이름, 문자열이 아닌 값은 -32602를 반환한다. | all |
+| `endpoint.input.pointer-held-message` | 1011 메시지는 누름을 쥔 pointer와 그 누름이 쥔 상태를 두 host에서 같은 문장으로 밝힌다. | all |
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | all |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | all |
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | all |
@@ -499,6 +501,7 @@ fn invalid_json_closes_connection() {
 | `platform.windows.input.pointer-phase-becomes-mouse-event` | pointer 입력은 DevTools 호출 `Input.dispatchMouseEvent`가 된다. move는 `mouseMoved`, press는 버튼과 `buttons`, `clickCount`를 담은 `mousePressed`, drag는 눌린 버튼을 담은 `mouseMoved`, release는 아직 눌린 버튼을 담은 `mouseReleased`, scroll은 delta를 담은 `mouseWheel`이다. | all |
 | `platform.windows.input.pointer-breaking-press-rules-is-not-sent` | 버튼이 눌린 동안의 press, press 없는 drag나 release, click이 없거나 셋보다 많은 press, 모르는 phase와 모르는 버튼은 보내지 않는다. 그 press는 열린 press로, 나머지는 거절로 답한다. | all |
 | `platform.windows.input.only-delivered-pointer-changes-press` | 전달된 press만 그 버튼의 press를 열고 전달된 release만 닫는다. drag는 그대로 둔다. | all |
+| `platform.windows.input.pointer-held-by-another-pointer` | 한 pointer가 page의 press를 쥔 동안 다른 pointer의 move, press, drag, release는 그 pointer가 쥔 것으로 답하고, 그 scroll은 보내며, 쥔 pointer 자신의 drag는 보내고, 마지막 release 뒤에는 다른 pointer가 press한다. | all |
 | `platform.windows.input.key-becomes-key-event` | 키는 key, code, Windows 가상 키 코드를 담은 DevTools 호출 `Input.dispatchKeyEvent`가 된다. 글자를 치는 키는 text를 담은 `keyDown`, 글자를 치지 않는 키나 Control, Alt, Meta가 붙은 키는 text 없는 `rawKeyDown`, 떼기는 `keyUp`이다. Shift와 입력기의 text는 친 글자를 유지하고, 어떤 키도 이름 붙이지 않는 글자는 text만 담아 보낸다. | all |
 | `platform.windows.input.key-without-name-or-character-is-not-sent` | 키 이름도 한 글자도 아닌 키는 빈 키나 `Enterr`처럼 거절되고 보내지 않는다. | all |
 | `platform.windows.input.queue-sends-one-call-at-a-time` | web view의 입력 queue는 DevTools 호출을 한 번에 하나씩 보낸다. 다음 호출은 앞 호출이 끝난 뒤에 시작하고, 각 호출은 끝날 때 답한다. | all |

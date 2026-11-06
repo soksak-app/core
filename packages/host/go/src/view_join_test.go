@@ -332,6 +332,27 @@ func TestLayoutCancellationClearsItsJoinWithoutPresentationAbandonment(t *testin
 	}
 }
 
+// A reload cancels every open layout ticket while a presentation of one waits for the documents, and that presentation then answers
+// that its preparation is no longer current, as the native commit of a cancelled ticket answers on every host.
+func TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := unsafe.Pointer(new(int))
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 1, Y: 2, W: 300, H: 160}, Visible: true}
+	request := PresentRequest{Ticket: 9, Placements: []Placement{placement}}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("join the presented view: %v", err)
+	}
+	if err := s.presentation.cancelAll(); err != nil {
+		t.Fatalf("cancel the open tickets: %v", err)
+	}
+	if _, err := s.finishLayoutPresentation(window, request); err == nil || err.Error() != "surface preparation 9 is no longer current" {
+		t.Fatalf("the presentation of the cancelled ticket answered %v", err)
+	}
+	if len(s.presentation.pending) != 0 || !slices.Contains(fake.cancelledTickets, request.Ticket) {
+		t.Fatalf("the cancelled ticket left pending state %v and native cancellations %v", s.presentation.pending, fake.cancelledTickets)
+	}
+}
+
 // contract: view.presentation-wait.joins
 // A shown view joins the open transaction once, and its presentation ends the wait without an abandon.
 func TestAShownViewJoinsTheOpenTransactionOnce(t *testing.T) {
