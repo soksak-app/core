@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F504-2: 변경한 layout 소유 module은 CI에서 한정된 필수 mutation 집합을 선택하며 복사본은 통과한 baseline을 재사용한다. 구조화된 failure code는 실제 assertion/runtime error를 출력한 진단 문자열 및 출처 불명 child signal과 구분한다. Runner, reporter, selector 검사와 추가 module error case 두 개가 통과한다. 최종 필수 실행은 baseline file 여섯 개를 통과하고 mutation 여덟 개를 모두 assertion으로 검출하며 생존, 오래된 위치, 모호한 위치, 무효한 결과는 없다. macOS에서 workflow 및 경계 검사도 통과한다.
+
 - F503-3: 동작 비교는 원래 ID와 변경한 ID 각각에 대해 입력 card의 순열 120개 모두와 sequence별 공개 operation 18개를 다룬다. ID 의존 선택 및 첫 card geometry mutation은 추적 comparator에서 실패한다. macOS에서 equivalence와 rule case 24개가 모두 통과하며 독립 slicing 및 구조 소유권 검사는 유지한다.
 
 - F506: close 요청, tab save, window save의 modified guard를 격리한 복사본에서 각각 제거하면 해당 추적 소유 assertion이 실패한다. macOS에서 close 경계, tab report, view surface case 23개가 모두 통과한다. production guard는 변경하지 않았고 native application 승인은 실행하지 않았다.

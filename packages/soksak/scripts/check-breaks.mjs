@@ -1,7 +1,7 @@
 /**
  * Apply each deliberate defect and require the suite to fail.
  *
- *   node scripts/check-breaks.mjs [id,id,...] [--list]
+ *   node scripts/check-breaks.mjs [id,id,... | --required | --changed <range>] [--list]
  *
  * Exits non-zero if any break survives or no longer applies.
  */
@@ -12,14 +12,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BREAKS } from "./breaks.mjs";
 import { mutationVerdict, runMutationTest } from "./mutation-runner.mjs";
+import { changedMutationFiles, REQUIRED_BREAKS, selectRequiredBreaks } from "./required-breaks.mjs";
 
 const REPO = new URL("../", import.meta.url).pathname;
 const ROOT = new URL("../../../", import.meta.url).pathname;
 // Listing and rejecting break ids need no copy, so they finish before one is made.
 const arguments_ = process.argv.slice(2);
 const listOnly = arguments_.includes("--list");
-const ids = arguments_.filter((argument) => argument !== "--list");
-const only = ids[0] ? new Set(ids[0].split(",")) : null;
+const argumentsWithoutList = arguments_.filter((argument) => argument !== "--list");
+let required = null;
+let only = null;
+try {
+  if (argumentsWithoutList[0] === "--changed" && argumentsWithoutList.length === 2) {
+    required = selectRequiredBreaks(changedMutationFiles(ROOT, argumentsWithoutList[1]));
+  } else if (argumentsWithoutList[0] === "--required" && argumentsWithoutList.length === 1) {
+    required = [...REQUIRED_BREAKS];
+  } else if (argumentsWithoutList.length > 1 || argumentsWithoutList[0]?.startsWith("-")) {
+    throw new Error("Use break ids, --required or --changed <revision range>");
+  } else if (argumentsWithoutList[0]) only = new Set(argumentsWithoutList[0].split(","));
+  if (required) only = new Set(required.map(({ id }) => id));
+} catch (error) {
+  console.error(error.message);
+  process.exit(2);
+}
 const knownIds = new Set(BREAKS.map(({ id }) => id));
 const unknownIds = only ? [...only].filter((id) => !knownIds.has(id)) : [];
 if (unknownIds.length) {
@@ -31,6 +46,11 @@ if (listOnly) {
   for (const entry of BREAKS) {
     if (!only || only.has(entry.id)) console.log(`${entry.id}\t${entry.file}\t${entry.what}`);
   }
+  process.exit(0);
+}
+
+if (required?.length === 0) {
+  console.log("No changed mutation owners");
   process.exit(0);
 }
 
@@ -70,11 +90,13 @@ for (const part of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) {
 // into. Link the tree rather than copy it — the run only reads it.
 symlinkSync(`${REPO}node_modules`, `${HERE}node_modules`);
 
-const TESTS = readdirSync(`${HERE}test`)
+const TESTS = required ? [...new Set(required.flatMap(({ tests }) => tests))] : readdirSync(`${HERE}test`)
   .filter((f) => f.endsWith(".test.mjs"))
   .map((f) => `test/${f}`);
 /** The test files to run for a break, the one named after its file first. */
-const order = (file) => {
+const order = (entry) => {
+  if (required) return required.find(({ id }) => id === entry.id).tests;
+  const file = entry.file;
   const named = `test/${file.replace(/^dist\//, "").replace(/\.js$/, "")}.test.mjs`;
   return TESTS.includes(named) ? [named, ...TESTS.filter((f) => f !== named)] : TESTS;
 };
@@ -147,12 +169,12 @@ const copy = () => {
   const top = `${mkdtempSync(join(tmpdir(), "soksak-break-"))}/`;
   const root = `${top}packages/soksak/`;
   for (const part of ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"])
-    cpSync(`${REPO}${part}`, `${root}${part}`, { recursive: true });
+    cpSync(`${HERE}${part}`, `${root}${part}`, { recursive: true });
   for (const part of ["package.json", "Makefile", ".node-version"])
-    cpSync(`${ROOT}${part}`, `${top}${part}`, { recursive: true });
+    cpSync(`${TOP}${part}`, `${top}${part}`, { recursive: true });
   for (const part of ["node-test-evidence.mjs", "test-event-reporter.mjs"])
-    cpSync(`${ROOT}scripts/${part}`, `${top}scripts/${part}`);
-  symlinkSync(`${REPO}node_modules`, `${root}node_modules`);
+    cpSync(`${TOP}scripts/${part}`, `${top}scripts/${part}`);
+  symlinkSync(`${HERE}node_modules`, `${root}node_modules`);
   return { top, root };
 };
 
@@ -161,7 +183,7 @@ const run = async (b) => {
   try {
     const src = originals[b.file];
     writeFileSync(`${root}${b.file}`, src.split(b.find).join(b.to));
-    for (const file of order(b.file)) {
+    for (const file of order(b)) {
       const timeout = breakTimeout(file);
       console.log(`START break=${b.id} test=${file} timeout_ms=${timeout}`);
       const result = await runFile(root, file, timeout, b.id);

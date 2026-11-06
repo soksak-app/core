@@ -17,3 +17,11 @@
 | `environment-error` | Command를 시작하지 못했거나 필요한 dependency·실행 근거가 없거나 실험이 중단되었다. Mutation 검출이 아니다. |
 
 Baseline은 `passed`만 승인한다. 필수 mutation은 assertion 실패, runtime 실패 또는 mutant timeout을 승인하고, 살아남은 mutation, 일치하지 않거나 여러 곳에 일치하는 edit, 환경 오류에서 실패한다. 탐색 실행은 환경 오류를 점수에 넣지 않고 중단한다. 출력과 JSON record는 deadline을 취소 또는 감독 process 소멸과 구분한다. 감독 원인이 기록되지 않은 종료 signal은 process를 끝낸 주체를 식별할 수 없으므로 환경 오류이다. Source 구문 오류나 throw한 runtime error는 유효한 검출로 유지한다.
+
+## 변경한 소유 module
+
+`node scripts/check-breaks.mjs --changed <base>...<head>`는 `scripts/required-breaks.mjs`에 선언한 필수 결함과 소유 test file을 선택한다. Source 변경은 해당 구현 소유 module을 선택한다. 지정한 소유 test 변경은 그 소유 module들을 선택하며, 공통 test, mutation script, layout 계약, 공통 build 입력 변경은 전체 필수 집합을 선택한다. 무관한 package는 선택하지 않고, 필수 소유 module이 없는 새 구현 source는 오류이다. 이전 tree가 없는 첫 push는 현재 tree에서 선택한다. `--required`는 한정된 전체 필수 집합을 로컬에서 실행하며, filter 없는 command는 전체 선언 결함 inventory를 계속 실행한다.
+
+필수 집합은 결함 최대 8개, 소유 module마다 test file 최대 3개로 제한한다. 선택한 모든 test는 먼저 불변인 package 복사본 하나에서 통과해야 한다. 이후 각 결함은 해당 baseline의 별도 복사본에서 선언한 test만 실행하므로, live checkout 편집이 실험 도중 검증 입력을 바꿀 수 없다. 살아남은 필수 결함, 유효하지 않은 실행 근거, baseline 실패는 gate를 거부한다.
+
+`core-node` CI job은 package build와 test 뒤 push 또는 pull request의 양쪽 revision으로 이 선택을 실행한다. 기존 필수 job gate에 해당 결과가 포함된다. 표준 출력, 표준 오류, 결과 record는 성공적인 검출도 포함하여 `required-mutation-evidence` artifact로 보존한다. 무관한 변경은 mutation artifact를 만들지 않는다. 이 gate는 선택한 선언 결함의 검출을 입증하며, 전체 탐색 mutation 점수나 application 승인을 입증하지 않는다.

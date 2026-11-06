@@ -1,10 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createNodeTestEvidence, readNodeTestEvidence, withNodeTestReporters, NODE_TEST_REPORTERS, testExecutionErrors } from '../node-test-evidence.mjs';
-import { EVENT_PREFIX } from '../test-event-reporter.mjs';
+import testEvents, { EVENT_PREFIX } from '../test-event-reporter.mjs';
 
 const summary = (file, counts = {}) => ({ type: 'test:summary', file, success: true,
   counts: { tests: 1, passed: 1, failed: 0, skipped: 0, cancelled: 0, todo: 0, ...counts } });
+
+test('the event reporter preserves the failure code rather than diagnostic text', { timeout: 1000 }, async () => {
+  const source = [
+    { type: 'test:stdout', data: { message: 'ENOENT ERR_ASSERTION' } },
+    { type: 'test:complete', data: { name: 'assertion', details: { error: { code: 'ERR_TEST_FAILURE', failureType: 'testCodeFailure', cause: { code: 'ERR_ASSERTION' } } } } },
+    { type: 'test:complete', data: { name: 'deadline', details: { error: { code: 'ERR_TEST_FAILURE', failureType: 'testTimeoutFailure' } } } },
+  ];
+  const events = [];
+  for await (const line of testEvents(source)) events.push(JSON.parse(line.slice(EVENT_PREFIX.length)));
+  assert.equal(events[0].errorCode, undefined);
+  assert.equal(events[1].errorCode, 'ERR_ASSERTION');
+  assert.equal(events[1].failureType, 'testCodeFailure');
+  assert.equal(events[2].failureType, 'testTimeoutFailure');
+});
 
 test('file-owned evidence aggregates every declared file and rejects a missing file despite a passing wrapper', { timeout: 10_000 }, () => {
   const evidence = createNodeTestEvidence(['/first.test.mjs', '/second.test.mjs']);

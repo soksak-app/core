@@ -358,3 +358,21 @@ test('the structure step of CI checks the names of the commands', () => {
   assert.match(read('.github/workflows/ci.yml'), /make -C core [^\n]*\bcheck-commands\b/);
   assert.match(read('Makefile'), /^check-commands:\n\t@pnpm exec sok-check commands$/m);
 });
+
+test('the core Node gate runs changed-owner required mutations and retains their evidence', { timeout: 1000 }, () => {
+  const ci = read('.github/workflows/ci.yml');
+  const core = /  core-node:\n([\s\S]*?)(?=\n  [a-z][a-z0-9-]+:\s*$)/m.exec(ci)?.[1] ?? '';
+  assert.match(core, /fetch-depth: 0/, 'changed-owner selection needs both revisions');
+  const list = steps(core);
+  const baseline = list.findIndex(({ name }) => name === 'Core package tests');
+  const mutation = list.findIndex(({ name }) => name === 'Required mutations for changed owners');
+  assert.ok(mutation > baseline, 'required mutations must follow the owning package build and tests');
+  assert.match(list[mutation].text, /check-breaks\.mjs --changed/);
+  assert.match(list[mutation].text, /github\.event\.pull_request\.base\.sha/);
+  assert.match(list[mutation].text, /github\.event\.before/);
+  assert.doesNotMatch(list[mutation].text, /continue-on-error|\|\| true|mutate\.mjs/);
+  const evidence = list.find(({ name }) => name === 'Keep required mutation evidence');
+  assert.ok(evidence, 'required mutation logs are not retained');
+  assert.match(evidence.text, /if: always\(\)/);
+  assert.match(evidence.text, /soksak-break-evidence-\*/);
+});

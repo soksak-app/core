@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -40,8 +40,14 @@ for (const [name, source, expected] of [
   ["pass", 'import test from "node:test"; test("case", () => {});', "passed"],
   ["assertion", 'import test from "node:test"; import assert from "node:assert/strict"; test("case", () => { console.log("before assertion"); assert.equal(1, 2); });', "assertion-failure"],
   ["runtime", 'import test from "node:test"; test("case", () => { throw new TypeError("mutant runtime"); });', "runtime-failure"],
+  ["runtime with assertion text", 'import test from "node:test"; test("case", () => { console.log("ERR_ASSERTION"); throw new TypeError("mutant runtime"); });', "runtime-failure"],
+  ["module runtime with environment text", 'console.log("ENOENT"); throw new TypeError("mutant runtime");', "runtime-failure"],
+  ["assertion with environment text", 'import test from "node:test"; import assert from "node:assert/strict"; test("case", () => { console.log("ENOENT"); assert.equal(1, 2); });', "assertion-failure"],
   ["syntax", "export const invalid = ;", "runtime-failure"],
+  ["test child signal", 'process.kill(process.pid, "SIGTERM");', "environment-error"],
   ["environment", 'import "./missing-dependency.mjs";', "environment-error"],
+  ["registered environment error", 'import test from "node:test"; test("case", () => { throw Object.assign(new Error("file refused"), { code: "EACCES" }); });', "environment-error"],
+  ["test deadline", 'import test from "node:test"; test("case", { timeout: 20 }, () => new Promise((resolve) => setTimeout(resolve, 50)));', "mutant-timeout"],
   ["empty", "", "environment-error"],
   ["skipped", 'import test from "node:test"; test.skip("not executed", () => {});', "environment-error"],
 ]) {
@@ -91,38 +97,61 @@ test("an unexplained process termination cannot establish mutation detection", {
   assert.equal(result.classification, "environment-error");
 });
 
-for (const [name, mutation, expectedCode, expectedOutput] of [
-  ["assertion", { to: "export const value = 2;" }, 0, /result=assertion-failure/],
-  ["runtime", { to: 'throw new TypeError("mutant"); export const value = 1;' }, 0, /result=runtime-failure/],
-  ["environment", { to: 'import "./missing.mjs"; export const value = 1;' }, 2, /result=environment-error/],
-  ["survivor", { to: "export const value = 1 + 0;" }, 1, /result=survived/],
-  ["stale", { find: "absent" }, 1, /STALE/],
-  ["ambiguous", { find: "value", source: "export const value = 1; // value" }, 1, /2 SITES/],
-  ["baseline", { source: "export const value = 0;" }, 2, /FAIL baseline/],
+for (const [title, name, mutation, expectedCode, expectedOutput] of [
+  ["required mutation command rejects invalid evidence and handles assertion", "assertion", { to: "export const value = 2;" }, 0, /result=assertion-failure/],
+  ["required mutation command rejects invalid evidence and handles runtime", "runtime", { to: 'throw new TypeError("mutant"); export const value = 1;' }, 0, /result=runtime-failure/],
+  ["required mutation command rejects invalid evidence and handles environment", "environment", { to: 'import "./missing.mjs"; export const value = 1;' }, 2, /result=environment-error/],
+  ["required mutation command rejects invalid evidence and handles survivor", "survivor", { to: "export const value = 1 + 0;" }, 1, /result=survived/],
+  ["required mutation command rejects invalid evidence and handles stale", "stale", { find: "absent" }, 1, /STALE/],
+  ["required mutation command rejects invalid evidence and handles ambiguous", "ambiguous", { find: "value", source: "export const value = 1; // value" }, 1, /2 SITES/],
+  ["required mutation command rejects invalid evidence and handles baseline", "baseline", { source: "export const value = 0;" }, 2, /FAIL baseline/],
+  ["required mutation command rejects invalid evidence and handles snapshot", "snapshot", {}, 0, /result=assertion-failure/],
+  ["required mutation command rejects invalid evidence and handles required assertion", "required assertion", {}, 0, /PASS break=state result=assertion-failure/],
+  ["required mutation command rejects invalid evidence and handles required survivor", "required survivor", { to: "export const value = 1 + 0;" }, 1, /FAIL break=state result=survived/],
+  ["required mutation command rejects invalid evidence and handles required baseline", "required baseline", { source: "export const value = 0;" }, 2, /FAIL baseline/],
 ]) {
-  test(`required mutation command rejects invalid evidence and handles ${name}`, { timeout: 15000 }, async (t) => {
+  test(title, { timeout: 15000 }, async (t) => {
     const root = await mkdtemp(join(tmpdir(), "soksak-break-command-"));
     t.after(() => rm(root, { recursive: true, force: true }));
     const packageRoot = join(root, "packages/soksak");
+    const selected = name.startsWith("required ");
+    const testFile = selected ? "test/soksak.test.mjs" : "test/case.test.mjs";
     for (const folder of ["dist", "test", "scripts", "src", "docs", "node_modules"]) await mkdir(join(packageRoot, folder), { recursive: true });
     await mkdir(join(root, "scripts"));
     for (const file of ["package.json", "Makefile", ".node-version"]) await writeFile(join(root, file), file === "package.json" ? '{"type":"module"}' : "");
     for (const file of ["package.json", "tsconfig.json"]) await writeFile(join(packageRoot, file), '{"type":"module"}');
-    for (const file of ["check-breaks.mjs", "bounded.mjs", "mutation-runner.mjs"]) await cp(new URL(`../scripts/${file}`, import.meta.url), join(packageRoot, "scripts", file));
+    for (const file of ["check-breaks.mjs", "bounded.mjs", "mutation-runner.mjs", "required-breaks.mjs"]) await cp(new URL(`../scripts/${file}`, import.meta.url), join(packageRoot, "scripts", file));
     for (const file of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
     const original = mutation.source ?? "export const value = 1;";
-    const entry = { id: "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
+    const entry = { id: selected ? "state" : "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
     await writeFile(join(packageRoot, "scripts/breaks.mjs"), `export const BREAKS = ${JSON.stringify([entry])};`);
     await writeFile(join(packageRoot, "dist/soksak.js"), original);
-    await writeFile(join(packageRoot, "test/case.test.mjs"), 'import test from "node:test"; import assert from "node:assert/strict"; import { value } from "../dist/soksak.js"; test("value", () => assert.equal(value, 1));');
-    const result = await run([join(packageRoot, "scripts/check-breaks.mjs")], { env: { ...process.env, SOKSAK_MUTATION_RUN_FOLDER: root } });
+    const originalTest = 'import test from "node:test"; import assert from "node:assert/strict"; import { value } from "../dist/soksak.js"; test("value", () => assert.equal(value, 1));';
+    const changedTest = 'import test from "node:test"; test("unrelated", () => {});';
+    const drift = name === "snapshot" ? `\nimport { writeFileSync } from "node:fs"; test("external edit", () => writeFileSync(process.env.MUTATION_LIVE_TEST, ${JSON.stringify(changedTest)}));` : "";
+    await writeFile(join(packageRoot, testFile), originalTest + drift);
+    const args = [join(packageRoot, "scripts/check-breaks.mjs")];
+    if (selected) {
+      const git = (...arguments_) => execFileSync("git", arguments_, { cwd: root, encoding: "utf8" }).trim();
+      git("init", "--quiet");
+      await writeFile(join(packageRoot, "src/soksak.ts"), "before");
+      git("add", "packages/soksak/src/soksak.ts");
+      git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "before");
+      const before = git("rev-parse", "HEAD");
+      await writeFile(join(packageRoot, "src/soksak.ts"), "after");
+      git("add", "packages/soksak/src/soksak.ts");
+      git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "after");
+      args.push("--changed", `${before}..HEAD`);
+    }
+    const result = await run(args, { env: { ...process.env, SOKSAK_MUTATION_RUN_FOLDER: root, MUTATION_LIVE_TEST: join(packageRoot, testFile) } });
     assert.equal(result.code, expectedCode, `${result.stdout}\n${result.stderr}`);
     assert.match(result.stdout, expectedOutput);
     assert.equal(await readFile(join(packageRoot, "dist/soksak.js"), "utf8"), original, "a mutation changed the original package");
+    if (name === "snapshot") assert.equal(await readFile(join(packageRoot, "test/case.test.mjs"), "utf8"), changedTest, "the external edit was not exercised");
     const evidence = /^Evidence: (.+)$/m.exec(result.stdout)?.[1];
     assert.ok(evidence, "the command did not identify its retained evidence");
-    const baseline = JSON.parse(await readFile(join(evidence, "baseline/test/case.test.mjs/result.json"), "utf8"));
-    assert.equal(baseline.classification, name === "baseline" ? "assertion-failure" : "passed");
+    const baseline = JSON.parse(await readFile(join(evidence, "baseline", testFile, "result.json"), "utf8"));
+    assert.equal(baseline.classification, name.endsWith("baseline") ? "assertion-failure" : "passed");
     assert.ok((await readFile(baseline.stdout, "utf8")).length > 0);
   });
 }

@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: core
+          fetch-depth: 0
       - uses: ./core/.github/actions/setup-node
         with:
           root: core
@@ -25,6 +26,20 @@ jobs:
         env:
           npm_config_offline: 'true'
         run: node core/scripts/node-tests.mjs --exclude scripts/ --exclude native/
+      - name: Required mutations for changed owners
+        env:
+          npm_config_offline: 'true'
+          MUTATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before || '0000000000000000000000000000000000000000' }}
+          MUTATION_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOKSAK_MUTATION_RUN_FOLDER: ${{ runner.temp }}
+        run: node core/packages/soksak/scripts/check-breaks.mjs --changed "$MUTATION_BASE...$MUTATION_HEAD"
+      - name: Keep required mutation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: required-mutation-evidence
+          path: ${{ runner.temp }}/soksak-break-evidence-*
+          if-no-files-found: ignore
       - name: Reject lockfile changes
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'

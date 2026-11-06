@@ -15,6 +15,11 @@ export default async function* testEvents(source) {
     if (event.type === "test:summary") Object.assign(line, { file: event.data.file, success: event.data.success, counts: event.data.counts });
     if (event.type === "test:complete") Object.assign(line, { skip: event.data.skip, todo: event.data.todo });
     const error = event.type === "test:complete" ? event.data?.details?.error : undefined;
+    if (error !== undefined && error !== null) {
+      const code = error.cause?.code ?? error.code;
+      if (typeof code === "string") line.errorCode = code;
+      if (typeof error.failureType === "string") line.failureType = error.failureType;
+    }
     if (error !== undefined && error !== null && Object.hasOwn(error, "exitCode")) Object.assign(line, { exitCode: error.exitCode, signal: error.signal });
     yield `${EVENT_PREFIX}${JSON.stringify(line)}\n`;
   }

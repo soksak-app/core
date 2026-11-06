@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F504-2: Changed layout owners select a bounded set of required mutations in CI, and copies reuse the passing baseline. Structured failure codes distinguish real assertion/runtime errors from printed diagnostics and unattributed child signals. The runner, reporter and selector checks pass, with two additional module-error cases; the final required run passes six baseline files and catches all eight mutations by assertion, with no surviving, stale, ambiguous or invalid result. Workflow and boundary checks pass on macOS.
+
 - F503-3: Behavior comparisons cover all 120 input-card permutations with original and renamed IDs and 18 public operations per sequence. ID-dependent choices and first-card geometry mutations fail the tracked comparator. All 24 equivalence and rule cases pass on macOS; independent slicing and structural ownership checks remain.
 
 - F506: Removing each close-request, tab-save and window-save modified guard fails its tracked owner assertion in an isolated copy. All 23 close-boundary, tab-report and view-surface cases pass on macOS. Production guards are unchanged; native application acceptance was not run.
