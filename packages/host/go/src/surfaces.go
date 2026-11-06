@@ -535,9 +535,10 @@ type Surfaces struct {
 	endedImageDetaches  []map[string]any
 	detachPageReady     bool
 	// reload hooks replace native calls only in owning host tests; production uses the platform operations.
-	reloadCancelLayout func() error
-	reloadHideSurface  func(unsafe.Pointer, bool)
-	reloadCloseImage   func(unsafe.Pointer)
+	reloadCancelLayout    func() error
+	reloadKeyboardDecided func()
+	reloadHideSurface     func(unsafe.Pointer, bool)
+	reloadCloseImage      func(unsafe.Pointer)
 	// invoke runs a task on the UI thread and waits for it. NewSurfaces sets mainThreadStep, and a test sets a runner that
 	// records the tasks.
 	invoke   func(task func())

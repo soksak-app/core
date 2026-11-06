@@ -4563,27 +4563,6 @@
         ]
       }
     },
-    "native.keyboard.hold_expired": {
-      "layer": "native",
-      "class": "input",
-      "level": "warn",
-      "fields": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "held": {
-            "type": "number"
-          },
-          "ms": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "held",
-          "ms"
-        ]
-      }
-    },
     "native.keyboard.hold_dropped": {
       "layer": "native",
       "class": "input",

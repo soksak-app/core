@@ -180,6 +180,30 @@ pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(
     Ok(())
 }
 
+/// Ends what the earlier page left in the layout of its window: the waits of its presentations, its open layout and the
+/// keyboard hold that its workbench owed, because that workbench ended with the page
+/// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Every step runs also when an earlier one fails, because each
+/// leaves its own state open.
+fn end_page_layout(
+    abandon: impl FnOnce() -> Result<(), String>,
+    cancel: impl FnOnce() -> Result<(), String>,
+    decided: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let failures: Vec<String> = [
+        abandon(),
+        cancel().map_err(|error| format!("cancelling layout: {error}")),
+        decided().map_err(|error| format!("ending the keyboard hold: {error}")),
+    ]
+    .into_iter()
+    .filter_map(Result::err)
+    .collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
+    }
+}
+
 /// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
 /// synchronous: while the previous image handle waits for removal in the same AppKit run loop, the replacement page
 /// must not attach a new native image.
@@ -188,16 +212,11 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     let owner = native_owner(window)?;
     let platform = platform::current()?;
     let window = window.clone();
-    let abandon = crate::documents::abandon_all_layout_presentation_waits(&window);
-    let cancel = platform.cancel_layout(owner);
-    match (abandon, cancel) {
-        (Ok(()), Ok(())) => {}
-        (Err(abandon), Ok(())) => return Err(abandon),
-        (Ok(()), Err(cancel)) => return Err(cancel),
-        (Err(abandon), Err(cancel)) => {
-            return Err(format!("{abandon}; cancelling layout: {cancel}"));
-        }
-    }
+    end_page_layout(
+        || crate::documents::abandon_all_layout_presentation_waits(&window),
+        || platform.cancel_layout(owner),
+        || platform.keyboard_decided(owner),
+    )?;
     // The new main document registers its own sidecar receivers, and its views subscribe again.
     data.sidecar_routes.clear();
     let surfaces: Vec<_> = data
@@ -1761,6 +1780,10 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
 #[cfg(test)]
 #[path = "windows_records_test.rs"]
 mod records_test;
+
+#[cfg(test)]
+#[path = "windows_page_test.rs"]
+mod page_test;
 
 #[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]

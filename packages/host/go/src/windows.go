@@ -314,9 +314,17 @@ func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
 	if cancelLayout == nil {
 		cancelLayout = func() error { return system.CancelLayout(s.window.NativeWindow()) }
 	}
-	if err := cancelLayout(); err != nil {
-		LogError("surface layout cancel", err)
-		return nil, err
+	cancelErr := cancelLayout()
+	// The workbench that owed the decision about the keyboard ended with its page, so the hold of the window ends here, also
+	// when the cancel failed (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+	keyboardDecided := s.reloadKeyboardDecided
+	if keyboardDecided == nil {
+		keyboardDecided = func() { system.KeyboardDecided(s.window.NativeWindow()) }
+	}
+	keyboardDecided()
+	if cancelErr != nil {
+		LogError("surface layout cancel", cancelErr)
+		return nil, cancelErr
 	}
 	hideSurface := s.reloadHideSurface
 	if hideSurface == nil {

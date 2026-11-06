@@ -30,8 +30,8 @@ uint64_t surfaceLayoutTraceRequested(void);
 void surfaceLayoutTracePresented(uint64_t ticket);
 // The decision of the workbench about the keyboard (docs/spec/native-surfaces.md#keyboard-of-a-surface). surfaceLayoutKeyboardHold
 // opens the hold of the input of owner: every later pointer and key event of the window waits, with the input that waits for a
-// layout transaction, until surfaceLayoutKeyboardDecided ends the hold, or until the bound of 1000 ms, which records
-// native.keyboard.hold_expired. A hold keeps up to 256 pieces of input. An open hold leaves the hold as it is. Call on the UI thread.
+// layout transaction, until surfaceLayoutKeyboardDecided, the end of the workbench or the close of the window ends the hold;
+// time does not end it. A hold keeps up to 256 pieces of input. An open hold leaves the hold as it is. Call on the UI thread.
 void surfaceLayoutKeyboardHold(void *owner);
 void surfaceLayoutKeyboardDecided(void *owner);
 bool surfaceLayoutKeyboardHeld(void *owner);

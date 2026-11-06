@@ -41,7 +41,6 @@
 // SPKeyboardHold is the wait of the input of a window for the decision of the workbench about the keyboard
 // (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 @interface SPKeyboardHold : NSObject
-@property(nonatomic, assign) double opened;
 @property(nonatomic, assign) NSUInteger dropped;
 @end
 @implementation SPKeyboardHold
@@ -84,9 +83,8 @@ static NSMutableDictionary<NSValue *, SPKeyboardHold *> *keyboardHolds;
 static NSMutableSet<NSValue *> *workbenchPresses;
 static NSMutableSet<NSValue *> *passedPresses;
 static bool (^pressOnWorkbench)(void *, double, double);
-// A person types about 10 keys in a second and a pointer moves about 120 times, so the limit holds more than the bound of a hold.
+// A person types about 10 keys in a second and a pointer moves about 120 times, so the limit holds about two seconds of input.
 static const NSUInteger kKeyboardHoldLimit = 256;
-static const double kKeyboardHoldBound = 1.0;
 
 static void releaseSettled(void);
 
@@ -372,17 +370,13 @@ bool surfaceLayoutHoldCall(void *owner, bool press, double x, double y, void (^c
     return waits;
 }
 
-static double nowMs(void) {
-    return CACurrentMediaTime() * 1000;
-}
-
 static void recordHoldDropped(NSUInteger count, const char *reason) {
     NSString *fields = [NSString stringWithFormat:@"{\"count\":%lu,\"reason\":\"%s\"}", (unsigned long)count, reason];
     sp_event(SP_CLASS_INPUT, SP_EVENT_WARN, "native.keyboard.hold_dropped", fields.UTF8String);
 }
 
-// Ends the hold of the keyboard of owner. An expired hold gives the input to the first responder of that moment, and a closed
-// window drops what it held.
+// Ends the hold of the keyboard of owner. A decided hold gives the input back where the keyboard is, and a closed window drops
+// what it held. Time does not end a hold.
 static void endKeyboardHold(void *owner, const char *end) {
     SPKeyboardHold *hold = [[keyboardHold(owner) retain] autorelease];
     if (!hold) return;
@@ -397,10 +391,6 @@ static void endKeyboardHold(void *owner, const char *end) {
     }
     if (hold.dropped) recordHoldDropped(hold.dropped, "full");
     if (closed && held) recordHoldDropped(held, "closed");
-    if (strcmp(end, "expired") == 0) {
-        NSString *fields = [NSString stringWithFormat:@"{\"held\":%lu,\"ms\":%.1f}", (unsigned long)held, nowMs() - hold.opened];
-        sp_event(SP_CLASS_INPUT, SP_EVENT_WARN, "native.keyboard.hold_expired", fields.UTF8String);
-    }
     if (!closed) releaseWhenFree(owner);
 }
 
@@ -422,12 +412,8 @@ void surfaceLayoutKeyboardHold(void *owner) {
     watchInput();
     observeHoldClose();
     SPKeyboardHold *hold = [[[SPKeyboardHold alloc] init] autorelease];
-    hold.opened = nowMs();
     if (!keyboardHolds) keyboardHolds = [[NSMutableDictionary alloc] init];
     keyboardHolds[[NSValue valueWithPointer:owner]] = hold;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kKeyboardHoldBound * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (keyboardHold(owner) == hold) endKeyboardHold(owner, "expired");
-    });
 }
 
 void surfaceLayoutKeyboardDecided(void *owner) {

@@ -460,11 +460,11 @@ int main(void) { @autoreleasepool {
     NSString *after = regionKeys(^{ typeKeys(holding, "y"); });
     check([after isEqual:@"y"], "a key after the decision reaches the region at once");
 
-    // R3: a call without the decision moves the keyboard and the keys keep waiting. R2: the hold that no decided call ends gives
-    // the keys to the first responder of the end of its bound and records its expiry as a warning.
+    // R3: a call without the decision moves the keyboard and the keys keep waiting. R2: time does not end a hold: the keys still
+    // wait more than a second later, nothing is recorded for the wait, and the decided call gives them to its target in order.
     sp_window_focus_workbench(holding);
     __block NSString *undecided = nil;
-    NSArray<NSDictionary *> *expiry = capturedEvents(^{
+    NSArray<NSDictionary *> *waited = capturedEvents(^{
         undecided = [regionKeys(^{
             sp_input_pointer(holding, 200, 250, 1, 0, 0, 0);
             sp_input_pointer(holding, 200, 250, 3, 0, 0, 0);
@@ -473,18 +473,22 @@ int main(void) { @autoreleasepool {
             runEvents(0.05);
         }) retain];
         check(holding.firstResponder == (NSResponder *)heldRegion, "a call without the decision moves the keyboard");
-        runEvents(1.1);
+        runEvents(1.5);
     });
     [undecided autorelease];
     check([undecided isEqual:@""], [NSString stringWithFormat:@"the keys wait after a call without the decision, got \"%@\"", undecided].UTF8String);
-    NSMutableString *expired = [NSMutableString string];
-    for (NSDictionary *event in expiry) {
-        if ([event[@"name"] isEqual:@"native.input.key_down"]) [expired appendString:event[@"fields"][@"characters"]];
+    NSMutableString *early = [NSMutableString string];
+    for (NSDictionary *event in waited) {
+        if ([event[@"name"] isEqual:@"native.input.key_down"]) [early appendString:event[@"fields"][@"characters"]];
+        check(![event[@"name"] hasPrefix:@"native.keyboard.hold_"],
+            [NSString stringWithFormat:@"a hold that waits records nothing, got %@", event[@"name"]].UTF8String);
     }
-    check([expired isEqual:@"abc"], [NSString stringWithFormat:@"the expired hold gives the keys to the region, got \"%@\"", expired].UTF8String);
-    NSDictionary *expiredFields = eventFields(expiry, @"native.keyboard.hold_expired");
-    check([expiredFields[@"held"] intValue] == 6 && [expiredFields[@"ms"] doubleValue] >= 1000,
-        [NSString stringWithFormat:@"the expiry records the 6 held key events and its duration, got %@", expiredFields].UTF8String);
+    check([early isEqual:@""], [NSString stringWithFormat:@"no key reaches the region 1.5 s into a hold, got \"%@\"", early].UTF8String);
+    NSString *late = regionKeys(^{
+        sp_window_keyboard_decided(holding);
+        runEvents(0.1);
+    });
+    check([late isEqual:@"abc"], [NSString stringWithFormat:@"the decided call gives the waiting keys in order, got \"%@\"", late].UTF8String);
 
     // A hold keeps 256 pieces of input and records the rest as dropped.
     sp_window_focus_workbench(holding);
