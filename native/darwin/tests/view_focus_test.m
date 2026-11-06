@@ -396,11 +396,15 @@ int main(int argc, char **argv) { @autoreleasepool {
     MainPageReadiness *mainPage = [[[MainPageReadiness alloc] init] autorelease];
     main.navigationDelegate = mainPage;
     [main loadHTMLString:mainPageHTML baseURL:nil];
-    BOOL mainReady = waitFor(^BOOL { return mainPage.finished || mainPage.failure != nil; })
-        && mainPage.finished && [main.title isEqual:@"main-ready"];
+    // WebKit sends the title of the page to the web view apart from the end of its navigation, and in some runs after it, so the
+    // page is ready when both arrived.
+    BOOL mainReady = waitFor(^BOOL {
+        return (mainPage.finished && [main.title isEqual:@"main-ready"]) || mainPage.failure != nil;
+    }) && mainPage.failure == nil;
     check(mainReady, mainPage.failure
         ? [NSString stringWithFormat:@"the registered app DOM web view finishes its main page before activation (%@)", mainPage.failure]
-        : @"the registered app DOM web view finishes its main page before activation");
+        : [NSString stringWithFormat:@"the registered app DOM web view finishes its main page before activation (finished %d, title \"%@\")",
+            mainPage.finished, main.title]);
     if (!mainReady) {
         [window close];
         [window release];
