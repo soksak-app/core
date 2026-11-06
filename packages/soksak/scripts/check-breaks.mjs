@@ -6,15 +6,10 @@
  * Exits non-zero if any break survives or no longer applies.
  */
 import { spawn } from "node:child_process";
-import {
-  cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { BREAKS } from "./breaks.mjs";
+import { copyWorkspace } from "./workspace-copy.mjs";
 
-const REPO = new URL("../", import.meta.url).pathname;
-const ROOT = new URL("../../../", import.meta.url).pathname;
 // Listing and rejecting break ids need no copy, so they finish before one is made.
 const arguments_ = process.argv.slice(2);
 const listOnly = arguments_.includes("--list");
@@ -37,10 +32,7 @@ if (listOnly) {
 // The defects are written into a copy. Writing them into the repository leaves
 // whatever else reads it — a build, an editor, another run — reading a defect
 // nobody wrote, for as long as this takes.
-// The copy keeps the workspace layout, because the suite reads the root's
-// toolchain declarations through the same relative paths.
-const TOP = `${mkdtempSync(join(tmpdir(), "soksak-breaks-"))}/`;
-const HERE = `${TOP}packages/soksak/`;
+const { top: TOP, root: HERE } = copyWorkspace("soksak-breaks-");
 const drop = () => rmSync(TOP, { recursive: true, force: true });
 // Take the copy away however this ends, including a run killed by a timeout.
 process.on("exit", drop);
@@ -55,15 +47,6 @@ process.on("uncaughtException", (e) => {
   console.error(e);
   process.exit(1);
 });
-for (const part of ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"]) {
-  cpSync(`${REPO}${part}`, `${HERE}${part}`, { recursive: true });
-}
-for (const part of ["package.json", "Makefile", ".node-version"]) {
-  cpSync(`${ROOT}${part}`, `${TOP}${part}`, { recursive: true });
-}
-// The suite reads more than the built code: jsdom is what the view is rendered
-// into. Link the tree rather than copy it — the run only reads it.
-symlinkSync(`${REPO}node_modules`, `${HERE}node_modules`);
 
 const TESTS = readdirSync(`${HERE}test`)
   .filter((f) => f.endsWith(".test.mjs"))
@@ -149,19 +132,8 @@ for (const b of BREAKS) {
   applicable.push(b);
 }
 
-const copy = () => {
-  const top = `${mkdtempSync(join(tmpdir(), "soksak-break-"))}/`;
-  const root = `${top}packages/soksak/`;
-  for (const part of ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"])
-    cpSync(`${REPO}${part}`, `${root}${part}`, { recursive: true });
-  for (const part of ["package.json", "Makefile", ".node-version"])
-    cpSync(`${ROOT}${part}`, `${top}${part}`, { recursive: true });
-  symlinkSync(`${REPO}node_modules`, `${root}node_modules`);
-  return { top, root };
-};
-
 const run = async (b) => {
-  const { top, root } = copy();
+  const { top, root } = copyWorkspace("soksak-break-");
   try {
     const src = originals[b.file];
     writeFileSync(`${root}${b.file}`, src.split(b.find).join(b.to));

@@ -1,0 +1,30 @@
+/**
+ * A copy of what the suite reads, in the workspace layout.
+ *
+ * Break and mutation runs write defects into a copy. The suite reads the
+ * package and, through the same relative paths, files at the workspace root:
+ * the toolchain declarations and the shared layout cases. A part missing here
+ * fails every run of the copy before any defect is written.
+ */
+import { cpSync, mkdtempSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const REPO = new URL("../", import.meta.url).pathname;
+const ROOT = new URL("../../../", import.meta.url).pathname;
+
+/** The package parts the suite reads. */
+const PACKAGE_PARTS = ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"];
+/** The workspace root parts the suite reads. */
+const ROOT_PARTS = ["package.json", "Makefile", ".node-version", "docs/spec/cases/layout"];
+
+/** Copies the parts into a new directory named with prefix; returns the copy's root and its package directory. */
+export function copyWorkspace(prefix) {
+  const top = `${mkdtempSync(join(tmpdir(), prefix))}/`;
+  const root = `${top}packages/soksak/`;
+  for (const part of PACKAGE_PARTS) cpSync(`${REPO}${part}`, `${root}${part}`, { recursive: true });
+  for (const part of ROOT_PARTS) cpSync(`${ROOT}${part}`, `${top}${part}`, { recursive: true });
+  // jsdom is what the view is rendered into. Link the tree rather than copy it — the run only reads it.
+  symlinkSync(`${REPO}node_modules`, `${root}node_modules`);
+  return { top, root };
+}
