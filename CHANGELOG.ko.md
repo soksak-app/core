@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F507: 정본 feature-link inventory가 선언한 요구사항 시나리오와 플랫폼 적용 상태를 검사하고 누락되거나 잘못된 소유 test 참조를 거부하며 연결을 미실행으로 보고한다. 추적한 Red case 5개로 승인 공백을 확인했고 소유 case 45개와 문서·inventory gate가 모두 통과한다. 제품 동작과 플랫폼 acceptance는 별도로 판정한다.
 - F508: Layout role 검사는 고정 순열 120개를 유지하고 topology, card 수, dimension과 layout option을 다루는 결정적 case 21개를 추가한다. 각 case는 생성한 trace 전에 거부와 회복을 관측하며 report는 method별 결과와 전체 실패 입력을 보존한다. 격리한 ID·array-order·size mutant는 기존 R2 case를 통과하지만 확장한 소유 assertion에서 실패한다. macOS에서 집중 case 63개가 모두 통과한다. Baseline 전이 714개는 성공 489개와 거부 225개이며, 다양한 입력군은 별도 merge 성공 case를 대체하거나 모든 layout의 전수 검증을 주장하지 않는다.
 
 - F506-1: Close 경계 소유 test는 save 실패 뒤 같은 modified tab에서 재시도하고, 대기 중 dirty 상태와 error를 유지하며, clean save 응답을 기다린 뒤 다른 tab을 바꾸지 않고 정확히 한 번 닫히는지 검증한다. Retry를 막는 통제한 mutation은 해당 소유 assertion에서 실패하며 macOS에서 close 경계, report, view surface case 25개가 모두 통과한다. Production 동작은 변경하지 않았으며 native application acceptance는 별도다.

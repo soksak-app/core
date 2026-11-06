@@ -8,13 +8,35 @@ View display acceptance enumerates installed enabled view plugins and identifies
 
 On macOS, recorded view content is checked with the public Vision text recognizer in a check-only executable. Each installed view has declared readiness and fixed expected text: the browser empty-state instruction, the editor text fixture, the HWP fixture paragraph and the terminal output marker. The complete recording is decoded and its finalized frame count is checked; the final frame crop must contain the expected text. The crop uses the applied view rectangle and the capture content origin and scale exactly once. Recognition does not run in the application or on its rendering path. Readiness without a captured-pixel verifier is rejected.
 
-Terminal background samples use the same view crop conversion: buffer coordinates include the capture content origin, display scale and content scale. A sample lies inside that crop, including at small sizes. Unit fixtures distinguish the requested pixel from surrounding pixels independently for each transform. The sample removes its stopped capture folder on success and on decoding or geometry failure.
+Terminal background samples use the same view crop conversion: buffer coordinates include the capture content origin, display scale and content scale. A sample lies inside that crop, including at small sizes. Unit fixtures distinguish the requested pixel from surrounding pixels independently for each transform. Stopped capture folders are removed only after successful session finalization; decoding, geometry or finalization failures retain them.
 
 The canonical work status is [features](../features.md). A source-file inventory is structural evidence only. It must not report feature parity or application correctness.
 
 The feature-link audit's self-check invokes the actual audit module. Its controlled mutations remove one error-reporting effect or response in an isolated copy, after the unchanged module passes the same assertion. These two omitted-error cases require that assertion to fail; a load error, interruption or failed baseline does not establish their detection. This validates the audit's own error contract, not the behavior of the product files it inventories.
 
 Current inventory and checklist totals are generated from their canonical inputs and are not repeated as manually maintained document counts. Parent and child checklist rows count separately. Required checks on historical evidence wording belong to the documentation gate and apply to both translations when the corresponding record exists; they do not count as product behavior validation.
+
+### Requirement scenario inventory
+
+The following table declares the bounded requirement scope of the scenario audit. It is separate from the implementation-to-test links so deleting an entire mapping remains detectable. Both translations must retain the same ordered keys. This is not a list of every product requirement; new scope requires a contract change here and owning links in the existing `FEATURE_LINKS` inventory.
+
+<!-- requirement-scope:start -->
+| Key | Required contract |
+| --- | --- |
+| `execution-results` | Accept only complete, nonempty selected test results. |
+| `execution-inputs` | Bind command results to the original inputs, reject drift and retain retries. |
+| `modified-close` | Keep a modified tab through pending or failed saves and allow closure after a clean retry. |
+| `layout-transitions` | Check accepted and refused public transitions, including refusal followed by recovery. |
+| `capture-lifecycle` | Finalize sampling recordings once, preserve failures and complete cleanup. |
+| `capture-coordinates` | Convert document, content and display coordinates to the requested cell pixel. |
+| `candidate-publication` | Reject incomplete or mismatched acceptance for the immutable candidate. |
+<!-- requirement-scope:end -->
+
+Each scoped feature declares one unique requirement key. Its existing owning test references declare the dimensions their assertions exercise: `normal`, `failure`, `race` and `recovery`. Normal and failure always require tests. A race or recovery dimension without a test needs a concrete inapplicability reason tied to that contract; an asynchronous state transition cannot be exempted merely because no test exists. The same test may cover multiple dimensions only when its assertions actually exercise each. Recovery means a refused state can progress through the intended subsequent operation, or failure cleanup completes as required; a fresh fixture that passes independently does not prove state recovery. Missing dimensions, unknown or repeated keys/dimensions, duplicate scenario references and invalid existing implementation/test references fail `make check-tests`.
+
+Every row declares `darwin`, `linux` and `win32` applicability: `required` means behavior still needs execution evidence on that platform; `unavailable` requires both an implementation reason and the condition that restores verification. A platform is never unavailable merely because this run uses another OS. The generated report labels mapped scenarios as unexecuted and required platforms as unverified; unavailable platforms remain unverified too. This structural check reads no run results, assigns no coverage percentage and grants no application or publication acceptance. Review must still compare each scenario tag with its owning assertions, and the existing runners and acceptance gates judge actual execution.
+
+The modified-close row owns only the core consumer's reported modified state and save response, including the file-write failure boundary represented by a rejected response. File persistence and PTY wire implementations belong to their independent repositories and retain their own requirements and tests; core does not inspect those implementations or claim their coverage. Layout identity and topology comparisons remain in their owning tests alongside this transition scope. Capture rows describe the sampler and its current native capture dependency. The lifecycle race scenario covers a late application error after stop and before the final audit; it does not verify parallel or repeated finalization. Candidate publication describes report validation, not an executed native application run.
 
 Core test ownership follows independently declared core packages. The root `e2e` package owns its window checks and the installable payloads under `e2e/fixtures/`; a fixture `package.json` describes an installed payload, not an independent core test owner. E2E tests may read their fixture manifests and sources. Core package tests remain unable to read E2E fixture files, and E2E tests remain unable to read another core package's implementation paths.
 

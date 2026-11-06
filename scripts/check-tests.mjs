@@ -84,7 +84,7 @@ lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"],
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
-  lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts", "packages/soksak/scripts/layout-sequences.mjs", "packages/soksak/scripts/layout-equivalence.mjs"], ["packages/soksak/test/**/*.mjs"], { sharedTests: true }),
+  lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts", "packages/soksak/scripts/layout-sequences.mjs", "packages/soksak/scripts/layout-equivalence.mjs", "packages/soksak/scripts/layout-cases.mjs"], ["packages/soksak/test/**/*.mjs"], { sharedTests: true }),
   lane("mutation execution", "js-ts", ["packages/soksak/scripts/mutation-runner.mjs", "packages/soksak/scripts/required-breaks.mjs"], ["packages/soksak/test/mutation-runner.test.mjs", "packages/soksak/test/required-breaks.test.mjs"], { sharedTests: true }),
   lane("soksak utility scripts", "js-ts", [
     "packages/soksak/scripts/bounded.mjs",
@@ -212,7 +212,48 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // A feature link is stronger than a file owner: it names the implementation, the behavior test,
 // the expected result, and the verification level of one feature.
 // The inventory remains structural, and the behavior is proved by the referenced test.
+const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
+const CAPTURE_REQUIREMENT_PLATFORMS = {
+  darwin: { status: "required" },
+  linux: { status: "unavailable", reason: "The native capture backend is implemented only for macOS.", resumeWhen: "Implement Linux capture and run its sampler acceptance." },
+  win32: { status: "unavailable", reason: "The native capture backend is implemented only for macOS.", resumeWhen: "Implement Windows capture and run its sampler acceptance." },
+};
 const FEATURE_LINKS = [
+  {
+    id: "F506-1",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: 'await registry.run(save, {}, t.id);' }],
+    tests: [{ file: "packages/workbench/test/plane-close-modified.test.mjs", id: "a failed save can retry and close the same modified tab" },
+      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "close boundary owner assertions detect missing guards and blocked save recovery" }],
+    expected: "The same dirty tab retains a failed save and its error, retries through the declared command, waits for a clean successful reply and closes once while preserving the other tab.",
+    levels: ["unit"],
+  },
+  {
+    id: "F507",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditRequirementCoverage" }, { file: "scripts/check-tests.mjs", symbol: "export function readRequirementScope" }],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "requirement audit rejects a removed requirement and every omitted scenario dimension" },
+      { file: "scripts/test/check-tests.test.mjs", id: "requirement audit rejects duplicate requirements and invalid scenario references" },
+      { file: "scripts/test/check-tests.test.mjs", id: "requirement audit requires explicit platform obligations and concrete unavailable reasons" },
+      { file: "scripts/test/check-tests.test.mjs", id: "requirement audit permits justified inapplicability only for race and recovery" },
+    ],
+    expected: "The bounded requirement scope rejects omitted or invalid scenario mappings and states platform obligations without inferring execution or acceptance.",
+    levels: ["unit"],
+  },
+  {
+    id: "F508",
+    requirement: { key: "layout-transitions", platforms: PORTABLE_REQUIREMENT_PLATFORMS,
+      inapplicable: { race: "Public layout operations are synchronous and share no asynchronous or native state." } },
+    implementation: [{ file: "packages/soksak/scripts/layout-cases.mjs", symbol: "export function makeLayoutCase" }, { file: "packages/soksak/scripts/layout-equivalence.mjs", symbol: "export function assertRoleIndependence" }],
+    tests: [
+      { file: "packages/soksak/test/layout-cases.test.mjs", id: "varied layout cases cover the declared input classes and operation outcomes", covers: ["normal", "failure", "recovery"] },
+      { file: "packages/soksak/test/layout-cases.test.mjs", id: "transformed sequences reject a refused operation that changes state", covers: ["failure"] },
+      { file: "packages/soksak/test/layout-cases.test.mjs", id: "explicit permutation selection bounds transformed sequence work" },
+      { file: "packages/soksak/test/layout-cases.test.mjs", id: "layout option changes affect geometry and refusal decisions" },
+      { file: "packages/soksak/test/layout-cases.test.mjs", id: "varied layout checks reject ID, array-order and size implementation mutants" },
+    ],
+    expected: "A deterministic bounded corpus varies topology, card count, dimensions, options and traces while preserving per-transition role independence, refused state and recovery assertions, and the independent slicing oracle.",
+    levels: ["unit"],
+  },
   {
     id: "F498-3",
     implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "export function parseLanguageResult" }],
@@ -227,6 +268,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F505",
+    requirement: { key: "candidate-publication", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The gate synchronously validates the completed report; input drift between its recorded snapshots is a failure case.", recovery: "Report validation retains no mutable candidate state; a new report is independently validated without repairing a failed report." } },
     implementation: [
       { file: "scripts/candidate-identity.mjs", symbol: "export async function hashTree" },
       { file: "scripts/candidate-policy.mjs", symbol: "export function candidateScripts" },
@@ -239,13 +281,13 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/candidate-identity.test.mjs", id: "candidate tree identity binds every file, executable mode and symlink target without extraction timestamps" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance requires complete matching evidence from two independent initial states" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses missing evidence" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses stale source evidence" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses changed installed dependency evidence" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses mismatched candidate evidence" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses skipped evidence" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses failed evidence" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance requires complete matching evidence from two independent initial states", covers: ["normal"] },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses missing evidence", covers: ["failure"] },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses stale source evidence", covers: ["failure"] },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses changed installed dependency evidence", covers: ["failure"] },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses mismatched candidate evidence", covers: ["failure"] },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses skipped evidence", covers: ["failure"] },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses failed evidence", covers: ["failure"] },
       { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication validates the completed attempt and immutable artifact ownership" },
       { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate policy reuses declared application scripts and native mode arguments" },
       { file: "scripts/test/candidate-acceptance.test.mjs", id: "the complete current candidate policy fits the authenticated report input" },
@@ -273,14 +315,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F500-2",
+    requirement: { key: "capture-coordinates", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The coordinate conversion reads one finalized frame and has no concurrent state transition.", recovery: "Coordinate conversion retains no mutable state after refusing invalid geometry; failed recording cleanup belongs to capture-lifecycle." } },
     implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
     tests: [
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content scale" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content origin" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include combined capture scales and origin" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include document offsets before capture conversion" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds read each requested row and column in order" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds reject a cell outside the capture and keep its evidence" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content scale", covers: ["normal"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content origin", covers: ["normal"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include combined capture scales and origin", covers: ["normal"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include document offsets before capture conversion", covers: ["normal"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds read each requested row and column in order", covers: ["normal"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds reject a cell outside the capture and keep its evidence", covers: ["failure"] },
     ],
     expected: "Each terminal cell sample uses document offsets and the shared capture origin and scale conversion, preserves requested row and column order, and retains evidence when geometry lies outside the capture.",
     levels: ["unit"],
@@ -349,10 +392,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F501-1",
+    requirement: { key: "execution-inputs", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: {} },
     implementation: [{ file: "scripts/test-evidence.mjs", symbol: "export async function runWithEvidence" }, { file: "scripts/language-test-adapters.mjs", symbol: "export async function runLanguageCases" }],
     tests: [
-      { file: "scripts/test/test-evidence.test.mjs", id: "executed evidence binds source.mjs before the command" },
-      { file: "scripts/test/test-evidence.test.mjs", id: "executed evidence preserves a failed command and reports an input that disappears" },
+      { file: "scripts/test/test-evidence.test.mjs", id: "executed evidence binds unchanged inputs before the command", covers: ["normal"] },
+      { file: "scripts/test/test-evidence.test.mjs", id: "persisted execution attempts retain each command outcome and input error", covers: ["recovery"] },
+      { file: "scripts/test/test-evidence.test.mjs", id: "executed evidence binds source.mjs before the command", covers: ["failure", "race"] },
+      { file: "scripts/test/test-evidence.test.mjs", id: "executed evidence preserves a failed command and reports an input that disappears", covers: ["failure", "race"] },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "the language adapter refuses to attribute a pass to inputs changed by its command" },
     ],
     expected: "Evidence binds inputs before execution, retains the actual command outcome and original identity, and refuses acceptance when an input changes or disappears during execution.",
@@ -372,10 +418,12 @@ const FEATURE_LINKS = [
   },
   {
     id: "F506",
+    requirement: { key: "modified-close", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: {} },
     implementation: [{ file: "packages/workbench/plane.js", symbol: "export async function closeTabById" }, { file: "packages/workbench/plane.js", symbol: "export const settleModifiedTabsToClose" }],
     tests: [
-      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "modified tabs require a clean save before tab or window closure" },
-      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "close boundary owner assertions detect each removed modified-state guard" },
+      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "a failed save can retry and close the same modified tab", covers: ["recovery"] },
+      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "modified tabs require a clean save before tab or window closure", covers: ["normal", "failure", "race"] },
+      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "close boundary owner assertions detect missing guards and blocked save recovery" },
     ],
     expected: "Tab and window closure wait for save completion and refuse closure while modifications or a save failure remain; removing each guard fails its owning assertion.",
     levels: ["unit"],
@@ -397,25 +445,27 @@ const FEATURE_LINKS = [
   },
   {
     id: "F498-1",
+    requirement: { key: "execution-results", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: { race: "Result aggregation is synchronous; event arrival order is consumed before the result is accepted." } },
     implementation: [{ file: "scripts/node-test-evidence.mjs", symbol: "export function testExecutionErrors" }, { file: "scripts/language-test-adapters.mjs", symbol: "export function parseLanguageResult" }],
     tests: [
-      { file: "scripts/test/node-test-evidence.test.mjs", id: "the shared acceptance rule rejects unexecuted and incomplete cases" },
-      { file: "scripts/test/node-test-evidence.test.mjs", id: "file-owned evidence aggregates every declared file and rejects a missing file despite a passing wrapper" },
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "the shared acceptance rule rejects unexecuted and incomplete cases", covers: ["normal", "failure"] },
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "file-owned evidence aggregates every declared file and rejects a missing file despite a passing wrapper", covers: ["normal", "failure", "recovery"] },
     ],
     expected: "Discovery, repeats and language adapters share executed-test acceptance and reject absent, skipped, todo, cancelled or failed required cases.",
     levels: ["unit"],
   },
   {
     id: "F500-1",
+    requirement: { key: "capture-lifecycle", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: {} },
     implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }, { file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
     tests: [
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background presentation failure stops during cleanup and preserves its original error" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background keeps the presentation error and reports a cleanup stop error" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background preserves a successful sample when the final error audit fails" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background presentation failure stops during cleanup and preserves its original error", covers: ["failure", "recovery"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background keeps the presentation error and reports a cleanup stop error", covers: ["failure", "recovery"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background preserves a successful sample when the final error audit fails", covers: ["failure", "race"] },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization", covers: ["normal"] },
       { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell stop failure remains failed after being caught and is not retried" },
     ],
-    expected: "Terminal samples use Session recording cleanup, preserve failed capture evidence and original errors, attempt stop once, and remove successful captures only after successful session finalization.",
+    expected: "Terminal samples use Session recording cleanup, preserve failed capture evidence and original errors, attempt stop once, and remove successful captures only after successful session finalization. The race scenario is a late application error after stop and before the final audit; parallel or repeated finalization is unverified.",
     levels: ["unit"],
   },
   {
@@ -10980,7 +11030,14 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     errors.push(`${file} [${language}]: test is not claimed by the test inventory`);
   }
 
-  const featureErrors = auditFeatureLinks(FEATURE_LINKS, files);
+  let requirementScope = [];
+  try {
+    requirementScope = readRequirementScope(readSource("docs/spec/verification.md"), readSource("docs/spec/verification.ko.md"));
+  } catch (error) {
+    errors.push(`cannot read requirement scope: ${error.message}`);
+  }
+  const requirementCoverage = auditRequirementCoverage(FEATURE_LINKS, requirementScope);
+  const featureErrors = auditFeatureLinks(FEATURE_LINKS, files, readSource, { requirementScope });
   errors.push(...featureErrors);
   const ownershipErrors = auditOwnership(files, readSource);
   errors.push(...ownershipErrors);
@@ -11005,14 +11062,115 @@ export function auditInventory(files, matrix = MATRIX, readSource = (file) => re
     goFailureErrors,
     failureMatrix,
     featureLinks: FEATURE_LINKS,
+    requirementCoverage,
     trackCount: matrix.length,
     implementationCount: implementationOwners.size,
     testCount: testOwners.size,
   };
 }
 
-export function auditFeatureLinks(features, files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+const SCENARIO_DIMENSIONS = ["normal", "failure", "race", "recovery"];
+const REQUIREMENT_PLATFORMS = ["darwin", "linux", "win32"];
+const nonempty = (value) => typeof value === "string" && value.trim().length > 0;
+const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** Scope is independent of the links, so deleting a whole mapping cannot shrink the obligation. */
+export function readRequirementScope(english, korean) {
+  const parse = (source, language) => {
+    const start = "<!-- requirement-scope:start -->";
+    const end = "<!-- requirement-scope:end -->";
+    if (source.split(start).length !== 2 || source.split(end).length !== 2 || source.indexOf(end) < source.indexOf(start)) {
+      throw new Error(`${language}: requirement scope needs one ordered start/end marker pair`);
+    }
+    const section = source.slice(source.indexOf(start) + start.length, source.indexOf(end));
+    const keys = [...section.matchAll(/^\| `([a-z]+(?:-[a-z]+)*)` \| (\S[^|\n]*) \|$/gm)].map((match) => match[1]);
+    const rows = section.split("\n").filter((line) => line.startsWith("|"));
+    if (keys.length === 0 || rows.length !== keys.length + 2 || new Set(keys).size !== keys.length) {
+      throw new Error(`${language}: requirement scope must have unique named rows and nonempty contracts`);
+    }
+    return keys;
+  };
+  const keys = parse(english, "English");
+  if (JSON.stringify(keys) !== JSON.stringify(parse(korean, "Korean"))) {
+    throw new Error("requirement scope keys and order differ between English and Korean");
+  }
+  return keys;
+}
+
+/** Declarations only: the existing feature audit owns file and identifier validity. */
+export function auditRequirementCoverage(features, requiredKeys) {
+  const errors = [];
+  const rows = [];
+  const seen = new Set();
+  const required = new Set(requiredKeys);
+  if (requiredKeys.length === 0 || required.size !== requiredKeys.length) errors.push("requirement scope is empty or duplicated");
+  for (const feature of features) {
+    const requirement = feature.requirement;
+    if (requirement === undefined) {
+      if (feature.tests?.some((test) => test.covers !== undefined)) errors.push(`${feature.id}: scenario test has no requirement`);
+      continue;
+    }
+    const key = requirement?.key;
+    if (!required.has(key)) errors.push(`${feature.id}: unknown requirement key: ${key}`);
+    if (seen.has(key)) errors.push(`${key}: requirement is duplicated`);
+    seen.add(key);
+    const covered = new Set();
+    const references = new Set();
+    for (const test of feature.tests ?? []) {
+      if (test.covers === undefined) continue;
+      const reference = `${test.file}#${test.id}`;
+      if (references.has(reference)) errors.push(`${key}: duplicate scenario test reference: ${reference}`);
+      references.add(reference);
+      if (!Array.isArray(test.covers) || test.covers.length === 0 ||
+        new Set(test.covers).size !== test.covers.length || test.covers.some((dimension) => !SCENARIO_DIMENSIONS.includes(dimension))) {
+        errors.push(`${key}: invalid or duplicate scenario dimension: ${reference}`);
+      } else for (const dimension of test.covers) covered.add(dimension);
+    }
+    const inapplicable = object(requirement?.inapplicable) ? requirement.inapplicable : {};
+    if (requirement?.inapplicable !== undefined && !object(requirement.inapplicable)) errors.push(`${key}: inapplicability must declare named reasons`);
+    for (const dimension of Object.keys(inapplicable)) {
+      if (!SCENARIO_DIMENSIONS.includes(dimension)) errors.push(`${key}: unknown inapplicable scenario: ${dimension}`);
+      if (["normal", "failure"].includes(dimension)) errors.push(`${key}: normal and failure require owning tests`);
+      if (!nonempty(inapplicable[dimension])) errors.push(`${key}: ${dimension} inapplicability requires a reason`);
+      if (covered.has(dimension)) errors.push(`${key}: ${dimension} cannot be both mapped and inapplicable`);
+    }
+    for (const dimension of SCENARIO_DIMENSIONS) {
+      if (!covered.has(dimension) && !(["race", "recovery"].includes(dimension) && nonempty(inapplicable[dimension]))) {
+        errors.push(`${key}: missing ${dimension} scenario`);
+      }
+    }
+    const platforms = object(requirement?.platforms) ? requirement.platforms : {};
+    for (const platform of Object.keys(platforms)) {
+      if (!REQUIREMENT_PLATFORMS.includes(platform)) errors.push(`${key}: unknown platform: ${platform}`);
+    }
+    for (const platform of REQUIREMENT_PLATFORMS) {
+      const entry = platforms[platform];
+      if (!object(entry) || !["required", "unavailable"].includes(entry.status)) {
+        errors.push(`${key}: ${platform} platform must declare required or unavailable`);
+      } else if (entry.status === "unavailable" && (!nonempty(entry.reason) || !nonempty(entry.resumeWhen))) {
+        errors.push(`${key}: ${platform} platform unavailable needs a reason and verification resume condition`);
+      }
+    }
+    rows.push({ key, feature: feature.id, dimensions: Object.fromEntries(SCENARIO_DIMENSIONS.map((dimension) =>
+      [dimension, covered.has(dimension) ? { status: "mapped", executed: false } :
+        { status: nonempty(inapplicable[dimension]) ? "inapplicable" : "missing", reason: inapplicable[dimension] }])),
+    platforms: Object.fromEntries(REQUIREMENT_PLATFORMS.map((platform) => [platform, { ...platforms[platform], verified: false }])) });
+  }
+  for (const key of required) if (!seen.has(key)) errors.push(`${key}: required behavior has no scenario mapping`);
+  return { errors, rows };
+}
+
+export function requirementSummary({ rows }) {
+  return ["Requirement scenarios (structural only; mapped tests were not executed; all platforms unverified):",
+    ...rows.map((row) => `${row.key} [${row.feature}]: ` +
+      Object.entries(row.dimensions).map(([name, value]) => `${name}=${value.status}${value.reason ? ` (${value.reason})` : ""}`).join("; ") + "; " +
+      Object.entries(row.platforms).map(([name, value]) => `${name}=${value.status ?? "missing"}/unverified` +
+        (value.status === "unavailable" ? ` (${value.reason}; resume: ${value.resumeWhen})` : "")).join("; "))].join("\n");
+}
+
+export function auditFeatureLinks(features, files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8"), { requirementScope } = {}) {
   const knownFiles = new Set(files);
+  const testFiles = new Set(discoverInventory(files).tests.map(({ file }) => file));
   const errors = [];
   const ids = new Set();
   const levels = new Set(["unit", "native", "application", "release"]);
@@ -11037,6 +11195,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
       }
     }
     for (const test of feature.tests ?? []) {
+      if (test.covers !== undefined && !testFiles.has(test.file)) errors.push(`${feature.id}: scenario reference is not a discovered test file: ${test.file}`);
       if (!test.file || !test.id) errors.push(`${feature.id}: behavior test link must name a file and test id`);
       else if (!knownFiles.has(test.file)) errors.push(`${feature.id}: behavior test file is not in the workspace: ${test.file}`);
       else {
@@ -11050,6 +11209,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
     if (!feature.implementation?.length) errors.push(`${feature.id}: feature link has no implementation entry`);
     if (!feature.tests?.length) errors.push(`${feature.id}: feature link has no behavior test entry`);
   }
+  if (requirementScope !== undefined) errors.push(...auditRequirementCoverage(features, requirementScope).errors);
   return errors;
 }
 
@@ -11114,7 +11274,8 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F433 removes a check; it adds no capability.
 // F431 names the release candidate 0.0.34; it changes no runtime capability.
 // F432 records the plugin releases and the registry entry for core 0.0.34; it changes no runtime capability of core.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+// F509-1 corrects the documented build command without changing runtime behavior.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F509-1", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
@@ -11172,7 +11333,7 @@ export function inventorySummary({ trackCount, implementationCount, testCount },
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
+  const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, requirementCoverage, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
   const adapterManifestFile = `${ROOT}scripts/language-test-cases.json`;
   try {
     const adapterManifest = JSON.parse(readFileSync(adapterManifestFile, "utf8"));
@@ -11212,5 +11373,6 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     for (const error of [...new Set(errors)].sort()) console.error(`- ${error}`);
     process.exitCode = 1;
   } else console.log(`Test inventory checks passed: ${summary}`);
+  console.log(requirementSummary(requirementCoverage));
   for (const warning of warnings) console.warn(`Warning: ${warning}`);
 }

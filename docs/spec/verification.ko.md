@@ -8,13 +8,35 @@ View display acceptance는 설치되고 활성화된 view plugin을 열거하고
 
 macOS에서는 검사 전용 executable의 공개 Vision text recognizer로 녹화된 view content를 확인한다. 설치된 각 view에는 선언 readiness와 고정된 예상 text가 있다. Browser empty-state 안내문, editor text fixture, HWP fixture 문단 및 terminal 출력 marker를 사용한다. 전체 녹화를 decode하고 확정 frame count를 확인하며 마지막 frame crop에 예상 text가 있어야 한다. Crop은 적용된 view rectangle과 capture content origin 및 scale을 정확히 한 번 적용한다. Recognition은 application이나 rendering 경로에서 실행하지 않는다. Captured-pixel verifier 없이 readiness만 제공하는 case는 거부한다.
 
-Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. Sample은 성공하거나 decoding 또는 geometry가 실패했을 때 멈춘 capture folder를 제거한다.
+Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. 멈춘 capture folder는 session finalization까지 성공한 뒤에만 제거하며 decoding, geometry 또는 finalization이 실패하면 보존한다.
 
 작업 상태 정본은 [기능 상태](../features.ko.md)다. 소스 파일 목록은 구조적 증거일 뿐 기능 동등성이나 애플리케이션의 정상 동작을 판정하지 않는다.
 
 Feature-link audit 자체 검사는 실제 audit module을 실행한다. 변경 전 module이 같은 assertion을 통과한 뒤, 격리한 복사본에서 error를 기록하는 effect 또는 response 하나를 제거한다. 이 두 error 누락 case는 해당 assertion의 실패를 요구한다. Load error, 중단 또는 baseline 실패는 이 두 case의 검출 근거가 아니다. 이는 audit 자체의 error 계약을 검증하며 목록에 든 제품 file의 동작을 검증하지 않는다.
 
 현재 inventory와 checklist 합계는 정본 입력에서 산출하고 문서에 수동 관리하는 개수로 반복하지 않는다. 부모와 자식 checklist row는 각각 센다. 필요한 과거 근거 문구 검사는 문서 gate에 속하며 해당 기록이 있을 때 양쪽 번역에 적용한다. 제품 동작 검증으로 세지 않는다.
+
+### 요구사항 시나리오 목록
+
+다음 표는 시나리오 audit이 검사하는 제한된 요구사항 범위를 선언한다. 구현과 test 연결에서 행 전체가 삭제되어도 발견하도록 연결 목록과 별도로 둔다. 두 번역은 같은 순서의 key를 유지해야 한다. 모든 제품 요구사항 목록이 아니며 범위를 추가하려면 이 계약과 기존 `FEATURE_LINKS` inventory의 소유 연결을 함께 변경한다.
+
+<!-- requirement-scope:start -->
+| Key | 필수 계약 |
+| --- | --- |
+| `execution-results` | 완전하고 비어 있지 않은 선택 test 결과만 승인한다. |
+| `execution-inputs` | command 결과를 원래 input에 연결하고 변경을 거부하며 재시도를 보존한다. |
+| `modified-close` | save가 대기하거나 실패하면 수정한 tab을 유지하고 깨끗한 상태로 재시도한 뒤 닫기를 허용한다. |
+| `layout-transitions` | 거부 이후 복구를 포함해 공개 연산의 승인과 거부 전이를 검사한다. |
+| `capture-lifecycle` | sampling 녹화를 한 번 확정하고 실패 근거를 보존하며 cleanup을 완료한다. |
+| `capture-coordinates` | document, content, display 좌표를 요청한 cell pixel로 변환한다. |
+| `candidate-publication` | 불변 candidate의 불완전하거나 일치하지 않는 acceptance를 거부한다. |
+<!-- requirement-scope:end -->
+
+범위에 포함된 feature는 고유한 requirement key 하나를 선언한다. 기존 소유 test 참조에 assertion이 검사하는 차원인 `normal`, `failure`, `race`, `recovery`를 선언한다. 정상과 실패에는 반드시 test가 필요하다. 경합이나 복구에 test가 없으면 해당 계약에 근거한 구체적인 비적용 이유가 필요하며, test가 없다는 이유로 비동기 상태 전이를 제외할 수 없다. 한 test가 여러 차원을 다루려면 assertion이 각각을 실제로 검사해야 한다. 복구는 거부된 상태가 의도한 다음 연산으로 진행하거나 실패 cleanup이 요구대로 완료되는 것이다. 새 fixture가 따로 통과한 것으로 상태 복구를 입증하지 않는다. 차원 누락, 알 수 없거나 반복된 key·차원, 중복 시나리오 참조, 잘못된 기존 구현·test 참조는 `make check-tests`를 실패시킨다.
+
+모든 행은 `darwin`, `linux`, `win32` 적용 상태를 선언한다. `required`는 그 플랫폼의 실행 근거가 계속 필요하다는 뜻이며, `unavailable`에는 구현상의 이유와 검증을 재개할 조건이 모두 필요하다. 이번 실행의 OS가 다르다는 이유로 플랫폼을 사용할 수 없다고 선언하지 않는다. 생성한 보고서는 연결된 시나리오를 미실행으로, 필수 플랫폼을 미검증으로 표시하며 사용할 수 없는 플랫폼도 미검증 상태로 남긴다. 이 구조 검사는 실행 결과를 읽지 않고 범위 백분율을 부여하지 않으며 application이나 publication acceptance를 승인하지 않는다. 검토자는 시나리오 tag를 소유 assertion과 대조하고 실제 실행은 기존 runner와 acceptance gate가 판정한다.
+
+modified-close 행은 거부된 응답으로 나타낸 file-write 실패 경계를 포함하여 core 소비자의 modified 상태 보고와 save 응답만 소유한다. 파일 저장과 PTY wire 구현은 독립 저장소의 요구사항과 test가 담당하며 core는 그 구현을 읽거나 범위를 검증했다고 주장하지 않는다. Layout 식별자와 topology 비교는 이 전이 범위와 함께 해당 소유 test에서 유지한다. Capture 행은 sampler와 현재 native capture 의존성을 설명한다. Lifecycle의 경합 시나리오는 stop 이후 final audit 이전에 도착한 application 오류를 다루며 병렬 또는 반복 finalization은 검증하지 않는다. Candidate publication은 report 검증을 설명하고 native application 실행 결과를 뜻하지 않는다.
 
 Core test 소유권은 독립적으로 선언된 core package를 따른다. Root `e2e` package가 window check와 `e2e/fixtures/` 아래 설치 가능한 payload를 소유한다. Fixture의 `package.json`은 설치 payload를 설명하며 별도의 core test 소유자를 만들지 않는다. E2E test는 자기 fixture manifest와 source를 읽을 수 있다. Core package test는 계속 E2E fixture 파일을 읽을 수 없고, E2E test도 다른 core package의 구현 경로를 읽을 수 없다.
 

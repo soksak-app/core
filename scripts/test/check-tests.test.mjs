@@ -5,9 +5,141 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-tests.mjs";
+import { auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
 
 const files = repositoryFiles();
+
+function requirementFixture() {
+  return {
+    features: [{ id: "F1", implementation: [{ file: "unit.js", symbol: "run" }],
+      expected: "An accepted operation completes and a refused operation preserves state.", levels: ["unit"],
+      requirement: { key: "operation", inapplicable: {}, platforms: {
+        darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" },
+      } },
+      tests: [{ file: "unit.test.mjs", id: "accepted and refused operations", covers: ["normal", "failure", "race", "recovery"] }],
+    }],
+    scope: ["operation"], files: ["unit.js", "unit.test.mjs"],
+    read: (file) => file === "unit.js" ? "export function run() {}" : 'test("accepted and refused operations", () => {});',
+  };
+}
+
+function requirementErrors(fixture) {
+  return auditFeatureLinks(fixture.features, fixture.files, fixture.read, { requirementScope: fixture.scope });
+}
+
+test("requirement audit rejects a removed requirement and every omitted scenario dimension", () => {
+  const absent = requirementFixture();
+  delete absent.features[0].requirement;
+  assert.match(requirementErrors(absent).join("\n"), /operation: required behavior has no scenario mapping/);
+  for (const dimension of ["normal", "failure", "race", "recovery"]) {
+    const fixture = requirementFixture();
+    fixture.features[0].tests[0].covers = fixture.features[0].tests[0].covers.filter((value) => value !== dimension);
+    assert.match(requirementErrors(fixture).join("\n"), new RegExp(`operation: missing ${dimension} scenario`));
+  }
+});
+
+test("requirement audit rejects duplicate requirements and invalid scenario references", () => {
+  const duplicate = requirementFixture();
+  duplicate.features.push({ ...structuredClone(duplicate.features[0]), id: "F2" });
+  assert.match(requirementErrors(duplicate).join("\n"), /operation: requirement is duplicated/);
+  const invalid = requirementFixture();
+  invalid.features[0].tests[0].id = "unregistered behavior";
+  assert.match(requirementErrors(invalid).join("\n"), /behavior test id is not present/);
+  invalid.features[0].tests[0].file = "missing.test.mjs";
+  assert.match(requirementErrors(invalid).join("\n"), /behavior test file is not in the workspace/);
+  const repeated = requirementFixture();
+  repeated.features[0].tests.push(structuredClone(repeated.features[0].tests[0]));
+  assert.match(requirementErrors(repeated).join("\n"), /duplicate scenario test reference/);
+  for (const covers of [["normal", "normal"], ["success"], []]) {
+    const fixture = requirementFixture();
+    fixture.features[0].tests[0].covers = covers;
+    assert.match(requirementErrors(fixture).join("\n"), /invalid or duplicate scenario dimension/);
+  }
+});
+
+test("requirement audit requires explicit platform obligations and concrete unavailable reasons", () => {
+  for (const value of [undefined, { status: "pass" }, { status: "unavailable" },
+    { status: "unavailable", reason: " ", resumeWhen: "Implement the capture backend." },
+    { status: "unavailable", reason: "No capture backend exists.", resumeWhen: " " }]) {
+    const fixture = requirementFixture();
+    fixture.features[0].requirement.platforms.linux = value;
+    assert.match(requirementErrors(fixture).join("\n"), /operation: linux platform/);
+  }
+});
+
+test("requirement scenario references cannot use an implementation file as a test", () => {
+  const fixture = requirementFixture();
+  fixture.features[0].tests[0].file = "unit.js";
+  fixture.features[0].tests[0].id = "run";
+  assert.match(requirementErrors(fixture).join("\n"), /scenario reference is not a discovered test file/);
+});
+
+test("requirement audit permits justified inapplicability only for race and recovery", () => {
+  for (const dimension of ["normal", "failure"]) {
+    const fixture = requirementFixture();
+    fixture.features[0].requirement.inapplicable[dimension] = "No asynchronous state is retained.";
+    fixture.features[0].tests[0].covers = fixture.features[0].tests[0].covers.filter((value) => value !== dimension);
+    assert.match(requirementErrors(fixture).join("\n"), /normal and failure require owning tests/);
+  }
+  for (const reason of ["", " "]) {
+    const fixture = requirementFixture();
+    fixture.features[0].requirement.inapplicable.race = reason;
+    fixture.features[0].tests[0].covers = ["normal", "failure", "recovery"];
+    assert.match(requirementErrors(fixture).join("\n"), /operation: race inapplicability requires a reason/);
+  }
+  const fixture = requirementFixture();
+  fixture.features[0].tests[0].covers = ["normal", "failure"];
+  fixture.features[0].requirement.inapplicable = {
+    race: "The operation validates an immutable value synchronously without shared state.",
+    recovery: "A refusal retains no state; each new value is validated independently.",
+  };
+  fixture.features[0].requirement.platforms.linux = { status: "unavailable",
+    reason: "No capture backend is implemented on Linux.", resumeWhen: "Implement and verify the Linux capture backend." };
+  assert.deepEqual(requirementErrors(fixture), []);
+});
+
+test("requirement scope rejects missing rows, duplicates and translation drift", () => {
+  const scope = ["<!-- requirement-scope:start -->", "| Key | Contract |", "| --- | --- |",
+    "| `first` | First contract. |", "| `second` | Second contract. |", "<!-- requirement-scope:end -->"].join("\n");
+  assert.deepEqual(readRequirementScope(scope, scope), ["first", "second"]);
+  assert.throws(() => readRequirementScope("", scope), /marker pair/);
+  assert.throws(() => readRequirementScope(scope + scope, scope), /marker pair/);
+  assert.throws(() => readRequirementScope(scope.replace("`second`", "`first`"), scope), /unique named rows/);
+  assert.throws(() => readRequirementScope(scope.replace("Second contract.", " "), scope), /nonempty contracts/);
+  assert.throws(() => readRequirementScope(scope, scope.replace("| `second` | Second contract. |\n", "")), /keys and order differ/);
+});
+
+test("requirement reports keep mapped scenarios and unavailable platforms explicitly unverified", () => {
+  const fixture = requirementFixture();
+  fixture.features[0].requirement.platforms.win32 = { status: "unavailable",
+    reason: "The native backend is not implemented.", resumeWhen: "Implement and verify the native backend." };
+  const report = auditRequirementCoverage(fixture.features, fixture.scope);
+  assert.deepEqual(report.errors, []);
+  assert.ok(Object.values(report.rows[0].dimensions).every((value) => value.status === "mapped" && value.executed === false));
+  assert.ok(Object.values(report.rows[0].platforms).every((value) => value.verified === false));
+  const summary = requirementSummary(report);
+  assert.match(summary, /mapped tests were not executed/);
+  assert.match(summary, /darwin=required\/unverified/);
+  assert.match(summary, /win32=unavailable\/unverified \(The native backend is not implemented.; resume: Implement and verify the native backend.\)/);
+  assert.doesNotMatch(summary, /\d+%|acceptance passed/);
+});
+
+test("the inventory enforces every declared requirement through its existing owning links", () => {
+  const inventory = auditInventory(files);
+  assert.deepEqual(inventory.requirementCoverage.errors, []);
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const read = (file) => readFileSync(join(root, file), "utf8");
+  const keys = readRequirementScope(read("docs/spec/verification.md"), read("docs/spec/verification.ko.md"));
+  assert.deepEqual(inventory.requirementCoverage.rows.map(({ key }) => key).sort(), [...keys].sort());
+  for (const key of keys) {
+    const feature = structuredClone(inventory.featureLinks.find((entry) => entry.requirement?.key === key));
+    assert.deepEqual(auditFeatureLinks([feature], files, read, { requirementScope: [key] }), [], key);
+    for (const test of feature.tests) if (test.covers) test.covers = test.covers.filter((dimension) => dimension !== "normal");
+    assert.match(auditFeatureLinks([feature], files, read, { requirementScope: [key] }).join("\n"), new RegExp(`${key}: missing normal scenario`));
+  }
+  const missingScope = auditInventory(files, undefined, (file) => file === "docs/spec/verification.md" ? "" : read(file));
+  assert.ok(missingScope.errors.some((error) => error.includes("cannot read requirement scope")));
+});
 
 test("the package index holds only the packages of this checkout and reads no declared repository", (t) => {
   // A CI job checks out only core, so a declared repository folder such as ../plugins/browser does not exist beside it.
