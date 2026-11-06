@@ -190,11 +190,15 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 		t.Fatal(err)
 	}
 	var driveErrors []string
+	// The time of each entry tells where a slow run spent its time.
+	durations := make([]time.Duration, len(entries))
 	for phase, entry := range entries {
 		sampler.SetPhase(phase)
+		start := time.Now()
 		if err := entry.drive(); err != nil {
 			driveErrors = append(driveErrors, fmt.Sprintf("%s: %v", entry.name, err))
 		}
+		durations[phase] = time.Since(start)
 	}
 	sampler.SetPhase(-1)
 	counts, err := sampler.StopSampler()
@@ -212,7 +216,7 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 		if count.Samples == 0 {
 			t.Fatalf("%s: the sampler took no sample", entry.name)
 		}
-		line := fmt.Sprintf("%s: %d of %d samples outside", entry.name, count.Outside, count.Samples)
+		line := fmt.Sprintf("%s: %d of %d samples outside in %v", entry.name, count.Outside, count.Samples, durations[phase].Round(time.Millisecond))
 		if count.Outside > 0 {
 			outside = true
 			line += fmt.Sprintf(" (first stack pointer %#x)", count.FirstOutside)

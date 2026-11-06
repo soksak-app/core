@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F674: Wails와 mygo main thread stack test의 stall 검사가 run loop의 모든 wake를 실패시키는 대신, native watch가 센 main run loop의 wait 안으로 보낸 것과 그렇게 보낸 것이 일으킨 wake를 실패시키고, run loop의 모든 turn을 log에 남긴다. framework build에서의 실행은 남아 있다.
+- F674: Wails와 mygo main thread stack test의 stall 검사가 run loop의 모든 wake를 실패시키는 대신, native watch가 센 main run loop의 wait 안으로 보낸 것과 그렇게 보낸 것이 일으킨 wake를 실패시키고, run loop의 모든 turn을 log에 남긴다. wait 안으로 주입한 보냄은 이 검사를 실패시키고 두 host는 이 검사를 통과한다. test는 항목마다 걸린 시간을 log에 남긴다. 색인으로 바쁜 기계에서 background 우선순위 아래 Wails host의 run은 stall 항목 전에 time limit까지 processor를 기다렸다.
 - F675: 입력기 우회가 `-[WKWebView inputContext]` 대신 WebKit이 입력 컨텍스트를 읽는 `-[NSView inputContext]`를 교체하므로, Backspace 같은 virtual key window의 이름 있는 키가 web view에서 key binding의 명령을 실행한다. 전에는 한글과 `é` 뒤의 Backspace가 아무것도 지우지 않았다.
 - F676: hold의 끝은 돌려주는 입력을 모두 한 번에 queue에 넣으므로, `surface_keyboard_test`가 keyboard hold를 끝내는 호출 뒤에 정해진 시간 대신 event queue가 빌 때까지 실행한다. 바꾸기 전 test는 background clamp 아래에서 CI처럼 실패했고, test는 10번 중 10번과 background clamp 아래 모든 실행에서 통과한다.
 - F673: `stall_watch_test`가 run loop를 정해진 시간 동안 돌리는 대신 각 단계를 main run loop의 wait나 main thread의 hold에서 시작하고 worker가 끝나면 실행을 끝낸다. 바꾸기 전 test는 utility clamp 아래에서 CI처럼 실패했고(`6 of 16 heartbeats read no lateness in a wait`), test는 10번 중 10번과 utility·background clamp 아래 모든 실행에서 통과한다.
