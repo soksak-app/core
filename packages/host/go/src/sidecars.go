@@ -44,6 +44,8 @@ type SidecarMessage struct {
 	Sidecar string          `json:"sidecar"`
 	Surface string          `json:"surface"`
 	Body    json.RawMessage `json:"body"`
+	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+	Cids []string `json:"cids,omitempty"`
 }
 
 // SidecarFailure is the event value that tells the page of the surface that was sent to a sidecar about the failure of that sidecar
@@ -2158,7 +2160,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			) {
 				continue
 			}
-			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Cids: output.Cids, Body: event.Body})
 		} else {
 			c.dropMessage(process, event)
 		}
@@ -2372,7 +2374,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			) {
 				continue
 			}
-			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
+			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Cids: output.Cids, Body: event.Body})
 		} else {
 			c.dropMessage(process, event)
 		}

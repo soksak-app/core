@@ -52,6 +52,7 @@ func init() {
 	diagnosticMethods["diagnostics.modal.hold"] = onModalWebViews(diagnosticModalHold)
 	diagnosticMethods["diagnostics.modal.held"] = onModalWebViews(diagnosticModalHeld)
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
+	diagnosticMethods["diagnostics.window.draw-covered"] = diagnosticWindowDrawCovered
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.input.reference"] = diagnosticInputReference
 	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
@@ -227,6 +228,29 @@ func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.Raw
 	mainThreadStep(func() { injectErr = system.InjectSettledFailure(s.window.NativeWindow()) })
 	if injectErr != nil {
 		return nil, injectErr
+	}
+	return nil, nil
+}
+
+// diagnosticWindowDrawCovered makes the image regions of the window draw while the window is covered, or ends that, and sends
+// the drawing state that changed. The window keeps reporting its occlusion (docs/spec/native-surfaces.md#image-regions).
+func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		Draw *bool `json:"draw"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.Draw == nil {
+		return nil, rpcError(codeInvalidParams, "draw is required")
+	}
+	s.images.SetDrawCovered(*p.Draw)
+	if err := s.sendImageDrawing(); err != nil {
+		return nil, err
 	}
 	return nil, nil
 }

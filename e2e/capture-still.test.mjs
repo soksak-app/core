@@ -13,6 +13,10 @@ for (const app of Object.values(APPS))
     const s = await open(t, app);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
     await fresh(s);
+    // An inactive application shows its window behind the frontmost window, where its image regions do not draw. The still
+    // reads the pixels of the window wherever it is in the window order (docs/spec/native-surfaces.md#image-regions).
+    await s.request("diagnostics.window.draw-covered", { draw: true });
+    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
     assert.ok(card, "terminal card absent");
@@ -27,7 +31,6 @@ for (const app of Object.values(APPS))
     await s.presented();
     const before = await s.get("host.window");
     assert.equal(before.active, false);
-    assert.equal(before.occluded, false);
     const surface = (await s.surfaces()).find((item) => item.surface === tab.id);
     assert.ok(surface?.applied, "native surface absent");
     const { path } = await s.request("diagnostics.capture.still", {});
@@ -60,7 +63,6 @@ for (const app of Object.values(APPS))
       t.diagnostic(`PNG ${image.width}x${image.height}: ${JSON.stringify(points)}`);
       const after = await s.get("host.window");
       assert.equal(after.active, false);
-      assert.equal(after.occluded, false);
       console.info(`PASS ${app.name}: still PNG observation (${Math.round(performance.now() - started)}ms)`);
     }
   });

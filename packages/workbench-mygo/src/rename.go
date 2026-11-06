@@ -203,7 +203,7 @@ func (s *Shell) drawRenameField(c *ui.Context, width float32) {
 	s.binder.Control(c, "core.rename.input", "core.rename.set", "")
 	field := s.binder.Bound(ui.TextInputBase(c, &value), "core.rename.input").Label(value).AutoFocus().Shrink(0).Width(width).PaddingX(s.frameLength(m.barTabRootPad)).
 		Border(s.palette.BorderWidth, s.palette.Focus).Radius(s.radiusSmall()).Background(s.palette.Bg).TextColor(s.palette.Fg).
-		FontSize(s.frameFont(s.textControl())).
+		FontSize(s.frameFont(s.textControl())).LineHeight(m.lineHeight).
 		HandleInput(func(event ui.InputEvent) bool {
 			if event.Kind != ui.InputKeyDown || event.Key != ui.KeyEscape {
 				return false

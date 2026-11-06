@@ -599,9 +599,15 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 		if text != "" {
 			ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.Muted)
 		}
+		// The operation error of the active tab is shown through the error display, which records it when it appears
+		// (docs/spec/plugins.md#tab-reports), as showTabError of packages/workbench/plane.js does.
 		if active := data.ActiveTab(); active != nil {
+			where := "tab error " + active.ID
 			if report := s.surfaces.reports[active.ID]; report != nil && report.Error != "" {
+				s.errors.Show(where, report.Error, "")
 				ui.Text(c, report.Error).FontSize(s.textCaption()).TextColor(s.palette.No)
+			} else {
+				s.errors.Hide(where)
 			}
 		}
 	})

@@ -183,6 +183,7 @@ test("a captured drag remains available when the session fails", async (t) => {
   s.get = async () => ({ active: false, occluded: false });
   s.presented = async () => ({ displayed: 12 });
   s.request = async (method) => {
+    if (method === "diagnostics.window.draw-covered") return null;
     if (method === "diagnostics.drag") return { frames, took: 100, asked: 100 };
     if (method === "diagnostics.capture.stop") return { frames, callbackStatus: join(frames, "callback-status.jsonl"),
       count: 1, limited: false, longestGap: 16 };

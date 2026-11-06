@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -196,44 +197,164 @@ func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefu
 	}
 }
 
-// contract: log.writer.never-blocks-and-counts-loss
-func TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
-	options.QueueEvents = 4
-	// The writer waits a long time between batches, so the queue stays full while the producer pushes.
-	options.BatchInterval = 30 * time.Second
-	log, err := host.StartEventLog(options)
-	if err != nil {
-		t.Fatal(err)
+// writerHold holds the writer goroutine in its write observer, as a slow disk holds it: while the writer is held it takes
+// nothing from the queue, so the queue fills and stays full.
+type writerHold struct {
+	armed   atomic.Bool
+	entered chan struct{}
+	release chan struct{}
+}
+
+func holdWriter(log *host.EventLog) *writerHold {
+	hold := &writerHold{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	log.SetOnWrite(func(string, int64) {
+		if hold.armed.Swap(false) {
+			hold.entered <- struct{}{}
+			<-hold.release
+		}
+	})
+	return hold
+}
+
+// refuseWhileHeld holds the writer, emits 20 events into a queue of 4 and releases the writer; it returns the accepted and the
+// refused events. An error is written without waiting for the batch interval, so its write is where the writer is held.
+func refuseWhileHeld(t *testing.T, log *host.EventLog, hold *writerHold, first int) (accepted, refused int) {
+	t.Helper()
+	hold.armed.Store(true)
+	if !log.Emit(host.LevelError, "host.test.failure", map[string]any{"reason": "the writer is held"}) {
+		t.Fatal("the error was refused")
 	}
-	support.StoreEveryLevel(t, log)
-	accepted, refused := 0, 0
-	for index := 0; index < 50; index++ {
+	select {
+	case <-hold.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the writer did not write the error")
+	}
+	for index := first; index < first+20; index++ {
 		if log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": index}) {
 			accepted++
 		} else {
 			refused++
 		}
 	}
-	if accepted < 3 || refused == 0 {
+	hold.release <- struct{}{}
+	return accepted, refused
+}
+
+// droppedRanges returns the log.dropped events of a run, after checking that each names count consecutive seq before its own
+// and that the stored events and the named ranges hold every seq from 1 once.
+func droppedRanges(t *testing.T, events []map[string]any) []map[string]any {
+	t.Helper()
+	var seqs []int
+	var dropped []map[string]any
+	for _, event := range events {
+		seq := int(event["seq"].(float64))
+		seqs = append(seqs, seq)
+		if event["event"] != "log.dropped" {
+			continue
+		}
+		fields := event["fields"].(map[string]any)
+		from, to := int(fields["from_seq"].(float64)), int(fields["to_seq"].(float64))
+		if to+1-from != int(fields["count"].(float64)) || seq <= to {
+			t.Fatalf("the dropped event %v does not name count seq before its own", event)
+		}
+		for missing := from; missing <= to; missing++ {
+			seqs = append(seqs, missing)
+		}
+		dropped = append(dropped, event)
+	}
+	sort.Ints(seqs)
+	for index, seq := range seqs {
+		if seq != index+1 {
+			t.Fatalf("seq %d at position %d: the stored events and the dropped ranges do not hold every seq once: %v", seq, index, events)
+		}
+	}
+	return dropped
+}
+
+// countOf returns the count of a log.dropped event.
+func countOf(event map[string]any) int {
+	return int(event["fields"].(map[string]any)["count"].(float64))
+}
+
+// contract: log.writer.never-blocks-and-counts-loss
+func TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped(t *testing.T) {
+	options := eventLogOptions(t.TempDir())
+	options.QueueEvents = 4
+	options.BatchInterval = 30 * time.Second
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	support.StoreEveryLevel(t, log)
+	hold := holdWriter(log)
+	accepted, refused := refuseWhileHeld(t, log, hold, 0)
+	if accepted != 4 || refused != 16 {
 		t.Fatalf("accepted %d, refused %d", accepted, refused)
 	}
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
-	dropped, stored := 0, 0
-	var count any
-	for _, event := range readEventLog(t, log.Path()) {
-		switch event["event"] {
-		case "log.dropped":
-			dropped++
-			count = event["fields"].(map[string]any)["count"]
-		case "host.test.event":
+	events := readEventLog(t, log.Path())
+	dropped := droppedRanges(t, events)
+	stored := 0
+	for _, event := range events {
+		if event["event"] == "host.test.event" {
 			stored++
 		}
 	}
-	if dropped != 1 || count != float64(refused) || stored != accepted {
-		t.Fatalf("dropped events %d with count %v (refused %d), stored %d (accepted %d)", dropped, count, refused, stored, accepted)
+	if len(dropped) != 1 || countOf(dropped[0]) != refused || dropped[0]["fields"].(map[string]any)["channel"] != "other" || stored != accepted {
+		t.Fatalf("dropped %v (refused %d), stored %d (accepted %d)", dropped, refused, stored, accepted)
+	}
+}
+
+// contract: log.writer.never-blocks-and-counts-loss
+func TestARecordOfTheLossBetweenTwoRefusalsSplitsThemIntoTwoDroppedRanges(t *testing.T) {
+	// The writer records the loss counted so far each time it writes the queue (the end of an interval, an error, a flush or
+	// the wakeup of a writer that slept); refusals on both sides of such a write are two ranges.
+	options := eventLogOptions(t.TempDir())
+	options.QueueEvents = 4
+	options.BatchInterval = 30 * time.Second
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	support.StoreEveryLevel(t, log)
+	hold := holdWriter(log)
+	firstAccepted, firstRefused := refuseWhileHeld(t, log, hold, 0)
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	secondAccepted, secondRefused := refuseWhileHeld(t, log, hold, 20)
+	if firstAccepted != 4 || firstRefused != 16 || secondAccepted != 4 || secondRefused != 16 {
+		t.Fatalf("accepted %d and %d, refused %d and %d", firstAccepted, secondAccepted, firstRefused, secondRefused)
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	dropped := droppedRanges(t, events)
+	if len(dropped) != 2 {
+		t.Fatalf("dropped events %d, want 2: %v", len(dropped), events)
+	}
+	if countOf(dropped[0]) != firstRefused || countOf(dropped[1]) != secondRefused {
+		t.Fatalf("dropped counts %d and %d, refused %d and %d", countOf(dropped[0]), countOf(dropped[1]), firstRefused, secondRefused)
+	}
+	// The four events accepted after the first range are stored between the two ranges.
+	after := dropped[0]["seq"].(float64)
+	before := dropped[1]["fields"].(map[string]any)["from_seq"].(float64)
+	var between []float64
+	stored := 0
+	for _, event := range events {
+		if event["event"] != "host.test.event" {
+			continue
+		}
+		stored++
+		if seq := event["seq"].(float64); seq > after && seq < before {
+			between = append(between, event["fields"].(map[string]any)["index"].(float64))
+		}
+	}
+	if fmt.Sprint(between) != "[20 21 22 23]" || stored != firstAccepted+secondAccepted {
+		t.Fatalf("stored between the ranges %v, stored %d (accepted %d)", between, stored, firstAccepted+secondAccepted)
 	}
 }
 

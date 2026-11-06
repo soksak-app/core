@@ -4,6 +4,24 @@
 
 ## 미배포
 
+- F632: mygo workbench는 활성 tab의 작업 오류가 나타날 때 그 글을 `tab error <tab>`으로 기록하며, 다른 두 host의 workbench와 같다. Red: card status 줄은 오류를 보였지만 `workbench.record.error`를 저장하지 않았다.
+- F502-13: mygo library가 가린 project의 view는 자리가 없다. `element.rect`는 page처럼 그 surface에 유효한 applied frame이 없다고 답한다. Red: `TestAViewUnderTheLibraryHasNoPlace`가 이전 drawing에서 실패했다.
+- F502-33: mygo workbench의 section 이름은 settings가 고른 font와 무관하게 page section header의 굵기, 즉 chrome이 `section-head-weight` 옆에 선언한 font stack `ui-font`의 600을 갖는다. Red: 이름을 bold로 그렸을 때 `TestTheNameOfASectionHasTheStemsOfThePageHeader`와 `TestASectionNameHasTheWeightOfThePage`가 실패했다.
+- F502-13: mygo card tab의 닫기 mark는 page 높이, 즉 작은 text size와 tight line height를 갖는다. framework에서 style이 정한 line height가 line의 높이가 되었기 때문이다. Red: `TestTheCloseMarkOfATabHasTheHeightOfThePage`가 그 framework 변경 전에 실패했다.
+- F502-13: mygo workbench의 element `core.sidebar`는 page처럼 sidebar의 set이고 status line 위에서 끝난다. set이 없는 sidebar에는 그 element가 없다. Red: `TestTheSidebarElementEndsAboveItsStatus`와 `TestASidebarWithoutASetHasNoElement`가 이전 drawing에서 실패했고, set과 status line을 재는 card test도 실패했다.
+- F502-13: mygo library의 결과 없음 note는 page 문단의 margin을 갖고, project를 추가하는 card와의 사이에 grid gap이 있다. Red: `TestTheNoteOfNoResultsHasTheMarginsOfAParagraph`가 이전 drawing에서 실패했다.
+- F502-13: mygo project tab의 rename field는 chrome의 line height를 가져 page input과 같은 높이이다. Red: `TestTheRenameFieldHasTheHeightOfThePage`가 이전 drawing에서 실패했다.
+- F502-13: mygo settings search의 element는 page input처럼 field 전체이다. pill은 search inset만큼 안쪽에 그려지고 focus ring은 field 둘레에 그려진다. Red: `TestTheSearchOfPluginsIsTheWholeField`가 이전 drawing에서 실패했다.
+- F502-13: mygo sidebar set의 edit와 delete button은 chrome의 seg metric으로 row 끝의 segment에 서고, caption이 row의 나머지를 차지한다. Red: `TestTheButtonsOfASetAreASegment`가 이전 drawing에서 실패했다.
+- F502-13: mygo settings row의 control은 page grid처럼 row 가운데에 선다. reset button이 있는 row만 wrap된다. Red: `TestAControlStandsInTheMiddleOfItsRow`가 이전 drawing에서 실패했다.
+- F502-13: mygo settings slider는 page의 range input처럼 track 높이이다. track 밖으로 나온 thumb 위에서도 pointer를 받고, focus ring은 thumb 둘레에 그려진다. Red: `TestASliderIsAsTallAsItsTrack`가 이전 drawing에서 실패했다.
+- F502-13: mygo settings card는 content와 함께 끝나고, 가장 큰 높이를 넘으면 pane이 scroll된다. max-height를 가진 page card와 같다. Red: `TestTheCardEndsWithItsContent`가 이전 drawing에서 실패했다.
+- F502-13: 이름 없는 mygo settings row는 page grid의 빈 name column을 유지하므로 그 button은 control column에 선다. Red: `TestAButtonOfARowWithoutANameStandsInTheControlColumn`가 이전 drawing에서 실패했다.
+- F502-13: mygo settings card의 grip은 page header의 padding과 border를 포함한 head 전체이고, 닫기 button은 그 안에 있다. Red: `TestTheGripIsTheWholeHeadOfTheCard`가 이전 drawing에서 실패했다.
+- F617: 사이드카 메시지가 요청의 cids를 안고 표면 소유자에게 간다.
+- F631: 가득 찬 event queue의 test는 writer를 붙잡아 거부를 모두 세고, 한 run을 count 합이 거부된 event 수인 여러 `log.dropped` 범위로 읽는다. writer는 queue를 쓸 때마다 손실을 기록하므로, `log.dropped` 하나를 기대한 test는 거부 도중에 writer가 깨면 실패했다. Red: 기록 양쪽의 두 거부를 `log.dropped` 하나로 기대했다.
+- F626: mygo host에서 열린 dialog의 frame은 dialog를 다시 그리고, 그 뒤의 blur된 workbench는 바뀔 때까지 유지해 다시 그리지 않는다. scroll하는 dialog의 매 frame이 창 전체를 바꿨다. Red: `TestScrollingTheSettingsCardRedrawsTheCardAlone`이 167 frame 모두에서 바뀐 pixel 960,000을 읽었고, card의 상한은 430,080이다.
+- F630: `make measure-app-usage`는 footprint를 읽지 못한, 어느 애플리케이션에도 속하지 않는 process를 측정 끝의 process table로 판정한다. `footprint`는 끝나는 WebKit process를 `ps`가 지우기 전에 찾지 못하고, 그것이 애플리케이션의 측정을 실패시켰다. Red: `scripts/test/measure-app-usage.test.mjs`가 cpu 읽기가 아직 그 process를 나열하는 동안 footprint를 실패시킨다.
 - F502-13: 열린 dialog는 세 host에서 그 밖의 모든 element를 inert로 만든다. `element.rect`는 여전히 rectangle을 답하고, 한 점이 무엇에 닿는지는 `host.hit`이 답하며, `element.act`는 core element와 surface element 모두 code 1010으로 거절된다. mygo host의 pointer sequence는 dialog 뒤의 element 이름을 대지 않는다. Red: page는 dialog 뒤 element의 action을 수행했다. mygo host는 1010 대신 -32000으로 거절했고, surface element의 action을 surface로 전달했으며, pointer sequence는 dialog 뒤의 `core.save`를 이름으로 댔다.
 - F628: Go host 의 진단 build 는 두 요청 사이의 CPU 를 profile 한다. `diagnostics.cpu.profile` `{on: true}` 는 Go runtime 의 CPU profile 을 `logs/cpu-<pid>-<ms>.pprof` 에 쓰기 시작하고, `{on: false}` 는 멈추고 경로로 답한다. `sample` 은 goroutine 을 호출자 frame 없이 읽어 Go host 의 settings 변경 비용이 어느 함수인지 특정하지 못했다. Red: `packages/host/go/tests/object_counts_test.go` 와 `packages/host/go/src/diagnostics_cpu_profile_test.go` 가 시작, 멈춤, `on` 없는 요청을 부른다.
 - F623: `make benchmark-b3`의 session folder는 git common directory의 `b3/`, baseline record 옆에 있다. `target/b3`에서는 판의 `cargo clean`이 몇 시간 동안 잰 값을 지웠다. Red: `scripts/test/benchmark-b3.test.mjs`가 main checkout과 그 worktree에서 folder를 읽는다.

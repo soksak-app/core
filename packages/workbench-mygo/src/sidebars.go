@@ -171,6 +171,8 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-head-gap", &m.SectionHeadGap)
 	read("section-head-pad", &m.SectionHeadPad)
 	read("section-head-text", &m.SectionHeadText)
+	read("section-head-weight", &m.SectionHeadWeight)
+	m.SectionHeadFont = declared.ChromeValue("ui-font")
 	read("section-tab-mark", &m.SectionTabMark)
 	read("sidebar-status-gap", &m.StatusGap)
 	read("space-2", &m.StatusPad)
@@ -463,7 +465,7 @@ func (s *Sidebars) surfacePlugin(surface string) string {
 // in the set but are not drawn (docs/spec/plugins.md).
 func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 	choice := s.choice(frame.Sidebar)
-	frame.Layout = set.Layout
+	frame.Layout, frame.Set = set.Layout, set.ID
 	for _, id := range set.Sections {
 		loaded, ok := s.sections[id]
 		if !ok {

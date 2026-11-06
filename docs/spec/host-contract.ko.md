@@ -147,6 +147,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result` | command는 UI dispatcher를 통해 marker 작업을 실행하고 native enabled 상태, kind, color, border width를 그대로 반환한다. | all |
 | `diagnostics.document.viewport-marker.reports-native-errors` | native marker 실패는 원래 text와 internal-error code로 반환하며 성공으로 보고하지 않는다. | all |
 | `diagnostics.capture.document-identity.start.is-declared` | 진단 build는 `diagnostics.capture.document-identity.start`를 선언한다. | all |
+| `diagnostics.window.draw-covered.is-declared` | 진단 build는 `diagnostics.window.draw-covered`를 선언한다. | all |
 | `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | 선택된 document identity source가 없는 중지는 source freeze와 제거를 건너뛰고 capture를 한 번 중지하며 `frameIdentity` option의 두 값을 모두 보존한다. | all |
 | `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | 선택된 source가 있으면 중지는 source를 freeze하고 capture를 중지한 뒤 같은 generation을 제거한다. `issuedSlots`는 성공한 freeze reply에서 온다. | all |
 | `diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze` | source freeze에 실패하면 issued-slot count를 더하지 않지만 capture finalization과 source 제거는 계속 시도하고 오류를 보존한다. | all |
@@ -525,6 +526,7 @@ fn invalid_json_closes_connection() {
 | `mygo.benchmark.empty-window-reads-the-window` | 빈 창 benchmark는 세 host benchmark의 창을 읽고, 읽기에 실패하면 끝나며, 인수를 받고, JSON 한 줄을 보고하고, `footprint`의 출력에서 footprint를 읽는다. | mygo only: 이 benchmark는 mygo framework의 창을 실행한다 |
 | `sidecars.protocol.request-line-carries-cids` | 입력을 이어받는 페이지 요청은 `root`와 `body` 사이에 필드 `cids`(상관 식별자, 순서대로)를 가진 요청 줄로 사이드카에 가고, 입력을 이어받지 않는 요청에는 `cids` 필드가 없다. | all |
 | `sidecars.protocol.request-with-cids-is-recorded` | `cids`를 가진 페이지 요청은 그 `cids`, 사이드카의 `name`, `surface`, body 크기 `bytes`를 가진 level `info`의 event `host.sidecar.request`가 되고, `cids`가 없는 요청은 이 event를 저장하지 않는다. | all |
+| `sidecars.protocol.reply-cids-reach-the-owner` | 줄이 `cids`를 밝힌 sidecar의 메시지는 그 `cids`와 함께 surface의 owner에게 간다. `sidecar-message` event와 host가 view에 post하는 메시지 모두, 표준 입출력 transport와 persistent 연결 모두 같다. `cids`가 없는 메시지에는 없다. | all |
 | `sidecars.protocol.reply-with-cids-is-recorded` | 줄이 `cids`를 밝히거나 body가 `error` member를 가진 객체인 sidecar의 메시지는 event `host.sidecar.reply`이다. `name`, `surface`, body 크기 `bytes`, `ok`(`error`이면 false), 줄의 `cids`, 그 첫 번째 요청을 host가 기억하면 `micros`, 오류이면 `error` `-32603: <text>`(문자열 오류는 그 글, 다른 값은 JSON 글)를 level `warn`(오류가 없는 reply는 `info`)으로 가진다. 둘 다 없는 메시지는 이 event를 저장하지 않는다. | all |
 | `sidecars.protocol.failure-fails-the-pending-requests` | sidecar의 실패는 기다리는 요청이 있는 surface마다 level `warn`에 `ok: false`, `bytes: 0`, `error` `-32603: <reason>`(page가 받는 이유)과 그 요청들의 `cids`를 가진 event `host.sidecar.reply`를 저장한다. | all |
 | `log.input.region-event-with-cids-is-recorded` | JSON에 `cids`가 있는 image region event는 그 `cids`, region의 `surface`와 `name`, event의 `type`을 가진 level `info`의 event `host.input.relay`가 된다. `cids`가 없는 region event는 `host.input.relay`를 저장하지 않는다. | all |
@@ -756,6 +758,8 @@ fn invalid_json_closes_connection() {
 | `image.drawing.configures-shown-regions` | 보이는 region은 창의 상태와 상관없이 설정을 받고, 화면에 없는 창에서 raster가 바뀔 때도 받으며, 숨겨진 region은 받지 않는다. 표시 대기는 그리기 상태가 아닌 region을 기다리지 않고 그리기 상태가 된 region을 기다리며, 설정된 raster는 region이 그리기 상태가 될 때 다시 설정되지 않는다. | all |
 | `image.drawing.configures-a-raster-that-changed-while-hidden` | region이 숨겨진 동안 바뀐 raster는 설정을 받지 않는다. region이 보이면 그리기 메시지 뒤에 바뀐 raster의 설정을 한 번 보내고, 바뀌지 않은 raster는 다시 설정하지 않는다. | all |
 | `image.drawing.answers-transfers-while-not-drawing` | region이 그리기를 멈추기 전에 받은 전송 그림은 `consumed`나 오류로 답을 받는다. | all |
+| `image.drawing.draws-covered-in-diagnostic-builds` | 진단 build에서 가려진 창의 region은 창이 가려진 채 그리는 동안 그리기 상태이고, 바깥 표면이 숨은 동안과 창이 가려진 채 그리기를 끝낸 뒤에는 그리기 상태가 아니며, 화면에 있는 창에서 가려진 채 그리기는 아무것도 바꾸지 않는다. | all |
+| `image.drawing.covered-window-never-draws-without-diagnostics` | 진단이 없는 build에는 가려진 채 그리기의 setter가 없고 `diagnostics.window.draw-covered`를 선언하지 않는다. 가려진 창의 region은 창이 화면에 다시 있을 때만 그린다. | all |
 | `sidecars-transport.replace.runs-when-sessions-reach-zero` | layout 목록이 오래된 service에 표면을 남기지 않으면 host가 그 service를 교체한다. | all |
 | `sidecars-transport.replace.keeps-a-service-that-a-layout-holds` | 이 process에서 보낸 적이 없는, 그 사이드카의 plugin 표면을 layout이 쥐는 동안에는 표면이 닫혀도 오래된 service가 남고 그 표면은 `sessions`에 들어간다. 그 표면이 없는 목록이 오면 service를 교체한다. | all |
 | `sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar` | plugin이 그 사이드카를 나열하지 않는 layout 표면은 오래된 service를 붙들지 않는다. | all |
@@ -1070,7 +1074,7 @@ fn invalid_json_closes_connection() {
 | `log.writer.assigns-seq-and-opens-with-log-open` | host 로그 파일은 `schema`(3), `pid`, `role`, `boot`를 담은 `log.open`으로 시작하며, writer는 모든 줄에 1부터 연속인 `seq`를 부여한다. | all |
 | `log.writer.stores-both-clocks` | writer의 모든 줄은, `log.open`, `log.rotated`, `log.dropped`를 포함해, `ts_us`(호출 시점의 wall clock, 마이크로초)와 `mono_ns`(호출 시점의 플랫폼 monotonic clock, 나노초이며 양수이고 앞선 호출의 `mono_ns`보다 작지 않다)를 가진다. | all |
 | `log.writer.stores-cids` | host의 생산자가 상관 식별자와 함께 낸 event는 `cids`(순서대로의 목록)와 함께 저장되고, 식별자가 없는 event에는 `cids`가 없다. 비어 있거나 따옴표, 역슬래시, 제어 문자를 담은 식별자는 거부하고 손실로 센다. | all |
-| `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려주고, writer는 거부된 event 수와 같은 `count`와 거부된 event의 `channel`을 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장한다. | all |
+| `log.writer.never-blocks-and-counts-loss` | `emit`은 기다리지 않고 돌아온다. 큐에 자리가 없으면 false를 돌려준다. writer는 손실을 기록할 때마다 직전 기록 이후 거부된 event 수와 같은 `count`와 거부된 event의 `channel`을 가진 `log.dropped` 하나를 그것이 가리키는 `seq` 범위 뒤에 저장하며, `count`의 합은 거부된 event 수다. | all |
 | `log.writer.writes-each-interval` | writer는 마지막 쓰기 뒤 batch 간격이 끝날 때마다 모인 것을 쓰며, event가 간격보다 빨리 계속 들어올 때도 그렇다. event가 없는 간격을 기다리는 writer는 꾸준한 입력 동안 아무것도 쓰지 않고 kill에서 한 간격보다 많이 잃는다. | all |
 | `log.writer.sleeps-with-nothing-to-write` | batch 간격 동안 쓴 것이 없는 writer는 event, source의 wake, 기다린 count가 닿을 때까지 다시 깨어나지 않는다. | all |
 | `log.writer.a-count-waits-for-a-write` | gate count만으로는 쓰지 않는다. 잠든 writer는 다음 event까지 최대 1분 동안 count를 들고 있는다. | all |

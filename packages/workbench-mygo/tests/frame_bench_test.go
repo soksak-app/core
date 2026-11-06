@@ -94,7 +94,16 @@ func TestAReportOfTheSameValueAsksForNoFrame(t *testing.T) {
 		command string
 		value   any
 	}{{"tab.title", "zsh"}, {"tab.footer", "short"}, {"tab.directory", "/tmp"}, {"tab.error", "late"}, {"tab.modified", true}} {
-		viewCall(t, f, stored, surface, report.command, report.value)
+		// The first error is recorded by the error display that shows it (docs/spec/plugins.md#tab-reports); the other reports
+		// record nothing.
+		records := viewCallShowing(t, f, stored, surface, report.command, report.value)
+		want := 0
+		if report.command == "tab.error" {
+			want = 1
+		}
+		if len(records) != want {
+			t.Fatalf("the first %s recorded %q", report.command, records)
+		}
 		before := f.frames
 		viewCall(t, f, stored, surface, report.command, report.value)
 		if f.frames != before {

@@ -255,7 +255,8 @@ export function createViewBridge({ handler, report }) {
     sidecar: (name) => {
       if (typeof name !== "string" || name === "") throw new TypeError("runtime.sidecar requires a sidecar name");
       return {
-        on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id, sidecar: name }), (data) => listener(data.body)),
+        // default: the host leaves out cids when the line of the message names none (docs/spec/sidecars.md), so the listener receives no identifiers.
+        on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id, sidecar: name }), (data) => listener(data.body, data.cids ?? [])),
         onFailure: (id, listener) => listen(`sidecar.failure:${id}`, () => calls.request("runtime.sidecar.onFailure", { id, sidecar: name }), (data) => listener(data.reason)),
         // default: cids is optional; without it the send carries no correlation identifiers.
         send: (id, body, cids = []) => calls.request("runtime.sidecar.send", { id, sidecar: name, body, cids }),

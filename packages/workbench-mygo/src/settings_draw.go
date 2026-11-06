@@ -3,6 +3,7 @@ package workbench
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,7 @@ type settingsPane struct {
 	headH, headGap, headPadStart, headPadEnd                                                   float32
 	shadowY, shadowBlur, shadowAlpha                                                           float32
 	rowNameW, rowH, gap                                                                        float32
+	segGap, segPad, segButtonPadY, segButtonPadX                                               float32
 	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking       float32
 	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset           float32
 	swatchMinW, swatchW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder            float32
@@ -37,6 +39,7 @@ func (s *Shell) readSettingsPane() settingsPane {
 		headH: metric("set-card-head-h"), headGap: metric("set-card-head-gap"), headPadStart: metric("set-card-head-pad-start"), headPadEnd: metric("set-card-head-pad-end"),
 		shadowY: metric("set-card-shadow-y"), shadowBlur: metric("set-card-shadow-blur"), shadowAlpha: metric("set-card-shadow-alpha"),
 		rowNameW: metric("set-row-name-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
+		segGap: metric("seg-gap"), segPad: metric("seg-pad"), segButtonPadY: metric("seg-button-pad-y"), segButtonPadX: metric("seg-button-pad-x"),
 		scopeGap: metric("space-4"), scopePadY: metric("space-2"), scopePadX: metric("space-1"), scopeMark: metric("scope-tab-mark"),
 		paneTop: metric("set-pane-pad-top"), paneX: metric("set-pane-pad-x"), paneBottom: metric("set-pane-pad-bottom"), rowGap: metric("set-row-gap"),
 		fieldPadY: metric("field-pad-y"), buttonPadX: metric("space-3"), fieldPadX: metric("space-2"), arrowInset: metric("select-arrow-inset"),
@@ -66,7 +69,9 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	if w.moved {
 		s.clampCard()
 	}
-	x, y, cardW, cardH := s.settingsCard()
+	// default: the card takes its height from its rows, and this frame measures that height again into drawnHeight below, so the
+	// height of the last frame is not needed here.
+	x, y, cardW, _ := s.settingsCard()
 	pane := s.readSettingsPane()
 	ui.Overlay(c, func() {
 		scrim := s.binder.Watched(s.exposedBox(c, "core.settings-modal.scrim", "", ""))
@@ -75,15 +80,17 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 			card := s.exposedBox(c, "core.settings-modal.card", "", "")
 			// The card takes the focus of the dialog, so a key presses no control before Tab or a press reaches one.
 			card.Focusable().FocusRing(false).LineHeight(pane.lineHeight)
-			card.Absolute().Left(float32(x)).Top(float32(y)).Size(float32(cardW), float32(cardH)).Column().Background(s.palette.Card).
+			// The card ends with its content, and past its largest height the pane scrolls, as a card with max-height does.
+			w.drawnHeight = float64(card.Bounds().H)
+			card.Absolute().Left(float32(x)).Top(float32(y)).Width(float32(cardW)).Column().Background(s.palette.Card).
 				Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Clip().Shadow(0, pane.shadowY, pane.shadowBlur, 0, ui.RGBA(0, 0, 0, pane.shadowAlpha)).
 				Role(ui.RoleDialog).Label(settingsName).Children(func() {
 				// The border of the card takes its width and height from the content.
 				border := 2 * s.palette.BorderWidth
 				s.drawSettingsHead(c, model, float32(cardW)-border, pane)
-				ui.Row(c).Height(float32(cardH) - border - pane.headH).FillWidth().Children(func() {
+				ui.Row(c).FillWidth().AlignItems(ui.Stretch).Children(func() {
 					s.drawSettingsNav(c, model, pane)
-					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, pane)
+					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, float32(s.settingsCardMost())-border-pane.headH, pane)
 				})
 			})
 		})
@@ -96,22 +103,21 @@ func (s *Shell) exposedBox(c *ui.Context, name, command, item string) ui.Element
 }
 
 func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
-	ui.Row(c).Size(width, pane.headH).Padding(0, pane.headPadEnd, 0, pane.headPadStart).Gap(pane.headGap).AlignItems(ui.Center).
-		BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Children(func() {
-		grip := s.exposedBox(c, "core.settings-modal.grip", "core.settings-modal.move", "")
-		grip.Grow(1).FillHeight().AlignItems(ui.Center).Row().Cursor(ui.CursorGrab).Role(ui.RoleGroup).Label(settingsName).Children(func() {
-			ui.Text(c, settingsName).FontSize(s.textControl()).TextColor(s.palette.Fg)
-		})
-		if dx, dy, pressed := grip.Dragged(); pressed && (dx != 0 || dy != 0) {
-			s.binder.run("core.settings-modal.move", windowParam{DX: float64(dx), DY: float64(dy)})
-		}
+	// The whole head moves the card, as the header of the page does, and the button that closes it stands inside.
+	grip := s.exposedBox(c, "core.settings-modal.grip", "core.settings-modal.move", "")
+	grip.Size(width, pane.headH).Padding(0, pane.headPadEnd, 0, pane.headPadStart).Gap(pane.headGap).Row().AlignItems(ui.Center).
+		BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Cursor(ui.CursorGrab).Role(ui.RoleGroup).Label(settingsName).Children(func() {
+		ui.Text(c, settingsName).Grow(1).FontSize(s.textControl()).TextColor(s.palette.Fg)
 		closing := model.close
 		s.drawAct(c, s.binder.Press(c, closing.Name, closing.Command.Name, closing.item(), closing.Command.Params), closing.Label, "close", false, 1)
 	})
+	if dx, dy, pressed := grip.Dragged(); pressed && (dx != 0 || dy != 0) {
+		s.binder.run("core.settings-modal.move", windowParam{DX: float64(dx), DY: float64(dy)})
+	}
 }
 
 func (s *Shell) drawSettingsNav(c *ui.Context, model *settingsModel, pane settingsPane) {
-	ui.Column(c).Width(pane.navW).FillHeight().Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
+	ui.Column(c).Width(pane.navW).Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
 		for _, control := range model.nav {
 			s.drawSettingsNavItem(c, control, pane)
 		}
@@ -140,13 +146,13 @@ func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pan
 	})
 }
 
-func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
+func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, most float32, pane settingsPane) {
 	w := &s.settingsWindow
 	key := fmt.Sprint(w.section, w.scope, w.chosen, w.editing)
 	if key != w.scrollKey {
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
 	}
-	ui.Scroll(c).TrackScroll(&w.scroll).Width(width).FillHeight().Children(func() {
+	ui.Scroll(c).TrackScroll(&w.scroll).Width(width).MaxHeight(most).Children(func() {
 		ui.Column(c).Width(width).Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
 			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
 				for _, control := range model.scopes {
@@ -210,6 +216,18 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		})
 		return
 	}
+	if len(row.controls) > 0 && row.controls[0].kind == controlCaption {
+		// A row with a caption has the columns 1fr and auto, and its buttons stand in a segment at its end.
+		ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+			s.drawControl(c, row.controls[0], pane)
+			ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
+				for _, control := range row.controls[1:] {
+					s.drawSegmentButton(c, control, pane)
+				}
+			})
+		})
+		return
+	}
 	if row.list {
 		ui.Row(c).FillWidth().Wrap().Children(func() {
 			for _, control := range row.controls {
@@ -218,9 +236,17 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		})
 		return
 	}
-	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Wrap().Children(func() {
+	// A row that wraps stacks its lines at its start, so a control stands in the middle of its row only in a row that does not.
+	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
+	if slices.ContainsFunc(row.controls, func(control *SettingsControl) bool { return strings.HasPrefix(control.item(), "reset:") }) {
+		line.Wrap()
+	}
+	line.Children(func() {
 		if row.name != "" {
 			ui.Text(c, row.name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
+		} else {
+			// A row without a name keeps the empty name column of the grid of the page.
+			ui.Box(c).Width(pane.rowNameW)
 		}
 		for _, control := range row.controls {
 			s.drawControl(c, control, pane)
@@ -246,7 +272,7 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 	case controlText:
 		s.drawTextControl(c, control)
 	case controlCaption:
-		s.exposedBox(c, control.Name, "", "").Grow(1).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+		s.exposedBox(c, control.Name, "", "").Grow(1).Basis(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 			ui.Text(c, control.Label).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		})
 	}
@@ -286,6 +312,22 @@ func (s *Shell) drawButton(c *ui.Context, control *SettingsControl, pane setting
 	}
 	button.Padding(pane.fieldPadY, pane.buttonPadX).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).Background(fill).AlignItems(ui.Center).Label(control.Label).Children(func() {
 		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(s.palette.Fg)
+	})
+}
+
+// drawSegmentButton draws a button of a segment, the .set-seg button of packages/workbench/app.css.
+func (s *Shell) drawSegmentButton(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
+	color := s.palette.Muted
+	if button.Hovered() {
+		color = s.palette.Fg
+	}
+	if control.On != nil && *control.On {
+		color = s.palette.Fg
+		button.Background(faded(s.palette.Fg, s.metrics.chipSelMix))
+	}
+	button.Padding(pane.segButtonPadY, pane.segButtonPadX).Radius(s.radiusSmall()).AlignItems(ui.Center).Label(control.Label).Children(func() {
+		ui.Text(c, control.Label).NoWrap().FontSize(s.textSmall()).TextColor(color)
 	})
 }
 
@@ -413,7 +455,10 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 	}
 	ui.Row(c).Grow(1).Gap(pane.slideGap).AlignItems(ui.Center).Children(func() {
 		s.binder.Control(c, control.Name, control.Command.Name, control.item())
-		slider := s.binder.Bound(ui.SliderBase(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1).Height(pane.thumb).PaddingX(pane.thumb / 2)
+		// The slider of the page is as tall as its track, and takes the pointer over the thumb that stands out of it.
+		reach := (pane.thumb - pane.trackH) / 2
+		slider := s.binder.Bound(ui.SliderBase(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1).Height(pane.trackH).
+			HitOutset(reach).PaddingX(pane.thumb / 2)
 		if slider.Changed() {
 			s.runControl(control, math.Round(value))
 		}
@@ -428,7 +473,7 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 		ring := plain.ringColor(c)
 		slider.FocusRing(false).DrawOver(func(p *ui.Painter, r ui.Rect) {
 			if ringed {
-				plain.ring(p, r, r.H/2, ring)
+				plain.ring(p, ui.Rect{X: r.X, Y: r.Y - reach, W: r.W, H: thumb}, thumb/2, ring)
 			}
 		})
 		ui.Text(c, *control.Value+control.unit).Width(s.chLength(c, "slide-value-w", s.textSmall())).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)

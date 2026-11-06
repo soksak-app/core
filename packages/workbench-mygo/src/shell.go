@@ -694,7 +694,9 @@ func (s *Shell) View(c *ui.Context) {
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
 	root := s.binder.Watched(ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip())
 	if s.dialogOpen() {
-		root.Blur(s.dialogBlur())
+		// Kept: the workbench behind the dialog changes nothing while the dialog scrolls or types, so its blurred layer is drawn
+		// again only when it changes, and a frame of the dialog redraws the dialog alone.
+		root.Blur(s.dialogBlur()).Cache()
 	}
 	root.Children(func() {
 		s.drawChrome(c, width)

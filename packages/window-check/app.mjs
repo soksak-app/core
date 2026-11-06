@@ -1104,18 +1104,24 @@ async function dragOnce(s, plan, capture, frameIdentity) {
   // pointer position to the page as a move. A diagnostic drag that is synthesized without a button mixes with that
   // move, so it is measured only in an inactive application.
   const window = await s.get("host.window");
-  // WebKit delays the painting of a window that another window covers completely, so the latency and the recording in
-  // that state are not the screen that a person sees.
-  if (window.occluded) {
-    throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window)}, so WebKit renders it less often. ` +
-      "Nothing was measured: uncover the window, without activating the application, and run the check again.");
-  }
   if (window.active) {
     throw new Error(`${s.app.name}: synthetic drag measurement refused because host.window.active is true; ` +
       `pointer ${JSON.stringify(window.pointer)}; window frame ${JSON.stringify(window.frame)}. ` +
       "An active window can receive AppKit cursor updates at the reported pointer location during the synthetic drag; " +
       "nothing was measured.");
   }
+  // An inactive application shows a new window behind the frontmost window, where its image regions do not draw. The drag
+  // makes them draw while covered for its duration, so the recording holds the regions; the window keeps its place and
+  // keeps reporting its occlusion (docs/spec/native-surfaces.md#image-regions).
+  await s.request("diagnostics.window.draw-covered", { draw: true });
+  try {
+    return await dragDrawing(s, plan, capture, frameIdentity);
+  } finally {
+    await s.request("diagnostics.window.draw-covered", { draw: false });
+  }
+}
+
+async function dragDrawing(s, plan, capture, frameIdentity) {
   const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
   const result = await s.request("diagnostics.drag", {
     ...plan,

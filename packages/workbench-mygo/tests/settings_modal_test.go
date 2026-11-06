@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -25,6 +26,7 @@ type modalStatus struct {
 	Listed  []string `json:"listed"`
 	Plugin  *string  `json:"plugin"`
 	Editing *string  `json:"editing"`
+	Scroll  float64  `json:"scroll"`
 	Rows    []struct {
 		Key         string  `json:"key"`
 		Name        string  `json:"name"`
@@ -802,7 +804,16 @@ func TestAFocusedSliderTakesTheRingOfTheSystem(t *testing.T) {
 	if !ok {
 		t.Fatal("no slider of the gap")
 	}
-	box, width := slider.Bounds, plainLength(t, "ring-w")
+	// The element is the track, and the ring goes around the thumb that stands out of it by reach above and below.
+	track, width := slider.Bounds, plainLength(t, "ring-w")
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	thumb, _ := declared.Metric("slide-thumb")
+	trackH, _ := declared.Metric("slide-track-h")
+	reach := float32(thumb-trackH) / 2
+	box := ui.Rect{X: track.X, Y: track.Y - reach, W: track.W, H: track.H + 2*reach}
 	x := box.X + box.W/2
 	if got := f.pixelOf(x, box.Y-width/2); got != want {
 		t.Fatalf("the ring is %v, not %v, around %+v", got, want, box)
@@ -1038,10 +1049,12 @@ func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
-	box := node.Bounds
-	if want := inputHeight(t) - 2*plainLength(t, "search-inset"); box.H != want {
-		t.Fatalf("the search is %v high, not %v", box.H, want)
+	if want := inputHeight(t); node.Bounds.H != want {
+		t.Fatalf("the search is %v high, not %v", node.Bounds.H, want)
 	}
+	// The pill lies inside the field by the inset.
+	inset := plainLength(t, "search-inset")
+	box := ui.Rect{X: node.Bounds.X + inset, Y: node.Bounds.Y + inset, W: node.Bounds.W - 2*inset, H: node.Bounds.H - 2*inset}
 	fill := controlBackground(t)
 	if got := f.pixelOf(box.X+2, box.Y+2); got == fill {
 		t.Fatal("the corner of the search is square")
@@ -1090,8 +1103,8 @@ func TestAFocusedSearchTakesTheRingOfTheSystem(t *testing.T) {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
 	width, inset := plainLength(t, "ring-w"), plainLength(t, "search-inset")
-	// The top edge, which is straight: the left of a pill is a curve.
-	x, y := node.Bounds.X+node.Bounds.W/2, node.Bounds.Y
+	// The top edge of the pill, which is straight: the left of a pill is a curve. The pill lies inside the field by the inset.
+	x, y := node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+inset
 	beside, around := f.pixelOf(x, y-inset/2), f.pixelOf(x, y-inset-width-.5)
 	f.tester.Key(0, ui.KeyTab)
 	f.settle()
@@ -1171,8 +1184,8 @@ func TestTheCancelOfTheSearchEmptiesIt(t *testing.T) {
 	}
 }
 
-// The column of a row is the free width of the pane, which the border of a theme narrows. The box of a search is that column, and
-// the search lies inside its box.
+// The column of a row is the free width of the pane, which the border of a theme narrows. The search, the whole field with its border,
+// is that column.
 func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
@@ -1192,7 +1205,7 @@ func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
 			t.Fatalf("no search in %q", f.tester.Texts())
 		}
 		want := metric("set-card-w") - 2*border - metric("set-nav-w") - 2*metric("set-pane-pad-x") - metric("set-row-name-w") - metric("set-row-gap")
-		if got := node.Bounds.W + 2*plainLength(t, "search-inset"); got != want {
+		if got := node.Bounds.W; got != want {
 			t.Fatalf("with a border of %v the box of the search is %v wide, not %v", border, got, want)
 		}
 	}
@@ -1427,5 +1440,49 @@ func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
 	}
 	if got := ink(drawn); got < (regular+bold)/2 {
 		t.Fatalf("the name has %d points of ink, a regular name %d and a bold one %d", got, regular, bold)
+	}
+}
+
+// TestScrollingTheSettingsCardRedrawsTheCardAlone checks that the wheel over the open card changes the pixels of the card,
+// not those of the blurred workbench below it, which nothing changed.
+func TestScrollingTheSettingsCardRedrawsTheCardAlone(t *testing.T) {
+	f := openedShell(t)
+	f.click("core.chrome.settings", "")
+	card := f.modal().Card
+	// What the shadow of the card reaches around it.
+	const reach = 40
+	bound := int((card.W + 2*reach) * (card.H + 2*reach))
+	// A frame in memory changing more than half the window draws it whole, so a bound past half tells nothing.
+	if bound*2 >= 1200*800 {
+		t.Fatalf("the card %+v with its shadow is half the window or more", card)
+	}
+	var records []ui.FrameRecord
+	var clock uint64
+	f.tester.RecordFrames(&ui.FrameRecorder{
+		Clock: func() uint64 { clock++; return clock },
+		Frame: func(r *ui.FrameRecord) { records = append(records, *r) },
+	})
+	x, y := float32(card.X+card.W*0.7), float32(card.Y+card.H*0.6)
+	f.tester.Move(x, y)
+	for range 6 {
+		f.tester.Wheel(x, y, 0, 48)
+		f.tester.Advance(20 * time.Millisecond)
+	}
+	f.settle()
+	if f.modal().Scroll <= 0 {
+		t.Fatalf("the wheel did not scroll the card: %+v", f.modal().Card)
+	}
+	drew := 0
+	for i, r := range records {
+		if r.Damage == 0 {
+			continue
+		}
+		drew++
+		if r.Damage > bound {
+			t.Errorf("frame %d of the scroll changed %d pixels, more than the %d of the card %+v", i, r.Damage, bound, card)
+		}
+	}
+	if drew == 0 {
+		t.Fatal("the scroll drew no frame")
 	}
 }

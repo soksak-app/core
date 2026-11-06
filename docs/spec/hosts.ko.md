@@ -281,6 +281,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H50 | 없음 | `tests/support/platform/native_event.rs`, `tests/support/platform/darwin/native_event.rs`, `tests/support/platform/windows/native_event.rs` | 행 H42 의 integration test 는 자기 crate 이므로 운영체제마다 이 파일로 native ring 에 기록한다. Go test 는 library package 안에 있어 그 binding 을 쓴다 |
 | H51 | `src/diagnostics_no_main_page_test.go` | 없음 | Go framework 에만 main page 가 없는 경우가 있고, 이 test 는 그 창의 diagnostics 답을 지킨다 |
 | H56 | `src/diagnostics_cpu_profile_test.go` | 없음 | row E3 의 endpoint method 를 시험한다. 그 method 는 Go language host library 에만 있다 |
+| H57 | 없음 | `tests/support/drawing.rs` | Rust integration test 는 crate 가 따로이므로 image region 의 그리기 상태 시험들은 이 module 로 helper 를 함께 쓴다. 같은 파일들의 Go 시험은 package `host_test` 안에서 helper 를 함께 쓰므로 Go language host library 에는 이 파일이 없다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make check-hosts-same`가 그 행을 읽는다 |
 | E2 | `diagnostics.gc.loop` | 없음 | 이 endpoint method는 Go runtime의 `runtime.GC`를 쉬지 않고 돈다. Rust language host library에는 수집할 garbage-collected heap이 없다 |
 | E3 | `diagnostics.cpu.profile` | 없음 | 이 endpoint method는 Go runtime을 profile한다(`runtime/pprof`). `sample`은 goroutine을 호출자 frame 없이 읽지만, Rust language host library의 frame은 모두 읽는다 |
