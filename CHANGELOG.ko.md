@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F619: framework의 window show는 등록된 platform에 묻는다. 그래서 framework test처럼 host 시작 전에 window를 보이는 process가 더는 nil dereference로 끝나지 않는다. 등록이 없으면 host의 fatal error로 process를 끝낸다.
 - F502-24-1: `go.work.sum`은 pin된 fork로 workspace module의 `go mod download`가 쓰는 내용을 담으므로, 그 download 뒤 checksum file의 변경을 거부하는 CI job의 guard가 변경을 보지 않는다.
 - F502-24-1: mygo module은 형제 folder 대신 push된 framework fork commit을 그 pseudo-version으로 가리키므로, worktree나 runner처럼 그 folder가 없는 checkout에서도 workspace의 모든 Go module이 import를 해석한다.
 - F592: Wails module은 window와 web view에 요청한 크기를 주는 push된 fork commit을 한 checkout에만 있는 형제 folder 대신 그 pseudo-version으로 가리키고, 그 sum을 담는다.
