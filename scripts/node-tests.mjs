@@ -2,7 +2,7 @@
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
-// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json; `make check-push` runs the tests of the changed packages with it.
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The words of the script keep the spaces of their quoted parts and lose their quotes, as the shell of a package script reads them. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it, and a path that names no file is an error. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json; `make check-push` runs the tests of the changed packages with it.
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -53,8 +53,34 @@ const EXIT_LIMIT_MS = 20_000;
 const SOURCE = /\.(?:[cm]?js)$/;
 
 /**
- * The steps of a test script: the commands to run before the tests (`before`), and the flags and paths of `node --test`. The step
- * `pnpm -r test` runs the tests of the packages, which this runner discovers itself, so it is not a step.
+ * The words of a step of a test script, read as the shell of a package script reads single and double quotes: whitespace outside a
+ * quote ends a word, and a quoted part keeps its spaces and loses its quotes (`--flag="a b"` is `--flag=a b`). No other shell syntax is
+ * read. An unclosed quote is an error that names the script.
+ */
+function scriptWords(step, script, where) {
+  const words = [];
+  let word = null;
+  for (let index = 0; index < step.length; index += 1) {
+    const char = step[index];
+    if (char === "'" || char === '"') {
+      const end = step.indexOf(char, index + 1);
+      if (end === -1) throw new Error(`${where}: the test script "${script}" has an unclosed ${char} quote`);
+      word = (word ?? '') + step.slice(index + 1, end);
+      index = end;
+    } else if (/\s/.test(char)) {
+      if (word !== null) words.push(word);
+      word = null;
+    } else {
+      word = (word ?? '') + char;
+    }
+  }
+  if (word !== null) words.push(word);
+  return words;
+}
+
+/**
+ * The steps of a test script: the commands to run before the tests (`before`, each as its words), and the flags and paths of
+ * `node --test`. The step `pnpm -r test` runs the tests of the packages, which this runner discovers itself, so it is not a step.
  */
 export function parseTestScript(script, where) {
   const steps = script.split('&&').map((step) => step.trim());
@@ -66,12 +92,12 @@ export function parseTestScript(script, where) {
       const command = step.startsWith('node ./run.mjs --test ')
         ? step.slice('node ./run.mjs --test '.length)
         : step.slice('node --test '.length);
-      const words = command.split(/\s+/).filter(Boolean).map((word) => word.replace(/^'(.*)'$/, '$1'));
+      const words = scriptWords(command, script, where);
       tests = { flags: words.filter((word) => word.startsWith('--')), paths: words.filter((word) => !word.startsWith('--')) };
     } else if (step === 'pnpm -r test') {
       continue;
     } else if (step.startsWith('pnpm ')) {
-      before.push(step);
+      before.push(scriptWords(step, script, where));
     } else if (tests === null && before.length === 0 && steps.length === 1) {
       throw new Error(`${where}: the test script "${script}" is not node --test`);
     } else {
@@ -91,12 +117,16 @@ function filesUnder(directory) {
   });
 }
 
-/** The files that one path of a test script names: a glob, a file or a directory. */
-function filesOf(folder, path) {
-  if (path.includes('*')) return globSync(path, { cwd: folder }).map((file) => join(folder, file));
+/**
+ * The files that one path of a test script names: a glob, a file or a directory. A path that names no file is an error that names the
+ * path and the package folder (`where`), because node --test would read the path as nothing and the run would pass without its tests.
+ */
+function filesOf(folder, path, where) {
   const full = join(folder, path);
-  if (!existsSync(full)) return [];
-  return statSync(full).isDirectory() ? filesUnder(full) : [full];
+  const files = path.includes('*') ? globSync(path, { cwd: folder }).map((file) => join(folder, file))
+    : !existsSync(full) ? [] : statSync(full).isDirectory() ? filesUnder(full) : [full];
+  if (files.length === 0) throw new Error(`${where}: the test script path ${path} names no file in the package folder ${where}`);
+  return files;
 }
 
 /** The reporters of a test file: the spec form on the standard output and the TAP form on the standard error. */
@@ -187,12 +217,10 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
     const key = folder === '.' && scriptName === 'test' ? 'test:scripts' : scriptName;
     if (manifest.scripts?.[key] === undefined) continue;
     const script = parseTestScript(manifest.scripts[key], folder);
-    for (const step of script.before) {
-      const [command, ...args] = step.split(/\s+/);
-      before.push({ name: `${folder}: ${step}`, command, args, cwd: directory });
+    for (const [command, ...args] of script.before) {
+      before.push({ name: `${folder}: ${[command, ...args].join(' ')}`, command, args, cwd: directory });
     }
-    const files = [...new Set(script.paths.flatMap((path) => filesOf(directory, path)))].sort();
-    if (files.length === 0) throw new Error(`${folder}: the test script names no test file in ${script.paths.join(' ')}`);
+    const files = [...new Set(script.paths.flatMap((path) => filesOf(directory, path, folder)))].sort();
     for (const file of files) {
       // The spec reporter writes the errors of the failed tests at the end of the file, so a file that is killed keeps none;
       // the TAP reporter on the standard error writes the error of each test when the test ends. The file process ends by itself when
@@ -276,8 +304,8 @@ async function main(argv) {
   const run = newRun(ROOT);
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each test limited to ${limitMs / 1000}s and no limit for a file; run ${run.id} keeps its output and manifest in ${run.folder}`);
   const beforeEach = values['when-idle'] === undefined ? undefined : whenIdle(count('when-idle'), { write });
-  const { results } = await runTests({ tests, concurrency, write, beforeEach, run });
-  const passed = [...results.values()].every((result) => result.status === 'pass');
+  // A run passes when every file passed and a file ran a test (runTests).
+  const { passed } = await runTests({ tests, concurrency, write, beforeEach, run });
   // The logs are audited also when a test failed, because a failed run is classified by its logs.
   const audited = auditAfterRun(scriptName, run, write);
   return passed && audited === 0 ? 0 : 1;

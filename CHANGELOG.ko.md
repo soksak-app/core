@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F645: test script의 단어는 package script의 shell이 작은따옴표와 큰따옴표를 읽는 대로 따옴표로 묶인 부분의 공백을 지키고 따옴표를 잃으며, 닫히지 않은 따옴표는 script를 밝히는 오류다. 아무 파일도 가리키지 않는 test script의 path나 glob은 그 path와 package folder를 밝히는 오류다. runner는 각 파일이 실행한 시험 수를 그 파일의 summary에서 센다. 시험을 실행하지 않은 파일의 `PASS` 줄은 `no test ran`으로 끝나고, `TOTAL`은 파일에서 실행된 시험을 세며, 어떤 파일도 시험을 실행하지 않은 run은 실패한다. 따옴표로 묶인 pattern의 flag가 flag 하나와 존재하지 않는 path 다섯이 되었고, 그 path들은 버려졌으며, pattern은 어떤 시험에도 맞지 않았고 run은 통과했었다. Red: `scripts/test/node-tests.test.mjs`와 `scripts/test/test-runner.test.mjs`.
 - F491: mygo workbench가 page처럼 `core.settings`의 `common`에 모든 설정의 common 값을 보고하므로, window check의 `keepCommonSettings`가 mygo host에서도 common 값을 되돌린다. 그곳의 check는 cleanup에서 `Cannot convert undefined or null to object`로 끝났다. Red: `TestTheStatusReportsTheCommonValueOfEverySetting`가 필드 없이 compile되지 않았다.
 - F584-5: `e2e/new-tab-keys.test.mjs`가 `e2e/activation/`을 떠나 기본 tier에서 돈다. activation 없이 pointer를 창 위로 옮기고 virtual key window를 기다린 뒤 key마다 text를 함께 보낸다. 새 `e2e/tab-press-keys.test.mjs`는 같은 tier에서 두 번째 terminal의 tab을 누르고 놓은 직후 key를 친다.
 - F502-34: mygo workbench는 surface를 담은 placement가 끝난 뒤에만 그 surface에 `surfaceFocus`를 보낸다. 앞선 placement가 도는 동안 frame이 그린 tab은 그 placement가 끝날 때 대상이 되었는데, 그 placement는 tab의 surface를 담지 않았고 host는 `surface … is not attached`로 호출을 거부했다. 이제 workbench는 page처럼 tab의 placement가 끝날 때까지 키보드를 workbench에 둔다. test의 fake host는 마지막 `syncSurfaces`가 담지 않은 surface를 거부한다. Red: `TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement`가 그 오류를 기록했다.

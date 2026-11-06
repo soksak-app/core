@@ -33,6 +33,9 @@ function validate(options) {
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new TypeError('concurrency must be a positive integer');
   if (typeof options.write !== 'function') throw new TypeError('write must be a function');
   const names = new Set();
+  // The tests that a run counts are the tests that its processes ran, which only a process that reports its test events knows, so a run
+  // counts either the tests of every process or none (runTests).
+  const reporting = tests[0].eventLimitMs !== undefined;
   for (const item of tests) {
     if (typeof item.name !== 'string' || item.name === '') throw new TypeError('a test needs a name');
     if (names.has(item.name)) throw new TypeError(`the test ${item.name} is listed twice`);
@@ -50,6 +53,9 @@ function validate(options) {
     // The event watchdog of a process that reports its test events (runOne). A process without the field has no watchdog.
     if (item.eventLimitMs !== undefined && (!Number.isInteger(item.eventLimitMs) || item.eventLimitMs < 1 || item.eventLimitMs > MAX_TEST_TIMEOUT_MS)) {
       throw new TypeError(`${item.name}: eventLimitMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
+    }
+    if ((item.eventLimitMs !== undefined) !== reporting) {
+      throw new TypeError(`${item.name}: every test of a run reports its test events (eventLimitMs) or none does`);
     }
     // The exit limit of a process after its tests ended (runOne). The samples that it takes are kept in the folder of the run.
     if (item.exitLimitMs !== undefined) {
@@ -261,6 +267,8 @@ function runOne(item, limitMs, env, outputPath) {
     const queued = new Map();
     const running = new Map();
     let fileExit = null;
+    // The tests that the process ran: the summary of each file counts its started tests, of which the skipped ones did not run.
+    let ran = 0;
     const count = (tests, key, step) => {
       const left = (tests.get(key) ?? 0) + step;
       if (left === 0) tests.delete(key);
@@ -275,6 +283,10 @@ function runOne(item, limitMs, env, outputPath) {
       } else if (event.type === 'test:complete') {
         if (running.has(key)) count(running, key, -1);
         if (Object.hasOwn(event, 'exitCode')) fileExit = { exitCode: event.exitCode, signal: event.signal };
+      } else if (event.type === 'test:summary' && Object.hasOwn(event, 'file')) {
+        const { tests, skipped } = event.counts ?? {};
+        if (!Number.isInteger(tests) || !Number.isInteger(skipped)) throw new Error(`the summary of ${event.file} has no counts of tests and skipped tests`);
+        ran += tests - skipped;
       }
     };
     // The standard error carries the event lines of the reporter and the TAP form of the tests. A line is read when it is complete.
@@ -294,7 +306,7 @@ function runOne(item, limitMs, env, outputPath) {
           else arm();
         } catch (error) {
           // The line is kept in the output of the file, and the file fails with the reason; the reporter writes only well-formed lines.
-          eventError ??= new Error(`the test event line ${JSON.stringify(line)} is not JSON: ${error.message}`);
+          eventError ??= new Error(`the test event line ${JSON.stringify(line)} cannot be read: ${error.message}`);
         }
       }
     });
@@ -316,10 +328,14 @@ function runOne(item, limitMs, env, outputPath) {
     };
     child.stdout.on('data', keep);
     child.stderr.on('data', keep);
+    // The result of a process that reports its test events carries the tests that it ran (`tests`), which the summaries of its files count;
+    // a file that ended before its summary counts none.
+    const reporting = item.eventLimitMs !== undefined;
+    const finish = (result) => resolve(reporting ? { ...result, tests: ran } : result);
     child.once('error', (error) => {
       clearTimeout(timer);
       clearTimeout(watchdog);
-      resolve({ status: 'fail', elapsedMs: performance.now() - started, output: error.message, detail: `could not start: ${error.message}` });
+      finish({ status: 'fail', elapsedMs: performance.now() - started, output: error.message, detail: `could not start: ${error.message}` });
     });
     child.once('close', async (code, signal) => {
       clearTimeout(timer);
@@ -329,21 +345,22 @@ function runOne(item, limitMs, env, outputPath) {
       // The event lines are the reporter's record for the runner, so they are not part of the output of the test.
       const output = Buffer.concat(chunks).toString('utf8').split('\n').filter((line) => !line.startsWith(EVENT_PREFIX)).join('\n');
       if (groupError) {
-        resolve({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
+        finish({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
       } else if (limit !== null) {
         const left = limit.leftovers.length > 0 ? `; left running: ${limit.leftovers.join('; ')}` : '';
-        resolve({ status: limit.status ?? 'timeout', elapsedMs: limit.elapsedMs, output, detail: `${limit.reason}${left}` });
-      } else if (eventError !== null) resolve({ status: 'fail', elapsedMs, output, detail: eventError.message });
+        finish({ status: limit.status ?? 'timeout', elapsedMs: limit.elapsedMs, output, detail: `${limit.reason}${left}` });
+      } else if (eventError !== null) finish({ status: 'fail', elapsedMs, output, detail: eventError.message });
       else if (running.size > 0) {
         const names = (tests) => [...tests.keys()].map((key) => key.slice(key.indexOf('\0') + 1)).join(', ');
         const end = fileExit === null ? (code === null ? `signal ${signal}` : `exit ${code}`)
           : (fileExit.signal === null ? `exit ${fileExit.exitCode}` : `signal ${fileExit.signal}`);
         const left = exitLeftovers.length > 0 ? `; left running after exit: ${exitLeftovers.join('; ')}` : '';
         const waiting = queued.size > 0 ? `; queued without a start: ${names(queued)}` : '';
-        resolve({ status: 'fail', elapsedMs, output, detail: `the test process ended by ${end} while a test ran; started without a result: ${names(running)}${waiting}${left}` });
-      } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
-      else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
-      else resolve({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
+        finish({ status: 'fail', elapsedMs, output, detail: `the test process ended by ${end} while a test ran; started without a result: ${names(running)}${waiting}${left}` });
+      } else if (exitLeftovers.length > 0) finish({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
+      // A process that reports its test events and ran no test passes, and its detail says so.
+      else if (code === 0) finish({ status: 'pass', elapsedMs, output, detail: reporting && ran === 0 ? 'no test ran' : '' });
+      else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
     });
   });
 }
@@ -355,8 +372,11 @@ function runOne(item, limitMs, env, outputPath) {
  * `eventLimitMs` is the event watchdog of a process that reports its test events (scripts/test-event-reporter.mjs), and `exitLimitMs`
  * the limit of its exit after its `test:summary` event, which needs `run`. `write(line)`
  * receives one line per event: `RUN`, `PASS`, `FAIL`, `TIME`, a `RUNNING` line every `heartbeatMs` that names the tests in
- * flight with their running time, the `SLOWEST` tests, and the `TOTAL`. Resolves with `{results, slowest}`; a result is
- * `{status, elapsedMs, output}` with the status `pass`, `fail` or `timeout`. `beforeEach(item)`, when given, is awaited before each test
+ * flight with their running time, the `SLOWEST` tests, and the `TOTAL`. Resolves with `{results, slowest, passed}`; a result is
+ * `{status, elapsedMs, output, detail}` with the status `pass`, `fail` or `timeout`. The processes of a run either all report their test
+ * events or none does. A result of a process that reports them also has `tests`, the tests that its files ran, its `PASS` line says
+ * `no test ran` when it ran none, and the `TOTAL` counts the tests that ran in the files. `passed` is true when every process passed and,
+ * in a run whose processes report their test events, a test ran; otherwise the line `FAIL no test ran in the <n> files of the run` says so. `beforeEach(item)`, when given, is awaited before each test
  * starts; the line `WAIT <name>` names the test that waits for it. `run` (`{id, folder}`), when given, passes the identifier and the folder to each
  * test as `SOKSAK_RUN_ID` and the folder as `SOKSAK_RUN_FOLDER`, stores the output of every test in the folder, and keeps `manifest.json` there with each test, its status,
  * its start and its end in microseconds; the manifest is rewritten when a test starts and when it ends.
@@ -426,6 +446,18 @@ export async function runTests(options) {
     .sort((a, b) => b.elapsedMs - a.elapsedMs).slice(0, slowCount);
   write(`SLOWEST ${slowest.map((item) => `${item.name} ${seconds(item.elapsedMs)}s`).join(', ')}`);
   const count = (status) => [...results.values()].filter((result) => result.status === status).length;
-  write(`TOTAL ${results.size} tests: ${count('pass')} pass, ${count('fail')} fail, ${count('timeout')} timeout in ${seconds(performance.now() - begun)}s`);
-  return { results, slowest };
+  const statuses = `${count('pass')} pass, ${count('fail')} fail, ${count('timeout')} timeout in ${seconds(performance.now() - begun)}s`;
+  let passed = count('pass') === results.size;
+  if (tests[0].eventLimitMs === undefined) write(`TOTAL ${results.size} tests: ${statuses}`);
+  else {
+    // The processes of the run report their test events, so each is a file whose tests the total counts.
+    const plural = (number, noun) => `${number} ${noun}${number === 1 ? '' : 's'}`;
+    const ran = [...results.values()].reduce((sum, result) => sum + result.tests, 0);
+    write(`TOTAL ${plural(ran, 'test')} ran in ${plural(results.size, 'file')}: ${statuses}`);
+    if (ran === 0) {
+      write(`FAIL no test ran in the ${plural(results.size, 'file')} of the run`);
+      passed = false;
+    }
+  }
+  return { results, slowest, passed };
 }
