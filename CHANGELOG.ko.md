@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F498-1: Discovery, Node 선택 반복과 언어 adapter가 실행 test 승인 판정을 공유한다. 빈 wrapper, skip suite, todo, cancel, 실패 case를 거부하고 Rust 결과는 모든 target을 포함한다. macOS에서 discovery/runner 58개와 evidence/repeat/adapter 31개 case가 통과한다.
+
 - F503-1: Audit 자체 검사는 실제 feature-link audit를 실행하고 격리한 mutation의 error 기록 및 response 누락을 검출한다. macOS에서 baseline과 집중 audit case 세 개가 통과하며 이 근거는 audit 자체를 검증한다.
 
 - F500: Terminal theme check는 capture origin, display scale과 content scale을 적용한 view crop을 읽고 sampling 실패 시에도 멈춘 recording을 제거한다. Owner Red는 wrong-pixel result 네 개와 empty-capture cleanup 실패를 재현하며 Green은 macOS에서 terminal-screen과 view-content case 16개 모두 통과한다. Native application acceptance는 다시 실행하지 않았다.

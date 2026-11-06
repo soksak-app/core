@@ -54,6 +54,7 @@ lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/tes
 lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
+lane("Node execution evidence", "js-ts", ["scripts/node-test-evidence.mjs"], ["scripts/test/node-test-evidence.test.mjs"]),
 lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
 lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs", "scripts/test/native-repeat.test.mjs"]),
 lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
@@ -207,6 +208,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // the expected result, and the verification level of one feature.
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
+  {
+    id: "F498-1",
+    implementation: [{ file: "scripts/node-test-evidence.mjs", symbol: "export function testExecutionErrors" }, { file: "scripts/language-test-adapters.mjs", symbol: "parseLanguageOutput" }],
+    tests: [
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "the shared acceptance rule rejects unexecuted and incomplete cases" },
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "file-owned evidence aggregates every declared file and rejects a missing file despite a passing wrapper" },
+    ],
+    expected: "Discovery, repeats and language adapters share executed-test acceptance and reject absent, skipped, todo, cancelled or failed required cases.",
+    levels: ["unit"],
+  },
   {
     id: "F503-1",
     implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],

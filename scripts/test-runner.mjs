@@ -12,6 +12,7 @@ import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 // also answers for a group that holds only zombies (test-command.mjs).
 import { hasEnded, processTable, runningMembers } from './test-command.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
+import { createNodeTestEvidence } from './node-test-evidence.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -277,20 +278,14 @@ function runOne(item, limitMs, env, outputPath) {
     const queued = new Map();
     const running = new Map();
     let fileExit = null;
-    let testSummary = null;
-    const omittedTests = [];
+    const testEvidence = item.nodeTestFile === undefined ? null : createNodeTestEvidence([item.nodeTestFile]);
     const count = (tests, key, step) => {
       const left = (tests.get(key) ?? 0) + step;
       if (left === 0) tests.delete(key);
       else tests.set(key, left);
     };
     const track = (event) => {
-      if (item.nodeTestFile !== undefined) {
-        if (event.type === 'test:summary' && event.file === item.nodeTestFile) testSummary = event;
-        if (event.type === 'test:complete' && (event.skip || event.todo)) {
-          omittedTests.push(`${event.skip ? 'skipped' : 'todo'}: ${event.name}`);
-        }
-      }
+      testEvidence?.track(event);
       const key = `${event.nesting}\0${event.name}`;
       if (event.type === 'test:enqueue') count(queued, key, 1);
       else if (event.type === 'test:dequeue') {
@@ -350,6 +345,7 @@ function runOne(item, limitMs, env, outputPath) {
       const elapsedMs = performance.now() - started;
       // The event lines are the reporter's record for the runner, so they are not part of the output of the test.
       const output = Buffer.concat(chunks).toString('utf8').split('\n').filter((line) => !line.startsWith(EVENT_PREFIX)).join('\n');
+      const evidenceErrors = testEvidence?.result().errors ?? [];
       if (groupError) {
         resolve({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
       } else if (limit !== null) {
@@ -364,13 +360,8 @@ function runOne(item, limitMs, env, outputPath) {
         const waiting = queued.size > 0 ? `; queued without a start: ${names(queued)}` : '';
         resolve({ status: 'fail', elapsedMs, output, detail: `the test process ended by ${end} while a test ran; started without a result: ${names(running)}${waiting}${left}` });
       } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
-      else if (code === 0 && item.nodeTestFile !== undefined && omittedTests.length > 0) {
-        resolve({ status: 'fail', elapsedMs, output, detail: `incomplete test evidence: ${omittedTests.join('; ')}` });
-      } else if (code === 0 && item.nodeTestFile !== undefined && (testSummary === null
-        || testSummary.success !== true || !Number.isInteger(testSummary.counts?.tests) || testSummary.counts.tests < 1
-        || !Number.isInteger(testSummary.counts?.passed) || testSummary.counts.passed < 1
-        || ['failed', 'cancelled', 'skipped', 'todo'].some((key) => testSummary.counts[key] !== 0))) {
-        resolve({ status: 'fail', elapsedMs, output, detail: `missing or incomplete test evidence for ${item.nodeTestFile}: ${JSON.stringify(testSummary?.counts ?? null)}` });
+      else if (code === 0 && evidenceErrors.length > 0) {
+        resolve({ status: 'fail', elapsedMs, output, detail: evidenceErrors.join('; ') });
       } else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
       else resolve({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
     });

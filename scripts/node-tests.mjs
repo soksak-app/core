@@ -11,6 +11,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditRunWithCatalog } from './audit-run.mjs';
 import { MAX_TEST_TIMEOUT_MS, runTests } from './test-runner.mjs';
+import { NODE_TEST_REPORTERS } from './node-test-evidence.mjs';
 
 /** The seconds since the last keyboard or pointer input of the person, or null when the system does not report it. */
 export function idleSeconds() {
@@ -101,9 +102,6 @@ function filesOf(folder, path) {
 
 /** The reporters of a test file: the spec form on the standard output and the TAP form on the standard error. */
 // The event reporter writes one line per test event to the standard error, which the runner reads for the event watchdog of the file.
-const EVENT_REPORTER = fileURLToPath(new URL('./test-event-reporter.mjs', import.meta.url));
-const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=tap', '--test-reporter-destination=stderr',
-  `--test-reporter=${EVENT_REPORTER}`, '--test-reporter-destination=stderr'];
 
 /**
  * The specification files that the sources of a package read, which its manifest declares in `specFiles` (paths under
@@ -201,7 +199,7 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
       // of the file is the largest limit of a test: a file whose events stop for that long holds a test that its own limit did not end.
       // The exit limit ends a file process that does not exit after the summary of its tests, when no test runs, and names its samples.
       tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath,
-        args: ['--test', ...REPORTERS, `--test-timeout=${testTimeoutMs}`, ...script.flags, file], cwd: directory,
+        args: ['--test', ...NODE_TEST_REPORTERS, `--test-timeout=${testTimeoutMs}`, ...script.flags, file], cwd: directory,
         eventLimitMs: MAX_TEST_TIMEOUT_MS, exitLimitMs: EXIT_LIMIT_MS, nodeTestFile: file });
     }
   }

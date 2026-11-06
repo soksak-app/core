@@ -24,7 +24,7 @@ Core test 소유권은 독립적으로 선언된 core package를 따른다. Root
 
 구현·테스트 누락, 미등록 빌드 대상, 해석 불가 참조, 필수 테스트 실행 제외, 테스트 0개, 필수 검사 생략, 오래된 증거, 충돌, 시간 초과는 해당 게이트를 실패시킨다. 감사 자체 테스트로 이 실패들을 입증한다. 동작 변이 검사는 구현을 무동작으로 바꾸거나 필수 효과·응답을 제거하고 대응 테스트의 실패를 요구한다. 파일 이름과 소스 패턴으로 동작을 입증하지 않는다.
 
-발견한 Node test file은 자체 test 실행의 result를 요구한다. 성공한 file wrapper나 command exit만으로는 부족하며 empty file, 등록 전 exit, 선택한 test 없음, skipped case와 todo case는 실패한다. Support module이 있는 package script는 명시한 glob으로 test entrypoint를 선택한다. Directory argument는 모든 JavaScript file을 선택하는 Node 동작을 유지하며 선택한 모든 file은 test evidence를 제공해야 한다. Node test contract가 없는 command는 command-result 의미를 유지한다.
+발견한 Node test file, 반복 선택, JS/TS 언어 case는 동일한 file 소유 실행 근거와 승인 규칙을 사용한다. 성공한 file wrapper나 command exit만으로는 부족하며 empty file, 등록 전 exit, 선택한 test 없음, skipped case, todo case, cancel, fail은 실패한다. Node가 test 합계에서 제외하는 skipped 또는 todo suite도 실패한다. 중첩한 선택 case는 실제 실행에 성공하면 통과하며 이름 선택 밖의 case는 요구하지 않는다. JS/TS 언어 case는 실행할 test entrypoint를 `testFiles`에 선언하고 모든 선언 file은 자체 summary를 제공해야 한다. Rust 언어 결과는 모든 target summary를 합산하므로 나중에 통과하거나 빈 target이 앞선 fail이나 ignored case를 숨길 수 없다. Support module이 있는 package script는 명시한 glob으로 test entrypoint를 선택한다. Directory argument는 모든 JavaScript file을 선택하는 Node 동작을 유지하며 선택한 모든 file은 test evidence를 제공해야 한다. Node test contract가 없는 command는 command-result 의미를 유지한다.
 
 Presentation wait의 unit check는 queue completion reaction이 실행될 task를 가질 때까지 presentation을 미완료 상태로 둔다. 현재 layout의 미완료 result와 다음 queued layout의 미실행을 함께 검사하고 presentation을 완료시킨 뒤 둘 다 끝나야 한다. Await 누락은 이 check를 실패시켜야 하며 promise completion이 전파될 수 있기 전의 관찰은 wait를 입증하지 않는다.
 
