@@ -208,6 +208,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F503-1",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "feature-link audit self-check detects an omitted error and response" }],
+    expected: "The self-check invokes the actual feature-link audit, passes its unchanged module, and catches separately omitted error reporting and return values by assertion failures.",
+    levels: ["unit"],
+  },
+  {
     id: "F500",
     implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }],
     tests: [
@@ -2626,11 +2633,11 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/check-tests.test.mjs", id: "boundary audit rejects a duplicate implementation and test owner" },
       { file: "scripts/test/check-tests.test.mjs", id: "evidence audit rejects attribution to the wrong behavior-test file" },
-      { file: "scripts/test/check-tests.test.mjs", id: "behavior mutation audit rejects a no-op implementation and an omitted response" },
+      { file: "scripts/test/check-tests.test.mjs", id: "feature-link audit self-check detects an omitted error and response" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
       { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
     ],
-    expected: "The audit rejects injected structural and behavioral defects, mandatory skips, wrong evidence attribution, and stale executable evidence while reporting structural and behavior evidence separately.",
+    expected: "The audit rejects structural defects, mandatory skips, wrong evidence attribution and stale executable evidence. Its feature-link self-check catches omitted error reporting and an omitted response in the actual audit module; this does not establish product behavior.",
     levels: ["unit"],
   },
   {
@@ -2647,7 +2654,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
       { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit rejects a missing host and a missing counterpart" },
     ],
-    expected: "Structural and behavioral audits reject missing implementation or test files, excluded or skipped execution, invalid evidence links, stale evidence, and missing host counterparts; no-op effects and responses fail their behavior assertions.",
+    expected: "Structural and execution audits reject missing implementation or test files, excluded or skipped execution, invalid evidence links, stale evidence and missing host counterparts. Product behavior remains the responsibility of the owning behavior tests.",
     levels: ["unit"],
   },
   {

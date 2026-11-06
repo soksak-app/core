@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F503-1: The audit self-check executes the actual feature-link audit and detects omitted error reporting and responses in isolated mutations. The baseline and three focused audit cases pass on macOS; this evidence covers the audit itself.
+
 - F500: Terminal theme checks sample the transformed view crop with capture origin, display scale and content scale, and remove stopped recordings even when sampling fails. Owner Red reproduces four wrong-pixel results and an empty-capture cleanup failure; Green passes all 16 terminal-screen and view-content cases on macOS. Native application acceptance was not rerun.
 
 - F499: The layout preparation test waits for completion reactions and verifies that pending presentation blocks the next layout. Removing the presentation await fails the tracked assertion in an isolated mutation; the unchanged implementation passes all 23 preparation, queue and frame-text cases on macOS.

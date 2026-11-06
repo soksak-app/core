@@ -12,6 +12,8 @@ Terminal background samples use the same view crop conversion: buffer coordinate
 
 The canonical work status is [features](../features.md). A source-file inventory is structural evidence only. It must not report feature parity or application correctness.
 
+An audit self-check invokes the actual audit module. Its controlled mutations remove one error-reporting effect or response in an isolated copy, after the unchanged module passes the same assertion. A mutation is detected only when that assertion fails; a load error, interruption or failed baseline does not establish detection. This validates the audit's own error contract, not the behavior of the product files it inventories.
+
 Core test ownership follows independently declared core packages. The root `e2e` package owns its window checks and the installable payloads under `e2e/fixtures/`; a fixture `package.json` describes an installed payload, not an independent core test owner. E2E tests may read their fixture manifests and sources. Core package tests remain unable to read E2E fixture files, and E2E tests remain unable to read another core package's implementation paths.
 
 Documentation checks require unique task identifiers and only waiting (`[ ]`), in-progress (`[~]`), complete (`[o]`), or temporarily bypassed (`[!]`) states. A `[!]` item records a nonempty cause and retry condition in both translations. Checklist identifiers, ordering, indentation, and states must match across translations. The text may be translated; the task state must not differ. The changelog and its translation must have the same sections, the same number of entries in each section, and, at each position, the same task identifiers and code spans.
