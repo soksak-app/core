@@ -77,11 +77,9 @@ function parseGo(output) {
   for (const line of output.split('\n')) {
     try {
       const event = JSON.parse(line);
-      if (!event.Test) {
-        if (event.Action === 'skip' && String(event.Output ?? '').includes('[no test files]')) skipped++;
-        continue;
-      }
-      if (event.Action === 'pass') tests++;
+      // A package without test files emits output followed by package skip; it is not a skipped named test.
+      if (!event.Test) continue;
+      if (event.Action === 'pass' || event.Action === 'fail') tests++;
       if (event.Action === 'fail') failed++;
       if (event.Action === 'skip') skipped++;
     } catch {

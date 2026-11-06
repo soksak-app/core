@@ -82,6 +82,54 @@ test('the Rust adapter aggregates every target including ignored or failed earli
   assert.deepEqual(parseLanguageResult('rust', output, ''), { tests: 6, failed: 1, skipped: 1, cancelled: 0, todo: 0 });
 });
 
+const goSupportEvents = [
+  { Action: 'start', Package: 'fixture/support' },
+  { Action: 'output', Package: 'fixture/support', Output: '?   \tfixture/support\t[no test files]\n' },
+  { Action: 'skip', Package: 'fixture/support', Elapsed: 0 },
+];
+const goPassingEvents = [
+  { Action: 'run', Package: 'fixture', Test: 'TestSelected' },
+  { Action: 'pass', Package: 'fixture', Test: 'TestSelected', Elapsed: 0 },
+  { Action: 'output', Package: 'fixture', Output: 'PASS\n' },
+  { Action: 'pass', Package: 'fixture', Elapsed: 0.1 },
+];
+
+test('the Go adapter counts a failed named test as executed', { timeout: 10_000 }, () => {
+  const output = [
+    { Action: 'run', Package: 'fixture', Test: 'TestRequired' },
+    { Action: 'output', Package: 'fixture', Test: 'TestRequired', Output: '    required_test.go:5: actual differs from expected\n' },
+    { Action: 'fail', Package: 'fixture', Test: 'TestRequired', Elapsed: 0 },
+    { Action: 'fail', Package: 'fixture', Elapsed: 0.1 },
+  ].map((event) => JSON.stringify(event)).join('\n');
+  assert.deepEqual(parseLanguageResult('go', output, ''), { tests: 1, failed: 1, skipped: 0, cancelled: 0, todo: 0 });
+});
+
+for (const [name, events, expected, status] of [
+  ['accepts a passing test beside a support package without tests', [...goSupportEvents, ...goPassingEvents], { tests: 1, skipped: 0 }, 'pass'],
+  ['rejects a named skipped test beside a passing test', [...goPassingEvents,
+    { Action: 'run', Package: 'fixture', Test: 'TestRequired' },
+    { Action: 'output', Package: 'fixture', Test: 'TestRequired', Output: '    required_test.go:5: unavailable\n' },
+    { Action: 'skip', Package: 'fixture', Test: 'TestRequired', Elapsed: 0 }], { tests: 1, skipped: 1 }, 'fail'],
+  ['rejects a selection containing only support packages without tests', goSupportEvents, { tests: 0, skipped: 0 }, 'fail'],
+  ['rejects a successful package with no selected test', [
+    { Action: 'output', Package: 'fixture', Output: 'testing: warning: no tests to run\n' },
+    { Action: 'pass', Package: 'fixture', Elapsed: 0.1 }], { tests: 0, skipped: 0 }, 'fail'],
+]) {
+  test(`the Go adapter ${name}`, { timeout: 10_000 }, async () => {
+    // Go emits package output and package skip as separate events. Only an event with Test names a test outcome.
+    const output = events.map((event) => JSON.stringify(event)).join('\n') + '\n';
+    const parsed = parseLanguageResult('go', output, '');
+    assert.equal(parsed.tests, expected.tests);
+    assert.equal(parsed.skipped, expected.skipped);
+    const cases = discoverLanguageCases({ cases: [{ id: 'go-selection', language: 'go',
+      ...command(`process.stdout.write(${JSON.stringify(output)})`) }] });
+    const result = await runLanguageCases(cases);
+    assert.equal(result.status, status, JSON.stringify(result));
+    if (expected.tests === 0) assert.match(result.cases[0].errors.join('; '), /zero tests reported/);
+    if (expected.skipped > 0) assert.match(result.cases[0].errors.join('; '), /1 test\(s\) skipped/);
+  });
+}
+
 test('discovers all supported language cases, each with its own explicit limit', () => {
   const cases = discoverLanguageCases({ cases: SUPPORTED_LANGUAGES.filter((language) => language !== 'application').map((language) => ({ id: language, language, ...command('process.exit(0)') })) });
   assert.deepEqual(cases.map(({ language, timeoutMs }) => [language, timeoutMs]), [
@@ -104,7 +152,6 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
   assert.equal(parseLanguageResult('js-ts', 'ℹ tests 2\nℹ pass 2\nℹ fail 0\nℹ skipped 0\nℹ todo 0\nℹ cancelled 0', '').tests, 0, 'wrapper totals do not prove file-owned execution');
   assert.deepEqual(parseLanguageResult('rust', 'test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;', ''), { tests: 2, failed: 0, skipped: 0, cancelled: 0, todo: 0 });
   assert.equal(parseLanguageResult('go', '{"Action":"pass","Test":"TestOne"}\n{"Action":"pass","Test":"TestTwo"}', '').tests, 2);
-  assert.equal(parseLanguageResult('go', '{"Action":"skip","Package":"example/no-tests","Output":"[no test files]\\n"}', '').skipped, 1);
   assert.equal(parseLanguageResult('objective-c', 'PASS: first\nPASS: second', '').tests, 2);
   assert.deepEqual(parseLanguageResult('shell', 'PASS: first\nFAIL: second\nSKIP: third\nCANCEL: fourth\nTODO: fifth', ''), {
     tests: 2, failed: 1, skipped: 1, cancelled: 1, todo: 1,

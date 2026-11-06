@@ -26,6 +26,8 @@ Core test 소유권은 독립적으로 선언된 core package를 따른다. Root
 
 발견한 Node test file, 반복 선택, JS/TS 언어 case는 동일한 file 소유 실행 근거와 승인 규칙을 사용한다. 성공한 file wrapper나 command exit만으로는 부족하며 empty file, 등록 전 exit, 선택한 test 없음, skipped case, todo case, cancel, fail은 실패한다. Node가 test 합계에서 제외하는 skipped 또는 todo suite도 실패한다. 중첩한 선택 case는 실제 실행에 성공하면 통과하며 이름 선택 밖의 case는 요구하지 않는다. JS/TS 언어 case는 실행할 test entrypoint를 `testFiles`에 선언하고 모든 선언 file은 자체 summary를 제공해야 한다. Rust 언어 결과는 모든 target summary를 합산하므로 나중에 통과하거나 빈 target이 앞선 fail이나 ignored case를 숨길 수 없다. Support module이 있는 package script는 명시한 glob으로 test entrypoint를 선택한다. Directory argument는 모든 JavaScript file을 선택하는 Node 동작을 유지하며 선택한 모든 file은 test evidence를 제공해야 한다. Node test contract가 없는 command는 command-result 의미를 유지한다.
 
+Go 언어 결과는 이름이 있는 통과 및 실패 test를 실행한 case로 센다. Test file이 없는 package는 output과 package skip을 별도 event로 내보내며, 선택한 다른 package의 test를 실행하는 run의 판정을 바꾸지 않는다. 이름이 있는 test의 skip은 실패한다. 이름 filter가 아무 test도 선택하지 않은 성공 package를 포함하여, 실행한 test가 없는 선택도 실패한다.
+
 Presentation wait의 unit check는 queue completion reaction이 실행될 task를 가질 때까지 presentation을 미완료 상태로 둔다. 현재 layout의 미완료 result와 다음 queued layout의 미실행을 함께 검사하고 presentation을 완료시킨 뒤 둘 다 끝나야 한다. Await 누락은 이 check를 실패시켜야 하며 promise completion이 전파될 수 있기 전의 관찰은 wait를 입증하지 않는다.
 
 

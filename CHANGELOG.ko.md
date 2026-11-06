@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F498-3: 실제처럼 분리한 output과 package-skip event는 정당한 support package를 허용하면서 이름 있는 skip과 빈 선택을 실패시킨다. 부정확한 합성 fixture를 제거한다. Red는 실행한 실패 test를 0개로 센 오류도 확인하며 이제 이름 있는 통과 및 실패 case를 모두 실행 수에 포함한다. macOS에서 adapter case 21개가 모두 통과한다.
+
 - F501-2: 살아 있는 process의 kernel executable 경로가 hash 전후에 일치해야 한다. 추적 Red로 무관한 file과 살아 있는 PID의 조합을 거부하고 executable 경로의 공백 보존을 검증한다. macOS에서 evidence case 16개가 모두 통과한다. 다른 platform은 identity 확인 불가를 명시하며, 이는 메모리에 mapping한 executable byte의 원자적 증명은 아니다.
 
 - F502-2: 실패한 layout sequence는 원래 seed, option과 trace를 보존하며 결정적인 replay는 같은 이름의 invariant가 계속 실패할 때만 호출을 축소한다. 통과, 다른 invariant 또는 분류하지 않은 실패로 축소를 승인할 수 없다. macOS에서 sequence 소유 case 열 개가 모두 통과한다.
