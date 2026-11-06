@@ -331,6 +331,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F680",
+    implementation: [
+      { file: "packages/window-check/cargo.mjs", symbol: "export function cargoCommand(env = process.env)" },
+      { file: "Makefile", symbol: "export CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" },
+      { file: "e2e/setup.mjs", symbol: "export function targetDirectory(" },
+      { file: "scripts/rust-tests.mjs", symbol: "runBuild(cargoCommand(), args, { cwd })" },
+      { file: "scripts/test-discovery.mjs", symbol: "execFileAsync(cargoCommand(environment)" },
+    ],
+    tests: [
+      { file: "e2e/test/setup.test.mjs", id: "the target directory comes from the cargo of the toolchain when the PATH holds no cargo folder" },
+      { file: "packages/window-check/test/cargo.test.mjs", id: "the cargo that CARGO names comes first" },
+      { file: "packages/window-check/test/cargo.test.mjs", id: "without CARGO, the cargo of CARGO_HOME/bin comes before the cargo of PATH" },
+      { file: "packages/window-check/test/cargo.test.mjs", id: "without CARGO_HOME, the cargo folder of rustup is .cargo/bin of HOME" },
+      { file: "packages/window-check/test/cargo.test.mjs", id: "the cargo of PATH when the cargo folder of rustup holds none" },
+      { file: "packages/window-check/test/cargo.test.mjs", id: "a CARGO that is no executable file is an error that names it" },
+      { file: "packages/window-check/test/cargo.test.mjs", id: "no cargo in the cargo folder of rustup or in PATH is an error that names both" },
+    ],
+    expected: "Every script and check that starts cargo runs the path that cargoCommand of @soksak/window-check resolves: CARGO of the environment, which the Makefile exports, then $CARGO_HOME/bin or ~/.cargo/bin, then PATH, so it runs in a shell whose PATH holds no cargo folder.",
+    levels: ["unit"],
+  },
+  {
     id: "F679",
     implementation: [
       { file: "native/darwin/process-identity/Makefile", symbol: "MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p' $(CURDIR)/../../../Makefile)" },

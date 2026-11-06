@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process';
 import { mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
+import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { runTests } from './test-runner.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -63,7 +64,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
  */
 export async function discoverRust({ packageName, features, cwd, env, id, write, timeoutMs, listOnly = false }) {
   const build = await runTests({
-    tests: [{ name: `build ${id}`, command: 'cargo', cwd, env, timeoutMs: BUILD_TIMEOUT_MS,
+    tests: [{ name: `build ${id}`, command: cargoCommand({ ...process.env, ...env }), cwd, env, timeoutMs: BUILD_TIMEOUT_MS,
       args: ['test', '--locked', '-p', packageName, ...(features ? ['--features', features] : []), '--no-run', '--message-format=json'] }],
     concurrency: 1, write,
   });
@@ -92,8 +93,9 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
 
 /** The target folder of cargo for the package in `cwd`, as `cargo metadata` reports it with the environment `env`. */
 async function cargoTargetDirectory({ cwd, env }) {
-  const { stdout } = await execFileAsync('cargo', ['metadata', '--format-version', '1', '--no-deps', '--locked'],
-    { cwd, env: env ? { ...process.env, ...env } : process.env, maxBuffer: 1 << 26 });
+  const environment = env ? { ...process.env, ...env } : process.env;
+  const { stdout } = await execFileAsync(cargoCommand(environment), ['metadata', '--format-version', '1', '--no-deps', '--locked'],
+    { cwd, env: environment, maxBuffer: 1 << 26 });
   const { target_directory: targetDir } = JSON.parse(stdout);
   if (typeof targetDir !== 'string' || !isAbsolute(targetDir)) throw new Error(`cargo metadata has no absolute target directory: ${targetDir}`);
   return targetDir;

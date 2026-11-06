@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { isAbsolute, join } from "node:path";
+import { cargoCommand } from "@soksak/window-check/cargo.mjs";
 
 /** Executable paths inside the app bundles in the macOS debug build. */
 export function debugBinaries(target) {
@@ -9,9 +10,9 @@ export function debugBinaries(target) {
   ]));
 }
 
-/** Builds and resolves the declared native capture-text check executable. */
-export function captureTextCommand(run = (command, args) => spawnSync(command, args, { encoding: "utf8", timeout: 30000 })) {
-  const metadata = run("cargo", ["metadata", "--format-version", "1", "--no-deps"]);
+/** Builds and resolves the declared native capture-text check executable. `cargo` gives the cargo to run. */
+export function captureTextCommand(run = (command, args) => spawnSync(command, args, { encoding: "utf8", timeout: 30000 }), cargo = cargoCommand) {
+  const metadata = run(cargo(), ["metadata", "--format-version", "1", "--no-deps"]);
   if (metadata.error) throw new Error(`cargo metadata: ${metadata.error.message}`);
   if (metadata.status !== 0) throw new Error(`cargo metadata exited with ${metadata.status}: ${String(metadata.stderr).trim()}`);
   const root = JSON.parse(metadata.stdout).workspace_root;

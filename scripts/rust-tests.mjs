@@ -11,6 +11,7 @@ import { dirname } from 'node:path';
 import { loadavg } from 'node:os';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
 
@@ -37,7 +38,7 @@ export function testExecutables(messages) {
 
 async function cargo(args, { cwd } = {}) {
   try {
-    return await runBuild('cargo', args, { cwd });
+    return await runBuild(cargoCommand(), args, { cwd });
   } catch (error) {
     if (typeof error.stdout === 'string' && error.stdout.length > 0) {
       process.stderr.write(error.stdout);
@@ -101,7 +102,7 @@ export async function runRustTests({ manifest, package: pkg, features, testTarge
   const tests = chosen.map((item) => {
     if (item.doc) {
       // A documentation test is filtered by its name as a substring; the runner requires one passed test in its output.
-      return { name: item.name, command: 'cargo', args: [...cargoArgs, '--doc', '--', item.name], cwd };
+      return { name: item.name, command: cargoCommand(), args: [...cargoArgs, '--doc', '--', item.name], cwd };
     }
     return {
       name: occurrences.get(item.name) > 1 ? `${item.target} ${item.name}` : item.name,

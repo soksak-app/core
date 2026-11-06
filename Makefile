@@ -324,8 +324,9 @@ CARGO_HOME ?= $(HOME)/.cargo
 export PATH := $(CARGO_HOME)/bin:$(PATH)
 # GNU Make 3.81 runs a recipe line without shell characters itself and looks its program up in its own PATH, not in the
 # exported one, and $(shell) does not receive the exported PATH either; so cargo is resolved once with that PATH and every
-# recipe runs $(CARGO). check-cargo stops a target that runs cargo when none was found.
-CARGO := $(shell PATH="$(PATH)" command -v cargo)
+# recipe runs $(CARGO). The scripts that a recipe starts read the exported CARGO through cargoCommand of
+# @soksak/window-check. check-cargo stops a target that runs cargo when none was found.
+export CARGO := $(shell PATH="$(PATH)" command -v cargo)
 
 .PHONY: check-cargo
 check-cargo:

@@ -113,16 +113,12 @@ case "$1" in
 esac
 `);
   chmodSync(cargo, 0o755);
-  const oldPath = process.env.PATH;
   const lines = [];
-  process.env.PATH = `${root}:${oldPath}`;
-  try {
+  await withCargoOf(root, async () => {
     const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: root, id: "locked", write: (line) => lines.push(line), timeoutMs: 1000 });
     assert.deepEqual(failures, [], lines.join("\n"));
     assert.deepEqual(tests.map((item) => item.testName), ["fixture::locked"]);
-  } finally {
-    process.env.PATH = oldPath;
-  }
+  });
 });
 
 /**
@@ -159,14 +155,15 @@ esac
   return { root, target };
 }
 
-/** Runs `body` with the fake cargo of `root` first on the path. */
+/** Runs `body` with the fake cargo of `root` as CARGO, the cargo that the discovery runs. */
 async function withCargoOf(root, body) {
-  const oldPath = process.env.PATH;
-  process.env.PATH = `${root}:${oldPath}`;
+  const oldCargo = process.env.CARGO;
+  process.env.CARGO = join(root, "cargo");
   try {
     return await body();
   } finally {
-    process.env.PATH = oldPath;
+    if (oldCargo === undefined) delete process.env.CARGO;
+    else process.env.CARGO = oldCargo;
   }
 }
 

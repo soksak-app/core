@@ -4,13 +4,14 @@
 // it is found in target_directory of `cargo metadata` and declared as SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2 and SOKSAK_BINARY_MYGO. A path that the run has already
 // declared is kept.
 import { spawnSync } from "node:child_process";
+import { cargoCommand } from "@soksak/window-check/cargo.mjs";
 import { captureTextCommand, debugBinaries } from "./platform/platform.js";
 
 export { captureTextCommand, debugBinaries };
 
-/** Build output folder that cargo decides. If it is not found, the run fails with that reason. */
-export function targetDirectory(run = (command, args) => spawnSync(command, args, { encoding: "utf8" })) {
-  const result = run("cargo", ["metadata", "--format-version", "1", "--no-deps"]);
+/** Build output folder that cargo decides. If it is not found, the run fails with that reason. `cargo` gives the cargo to run. */
+export function targetDirectory(run = (command, args) => spawnSync(command, args, { encoding: "utf8" }), cargo = cargoCommand) {
+  const result = run(cargo(), ["metadata", "--format-version", "1", "--no-deps"]);
   if (result.error) throw new Error(`cargo metadata: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`cargo metadata exited with ${result.status}: ${String(result.stderr).trim()}`);
   const directory = JSON.parse(result.stdout).target_directory;

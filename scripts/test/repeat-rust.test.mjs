@@ -1,6 +1,7 @@
 // Verifies that `make repeat-rust` names each test of a package when it starts, reports its result and elapsed time, and kills a
-// test at its own limit. The Rust toolchain is replaced by a fake `cargo` on PATH; `make` gets its HOME and its CARGO_HOME in the
-// same folder so that the cargo of `$(CARGO_HOME)/bin` does not shadow the fake.
+// test at its own limit. The Rust toolchain is replaced by a fake `cargo`. `make` finds it on PATH and gets its HOME and its
+// CARGO_HOME in the same folder so that the cargo of `$(CARGO_HOME)/bin` does not shadow the fake; a script started directly gets
+// the fake as CARGO, the variable that the Makefile exports.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -32,7 +33,7 @@ if (args.includes('--message-format=json')) process.stdout.write(${JSON.stringif
 `);
     const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs',
       '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture', '--test-target', 'lib'], {
-      cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+      cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') },
       encoding: 'utf8', timeout: 10000,
     });
     assert.notEqual(result.status, 0, 'a failed discovery must fail the check');
@@ -59,7 +60,7 @@ test('Rust owner CLI fails a test build whose link reports an object newer than 
   writeFileSync(join(directory, 'cargo'), `${script}\n`);
   const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs',
     '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture', '--test-target', 'lib'], {
-    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+    cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') },
     encoding: 'utf8', timeout: 10000,
   });
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
@@ -216,18 +217,16 @@ test('make repeat-rust rejects shell syntax in a Cargo target without executing 
 
 test('runRustTests rejects an explicitly empty Cargo target before invoking Cargo', async (t) => {
   const { directory } = targetCargo(t);
-  const previousPath = process.env.PATH;
-  const previousHome = process.env.HOME;
-  process.env.PATH = `${directory}:${previousPath}`;
-  process.env.HOME = directory;
+  const previousCargo = process.env.CARGO;
+  process.env.CARGO = join(directory, 'cargo');
   try {
     await assert.rejects(runRustTests({
       manifest: 'Cargo.toml', package: 'fixture', testTarget: '', count: 1, timeoutMs: 1000, write() {},
     }), /--test-target must be lib or test:<Cargo target name>/);
     assert.equal(existsSync(join(directory, 'args')), false, 'Cargo ran before the empty selector was rejected');
   } finally {
-    process.env.PATH = previousPath;
-    process.env.HOME = previousHome;
+    if (previousCargo === undefined) delete process.env.CARGO;
+    else process.env.CARGO = previousCargo;
   }
 });
 
@@ -269,7 +268,7 @@ test('Rust repeat discovery locks Cargo test and metadata resolution', { timeout
     'scripts/rust-tests.mjs', '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture',
     '--test-target', 'lib', '--test', 'fixture::alpha',
   ], {
-    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+    cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') },
     encoding: 'utf8', timeout: 10000,
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);

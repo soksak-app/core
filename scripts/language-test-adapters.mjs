@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
 import { runCommand } from './test-command.mjs';
 import { runWithEvidence, persistEvidence } from './test-evidence.mjs';
@@ -153,7 +154,8 @@ export async function runLanguageCases(cases, { onEvent, evidence = false, root 
   for (const caseSpec of cases) {
     const execute = async () => caseResult(caseSpec, await runCommand({
       id: caseSpec.id,
-      command: caseSpec.language === 'js-ts' ? '/usr/bin/env' : caseSpec.command,
+      // A case that names cargo runs the cargo that cargoCommand resolves, as every script of the repository does.
+      command: caseSpec.language === 'js-ts' ? '/usr/bin/env' : caseSpec.command === 'cargo' ? cargoCommand() : caseSpec.command,
       args: caseSpec.language === 'js-ts' ? ['-u', 'NODE_TEST_CONTEXT', caseSpec.command, ...withNodeTestReporters(caseSpec.args)] : caseSpec.args,
       cwd: caseSpec.cwd,
       timeoutMs: caseSpec.timeoutMs,

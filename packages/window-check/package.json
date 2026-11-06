@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./app.mjs": "./app.mjs",
+    "./cargo.mjs": "./cargo.mjs",
     "./endpoint-wait.mjs": "./endpoint-wait.mjs",
     "./folder-wait.mjs": "./folder-wait.mjs",
     "./event-log.mjs": "./event-log.mjs",
@@ -29,6 +30,7 @@
   },
   "files": [
     "app.mjs",
+    "cargo.mjs",
     "design-rects.mjs",
     "endpoint-wait.mjs",
     "folder-wait.mjs",

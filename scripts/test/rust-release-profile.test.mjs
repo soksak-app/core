@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { cargoCommand } from "@soksak/window-check/cargo.mjs";
 import { macosMinimum } from "../macos-minimum.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -18,7 +19,7 @@ const minimum = macosMinimum(root);
 test("a release build loads the proc-macro libraries that it builds for the host", { timeout: 600000 }, (t) => {
   const target = mkdtempSync(join(tmpdir(), "soksak-rust-release-profile-"));
   t.after(() => rmSync(target, { recursive: true, force: true }));
-  const build = spawnSync("cargo", ["build", "--locked", "--release", "-p", "serde", "--message-format=json"], {
+  const build = spawnSync(cargoCommand(), ["build", "--locked", "--release", "-p", "serde", "--message-format=json"], {
     cwd: root, env: { ...process.env, MACOSX_DEPLOYMENT_TARGET: minimum, CARGO_TARGET_DIR: target },
     encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
   });
