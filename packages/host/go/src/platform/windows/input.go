@@ -19,12 +19,16 @@ const activateStep = 20 * time.Millisecond
 
 // InjectPointer delivers a pointer input through the DevTools protocol of the web view of the window. It uses no real pointer and no
 // system focus, so a window behind others takes it. Call it on the UI thread.
-func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window unsafe.Pointer, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	view, err := webviewOf(uintptr(window))
 	if err != nil {
 		return err
 	}
-	call, result := view.presses.call(x, y, phase, button, deltaX, deltaY, clicks)
+	call, result := view.presses.call(pointer, x, y, phase, button, deltaX, deltaY, clicks)
+	if result == platform.PointerHeld {
+		done(result, platform.ButtonHeld{Pointer: view.presses.holder, Reason: pointerHeldReason})
+		return nil
+	}
 	if result != platform.PointerDelivered {
 		done(result, platform.ButtonHeld{})
 		return nil
@@ -32,7 +36,7 @@ func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, 
 	wait := time.Duration(receive * float64(time.Second))
 	return view.queue.push(call, wait, func(err error) {
 		if err == nil {
-			view.presses.delivered(phase, button)
+			view.presses.delivered(pointer, phase, button)
 		} else {
 			fmt.Fprintf(os.Stderr, "input.pointer: %v\n", err)
 		}

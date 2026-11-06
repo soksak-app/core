@@ -38,10 +38,16 @@ func newCall(method string, params map[string]any) devToolsCall {
 	return devToolsCall{method, string(text)}
 }
 
-// pressState is the open press of each button of a window. A page has one mouse pointer, so a window holds one press of each button.
+// pressState is the open press of each button of a window and the pointer that holds them. A page has one mouse pointer, so a
+// window holds one press of each button, all of one pointer.
 type pressState struct {
 	open [2]bool
+	// holder is the pointer of the open presses; it is empty while no press is open.
+	holder string
 }
+
+// pointerHeldReason is the reason of a PointerHeld rejection: the page has one mouse pointer, which the presses of holder take.
+const pointerHeldReason = "the page has one mouse pointer"
 
 // buttons is the protocol's mask of the open presses, with button changed to pressed.
 func (s *pressState) buttons(button int, pressed bool) int {
@@ -59,11 +65,15 @@ func (s *pressState) buttons(button int, pressed bool) int {
 	return mask
 }
 
-// call returns the call that delivers a pointer input, or the result of an input that is not sent. x and y are CSS pixels of the web view
-// at the content area of the window. It keeps the press rules of the other platforms: a button has one press, and a drag and a release need it.
-func (s *pressState) call(x, y float64, phase, button int, deltaX, deltaY float64, clicks int) (devToolsCall, platform.PointerResult) {
+// call returns the call that delivers a pointer input of pointer, or the result of an input that is not sent. x and y are CSS pixels of
+// the web view at the content area of the window. It keeps the press rules of the other platforms: a button has one press, and a drag and
+// a release need it. While another pointer holds a press, a move, a press, a drag and a release are PointerHeld, and a scroll is sent.
+func (s *pressState) call(pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int) (devToolsCall, platform.PointerResult) {
 	if button != 0 && button != 1 {
 		return devToolsCall{}, platform.PointerRejected
+	}
+	if s.holder != "" && s.holder != pointer && phase != phaseScroll {
+		return devToolsCall{}, platform.PointerHeld
 	}
 	name := "left"
 	if button == 1 {
@@ -104,13 +114,17 @@ func (s *pressState) call(x, y float64, phase, button int, deltaX, deltaY float6
 	return newCall("Input.dispatchMouseEvent", event), platform.PointerDelivered
 }
 
-// delivered records a pointer input that reached the page. An input that failed leaves the press as it was.
-func (s *pressState) delivered(phase, button int) {
+// delivered records a pointer input of pointer that reached the page. An input that failed leaves the press as it was.
+func (s *pressState) delivered(pointer string, phase, button int) {
 	switch phase {
 	case phasePress:
 		s.open[button] = true
+		s.holder = pointer
 	case phaseRelease:
 		s.open[button] = false
+		if s.open == [2]bool{} {
+			s.holder = ""
+		}
 	}
 }
 

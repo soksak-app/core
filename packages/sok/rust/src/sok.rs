@@ -55,7 +55,7 @@ commands:
   exposures [window]
   status NAME [window] [--surface S] [--watch]
   element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
-  input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
+  input pointer [window] [--pointer NAME] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
@@ -120,6 +120,7 @@ const OPTIONS: &[&str] = &[
     "phase",
     "platform",
     "button",
+    "pointer",
     "delta-x",
     "clicks",
     "delta-y",
@@ -403,6 +404,7 @@ fn plan(
                         method: "input.pointer",
                         params: Some(compact(vec![
                             ("window", text(window)),
+                            ("pointer", a.optional("pointer")),
                             ("x", x),
                             ("y", y),
                             ("phase", text(phase)),

@@ -592,11 +592,13 @@ type Platform interface {
 	// It also reports the same mask again. Call it once on the UI thread after the application started.
 	WatchButtons(changed func(mask uint64)) error
 
-	// InjectPointer delivers a pointer input at the content area coordinates (x, y) of the window and returns the result.
+	// InjectPointer delivers a pointer input of the named pointer at the content area coordinates (x, y) of the window and returns the result.
 	// phase is 0 for move, 1 for press, 2 for drag, 3 for release and 4 for scroll, and button is 0 for left and 1 for right.
+	// Each pointer holds its own open presses (docs/spec/exposure.md#named-pointers).
 	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event or receive seconds passed.
-	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld.
-	InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(result PointerResult, held ButtonHeld)) error
+	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld
+	// or PointerHeld.
+	InjectPointer(window unsafe.Pointer, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(result PointerResult, held ButtonHeld)) error
 	// ActivateWindow activates the application and the window. It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
 	// or calls done with an error that names the stage where it stopped when it does not finish within timeout seconds.
 	// When the coordinates are a native surface, it does not wait for the web view state.
@@ -758,16 +760,23 @@ const (
 	PointerUnreceived
 	// PointerButtonHeld means that AppKit reported a pressed mouse button, so the synthetic press or release was not delivered.
 	PointerButtonHeld
-	// PointerPressOpen means that the synthetic press of that button in that window is still open, so the press was not delivered.
+	// PointerPressOpen means that the press of that button of the pointer is still open, so the press was not delivered.
 	PointerPressOpen
+	// PointerHeld means that an open press of another pointer would share the state that the input changes, so it was not delivered.
+	PointerHeld
 )
 
-// ButtonHeld is the state that AppKit reported at the time of the rejection with PointerButtonHeld.
+// ButtonHeld is the state of a rejection: for PointerButtonHeld what AppKit reported at the time of the rejection, for PointerHeld
+// the pointer whose press rejected the input and the reason.
 type ButtonHeld struct {
 	// Mask is the value of NSEvent.pressedMouseButtons.
 	Mask uint64
 	// Frontmost is the frontmost application. It is nil when AppKit does not report a frontmost application.
 	Frontmost *FrontmostApplication
+	// Pointer is the pointer that holds the press of a PointerHeld rejection.
+	Pointer string
+	// Reason is the state that the press of Pointer holds.
+	Reason string
 }
 
 // FrontmostApplication is the frontmost application. BundleIdentifier is an empty string when there is no bundle identifier.
