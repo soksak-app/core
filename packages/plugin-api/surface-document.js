@@ -1,7 +1,7 @@
 // Core observation of the actual surface document. The view bridge owns its relay and the plugin owns no copy.
 import { auditDocument, documentRoots, onDocumentBinding } from "./binder.js";
 
-const NAMES = new Set(["core.surface.document", "core.surface.input", "core.surface.hit"]);
+const NAMES = new Set(["core.surface.document", "core.surface.input", "core.surface.hit", "core.surface.clock"]);
 /** Core names owned by a surface document, excluding main-document commands such as core.surface.menu. */
 export const surfaceDocumentEntry = (name) => NAMES.has(name);
 
@@ -83,6 +83,12 @@ export function observeSurfaceDocument(view) {
     document: { read: readDocument, subscribe: subscribe(documentListeners) },
     input: { read: readInput, subscribe: subscribe(inputListeners) },
     hit: ({ x, y }) => document.elementFromPoint(x, y) !== null,
+    clock: () => {
+      // The view start installs sokView with the page identity of the document; performance.timeOrigin does not identify it.
+      const page = view.sokView?.page;
+      if (typeof page !== "string" || page === "") throw new Error("the view document has no page identity");
+      return { page, timeOrigin: view.performance.timeOrigin, now: view.performance.now() };
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

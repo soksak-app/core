@@ -7,7 +7,7 @@
 // into data attributes of the slot element, and this module reads those attributes to measure and report.
 import { native, surfaces as app } from "./host.js";
 import { chromeRow, drawnFrameText } from "./frame-text.js";
-import { runActive, setRunActive } from "./run-state.js";
+import { onRunEnd, runActive, setRunActive } from "./run-state.js";
 
 const plane = document.getElementById("plane");
 
@@ -137,19 +137,46 @@ let clippedSeq = 0;
 /** Placement request last sent to the host: the holes of the answer (rects, null before the answer) and the sequence number of the commit that drew it (drawnSeq). */
 let sentPlacement = null;
 
+/* Holes of the newest acknowledged presentation that the clip does not hold yet: {seq, rects}, or null. */
+let acknowledgedHoles = null;
+/* Whether an animation frame that writes the acknowledged holes is requested. */
+let holesFrame = false;
+
 /**
- * Writes the holes of commit seq into the clip on the next frame. Answers can arrive in an order different from
- * the requests. Under load, if the answer of an earlier placement during a drag arrives later than the answer
- * of a later placement, the holes of the earlier placement would overwrite those of the later one, so only the
- * holes of a commit newer than the one already written are written.
+ * Keeps the holes of the acknowledged presentation of commit seq for the clip. Answers can arrive in an order
+ * different from the requests. Under load, if the answer of an earlier placement during a drag arrives later than
+ * the answer of a later placement, the holes of the earlier placement would overwrite those of the later one, so
+ * only the holes of a commit newer than the ones kept or written are kept.
+ *
+ * During a run the next drawn commit writes them in its own draw. An animation frame starts a rendering update of
+ * the main document, and its layer commit can still be in flight when the next draw of the run asks for its
+ * presentation; WebKit then holds that draw until the next display refresh (docs/spec/native-surfaces.md). Outside
+ * a run, and at the end of a run, one animation frame after the acknowledgement writes them.
  */
-function clipNextFrame(seq, rects) {
+function acknowledgeHoles(seq, rects) {
+  if (seq < clippedSeq || (acknowledgedHoles && seq < acknowledgedHoles.seq)) return;
+  acknowledgedHoles = { seq, rects };
+  if (!runActive()) writeHolesNextFrame();
+}
+
+function writeHolesNextFrame() {
+  if (!acknowledgedHoles || holesFrame) return;
+  holesFrame = true;
   requestAnimationFrame(() => {
-    if (seq < clippedSeq) return;
-    clippedSeq = seq;
-    syncNativePaintClip(rects);
+    holesFrame = false;
+    writeAcknowledgedHoles();
   });
 }
+
+/** Writes the kept holes of the acknowledged presentation into the clip. */
+function writeAcknowledgedHoles() {
+  const holes = acknowledgedHoles;
+  acknowledgedHoles = null;
+  if (!holes || holes.seq < clippedSeq) return;
+  clippedSeq = holes.seq;
+  syncNativePaintClip(holes.rects);
+}
+onRunEnd(writeHolesNextFrame);
 
 /** Excludes only the rectangles of the shown native surfaces from the app background as holes in actual pixels. */
 function syncNativePaintClip(rects) {
@@ -375,12 +402,12 @@ function placementAnswer(record, answer) {
   return placements;
 }
 
-/** Cancels the preparation that its draw did not reach. The next commit then prepares again. */
-export function cancelPrepared() {
+/** Cancels the preparation that its draw did not reach; options.handover hands its open transaction to the next preparation. The next commit then prepares again. */
+export function cancelPrepared(options) {
   aheadRecord = null;
   // No drawing of this preparation follows, so a run that only waited for that drawing ends.
   endRun();
-  return app.cancelPrepared();
+  return app.cancelPrepared(options);
 }
 
 /**
@@ -469,6 +496,8 @@ export function publishAhead(rects, seated, titlebar) {
  */
 function commit(mine, snapshot, final, titlebar) {
   const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, surfaces: [] };
+  // A drawn commit runs in the draw of a layout, which follows the acknowledgement of the presentation before it.
+  if (record.drawn) writeAcknowledgedHoles();
   const kinds = app.kinds;
   for (const s of snapshot) {
     // Without a host, this module simulates the surface, so it decides the applied position here too.
@@ -532,7 +561,7 @@ function commit(mine, snapshot, final, titlebar) {
         surface.visible && app.kinds.includes(surface.plugin)).map(({ applied }) => ({
           x: origin.left + applied.x, y: origin.top + applied.y, w: applied.w, h: applied.h,
         }));
-      if (entry.drawnSeq) clipNextFrame(entry.drawnSeq, entry.rects);
+      if (entry.drawnSeq) acknowledgeHoles(entry.drawnSeq, entry.rects);
       return placed;
     });
   }
@@ -545,7 +574,7 @@ function commit(mine, snapshot, final, titlebar) {
   // placement of that request. Its holes are written, or, if the answer has not arrived yet, when it arrives.
   if (native && record.drawn && !answered && sentPlacement) {
     sentPlacement.drawnSeq = record.seq;
-    if (sentPlacement.rects) clipNextFrame(record.seq, sentPlacement.rects);
+    if (sentPlacement.rects) acknowledgeHoles(record.seq, sentPlacement.rects);
   }
   // Without a host, the seat this module placed is the actual seat. With a host but no answer, the request equals
   // the previous one and was not sent, so the seat last answered stays valid. Storing this record then would

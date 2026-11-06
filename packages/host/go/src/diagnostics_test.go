@@ -969,3 +969,30 @@ func TestDrawCoveredIsADiagnosticMethod(t *testing.T) {
 		t.Fatal("diagnostics.window.draw-covered is not a diagnostic method")
 	}
 }
+
+// contract: recording.drag.layout-trace-after-settle
+func TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented(t *testing.T) {
+	var order []string
+	result, err := stopAfterSettled(func() (int, error) {
+		order = append(order, "settle")
+		return 1, nil
+	}, func() error {
+		order = append(order, "stop")
+		return nil
+	})
+	if result != 1 || err != nil || !reflect.DeepEqual(order, []string{"settle", "stop"}) {
+		t.Fatalf("result %d, error %v, order %v; want 1, nil, [settle stop]", result, err, order)
+	}
+
+	order = nil
+	_, err = stopAfterSettled(func() (int, error) {
+		order = append(order, "settle")
+		return 0, errors.New("the drag was not presented")
+	}, func() error {
+		order = append(order, "stop")
+		return nil
+	})
+	if err == nil || err.Error() != "the drag was not presented" || !reflect.DeepEqual(order, []string{"settle", "stop"}) {
+		t.Fatalf("error %v, order %v; want the drag error and the trace stopped after it", err, order)
+	}
+}

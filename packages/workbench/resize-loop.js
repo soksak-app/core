@@ -68,7 +68,9 @@ export function watchResizeLoop(view, report, locate = creator, trace = callStac
   // Mutations not yet delivered at the first callback of this frame. Records delivered before the first callback cannot be
   // distinguished from those of the previous frame, so they are not included.
   let before = [];
-  // Callback slots that ran in this frame. The rAF of the next frame clears them, and that rAF runs before the observation round of the next frame.
+  // Callback slots that ran in this frame. The next task clears them: a task never runs inside a rendering update, so it runs after the
+  // round and its loop error and before the round of the next frame. An animation frame would start a rendering update of its own, and its
+  // layer commit can hold the presentation of the next layout draw (docs/spec/native-surfaces.md).
   let slots = [];
   // Mutations that happened after the loop error until the rAF of the next frame. null if there was no error.
   let after = null;
@@ -123,11 +125,14 @@ export function watchResizeLoop(view, report, locate = creator, trace = callStac
         slots.push({ ran: `${label} at ${view.performance.now().toFixed(1)}ms on ${[...entries].map(sized).join(", ")}`, changed: [], writes: [] });
         if (!clearing) {
           clearing = true;
-          view.requestAnimationFrame(() => {
+          const channel = new view.MessageChannel();
+          channel.port1.onmessage = () => {
+            channel.port1.close();
             before = [];
             slots = [];
             clearing = false;
-          });
+          };
+          channel.port2.postMessage(null);
         }
         return callback(entries, observer);
       });

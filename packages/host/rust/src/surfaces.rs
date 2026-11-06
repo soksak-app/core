@@ -791,8 +791,11 @@ fn surface_dispatch_timestamp() -> Option<u64> {
 }
 
 #[derive(Clone)]
-struct SurfaceDispatch {
+pub(crate) struct SurfaceDispatch {
     window: String,
+    // The surface of a dispatch that belongs to one surface, such as the placement of its composition; None for the window
+    // layout.
+    surface: Option<String>,
     ticket: Option<u64>,
     operation: &'static str,
     stage: &'static str,
@@ -810,8 +813,21 @@ fn surface_dispatch(
         surface_dispatch_clock,
         || window.label().to_string(),
         ticket,
+        None,
         operation,
         stage,
+    )
+}
+
+/// The dispatch context of the placement of the composition of surface (docs/spec/events.json).
+pub(crate) fn composition_dispatch(window: &Window, surface: &str) -> Option<SurfaceDispatch> {
+    surface_dispatch_context_with(
+        surface_dispatch_clock,
+        || window.label().to_string(),
+        None,
+        Some(surface.to_owned()),
+        "composition",
+        "composition-place-ui",
     )
 }
 
@@ -819,11 +835,13 @@ fn surface_dispatch_context_with(
     clock: impl FnOnce() -> Option<(u64, SurfaceDispatchMode)>,
     window: impl FnOnce() -> String,
     ticket: Option<u64>,
+    surface: Option<String>,
     operation: &'static str,
     stage: &'static str,
 ) -> Option<SurfaceDispatch> {
     clock().map(|(queued, mode)| SurfaceDispatch {
         window: window(),
+        surface,
         ticket,
         operation,
         stage,
@@ -835,26 +853,10 @@ fn surface_dispatch_context_with(
 fn record_surface_dispatch(dispatch: &SurfaceDispatch, entered: u64, returned: u64) {
     match dispatch.mode {
         SurfaceDispatchMode::Performance => crate::performance::observe("host", || {
-            surface_dispatch_fields(
-                &dispatch.window,
-                dispatch.ticket,
-                dispatch.operation,
-                dispatch.stage,
-                dispatch.queued,
-                entered,
-                returned,
-            )
+            surface_dispatch_fields(dispatch, entered, returned)
         }),
         SurfaceDispatchMode::Frame => {
-            let mut fields = surface_dispatch_fields(
-                &dispatch.window,
-                dispatch.ticket,
-                dispatch.operation,
-                dispatch.stage,
-                dispatch.queued,
-                entered,
-                returned,
-            );
+            let mut fields = surface_dispatch_fields(dispatch, entered, returned);
             if let Value::Object(fields) = &mut fields {
                 fields.remove("event");
             }
@@ -867,31 +869,29 @@ fn record_surface_dispatch(dispatch: &SurfaceDispatch, entered: u64, returned: u
     }
 }
 
-fn surface_dispatch_fields(
-    window: &str,
-    ticket: Option<u64>,
-    operation: &str,
-    stage: &str,
-    queued: u64,
-    entered: u64,
-    returned: u64,
-) -> Value {
+fn surface_dispatch_fields(dispatch: &SurfaceDispatch, entered: u64, returned: u64) -> Value {
     let mut fields = serde_json::Map::from_iter([
         ("event".into(), json!("surface.dispatch")),
-        ("window".into(), json!(window)),
-        ("operation".into(), json!(operation)),
-        ("stage".into(), json!(stage)),
-        ("queued_ns".into(), json!(queued.to_string())),
+        ("window".into(), json!(dispatch.window)),
+        ("operation".into(), json!(dispatch.operation)),
+        ("stage".into(), json!(dispatch.stage)),
+        ("queued_ns".into(), json!(dispatch.queued.to_string())),
         ("entered_ns".into(), json!(entered.to_string())),
         ("returned_ns".into(), json!(returned.to_string())),
     ]);
-    if let Some(ticket) = ticket {
+    if let Some(surface) = &dispatch.surface {
+        fields.insert("surface".into(), json!(surface));
+    }
+    if let Some(ticket) = dispatch.ticket {
         fields.insert("ticket".into(), json!(ticket));
     }
     Value::Object(fields)
 }
 
-fn surface_dispatch_result<T>(dispatch: Option<SurfaceDispatch>, work: impl FnOnce() -> T) -> T {
+pub(crate) fn surface_dispatch_result<T>(
+    dispatch: Option<SurfaceDispatch>,
+    work: impl FnOnce() -> T,
+) -> T {
     surface_dispatch_result_with(
         dispatch,
         surface_dispatch_timestamp,

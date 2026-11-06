@@ -284,7 +284,7 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 
 	// The revision check and every native application run as one task of the UI thread. Even when the arrival
 	// order of the calling goroutines is reversed, an earlier revision is not applied after a newer snapshot.
-	mainThreadStep(func() {
+	place := func() {
 		if request.Revision <= s.compositionRevisions[request.Surface] {
 			err = fmt.Errorf("stale composition revision %d", request.Revision)
 			return
@@ -350,7 +350,12 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 		}
 		system.SetSurfaceOverlays(view.handle, nativeSurfaceOverlays(declaration.Overlays, overlays))
 		s.compositionRevisions[request.Surface] = request.Revision
-	})
+	}
+	// The frame trace states when the placement reached the host and when the UI thread applied it (docs/spec/events.json).
+	if dispatchErr := runSurfaceDispatchOf(mainThreadStep, s.window.Name(), request.Surface, nil, "composition",
+		"composition-place-ui", func() error { place(); return nil }); dispatchErr != nil {
+		return dispatchErr
+	}
 	if err != nil {
 		s.releaseImageConfigurations(configurations)
 		return err

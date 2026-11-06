@@ -202,12 +202,20 @@
 - F527: `core.settings.change` takes the type of a setting from its declaration, so `applyTrace`, `make app-usage TRACE=0` and `make terminal-redraw-usage TRACE=0` set `diagnostics.log` to an object; the string of a control becomes the boolean or the number that the setting declares, a value of another type fails with -32602 and the check of its setting, and without a scope the command sets the common value
 - F502-10: The framework reports what came of the frame that shows a scene (`Window.AfterPresent`), reads the element tree in every build (`Content.ElementTree`), the release builds included, and draws the frames of a window out of sight with `WindowOptions.DrawWhileOccluded`. In both language host libraries the presentation notice of the `Frontend` port carries a failure, which cancels the layout transaction, and the settled presentation of the port makes the block that the settled wait of the platform takes, so that neither the transaction nor the wait names a main web view; the Wails and Tauri framework adapters make that block through the new operation `MainPresentation` of the Surface layout group. The main-thread audit counts a call of a block as a call of a native function.
 - F502-13: The exposure kind `dom` becomes `element` on every host and in every plugin declaration: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, the MCP tools `element_rect` and `element_act` and the member `element` of `exposure.list`; a manifest with `exposes.dom` is refused. The workbench statuses are defined over the workbench: `core.window.workbench`, `core.workbench.error` and `core.workbench.audit`, whose rows are `{role, expose, command, text}`, and the responder owner and the `host.hit` kind `workbench`. The window checks wait for a new `start` of `core.window.workbench`, and each iterates `Object.values(APPS)` or `MAIN_PAGE_APPS`, which `scripts/check-e2e-host-parity.mjs` checks.
+- F484: A preparation whose draw a layout epoch change cancelled hands its open transaction to the next preparation of the window instead of committing it, so its native frames no longer reach the screen over the DOM of the earlier layout.
+- F435-8-2: The ResizeObserver loop recorder of diagnostic builds clears its slots in the next task, so an observation round adds no animation frame.
+- F483-1: `core.surface.clock` returns the page identity of the document, and the content trace names the document by it instead of by its time origin.
+- F435-8-1: During a run the next drawn commit writes the paint holes of the acknowledged presentation, so no animation frame adds a layer commit before the next draw.
+- F435-7: The placement of a composition records a frame dispatch that names its surface, on both hosts.
+- F483: Every view registers `core.surface.clock`, and the content trace maps document times through the narrowest of five clock readings.
+- F482: The Tauri host ends the layout trace of a recorded drag after the last layout is presented, so the trace holds its presentation.
 - F481: The plain view benchmark waits until the probe view registered `probeplain.measure` before its content trace starts.
 - F463: Core uses the checks kit and its one executable `soksak-check`. Red: `scripts/test/workflows.test.mjs` failed. Green: it passes.
 - F466: Records cite no temporary log, and the record check reports a new citation.
 - F479: The release candidate is 0.0.37.
 - F479: The release run published v0.0.37, and the registry lists it with the plugins that require it.
 - F435-5: A convergence failure of a view drag states when the gesture ended.
+- F435-6: A convergence result of a view drag states the last host layout and the last source frame of the final viewport relative to the gesture end.
 - F480: `e2e/terminal-reopen.test.mjs` checks that a terminal opened after the earlier terminals closed displays its prompt, and the benchmark readiness failure reports the session, the surface and its regions.
 - F478: The Wails host keeps a null `data` of a view event and a null `params` of a view request as values.
 - F477: The window check setup names the declared make target `build-capture-text-path`.

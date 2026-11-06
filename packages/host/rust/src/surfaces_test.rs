@@ -187,6 +187,7 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
         || Some((100, SurfaceDispatchMode::Performance)),
         || "main".to_owned(),
         Some(41),
+        None,
         "present",
         "present-prepare-ui",
     )
@@ -198,15 +199,7 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
             || clock_values.next().flatten(),
             |dispatch, entered, returned| {
                 assert_eq!(dispatch.mode, SurfaceDispatchMode::Performance);
-                observed.push(surface_dispatch_fields(
-                    &dispatch.window,
-                    dispatch.ticket,
-                    dispatch.operation,
-                    dispatch.stage,
-                    dispatch.queued,
-                    entered,
-                    returned,
-                ));
+                observed.push(surface_dispatch_fields(dispatch, entered, returned));
             },
             || {
                 phases.push("work");
@@ -239,6 +232,7 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
             off_label_reads += 1;
             "main".to_owned()
         },
+        None,
         None,
         "sync",
         "sync-layout-ui",
@@ -293,6 +287,7 @@ fn surface_dispatch_records_frame_boundaries_when_performance_trace_is_off() {
     let dispatch = surface_dispatch_context_with(
         || Some((400, SurfaceDispatchMode::Frame)),
         || WINDOW.to_owned(),
+        None,
         None,
         "present",
         "present-prepare-ui",
@@ -1172,5 +1167,32 @@ fn an_image_region_declaration_keeps_the_keys_of_its_surface() {
             region("view", "image", "dom")
         ])
         .declares_image_region()
+    );
+}
+
+// contract: performance.surface.dispatch-names-its-surface
+#[test]
+fn a_composition_dispatch_names_its_surface() {
+    let dispatch = surface_dispatch_context_with(
+        || Some((100, SurfaceDispatchMode::Frame)),
+        || "main".to_owned(),
+        None,
+        Some("tab-1".to_owned()),
+        "composition",
+        "composition-place-ui",
+    )
+    .expect("enabled trace captures its dispatch context");
+    assert_eq!(
+        surface_dispatch_fields(&dispatch, 120, 140,),
+        serde_json::json!({
+            "event": "surface.dispatch",
+            "window": "main",
+            "surface": "tab-1",
+            "operation": "composition",
+            "stage": "composition-place-ui",
+            "queued_ns": "100",
+            "entered_ns": "120",
+            "returned_ns": "140"
+        }),
     );
 }

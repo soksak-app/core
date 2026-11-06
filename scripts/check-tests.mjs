@@ -963,6 +963,102 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F483",
+    implementation: [
+      { file: "packages/plugin-api/surface-document.js", symbol: "return { page, timeOrigin: view.performance.timeOrigin, now: view.performance.now() };" },
+      { file: "packages/plugin-api/view.js", symbol: "expose.command(\"core.surface.clock\", state.clock)," },
+      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "\"core.surface.hit\": true, \"core.surface.clock\": true}" },
+      { file: "e2e/view-metrics-collection.mjs", symbol: "async function narrowestClockBracket(s, surface, startBracket, page) {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "a view surface mounts with the core surface entries that exposure.json declares" },
+      { file: "packages/workbench-mygo/tests/exposure_names_test.go", id: "TestTheRegistryServesEveryDeclaredCommandAndStatus" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
+    ],
+    expected: "Every view registers core.surface.clock in its document on the three hosts, the mygo workbench holds it as a name of the view, and the content trace of a view keeps the narrowest of five clock brackets of the same document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F435-7",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func runSurfaceDispatchOf(dispatch func(func()), window, surface string, ticket *uint64, operation, stage string, work func() error) error {" },
+      { file: "packages/host/go/src/composition.go", symbol: "runSurfaceDispatchOf(mainThreadStep, s.window.Name(), request.Surface, nil, \"composition\"," },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn composition_dispatch(window: &Window, surface: &str) -> Option<SurfaceDispatch> {" },
+      { file: "packages/host/rust/src/composition.rs", symbol: "let dispatch = surfaces::composition_dispatch(&window, &request.surface);" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestSurfaceDispatchOfACompositionNamesItsSurface" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_composition_dispatch_names_its_surface" },
+    ],
+    expected: "The placement of a composition records a surface dispatch with the operation composition, the stage composition-place-ui and the surface name on the three hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F435-8-1",
+    implementation: [
+      { file: "packages/workbench/compositor.js", symbol: "function writeAcknowledgedHoles() {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/native-paint-clip.test.mjs", id: "during a run the next drawn commit writes the acknowledged holes without an animation frame" },
+    ],
+    expected: "During a run the next drawn commit writes the paint holes of the acknowledged presentation, without an animation frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F435-8-2",
+    implementation: [
+      { file: "packages/workbench/resize-loop.js", symbol: "const channel = new view.MessageChannel();" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/resize-loop.test.mjs", id: "a callback round requests no animation frame and the next task ends its slots" },
+    ],
+    expected: "The ResizeObserver loop recorder clears its callback slots in the next task and requests no animation frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F483-1",
+    implementation: [
+      { file: "packages/plugin-api/surface-document.js", symbol: "const page = view.sokView?.page;" },
+      { file: "e2e/view-metrics-collection.mjs", symbol: "async function documentPage(s, surface) {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
+    ],
+    expected: "core.surface.clock returns the page identity of the view document, and the content trace names the document by it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F484",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "let handedTicket = null;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/host-chrome.test.mjs", id: "a handed-over preparation sends no cancel and only a failed or cancelled next preparation ends it" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a preparation that a newer layout replaced before its draw hands its transaction to the next layout" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a preparation whose draw fails cancels its transaction without a handover" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a preparation whose request fails cancels without a handover and the failure reaches the caller" },
+    ],
+    expected: "A preparation whose draw a layout epoch change cancelled hands its open transaction to the next preparation, and a failed next preparation or a cancel without a handover ends it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F482",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func stopAfterSettled[T any](settle func() (T, error), stop func() error) (T, error) {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "result, err := stopAfterSettled(settle, func() error {" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn stop_after_settled<T, L>(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "let (result, layouts) = stop_after_settled(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestRecordedDragStopsItsLayoutTraceAfterTheLastLayoutIsPresented" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_recorded_drag_stops_its_layout_trace_after_the_last_placement_is_presented" },
+    ],
+    expected: "A recorded drag on the three hosts waits until the last layout is committed and presented and stops the layout trace after it, also when the wait fails, through one helper in each language host library.",
+    levels: ["unit"],
+  },
+  {
     id: "F502-13",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "export const EXPOSE_KINDS = Object.freeze({ status: \"status\", commands: \"command\", element: \"element\" });" },
@@ -12881,7 +12977,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F637 keeps a listing of the mygo workbench tests out of the element name judgment of their TestMain; it changes no runtime capability.
 // F629 declares the contract case of an existing Rust test whose behavior F634 added; it changes no runtime capability.
 // F631 corrects the tests of a full event queue and states the existing rule of log.dropped; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F639", "F637", "F629", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F639", "F637", "F629", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

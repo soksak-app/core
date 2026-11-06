@@ -15,9 +15,19 @@ function fakeView() {
     }
   };
   window.requestAnimationFrame = (fn) => frames.push(fn);
+  // The next task after a rendering update: the fixture delivers the posted messages when the test runs task().
+  const messages = [];
+  window.MessageChannel = class {
+    constructor() {
+      const port1 = { onmessage: null, close() {} };
+      this.port1 = port1;
+      this.port2 = { postMessage: () => messages.push(port1) };
+    }
+  };
   window.performance.now = () => 1234.56;
   const frame = () => frames.splice(0).forEach((fn) => fn());
-  return { window, observers, frame };
+  const task = () => messages.splice(0).forEach((port) => port.onmessage?.({}));
+  return { window, observers, frame, frames, task };
 }
 
 test("the observations delivered in the frame after a loop error are reported", () => {
@@ -72,13 +82,13 @@ test("the callbacks that ran in the frame of a loop error are reported with the 
 });
 
 test("the callbacks of an earlier frame are not reported with a loop error", () => {
-  const { window, observers, frame } = fakeView();
+  const { window, observers, task } = fakeView();
   const reported = [];
   watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:7:3");
   new window.ResizeObserver(() => {});
   const plane = window.document.getElementById("plane");
   observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
-  frame();
+  task();
   window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
   assert.deepEqual(reported, [
     "resize observer loop: before the round, undelivered at the first callback: nothing",
@@ -145,5 +155,22 @@ test("a body dataset write inside a callback slot is reported with the stack of 
     "resize observer loop: in the round callback 1 ran probe@wails://localhost/probe.js:1:1 created at 1234.6ms at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 188x498, then changed attributes data-screen of body",
     "resize observer loop: in the round callback 1 set data-screen of body to library at drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5",
     "resize observer loop: in the round callback 1 removed data-dragging of body at drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5",
+  ]);
+});
+
+test("a callback round requests no animation frame and the next task ends its slots", () => {
+  const { window, observers, frames, task } = fakeView();
+  const reported = [];
+  watchResizeLoop(window, (line) => reported.push(line), () => "probe@wails://localhost/probe.js:7:3");
+  new window.ResizeObserver(() => {});
+  const plane = window.document.getElementById("plane");
+  observers[0].callback([{ target: plane, contentRect: { width: 600, height: 400 } }], observers[0]);
+  // An animation frame starts a rendering update, and its layer commit can hold the presentation of the next layout draw.
+  assert.equal(frames.length, 0, "a callback round of the recorder requested an animation frame");
+  task();
+  window.dispatchEvent(new window.ErrorEvent("error", { message: "ResizeObserver loop completed with undelivered notifications." }));
+  assert.deepEqual(reported, [
+    "resize observer loop: before the round, undelivered at the first callback: nothing",
+    "resize observer loop: this frame ran no callback",
   ]);
 });

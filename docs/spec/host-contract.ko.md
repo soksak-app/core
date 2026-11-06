@@ -482,6 +482,7 @@ fn invalid_json_closes_connection() {
 | `performance.surface.dispatch-records-existing-boundaries` | performance trace가 켜져 있으면 surface `sync`와 `present` 경로의 기존 UI dispatch와 비동기 presentation callback마다 같은 host event clock으로 window, operation, stage, `queued_ns`, `entered_ns`, `returned_ns`를 담은 `host.trace.surface.dispatch`를 저장한다. 이미 배정된 layout ticket은 포함하고, 아직 ticket이 배정되지 않았으면 생략한다. `queued_ns`는 기존 dispatch 또는 callback 등록 직전, `entered_ns`는 UI closure 또는 callback 진입 시점, `returned_ns`는 종료 시점에 기록한다. 이 기록은 caller 재개 시간을 포함하지 않으며 dispatch를 추가하지 않는다. | all |
 | `performance.surface.dispatch-records-frame-only-boundaries` | performance trace가 꺼져 있고 frame trace가 켜져 있으면 기존 surface dispatch마다 window, operation, stage와 `queued_ns`, `entered_ns`, `returned_ns`를 담은 `host.frame.surface.dispatch` 하나를 저장하며 중복 `host.trace.surface.dispatch` 기록은 만들지 않는다. | all |
 | `performance.surface.dispatch-frame-fallback-is-exclusive` | surface dispatch는 performance trace gate가 열려 있으면 이를 사용하고, 아니면 frame trace gate가 열려 있을 때 frame tracing을 사용하며, 두 gate가 모두 닫혀 있으면 event clock을 읽지 않는다. `host.trace.surface.dispatch`와 `host.frame.surface.dispatch` 중 최대 하나의 경로로 기록한다. | all |
+| `performance.surface.dispatch-names-its-surface` | surface 하나의 region과 overlay를 배치하는 UI dispatch는 operation `composition`, stage `composition-place-ui`, 그리고 surface 이름을 담은 `surface` 필드를 다른 surface dispatch와 같은 gate와 clock으로 기록한다. window layout의 dispatch는 `surface`를 기록하지 않는다. | all |
 | `performance.sampler.failed-reading-is-explicit` | 상주 크기를 얻지 못한 sampler 읽기는 `rss_host_kb` 대신 `error`를 기록한다. | all |
 | `performance.sampler.reads-every-registered-process` | trace가 켜져 있는 동안 표본 추출은 host와 프로세스 등록부의 각 process마다 `role`, `name`, `pid`, `rss_kb`를 담은 이벤트 `host.sampler.memory`를 하나씩 저장한다. process의 이름을 붙이면 이벤트 `host.trace.process`를 저장하고, 제거된 process는 다시 읽지 않으며, 크기를 읽을 수 없는 등록 process는 `rss_kb` 없이 `error`와 함께 저장한다. | all |
 | `performance.sampler.names-the-sidecar-processes` | host가 시작한 사이드카 process와 연결한 상주 service는 process가 끝나거나 연결이 끝날 때까지 프로세스 등록부에 있다. | all |
@@ -671,6 +672,7 @@ fn invalid_json_closes_connection() {
 | `recording.finish.retired-stop-failure-releases-owner` | native stream과 writer가 퇴역한 뒤 capture stop이 실패하면 finish는 stop 오류를 보고하고 start가 반환한 폴더를 그대로 두며, 다른 녹화를 시작할 수 있도록 녹화 소유권을 해제한다. | all |
 | `recording.finish.stop-query-failure-preserves-owner` | capture stop과 native 소유권 조회가 모두 실패하면 finish는 두 오류를 보고하고 폴더와 cleanup 소유권을 유지한다. | all |
 | `recording.finish.layout-trace-failure-preserves-folder` | capture stop 뒤 layout trace finalization이 실패하면 finish는 해당 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | all |
+| `recording.drag.layout-trace-after-settle` | 기록하는 drag는 마지막 layout이 commit되고 표시된 뒤에 layout trace를 끝내므로, trace가 마지막 layout의 presentation과 commit을 가진다. drag나 그 대기가 실패해도 trace는 끝난다. | all |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | all |
 | `recording.start.failed-start-removes-folder` | 캡처 시작에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | all |
 | `recording.start.cleanup-failure-retains-folder-owner` | 시작 실패 뒤 소유 폴더를 제거할 수 없으면 두 오류를 보고하고 cleanup 소유권을 유지하며, abort가 폴더를 제거할 때까지 다음 시작을 막는다. | all |

@@ -8,10 +8,13 @@ import { createViewBridge } from "../view.js";
 import { observeSurfaceDocument } from "../surface-document.js";
 
 const turn = () => new Promise((resolve) => setImmediate(resolve));
-const coreNames = ["core.surface.document", "core.surface.hit", "core.surface.input"];
+const coreNames = ["core.surface.clock", "core.surface.document", "core.surface.hit", "core.surface.input"];
 const declarations = {
   status: ["document", "input"].map((name) => ({ name: `core.surface.${name}`, description: name, schema: {} })),
-  commands: [{ name: "core.surface.hit", description: "Hits the document.", params: { type: "object" }, result: { type: "boolean" } }],
+  commands: [
+    { name: "core.surface.hit", description: "Hits the document.", params: { type: "object" }, result: { type: "boolean" } },
+    { name: "core.surface.clock", description: "Reads the document clock.", params: { type: "object" }, result: { type: "object" } },
+  ],
   element: [],
 };
 
@@ -95,6 +98,13 @@ test("the bridge registers the actual view document without plugin exposure setu
   view.document.elementFromPoint = (x, y) => x === 20 && y === 30 ? view.document.body : null;
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 20, y: 30 } }), true);
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 0, y: 0 } }), false);
+  view.performance.now = () => 1234.5;
+  // The view start installs sokView; its page identity names the document, which performance.timeOrigin does not.
+  view.sokView = { page: "page-probe" };
+  assert.deepEqual(await request("command.run", "core.surface.clock", { params: {} }),
+    { page: "page-probe", timeOrigin: view.performance.timeOrigin, now: 1234.5 }, "the clock command reads the document clock");
+  delete view.sokView;
+  await assert.rejects(request("command.run", "core.surface.clock", { params: {} }), /the view document has no page identity/);
 });
 
 test("the document status preserves null view start params", { timeout: 5000 }, async (t) => {

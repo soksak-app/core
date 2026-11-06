@@ -420,6 +420,37 @@ export function requireViewContentFrameCoverage(mappedFrames, { gestureStartedAt
   return mappedFrames.filter((frame) => !left.has(frame));
 }
 
+// The mapping of document times to the native clock is as wide as the round trip that read the document clock, and the start
+// command of a view can take tens of milliseconds under load. The trace therefore reads core.surface.clock CLOCK_SAMPLES times and
+// keeps the narrowest bracket of the same document (Cristian's algorithm). WebKit derives performance.timeOrigin from the current
+// wall clock at each read and reduces it to whole milliseconds, so one document can report time origins one millisecond apart: the
+// page identity names the document, and every bracket keeps the time origin of the trace start, which the source frames use.
+const CLOCK_SAMPLES = 5;
+
+/** Reads the page identity of the view document of surface. */
+async function documentPage(s, surface) {
+  const clock = await s.run("core.surface.clock", {}, surface);
+  assert.ok(typeof clock?.page === "string" && clock.page.length > 0, `${surface} core.surface.clock returned ${JSON.stringify(clock)}`);
+  return clock.page;
+}
+
+async function narrowestClockBracket(s, surface, startBracket, page) {
+  const width = (bracket) => bracket.after.timeMs - bracket.before.timeMs;
+  let narrowest = startBracket;
+  for (let sample = 0; sample < CLOCK_SAMPLES; sample++) {
+    const before = await monotonicTimeMs(s);
+    const clock = await s.run("core.surface.clock", {}, surface);
+    const after = await monotonicTimeMs(s);
+    assert.ok(Number.isFinite(clock?.now), `${surface} core.surface.clock returned ${JSON.stringify(clock)}`);
+    assert.equal(clock.page, page, `${surface} core.surface.clock read another document than the trace start`);
+    const bracket = viewStartClockBracket(surface, { sourceClock: {
+      documentTimeOriginMs: startBracket.sourceClock.documentTimeOriginMs, sourceNowMs: clock.now, sourceResolutionMs: startBracket.sourceClock.sourceResolutionMs,
+    } }, before, after, { hostPid: startBracket.hostPid, window: startBracket.window });
+    if (width(bracket) < width(narrowest)) narrowest = bracket;
+  }
+  return narrowest;
+}
+
 /** Runs a gesture or layout operation between explicit source-frame observer start and stop callbacks. */
 export async function withViewContentTrace(t, s, descriptor, surface, action) {
   assert.ok(typeof descriptor?.plugin === "string" && descriptor.plugin.length > 0,
@@ -434,6 +465,8 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
     "content trace requires its connected host client and process PID");
   assert.ok(typeof window === "string" && window.length > 0, "content trace requires its target window");
   const offsets = currentEventOffsets(s.app.configDir);
+  // The page read before the start and every clock read after it name one document, so no reload happened between them.
+  const page = await documentPage(s, surface);
   const before = await monotonicTimeMs(s);
   let start;
   let started = false;
@@ -445,7 +478,7 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
     assert.strictEqual(s.client, client, "content trace start changed the session host client");
     assert.equal(s.client.endpoint.pid, hostPid, "content trace start changed the host process");
     assert.equal(s.window, window, "content trace start changed the target window");
-    startBracket = viewStartClockBracket(surface, start, before, after, { hostPid, window });
+    startBracket = await narrowestClockBracket(s, surface, viewStartClockBracket(surface, start, before, after, { hostPid, window }), page);
   } catch (error) {
     if (started) {
       try {

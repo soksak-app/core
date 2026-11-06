@@ -1688,7 +1688,7 @@ test("a view surface mounts with the core surface entries that exposure.json dec
     assert.deepEqual(registry.namesOf(surfaceId), [], "the main placeholder registered view document entries");
     const start = viewStartValues(surface, null);
     assert.deepEqual(start.declarations.status.map(({ name }) => name).sort(), ["core.surface.document", "core.surface.input"]);
-    assert.deepEqual(start.declarations.commands.map(({ name }) => name), ["core.surface.hit"]);
+    assert.deepEqual(start.declarations.commands.map(({ name }) => name), ["core.surface.hit", "core.surface.clock"]);
     assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 7, method: "status.get", params: { name: "core.surface.document" } }),
       true, "the core entry of the view surface is not served by its page");
   } finally {
