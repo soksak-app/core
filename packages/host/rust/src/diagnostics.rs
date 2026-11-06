@@ -1112,6 +1112,7 @@ fn native_drag(
     mut presented: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Value, Failure> {
     let input = |phase: i32, (x, y): (f64, f64)| platform::Pointer {
+        pointer: exposure::MAIN_POINTER.to_string(),
         x,
         y,
         phase,

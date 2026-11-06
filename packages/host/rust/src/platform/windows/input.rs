@@ -35,10 +35,11 @@ pub fn pointer(
     let held = view.clone();
     let answer: Answer = Box::new(move |result| {
         match &result {
-            Ok(()) => held
-                .presses
-                .borrow_mut()
-                .delivered(pointer.phase, pointer.button),
+            Ok(()) => {
+                held.presses
+                    .borrow_mut()
+                    .delivered(&pointer.pointer, pointer.phase, pointer.button)
+            }
             Err(failure) => {
                 crate::application_log::log_error("input.pointer", format!("{failure:?}"))
             }

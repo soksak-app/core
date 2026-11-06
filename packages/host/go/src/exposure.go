@@ -1039,7 +1039,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 			pressed, err = viewAt(window, input.X, input.Y)
 			return err
 		}, func() error {
-			return system.InjectPointer(window, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
+			return system.InjectPointer(window, input.Pointer, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
 				input.DeltaX, input.DeltaY, input.Clicks, receiveTimeout.Seconds(), func(result platform.PointerResult, held platform.ButtonHeld) {
 					done <- delivery{result, held}
 				})
@@ -1059,7 +1059,9 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerButtonHeld:
 		return rpcError(codeButtonHeld, "%s", ButtonHeldMessage(got.held))
 	case platform.PointerPressOpen:
-		return rpcError(codePressOpen, "a synthetic press of this button is still open in the window; send up before the next down")
+		return rpcError(codePressOpen, "pointer %s holds an open press of this button; send up before the next down", input.Pointer)
+	case platform.PointerHeld:
+		return rpcError(codePointerHeld, "%s", PointerHeldMessage(got.held))
 	}
 	if pressed != 0 {
 		s.press(pressed)
@@ -1080,6 +1082,12 @@ func ButtonHeldMessage(held platform.ButtonHeld) string {
 	}
 	return fmt.Sprintf("AppKit reports NSEvent.pressedMouseButtons mask %#x while %s is frontmost; the synthetic press or release was not delivered",
 		held.Mask, frontmost)
+}
+
+// PointerHeldMessage builds the message of the 1011 error: the pointer whose open press rejected the input and the state that the
+// press holds (docs/spec/exposure.md#named-pointers).
+func PointerHeldMessage(held platform.ButtonHeld) string {
+	return fmt.Sprintf("pointer %s holds a press that this input would share: %s", held.Pointer, held.Reason)
 }
 
 // activate activates the application, makes the window the key window, and waits until the web view of the window receives the active state.

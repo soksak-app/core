@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::platform::{Delivery, Key, Pointer};
+use crate::platform::{Delivery, Key, Pointer, PointerHeld};
 
 const PHASE_MOVE: i32 = 0;
 const PHASE_PRESS: i32 = 1;
@@ -36,11 +36,17 @@ impl Call {
     }
 }
 
-/// The open press of each button of a window. A page has one mouse pointer, so a window holds one press of each button.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// The open press of each button of a window and the pointer that holds them. A page has one mouse pointer, so a window
+/// holds one press of each button, all of one pointer.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct PressState {
     pub(crate) open: [bool; 2],
+    /// The pointer of the open presses; it is None while no press is open.
+    pub(crate) holder: Option<String>,
 }
+
+/// The reason of a Delivery::PointerHeld rejection: the page has one mouse pointer, which the presses of the holder take.
+pub(crate) const POINTER_HELD_REASON: &str = "the page has one mouse pointer";
 
 impl PressState {
     /// The protocol's mask of the open presses, with the button changed to pressed.
@@ -54,13 +60,22 @@ impl PressState {
 
     /// The call that delivers a pointer input, or the result of an input that is not sent. The coordinates are CSS pixels of the web view
     /// at the content area of the window. It keeps the press rules of the other platforms: a button has one press, and a drag and a release
-    /// need it.
+    /// need it. While another pointer holds a press, a move, a press, a drag and a release are PointerHeld, and a scroll is sent.
     pub(crate) fn call(&self, pointer: &Pointer) -> Result<Call, Delivery> {
         let button = match pointer.button {
             0 => 0,
             1 => 1,
             _ => return Err(Delivery::Rejected),
         };
+        if let Some(holder) = &self.holder
+            && *holder != pointer.pointer
+            && pointer.phase != PHASE_SCROLL
+        {
+            return Err(Delivery::PointerHeld(PointerHeld {
+                pointer: holder.clone(),
+                reason: POINTER_HELD_REASON.to_string(),
+            }));
+        }
         let name = ["left", "right"][button];
         let clicks = pointer.clicks;
         let valid_clicks = (1..=MAX_CLICKS).contains(&clicks);
@@ -110,12 +125,20 @@ impl PressState {
         Ok(Call::new("Input.dispatchMouseEvent", event))
     }
 
-    /// Records a pointer input that reached the page. An input that failed leaves the press as it was.
-    pub(crate) fn delivered(&mut self, phase: i32, button: i32) {
+    /// Records a pointer input of pointer that reached the page. An input that failed leaves the press as it was.
+    pub(crate) fn delivered(&mut self, pointer: &str, phase: i32, button: i32) {
         let button = usize::from(button == 1);
         match phase {
-            PHASE_PRESS => self.open[button] = true,
-            PHASE_RELEASE => self.open[button] = false,
+            PHASE_PRESS => {
+                self.open[button] = true;
+                self.holder = Some(pointer.to_string());
+            }
+            PHASE_RELEASE => {
+                self.open[button] = false;
+                if self.open == [false, false] {
+                    self.holder = None;
+                }
+            }
             _ => {}
         }
     }

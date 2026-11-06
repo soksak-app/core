@@ -21,7 +21,7 @@ use crate::application_log::log_error;
 use crate::buffer_bounds::record_buffer_drop;
 use crate::endpoint::{
     BUTTON_HELD, Endpoint, Failure, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT, NO_INPUT,
-    NOT_ACTIVE, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME, missing_window,
+    NOT_ACTIVE, POINTER_HELD, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME, missing_window,
 };
 use crate::event_log::Level;
 use crate::event_record::emit_host;
@@ -29,7 +29,7 @@ use crate::platform;
 use crate::surfaces::label_for;
 use crate::windows::{self, NativeFailure, WindowData, window_data, with_native_owner};
 
-pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer};
+pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer, PointerHeld};
 
 /// The time within which a document must respond.
 pub const TIMEOUT: Duration = Duration::from_secs(10);
@@ -280,13 +280,37 @@ pub fn button_held_message(held: &ButtonHeld) -> String {
     )
 }
 
+/// Builds the message of error 1011: the pointer whose open press rejected the input and the state that the press
+/// holds (docs/spec/exposure.md#named-pointers).
+pub fn pointer_held_message(held: &PointerHeld) -> String {
+    format!(
+        "pointer {} holds a press that this input would share: {}",
+        held.pointer, held.reason
+    )
+}
+
 /// The largest click count of `input.pointer`: a person's triple click.
 const POINTER_CLICKS_MAX: i64 = 3;
 
+/// The pointer of an `input.pointer` request that names none.
+pub const MAIN_POINTER: &str = "main";
+
+/// The longest pointer name: a name has 1 to POINTER_NAME_MAX characters of a-z, 0-9 and -.
+const POINTER_NAME_MAX: usize = 32;
+
+/// Reports whether name has the form of a pointer name.
+fn pointer_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= POINTER_NAME_MAX
+        && name
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+}
+
 /// Every field of `input.pointer`. A field outside it is rejected, so a misspelled or an unsupported field does not
 /// deliver a different gesture than the caller asked for.
-const POINTER_FIELDS: [&str; 9] = [
-    "window", "x", "y", "phase", "button", "deltaX", "deltaY", "activate", "clicks",
+const POINTER_FIELDS: [&str; 10] = [
+    "window", "pointer", "x", "y", "phase", "button", "deltaX", "deltaY", "activate", "clicks",
 ];
 
 /// Reads the parameters of `input.pointer`.
@@ -299,6 +323,15 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
             "input.pointer has no field {field}"
         )));
     }
+    let name = match params.get("pointer") {
+        None | Some(Value::Null) => MAIN_POINTER.to_string(),
+        Some(Value::String(name)) if pointer_name(name) => name.clone(),
+        Some(_) => {
+            return Err(Failure::params(format!(
+                "pointer must be 1 to {POINTER_NAME_MAX} characters of a-z, 0-9 and -"
+            )));
+        }
+    };
     let phase = match params.get("phase").and_then(Value::as_str) {
         Some("move") => 0,
         Some("down") => 1,
@@ -340,6 +373,7 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
         },
     };
     Ok(Pointer {
+        pointer: name,
         x: number(params, "x")?,
         y: number(params, "y")?,
         phase,
@@ -2562,13 +2596,16 @@ impl Host {
         }
         let (tx, rx) = mpsc::channel();
         let target = window.clone();
+        // The delivery takes the pointer, so the press reading and the answer keep their own copies.
+        let (phase, x, y) = (pointer.phase, pointer.x, pointer.y);
+        let name = pointer.pointer.clone();
         let pressed = with_native_owner(window, move |handle| {
             crate::surfaces::read_press_then_deliver(
                 || {
-                    if pointer.phase != 1 {
+                    if phase != 1 {
                         return Ok(None);
                     }
-                    crate::surfaces::surface_at(platform, handle, &target, pointer.x, pointer.y)
+                    crate::surfaces::surface_at(platform, handle, &target, x, y)
                 },
                 || {
                     platform.input_pointer(
@@ -2622,8 +2659,13 @@ impl Host {
             }
             Delivery::PressOpen => Err(Failure::new(
                 PRESS_OPEN,
-                "a synthetic press of this button is still open in the window; send up before the next down",
+                format!(
+                    "pointer {name} holds an open press of this button; send up before the next down"
+                ),
             )),
+            Delivery::PointerHeld(held) => {
+                Err(Failure::new(POINTER_HELD, pointer_held_message(&held)))
+            }
         }
     }
 

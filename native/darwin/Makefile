@@ -326,6 +326,7 @@ NATIVE_TESTS = observe_test \
   input_inject_test \
   input_virtual_test \
   input_virtual_key_equivalent_test \
+  input_pointers_test \
   input_reference_test \
   mouse_buttons_test \
   webview_input_receipts_test \

@@ -293,6 +293,22 @@ fn the_only_window_is_used_and_parameters_are_sent() {
         (
             &[
                 "input",
+                "pointer",
+                "--pointer",
+                "second",
+                "--x",
+                "3",
+                "--y",
+                "4",
+                "--phase",
+                "drag",
+            ],
+            "input.pointer",
+            r#"{"phase":"drag","pointer":"second","window":"main","x":3,"y":4}"#,
+        ),
+        (
+            &[
+                "input",
                 "key",
                 "--key",
                 "a",

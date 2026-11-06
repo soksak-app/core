@@ -494,7 +494,7 @@ func TestEndpointNameErrors(t *testing.T) {
 	}
 }
 
-// contract: endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-clicks-default, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding
+// contract: endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-clicks-default, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.pointer-name
 func TestEndpointPointerParams(t *testing.T) {
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
@@ -515,6 +515,11 @@ func TestEndpointPointerParams(t *testing.T) {
 		{"window": "main", "x": 1, "y": 2, "phase": "scroll", "clicks": 2},
 		{"window": "main", "x": 1, "y": 2, "phase": "down", "clickCount": 2},
 		{"window": "main", "x": 1, "y": 2, "phase": "down", "Clicks": 2},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "pointer": ""},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "pointer": "Second"},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "pointer": "a b"},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "pointer": strings.Repeat("p", 33)},
+		{"window": "main", "x": 1, "y": 2, "phase": "down", "pointer": 2},
 	}
 	for i, params := range rejected {
 		got := call(t, conn, i+1, "input.pointer", params)
@@ -529,6 +534,8 @@ func TestEndpointPointerParams(t *testing.T) {
 		{"window": "main", "x": 0, "y": 0, "phase": "scroll", "deltaY": -3, "button": "right"},
 		{"window": "main", "x": 5, "y": 6, "phase": "down", "clicks": 2},
 		{"window": "main", "x": 5, "y": 6, "phase": "up", "clicks": 3},
+		{"window": "main", "x": 7, "y": 8, "phase": "down", "pointer": "second-1"},
+		{"window": "main", "x": 7, "y": 8, "phase": "drag", "pointer": strings.Repeat("p", 32)},
 	}
 	for i, params := range accepted {
 		if got := call(t, conn, 100+i, "input.pointer", params); got.Error != nil {
@@ -538,12 +545,14 @@ func TestEndpointPointerParams(t *testing.T) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()
 	want := []host.PointerInput{
-		{X: 1, Y: 2, Phase: "move", Button: "left", Activate: true, Clicks: 1},
-		{X: 3, Y: 4, Phase: "up", Button: "right", Clicks: 1},
-		{X: 1.5, Y: 2, Phase: "drag", Button: "left", Clicks: 1},
-		{X: 0, Y: 0, Phase: "scroll", Button: "right", DeltaY: -3, Clicks: 1},
-		{X: 5, Y: 6, Phase: "down", Button: "left", Clicks: 2},
-		{X: 5, Y: 6, Phase: "up", Button: "left", Clicks: 3},
+		{Pointer: "main", X: 1, Y: 2, Phase: "move", Button: "left", Activate: true, Clicks: 1},
+		{Pointer: "main", X: 3, Y: 4, Phase: "up", Button: "right", Clicks: 1},
+		{Pointer: "main", X: 1.5, Y: 2, Phase: "drag", Button: "left", Clicks: 1},
+		{Pointer: "main", X: 0, Y: 0, Phase: "scroll", Button: "right", DeltaY: -3, Clicks: 1},
+		{Pointer: "main", X: 5, Y: 6, Phase: "down", Button: "left", Clicks: 2},
+		{Pointer: "main", X: 5, Y: 6, Phase: "up", Button: "left", Clicks: 3},
+		{Pointer: "second-1", X: 7, Y: 8, Phase: "down", Button: "left", Clicks: 1},
+		{Pointer: strings.Repeat("p", 32), X: 7, Y: 8, Phase: "drag", Button: "left", Clicks: 1},
 	}
 	if len(backend.pointers) != len(want) {
 		t.Fatalf("pointer input %+v, want %+v", backend.pointers, want)
@@ -572,6 +581,15 @@ func TestButtonHeldMessage(t *testing.T) {
 		if got := host.ButtonHeldMessage(c.held); got != c.want {
 			t.Errorf("ButtonHeldMessage(%+v) = %q, want %q", c.held, got, c.want)
 		}
+	}
+}
+
+// contract: endpoint.input.pointer-held-message
+func TestPointerHeldMessage(t *testing.T) {
+	held := platform.ButtonHeld{Pointer: "second", Reason: "the page at the point holds its press"}
+	want := "pointer second holds a press that this input would share: the page at the point holds its press"
+	if got := host.PointerHeldMessage(held); got != want {
+		t.Errorf("PointerHeldMessage(%+v) = %q, want %q", held, got, want)
 	}
 }
 
