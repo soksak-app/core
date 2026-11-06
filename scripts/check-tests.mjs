@@ -1217,6 +1217,22 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F584-4",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "sp_document_draw_covered" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "sp_webview_render_occluded" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "documentDrawCoveredPlatform" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "draw_documents_covered" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region shows its document when the state is set while the window is covered" },
+      { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the other window still hides its document" },
+      { file: "e2e/capture-covered.test.mjs", id: "a still of a covered window holds the document of its browser tab and its changes" },
+    ],
+    expected: "While a window draws covered, a still of the covered window holds the document of its browser tab as before the cover and the changes made while covered; the regions of other windows keep hiding their documents.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F609",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "deliverKeptKeys" },
@@ -2380,7 +2396,7 @@ const FEATURE_LINKS = [
   {
     id: "F500",
     implementation: [
-      { file: "native/darwin/src/webview_geometry.m", symbol: "view._windowOcclusionDetectionEnabled = NO;" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "view._windowOcclusionDetectionEnabled = !render;" },
     ],
     tests: [
       { file: "native/darwin/tests/window_occlusion_test.m", id: "the covered surface document stays visible" },
