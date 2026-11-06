@@ -142,8 +142,8 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::place_webview(view, x, y, w, h)
     }
-    fn render_occluded(&self, view: &PlatformWebview) -> Result<(), String> {
-        unsupported::render_occluded(view)
+    fn render_occluded(&self, view: &PlatformWebview, render: bool) -> Result<(), String> {
+        unsupported::render_occluded(view, render)
     }
     fn create_surface(&self, window: Handle) -> Result<Handle, String> {
         unsupported::create_surface(window)
@@ -320,6 +320,10 @@ impl Platform for Windows {
         visible: bool,
     ) -> Result<(), String> {
         unsupported::place_document(document, insets, visible)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn draw_documents_covered(&self, _window: Handle, _draw: bool) -> Result<(), String> {
+        Err("not implemented on Windows".into())
     }
     #[cfg(feature = "diagnostics")]
     fn document_viewport_marker(

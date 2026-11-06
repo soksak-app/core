@@ -476,10 +476,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
-    /// Keeps the document of a webview shown and its rendering running while its window is occluded, for a modal webview,
-    /// which is raised only after it renders and which a still capture of a covered window shows. Call it on the main
-    /// thread.
-    fn render_occluded(&self, view: &PlatformWebview) -> Result<(), String>;
+    /// With render, keeps the document of a webview shown and its rendering running while its window is occluded, as a modal
+    /// webview needs, which is raised only after it renders and which a still capture of a covered window shows; without,
+    /// gives the webview back the occlusion detection of WebKit. Call it on the main thread.
+    fn render_occluded(&self, view: &PlatformWebview, render: bool) -> Result<(), String>;
     /// Creates a logical SurfaceHost in the window composition of the window. This call does not create a DOM webview.
     fn create_surface(&self, window: Handle) -> Result<Handle, String>;
     fn close_surface(&self, surface: Handle) -> Result<(), String>;
@@ -622,6 +622,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Sets the document region with the CSS pixel insets of the surface viewport. Call it on the main thread.
     fn place_document(&self, document: Handle, insets: Insets, visible: bool)
     -> Result<(), String>;
+    /// Makes the document regions of the window show their documents and render while the window is occluded, or ends that
+    /// (docs/spec/native-surfaces.md#document-regions). Call it on the main thread.
+    #[cfg(feature = "diagnostics")]
+    fn draw_documents_covered(&self, window: Handle, draw: bool) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Sets the diagnostic marker on an attached native document view. `None` is allowed only for an idempotent stop.
     /// Returns the marker style reported by the native view. Call it on the main thread.

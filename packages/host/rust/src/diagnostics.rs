@@ -225,9 +225,18 @@ pub(crate) fn call(
     }
 }
 
-/// Makes the image regions of the window draw while the window is covered, or ends that, and sends the drawing state that
-/// changed. The window keeps reporting its occlusion (docs/spec/native-surfaces.md#image-regions).
+/// Makes the image regions and the documents of the document regions of the window draw while the window is covered, or ends
+/// that, and sends the drawing state that changed. The window keeps reporting its occlusion
+/// (docs/spec/native-surfaces.md#image-regions, docs/spec/native-surfaces.md#document-regions).
 fn draw_covered(window: &Window, draw: bool) -> Result<Value, Failure> {
+    let platform = platform::current().map_err(internal)?;
+    crate::windows::with_native_owner(window, move |handle| {
+        platform.draw_documents_covered(handle, draw)
+    })
+    .map_err(exposure::native_failure(
+        window.label(),
+        crate::endpoint::HANDLER_FAILED,
+    ))?;
     crate::windows::with_open_window(&crate::windows::window_data(window), |data| {
         data.images.set_draw_covered(draw);
         crate::composition::send_image_drawing_of(window, data)

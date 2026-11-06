@@ -232,8 +232,15 @@ func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.Raw
 	return nil, nil
 }
 
-// diagnosticWindowDrawCovered makes the image regions of the window draw while the window is covered, or ends that, and sends
-// the drawing state that changed. The window keeps reporting its occlusion (docs/spec/native-surfaces.md#image-regions).
+// documentDrawCoveredPlatform is implemented only by platforms that make the document regions of a window draw while it is
+// covered.
+type documentDrawCoveredPlatform interface {
+	DrawDocumentsCovered(window unsafe.Pointer, draw bool) error
+}
+
+// diagnosticWindowDrawCovered makes the image regions and the documents of the document regions of the window draw while the
+// window is covered, or ends that, and sends the drawing state that changed. The window keeps reporting its occlusion
+// (docs/spec/native-surfaces.md#image-regions, docs/spec/native-surfaces.md#document-regions).
 func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -247,6 +254,13 @@ func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMe
 	}
 	if p.Draw == nil {
 		return nil, rpcError(codeInvalidParams, "draw is required")
+	}
+	documents, ok := system.(documentDrawCoveredPlatform)
+	if !ok {
+		return nil, errors.New("the covered drawing of document regions is unavailable on this platform")
+	}
+	if err := s.useWindow(func(window unsafe.Pointer) error { return documents.DrawDocumentsCovered(window, *p.Draw) }); err != nil {
+		return nil, nativeError(codeHandler, err)
 	}
 	s.images.SetDrawCovered(*p.Draw)
 	if err := s.sendImageDrawing(); err != nil {

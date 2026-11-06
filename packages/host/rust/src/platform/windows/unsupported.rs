@@ -97,7 +97,7 @@ pub fn place_webview(
     missing("webview placement")
 }
 
-pub fn render_occluded(_view: &PlatformWebview) -> Result<(), String> {
+pub fn render_occluded(_view: &PlatformWebview, _render: bool) -> Result<(), String> {
     missing("webview rendering while occluded")
 }
 
