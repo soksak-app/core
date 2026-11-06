@@ -482,8 +482,12 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	return s, nil
 }
 
-// shortcutConditions holds the condition of each workbench row of the shortcut table, by the text of its when. A place that the shell
-// does not draw yet never holds.
+// shortcutConditions holds the condition of each workbench row of the shortcut table, by the text of its when. A row whose place
+// takes its key with its own handler never holds, as the field and the layer of the page take theirs: the rename field takes Enter
+// with its submit and Escape with its input handler (drawRenameField), and the popover of the picker layer takes Escape and closes
+// the layer (drawPicker). The focused element and an overlay receive a key ahead of the shortcuts of the window, so a binding of
+// those rows would be a second handler of the key. This shell shows no native modal menu, because the picker is the modal of the
+// window, and it always runs with the chrome of a host.
 func (s *Shell) shortcutConditions() map[string]func() bool {
 	never := func() bool { return false }
 	library := func() bool { return s.browsing || s.opened() == nil }
