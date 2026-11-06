@@ -359,6 +359,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F682",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "export function declaredLanguageCaseTests(" },
+      { file: "scripts/check-tests.mjs", symbol: "export function auditLanguageCaseCounts(" },
+      { file: "scripts/language-test-cases.json", symbol: "\"id\": \"go-sok-registry\"" },
+    ],
+    tests: [
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "the expected tests of each committed language case are the tests that its test files declare" },
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "a node:test file declares its top-level test() calls, and a nested or looped test leaves the count open" },
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "a Rust test file declares its #[test] functions without #[ignore], and a filter or a macro leaves the count open" },
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "a Go test file declares the test functions that the -run pattern selects, and a subtest leaves the count open" },
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "an Objective-C or shell test declares a PASS line for each call of its writer and each line that writes one, and a loop leaves the count open" },
+    ],
+    expected: "make check-tests fails a language case whose expectedTests differs from the tests that its test files declare, or whose test files do not fix the count, and the Rust and Go registry cases expect their seven tests.",
+    levels: ["unit"],
+  },
+  {
     id: "F681",
     implementation: [
       { file: "Makefile", symbol: "CARGO_HOME ?= $(HOME)/.cargo" },
@@ -13454,6 +13471,87 @@ export function auditExecutableLanguageCoverage(files, adapterLanguages) {
   return errors;
 }
 
+// The options of `cargo test` that take a value; any other word after `test` that is not an option filters the tests by name.
+const CARGO_TEST_VALUE_OPTIONS = new Set(["-p", "--package", "--test", "--features", "-F", "--manifest-path", "--target", "--profile"]);
+
+/** The body of each top-level block `^<head>... {` up to its closing `^}` line, with the line of its head. */
+function topLevelBlocks(text, head) {
+  return [...text.matchAll(new RegExp(`^${head}[^\\n]*\\{\\n([\\s\\S]*?)^\\}`, "gm"))];
+}
+
+/**
+ * The number of tests that a language case runs, counted from the declarations of its test files in the way that the adapter of
+ * its language counts results (scripts/language-test-adapters.mjs): a passed or failed top-level `test()` of node:test, a
+ * `#[test]` function without `#[ignore]`, a Go test function that the `-run` pattern selects, and a `PASS:` line of an
+ * Objective-C or shell test, written once by each call of the function that writes it or by each line that writes it. Returns
+ * `{ tests }`, or `{ reason }` when the declarations do not fix the count, such as a test declared in a loop or a subtest.
+ */
+export function declaredLanguageCaseTests({ language, args = [], testFiles = [] }, readText) {
+  if (testFiles.length === 0) return { reason: "the case names no test file" };
+  let tests = 0;
+  for (const file of testFiles) {
+    const text = readText(file);
+    const line = (index) => text.slice(0, index).split("\n").length;
+    if (language === "js-ts") {
+      const code = text.replace(/(^|[ \t])\/\/[^\n]*/gm, "$1");
+      for (const call of code.matchAll(/(?<![\w$])(?:[\w$]+\.)?(test|it|describe|suite)\s*\(/gm)) {
+        const column = call.index - code.lastIndexOf("\n", call.index - 1) - 1;
+        if (column !== 0 || call[1] !== "test" || call[0].includes(".")) {
+          return { reason: `${file}:${code.slice(0, call.index).split("\n").length} declares a test that is not a top-level test() call, whose count node:test fixes only when it runs` };
+        }
+        tests += 1;
+      }
+    } else if (language === "rust") {
+      const words = args.slice(args.indexOf("test") + 1);
+      for (let index = 0; index < words.length; index += 1) {
+        if (words[index] === "--") return { reason: "the arguments after -- of the case select the tests of the test executable" };
+        if (CARGO_TEST_VALUE_OPTIONS.has(words[index])) index += 1;
+        else if (!words[index].startsWith("-")) return { reason: `the case filters its tests by the name ${words[index]}` };
+      }
+      if (/\bmacro_rules!/.test(text)) return { reason: `${file} defines a macro, which can declare tests that its text does not show` };
+      for (const attributes of text.matchAll(/^[ \t]*#\[test\][\s\S]*?\bfn\b/gm)) {
+        if (!/#\[ignore\b/.test(attributes[0])) tests += 1;
+      }
+    } else if (language === "go") {
+      const run = args.indexOf("-run") === -1 ? null : args[args.indexOf("-run") + 1];
+      if (run?.includes("/")) return { reason: `the -run pattern ${run} selects subtests` };
+      const selected = run ? new RegExp(run) : /^/;
+      for (const block of topLevelBlocks(text, "func (Test[\\w]*)\\(\\w+ \\*testing\\.T\\)")) {
+        if (!selected.test(block[1])) continue;
+        if (/\bt\.Run\(/.test(block[2])) return { reason: `${file}:${line(block.index)} ${block[1]} runs subtests, which go test -json reports as tests` };
+        tests += 1;
+      }
+    } else if (language === "objective-c" || language === "shell") {
+      const writers = topLevelBlocks(text, language === "shell" ? "([\\w]+)\\(\\)\\s*" : "static\\s+\\w+\\s+(\\w+)\\s*\\([^)]*\\)\\s*")
+        .filter((block) => /PASS:/.test(block[2]));
+      let outside = text;
+      for (const block of writers) outside = outside.replace(block[0], "");
+      const literals = outside.replace(/"(?:[^"\\\n]|\\.)*"|'[^'\n]*'/g, "\"\"");
+      const code = language === "shell" ? literals.replace(/(^|[ \t;])#[^\n]*/gm, "$1") : literals.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
+      if ((language === "shell" ? /(^|[;&|])[ \t]*(for|while|until)[ \t]/m : /\b(for|while)\s*\(/).test(code)) {
+        return { reason: `${file} writes its results in a loop, which runs a number of tests that its text does not show` };
+      }
+      tests += (outside.match(/PASS:/g) ?? []).length;
+      for (const block of writers) tests += (outside.match(new RegExp(`\\b${block[1]}\\s*\\(`, "g")) ?? []).length;
+    } else return { reason: `the adapter of the language ${language} counts no declared test` };
+  }
+  return { tests };
+}
+
+/** Each language case whose expectedTests differs from the tests that its test files declare, or whose count they do not fix. */
+export function auditLanguageCaseCounts(cases, readText) {
+  const errors = [];
+  for (const caseSpec of cases) {
+    if (caseSpec.expectedTests === undefined) continue;
+    const declared = declaredLanguageCaseTests(caseSpec, readText);
+    if (declared.reason) errors.push(`language case ${caseSpec.id}: its test files do not fix its number of tests: ${declared.reason}`);
+    else if (declared.tests !== caseSpec.expectedTests) {
+      errors.push(`language case ${caseSpec.id}: expectedTests is ${caseSpec.expectedTests}, and its test files declare ${declared.tests} tests`);
+    }
+  }
+  return errors;
+}
+
 function repositoryFiles() {
   return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
     cwd: ROOT,
@@ -13940,7 +14038,10 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   try {
     const adapterManifest = JSON.parse(readFileSync(adapterManifestFile, "utf8"));
     if (!Array.isArray(adapterManifest.cases)) errors.push(`${adapterManifestFile}: cases must be an array`);
-    else errors.push(...auditExecutableLanguageCoverage(repositoryFiles(), adapterManifest.cases.map(({ language }) => language)));
+    else {
+      errors.push(...auditExecutableLanguageCoverage(repositoryFiles(), adapterManifest.cases.map(({ language }) => language)));
+      errors.push(...auditLanguageCaseCounts(adapterManifest.cases, (file) => readFileSync(`${ROOT}${file}`, "utf8")));
+    }
   } catch (error) {
     errors.push(`${adapterManifestFile}: cannot read language adapter cases: ${error.message}`);
   }

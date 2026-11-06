@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F682: `make check-tests`는 `expectedTests`가 test file이 선언한 테스트 수와 다른 language case를 실패시키고, Go와 Rust registry case는 F651이 6개로 남긴 일곱 테스트를 기대한다.
 - F677: `make check-docs`는 text file의 모든 절 참조 `docs/<path>.md#<anchor>`에 그 문서와 anchor를 요구하고, 저장소의 그런 참조는 모두 있는 절을 가리킨다. 닫는 run이 없는 backtick이 그 뒤의 link를 더는 숨기지 않는다.
 - F680: cargo를 시작하는 script와 check는 Makefile의 순서대로 `@soksak/window-check`의 `cargoCommand`로 cargo를 찾고 Makefile은 `CARGO`를 export하므로, `PATH`에 cargo folder가 없는 shell에서도 실행된다.
 - F681: Makefile은 make의 `PATH` 앞에 `$(CARGO_HOME)/bin`(환경이 `CARGO_HOME`을 정하지 않으면 `~/.cargo/bin`)을 두므로 hosted runner에서 rustup이 설치한 cargo를 찾는다.
