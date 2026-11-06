@@ -4,13 +4,15 @@
 
 ## 미배포
 
-- F510: Core Node 전체 검증에서 file 465개가 모두 통과한다. 설치 단계 수정 뒤 소유 case 23개도 통과한다. 현재 계약에 통합한 Editor는 case 215개가 모두 통과한다. Native 소유 suite, benchmark acceptance와 activation acceptance는 각각의 checklist 상태를 유지한다.
+- F509: 고정한 로컬 candidate와 설치 component 집합을 사용한 두 host의 focused case 12개가 독립 초기 상태 두 번에서 모두 통과한다. 전체 audit와 cleanup을 완료하고 준비 후 동결한 입력의 raw identity가 실행 후에도 동일함을 확인했다. 최초 fixture·selection 실패는 보존하고 수정했다. 이전 F506 guard-mutation 근거, 실제 Editor baseline, 별도 native close fixture와 Editor E58 파일 write-race 검증은 각각의 범위를 유지하며 최신 Editor source의 native 승인을 주장하지 않는다.
+
+- F510: Core Node file 465개, 이후 설치 단계 소유 case 23개와 통합한 최신 Editor case 215개가 모두 통과한다. 격리 checkout의 native 전체 검증은 format·clippy, native 항목 96개, host·CLI 실행 4201개 및 적용 대상 contract 전체(합집합 1009개)를 통과한다. 검사한 bundle·registry·release payload는 바뀌지 않았다. F511과 F512의 일반 application·benchmark·activation acceptance는 미완료로 남는다.
 
 - F509-4: Plugin 설치는 host마다 registry를 다시 build하지 않고 이미 build한 workspace registry를 소비한다. 실행 파일이나 index가 없으면 CLI 변경 호출 전에 필요한 build 명령을 안내하고 실패한다. 실제 Makefile dry run은 먼저 암묵적 rebuild를 거절했으며 기존 파일 보존과 command fixture 설치를 포함한 runner 소유 case 23개가 macOS에서 모두 통과한다. 일반 application target의 명시적 registry build는 유지한다. 실제 설치 payload identity와 native acceptance는 별도다.
 
-- F509-3: 선언한 Node script가 유지보수되는 parser를 통해 quoted 및 escaped argument, 분리한 pattern value와 literal command separator를 보존한다. 준비 command는 argument 경계를 유지하며 미지원 문법이나 하나라도 해석되지 않은 path는 실행 전에 실패한다. 추적 Red case 일곱 개에는 제외한 test를 실행한 실제 child가 포함되며 이제 argument 형태 네 가지 모두 선택한 case만 실행한다. macOS에서 discovery case 38개와 runner case 28개가 모두 통과한다. 양쪽 contract와 requirement mapping은 이 harness 수정과 아직 남은 두 초기 상태의 native acceptance를 구분한다.
+- F509-3: 선언한 Node script가 유지보수되는 parser를 통해 quoted 및 escaped argument, 분리한 pattern value와 literal command separator를 보존한다. 준비 command는 argument 경계를 유지하며 미지원 문법이나 하나라도 해석되지 않은 path는 실행 전에 실패한다. 추적 Red case 일곱 개에는 제외한 test를 실행한 실제 child가 포함되며 이제 argument 형태 네 가지 모두 선택한 case만 실행한다. macOS에서 discovery case 38개와 runner case 28개가 모두 통과한다. 양쪽 contract와 requirement mapping은 이 harness 수정과 F509에 기록한 두 초기 상태의 native acceptance를 구분한다.
 
-- F509-2: Close fixture는 선언된 exposure schema 부분집합을 사용하며 소유 test가 모든 실제 fixture manifest를 공개 production validator로 검사한다. 최초 native 설치 실패를 보존했고 같은 미지원 필드 선언이 수정 전 추적 소유 assertion에서 실패하며 수정 후 소유 case 두 개와 문서·exposure 검사가 통과한다. Validator는 변경하지 않았다. Focused native acceptance는 F509에 미완료로 남아 있다.
+- F509-2: Close fixture는 선언된 exposure schema 부분집합을 사용하며 소유 test가 모든 실제 fixture manifest를 공개 production validator로 검사한다. 최초 native 설치 실패를 보존했고 같은 미지원 필드 선언이 수정 전 추적 소유 assertion에서 실패하며 수정 후 소유 case 두 개와 문서·exposure 검사가 통과한다. Validator는 변경하지 않았다. Focused native acceptance는 F509에 기록한다.
 
 - F507: 정본 feature-link inventory가 선언한 요구사항 시나리오와 플랫폼 적용 상태를 검사하고 누락되거나 잘못된 소유 test 참조를 거부하며 연결을 미실행으로 보고한다. 추적한 Red case 5개로 승인 공백을 확인했고 소유 case 45개와 문서·inventory gate가 모두 통과한다. 제품 동작과 플랫폼 acceptance는 별도로 판정한다.
 - F508: Layout role 검사는 고정 순열 120개를 유지하고 topology, card 수, dimension과 layout option을 다루는 결정적 case 21개를 추가한다. 각 case는 생성한 trace 전에 거부와 회복을 관측하며 report는 method별 결과와 전체 실패 입력을 보존한다. 격리한 ID·array-order·size mutant는 기존 R2 case를 통과하지만 확장한 소유 assertion에서 실패한다. macOS에서 집중 case 63개가 모두 통과한다. Baseline 전이 714개는 성공 489개와 거부 225개이며, 다양한 입력군은 별도 merge 성공 case를 대체하거나 모든 layout의 전수 검증을 주장하지 않는다.
