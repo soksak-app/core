@@ -1,17 +1,17 @@
-// Activation-tier probes of native-menu, modal, and IME key routing from a focused plugin view.
+// Probes of native-menu and modal key routing from a focused plugin view. The window takes the presses and the keys as the
+// virtual key window, and a key equivalent reaches the menu through the same path as in the key window of the active
+// application, so the application and the input source of the person stay as they are
+// (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
 import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
-import { fresh, reading } from "../fixture.mjs";
-import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
-import { compareAppKitReference } from "./ime-reference-steps.mjs";
+import { fresh, reading } from "./fixture.mjs";
+import { ensureTerminals } from "./terminal-screen.mjs";
 
-const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";
 const PICKER_CLOSE = "workbench.trace.picker.close";
@@ -51,14 +51,15 @@ function assertNoViewKeydown(events, after, label) {
 async function focusedTerminal(s) {
   const [terminal] = await ensureTerminals(s, 1);
   const surface = terminal.surface;
-  await s.keepPointerOutside();
   const view = await s.rect("terminal.view", undefined, surface);
   const point = { x: view.document.x + view.x + view.width / 2,
     y: view.document.y + view.y + view.height / 2 };
-  await s.pointer(point.x, point.y, "move", { activate: true });
+  // A pointer move that presses nothing makes the window the virtual key window.
+  await s.pointer(point.x, point.y, "move");
+  await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
   await s.click(point.x, point.y);
-  await s.until("host.window", (window) => window.active && window.key && window.responder?.surface === surface,
-    "the terminal view did not become the active first-responder owner");
+  await s.until("host.window", (window) => window.virtualKey && window.responder?.surface === surface,
+    "the terminal view did not become the first-responder owner of the virtual key window");
   return { terminal, surface };
 }
 
@@ -72,11 +73,11 @@ async function focusedBrowser(s) {
   await s.run("browser.navigate", { url }, browser.surface);
   await s.until("browser.location", (location) => location.url === url && !location.loading && location.error === null,
     "the local address fixture did not load", { surface: browser.surface });
-  await s.keepPointerOutside();
   const field = await s.rect("browser.address", undefined, browser.surface);
-  await s.pointer(field.x + field.width / 2, field.y + field.height / 2, "move", { activate: true });
-  await s.until("host.window", (window) => window.active && window.key,
-    "the browser window did not become the active key window");
+  // A pointer move that presses nothing makes the window the virtual key window.
+  await s.pointer(field.x + field.width / 2, field.y + field.height / 2, "move");
+  await s.until("host.window", (window) => window.virtualKey,
+    "the browser window did not become the virtual key window");
   await s.click(field.x + field.width / 2, field.y + field.height / 2);
   await s.until("host.window", (window) => window.responder?.surface === browser.surface,
     "the browser view did not become the first-responder owner");
@@ -272,6 +273,10 @@ for (const app of Object.values(APPS)) {
         `the ${page} library screen did not open`);
       await s.until("core.library", (state) => state.page === page,
         `the library did not select its ${page} page`);
+      // A pointer move that presses nothing makes the window the virtual key window.
+      const content = (await s.get("host.window")).content;
+      await s.pointer(content.width / 2, content.height / 2, "move");
+      await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
       await s.run("core.focus.set", { name: "core.library.window" });
       await s.until("core.focus", (focus) => focus?.name === "core.library.window" && focus.surface === null,
         `the ${page} library's new-window control did not hold main-document focus`);
@@ -294,8 +299,7 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("core.screen")).screen, "workspace",
       "the focused browser key case requires the library to be hidden");
     const focusedWindow = await s.get("host.window");
-    assert.equal(focusedWindow.active, true, "the focused browser window is not active");
-    assert.equal(focusedWindow.key, true, "the focused browser window is not the key window");
+    assert.equal(focusedWindow.virtualKey, true, "the focused browser window is not the virtual key window");
     assert.equal(focusedWindow.responder?.surface, surface,
       `the browser view does not own the key responder: ${JSON.stringify(focusedWindow.responder)}`);
     const offsets = currentEventOffsets(s.app.configDir);
@@ -345,42 +349,5 @@ for (const app of Object.values(APPS)) {
         await (child ? s.on(child.window) : s).key("n", "up", { modifiers: ["shift", "command"] });
       }
     }
-  });
-
-  test(`${app.name}: IME Escape ends view composition as it does in AppKit`, { timeout: 90000 }, async (t) => {
-    const s = await openProbe(t, app);
-    const { surface } = await focusedTerminal(s);
-    await s.selectInputSource(KOREAN_2SET);
-    await compareAppKitReference(s, ["g", "k", "s", "Escape"], "한", ["ㅎ", "하", "한", "한"]);
-    await focusedTerminal(s);
-    const recording = await s.record();
-    // The recording starts before the first key and remains active through the committed screen after Escape.
-    for (const [key, expected] of [["g", "ㅎ"], ["k", "하"], ["s", "한"]]) {
-      await s.press(key);
-      await s.until("terminal.compose", (compose) => compose.text === expected,
-        `the Korean input method did not produce ${expected}`, { surface });
-    }
-    const offsets = currentEventOffsets(s.app.configDir);
-    await s.press("Escape");
-    await s.until("terminal.compose", (compose) => compose.text === "",
-      "Escape did not end the active composition", { surface });
-    const linesAfter = await readScreenUntil(s, surface,
-      (lines) => lines.some((line) => line.trimEnd().endsWith("한")),
-      "Escape did not commit the AppKit reference text into the terminal document");
-    assert.ok(linesAfter.some((line) => line.trimEnd().endsWith("한")),
-      `the terminal document does not end in the committed AppKit text: ${JSON.stringify(linesAfter)}`);
-    const gestureEnd = await s.presented();
-    const stopped = await recording.stop({ after: gestureEnd.displayed + 100 });
-    const captured = frames(recording.frames).map(readFrame);
-    assert.equal(captured.length, stopped.count, "the IME Escape recording has missing frame files");
-    assert.ok(captured.length > 1, "the IME Escape recording has no complete frames");
-    assert.equal(stopped.limited, false, "the IME Escape recording exceeded its bounded capacity");
-    const events = await traceEvents(s, offsets);
-    assert.equal(traceCommands(events, "core.picker.close").length, 0,
-      "composition Escape must not forward core.picker.close");
-    assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed").length, 0,
-      "composition Escape must not forward a workbench shortcut command");
-    assert.deepEqual((await s.get("core.workbench.audit")).unbound, []);
-    t.diagnostic(`${app.name}: captured complete g/k/s/Escape gesture in ${captured.length} frames`);
   });
 }

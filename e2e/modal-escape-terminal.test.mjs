@@ -1,12 +1,29 @@
-// Checks that the keyboard returns to the terminal after native Escape closes the add picker of the active key window, and
-// that a key pressed as the picker opens does not reach the terminal. The terminal types its characters through the input
-// method, which answers only the key window of the active application, so this check runs in the activation tier;
-// e2e/modal-escape.test.mjs checks the Escape of the picker on the virtual key window.
+// Checks that the keyboard returns to the terminal after native Escape closes the add picker of the key window, and that a key
+// pressed as the picker opens does not reach the terminal. The window takes the press and the keys as the virtual key window and
+// each character key states its text, so the application and the input source of the person stay as they are
+// (docs/spec/exposure.md#virtual-key-window); e2e/modal-escape.test.mjs checks the Escape of the picker itself.
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
-import { echoed, ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
+import { fresh } from "./fixture.mjs";
+import { echoed, ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
+
+// Presses each character of text with that text stated, and a space as Space.
+async function type(s, text) {
+  for (const ch of text) await s.press(ch === " " ? "Space" : ch, { text: ch });
+}
+
+// Makes the window the virtual key window over the terminal, presses the terminal and waits until it holds the keyboard.
+async function focusTerminal(s, surface) {
+  const view = await s.rect("terminal.view", undefined, surface);
+  const x = view.document.x + view.x + view.width / 2, y = view.document.y + view.y + view.height / 2;
+  // A pointer move that presses nothing makes the window the virtual key window.
+  await s.pointer(x, y, "move");
+  await s.until("host.window", (state) => state.virtualKey, "the window did not become the virtual key window");
+  await s.click(x, y);
+  await s.until("host.window", (state) => state.virtualKey && state.regions.some((region) =>
+    region.surface === surface && region.focused), "the terminal did not take the keyboard");
+}
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the keyboard returns to the terminal after native Escape closes the add picker`, async (t) => {
@@ -14,13 +31,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const [{ surface }] = await ensureTerminals(s, 1);
     await s.presented();
-    const view = await s.rect("terminal.view", undefined, surface);
-    const x = view.document.x + view.x + view.width / 2, y = view.document.y + view.y + view.height / 2;
-    await s.pointer(x, y, "move", { activate: true });
-    await s.selectInputSource("com.apple.keylayout.ABC");
-    await s.click(x, y);
-    await s.until("host.window", (state) => state.active && state.key && state.regions.some((region) =>
-      region.surface === surface && region.focused), "the terminal did not take the keyboard");
+    await focusTerminal(s, surface);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface)).id;
     await s.run("core.card.menu", { card, menu: "add" });
     await s.until("core.picker", (picker) => picker.open, "the add picker did not open");
@@ -33,7 +44,7 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (state) => state.regions.some((region) => region.surface === surface && region.focused),
       "the keyboard did not return to the terminal");
     t.diagnostic(`picker closed: ${JSON.stringify((await s.get("host.window")).responder)}`);
-    for (const ch of "echo modalback") await s.press(ch === " " ? "Space" : ch);
+    await type(s, "echo modalback");
     await s.press("Enter");
     await readScreenUntil(s, surface, (lines) => echoed(lines, "modalback"), "the keys after the Escape did not reach the terminal");
   });
@@ -42,22 +53,16 @@ for (const app of Object.values(APPS)) {
 // A person can press a key as soon as the add picker opens, before its page has drawn. The key reaches the picker or nothing,
 // and the terminal behind it reads only what follows the close.
 for (const app of Object.values(APPS)) {
-  for (const [name, key] of [["Escape", "Escape"], ["a character", "q"]]) {
+  for (const [name, key, options] of [["Escape", "Escape", {}], ["a character", "q", { text: "q" }]]) {
     test(`${app.name}: ${name} pressed as the add picker opens does not reach the terminal`, async (t) => {
       const s = await open(t, app);
       await fresh(s);
       const [{ surface }] = await ensureTerminals(s, 1);
       await s.presented();
-      const view = await s.rect("terminal.view", undefined, surface);
-      const x = view.document.x + view.x + view.width / 2, y = view.document.y + view.y + view.height / 2;
-      await s.pointer(x, y, "move", { activate: true });
-      await s.selectInputSource("com.apple.keylayout.ABC");
-      await s.click(x, y);
-      await s.until("host.window", (state) => state.active && state.key && state.regions.some((region) =>
-        region.surface === surface && region.focused), "the terminal did not take the keyboard");
+      await focusTerminal(s, surface);
       const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface)).id;
       await s.run("core.card.menu", { card, menu: "add" });
-      await s.press(key);
+      await s.press(key, options);
       t.diagnostic(`after the key: ${JSON.stringify((await s.get("host.window")).responder)}`);
       if ((await s.get("core.picker")).open) {
         await s.until("host.window", (state) => state.responder?.surface !== surface,
@@ -67,7 +72,7 @@ for (const app of Object.values(APPS)) {
       }
       await s.until("host.window", (state) => state.regions.some((region) => region.surface === surface && region.focused),
         "the keyboard did not return to the terminal");
-      for (const ch of "echo modalleak") await s.press(ch === " " ? "Space" : ch);
+      await type(s, "echo modalleak");
       await s.press("Enter");
       await readScreenUntil(s, surface, (lines) => echoed(lines, "modalleak"), "the key pressed as the picker opened reached the terminal");
     });

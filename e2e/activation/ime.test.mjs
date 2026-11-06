@@ -1,9 +1,7 @@
-// Activation-tier window check: types Hangul into the terminal through the real macOS input method.
-//
-// The OS input method serves only the key window of the active application, so this check activates the app and takes the user's focus,
-// and switches the input source through diagnostics.input.source of the diagnostic build. At the end it restores the previous input source.
-// It is not part of the default window check (make test-app); a run that the user approved runs it
-// only through make test-app-activation.
+// Types Hangul into the terminal through the real macOS Korean input method and checks its preedit, its commits and the cursor.
+// The subject is the composition of the OS input method, which serves only the key window of the active application and composes
+// nothing for the virtual key window (docs/spec/exposure.md#virtual-key-window), so this check activates the application and
+// switches the input source through diagnostics.input.source of the diagnostic build, restoring the previous source at the end.
 import assert from "node:assert/strict";
 import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";

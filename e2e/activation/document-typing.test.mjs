@@ -1,5 +1,7 @@
-// A document region takes typed text when its application is active and its window is the key window: the same press
-// and keys as the check of e2e/browser.test.mjs, which runs while the application is inactive.
+// A document region takes typed text when its application is active and its window is the key window: the same press and keys
+// as the check of e2e/browser.test.mjs, which runs while the application is inactive. A document region passes its character
+// keys to the input context of WebKit, which the OS input method serves only in the key window of the active application, so
+// the virtual key window types nothing into it and this check activates the application (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";

@@ -1,9 +1,11 @@
-// Activation-tier check of a native menu key equivalent from a focused plugin view.
+// Checks a native menu key equivalent from a focused plugin view. The window takes the press and the key as the virtual key
+// window, and the key equivalent reaches the menu through the same path as in the key window of the active application, so the
+// application and the input source of the person stay as they are (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { fresh } from "../fixture.mjs";
+import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: Command-zero in a focused view runs the native text-size menu command`, { timeout: 60000 }, async (t) => {
@@ -21,10 +23,10 @@ for (const app of Object.values(APPS)) {
     const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.id === browser.surface));
     assert.ok(card, "the browser has no owning card");
     const field = await s.rect("browser.address", undefined, browser.surface);
-    await s.keepPointerOutside();
     const recording = await s.record();
-    await s.pointer(field.x + field.width / 2, field.y + field.height / 2, "move", { activate: true });
-    await s.until("host.window", window => window.active && window.key, "the shortcut window did not become active and key");
+    // A pointer move that presses nothing makes the window the virtual key window.
+    await s.pointer(field.x + field.width / 2, field.y + field.height / 2, "move");
+    await s.until("host.window", window => window.virtualKey, "the shortcut window did not become the virtual key window");
     await s.click(field.x + field.width / 2, field.y + field.height / 2);
     await s.until("host.window", window => window.responder?.surface === browser.surface,
       "the native address press did not focus its view");
@@ -34,8 +36,7 @@ for (const app of Object.values(APPS)) {
     const resetItem = menu.menus.flatMap(item => item.items).find(item => item.key === "cmd+0");
     assert.ok(resetItem, `the active menu has no Command+0 item: ${JSON.stringify(menu)}`);
     const beforeShortcut = await s.get("host.window");
-    assert.equal(beforeShortcut.active, true, "the shortcut window is not active");
-    assert.equal(beforeShortcut.key, true, "the shortcut window is not key");
+    assert.equal(beforeShortcut.virtualKey, true, "the shortcut window is not the virtual key window");
     assert.equal(beforeShortcut.responder?.surface, browser.surface, "the browser view is not the first-responder owner");
     t.diagnostic(`before Command+0: window=${JSON.stringify(beforeShortcut)}`);
     t.diagnostic(`before Command+0: menu item=${JSON.stringify(resetItem)}`);
@@ -43,10 +44,8 @@ for (const app of Object.values(APPS)) {
       "the view did not select its owning text-size scope");
     await s.run("core.text.larger");
     await s.until("core.text", value => value.cards[card.id] > 1, "text-size preparation did not apply");
-    const beforeInputSource = (await s.get("browser.address.text", browser.surface)).value;
-    await s.selectInputSource("com.apple.keylayout.ABC");
     const original = (await s.get("browser.address.text", browser.surface)).value;
-    t.diagnostic(`address before input-source selection=${JSON.stringify(beforeInputSource)}; shortcut baseline after selection=${JSON.stringify(original)}`);
+    t.diagnostic(`shortcut baseline=${JSON.stringify(original)}`);
     await s.press("0", { modifiers: ["command"] });
     await s.until("core.text", value => value.cards[card.id] === 1,
       "the view key equivalent did not reset its owning card text size");
