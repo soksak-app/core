@@ -6788,7 +6788,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F204",
-    implementation: [{ file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 =>" }],
+    implementation: [{ file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" }],
     tests: [{ file: "packages/host/wailsv3/tests/framework_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" }],
     expected: "The Wails host builds against the fork under its renamed account.",
     levels: ["unit"],
@@ -8364,7 +8364,7 @@ const FEATURE_LINKS = [
   {
     id: "F70",
     implementation: [
-      { file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 =>" },
+      { file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" },
     ],
     tests: [
       { file: "packages/host/wailsv3/tests/framework_log_test.go", id: "TestTheTransportReturnsAFailedCallWithoutLoggingIt" },

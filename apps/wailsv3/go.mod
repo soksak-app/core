@@ -25,4 +25,4 @@ require (
 // transport-error records, rejects callbacks from retired windows while
 // preserving window event routing, and gives a window and its web view the
 // size that it was asked for.
-replace github.com/wailsapp/wails/v3 => ../../../wails-fork/v3
+replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-20261105142514-75cb0e38d6aa
