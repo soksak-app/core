@@ -129,9 +129,14 @@ export async function cellBackgrounds(session, surface, cells) {
   const frame = readFrame(files.at(-1));
   const view = await session.rect("terminal.view", undefined, surface);
   const { cellWidth, cellHeight } = await session.get("terminal.session", surface);
-  return cells.map(({ col, row }) => pixel(frame,
-    Math.round((view.document.x + view.x + (col + 0.1) * cellWidth) * frame.scale),
-    Math.round((view.document.y + view.y + (row + 0.08) * cellHeight) * frame.scale)));
+  return cells.map(({ col, row }) => {
+    const crop = cropViewPixels(frame, { x: view.document.x + view.x + col * cellWidth,
+      y: view.document.y + view.y + row * cellHeight, w: cellWidth, h: cellHeight });
+    // Sample inside the converted cell, including when it occupies only one capture pixel.
+    return pixel({ ...crop, stride: crop.width * 4 },
+      Math.min(crop.width - 1, Math.round(crop.width * 0.1)),
+      Math.min(crop.height - 1, Math.round(crop.height * 0.08)));
+  });
 }
 
 /** Background of a selected cell when there is no highlight color. It is --rail of the current theme (docs/spec/persistent-services.md). */

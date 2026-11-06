@@ -7,10 +7,10 @@ import test from "node:test";
 import { finishSession, Session } from "@soksak/window-check/app.mjs";
 import { cellBackgrounds, echoed, terminalBackgroundSample } from "../terminal-screen.mjs";
 
-function capturedFrame({ scale, contentScale, origin, point }) {
+function capturedFrame({ scale, contentScale, origin, point, marks = [{ point, color: [12, 34, 56] }] }) {
   const width = 64, height = 64, stride = width * 4 + 8;
   const data = Buffer.alloc(stride * height, 255);
-  data.set([56, 34, 12, 255], point[1] * stride + point[0] * 4);
+  for (const { point: [x, y], color: [red, green, blue] } of marks) data.set([blue, green, red, 255], y * stride + x * 4);
   // A literal-only LZ4 block keeps the fixture's declared capture pixels exact.
   const lengths = [0xf0];
   let remaining = data.length - 15;
@@ -24,7 +24,8 @@ function capturedFrame({ scale, contentScale, origin, point }) {
   return Buffer.concat([header, block]);
 }
 
-function captureSession(t, { bytes, presentationError, stopError, viewError } = {}) {
+function captureSession(t, { bytes, presentationError, stopError, viewError,
+  view = { document: { x: 0, y: 0 }, x: 4, y: 8 }, cellWidth = 8, cellHeight = 4 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "terminal-background-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const frameDir = join(directory, "logs", "captures", "sample");
@@ -49,11 +50,11 @@ function captureSession(t, { bytes, presentationError, stopError, viewError } = 
       if (method === "dom.rect") {
         assert.equal(params.name, "terminal.view");
         if (viewError) throw viewError;
-        return { document: { x: 0, y: 0 }, x: 4, y: 8 };
+        return view;
       }
       if (method === "status.get") {
         assert.equal(params.name, "terminal.session");
-        return { cellWidth: 8, cellHeight: 4 };
+        return { cellWidth, cellHeight };
       }
       assert.equal(method, "diagnostics.capture.stop");
       if (stopError) throw stopError;
@@ -186,6 +187,43 @@ test("terminal cell backgrounds retain their sample until successful session fin
   assert.deepEqual(stops(capture), [["diagnostics.capture.stop", { after: 42 }]]);
   assert.equal(existsSync(capture.frameDir), false);
   assert.equal(capture.closed, true);
+});
+
+for (const geometry of [
+  { name: "terminal cell backgrounds include display scale", scale: 2, contentScale: 1, origin: [0, 0], point: [10, 17] },
+  { name: "terminal cell backgrounds include capture content scale", scale: 1, contentScale: 2, origin: [0, 0], point: [10, 17] },
+  { name: "terminal cell backgrounds include capture content origin", scale: 1, contentScale: 1, origin: [16, 24], point: [21, 32] },
+  { name: "terminal cell backgrounds include combined capture scales and origin", scale: 2, contentScale: 1.5, origin: [3, 5], point: [20, 35] },
+  { name: "terminal cell backgrounds include document offsets before capture conversion", scale: 2, contentScale: 1.5, origin: [3, 5],
+    view: { document: { x: 3, y: 2 }, x: 4, y: 8 }, point: [29, 41] },
+  { name: "terminal cell backgrounds stay inside a one-pixel cell", scale: 1, contentScale: 1, origin: [0, 0],
+    cellWidth: 1, cellHeight: 1, point: [4, 8] },
+]) {
+  test(geometry.name, { timeout: 5000 }, async (t) => {
+    const capture = captureSession(t, { ...geometry, bytes: capturedFrame(geometry) });
+    assert.deepEqual(await cellBackgrounds(capture.session, "fixture-terminal", [{ col: 0, row: 0 }]), [[12, 34, 56]],
+      "the selected cell must read its marked capture pixel rather than the surrounding white pixels");
+    await capture.finish(true);
+    assert.equal(stops(capture).length, 1);
+  });
+}
+
+test("terminal cell backgrounds read each requested row and column in order", { timeout: 5000 }, async (t) => {
+  const capture = captureSession(t, { bytes: capturedFrame({ scale: 1, contentScale: 1, origin: [16, 24], marks: [
+    { point: [21, 32], color: [12, 34, 56] },
+    { point: [37, 36], color: [78, 90, 123] },
+  ] }) });
+  assert.deepEqual(await cellBackgrounds(capture.session, "fixture-terminal", [{ col: 2, row: 1 }, { col: 0, row: 0 }]),
+    [[78, 90, 123], [12, 34, 56]], "each request must sample its own cell in the supplied order");
+  await capture.finish(true);
+});
+
+test("terminal cell backgrounds reject a cell outside the capture and keep its evidence", { timeout: 5000 }, async (t) => {
+  const capture = captureSession(t, { bytes: capturedFrame({ scale: 1, contentScale: 1, origin: [0, 0], point: [5, 8] }) });
+  await assert.rejects(cellBackgrounds(capture.session, "fixture-terminal", [{ col: 8, row: 0 }]), /outside/);
+  await capture.finish(false);
+  assert.equal(existsSync(capture.frameDir), true);
+  assert.equal(stops(capture).length, 1);
 });
 
 test("terminal cell presentation failure stops during cleanup and retains its evidence", { timeout: 5000 }, async (t) => {

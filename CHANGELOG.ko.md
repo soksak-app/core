@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F500-2: Cell sampling은 공통 crop 변환을 사용하고 한 pixel cell 안으로 sample을 제한하며 capture 밖의 cell을 거부한다. Red는 잘못된 pixel 결과 다섯 개와 누락된 거부 한 개를 재현한다. recording 수명주기를 유지한 macOS의 terminal-screen 및 view-content case 34개가 모두 통과한다. Native application 승인은 실행하지 않았다.
+
 - F498-3: 실제처럼 분리한 output과 package-skip event는 정당한 support package를 허용하면서 이름 있는 skip과 빈 선택을 실패시킨다. 부정확한 합성 fixture를 제거한다. Red는 실행한 실패 test를 0개로 센 오류도 확인하며 이제 이름 있는 통과 및 실패 case를 모두 실행 수에 포함한다. macOS에서 adapter case 21개가 모두 통과한다.
 
 - F501-2: 살아 있는 process의 kernel executable 경로가 hash 전후에 일치해야 한다. 추적 Red로 무관한 file과 살아 있는 PID의 조합을 거부하고 executable 경로의 공백 보존을 검증한다. macOS에서 evidence case 16개가 모두 통과한다. 다른 platform은 identity 확인 불가를 명시하며, 이는 메모리에 mapping한 executable byte의 원자적 증명은 아니다.

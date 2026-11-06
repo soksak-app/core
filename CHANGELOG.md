@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F500-2: Cell sampling uses the shared crop transform, clamps samples within one-pixel cells and rejects cells outside the capture. Red reproduces five wrong-pixel results and one missing rejection. All 34 terminal-screen and view-content cases pass on macOS with the recording lifecycle retained. Native application acceptance was not run.
+
 - F498-3: Realistic separate output and package-skip events preserve legitimate support packages while named skips and empty selections fail. The inaccurate synthetic fixture is removed. Red also exposes an executed failing test counted as zero; passing and failing named cases now both count as executed. All 21 adapter cases pass on macOS.
 
 - F501-2: The kernel executable path must match before and after hashing a live process. Tracked Red rejects an unrelated file paired with a live PID and preserves whitespace in executable paths. All 16 evidence cases pass on macOS. Other platforms report unavailable identity explicitly; this is not an atomic proof of mapped executable bytes.
