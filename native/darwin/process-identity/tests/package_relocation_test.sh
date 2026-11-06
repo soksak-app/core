@@ -18,7 +18,9 @@ config_path="$package_dir/lib/pkgconfig"
 flags=$(PKG_CONFIG_PATH="$config_path" pkg-config --cflags --libs soksak-process-identity)
 printf '%s\n' "$flags" | grep -F -- "$package_dir/lib/pkgconfig/../../include" >/dev/null
 printf '%s\n' "$flags" | grep -F -- "$package_dir/lib/pkgconfig/../../lib" >/dev/null
-clang -Wall -Werror -O2 -mmacosx-version-min=14.4 \
+# The consumer compiles for the macOS minimum that the Cflags of the package declare.
+printf '%s\n' "$flags" | grep -E -- '-mmacosx-version-min=[0-9]+\.[0-9]+' >/dev/null
+clang -Wall -Werror -O2 \
   $(PKG_CONFIG_PATH="$config_path" pkg-config --cflags soksak-process-identity) \
   "$package_root/tests/package_consumer_test.m" \
   $(PKG_CONFIG_PATH="$config_path" pkg-config --libs soksak-process-identity) \

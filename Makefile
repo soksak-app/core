@@ -179,7 +179,7 @@ check-hosts-same:
 # JS/TS, Rust, Go, Objective-C, and shell test cases use the same observable case contract. The cases build with the declared
 # macOS minimum: go-env holds MACOSX_DEPLOYMENT_TARGET, which cargo also reads.
 test-language: check-cargo build-native
-	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
+	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) $(CURDIR)/native/darwin/build/appearance_test
 	@$(call go-env) node scripts/language-test-adapters.mjs scripts/language-test-cases.json
 
 # Runs each test of a Rust package alone in a new process. Finds tests that depend on state another test created or on test order.
@@ -383,11 +383,11 @@ sok-mygo = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)
 sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 build-native:
-	@$(MAKE) -C native/darwin
+	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM)
 
 # Fetches and checksum-validates the pinned native dependency without compiling it.
 fetch-native:
-	@$(MAKE) -C native/darwin fetch
+	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) fetch
 
 # The workspace registry. Packs the sibling plugin repositories that scripts/workspace-registry.json declares with their make pack,
 # builds every declared sidecar from its repository and releases them for the current platform, and then
@@ -530,7 +530,7 @@ test-native: build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2
 	@$(MAKE) check-rust-format
 	@$(MAKE) check-rust-clippy
 	@$(MAKE) check-go-format
-	@$(MAKE) -C native/darwin test
+	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) test
 	@$(MAKE) test-hosts
 
 # Checks that every Go file the repository tracks is in gofmt form. Reports every file of a different form and fails.

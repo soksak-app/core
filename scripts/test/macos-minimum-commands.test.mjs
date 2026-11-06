@@ -6,7 +6,8 @@
 // command needs MACOSX_DEPLOYMENT_TARGET, which rustc reads for its link and the cc crate for its compile.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -108,4 +109,53 @@ test("the native library compiles, configures and declares in its pkg-config fil
     const pkgconfig = lines.filter((line) => line.includes("soksak-darwin.pc"));
     assert.ok(pkgconfig.some((line) => line.includes(`-mmacosx-version-min=${version}`)), `the pkg-config file does not declare ${version}:\n${pkgconfig.join("\n")}`);
   }
+});
+
+/** The clang lines and the pkg-config lines that `make -n -B build` prints in `folder`, which must succeed. */
+function processIdentityBuild(folder, variables) {
+  const result = spawnSync("make", ["-n", "-B", "-C", folder, ...variables, "build"], { cwd: root, encoding: "utf8", timeout: 30000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  const lines = result.stdout.replace(/\\\n/g, " ").split("\n");
+  const clang = lines.filter((line) => /^clang /.test(line));
+  assert.ok(clang.length > 0, lines.join("\n"));
+  return { clang, pkgconfig: lines.filter((line) => line.includes("Cflags:")) };
+}
+
+function assertBuildsFor({ clang, pkgconfig }, version) {
+  for (const line of clang) assert.ok(line.includes(` -mmacosx-version-min=${version}`), `${line}\n  does not compile for ${version}`);
+  assert.ok(pkgconfig.length === 1 && pkgconfig[0].includes(`-mmacosx-version-min=${version}`), `the pkg-config file does not declare ${version}:\n${pkgconfig.join("\n")}`);
+}
+
+/** A copy of the process identity package in `<folder>/native/darwin/process-identity` below a Makefile of the repository with `makefile`. */
+function processIdentityCopy(t, makefile) {
+  const folder = mkdtempSync(join(tmpdir(), "soksak-process-identity-minimum-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const copy = join(folder, "native/darwin/process-identity");
+  for (const part of ["Makefile", "include", "src"]) cpSync(join(root, "native/darwin/process-identity", part), join(copy, part), { recursive: true });
+  writeFileSync(join(folder, "Makefile"), makefile);
+  return copy;
+}
+
+test("the process identity package compiles and declares the macOS minimum that its caller passes, and alone the one of the Makefile of the repository", { timeout: 60000 }, (t) => {
+  assertBuildsFor(processIdentityBuild("native/darwin/process-identity", []), macosMinimum(root));
+  assertBuildsFor(processIdentityBuild("native/darwin/process-identity", [`MACOS_MINIMUM=${PROBE}`]), PROBE);
+  // Alone, below a Makefile of the repository that declares another version, the package reads that version.
+  assertBuildsFor(processIdentityBuild(processIdentityCopy(t, "MACOS_MINIMUM = 98.6\n"), []), "98.6");
+  const undeclared = processIdentityCopy(t, "# no minimum\n");
+  const result = spawnSync("make", ["-n", "-C", undeclared, "build"], { cwd: root, encoding: "utf8", timeout: 30000 });
+  assert.notEqual(result.status, 0, result.stdout);
+  assert.match(result.stderr, /Makefile declares no MACOS_MINIMUM = <macOS version>/, result.stderr);
+});
+
+test("the native library passes its macOS minimum to the build of the process identity package", { timeout: 60000 }, () => {
+  // `make -n` runs the recipe line of $(MAKE), so the expansion holds the commands of the package build.
+  const library = join(root, "native/darwin/process-identity/lib/libsoksak-process-identity.a");
+  const result = spawnSync("make", ["-n", "-B", "-C", "native/darwin", `MACOS_MINIMUM=${PROBE}`, library], { cwd: root, encoding: "utf8", timeout: 30000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  const lines = result.stdout.replace(/\\\n/g, " ").split("\n");
+  const clang = lines.filter((line) => /^clang /.test(line) && line.includes("process_identity"));
+  assert.ok(clang.length > 0, lines.join("\n"));
+  assertBuildsFor({ clang, pkgconfig: lines.filter((line) => line.includes("Cflags:")) }, PROBE);
 });

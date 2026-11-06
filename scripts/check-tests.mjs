@@ -318,6 +318,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F679",
+    implementation: [
+      { file: "native/darwin/process-identity/Makefile", symbol: "MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p' $(CURDIR)/../../../Makefile)" },
+      { file: "native/darwin/Makefile", symbol: "@$(MAKE) -C $(CURDIR)/process-identity MACOS_MINIMUM=$(MACOS_MINIMUM) build" },
+      { file: "Makefile", symbol: "@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM)" },
+    ],
+    tests: [
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "the process identity package compiles and declares the macOS minimum that its caller passes, and alone the one of the Makefile of the repository" },
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "the native library passes its macOS minimum to the build of the process identity package" },
+    ],
+    expected: "The process identity package compiles and declares in its pkg-config file the MACOS_MINIMUM that native/darwin passes, which the root Makefile passes to it, and alone the one of the root Makefile.",
+    levels: ["unit"],
+  },
+  {
     id: "F678",
     implementation: [
       { file: "Makefile", symbol: "out=$$($(MAKE) --no-print-directory measure-object-counts APP=$(APP)" },

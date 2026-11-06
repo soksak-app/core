@@ -102,12 +102,15 @@ ZXING_BUILD := $(BUILD)/zxing-cpp-build
 ZXING_INSTALL := $(BUILD)/zxing-cpp-install
 ZXING_LIBRARY := $(ZXING_INSTALL)/lib/libZXing.a
 # The newest API the sources use is from macOS 14.4 (getCurrentProcessShareableContentWithCompletionHandler in
-# capture.m). MACOS_MINIMUM of the Makefile of the repository declares that version once, and this Makefile reads it.
+# capture.m). MACOS_MINIMUM of the Makefile of the repository declares that version once: that Makefile passes it, a make
+# in this folder alone reads it, and this Makefile passes it to the process identity package.
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
 # with it.
+ifeq ($(origin MACOS_MINIMUM),undefined)
 MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p' $(CURDIR)/../../Makefile)
+endif
 ifeq ($(MACOS_MINIMUM),)
-$(error $(CURDIR)/../../Makefile declares no MACOS_MINIMUM = <macOS version>)
+$(error $(abspath $(CURDIR)/../../Makefile) declares no MACOS_MINIMUM = <macOS version>)
 endif
 MINIMUM    := -mmacosx-version-min=$(MACOS_MINIMUM)
 # The architecture of the release platform darwin-arm64. Every clang call and the ZXing configure name it, so a make that
@@ -202,7 +205,7 @@ $(BUILD):
 # Every check links tests/support/no_activation.m. A check that does not declare activation fails if the application
 # is active when it exits.
 $(PROCESS_IDENTITY_LIBRARY):
-	@$(MAKE) -C $(CURDIR)/process-identity build
+	@$(MAKE) -C $(CURDIR)/process-identity MACOS_MINIMUM=$(MACOS_MINIMUM) build
 
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@

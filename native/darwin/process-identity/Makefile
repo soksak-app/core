@@ -4,7 +4,15 @@ LIBDIR := lib
 LIBRARY := $(LIBDIR)/libsoksak-process-identity.a
 OBJECT := $(BUILD)/process_identity.o
 TEST_EXECUTABLE := $(BUILD)/process_identity_test
-MINIMUM := -mmacosx-version-min=14.4
+# MACOS_MINIMUM of the Makefile of the repository declares the minimum macOS version once. The Makefile of native/darwin
+# passes it; a make in this folder alone reads it. The pkg-config file puts it in Cflags so that a consumer compiles for it.
+ifeq ($(origin MACOS_MINIMUM),undefined)
+MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p' $(CURDIR)/../../../Makefile)
+endif
+ifeq ($(MACOS_MINIMUM),)
+$(error $(abspath $(CURDIR)/../../../Makefile) declares no MACOS_MINIMUM = <macOS version>)
+endif
+MINIMUM := -mmacosx-version-min=$(MACOS_MINIMUM)
 # The architecture of the release platform darwin-arm64, as in the Makefile of native/darwin.
 ARCH := arm64
 CFLAGS := -arch $(ARCH) -fmodules -Wall -Werror -O2 $(MINIMUM)
