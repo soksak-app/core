@@ -1,4 +1,5 @@
 //! Checks that a diagnostic build makes the regions of a covered window draw (docs/spec/native-surfaces.md#image-regions).
+#![cfg(feature = "diagnostics")]
 
 #[path = "support/drawing.rs"]
 mod drawing;
@@ -9,7 +10,6 @@ use soksak_host::images::Images;
 // A check that reads the pixels of a covered window asks its regions to draw; the window stays occluded, and a region whose
 // surface hides still draws nothing.
 // contract: image.drawing.draws-covered-in-diagnostic-builds
-#[cfg(feature = "diagnostics")]
 #[test]
 fn a_region_of_a_covered_window_draws_while_the_window_draws_covered() {
     let images = Images::default();
