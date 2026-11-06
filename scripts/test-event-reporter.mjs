@@ -1,6 +1,6 @@
 // The node:test reporter that the test runner reads (docs/operations/examples.md#test-parity). It writes one line per test event to the
-// standard error, prefixed by EVENT_PREFIX, so the runner resets the event watchdog of the file at each event. The other lines of the
-// standard error are the TAP form, which the runner keeps as the output of the file. A line also carries the `nesting` of the test, so
+// standard error, prefixed by EVENT_PREFIX, so the runner resets the event watchdog of the file at each event. The TAP form on the
+// standard output and the other lines of the standard error are the output of the file, which the runner keeps. A line also carries the `nesting` of the test, so
 // the runner pairs the `test:dequeue` of each test with its `test:complete`, and the `exitCode` and `signal` of the error of a
 // `test:complete`, which node --test sets on the result of a test file whose process ended with a status other than 0 or a signal. The
 // `test:summary` of a file (the summary that names its `file`) carries the `counts` of its tests, from which the runner reads how many

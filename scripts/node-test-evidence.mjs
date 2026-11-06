@@ -4,14 +4,14 @@ import { EVENT_PREFIX } from './test-event-reporter.mjs';
 
 const reporter = fileURLToPath(new URL('./test-event-reporter.mjs', import.meta.url));
 /**
- * The reporters of a node --test file that the test runner runs with `eventLimitMs`: the spec form on the standard output, the TAP form on
- * the standard error, and the events of scripts/test-event-reporter.mjs on the standard error, which the runner reads for the event
- * watchdog of the file and for the tests that the file ran. The spec form writes the errors of the failed tests at the end of the file,
- * so a file that is killed keeps none; the TAP form writes the error of each test when the test ends.
+ * The reporters of a node --test file that the test runner runs with `eventLimitMs`: the TAP form on the standard output, which writes the
+ * result and the error of each test when the test ends, so a file that is killed keeps the errors of the tests that failed before, and
+ * the events of scripts/test-event-reporter.mjs on the standard error, which the runner reads for the event watchdog of the file and for
+ * the tests that the file ran. node --test composes its root test stream with each reporter, and each composition adds end listeners
+ * to that stream, so a third reporter passes the listener limit of 10 and Node prints a MaxListenersExceededWarning.
  */
 export const NODE_TEST_REPORTERS = Object.freeze([
-  '--test-reporter=spec', '--test-reporter-destination=stdout',
-  '--test-reporter=tap', '--test-reporter-destination=stderr',
+  '--test-reporter=tap', '--test-reporter-destination=stdout',
   `--test-reporter=${reporter}`, '--test-reporter-destination=stderr',
 ]);
 
@@ -75,7 +75,7 @@ export function createNodeTestEvidence(files) {
   };
 }
 
-/** Reads the event reporter's lines, never the TAP or spec reporter's wrapper totals. */
+/** Reads the event reporter's lines, never the wrapper totals of the TAP reporter. */
 export function readNodeTestEvidence(output, files = []) {
   const evidence = createNodeTestEvidence(files);
   for (const line of output.split('\n')) {

@@ -359,6 +359,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F683-1",
+    implementation: [
+      { file: "scripts/node-test-evidence.mjs", symbol: "export const NODE_TEST_REPORTERS = Object.freeze([" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "export function processWarnings(output) {" },
+    ],
+    tests: [
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "a node --test run with the shared reporters prints no process warning" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case whose ${phase} prints a process warning of node fails with the warning" },
+    ],
+    expected: "A node --test file of the runners runs with two reporters and prints no MaxListenersExceededWarning, and a language case whose build or test output holds a process warning of node fails with the warning.",
+    levels: ["unit"],
+  },
+  {
     id: "F683",
     implementation: [
       { file: "scripts/language-test-adapters.mjs", symbol: "function validateBuild(build, id) {" },

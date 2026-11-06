@@ -199,10 +199,10 @@ test("each test file of a package is a test with the folder and the flags of its
   put(root, "c/package.json", JSON.stringify({ name: "c" }));
   const { tests, before } = discoverNodeTests({ root, packages: ["a", "b", "c"] });
   assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1), item.cwd]), [
-    ["a/test/nested/two.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/one.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/support/helper.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
-    ["b/test/three.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000"], join(root, "b")],
+    ["a/test/nested/two.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
+    ["a/test/one.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
+    ["a/test/support/helper.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
+    ["b/test/three.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000"], join(root, "b")],
   ]);
   assert.deepEqual(before, [{ name: "b: pnpm build", command: "pnpm", args: ["build"], cwd: join(root, "b") }]);
 });
@@ -316,7 +316,7 @@ test("another script of the packages that have it is discovered, and quotes arou
   put(root, "other/package.json", JSON.stringify({ name: "other", scripts: { test: "node --test test/" } }));
   put(root, "other/test/x.test.mjs", "");
   const { tests } = discoverNodeTests({ root, packages: ["e2e", "other"], script: "verify" });
-  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", "--test-reporter=tap", "--test-reporter-destination=stderr", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
+  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
 });
 
 test("a changed specification file selects the tests of the packages that declare it in specFiles", () => {

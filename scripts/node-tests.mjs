@@ -241,8 +241,8 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
     }
     const files = [...new Set(script.paths.flatMap((path) => filesOf(directory, path, folder)))].sort();
     for (const file of files) {
-      // The spec reporter writes the errors of the failed tests at the end of the file, so a file that is killed keeps none;
-      // the TAP reporter on the standard error writes the error of each test when the test ends. The file process ends by itself when
+      // The TAP reporter on the standard output writes the error of each test when the test ends, so a file that is killed keeps the
+      // errors of the tests that failed before. The file process ends by itself when
       // its tests end and is not ended with process.exit: on macOS the pipes of the standard output and error are asynchronous, and
       // process.exit drops the reports still queued on them (the last reports of a file were lost that way). The event watchdog
       // of the file is the largest limit of a test: a file whose events stop for that long holds a test that its own limit did not end.

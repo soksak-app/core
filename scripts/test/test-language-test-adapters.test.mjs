@@ -202,6 +202,20 @@ test('refuses a build without its own limit and names the case', () => {
     build: { args: [], timeoutMs: 1000 } }] }), /case no-build-command\.build\.command must be a non-empty string/);
 });
 
+for (const phase of ['test', 'build']) {
+  test(`a case whose ${phase} prints a process warning of node fails with the warning`, { timeout: 30_000 }, async () => {
+    const warning = '(node:4242) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 end listeners added to [TestsStream].';
+    const print = `console.error(${JSON.stringify(warning)})`;
+    const cases = discoverLanguageCases({ cases: [{ id: 'warned', language: 'shell',
+      ...command(`${phase === 'test' ? print : ''}; console.log('PASS: warned case')`),
+      ...(phase === 'build' ? { build: { command: process.execPath, args: ['-e', print], timeoutMs: 30_000 } } : {}) }] });
+    const result = await runLanguageCases(cases);
+    assert.equal(result.status, 'fail', JSON.stringify(result.cases[0]));
+    assert.ok(result.cases[0].errors.includes('node printed MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 end listeners added to [TestsStream].'),
+      JSON.stringify(result.cases[0].errors));
+  });
+}
+
 test('discovers all supported language cases, each with its own explicit limit', () => {
   const cases = discoverLanguageCases({ cases: SUPPORTED_LANGUAGES.filter((language) => language !== 'application').map((language) => ({ id: language, language, ...command('process.exit(0)') })) });
   assert.deepEqual(cases.map(({ language, timeoutMs }) => [language, timeoutMs]), [

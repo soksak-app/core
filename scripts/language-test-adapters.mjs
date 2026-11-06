@@ -134,6 +134,14 @@ export function parseLanguageResult(language, stdout, stderr) {
   throw invalid(`unsupported language: ${language}`);
 }
 
+// A process warning of node: `(node:<pid>) [<code>] <Name>Warning: <message>`. A warning is a failure of the case that printed it.
+const PROCESS_WARNING = /^\(node:\d+\) (?:\[[A-Z0-9_]+\] )?([A-Za-z]*Warning): (.*)$/gm;
+
+/** The process warnings of node in `output`, each once, as errors that name the warning and its message. */
+export function processWarnings(output) {
+  return [...new Set([...output.matchAll(PROCESS_WARNING)].map(([, name, message]) => `node printed ${name}: ${message}`))];
+}
+
 // A case that names cargo runs the cargo that cargoCommand resolves, as every script of the repository does.
 const executable = (command) => (command === 'cargo' ? cargoCommand() : command);
 
@@ -142,6 +150,7 @@ function buildResult(commandResult) {
   const errors = [];
   if (commandResult.status !== 'pass') errors.push(`build status ${commandResult.status}`);
   errors.push(...linkerWarnings(`${commandResult.stdout}\n${commandResult.stderr}`).failures);
+  errors.push(...processWarnings(`${commandResult.stdout}\n${commandResult.stderr}`));
   return {
     status: commandResult.status === 'pass' && errors.length > 0 ? 'fail' : commandResult.status,
     exitCode: commandResult.exitCode,
@@ -176,6 +185,7 @@ function caseResult(caseSpec, build, commandResult) {
   if (commandResult.signal) errors.push(`process crashed with ${commandResult.signal}`);
   // A build of the case whose link reports an object newer than the link compiled or linked for another macOS version (macos-minimum.mjs).
   errors.push(...linkerWarnings(`${commandResult.stdout}\n${commandResult.stderr}`).failures);
+  errors.push(...processWarnings(`${commandResult.stdout}\n${commandResult.stderr}`));
   if (caseSpec.expectedTests !== undefined && actual.tests !== caseSpec.expectedTests) {
     errors.push(`expected ${caseSpec.expectedTests} tests, observed ${actual.tests}`);
   }
