@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F619: `platform.Substitute` registers an implementation in place of the one of the operating system for a test of the Go host, and `TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts` and `TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError` show a window before the host starts: through a registered fake, and with no registration, which ends the process with status 1 instead of a nil dereference.
 - F619: The window show of a framework asks for the registered platform, so a process that shows a window before the host starts, such as the framework tests, no longer ends with a nil dereference; a missing registration ends the process through the fatal error of the host.
 - F502-24-1: `go.work.sum` holds what `go mod download` of a workspace module writes with the pinned forks, so the guard of the CI jobs that rejects a change of the checksum files after that download sees none.
 - F502-24-1: The mygo modules name the pushed fork commit of the framework by its pseudo-version in place of a sibling folder, so every Go module of the workspace resolves its imports in a checkout without that folder, as a worktree or a runner has.
