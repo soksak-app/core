@@ -234,6 +234,9 @@ impl Platform for Darwin {
         webview::place(view, x, y, w, h);
         Ok(())
     }
+    fn render_occluded(&self, view: &PlatformWebview) -> Result<(), String> {
+        webview::render_occluded(view)
+    }
     fn create_surface(&self, window: Handle) -> Result<Handle, String> {
         webview::create_surface(window)
     }

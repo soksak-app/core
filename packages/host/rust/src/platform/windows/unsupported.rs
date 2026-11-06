@@ -97,6 +97,10 @@ pub fn place_webview(
     missing("webview placement")
 }
 
+pub fn render_occluded(_view: &PlatformWebview) -> Result<(), String> {
+    missing("webview rendering while occluded")
+}
+
 pub fn create_surface(_window: Handle) -> Result<Handle, String> {
     missing("surface host")
 }

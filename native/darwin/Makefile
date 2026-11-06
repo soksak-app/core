@@ -309,6 +309,7 @@ NATIVE_TESTS = observe_test \
   image_region_input_transaction_test \
   image_region_hangul_test \
   image_region_virtual_typing_test \
+  webview_virtual_typing_test \
   image_region_input_document_test \
   activity_observers_test \
   activity_observers_allocation_test \
@@ -333,6 +334,7 @@ NATIVE_TESTS = observe_test \
   webview_input_records_test \
   window_facts_test \
   window_occlusion_test \
+  webview_render_occluded_test \
   window_responder_test \
   window_reveal_test \
   window_show_test \

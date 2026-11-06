@@ -476,6 +476,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
         w: f64,
         h: f64,
     ) -> Result<(), String>;
+    /// Keeps the document of a webview shown and its rendering running while its window is occluded, for a modal webview,
+    /// which is raised only after it renders and which a still capture of a covered window shows. Call it on the main
+    /// thread.
+    fn render_occluded(&self, view: &PlatformWebview) -> Result<(), String>;
     /// Creates a logical SurfaceHost in the window composition of the window. This call does not create a DOM webview.
     fn create_surface(&self, window: Handle) -> Result<Handle, String>;
     fn close_surface(&self, surface: Handle) -> Result<(), String>;

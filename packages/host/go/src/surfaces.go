@@ -1460,11 +1460,13 @@ func (s *Surfaces) finishLayoutPresentation(window unsafe.Pointer, req PresentRe
 	return out, nil
 }
 
-// ensureCurrentPresentationJoins verifies that each visible root view in the request still matches its ticket join.
+// ensureCurrentPresentationJoins verifies that each visible root view in the request still matches its ticket join. The presentation
+// recorded the state of its ticket before it waited, so a ticket without state was cancelled meanwhile, by a reload, the close of the
+// window or cancelSurfaces, and its preparation is no longer current.
 func (s *Surfaces) ensureCurrentPresentationJoins(window unsafe.Pointer, req PresentRequest) error {
 	state := s.presentation.pending[req.Ticket]
 	if state == nil {
-		return fmt.Errorf("surface presentation %d has no pending root-view state", req.Ticket)
+		return fmt.Errorf("surface preparation %d is no longer current", req.Ticket)
 	}
 	for _, placement := range req.Placements {
 		if !placement.Visible || s.viewRecords().specs[placement.ID] == nil {

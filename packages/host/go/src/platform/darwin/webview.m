@@ -213,6 +213,9 @@ static void *nativeWebviewCreateOnMain(void *handle, unsigned long long identifi
     }
     // The page of a modal does not move the keyboard focus of the window. The main page does.
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) { [view release]; return NULL; }
+    // The modal renders while the window is occluded: it is raised only after it renders, and a still capture of a covered
+    // window shows it.
+    if (!sp_webview_render_occluded(view)) { [view release]; return NULL; }
     // The modal is placed directly in the window, above the main web view and below the existing modals, and fills
     // the window. It is kept hidden here and raised when it finishes rendering.
     [window.contentView addSubview:view positioned:NSWindowAbove relativeTo:root];
