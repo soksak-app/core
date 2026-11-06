@@ -10564,7 +10564,7 @@ const FEATURE_LINKS = [
   {
     id: "F346",
     implementation: [
-      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir)" },
+      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir, action)" },
     ],
     tests: [
       { file: "scripts/test/test-app.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },
@@ -11308,12 +11308,15 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-app.test.mjs", id: "a failed preparation skips the checks, runs the cleanup and names the failed step" },
       { file: "scripts/test/test-app.test.mjs", id: "a failed check does not skip the next check" },
       { file: "scripts/test/test-app.test.mjs", id: "a start step ends when the application writes endpoint.json and fails when the application exits first" },
-      { file: "scripts/test/test-app.test.mjs", id: "a quit step requests host.quit and ends when the application exits" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step by the menu selects the Quit item that host.menu lists and passes when the application exits with status 0" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step by the key sends Command+Q down and up to the window and passes when the application exits with status 0" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step fails when the application ends with another status than 0 after its Quit item" },
+      { file: "scripts/test/test-app.test.mjs", id: "a quit step fails when the application menu has no item with the key equivalent cmd+q" },
       { file: "scripts/test/test-app.test.mjs", id: "a quit step without a started application is skipped" },
       { file: "scripts/test/test-app.test.mjs", id: "a process whose command names the configuration root or an application bundle remains" },
       { file: "scripts/test/test-app.test.mjs", id: "a passed run removes its configuration root and a failed run keeps it" },
     ],
-    expected: "make test-app runs the end-to-end checks in a new configuration root for each run: it starts the applications, runs the checks, quits the applications with host.quit and fails on a remaining process.",
+    expected: "make test-app runs the end-to-end checks in a new configuration root for each run: it starts the applications, runs the checks, quits the applications through the Quit item of the application menu and the last one through Command+Q, fails on an exit status other than 0 and fails on a remaining process.",
     levels: ["unit"],
   },
   {

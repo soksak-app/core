@@ -72,6 +72,9 @@ test("the plan prepares, starts the three applications, checks and quits them in
     "--registry-ca", "/work/target/e2e/run/soksak-check-registry-tls/ca.pem",
   ]);
   assert.ok(plan.find((item) => item.name === "remaining processes").paths.includes("/work/target/debug/sok-mygo.app"));
+  // A person quits through the Quit item of the application menu or its key equivalent: the last application ends by Command+Q.
+  assert.deepEqual(plan.filter((item) => item.kind === "quit").map((item) => [item.app, item.by]),
+    [["wailsv3", "menu"], ["tauriv2", "menu"], ["mygo", "key"]]);
   assert.equal(checks.env.SOKSAK_CANDIDATE_REGISTRY, "file:///work/target/registry/index.json");
   assert.deepEqual(checks.argv.slice(2, 4), ["--script", "verify"]);
   assert.ok(!checks.argv.includes("--when-idle"));
@@ -129,26 +132,84 @@ test("a start step ends when endpoint.json is written before the watch of the fo
   assert.deepEqual(await runPlan([started], { write: () => {}, children }), []);
 });
 
-test("a quit step requests host.quit and ends when the application exits", { timeout: 10000 }, async (t) => {
-  const app = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
-  const fake = await startFakeEndpoint({ "command.run": (params) => { assert.equal(params.name, "host.quit"); app.kill("SIGTERM"); return null; } });
+/** The application menu that host.menu reports, with the Quit item in the application submenu. */
+const MENUS = { language: "en", menus: [
+  { title: "soksak", items: [{ title: "About soksak", key: "" }, { title: "Quit soksak", key: "cmd+q" }] },
+  { title: "File", items: [{ title: "Close Window", key: "cmd+w" }] },
+] };
+
+/** A started application that exits with status 0 on SIGTERM, as a host ends after its quit, once it handles the signal. */
+async function quittingApplication(t) {
+  const app = spawn(process.execPath, ["-e", "process.on('SIGTERM', () => process.exit(0)); process.stdout.write('ready'); setInterval(() => {}, 1000)"],
+    { stdio: ["ignore", "pipe", "ignore"] });
+  t.after(() => app.kill("SIGKILL"));
+  await new Promise((resolve) => app.stdout.once("data", resolve));
+  return app;
+}
+
+test("a quit step by the menu selects the Quit item that host.menu lists and passes when the application exits with status 0", { timeout: 10000 }, async (t) => {
+  const app = await quittingApplication(t);
+  const fake = await startFakeEndpoint({
+    "status.get": (params) => { assert.equal(params.name, "host.menu"); return MENUS; },
+    "command.run": (params) => {
+      assert.deepEqual([params.name, params.params], ["host.menu.select", { menu: "soksak", title: "Quit soksak" }]);
+      app.kill("SIGTERM");
+      return null;
+    },
+  });
   t.after(() => fake.close());
-  const children = new Map([["app", app]]);
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", app: "app", configDir: fake.configDir }], { write: () => {}, children });
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
+    { write: () => {}, children: new Map([["app", app]]) });
+  assert.deepEqual(failures, []);
+  assert.deepEqual(fake.requests.map((request) => request.method), ["status.get", "command.run"]);
+});
+
+test("a quit step by the key sends Command+Q down and up to the window and passes when the application exits with status 0", { timeout: 10000 }, async (t) => {
+  const app = await quittingApplication(t);
+  const keys = [];
+  const fake = await startFakeEndpoint({
+    "windows.list": () => [{ window: "w1" }],
+    "input.key": (params) => {
+      keys.push(params);
+      if (params.phase === "up") app.kill("SIGTERM");
+      return null;
+    },
+  });
+  t.after(() => fake.close());
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "key", app: "app", configDir: fake.configDir }],
+    { write: () => {}, children: new Map([["app", app]]) });
+  assert.deepEqual(failures, []);
+  assert.deepEqual(keys, ["down", "up"].map((phase) => ({ window: "w1", key: "q", text: "q", modifiers: ["command"], phase })));
+});
+
+test("a quit step fails when the application ends with another status than 0 after its Quit item", { timeout: 10000 }, async (t) => {
+  const app = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  const fake = await startFakeEndpoint({ "status.get": () => MENUS, "command.run": () => { app.kill("SIGTERM"); return null; } });
+  t.after(() => fake.close());
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
+    { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, ["quit app: the application ended with signal SIGTERM"]);
-  assert.equal(fake.requests[0].params.name, "host.quit");
+});
+
+test("a quit step fails when the application menu has no item with the key equivalent cmd+q", { timeout: 10000 }, async (t) => {
+  const app = await quittingApplication(t);
+  const fake = await startFakeEndpoint({ "status.get": () => ({ language: "en", menus: [MENUS.menus[1]] }) });
+  t.after(() => fake.close());
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
+    { write: () => {}, children: new Map([["app", app]]) });
+  assert.deepEqual(failures, ["quit app: the application menu has no item with the key equivalent cmd+q"]);
 });
 
 test("a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one", { timeout: 10000 }, async (t) => {
   // diagnostics.host.relaunch replaces the started application with a new process, which owns process.lock (docs/spec/endpoint.md).
   const started = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
   await new Promise((resolve) => started.once("exit", resolve));
-  const fake = await startFakeEndpoint({ "command.run": () => null });
+  const fake = await startFakeEndpoint({ "status.get": () => MENUS, "command.run": () => null });
   t.after(() => fake.close());
   const holder = spawn("lockf", [join(fake.configDir, "process.lock"), process.execPath, "-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"]);
   t.after(() => holder.kill());
   await new Promise((resolve) => holder.stdout.once("data", resolve));
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", app: "app", configDir: fake.configDir }],
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
     { write: () => {}, children: new Map([["app", started]]) });
   assert.deepEqual(failures, []);
   assert.notEqual(holder.exitCode, null, "the quit step ended while the process that holds process.lock was running");
