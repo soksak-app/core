@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F435-8-1: During a run the next drawn commit writes the paint holes of the acknowledged presentation, so no animation frame adds a layer commit before the next draw.
 - F435-7: The placement of a composition records a frame dispatch that names its surface, on both hosts.
 - F483: Every view registers `core.surface.clock`, and the content trace maps document times through the narrowest of five clock readings.
 - F482: The Tauri host ends the layout trace of a recorded drag after the last layout is presented, so the trace holds its presentation.
