@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F584-5-1: mygo workbench 에서 열린 picker 의 Escape 와 바깥 press 는 shortcut table 과 page 처럼 binder 를 거쳐 `core.picker.close` 를 실행한다. 이전에는 popover 가 command 없이 layer 를 닫아 `workbench.command` 기록이 남지 않았다. `docs/spec/exposure.md` 는 네이티브 modal 메뉴가 Wails host 와 Tauri host 의 modal web view 라고 밝히고, `e2e/view-keyboard-routing.test.mjs` 는 mygo 에서 그 Escape 에 `core.picker.close` 한 번과 `core.modal.dismiss` 없음을 요구한다.
 - F651: patch release는 호환 release이므로 `^0.0.z`는 `0.0.z`부터 `0.1.0` 미만의 모든 version을 포함한다. 전에는 `^0.0.39`가 `0.0.40` 미만에서 끝나서 core 0.0.40이 `^0.0.39`를 선언한 plugin을 설치하지 않았다. Go와 Rust의 `sok`, `@soksak/plugin-api`는 공유 표 `docs/spec/cases/version-ranges.json`을 재생하고, workbench는 자기 `version-range.js` 대신 `@soksak/plugin-api`로 범위를 읽으며, registry의 later-core 검사는 범위 `^0.0.z`가 포함하는 뒤의 `0.0` core를 보고하지 않는다.
 - F651: version 범위는 앞의 형식들을 정확히 ` || `로 이은 합집합 `<range> || <range>`이기도 하며, Go와 Rust의 `sok`, `@soksak/plugin-api`의 manifest reader와 `rangeContains`에서 한 부분이 포함하는 version을 포함한다. 빈 부분이 있거나 `||` 둘레의 공백이 다른 합집합은 거부한다.
 - F502-17-2: `exposure.json`이 rename, project, folder, library search에 선언하는 모든 core 이름을 mygo workbench가 `packages/workbench`의 파라미터, 거절, 저장 형식으로 제공한다: `packages/workbench-mygo/tests`의 registry gate와 element name gate가 각 이름을 찾고, rename, project, library test가 그 control을 고정한다.

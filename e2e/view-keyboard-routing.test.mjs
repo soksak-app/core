@@ -187,7 +187,7 @@ for (const app of MAIN_PAGE_APPS) {
 
 // A host with a main page (`pageProcess` of `host.window`) shows a modal in a modal web view, which takes the keyboard and answers
 // the main page through the modal answer channel; the mygo host draws the modal in the window, whose workbench keeps the keyboard
-// (docs/spec/native-modals.md).
+// and runs core.picker.close for Escape (docs/spec/native-modals.md, docs/spec/exposure.md#keyboard-shortcuts).
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native picker Escape dismisses its modal once`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
@@ -215,9 +215,15 @@ for (const app of Object.values(APPS)) {
     assertDeliveredKey(events, "Escape", "native picker Escape");
     const reached = injectedKeyEvents(events, "Escape").map((event) => JSON.parse(event.fields.text).responder);
     assert.ok(!reached.includes("SPImageRegion"), `native picker Escape reached the terminal: ${JSON.stringify(reached)}`);
-    assert.equal(traceCommands(events, "core.picker.close").length, 0,
-      "native picker Escape must not run the view's core.picker.close command");
-    if (webView) {
+    if (!webView) {
+      // The workbench draws the picker and holds the keyboard, so the Escape row of the picker layer runs core.picker.close
+      // (docs/spec/exposure.md#keyboard-shortcuts); the view behind it received no Escape, as the responders above show.
+      assert.equal(await commandRuns(s, offsets, "core.picker.close"), 1, "native picker Escape must run core.picker.close once");
+      assert.equal(traceCommands(await traceEvents(s, offsets), "core.modal.dismiss").length, 0,
+        "native picker Escape must not answer core.modal.dismiss without a modal web view");
+    } else {
+      assert.equal(traceCommands(events, "core.picker.close").length, 0,
+        "native picker Escape must not run the view's core.picker.close command");
       assert.equal(await commandRuns(s, offsets, "core.modal.dismiss"), 1,
         "native picker Escape must answer core.modal.dismiss once");
       assert.equal(events.filter((event) => event.event === MODAL_ANSWER

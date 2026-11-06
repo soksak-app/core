@@ -510,6 +510,12 @@ func startedShell(t testing.TB, stored *storedHost) *shellFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return startedShellOf(t, stored, declared)
+}
+
+// startedShellOf is startedShell with the declarations declared.
+func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declarations) *shellFixture {
+	t.Helper()
 	f := &shellFixture{t: t, host: stored, pending: make(steps, 256)}
 	shell, err := workbench.NewShell(workbench.ShellOptions{
 		Now:       time.Now,

@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -65,10 +66,42 @@ func (s pickerStatus) keys() []string {
 	return keys
 }
 
+// recordingCommands makes the shell of host write the record workbench.command of each command that runs: the class call is at
+// debug in the log policy of the host and in the log setting.
+func recordingCommands(host *storedHost) *storedHost {
+	classes := map[string]any{}
+	for class, level := range sok.DefaultLogPolicy().Classes() {
+		classes[class] = level
+	}
+	classes["call"] = "debug"
+	host.classes = classes
+	host.common["diagnostics.log"] = map[string]any{"call": "debug"}
+	return host
+}
+
+// commandRecords is the number of records workbench.command of the command name that reached the host.
+func (f *shellFixture) commandRecords(name string) int {
+	f.t.Helper()
+	f.settle()
+	count := 0
+	for _, event := range f.host.written("workbench.command") {
+		if event["fields"].(map[string]any)["name"] == name {
+			count++
+		}
+	}
+	return count
+}
+
 // projectWithPlugins is a shown project of a window with the plugins of acmeDocument.
 func projectWithPlugins(t *testing.T) *shellFixture {
 	t.Helper()
-	f := newShell(t, acme())
+	return projectOn(t, acme())
+}
+
+// projectOn is projectWithPlugins with the host host.
+func projectOn(t *testing.T, host *storedHost) *shellFixture {
+	t.Helper()
+	f := newShell(t, host)
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
 	f.run("core.library.form.submit", nil)
@@ -135,8 +168,9 @@ func TestTheButtonOfAMenuClosesItsMenu(t *testing.T) {
 	}
 }
 
+// Escape and a press outside close the menu through core.picker.close, as the shortcut table and the layer of the page run it.
 func TestEscapeAndAPressOutsideCloseTheMenu(t *testing.T) {
-	f := projectWithPlugins(t)
+	f := projectOn(t, recordingCommands(acme()))
 	card := f.tabbedCards()[0]
 	f.click("core.card.add", card)
 	f.tester.Key(0, ui.KeyEscape)
@@ -144,11 +178,17 @@ func TestEscapeAndAPressOutsideCloseTheMenu(t *testing.T) {
 	if f.menu().Open {
 		t.Fatal("Escape leaves the menu open")
 	}
+	if got := f.commandRecords("core.picker.close"); got != 1 {
+		t.Fatalf("Escape left %d records of core.picker.close, not 1", got)
+	}
 	f.click("core.card.add", card)
 	f.tester.ClickAt(600, 500)
 	f.settle()
 	if f.menu().Open {
 		t.Fatal("a press outside leaves the menu open")
+	}
+	if got := f.commandRecords("core.picker.close"); got != 2 {
+		t.Fatalf("Escape and a press outside left %d records of core.picker.close, not 2", got)
 	}
 }
 

@@ -143,3 +143,76 @@ func TestShortcutFailureReachesItsHandler(t *testing.T) {
 		t.Fatalf("the failure is %q, want %q", failure, want)
 	}
 }
+
+// ownKeyPlaces are the conditions of the workbench rows whose place takes its key with its own handler.
+var ownKeyPlaces = []string{"The tab rename field has focus", "A picker layer is open", "A native modal menu is open and has keyboard focus"}
+
+// projectWithoutOwnKeyRows opens a project with plugins in a shell whose shortcut table has no row of those places.
+func projectWithoutOwnKeyRows(t *testing.T) *shellFixture {
+	t.Helper()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := *declared
+	table.Shortcuts = slices.DeleteFunc(slices.Clone(declared.Shortcuts), func(row workbench.Shortcut) bool {
+		return slices.Contains(ownKeyPlaces, row.When)
+	})
+	// Enter and Escape of the rename field, Escape of the picker layer and Escape of a native modal menu.
+	if removed := len(declared.Shortcuts) - len(table.Shortcuts); removed != 4 {
+		t.Fatalf("the table holds %d rows of the places, not 4", removed)
+	}
+	f := startedShellOf(t, recordingCommands(acme()), &table)
+	f.settle()
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	return f
+}
+
+// The rename field takes Enter and Escape with its own handlers, which run the command of the row once, as the field of the page
+// does, so the keys save and leave a rename without a row of the table.
+func TestTheRenameFieldTakesItsKeysItself(t *testing.T) {
+	f := projectWithoutOwnKeyRows(t)
+	id := f.host.projects[0]["id"].(string)
+	doubleClick(f, f.box("core.project-tab", id))
+	f.tester.Type("beta")
+	f.tester.Frame()
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if got := status[*renameRead](t, f, "core.rename"); got != nil || storedTitle(f) != "beta" {
+		t.Fatalf("after Enter the rename is %+v and the title %q", got, storedTitle(f))
+	}
+	if got := f.commandRecords("core.rename.commit"); got != 1 {
+		t.Fatalf("Enter left %d records of core.rename.commit, not 1", got)
+	}
+	doubleClick(f, f.box("core.project-tab", id))
+	f.tester.Type("gamma")
+	f.tester.Frame()
+	f.tester.Key(0, ui.KeyEscape)
+	f.settle()
+	if got := status[*renameRead](t, f, "core.rename"); got != nil || storedTitle(f) != "beta" {
+		t.Fatalf("after Escape the rename is %+v and the title %q", got, storedTitle(f))
+	}
+	if got := f.commandRecords("core.rename.cancel"); got != 1 {
+		t.Fatalf("Escape left %d records of core.rename.cancel, not 1", got)
+	}
+}
+
+// The popover of the picker layer takes Escape and runs core.picker.close once, as the layer of the page does, so the key closes
+// the layer without a row of the table.
+func TestThePickerLayerTakesEscapeItself(t *testing.T) {
+	f := projectWithoutOwnKeyRows(t)
+	f.click("core.card.add", f.tabbedCards()[0])
+	if !f.menu().Open {
+		t.Fatal("the press did not open the menu")
+	}
+	f.tester.Key(0, ui.KeyEscape)
+	f.settle()
+	if f.menu().Open {
+		t.Fatal("Escape leaves the menu open")
+	}
+	if got := f.commandRecords("core.picker.close"); got != 1 {
+		t.Fatalf("Escape left %d records of core.picker.close, not 1", got)
+	}
+}
