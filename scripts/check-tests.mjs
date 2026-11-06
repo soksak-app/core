@@ -4084,7 +4084,7 @@ const FEATURE_LINKS = [
     id: "F239-277",
     implementation: [
       { file: "packages/sok/go/src/install.go", symbol: "func ParseVersion(text string)" },
-      { file: "go.work.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
+      { file: "go.work.sum", symbol: "github.com/wailsapp/task/v3 v3.40.1-patched3 h1:" },
       { file: "packages/sok/go/go.sum", symbol: "github.com/Masterminds/semver/v3 v3.5.0 h1:" },
     ],
     tests: [

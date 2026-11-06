@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-24-1: `go.work.sum`은 pin된 fork로 workspace module의 `go mod download`가 쓰는 내용을 담으므로, 그 download 뒤 checksum file의 변경을 거부하는 CI job의 guard가 변경을 보지 않는다.
 - F502-24-1: mygo module은 형제 folder 대신 push된 framework fork commit을 그 pseudo-version으로 가리키므로, worktree나 runner처럼 그 folder가 없는 checkout에서도 workspace의 모든 Go module이 import를 해석한다.
 - F592: Wails module은 window와 web view에 요청한 크기를 주는 push된 fork commit을 한 checkout에만 있는 형제 folder 대신 그 pseudo-version으로 가리키고, 그 sum을 담는다.
 - F502-3: mygo host는 아무것도 배치하지 않는 frame을 framework의 native call 때문에 할당하지 않고 그린다. pin된 fork는 receiver로 call을 판정하고 할당 없이 실행한다. 전에는 calling thread에서 실행되는 `CFRelease`나 `release` 하나가 4번 할당했다. diff scene의 sidebar를 scroll하는 frame은 이제 166번 대신 102번 할당한다.
