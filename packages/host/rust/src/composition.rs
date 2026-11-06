@@ -11,6 +11,7 @@ use crate::exposure;
 use crate::images::{Configure, Images, Key};
 use crate::platform::{self, DOMOverlay, Insets};
 use crate::sidecars::WindowSidecars;
+use crate::surfaces;
 use crate::windows::{WindowData, window_data};
 
 fn release_image_configurations(images: &Images, configurations: &[(Key, Configure)]) {
@@ -334,79 +335,89 @@ pub fn place(webview: &Webview, request: CompositionPlaceRequest) -> Result<(), 
         .get(&request.surface)
         .copied()
         .ok_or_else(|| format!("surface {:?} is not attached", request.surface))?;
+    let dispatch = surfaces::composition_dispatch(&window, &request.surface);
     let surface = request.surface;
     let revision = request.revision;
     let host = window.clone();
     let applied_data = data.clone();
     let configurations = exposure::on_main(&window, move || {
-        let mut revisions = applied_data
-            .composition_revisions
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the composition revisions, which the
-            // placement amends; the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner);
-        // default: the last revision of a surface that has not received a placement is 0.
-        if revision <= revisions.get(&surface).copied().unwrap_or_default() {
-            return Err(format!("stale composition revision {revision}"));
-        }
-        let mut resolved = Vec::with_capacity(declaration.regions.len());
-        for region in &declaration.regions {
-            let key = (surface.clone(), region.name.clone());
-            let handle = if region.kind == "document" {
-                applied_data.documents.get(&key)?
-            } else {
-                applied_data.images.get(&key)?
-            };
-            resolved.push((region.clone(), handle));
-        }
-        let mut configurations = Vec::new();
-        let result = (|| -> Result<(), String> {
-            for (region, handle) in resolved {
-                let placement = regions.get(&region.name).expect("validated above");
-                if region.kind == "document" {
-                    platform.place_document(handle, placement.insets(), placement.visible)?;
+        surfaces::surface_dispatch_result(dispatch, || {
+            let mut revisions = applied_data
+                .composition_revisions
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the composition revisions, which the
+                // placement amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            // default: the last revision of a surface that has not received a placement is 0.
+            if revision <= revisions.get(&surface).copied().unwrap_or_default() {
+                return Err(format!("stale composition revision {revision}"));
+            }
+            let mut resolved = Vec::with_capacity(declaration.regions.len());
+            for region in &declaration.regions {
+                let key = (surface.clone(), region.name.clone());
+                let handle = if region.kind == "document" {
+                    applied_data.documents.get(&key)?
                 } else {
-                    platform.place_image(handle, placement.insets(), placement.visible)?;
-                    let key = (surface.clone(), region.name.clone());
-                    applied_data.images.set_visible(&key, placement.visible)?;
-                    match platform.image_raster(handle)? {
-                        Some(raster) => {
-                            if let Some(configuration) = applied_data.images.configure_raster(
-                                &key,
-                                raster.width,
-                                raster.height,
-                                raster.scale,
-                                placement.visible,
-                            )? {
-                                observe_raster(&key, "configured", "composition", Some(&raster));
-                                configurations.push((key, configuration));
+                    applied_data.images.get(&key)?
+                };
+                resolved.push((region.clone(), handle));
+            }
+            let mut configurations = Vec::new();
+            let result = (|| -> Result<(), String> {
+                for (region, handle) in resolved {
+                    let placement = regions.get(&region.name).expect("validated above");
+                    if region.kind == "document" {
+                        platform.place_document(handle, placement.insets(), placement.visible)?;
+                    } else {
+                        platform.place_image(handle, placement.insets(), placement.visible)?;
+                        let key = (surface.clone(), region.name.clone());
+                        applied_data.images.set_visible(&key, placement.visible)?;
+                        match platform.image_raster(handle)? {
+                            Some(raster) => {
+                                if let Some(configuration) = applied_data.images.configure_raster(
+                                    &key,
+                                    raster.width,
+                                    raster.height,
+                                    raster.scale,
+                                    placement.visible,
+                                )? {
+                                    observe_raster(
+                                        &key,
+                                        "configured",
+                                        "composition",
+                                        Some(&raster),
+                                    );
+                                    configurations.push((key, configuration));
+                                }
                             }
+                            None if placement.visible
+                                && platform.image_surface_placed(handle)? =>
+                            {
+                                return Err(format!(
+                                    "image {:?} has no raster geometry: {}",
+                                    region.name,
+                                    raster_facts(platform, handle)
+                                ));
+                            }
+                            None if placement.visible => {
+                                observe_raster(&key, "deferred", "composition", None);
+                            }
+                            None => {}
                         }
-                        None if placement.visible && platform.image_surface_placed(handle)? => {
-                            return Err(format!(
-                                "image {:?} has no raster geometry: {}",
-                                region.name,
-                                raster_facts(platform, handle)
-                            ));
-                        }
-                        None if placement.visible => {
-                            observe_raster(&key, "deferred", "composition", None);
-                        }
-                        None => {}
                     }
                 }
+                let native_overlays = dom_overlays(&overlay_names, &overlays);
+                platform.set_surface_overlays(surface_handle, &native_overlays)?;
+                revisions.insert(surface, revision);
+                Ok(())
+            })();
+            if let Err(error) = result {
+                release_image_configurations(&applied_data.images, &configurations);
+                return Err(error);
             }
-            let native_overlays = dom_overlays(&overlay_names, &overlays);
-            platform.set_surface_overlays(surface_handle, &native_overlays)?;
-            revisions.insert(surface, revision);
-            Ok(())
-        })();
-        if let Err(error) = result {
-            release_image_configurations(&applied_data.images, &configurations);
-            return Err(error);
-        }
-        exposure::window_changed(&host);
-        Ok(configurations)
+            exposure::window_changed(&host);
+            Ok(configurations)
+        })
     })?;
     send_image_configurations(&window, configurations)
 }

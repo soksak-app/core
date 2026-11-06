@@ -380,19 +380,78 @@ test("a cancelled preparation sends its ticket once and the next equal request i
   const { surfaces } = await import("../host.js?cancel");
   const record = (drawn) => ({ surfaces: [], settled: true, drawn, titlebar: 40 });
   try {
-    await surfaces.cancelPrepared();
+    await surfaces.cancelPrepared({ handover: false });
     assert.deepEqual(calls, [], "no preparation is open");
     await surfaces.place(record(false));
-    await surfaces.cancelPrepared();
+    await surfaces.cancelPrepared({ handover: false });
     assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces", "cancelSurfaces"]);
     assert.deepEqual(calls[1].request, { ticket: 1 });
-    await surfaces.cancelPrepared();
+    await surfaces.cancelPrepared({ handover: false });
     assert.equal(calls.length, 2, "a cancelled preparation is not cancelled again");
     await surfaces.place(record(false));
     await surfaces.place(record(true));
     assert.deepEqual(calls.slice(2).map((c) => c.name), ["syncSurfaces", "presentSurfaces"], "the equal request after a cancellation was not sent");
-    await surfaces.cancelPrepared();
+    await surfaces.cancelPrepared({ handover: false });
     assert.equal(calls.length, 4, "a presented preparation is not cancelled");
+  } finally {
+    dom.window.close();
+  }
+});
+
+// A handed-over preparation stays open for the next preparation of the window, which places every surface again and commits
+// both with its own presentation (F484). Every exit ends it: a failed next preparation and a cancel without a handover cancel it.
+test("a handed-over preparation sends no cancel and only a failed or cancelled next preparation ends it", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  let ticket = 0;
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => null,
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      if (name === "log") return clockAnswer(name, request);
+      calls.push({ name, request });
+      if (name === "syncSurfaces") {
+        if (request.titlebar === 99) throw new Error("preparation refused");
+        return { ticket: ++ticket, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
+      }
+      if (name === "presentSurfaces") return request.placements;
+      if (name === "cancelSurfaces") return null;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { surfaces } = await import("../host.js?handover");
+  const record = (drawn, titlebar = 40) => ({ surfaces: [], settled: true, drawn, titlebar });
+  const names = () => calls.map((c) => c.name);
+  try {
+    await surfaces.place(record(false));
+    await surfaces.cancelPrepared({ handover: true });
+    assert.deepEqual(names(), ["syncSurfaces"], "a handed-over preparation was cancelled and committed");
+    await surfaces.place(record(false));
+    await surfaces.place(record(true));
+    await surfaces.cancelPrepared({ handover: false });
+    assert.deepEqual(names(), ["syncSurfaces", "syncSurfaces", "presentSurfaces"],
+      "the next preparation did not take over the handed-over preparation");
+
+    calls.length = 0;
+    await surfaces.place(record(false, 41));
+    await surfaces.cancelPrepared({ handover: true });
+    await assert.rejects(surfaces.place(record(false, 99)), /preparation refused/);
+    assert.deepEqual(names(), ["syncSurfaces", "syncSurfaces", "cancelSurfaces"], "a failed next preparation left the handed-over one open");
+    assert.deepEqual(calls[2].request, { ticket: 3 });
+    await surfaces.cancelPrepared({ handover: false });
+    assert.equal(calls.length, 3, "the cancel after a failed preparation sent a call or found an open preparation");
+
+    calls.length = 0;
+    await surfaces.place(record(false, 42));
+    await surfaces.cancelPrepared({ handover: true });
+    await surfaces.cancelPrepared({ handover: false });
+    assert.deepEqual(names(), ["syncSurfaces", "cancelSurfaces"], "a cancel without a handover left the handed-over preparation open");
+    assert.deepEqual(calls[1].request, { ticket: 4 });
   } finally {
     dom.window.close();
   }

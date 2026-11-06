@@ -1116,10 +1116,19 @@ const (
 )
 
 func recordSurfaceDispatch(mode surfaceDispatchMode, window string, ticket *uint64, operation, stage string, queued, entered, returned uint64) {
+	recordSurfaceDispatchOf(mode, window, "", ticket, operation, stage, queued, entered, returned)
+}
+
+// recordSurfaceDispatchOf records a dispatch that belongs to one surface, such as the placement of its composition, with that
+// surface; surface is empty for a dispatch of the window layout.
+func recordSurfaceDispatchOf(mode surfaceDispatchMode, window, surface string, ticket *uint64, operation, stage string, queued, entered, returned uint64) {
 	fields := map[string]any{
 		"event": "surface.dispatch", "window": window, "operation": operation, "stage": stage,
 		"queued_ns": strconv.FormatUint(queued, 10), "entered_ns": strconv.FormatUint(entered, 10),
 		"returned_ns": strconv.FormatUint(returned, 10),
+	}
+	if surface != "" {
+		fields["surface"] = surface
 	}
 	if ticket != nil && *ticket != 0 {
 		fields["ticket"] = *ticket
@@ -1177,6 +1186,11 @@ func readSurfaceDispatchClock() (uint64, bool) {
 }
 
 func runSurfaceDispatch(dispatch func(func()), window string, ticket *uint64, operation, stage string, work func() error) error {
+	return runSurfaceDispatchOf(dispatch, window, "", ticket, operation, stage, work)
+}
+
+// runSurfaceDispatchOf runs work through dispatch and records it with surface, which is empty for a dispatch of the window layout.
+func runSurfaceDispatchOf(dispatch func(func()), window, surface string, ticket *uint64, operation, stage string, work func() error) error {
 	queued, mode := surfaceDispatchClock()
 	var entered, returned uint64
 	var enteredAvailable, returnedAvailable bool
@@ -1191,7 +1205,7 @@ func runSurfaceDispatch(dispatch func(func()), window string, ticket *uint64, op
 		}
 	})
 	if mode != surfaceDispatchOff && enteredAvailable && returnedAvailable {
-		recordSurfaceDispatch(mode, window, ticket, operation, stage, queued, entered, returned)
+		recordSurfaceDispatchOf(mode, window, surface, ticket, operation, stage, queued, entered, returned)
 	}
 	return workErr
 }

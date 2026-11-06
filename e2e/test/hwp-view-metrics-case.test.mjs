@@ -152,7 +152,7 @@ function layoutFailureSession(root, captureDirectory) {
     },
     async run(name) {
       // The clock reads of the trace are as wide as the start bracket, so the trace keeps the start bracket.
-      if (name === "core.surface.clock") return { timeOrigin: 10, now: 5 };
+      if (name === "core.surface.clock") return { page: "page-a", timeOrigin: 10, now: 5 };
       assert.equal(name, "core.grid.size");
       const placement = { level: "debug", seq: 1, event: "host.trace.surface", ts_us: 10050, mono_ns: 10050000,
         fields: { phase: "placed", surface: "view-a", x: 0, y: 0, w: 50, h: 40, visible: true } };
@@ -230,7 +230,7 @@ function layoutDeadlineSession(root, captureDirectory, lastFrameTimeMs) {
     },
     async run(name) {
       // The clock reads of the trace are as wide as the start bracket, so the trace keeps the start bracket.
-      if (name === "core.surface.clock") return { timeOrigin: 10, now: 5 };
+      if (name === "core.surface.clock") return { page: "page-a", timeOrigin: 10, now: 5 };
       assert.equal(name, "core.grid.size");
       const placement = { level: "debug", seq: 1, event: "host.trace.surface", ts_us: 10050, mono_ns: 10050000,
         fields: { phase: "placed", surface: "view-a", x: 10, y: 8, w: 85, h: 64, visible: true } };

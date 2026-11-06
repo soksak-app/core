@@ -30,7 +30,7 @@ function startBracket({ surface = "view-1", documentTimeOriginMs = 1999, sourceN
 }
 
 // Each clock read advances 10 ms unless clockValues names the readings; the document clock reads 0.2 ms of time origin 1999.
-function traceSession(root, calls, { clockValues, hostPid = 41, window = "main", documentClock = () => ({ timeOrigin: 1999, now: 0.2 }) } = {}) {
+function traceSession(root, calls, { clockValues, hostPid = 41, window = "main", documentClock = () => ({ page: "page-1", timeOrigin: 1999, now: 0.2 }) } = {}) {
   const client = { endpoint: { pid: hostPid } };
   let nextClock = 0;
   return {
@@ -430,7 +430,7 @@ test("generic content trace brackets the successful start command with native cl
     },
     async run(name, params, surface) {
       calls.push(["read", name, params, surface]);
-      return { timeOrigin: 1999, now: 0.2 };
+      return { page: "page-1", timeOrigin: 1999, now: 0.2 };
     }, async flushLog() { calls.push(["flush"]); } };
   const descriptor = {
     plugin: "fixture",
@@ -451,7 +451,7 @@ test("generic content trace brackets the successful start command with native cl
         frameTimeMs: 0.5, width: 300, height: 200 } })}\n`);
     return { gestureEndedAtMs: 2 };
   });
-  assert.deepEqual(calls.map(([name]) => name), ["clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
+  assert.deepEqual(calls.map(([name]) => name), ["read", "clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
   assert.equal(result.startBracket.surface, "view-1");
   assert.equal(result.startBracket.window, "main");
   assert.equal(result.startBracket.hostPid, 41);
@@ -477,7 +477,11 @@ test("content trace maps document times through the narrowest clock bracket of t
   const nows = [20, 30, 40.5, 50, 60];
   let read = 0;
   const calls = [];
-  const s = traceSession(root, calls, { clockValues, documentClock: () => ({ timeOrigin: 1999, now: nows[read++] }) });
+  // WebKit derives performance.timeOrigin from the current wall clock at each read and reduces it to whole milliseconds, so one
+  // document can report time origins one millisecond apart; the page identity names the document.
+  const s = traceSession(root, calls, { clockValues,
+    documentClock: () => (read === 0 && !calls.includes("start") ? { page: "page-1", timeOrigin: 1999, now: 19 }
+      : { page: "page-1", timeOrigin: 1999 + (read % 2), now: nows[read++] }) });
   const descriptor = {
     plugin: "fixture",
     async startContentTrace() { calls.push("start"); return sourceResult(1999, 0.2); },
@@ -487,14 +491,16 @@ test("content trace maps document times through the narrowest clock bracket of t
   assert.deepEqual(result.startBracket.before, clockReading(1080000000));
   assert.deepEqual(result.startBracket.after, clockReading(1082000000));
   assert.equal(result.startBracket.sourceClock.sourceNowMs, 40.5);
+  assert.equal(result.startBracket.sourceClock.documentTimeOriginMs, 1999, "the bracket left the time origin of the trace start");
 
   const otherCalls = [];
-  const other = traceSession(root, otherCalls, { documentClock: () => ({ timeOrigin: 2000, now: 1 }) });
+  let otherRead = 0;
+  const other = traceSession(root, otherCalls, { documentClock: () => ({ page: otherRead++ === 0 ? "page-1" : "page-2", timeOrigin: 1999, now: 1 }) });
   await assert.rejects(withViewContentTrace({ diagnostic() {} }, other, { ...descriptor,
     async startContentTrace() { otherCalls.push("start"); return sourceResult(1999, 0.2); },
     async stopContentTrace() { otherCalls.push("stop"); return {}; } }, "view-1", async () => {}),
   /core.surface.clock read another document than the trace start/);
-  assert.deepEqual(otherCalls, ["clock", "start", "clock", "clock", "read", "clock", "stop"], "a failed clock read stops the observer");
+  assert.deepEqual(otherCalls, ["read", "clock", "start", "clock", "clock", "read", "clock", "stop"], "a failed clock read stops the observer");
 });
 
 test("content trace stops its diagnostic marker when the recorded action fails", { timeout: 5000 }, async (t) => {
@@ -518,7 +524,7 @@ test("content trace stops its diagnostic marker when the recorded action fails",
     calls.push("action");
     throw new Error("controlled action failure");
   }), /controlled action failure/);
-  assert.deepEqual(calls, ["clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
+  assert.deepEqual(calls, ["read", "clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
 });
 
 test("content trace stops after a successful start returns invalid marker evidence", { timeout: 5000 }, async (t) => {
@@ -542,7 +548,7 @@ test("content trace stops after a successful start returns invalid marker eviden
     calls.push("action");
     assert.ok(start.marker, "marker reply is invalid");
   }), /marker reply is invalid/);
-  assert.deepEqual(calls, ["clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
+  assert.deepEqual(calls, ["read", "clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
 });
 
 test("content trace stops when a successful start reply has no valid source clock anchor", { timeout: 5000 }, async (t) => {
@@ -564,7 +570,7 @@ test("content trace stops when a successful start reply has no valid source cloc
   await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
     calls.push("action");
   }), /no sourceClock anchor/);
-  assert.deepEqual(calls, ["clock", "start", "clock", "stop"]);
+  assert.deepEqual(calls, ["read", "clock", "start", "clock", "stop"]);
 });
 
 test("content trace stops its observer when the post-start native clock read fails", { timeout: 5000 }, async (t) => {
@@ -587,7 +593,7 @@ test("content trace stops its observer when the post-start native clock read fai
   await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
     calls.push("action");
   }), /controlled post-start clock failure/);
-  assert.deepEqual(calls, ["clock", "start", "clock", "stop"]);
+  assert.deepEqual(calls, ["read", "clock", "start", "clock", "stop"]);
 });
 
 test("content trace start failure does not read an after clock or stop an unstarted observer", { timeout: 5000 }, async (t) => {
@@ -606,7 +612,7 @@ test("content trace start failure does not read an after clock or stop an unstar
   await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
     calls.push("action");
   }), /controlled start failure/);
-  assert.deepEqual(calls, ["clock", "start"]);
+  assert.deepEqual(calls, ["read", "clock", "start"]);
 });
 
 test("content trace bracket rejects a replaced client, changed host process or target window", { timeout: 5000 }, async (t) => {
@@ -638,7 +644,7 @@ test("content trace bracket rejects a replaced client, changed host process or t
       assert.match(failure.message, error, `${name} change must fail its bracket`);
       return true;
     });
-    assert.deepEqual(calls, ["clock", "start", "clock", "stop"], `${name} change cleans up the observer`);
+    assert.deepEqual(calls, ["read", "clock", "start", "clock", "stop"], `${name} change cleans up the observer`);
   }
 });
 

@@ -140,6 +140,53 @@ test("a preparation that a newer layout replaced before its draw is cancelled", 
   }
 });
 
+// A cancel that commits would show the native frames of the undrawn preparation over the DOM of the earlier layout (F484). An epoch
+// change has queued the next layout, which places every surface again, so the cancel hands the open transaction to that layout.
+test("a preparation that a newer layout replaced before its draw hands its transaction to the next layout", { timeout: 1000 }, async () => {
+  for (const moved of ["prepare", "frame"]) {
+    const cancels = [];
+    let current = 1;
+    await drawPrepared({
+      epoch: 1, current: () => current,
+      prepare: async () => { if (moved === "prepare") current = 2; },
+      draw: assert.fail,
+      frame: async (work) => { if (moved === "frame") current = 2; work(); },
+      presented: assert.fail,
+      cancel: async (options) => { cancels.push(options); },
+    });
+    assert.deepEqual(cancels, [{ handover: true }], `the epoch moved during ${moved}`);
+  }
+});
+
+// A failed draw has no queued layout after it, so its cancel ends the transaction.
+test("a preparation whose draw fails cancels its transaction without a handover", { timeout: 1000 }, async () => {
+  const cancels = [];
+  await assert.rejects(drawPrepared({
+    epoch: 1, current: () => 1,
+    prepare: async () => {},
+    draw: () => { throw new Error("draw failed"); },
+    frame: async (work) => work(),
+    presented: assert.fail,
+    cancel: async (options) => { cancels.push(options); },
+  }), /draw failed/);
+  assert.deepEqual(cancels, [{ handover: false }]);
+});
+
+// The next layout ends a handed-over transaction; when its preparation fails before the host begins it, the cancel ends it instead.
+test("a preparation whose request fails cancels without a handover and the failure reaches the caller", { timeout: 1000 }, async () => {
+  const cancels = [];
+  const failure = new Error("preparation refused");
+  await assert.rejects(drawPrepared({
+    epoch: 1, current: () => 1,
+    prepare: async () => { throw failure; },
+    draw: assert.fail,
+    frame: assert.fail,
+    presented: assert.fail,
+    cancel: async (options) => { cancels.push(options); },
+  }), failure);
+  assert.deepEqual(cancels, [{ handover: false }]);
+});
+
 test("a preparation that presents is not cancelled", { timeout: 1000 }, async () => {
   const calls = [];
   await drawPrepared({

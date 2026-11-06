@@ -971,6 +971,10 @@
             "type": "string",
             "minLength": 1
           },
+          "surface": {
+            "type": "string",
+            "minLength": 1
+          },
           "ticket": {
             "type": "integer",
             "minimum": 1
@@ -978,7 +982,8 @@
           "operation": {
             "enum": [
               "sync",
-              "present"
+              "present",
+              "composition"
             ]
           },
           "stage": {
@@ -1008,7 +1013,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
+      "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The operation composition records the placement of the regions and overlays of one surface, which surface names; the records of the window layout have no surface. The record does not include the caller's resume time after a synchronous dispatch."
     },
     "host.frame.commit": {
       "layer": "host",
@@ -1195,6 +1200,10 @@
             "type": "string",
             "minLength": 1
           },
+          "surface": {
+            "type": "string",
+            "minLength": 1
+          },
           "ticket": {
             "type": "integer",
             "minimum": 1
@@ -1202,7 +1211,8 @@
           "operation": {
             "enum": [
               "sync",
-              "present"
+              "present",
+              "composition"
             ]
           },
           "stage": {
@@ -1232,7 +1242,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The frame trace of an existing surface-layout UI admission or native callback when the performance trace's call/debug path is not eligible. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The record does not include the caller's resume time after a synchronous dispatch."
+      "description": "The frame trace of an existing surface-layout UI admission or native callback when the performance trace's call/debug path is not eligible. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The operation composition records the placement of the regions and overlays of one surface, which surface names; the records of the window layout have no surface. The record does not include the caller's resume time after a synchronous dispatch."
     },
     "host.trace.view.callback-cancelled": {
       "layer": "host",

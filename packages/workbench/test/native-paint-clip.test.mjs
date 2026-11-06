@@ -150,3 +150,28 @@ test("a drawn commit equal to the prepared placement writes the holes of that pl
   } finally { f.dom.window.close(); }
 });
 
+
+test("during a run the next drawn commit writes the acknowledged holes without an animation frame", async () => {
+  const f = await fixture("run");
+  const divider = document.createElement("div");
+  divider.className = "sp-divider";
+  divider.dataset.dragging = "true";
+  document.getElementById("plane").appendChild(divider);
+  try {
+    const first = f.compositor.publish();
+    f.answer(); await first;
+    // An animation frame starts a rendering update of the main document, and its layer commit can still be in flight when the next draw of the run asks for its presentation.
+    assert.equal(f.callbacks.length, 0, "a presentation during a run requested an animation frame");
+    assert.equal(f.clip(), null, "a presentation wrote its holes before a later draw");
+    f.resize(180);
+    const second = f.compositor.publish();
+    assert.match(f.clip(), /M20,25v100h200v-100Z/, `the next drawn commit of the run did not write the acknowledged holes: ${f.clip()}`);
+    delete divider.dataset.dragging;
+    const last = f.compositor.publish();
+    f.answer(); await second;
+    f.answer(); await last;
+    assert.equal(f.callbacks.length, 1, "the end of the run did not request one animation frame for the acknowledged holes");
+    f.frame();
+    assert.match(f.clip(), /M20,25v100h180v-100Z/, `the end of the run did not write the holes of the last presentation: ${f.clip()}`);
+  } finally { divider.remove(); f.dom.window.close(); }
+});

@@ -1610,3 +1610,25 @@ func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
 	default:
 	}
 }
+
+// contract: performance.surface.dispatch-names-its-surface
+func TestSurfaceDispatchOfACompositionNamesItsSurface(t *testing.T) {
+	isolateTraceRecords(t)
+	wasOn := performanceOn.Swap(false)
+	t.Cleanup(func() { performanceOn.Store(wasOn) })
+	oldSystem := system
+	system = &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 120, 140}}
+	t.Cleanup(func() { system = oldSystem })
+	if err := runSurfaceDispatchOf(func(task func()) { task() }, "main", "tab-1", nil, "composition", "composition-place-ui", func() error {
+		return nil
+	}); err != nil {
+		t.Fatalf("run composition dispatch: %v", err)
+	}
+	want := map[string]any{
+		"window": "main", "surface": "tab-1", "operation": "composition", "stage": "composition-place-ui",
+		"queued_ns": "100", "entered_ns": "120", "returned_ns": "140",
+	}
+	if got := bufferedTraces(t, "host.frame.surface.dispatch"); len(got) != 1 || !reflect.DeepEqual(got[0], want) {
+		t.Fatalf("composition dispatch records = %#v, want one record %#v", got, want)
+	}
+}

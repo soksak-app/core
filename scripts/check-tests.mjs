@@ -963,10 +963,10 @@ const FEATURE_LINKS = [
   {
     id: "F483",
     implementation: [
-      { file: "packages/plugin-api/surface-document.js", symbol: "clock: () => ({ timeOrigin: view.performance.timeOrigin, now: view.performance.now() })," },
+      { file: "packages/plugin-api/surface-document.js", symbol: "return { page, timeOrigin: view.performance.timeOrigin, now: view.performance.now() };" },
       { file: "packages/plugin-api/view.js", symbol: "expose.command(\"core.surface.clock\", state.clock)," },
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "\"core.surface.hit\": true, \"core.surface.clock\": true}" },
-      { file: "e2e/view-metrics-collection.mjs", symbol: "async function narrowestClockBracket(s, surface, startBracket) {" },
+      { file: "e2e/view-metrics-collection.mjs", symbol: "async function narrowestClockBracket(s, surface, startBracket, page) {" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
@@ -975,6 +975,70 @@ const FEATURE_LINKS = [
       { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
     ],
     expected: "Every view registers core.surface.clock in its document on the three hosts, the mygo workbench holds it as a name of the view, and the content trace of a view keeps the narrowest of five clock brackets of the same document.",
+    levels: ["unit"],
+  },
+  {
+    id: "F435-7",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func runSurfaceDispatchOf(dispatch func(func()), window, surface string, ticket *uint64, operation, stage string, work func() error) error {" },
+      { file: "packages/host/go/src/composition.go", symbol: "runSurfaceDispatchOf(mainThreadStep, s.window.Name(), request.Surface, nil, \"composition\"," },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn composition_dispatch(window: &Window, surface: &str) -> Option<SurfaceDispatch> {" },
+      { file: "packages/host/rust/src/composition.rs", symbol: "let dispatch = surfaces::composition_dispatch(&window, &request.surface);" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestSurfaceDispatchOfACompositionNamesItsSurface" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_composition_dispatch_names_its_surface" },
+    ],
+    expected: "The placement of a composition records a surface dispatch with the operation composition, the stage composition-place-ui and the surface name on the three hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F435-8-1",
+    implementation: [
+      { file: "packages/workbench/compositor.js", symbol: "function writeAcknowledgedHoles() {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/native-paint-clip.test.mjs", id: "during a run the next drawn commit writes the acknowledged holes without an animation frame" },
+    ],
+    expected: "During a run the next drawn commit writes the paint holes of the acknowledged presentation, without an animation frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F435-8-2",
+    implementation: [
+      { file: "packages/workbench/resize-loop.js", symbol: "const channel = new view.MessageChannel();" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/resize-loop.test.mjs", id: "a callback round requests no animation frame and the next task ends its slots" },
+    ],
+    expected: "The ResizeObserver loop recorder clears its callback slots in the next task and requests no animation frame.",
+    levels: ["unit"],
+  },
+  {
+    id: "F483-1",
+    implementation: [
+      { file: "packages/plugin-api/surface-document.js", symbol: "const page = view.sokView?.page;" },
+      { file: "e2e/view-metrics-collection.mjs", symbol: "async function documentPage(s, surface) {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
+    ],
+    expected: "core.surface.clock returns the page identity of the view document, and the content trace names the document by it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F484",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "let handedTicket = null;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/host-chrome.test.mjs", id: "a handed-over preparation sends no cancel and only a failed or cancelled next preparation ends it" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a preparation that a newer layout replaced before its draw hands its transaction to the next layout" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a preparation whose draw fails cancels its transaction without a handover" },
+      { file: "packages/workbench/test/layout-queue.test.mjs", id: "a preparation whose request fails cancels without a handover and the failure reaches the caller" },
+    ],
+    expected: "A preparation whose draw a layout epoch change cancelled hands its open transaction to the next preparation, and a failed next preparation or a cancel without a handover ends it.",
     levels: ["unit"],
   },
   {

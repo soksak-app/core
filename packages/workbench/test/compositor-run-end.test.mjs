@@ -103,7 +103,7 @@ test("a cancelled preparation ends a run that waited for its drawing", async () 
   answers.shift().present();
   await prepared;
   assert.equal(runState.runActive(), true);
-  await compositor.cancelPrepared();
+  await compositor.cancelPrepared({ handover: false });
   assert.equal(runState.runActive(), false, "no drawing follows a cancelled preparation");
   assert.equal(ends, 1);
 });
