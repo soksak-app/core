@@ -20,9 +20,9 @@ use std::time::Duration;
 #[cfg(feature = "diagnostics")]
 use super::DocumentViewportMarker;
 use super::{
-    CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit, ImagePresentation,
-    ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream, Platform, Pointer,
-    ProcessFootprint, Raster, WindowOverlay,
+    CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame, Handle, Hit,
+    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream,
+    Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -311,14 +311,10 @@ impl Platform for Darwin {
     fn create_document(
         &self,
         surface: Handle,
-        store: &str,
-        folder: &str,
-        plugin: &str,
-        label: &str,
-        channel: Option<&str>,
+        options: DocumentOptions<'_>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        document::create(surface, store, folder, plugin, label, channel, changed)
+        document::create(surface, options, changed)
     }
     fn set_view_message(
         &self,

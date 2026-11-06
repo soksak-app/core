@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // contract: host.view.killed.is-written-on-every-end
@@ -134,7 +136,7 @@ func (p *lifecyclePlatform) CancelLayoutTicket(window unsafe.Pointer, ticket uin
 	return nil
 }
 
-func (p *lifecyclePlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error) {
+func (p *lifecyclePlatform) CreateDocument(surface unsafe.Pointer, options platform.DocumentOptions, changed func(state string)) (unsafe.Pointer, error) {
 	handle := unsafe.Pointer(new(int))
 	p.created = append(p.created, handle)
 	p.createdFor = append(p.createdFor, surface)

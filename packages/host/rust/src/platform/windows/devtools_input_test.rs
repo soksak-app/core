@@ -194,9 +194,9 @@ fn a_key_that_is_no_name_and_no_character_is_not_sent() {
 struct Fake {
     methods: RefCell<Vec<&'static str>>,
     params: RefCell<Vec<String>>,
-    completes: RefCell<Vec<Option<Box<dyn FnOnce(Result<(), String>)>>>>,
+    completes: RefCell<Vec<Option<Complete>>>,
     refuse: RefCell<Option<String>>,
-    timers: RefCell<Vec<Option<Box<dyn FnOnce()>>>>,
+    timers: RefCell<Vec<Option<Task>>>,
 }
 
 impl Fake {
@@ -224,11 +224,7 @@ impl Fake {
 struct FakeTransport(Rc<Fake>);
 
 impl Transport for FakeTransport {
-    fn send(
-        &self,
-        call: &Call,
-        complete: Box<dyn FnOnce(Result<(), String>)>,
-    ) -> Result<(), String> {
+    fn send(&self, call: &Call, complete: Complete) -> Result<(), String> {
         if let Some(refused) = self.0.refuse.borrow().clone() {
             return Err(refused);
         }
@@ -403,7 +399,7 @@ fn a_capture_of_a_view_that_does_not_draw_is_refused() {
 
 type CaptureAnswers = Rc<RefCell<Vec<Result<(), String>>>>;
 
-fn capture_done() -> (CaptureAnswers, Box<dyn FnOnce(Result<(), String>)>) {
+fn capture_done() -> (CaptureAnswers, Complete) {
     let got: CaptureAnswers = Rc::default();
     let held = got.clone();
     (got, Box::new(move |result| held.borrow_mut().push(result)))

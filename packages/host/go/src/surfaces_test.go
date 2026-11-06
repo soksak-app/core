@@ -434,16 +434,12 @@ func TestUnregisteredNativeSurfaceViewFailsWithItsAddress(t *testing.T) {
 // the addresses that they load. Every other operation of the platform interface is not implemented by it.
 type viewPlatform struct {
 	platform.Platform
-	created []viewCreation
+	created []platform.DocumentOptions
 	loaded  []string
 }
 
-type viewCreation struct {
-	folder, plugin, label, channel string
-}
-
-func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error) {
-	p.created = append(p.created, viewCreation{folder: folder, plugin: plugin, label: label, channel: channel})
+func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, options platform.DocumentOptions, changed func(state string)) (unsafe.Pointer, error) {
+	p.created = append(p.created, options)
 	return unsafe.Pointer(new(int)), nil
 }
 
@@ -481,7 +477,7 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}
-	if len(fake.created) != 1 || fake.created[0].channel != "channel-script" || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" || fake.created[0].label != "soksak://plugin/probe" {
+	if len(fake.created) != 1 || fake.created[0].Channel != "channel-script" || fake.created[0].Plugin != "probe" || fake.created[0].Folder != "/plugins/probe" || fake.created[0].Label != "soksak://plugin/probe" {
 		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder with its process label and the channel script", fake.created)
 	}
 	if want := []string{"soksak://probe/ui/page.html"}; !reflect.DeepEqual(fake.loaded, want) {

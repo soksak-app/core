@@ -38,6 +38,22 @@ type ProcessFootprint struct {
 	Neural     uint64
 }
 
+// DocumentOptions are the creation values of a document web view: a document region or a view
+// (docs/spec/native-surfaces.md#document-regions).
+type DocumentOptions struct {
+	// Directory is the absolute path at which the persistent data store keeps the site data.
+	Directory string
+	// Folder is the installed folder of the plugin whose surface owns the region; the region serves soksak://<plugin>/<path> from it.
+	Folder string
+	// Plugin is the id of that plugin.
+	Plugin string
+	// Label is the display label of the WebContent process (docs/spec/plugin-processes.md#operating-system-display-labels).
+	Label string
+	// Channel is empty for a document region. A view surface passes the text of the view channel script, and its configuration is
+	// the only one that serves the core root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
+	Channel string
+}
+
 type Rect struct {
 	X, Y, W, H float64
 }
@@ -429,15 +445,9 @@ type Platform interface {
 	// AlignRect fits a region in page coordinates inward to the display pixels.
 	AlignRect(window unsafe.Pointer, at Rect) (Rect, error)
 
-	// CreateDocument creates a hidden external document web view inside the surface web view surface. directory is the absolute path at which the persistent
-	// data store keeps the site data. changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward,
-	// error, scroll}) on the UI thread.
-	// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region serves
-	// soksak://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). channel is empty for a document region.
-	// A view surface passes the text of the view channel script, and its configuration is the only one that serves the core
-	// root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
-	// label is the display label of the WebContent process (docs/spec/plugin-processes.md#operating-system-display-labels).
-	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error)
+	// CreateDocument creates a hidden external document web view inside the surface web view surface, with the values of options.
+	// changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward, error, scroll}) on the UI thread.
+	CreateDocument(surface unsafe.Pointer, options DocumentOptions, changed func(state string)) (unsafe.Pointer, error)
 	// SetViewMessage receives {"message": value} for each message of the sok-view handler of a view, and {"error": reason} for a
 	// message from another frame. It must be set before the view loads a page.
 	SetViewMessage(document unsafe.Pointer, message func(value string)) error

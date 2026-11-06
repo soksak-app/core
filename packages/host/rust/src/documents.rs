@@ -21,7 +21,7 @@ use crate::application_log::{log_error, log_failure};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::exposure::{self, on_main};
-use crate::platform::{self, Handle, Platform};
+use crate::platform::{self, DocumentOptions, Handle, Platform};
 use crate::presentation_wait::{
     PresentationWait, ViewPlacement, presentation_abandoned_payload, trace_presentation_join,
 };
@@ -1644,11 +1644,13 @@ fn attach_view(
         |channel| {
             platform.create_document(
                 surface_handle,
-                directory,
-                &folder,
-                plugin,
-                &process_label(plugin, VIEW_NAME),
-                Some(channel),
+                DocumentOptions {
+                    directory,
+                    folder: &folder,
+                    plugin,
+                    label: &process_label(plugin, VIEW_NAME),
+                    channel: Some(channel),
+                },
                 Box::new(move |state: String| {
                     view_state(&state_window, &state_surface, &state_origin, &state)
                 }),
@@ -2534,8 +2536,17 @@ fn create(
     // Every step that can fail without the document runs before its creation, so configure_document is the only step after it.
     let dark = crate::theme::is_dark(&host)?;
     let label = process_label(&plugin, &name);
-    let handle =
-        platform.create_document(surface, directory, &folder, &plugin, &label, None, changed)?;
+    let handle = platform.create_document(
+        surface,
+        DocumentOptions {
+            directory,
+            folder: &folder,
+            plugin: &plugin,
+            label: &label,
+            channel: None,
+        },
+        changed,
+    )?;
     let message_host = host.clone();
     let message_surface = surface_id.clone();
     let message_document = name.clone();

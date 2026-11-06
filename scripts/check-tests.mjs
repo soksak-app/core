@@ -1378,6 +1378,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F636",
+    implementation: [
+      { file: "packages/host/rust/src/platform/platform.rs", symbol: "pub struct DocumentOptions<'a> {" },
+      { file: "packages/host/go/src/platform/platform.go", symbol: "type DocumentOptions struct {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage" },
+      { file: "packages/host/go/src/platform/darwin/document_test.go", id: "TestCreateDocumentReportsTheNativeCause" },
+    ],
+    expected: "The creation values of a document web view are one DocumentOptions value in both hosts, and the Rust workspace passes make check-rust-clippy.",
+    levels: ["unit"],
+  },
+  {
     id: "F630",
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "const unread = new Map();" },

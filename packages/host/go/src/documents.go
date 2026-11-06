@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // documentData is the directory inside the configuration directory that holds the persistent site data of document regions. It differs from the
@@ -340,7 +342,9 @@ func (s *Surfaces) createDocument(key DocumentKey, restore string, effects []Str
 	if err != nil {
 		return nil, err
 	}
-	handle, err := system.CreateDocument(view.handle, filepath.Join(s.host.configDir, documentData), folder, plugin, ProcessLabel(plugin, key.Name), "", func(state string) {
+	handle, err := system.CreateDocument(view.handle, platform.DocumentOptions{
+		Directory: filepath.Join(s.host.configDir, documentData), Folder: folder, Plugin: plugin, Label: ProcessLabel(plugin, key.Name),
+	}, func(state string) {
 		s.documentChanged(key, state)
 	})
 	if err != nil {
@@ -441,7 +445,9 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		return fmt.Errorf("view of surface %q cannot start: %w", surfaceID, err)
 	}
 	var handle unsafe.Pointer
-	handle, err = system.CreateDocument(surface, directory, folder, plugin, ProcessLabel(plugin, viewRegionName), channel, func(state string) {
+	handle, err = system.CreateDocument(surface, platform.DocumentOptions{
+		Directory: directory, Folder: folder, Plugin: plugin, Label: ProcessLabel(plugin, viewRegionName), Channel: channel,
+	}, func(state string) {
 		if !s.documents.currentView(surfaceID, handle, generation) {
 			s.traceStaleViewCallback(surfaceID, "state")
 			return
