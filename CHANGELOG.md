@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F492: The window-check run after development passes on both hosts: 91 of 91 files and 13 of 13 native end-to-end tests.
 - F496: The pasteboard restore of a window check names each type without data and writes back only the items that it could read.
 - F493: The Tauri host uses a tao fork commit that makes no activation call at launch when the application does not ignore other applications, so a background relaunch stays in the background.
 - F495: The hosts check numbers project, space and card ids per kind, so a card name does not count the ids of another kind.
