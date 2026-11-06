@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F505: Publication consumes the exact successful candidate attempt and immutable artifacts only after complete local application, activation and benchmark reports match both bundles, the frozen installed component cohort, source and dependency inputs, required native cases, full log audit and cleanup across two independent initial states. Missing, stale, mismatched, skipped or failed evidence is rejected. Collector-to-gate transport and exact-file fixtures pass: 121 focused owner cases, followed by 24 affected make-entrypoint and test-kind cases. The candidate make entrypoint does not rebuild the candidate. Actual candidate application acceptance and publication were not performed.
+
 - F504-2: Changed layout owners select a bounded set of required mutations in CI, and copies reuse the passing baseline. Structured failure codes distinguish real assertion/runtime errors from printed diagnostics and unattributed child signals. The runner, reporter and selector checks pass, with two additional module-error cases; the final required run passes six baseline files and catches all eight mutations by assertion, with no surviving, stale, ambiguous or invalid result. Workflow and boundary checks pass on macOS.
 
 - F503-3: Behavior comparisons cover all 120 input-card permutations with original and renamed IDs and 18 public operations per sequence. ID-dependent choices and first-card geometry mutations fail the tracked comparator. All 24 equivalence and rule cases pass on macOS; independent slicing and structural ownership checks remain.

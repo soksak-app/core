@@ -109,7 +109,20 @@ function casesOf(file, marks) {
 
 /** The audit of the logs of a run. Writes `judgment.json` in the folder and returns the findings `<file>:<line>: <message>`. */
 export function auditRun(catalog, folder) {
+  const failed = (status, findings) => writeFileSync(join(folder, 'judgment.json'),
+    `${JSON.stringify({ schema: 1, run: null, tests: [], volume: [], audit: { status, findings } }, null, 2)}\n`);
+  failed('running', []);
+  try {
+    return judgeRun(catalog, folder);
+  } catch (error) {
+    failed('fail', [error.message]);
+    throw error;
+  }
+}
+
+function judgeRun(catalog, folder) {
   const { file: marksFile, marks } = readMarks(folder);
+  if (new Set(marks.map(({ run }) => run)).size !== 1) throw new Error(`${marksFile}: marks belong to different runs`);
   const cases = casesOf(marksFile, marks);
   endsOfOpenCases(folder, marksFile, cases);
   const findings = [];
@@ -231,7 +244,8 @@ export function auditRun(catalog, folder) {
     }
     return row;
   });
-  writeFileSync(join(folder, 'judgment.json'), `${JSON.stringify({ schema: 1, run: marks[0].run, tests: rows, volume }, null, 2)}\n`);
+  writeFileSync(join(folder, 'judgment.json'), `${JSON.stringify({ schema: 1, run: marks[0].run, tests: rows, volume,
+    audit: { status: findings.length === 0 ? 'pass' : 'fail', findings } }, null, 2)}\n`);
   return findings;
 }
 

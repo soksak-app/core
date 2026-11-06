@@ -1,17 +1,29 @@
 // The run of the end-to-end checks (scripts/test-app.mjs, docs/operations/examples.md#end-to-end-run): the steps of a run, a fresh
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs, { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startFakeEndpoint } from "@soksak/client/testing";
-import { e2ePlan, finishRoot, newConfigRoot, remainingProcesses, runPlan } from "../test-app.mjs";
+import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan } from "../test-app.mjs";
 
 const node = (code) => [process.execPath, "-e", code];
 const step = (name, phase, code) => ({ name, phase, kind: "run", argv: node(code), env: {} });
+
+test("candidate acceptance has a make entrypoint that requires explicit context and script without rebuilding", { timeout: 10000 }, () => {
+  const cwd = fileURLToPath(new URL('../../', import.meta.url));
+  const missing = spawnSync('make', ['--no-print-directory', 'test-app-candidate'], { cwd, encoding: 'utf8' });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /CONTEXT=.*SCRIPT=/);
+  const planned = spawnSync('make', ['--no-print-directory', '-n', 'test-app-candidate', 'CONTEXT=/candidate/context.json', 'SCRIPT=test-app'], { cwd, encoding: 'utf8' });
+  assert.equal(planned.status, 0, planned.stderr);
+  assert.match(planned.stdout, /node scripts\/test-app.mjs --candidate "\/candidate\/context.json" --script "test-app"/);
+  assert.doesNotMatch(planned.stdout, /pnpm|cargo|go build|build-registry|clang/);
+});
 
 function workspace(t) {
   const root = mkdtempSync(join(tmpdir(), "soksak-e2e-run-test-"));
@@ -23,6 +35,28 @@ function recorder() {
   const lines = [];
   return { lines, write: (line) => lines.push(line) };
 }
+
+test("a final configuration cleanup failure cannot leave passing candidate evidence", { timeout: 5000 }, async (t) => {
+  const root = workspace(t), runFolder = join(root, "run");
+  mkdirSync(runFolder);
+  const selection = { only: null, exclude: [], changed: false, namePattern: null, apps: ["tauriv2", "wailsv3"] };
+  writeFileSync(join(runFolder, "manifest.json"), JSON.stringify({ schema: 1, run: "fixture", finished_us: 1,
+    script: "benchmark:fixture", selection, tests: [{ name: "fixture.test.mjs", status: "pass" }] }));
+  writeFileSync(join(runFolder, "judgment.json"), JSON.stringify({ run: "fixture", audit: { status: "pass", findings: [] },
+    tests: selection.apps.map((app) => ({ app, result: "pass" })) }));
+  const inputs = { head: "fixture", dirty: false, hosts: [] }, failures = [];
+  const context = { candidate: { artifacts: [] }, assets: [], registry: { sha256: "fixture", pack: "required", components: [] } };
+  await finishCandidate({ root, context, configRoot: join(root, "config"), runFolder, script: "benchmark:fixture",
+    initializationId: "initial", inputs: { before: inputs, after: inputs }, steps: [{ name: "checks", status: "pass" }],
+    failures, dispose: async () => {}, write: () => {} },
+  { capture: async () => inputs, cleanup: () => { throw new Error("configuration removal denied"); } }).catch((error) => {
+    assert.match(error.message, /configuration removal denied/);
+  });
+  const { acceptance } = JSON.parse(readFileSync(join(runFolder, "manifest.json"), "utf8"));
+  assert.ok(acceptance.run.errors.some((error) => /configuration removal denied/.test(error)));
+  assert.equal(acceptance.run.plan.status, "fail");
+  assert.deepEqual(acceptance.run.plan.steps.at(-1), { name: "configuration cleanup", status: "fail" });
+});
 
 test("each run gets a new empty configuration root under target/e2e", { timeout: 5000 }, (t) => {
   const root = workspace(t);
@@ -83,6 +117,50 @@ test("a failed preparation skips the checks, runs the cleanup and names the fail
   assert.ok(lines.includes("skipped second: first failed"), lines.join("\n"));
   assert.ok(lines.includes("skipped checks: first failed"), lines.join("\n"));
   assert.ok(lines.some((line) => /^passed end /.test(line)), lines.join("\n"));
+});
+
+test("a candidate plan uses its bundled installers and frozen registry without building the workspace", { timeout: 5000 }, () => {
+  const candidate = {
+    hosts: [{ app: "tauriv2", bundle: "/candidate/tauriv2.app" }, { app: "wailsv3", bundle: "/candidate/wailsv3.app" }],
+    registry: { path: "/candidate/index.json", pack: "required", components: [{ kind: "plugin", id: "fixture" }] },
+  };
+  const plan = e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app",
+    native: "test-app", candidate, runFolder: "/work/target/test-runs/candidate" });
+  assert.equal(plan.some((step) => step.argv?.includes("install-plugins")), false);
+  assert.deepEqual(plan.find((step) => step.name === "registry wailsv3").argv,
+    ["/candidate/wailsv3.app/Contents/MacOS/sok", "registry", "use", "/candidate/index.json", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
+  assert.deepEqual(plan.find((step) => step.name === "install fixture wailsv3").argv,
+    ["/candidate/wailsv3.app/Contents/MacOS/sok", "plugin", "install", "fixture", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
+  assert.equal(plan.find((step) => step.name === "start wailsv3").argv[0], "/candidate/wailsv3.app/Contents/MacOS/sok-wailsv3");
+  const check = plan.find((step) => step.name === "window checks");
+  assert.equal(check.env.SOKSAK_CANDIDATE_RUN_FOLDER, "/work/target/test-runs/candidate");
+  assert.equal(check.env.SOKSAK_CANDIDATE_REGISTRY, "file:///candidate/index.json");
+  assert.equal(check.env.SOKSAK_BINARY_TAURIV2, "/candidate/tauriv2.app/Contents/MacOS/sok-tauriv2");
+  assert.equal(plan.find((step) => step.name === "native end-to-end tests").env.SOKSAK_NATIVE_TEST_RUN_FOLDER,
+    "/work/target/test-runs/candidate/native");
+  const names = plan.map((step) => step.name);
+  assert.ok(names.indexOf("acceptance before") > names.indexOf("start tauriv2"));
+  assert.ok(names.indexOf("acceptance before") < names.indexOf("window checks"));
+  assert.ok(names.indexOf("acceptance after") > names.indexOf("native end-to-end tests"));
+  assert.ok(names.indexOf("acceptance after") < names.indexOf("quit wailsv3"));
+});
+
+test("a plan records failed and skipped steps and still captures final inputs before cleanup", { timeout: 10000 }, async () => {
+  const outcomes = [], captures = [];
+  const failures = await runPlan([
+    { name: "acceptance before", phase: "prepare", kind: "capture", capture: "before" },
+    step("window checks", "check", "process.exit(1)"),
+    { name: "acceptance after", phase: "cleanup", kind: "capture", capture: "after" },
+    step("close", "cleanup", ""),
+  ], { write() {}, capture: async (phase) => captures.push(phase), outcome: (value) => outcomes.push(value) });
+  assert.deepEqual(captures, ["before", "after"]);
+  assert.deepEqual(failures, ["window checks: exited with code 1"]);
+  assert.deepEqual(outcomes.map(({ name, status }) => [name, status]),
+    [["acceptance before", "pass"], ["window checks", "fail"], ["acceptance after", "pass"], ["close", "pass"]]);
+  const skipped = [];
+  await runPlan([step("prepare", "prepare", "process.exit(1)"), step("check", "check", ""), step("cleanup", "cleanup", "")],
+    { write() {}, outcome: (value) => skipped.push(value) });
+  assert.deepEqual(skipped.map(({ name, status }) => [name, status]), [["prepare", "fail"], ["check", "skip"], ["cleanup", "pass"]]);
 });
 
 test("a failed check does not skip the next check", { timeout: 10000 }, async () => {
