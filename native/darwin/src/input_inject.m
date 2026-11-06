@@ -1174,22 +1174,22 @@ static NSString *jsonText(const char *text) {
     return data ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] : @"null";
 }
 
-static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down);
+static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down, bool held);
 
 // Delivers a key behind the input of its window that waits. Whether the key is kept is the only answer the caller has until its
-// turn, and the record of that turn states the result.
+// turn, and the record of that turn states the result and that the key waited.
 sp_input_result sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     NSWindow *window = (__bridge NSWindow *)handle;
     NSString *keptKey = key ? [NSString stringWithUTF8String:key] : nil, *keptText = text ? [NSString stringWithUTF8String:text] : nil;
     if (window && NSThread.isMainThread && surfaceLayoutHoldCall(window, false, 0, 0, ^{
-            keyNow(window, keptKey.UTF8String, keptText.UTF8String, modifiers, down);
+            keyNow(window, keptKey.UTF8String, keptText.UTF8String, modifiers, down, true);
         })) {
         return SP_INPUT_DELIVERED;
     }
-    return keyNow(handle, key, text, modifiers, down);
+    return keyNow(handle, key, text, modifiers, down, false);
 }
 
-static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
+static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down, bool held) {
     const char *why = "";
     bool equivalent = false, typed = false;
     // The view that holds the keyboard when the key is sent receives it; the record names it with the key window.
@@ -1199,9 +1199,9 @@ static sp_input_result keyNow(void *handle, const char *key, const char *text, u
     sp_input_result result = keyInput(handle, key, text, modifiers, down, &why, &equivalent, &typed);
     NSString *record = [NSString stringWithFormat:
         @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\","
-        "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s,\"virtualKeyText\":%s}",
+        "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s,\"virtualKeyText\":%s,\"held\":%s}",
         jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why, responderName,
-        window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false", typed ? "true" : "false"];
+        window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false", typed ? "true" : "false", held ? "true" : "false"];
     sp_log_info("input inject", record.UTF8String);
     return result;
 }

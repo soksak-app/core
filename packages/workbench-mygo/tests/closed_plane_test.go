@@ -12,7 +12,9 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// closeWithoutAFrame closes the shown project and draws no frame, so the elements of the last frame still take the input.
+// closeWithoutAFrame closes the shown project and draws no frame, so the elements of the last frame still take the input. The
+// close answers after the frame that shows the library (docs/spec/exposure.md#registration), so without a frame it has not
+// answered; the screen states the close.
 func closeWithoutAFrame(f *shellFixture) {
 	f.t.Helper()
 	raw, err := json.Marshal(map[string]string{"id": f.host.projects[0]["id"].(string)})
@@ -23,8 +25,15 @@ func closeWithoutAFrame(f *shellFixture) {
 	done := false
 	f.shell.Registry().RunLater("core.project.close", raw, func(_ any, err error) { answered, done = err, true })
 	f.pending.drain(f.t)
-	if !done || answered != nil {
-		f.t.Fatalf("the close answered %v, done %t", answered, done)
+	if done {
+		f.t.Fatalf("the close answered %v before a frame showed it", answered)
+	}
+	screen, err := f.shell.Registry().Read("core.screen")
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	if text, err := json.Marshal(screen); err != nil || !strings.Contains(string(text), `"screen":"library"`) {
+		f.t.Fatalf("after the close the screen is %s (%v)", text, err)
 	}
 }
 

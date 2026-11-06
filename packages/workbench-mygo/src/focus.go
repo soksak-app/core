@@ -139,6 +139,8 @@ func (f *Focus) Set(name string, index int) error {
 			if !f.absent[place] {
 				f.handles[place].Focus(f.window)
 				f.reveal = &place
+				// The frame that applies the focus reports it and reveals the element.
+				f.changed()
 			}
 			return nil
 		}

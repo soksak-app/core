@@ -63,6 +63,26 @@ func (w *appWindow) Invalidate() {
 	w.frames++
 }
 
+// settle runs the later steps and draws each frame that the workbench asked for with tester, the view of the workbench of the
+// window, as the window of the framework does: a command whose run asked for a frame answers after it
+// (docs/spec/exposure.md#registration).
+func (w *appWindow) settle(t *testing.T, queue steps, tester *ui.Tester) {
+	t.Helper()
+	drawn := 0
+	for range 16 {
+		queue.drain(t)
+		w.mu.Lock()
+		asked := w.frames > drawn
+		drawn = w.frames
+		w.mu.Unlock()
+		if !asked {
+			return
+		}
+		tester.Frame()
+	}
+	t.Fatal("the workbench asked for a frame after each of 16 frames")
+}
+
 // fixtureApp returns an application workbench over the table of stored and the replies that it sends the host.
 func fixtureApp(t *testing.T, stored *storedHost) (*workbench.App, *appWindow, steps, *[]map[string]any) {
 	t.Helper()
@@ -150,12 +170,12 @@ func TestAStartLeavesAnAddressOfAnUnknownProject(t *testing.T) {
 func TestExposureRequestRunsACommandInAStep(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, replies := fixtureApp(t, stored)
-	app.Build(window)
+	tester := ui.NewTester(app.Build(window), 1200, 800)
 	app.Shown(window)
-	queue.drain(t)
+	window.settle(t, queue, tester)
 	app.Emit(window, "exposure-request", map[string]any{"id": 7, "method": "command.run",
 		"params": map[string]any{"name": "core.library.form.open", "params": map[string]string{"mode": "open"}}})
-	queue.drain(t)
+	window.settle(t, queue, tester)
 	if len(*replies) != 1 || (*replies)[0]["id"] != float64(7) || (*replies)[0]["error"] != nil {
 		t.Fatalf("the replies are %v", *replies)
 	}

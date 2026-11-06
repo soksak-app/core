@@ -578,14 +578,18 @@ func TestTheStepAfterAFrameReadsAClosedProjectAsNoPlane(t *testing.T) {
 	}
 	f.shell.Registry().RunLater("core.project.close", raw, func(_ any, err error) { answered, done = err, true })
 	f.pending.drain(t)
-	if !done || answered != nil {
-		t.Fatalf("the close answered %v, done %t", answered, done)
+	if done {
+		t.Fatalf("the close answered %v before the frame that shows it", answered)
 	}
 	for _, step := range posted {
 		step()
 	}
 	if last.Failed != 0 || len(last.Rows) != 0 {
 		t.Fatalf("core.verify without a plane is %+v", last)
+	}
+	f.settle()
+	if !done || answered != nil {
+		t.Fatalf("after the frame of the library the close answered %v, done %t", answered, done)
 	}
 }
 

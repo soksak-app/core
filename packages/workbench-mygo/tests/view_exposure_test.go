@@ -141,7 +141,7 @@ func (r *viewRelay) ask(id int, method, params string) {
 func (r *viewRelay) answer(id int) map[string]any {
 	r.t.Helper()
 	var reply map[string]any
-	r.f.pending.until(r.t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		reply = r.answers[float64(id)]
@@ -154,7 +154,7 @@ func (r *viewRelay) answer(id int) map[string]any {
 func (r *viewRelay) request(n int) map[string]any {
 	r.t.Helper()
 	var request map[string]any
-	r.f.pending.until(r.t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		if len(r.requests) <= n {
@@ -259,7 +259,7 @@ func TestAStatusOfAViewAnswersThroughItsSubscription(t *testing.T) {
 	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "terminal.screen"}})
 	r.ask(9, "status.get", `{"name": "terminal.screen"}`)
 	var pushed map[string]any
-	r.f.pending.until(t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		if len(r.pushed) == 0 {
@@ -285,7 +285,7 @@ func TestAWatchedStatusOfAViewReachesTheHost(t *testing.T) {
 	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "terminal.screen"}})
 	r.ask(9, "status.watch", `{"name": "terminal.screen"}`)
 	var id any
-	r.f.pending.until(t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		if len(r.pushed) == 0 {
@@ -298,7 +298,7 @@ func TestAWatchedStatusOfAViewReachesTheHost(t *testing.T) {
 	r.call(surface, "runtime.native.call", changed)
 	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": id}})
 	r.answer(9)
-	r.f.pending.until(t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		return len(r.changed) == 1
@@ -332,7 +332,7 @@ func TestAViewRunsACommandThatItRegistered(t *testing.T) {
 		t.Fatalf("the view received %v", request)
 	}
 	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "terminal", "id": request["id"], "result": "done"})
-	r.f.pending.until(t, func() bool {
+	r.f.until(func() bool {
 		for _, reply := range r.stored.replies {
 			if reply["id"] == float64(6) {
 				return reply["result"] == "done"
@@ -369,7 +369,7 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 	}
 	r.call(surface, "runtime.status.watch", map[string]any{"name": "terminal.screen", "surface": surface})
 	var id any
-	r.f.pending.until(t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		if len(r.pushed) == 0 {
@@ -381,7 +381,7 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": id}})
 	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "terminal.screen", "value": "one", "version": 1}})
 	var status map[string]any
-	r.f.pending.until(t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		for _, pushed := range r.pushed {
@@ -396,7 +396,7 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 		t.Fatalf("the view received %v", status)
 	}
 	r.call(surface, "runtime.status.unwatch", map[string]any{"name": "terminal.screen", "surface": surface})
-	r.f.pending.until(t, func() bool {
+	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		last := r.pushed[len(r.pushed)-1]
@@ -444,7 +444,7 @@ func TestTheSurfaceStatusListsWhatTheViewRegistered(t *testing.T) {
 		t.Fatalf("a view that registered nothing lists %v", listed)
 	}
 	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	r.f.pending.until(r.t, func() bool { return len(exposes()) == 1 })
+	r.f.until(func() bool { return len(exposes()) == 1 })
 	if listed := exposes(); !reflect.DeepEqual(listed, []any{"command terminal.input"}) {
 		t.Fatalf("the view lists %v", listed)
 	}

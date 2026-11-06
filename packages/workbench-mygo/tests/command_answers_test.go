@@ -68,3 +68,54 @@ func TestTheSearchFocusNeedsTheLibrary(t *testing.T) {
 		t.Fatalf("core.library.search.focus failed with %v", err)
 	}
 }
+
+// A command answers after the frame that shows its change (docs/spec/exposure.md#registration): core.projects.browse, the
+// command of Command+K, answers when the frame that draws the library ran, so a request that the caller sends after the answer
+// finds the elements of the library.
+func TestACommandAnswersAfterTheFrameThatShowsItsChange(t *testing.T) {
+	f := openedShell(t)
+	if f.has("core.library.window", "") {
+		t.Fatal("the workspace already shows the library")
+	}
+	answered := false
+	var focused error
+	f.shell.Registry().RunLater("core.projects.browse", nil, func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.projects.browse failed: %v", err)
+		}
+		answered = true
+		_, focused = f.shell.Registry().Answer("command.run",
+			json.RawMessage(`{"name":"core.focus.set","params":{"name":"core.library.window","index":0}}`), nil)
+	})
+	if answered {
+		t.Fatal("core.projects.browse answered before a frame drew the library")
+	}
+	f.settle()
+	if !answered {
+		t.Fatal("core.projects.browse did not answer after the frame that drew the library")
+	}
+	if focused != nil {
+		t.Fatalf("a request after the answer of core.projects.browse failed: %v", focused)
+	}
+}
+
+// A command whose run asks for no frame answers at once: core.library.window asks the host for a new window and changes
+// nothing that this window draws.
+func TestACommandThatChangesNothingAnswersAtOnce(t *testing.T) {
+	f := openedShell(t)
+	frames := f.frames
+	answered := false
+	f.shell.Registry().RunLater("core.library.window", nil, func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.library.window failed: %v", err)
+		}
+		answered = true
+	})
+	if f.frames != frames {
+		t.Fatalf("core.library.window asked for %d frames", f.frames-frames)
+	}
+	if !answered {
+		t.Fatal("core.library.window, which asked for no frame, did not answer at once")
+	}
+	f.settle()
+}

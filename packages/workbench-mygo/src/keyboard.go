@@ -22,8 +22,6 @@ type keyboardState struct {
 	due bool
 	// target is the surface of the last call. It starts nil, because a window starts with the keyboard in its workbench.
 	target *string
-	// moves counts the moves of the ring, so a command reads whether it moved the ring.
-	moves int
 	// decided holds the answers that wait for the keyboard decision that follows their placement, and answered those that
 	// wait for the keyboard calls that run. sending counts those calls.
 	decided, answered []func(err error)
@@ -38,19 +36,20 @@ func (s *Shell) keyboardPressed() {
 	s.options.Invalidate()
 }
 
-// focusCard moves the focus ring to card and owes the keyboard to its active surface.
+// focusCard moves the focus ring to card and owes the keyboard to its active surface. The frame that it asks for shows the move.
 func (s *Shell) focusCard(card string) {
 	s.focused = card
 	s.keyboard.owed = true
-	s.keyboard.moves++
+	s.options.Invalidate()
 }
 
-// followCommand holds the answer of a command that moves the ring until the placement that shows the move ran and the host
-// answered the keyboard call that follows it.
+// followCommand holds the answer of a command whose run asked for a frame until the placement of that frame ran and the host
+// answered the keyboard call that follows it, so a request after the answer finds what the frame shows; a move of the ring is
+// one such change. A run that asked for no frame, or that failed, answers at once (docs/spec/exposure.md#registration).
 func (s *Shell) followCommand(answer func(value any, err error)) func(value any, err error) {
-	moves := s.keyboard.moves
+	requests := s.frameRequests.Load()
 	return func(value any, err error) {
-		if err != nil || s.keyboard.moves == moves {
+		if err != nil || s.frameRequests.Load() == requests {
 			answer(value, err)
 			return
 		}

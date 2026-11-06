@@ -178,7 +178,7 @@ func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {
 		r.mu.Unlock()
 		r.ask(id, "element.rect", `{"name": "terminal.view"}`)
 		var pushed map[string]any
-		r.f.pending.until(t, func() bool {
+		r.f.until(func() bool {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			if len(r.pushed) <= seen {
