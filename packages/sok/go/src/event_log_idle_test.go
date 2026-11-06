@@ -325,6 +325,7 @@ func TestAFlushThatAStopFindsBehindItIsAnswered(t *testing.T) {
 }
 
 // A writer that does not answer leaves its caller the deadline, and the error names it.
+// contract: log.writer.flush-at-exit
 func TestAFlushThatGetsNoAnswerReportsItsDeadline(t *testing.T) {
 	useEventLogFilesystemPlatform(t)
 	log, err := StartEventLog(EventLogOptions{

@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use soksak_host::platform;
 
+// contract: log.native.wake-stores-a-record-at-once
 #[test]
 fn a_native_event_ends_the_wait_of_the_platform() {
     let system = platform::current().unwrap();

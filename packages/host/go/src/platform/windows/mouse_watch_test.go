@@ -65,6 +65,7 @@ func watchSurface(source *mouseSource, surface uintptr) (*[]uintptr, *[]step, ui
 	return asked, steps, monitor
 }
 
+// contract: platform.windows.mouse.mask-follows-raw-input-buttons
 func TestTheMaskFollowsEveryButtonOfARawInput(t *testing.T) {
 	for _, test := range []struct {
 		flags uint16
@@ -88,6 +89,7 @@ func TestTheMaskFollowsEveryButtonOfARawInput(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.held-buttons-name-their-bits
 func TestTheHeldButtonsNameTheirBits(t *testing.T) {
 	mask := mouseButtonsHeld(func(key int) bool { return key == 0x02 || key == 0x06 })
 	if mask != 1<<1|1<<4 {
@@ -95,6 +97,7 @@ func TestTheHeldButtonsNameTheirBits(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.button-watch-reports-mask-from-its-start
 func TestEveryButtonInputReportsItsMaskOnTheUIThread(t *testing.T) {
 	source, tasks, _ := newMouseSource(&fakeMouse{})
 	source.mask = 1 << 1
@@ -119,6 +122,7 @@ func TestEveryButtonInputReportsItsMaskOnTheUIThread(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.second-button-watch-is-refused
 func TestASecondButtonWatchIsRefused(t *testing.T) {
 	source, _, _ := newMouseSource(&fakeMouse{})
 	if err := source.setChanged(func(uint64) {}); err != nil {
@@ -129,6 +133,7 @@ func TestASecondButtonWatchIsRefused(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.drag-over-surface-reaches-window-in-order
 func TestADragThatStartsOverASurfaceReachesItsWindowInOrder(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{30, 20, 10}, x: 1, y: 2}
 	source, tasks, _ := newMouseSource(system)
@@ -157,6 +162,7 @@ func TestADragThatStartsOverASurfaceReachesItsWindowInOrder(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.fast-click-still-ends-its-drag
 func TestAClickFasterThanTheUIThreadStillEndsItsDrag(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{20}}
 	source, tasks, _ := newMouseSource(system)
@@ -169,6 +175,7 @@ func TestAClickFasterThanTheUIThreadStillEndsItsDrag(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.page-drag-never-wakes-ui-thread
 func TestADragOfThePageNeverWakesTheUIThread(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{30}}
 	source, tasks, _ := newMouseSource(system)
@@ -187,6 +194,7 @@ func TestADragOfThePageNeverWakesTheUIThread(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.move-without-position-change-wakes-nothing
 func TestAMoveWithoutAPositionChangeWakesNothing(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{20}, x: 1}
 	source, tasks, _ := newMouseSource(system)
@@ -200,6 +208,7 @@ func TestAMoveWithoutAPositionChangeWakesNothing(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.press-over-another-window-is-not-delivered
 func TestAPressOverAnotherWindowIsNotDelivered(t *testing.T) {
 	for _, window := range []uintptr{8, 0} {
 		system := &fakeMouse{window: window, views: []uintptr{20}}
@@ -214,6 +223,7 @@ func TestAPressOverAnotherWindowIsNotDelivered(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.primary-button-follows-system-exchange
 func TestThePrimaryButtonFollowsTheSystemExchange(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{20}, swap: true}
 	source, tasks, _ := newMouseSource(system)
@@ -234,6 +244,7 @@ func TestThePrimaryButtonFollowsTheSystemExchange(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.secondary-button-is-no-drag
 func TestASecondaryButtonIsNoDrag(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{20}}
 	source, tasks, _ := newMouseSource(system)
@@ -245,6 +256,7 @@ func TestASecondaryButtonIsNoDrag(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.removed-watch-takes-no-input
 func TestAnEndedWatchTakesNoStepThatWasSentToIt(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{20}}
 	source, tasks, _ := newMouseSource(system)
@@ -261,6 +273,7 @@ func TestAnEndedWatchTakesNoStepThatWasSentToIt(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.read-failure-is-reported-and-release-ends-drag
 func TestAReadFailureIsReportedAndAReleaseStillEndsTheDrag(t *testing.T) {
 	system := &fakeMouse{window: 7, views: []uintptr{20}, x: 1, y: 2}
 	source, tasks, errs := newMouseSource(system)
@@ -279,6 +292,7 @@ func TestAReadFailureIsReportedAndAReleaseStillEndsTheDrag(t *testing.T) {
 	}
 }
 
+// contract: platform.windows.mouse.unreadable-hit-is-reported
 func TestAHitThatCannotBeReadIsReported(t *testing.T) {
 	system := &fakeMouse{window: 7, hitErr: errors.New("no position")}
 	source, tasks, errs := newMouseSource(system)

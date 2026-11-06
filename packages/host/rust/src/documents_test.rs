@@ -181,7 +181,7 @@ fn document_error_records(name: &str) -> Vec<serde_json::Value> {
 
 // contract: documents.attach.one-main-step
 #[test]
-fn a_surface_close_during_an_attach_finds_no_name_of_the_attach() {
+fn a_surface_close_during_a_document_attach_finds_no_name_of_the_attach() {
     let (surface, name) = ("document-close-surface", "document-close-region");
     let (webview, records, framework) = attach_fixture(surface, name);
     let closed = records.clone();

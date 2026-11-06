@@ -4,6 +4,7 @@ use super::settled_frame;
 use crate::test_framework::{FixtureFrontend, WINDOW};
 
 /// The settled wait brings the content to the screen through the settled presentation of the Frontend.
+// contract: exposure.settled-wait.presents-through-the-frontend
 #[test]
 fn the_settled_wait_brings_the_content_through_the_frontend() {
     let frontend = FixtureFrontend::new(Ok(0x20));
@@ -32,6 +33,7 @@ fn the_settled_wait_brings_the_content_through_the_frontend() {
 }
 
 /// A settled presentation that the Frontend cannot make ends the wait with its error, before the settled wait of the platform.
+// contract: exposure.settled-wait.presents-through-the-frontend
 #[test]
 fn the_settled_wait_ends_with_the_failure_of_the_frontend() {
     let frontend = FixtureFrontend::new(Err("the main webview is gone".into()));
@@ -44,6 +46,7 @@ fn the_settled_wait_ends_with_the_failure_of_the_frontend() {
 }
 
 /// The failure of the block ends the settled wait.
+// contract: exposure.settled-wait.presents-through-the-frontend
 #[test]
 fn the_settled_wait_ends_with_the_failure_of_the_presentation() {
     let frontend = FixtureFrontend::new(Ok(0x20));

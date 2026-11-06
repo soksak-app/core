@@ -185,6 +185,7 @@ func TestADragThatRecordedFewerStepsThanItDeliveredFails(t *testing.T) {
 }
 
 // A press goes where the last frame drew, so a boundary that a change just made takes the press only after the window presented it.
+// contract: diagnostics.drag.native-reads-boundary-after-presentation
 func TestANativeDragAsksForItsBoundaryAfterTheWindowPresentedIt(t *testing.T) {
 	order := []string{}
 	from, err := presentedBoundary(func() (float64, error) {

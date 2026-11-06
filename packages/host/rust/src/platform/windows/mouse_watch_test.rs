@@ -18,6 +18,7 @@ struct FakeMouse {
     views: Vec<Handle>,
     at: Cell<(f64, f64)>,
     fails: Cell<bool>,
+    hit_fails: bool,
     hits: Cell<u32>,
 }
 
@@ -27,6 +28,9 @@ impl MouseSystem for &FakeMouse {
     }
     fn hit(&self) -> Result<Option<(Handle, Vec<Handle>)>, String> {
         self.hits.set(self.hits.get() + 1);
+        if self.hit_fails {
+            return Err("no position".into());
+        }
         if self.window == 0 {
             return Ok(None);
         }
@@ -75,6 +79,7 @@ fn run_steps(watch: &InputWatch, steps: Vec<MouseStep>) {
     }
 }
 
+// contract: platform.windows.mouse.mask-follows-raw-input-buttons
 #[test]
 fn the_mask_follows_every_button_of_a_raw_input() {
     for (flags, from, want, named) in [
@@ -96,6 +101,7 @@ fn the_mask_follows_every_button_of_a_raw_input() {
     }
 }
 
+// contract: platform.windows.mouse.held-buttons-name-their-bits
 #[test]
 fn the_held_buttons_name_their_bits() {
     assert_eq!(
@@ -104,6 +110,7 @@ fn the_held_buttons_name_their_bits() {
     );
 }
 
+// contract: platform.windows.mouse.button-watch-reports-mask-from-its-start
 #[test]
 fn every_button_input_reports_its_mask_once_reports_started() {
     let watches = Mutex::new(MouseWatches::new());
@@ -123,6 +130,7 @@ fn every_button_input_reports_its_mask_once_reports_started() {
     assert_eq!(reported(RIGHT_UP, &mut reader), vec![MouseStep::Buttons(0)]);
 }
 
+// contract: platform.windows.mouse.second-button-watch-is-refused
 #[test]
 fn a_second_button_watch_is_refused() {
     let watches = Mutex::new(MouseWatches::new());
@@ -130,6 +138,7 @@ fn a_second_button_watch_is_refused() {
     assert!(start_reports(&watches).is_err());
 }
 
+// contract: platform.windows.mouse.drag-over-surface-reaches-window-in-order
 #[test]
 fn a_drag_that_starts_over_a_surface_reaches_its_window_in_order() {
     let watches = Mutex::new(MouseWatches::new());
@@ -161,6 +170,7 @@ fn a_drag_that_starts_over_a_surface_reaches_its_window_in_order() {
     assert_eq!(reader.receive(0).0, vec![]);
 }
 
+// contract: platform.windows.mouse.fast-click-still-ends-its-drag
 #[test]
 fn a_click_faster_than_the_ui_thread_still_ends_its_drag() {
     let watches = Mutex::new(MouseWatches::new());
@@ -174,6 +184,7 @@ fn a_click_faster_than_the_ui_thread_still_ends_its_drag() {
     assert_eq!(*points.borrow(), vec![(0, 0.0, 0.0), (2, 0.0, 0.0)]);
 }
 
+// contract: platform.windows.mouse.page-drag-never-wakes-ui-thread
 #[test]
 fn a_drag_of_the_page_never_wakes_the_ui_thread() {
     let watches = Mutex::new(MouseWatches::new());
@@ -188,6 +199,7 @@ fn a_drag_of_the_page_never_wakes_the_ui_thread() {
     assert!(points.borrow().is_empty());
 }
 
+// contract: platform.windows.mouse.move-without-position-change-wakes-nothing
 #[test]
 fn a_move_without_a_position_change_wakes_nothing() {
     let watches = Mutex::new(MouseWatches::new());
@@ -201,6 +213,7 @@ fn a_move_without_a_position_change_wakes_nothing() {
     assert_eq!(reader.receive(WHEEL).0, vec![]);
 }
 
+// contract: platform.windows.mouse.press-over-another-window-is-not-delivered
 #[test]
 fn a_press_over_another_window_is_not_delivered() {
     for window in [8, 0] {
@@ -217,6 +230,7 @@ fn a_press_over_another_window_is_not_delivered() {
     }
 }
 
+// contract: platform.windows.mouse.primary-button-follows-system-exchange
 #[test]
 fn the_primary_button_follows_the_system_exchange() {
     let watches = Mutex::new(MouseWatches::new());
@@ -236,6 +250,7 @@ fn the_primary_button_follows_the_system_exchange() {
     assert_eq!(*points.borrow(), vec![(0, 0.0, 0.0), (2, 0.0, 0.0)]);
 }
 
+// contract: platform.windows.mouse.secondary-button-is-no-drag
 #[test]
 fn a_secondary_button_is_no_drag() {
     let watches = Mutex::new(MouseWatches::new());
@@ -246,6 +261,7 @@ fn a_secondary_button_is_no_drag() {
     assert_eq!(system.hits.get(), 0);
 }
 
+// contract: platform.windows.mouse.removed-watch-takes-no-input
 #[test]
 fn a_removed_watch_is_not_read() {
     let watches = Mutex::new(MouseWatches::new());
@@ -256,6 +272,7 @@ fn a_removed_watch_is_not_read() {
     assert_eq!(reader.receive(LEFT_DOWN).0, vec![]);
 }
 
+// contract: platform.windows.mouse.read-failure-is-reported-and-release-ends-drag
 #[test]
 fn a_read_failure_is_reported_and_a_release_still_ends_the_drag() {
     let watches = Mutex::new(MouseWatches::new());
@@ -272,4 +289,23 @@ fn a_read_failure_is_reported_and_a_release_still_ends_the_drag() {
     assert_eq!(release_failures.len(), 1);
     run_steps(&watch, released);
     assert_eq!(*points.borrow(), vec![(0, 1.0, 2.0), (2, 1.0, 2.0)]);
+}
+
+// contract: platform.windows.mouse.unreadable-hit-is-reported
+#[test]
+fn a_hit_that_cannot_be_read_is_reported() {
+    let watches = Mutex::new(MouseWatches::new());
+    let (_, dragging) = add_watch(&watches, WINDOW);
+    let (watch, points) = input_watch(20, dragging);
+    let system = FakeMouse {
+        hit_fails: true,
+        ..surface_mouse(&[20])
+    };
+    let mut reader = MouseReader::new(&system, &watches);
+    let (steps, failures) = reader.receive(LEFT_DOWN);
+    assert_eq!(failures.len(), 1);
+    assert_eq!(steps, vec![]);
+    run_steps(&watch, steps);
+    run_steps(&watch, reader.receive(LEFT_UP).0);
+    assert!(points.borrow().is_empty());
 }
