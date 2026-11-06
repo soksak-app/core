@@ -1690,6 +1690,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F638",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false, frameIdentity } = {})" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/drag-pace.test.mjs", id: "a drag that is not paced fails at once with its took, asked, press waits, range and load" },
+      { file: "packages/window-check/test/drag-pace.test.mjs", id: "a drag that is paced passes after one gesture" },
+    ],
+    expected: "A window check drag that does not run at the asked rate fails after its first gesture with its took, asked, press waits, range and load, and a paced drag passes after one gesture.",
+    levels: ["unit"],
+  },
+  {
     id: "F554",
     implementation: [
       { file: "packages/workbench/plane.js", symbol: "return sectionSurfaceShown(surfaceId) ? value(\"textSize\") : null;" },
