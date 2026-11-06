@@ -31,20 +31,27 @@ const RESCAN_REPORT = / File system must be re-scanned\.$/;
  * (recursive) is active and again at each change and at each report of lost events (RESCAN_REPORT); an error that `read`
  * throws or any other error that the watch reports rejects the wait. At the deadline `timeout` (ms) `read` runs once more,
  * and the wait rejects with the error that `expired()` returns when it returns undefined. An abort of `signal` rejects the
- * wait with its reason, as a process whose state the wait awaits that ends first. The watch ends before the wait settles,
- * and an error of its end rejects the wait.
+ * wait with its reason, as a process whose state the wait awaits that ends first. The deadline bounds the wait also when
+ * the watch does not start or does not end: at a high load of the file system events service the start and the end of a
+ * watch can take minutes. The wait settles first and the watch ends after it; endWatches reports a watch end that has not
+ * finished and an error of a watch end.
  */
 export function untilFolderState(folder, read, timeout, expired, signal) {
   return new Promise((resolve, reject) => {
     let active = false;
     let finished = false;
-    // `settle` resolves or rejects the wait after the watch ended; a watch that did not start rejects it with its own
-    // error, and an error of the end of the watch rejects it.
-    const finish = (settle) => {
+    // `outcome` (resolve or reject) settles the wait with `value` at once, and the watch ends after it. A watch that did not
+    // start ends when its start settles; an error of its end goes to endWatches.
+    const finish = (outcome, value) => {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
-      subscribed.then((subscription) => subscription.unsubscribe().then(settle), reject).catch(reject);
+      outcome(value);
+      const end = { folder, reported: false };
+      // default: a watch whose start failed has nothing to end, and the error of its start rejected the wait.
+      ending.set(end, subscribed.then((subscription) => subscription.unsubscribe(), () => undefined).then(
+        () => { ending.delete(end); },
+        (error) => { ending.delete(end); endErrors.push(new Error(`the watch of ${folder} failed to end: ${error.message}`, { cause: error })); }));
     };
     const check = (atDeadline = false) => {
       if (finished || (!active && !atDeadline)) return;
@@ -52,23 +59,48 @@ export function untilFolderState(folder, read, timeout, expired, signal) {
       try {
         value = read();
       } catch (error) {
-        finish(() => reject(error));
+        finish(reject, error);
         return;
       }
-      if (value !== undefined) finish(() => resolve(value));
-      else if (atDeadline) finish(() => reject(expired()));
+      if (value !== undefined) finish(resolve, value);
+      else if (atDeadline) finish(reject, expired());
     };
     // The deadline bounds the wait, and the result is judged by the state that `read` returns at it: at a high load the
     // watch can become active or deliver a change after the deadline, so the state is read once more there.
     const timer = setTimeout(() => check(true), timeout);
-    signal?.addEventListener("abort", () => finish(() => reject(signal.reason)), { once: true });
-    const subscribed = subscribe(folder, (error) => {
-      if (error && !RESCAN_REPORT.test(error.message)) finish(() => reject(error));
-      else check();
-    });
+    signal?.addEventListener("abort", () => finish(reject, signal.reason), { once: true });
+    const subscribed = subscribe(folder, (error) => (error && !RESCAN_REPORT.test(error.message) ? finish(reject, error) : check()));
     subscribed.then(() => {
       active = true;
       check();
-    }, (error) => finish(() => reject(error)));
+    }, (error) => finish(reject, error));
   });
+}
+
+// The watch ends that have not finished, each with the promise of its end, and the errors of the watch ends since the last report.
+const ending = new Map();
+const endErrors = [];
+
+/**
+ * Waits until every watch end has finished or `limit` (ms) has passed, and returns the failures of the watch ends: an
+ * error for each watch that has not ended by then, reported once per watch, and each error of a watch end. A check calls
+ * it when it ends, because a watch that a wait of the check started ends with that check.
+ */
+export async function endWatches(limit) {
+  let expired = null;
+  if (ending.size) {
+    let timer;
+    const bound = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`the watch ends did not finish within ${limit} ms`)), limit);
+    });
+    expired = await Promise.race([Promise.all(ending.values()), bound]).then(() => null, (error) => error);
+    clearTimeout(timer);
+  }
+  const failures = endErrors.splice(0);
+  for (const end of ending.keys()) {
+    if (end.reported) continue;
+    end.reported = true;
+    failures.push(new Error(`the watch of ${end.folder} did not end within ${limit} ms after its wait`, { cause: expired }));
+  }
+  return failures;
 }

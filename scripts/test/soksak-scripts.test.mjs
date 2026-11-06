@@ -623,6 +623,14 @@ new Promise((resolve, reject) => {
   assert.deepEqual(auditE2ESource(completion, "e2e/timeout-case.mjs"), []);
 });
 
+// A timer whose callback is a name and not a function is a wait of a fixed duration unless it rejects, so the audit reports it
+// with the file and the line instead of failing on the callback (F487).
+test("window-source audit reports a timer whose callback is a name", { timeout: 1000 }, () => {
+  const source = "new Promise((resolve) => { setTimeout(resolve, 1500); });";
+  assert.deepEqual(auditE2ESource(source, "e2e/timeout-case.mjs"),
+    ["e2e/timeout-case.mjs:1: uses setTimeout as a wait; a timeout must reject"]);
+});
+
 test("window-source audit does not resolve a timeout helper through a callback shadow", { timeout: 1000 }, () => {
   const source = `
 new Promise((resolve, reject) => {

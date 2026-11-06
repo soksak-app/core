@@ -11,6 +11,7 @@ import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
+import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
@@ -94,6 +95,8 @@ export function assertEndpointUsesCurrentBuild(endpoint, resolvedBinary, binaryM
 
 /** The default wait time of one request. It is longer than the document response time of the host. */
 const REQUEST = 20_000;
+// The time limit (ms) for the end of the folder watches that the waits of a check started, at the end of the check.
+const WATCH_END_LIMIT = 10_000;
 
 /**
  * The sequential-run lock between check files. A second check run fails without waiting. The lock file holds the number
@@ -297,6 +300,11 @@ export async function finishSession(t, session, close) {
           `that the check did not declare:\n${undeclared.join("\n")}`);
       }
     } catch (error) {
+      failures.push(error);
+      t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+    }
+    // A folder watch that a wait of the check started ends with the check (folder-wait.mjs).
+    for (const error of await endWatches(WATCH_END_LIMIT)) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
