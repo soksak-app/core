@@ -395,13 +395,14 @@ for (const app of Object.values(APPS)) {
       return tab;
     };
 
-    await s.run("core.settings.set", { patch: { "browser.home": home } });
+    // The home address is a common setting, which the preparation of the check keeps and restores when the check ends.
+    await s.run("core.settings.set", { patch: { "browser.home": home }, scope: "common" });
     await s.until("core.settings", (value) => value.values["browser.home"] === home && !value.saving, "browser.home was not saved");
     const opened = await split();
     await loaded(s, opened, home);
     await placed(s, opened, "the home document");
 
-    await s.run("core.settings.set", { patch: { "browser.home": "" } });
+    await s.run("core.settings.set", { patch: { "browser.home": "" }, scope: "common" });
     await s.until("core.settings", (value) => value.values["browser.home"] === "" && !value.saving, "browser.home was not cleared");
     const empty = await split();
     assert.equal((await s.get("browser.location", empty)).url, "", "a new browser card without a home has an address");

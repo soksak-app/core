@@ -992,9 +992,10 @@ export async function prepareFixture(s, { settings = {}, performanceTrace = TRAC
  * a check must not remain.
  */
 export async function keepCommonSettings(s) {
-  const before = (await s.get("core.settings")).values;
+  // The common values, not the effective ones: a value that the project of the check overrides is not a common value.
+  const before = (await s.get("core.settings")).common;
   s.cleanup(async () => {
-    const now = (await s.get("core.settings")).values;
+    const now = (await s.get("core.settings")).common;
     const patch = Object.fromEntries(Object.entries(before)
       .filter(([key, value]) => JSON.stringify(now[key]) !== JSON.stringify(value)));
     if (Object.keys(patch).length) await s.run("core.settings.set", { patch, scope: "common" });
