@@ -5,7 +5,7 @@
 // networking process (pgrep -f com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed. The memory of a
 // process is its phys_footprint (footprint -p PID -f bytes). Its CPU share is the
 // CPU time that ps reports, read at two points INTERVAL seconds apart. Every error is printed to stderr with the process or window it concerns,
-// and the exit status is 1 when an error occurred. `make app-usage` runs it.
+// and the exit status is 1 when an error occurred. `make measure-app-usage` runs it.
 //
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] [--interval SECONDS] [--json]
 import { execFileSync, spawnSync } from "node:child_process";

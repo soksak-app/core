@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F490: `make test-app`이 `build-registry`로 workspace registry를 만들고 native end-to-end target `test-app`을 실행하며, 기록이 Makefile이 선언한 make target을 가리킵니다. end-to-end target의 test가 prerequisite, window-check script, native target을 검사합니다.
 - F489: native test의 focus fixture가 main web view의 title을 끝난 navigation과 함께 기다립니다. navigation이 끝날 때 title이 아직 비어 있을 수 있기 때문입니다. 실패는 page 상태를 보고합니다.
 - F488: event 1,000,000개 로그의 query contract case가 경과 시간 대신 query마다 행과 읽은 segment와 줄로 판정하므로, 공유 runner의 부하로 실패하지 않습니다. 시간은 계속 출력합니다.
 - F486: window check의 folder wait가 watch의 dropped events 보고에서 실패하지 않고 folder의 상태를 다시 읽습니다.

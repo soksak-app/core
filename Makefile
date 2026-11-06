@@ -20,7 +20,7 @@ check-commits:
 install-hooks:
 	@git config core.hooksPath .githooks
 
-# Runs before a push (the pre-push hook of `make hooks`): the commit messages of RANGE, because a published commit message is kept.
+# Runs before a push (the pre-push hook of `make install-hooks`): the commit messages of RANGE, because a published commit message is kept.
 # CI runs every other check on the pushed commits, a later commit corrects a failure, and the release gate releases only a green run.
 # The pre-push hook sets RANGE to the commits of each pushed ref (scripts/push-range.mjs). Without RANGE, the commits are origin/main..HEAD:
 # the commits that the remote main branch does not have. This range exists on every branch, while @{upstream}..HEAD fails with git exit 128
@@ -476,9 +476,9 @@ check-release-tauriv2: build-tauriv2-release
 # Each e2e target builds both debug applications and the workspace registry, and scripts/test-app.mjs runs the window-check script
 # and the native end-to-end target of its tier in a new configuration root under target/e2e: it starts the applications, runs the
 # checks and quits the applications.
-E2E_BUILD = build-wailsv3 build-tauriv2 registry
+E2E_BUILD = build-wailsv3 build-tauriv2 build-registry
 test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
-	@node scripts/test-app.mjs --script test-app --native e2e $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+	@node scripts/test-app.mjs --script test-app --native test-app $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
 
 test-app-activation: $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:activation --native test-app-activation

@@ -95,7 +95,7 @@ test("generated exclusions are explicit and do not exclude another package's dis
   const result = discoverInventory(["packages/soksak/dist/index.js", "new/dist/original.js"]);
   assert.deepEqual(result.implementations, [{ file: "new/dist/original.js", language: "js-ts" }]);
   assert.equal(result.generated.length, 1);
-  assert.match(result.generated[0].reason, /make verify/);
+  assert.match(result.generated[0].reason, /make test-all/);
 });
 
 test("inventory reports uncovered implementations and tests as separate results", { timeout: 1000 }, () => {

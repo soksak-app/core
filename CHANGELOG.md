@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F490: `make test-app` builds the workspace registry through `build-registry` and runs the native end-to-end target `test-app`, and the records name the make targets that the Makefiles declare; a test of the end-to-end targets checks their prerequisites, window-check scripts and native targets.
 - F489: The focus fixture of the native tests waits for the title of its main web view together with the finished navigation, because the title can still be empty when the navigation finishes; its failure reports the state of the page.
 - F488: The contract case of the query on a log of 1,000,000 events judges the rows and the segments and lines that each query reads instead of its elapsed time, so the load of a shared runner no longer fails it; it still prints each time.
 - F486: A folder wait of the window checks reads the state of the folder again when its watch reports dropped events, instead of failing.

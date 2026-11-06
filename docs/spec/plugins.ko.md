@@ -25,7 +25,7 @@ Plugin과 sidecar는 자기 repository에 있다([Repository](#repository)).
 
 ## Repository
 
-Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make check-boundaries`는 `scripts/workspace-registry.json`이 선언한 plugin id를 읽고 다른 repository는 읽지 않으므로 core checkout만으로 실행된다. `make registry`는 선언된 sibling repository를 읽어 plugin을 pack하고 sidecar를 release하며, `plugin.json`의 `id`가 선언과 다르면 파일과 두 값을 밝히며 실패하고, `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다.
+Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make check-boundaries`는 `scripts/workspace-registry.json`이 선언한 plugin id를 읽고 다른 repository는 읽지 않으므로 core checkout만으로 실행된다. `make build-registry`는 선언된 sibling repository를 읽어 plugin을 pack하고 sidecar를 release하며, `plugin.json`의 `id`가 선언과 다르면 파일과 두 값을 밝히며 실패하고, `make install-plugins`는 `make build-registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다.
 
 | 폴더 | Repository | GitHub |
 | --- | --- | --- |
@@ -45,7 +45,7 @@ Core, plugin, sidecar, kit은 소스 수준에서 결합하지 않는다. 어떤
 
 Plugin이나 sidecar의 version은 자기 것이며 core version과 관계가 없다. Plugin의 `engines.soksak` 범위가 그 plugin을 설치하는 core version을 정하며, 한 core release에서 끝나는 범위가 plugin이 다음 release에 설치되는 것을 막지 않는다. Plugin이나 sidecar repository의 release workflow는 `main`으로의 push에서 시작해 자기 `ci.yml`을 검사로 실행하고 kit의 release gate를 실행한다. Gate가 release하면 release job은 run commit이 `main`의 head이고 tag `v<version>`이 없음을 요구하고, 자기 생태계의 표준 package 도구로 release를 쓰고 release 파일과 함께 `v<version>`을 만든다. Plugin이나 sidecar repository의 어떤 workflow도 core나 다른 plugin, sidecar repository를 checkout하거나 그곳에서 내려받지 않는다. Plugin repository는 build에서 sidecar에 의존하지 않는다. `plugin.json`의 `dependencies`가 설치를 위해 sidecar와 그 범위를 적는다. `make install`은 plugin이나 sidecar repository의 설치 단계다. 잠긴 의존과 build가 필요로 하는 외부 소스를 받고, build, test, pack은 설치하지 않고 그것이 설치한 것을 쓴다. `make test`는 plugin repository의 test를 실행하고, `make pack OUT=<folder>`는 release가 필요로 하는 것을 build하고 `pnpm pack`으로 release를 쓴다([plugin release](installation.md#plugin-release)). Core의 workspace registry는 이 target으로 각 plugin을 pack한다. Sidecar repository는 `make test`, `sidecar.json`이 적는 실행 파일을 쓰는 `make build`, sidecar를 build하고 `npm pack`으로 현재 platform의 release를 쓰는 `make release OUT=<folder>`를 갖는다([sidecar release](installation.md)). Registry repository `../registry`는 새 plugin, sidecar, version을 제3자의 것도 entry 파일을 바꾸는 pull request로 받는다. 그 workflow는 pull request를 검사하고 merge하고 index를 게시하며([공개 registry](registry.md)), 그 `make build`는 `index.json`을 쓰기 전에 모든 release를 그 entry와 대조한다.
 
-Core window check는 registry fixture에서 plugin을 설치한다. `scripts/workspace-registry.json`은 main checkout(git common directory의 상위 폴더, 따라서 worktree도 같은 sibling 폴더를 찾는다) 기준 상대 폴더로 plugin repository와 각 plugin의 id(`{repository, id}`), sidecar 폴더(`sidecar.json`을 가진 폴더), pack을 선언한다. `make registry`는 선언된 각 sidecar를 build하고 release하며, 선언된 각 plugin을 pack하고, `target/registry`에 index를 만든다. Network는 쓰지 않는다. `shell` plugin과 `@soksak/sidecar-shell`은 repository가 있지만 선언하지 않으므로, 두 애플리케이션의 새 space layout은 shell card 자리에 terminal card를 둔다.
+Core window check는 registry fixture에서 plugin을 설치한다. `scripts/workspace-registry.json`은 main checkout(git common directory의 상위 폴더, 따라서 worktree도 같은 sibling 폴더를 찾는다) 기준 상대 폴더로 plugin repository와 각 plugin의 id(`{repository, id}`), sidecar 폴더(`sidecar.json`을 가진 폴더), pack을 선언한다. `make build-registry`는 선언된 각 sidecar를 build하고 release하며, 선언된 각 plugin을 pack하고, `target/registry`에 index를 만든다. Network는 쓰지 않는다. `shell` plugin과 `@soksak/sidecar-shell`은 repository가 있지만 선언하지 않으므로, 두 애플리케이션의 새 space layout은 shell card 자리에 terminal card를 둔다.
 
 ## plugin.json
 
@@ -282,7 +282,7 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 
 ## 스테이징 배치
 
-`sok-copy-frontend <출력> [--diagnostics] [--installed <설정 디렉터리>] [--registry-index <절대 index 경로>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. `--registry-index`는 절대 index 경로를 Node의 `pathToFileURL`로 file URL로 바꾸고, staged 환경에서만 `environment.json`의 registry를 교체한다. Debug staging target은 `make registry`가 생성한 workspace registry의 절대 경로를 전달한다. Release staging은 `--registry-index`를 전달하지 않으므로 선언된 HTTPS registry가 기본값으로 남는다. 원본 `environment.json`은 바뀌지 않는다. 스테이징된 프런트엔드는 다음을 포함한다:
+`sok-copy-frontend <출력> [--diagnostics] [--installed <설정 디렉터리>] [--registry-index <절대 index 경로>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. `--registry-index`는 절대 index 경로를 Node의 `pathToFileURL`로 file URL로 바꾸고, staged 환경에서만 `environment.json`의 registry를 교체한다. Debug staging target은 `make build-registry`가 생성한 workspace registry의 절대 경로를 전달한다. Release staging은 `--registry-index`를 전달하지 않으므로 선언된 HTTPS registry가 기본값으로 남는다. 원본 `environment.json`은 바뀌지 않는다. 스테이징된 프런트엔드는 다음을 포함한다:
 
 | 경로 | 원본 |
 | --- | --- |

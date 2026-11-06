@@ -304,7 +304,7 @@ On macOS each application runs from an application bundle, because the operating
 | `make build-wailsv3`, `make build-tauriv2` | Build `native/darwin` and the frontend, stage it, and build the debug executable |
 | `make build-wailsv3-release`, `make build-tauriv2-release` | Build the release executable |
 | `make wailsv3`, `make tauriv2` | Build and run the debug executable |
-| `make registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry` from the plugin and sidecar repositories that `scripts/workspace-registry.json` declares ([repositories](plugins.md#repositories)), and install its plugins into a configuration directory |
+| `make build-registry`, `make install-plugins CONFIG=DIR` | Build the workspace registry in `target/registry` from the plugin and sidecar repositories that `scripts/workspace-registry.json` declares ([repositories](plugins.md#repositories)), and install its plugins into a configuration directory |
 | `make check-rust-clippy` | Run clippy with `-D warnings` on every package and test of the Rust workspace, with and without the diagnostics feature; `make test-native` runs it |
 | `make test-native` | Run `make -C native/darwin test`, `go test` for `packages/host/wailsv3`, and `cargo test -p soksak-host-tauriv2`, the host tests with and without diagnostics; each sidecar repository runs its own tests |
 | `make check-platform-files` | Run `scripts/check-platform-files.mjs` |
