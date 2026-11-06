@@ -657,6 +657,7 @@ func TestADecidedCallEndsTheHoldAndAPlainCallDoesNot(t *testing.T) {
 	}
 }
 
+// contract: surface-layout.keyboard-waits-for-the-decision
 func TestTheInputOfTheWindowWaitsForTheDecisionOfTheWorkbench(t *testing.T) {
 	fake := &keyboardHoldPlatform{}
 	saved := system
