@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F497: release candidate는 0.0.39입니다.
+- F497: core 0.0.39를 게시했고, registry가 이를 요구하는 plugin release와 함께 올립니다.
 - F492: 개발 뒤의 window-check run이 두 host에서 통과한다: 파일 91개 중 91개, native end-to-end test 13개 중 13개.
 - F496: window check의 pasteboard 복원이 data 없는 type을 모두 밝히고, 읽은 item만 다시 쓴다.
 - F493: Tauri host가 다른 application을 무시하지 않을 때 launch에서 activation을 부르지 않는 tao fork commit을 써, background relaunch가 background에 남는다.
