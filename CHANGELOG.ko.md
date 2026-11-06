@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F659: release candidate는 0.0.40입니다.
 - F502-3: mygo host는 아무것도 배치하지 않는 frame을 framework의 native call 때문에 할당하지 않고 그린다. pin된 fork는 receiver로 call을 판정하고 할당 없이 실행한다. 전에는 calling thread에서 실행되는 `CFRelease`나 `release` 하나가 4번 할당했다. diff scene의 sidebar를 scroll하는 frame은 이제 166번 대신 102번 할당한다.
 - F651: `@soksak/plugin-api`는 test가 읽는 version 범위 사례 표를 `specFiles`에 선언하므로, 표가 바뀌면 이 package가 선택된다.
 - F651: host contract의 합집합 행은 pipe를 escape하고, markdown 표를 읽는 모든 check는 `scripts/markdown-table.mjs`의 `tableCells`로 cell을 읽는다. 이 함수는 escape되지 않은 `|`에서만 cell을 끝내고 `\|`를 `|`로 읽는다. 이전에는 계약 reader가 합집합을 나눠 scope를 `\`로 읽었다.

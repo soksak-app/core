@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F659: The release candidate is 0.0.40.
 - F502-3: The mygo host draws a frame that lays nothing out without allocating for the native calls of its framework: the pinned fork decides a call by its receiver and makes it without allocating, where each `CFRelease` or `release` that ran on the calling thread allocated 4 times, and a frame that scrolls the sidebar of the diff scene allocates 102 times instead of 166.
 - F651: `@soksak/plugin-api` declares the version range case table in `specFiles`, because its tests read it, so a change of the table selects the package.
 - F651: The union row of the host contract escapes its pipes, and every check that reads a markdown table reads its cells through `tableCells` of `scripts/markdown-table.mjs`, which ends a cell only at an unescaped `|` and reads `\|` as `|`; before, the contract reader split the union and read its scope as `\`.
