@@ -396,11 +396,12 @@ int main(int argc, char **argv) { @autoreleasepool {
     MainPageReadiness *mainPage = [[[MainPageReadiness alloc] init] autorelease];
     main.navigationDelegate = mainPage;
     [main loadHTMLString:mainPageHTML baseURL:nil];
-    BOOL mainReady = waitFor(^BOOL { return mainPage.finished || mainPage.failure != nil; })
-        && mainPage.finished && [main.title isEqual:@"main-ready"];
-    check(mainReady, mainPage.failure
-        ? [NSString stringWithFormat:@"the registered app DOM web view finishes its main page before activation (%@)", mainPage.failure]
-        : @"the registered app DOM web view finishes its main page before activation");
+    // The title of the web view can still be empty when its navigation finishes and reaches the page title later, so the wait observes both.
+    BOOL mainReady = waitFor(^BOOL {
+        return (mainPage.finished && [main.title isEqual:@"main-ready"]) || mainPage.failure != nil;
+    }) && mainPage.failure == nil;
+    check(mainReady, [NSString stringWithFormat:@"the registered app DOM web view finishes its main page before activation "
+        "(finished %d, failure %@, loading %d, title %@)", mainPage.finished, mainPage.failure, main.loading, main.title]);
     if (!mainReady) {
         [window close];
         [window release];
