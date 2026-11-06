@@ -6,6 +6,8 @@
 
 - F660: module mount와 함께 test를 잃은 view surface 동작이 view path에 소유 test를 갖는다: dispose 뒤 tab state, keep busy와 modified, unload와 close report, label cache, 대기 중인 dispose 뒤 mount, 실패한 mount의 mount listener, place 동안의 sidecar send, presentation ticket. authorization 전에 dispose가 끝낸 mount는 끝나지 않는 대신 null로 끝난다.
 - F644: Rust host에서 presentation의 raster 단계 기록, 즉 refresh와 대기 뒤 ticket을 담은 `present-raster-wait`는 test `the_raster_wait_of_a_presentation_records_its_refresh_and_its_wait`가 확인하며, 그 Red와 Green은 run을 기다린다.
+- F584-5-2: `TestAViewTakesThePointerUpToItsEdges` 는 view 안으로 닿던 grab area 에서 실패하고 변경 위에서 통과하므로, mygo workbench 의 native view 가 가장자리까지 pointer 를 받는 것이 run 으로 보인다.
+- F619: `platform.Substitute`는 Go host의 test를 위해 operating system의 구현 대신 다른 구현을 등록한다. `TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts`와 `TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError`는 host 시작 전에 window를 보인다: 등록된 fake로 보이고, 등록이 없으면 nil dereference 대신 status 1로 process를 끝낸다.
 - F619: framework의 window show는 등록된 platform에 묻는다. 그래서 framework test처럼 host 시작 전에 window를 보이는 process가 더는 nil dereference로 끝나지 않는다. 등록이 없으면 host의 fatal error로 process를 끝낸다.
 - F502-24-1: `go.work.sum`은 pin된 fork로 workspace module의 `go mod download`가 쓰는 내용을 담으므로, 그 download 뒤 checksum file의 변경을 거부하는 CI job의 guard가 변경을 보지 않는다.
 - F502-24-1: mygo module은 형제 folder 대신 push된 framework fork commit을 그 pseudo-version으로 가리키므로, worktree나 runner처럼 그 folder가 없는 checkout에서도 workspace의 모든 Go module이 import를 해석한다.
