@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-24-1: `go.work.sum` holds what `go mod download` of a workspace module writes with the pinned forks, so the guard of the CI jobs that rejects a change of the checksum files after that download sees none.
 - F502-24-1: The mygo modules name the pushed fork commit of the framework by its pseudo-version in place of a sibling folder, so every Go module of the workspace resolves its imports in a checkout without that folder, as a worktree or a runner has.
 - F592: The Wails modules name the pushed fork commit that gives a window and its web view the asked size by its pseudo-version, in place of a sibling folder that only one checkout has, and their sums list it.
 - F502-3: The mygo host draws a frame that lays nothing out without allocating for the native calls of its framework: the pinned fork decides a call by its receiver and makes it without allocating, where each `CFRelease` or `release` that ran on the calling thread allocated 4 times, and a frame that scrolls the sidebar of the diff scene allocates 102 times instead of 166.
