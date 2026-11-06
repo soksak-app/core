@@ -22,6 +22,8 @@ Core test 소유권은 독립적으로 선언된 core package를 따른다. Root
 
 발견한 Node test file은 자체 test 실행의 result를 요구한다. 성공한 file wrapper나 command exit만으로는 부족하며 empty file, 등록 전 exit, 선택한 test 없음, skipped case와 todo case는 실패한다. Support module이 있는 package script는 명시한 glob으로 test entrypoint를 선택한다. Directory argument는 모든 JavaScript file을 선택하는 Node 동작을 유지하며 선택한 모든 file은 test evidence를 제공해야 한다. Node test contract가 없는 command는 command-result 의미를 유지한다.
 
+Presentation wait의 unit check는 queue completion reaction이 실행될 task를 가질 때까지 presentation을 미완료 상태로 둔다. 현재 layout의 미완료 result와 다음 queued layout의 미실행을 함께 검사하고 presentation을 완료시킨 뒤 둘 다 끝나야 한다. Await 누락은 이 check를 실패시켜야 하며 promise completion이 전파될 수 있기 전의 관찰은 wait를 입증하지 않는다.
+
 
 증거에는 기능·테스트, 검증 수준, 언어·호스트·플랫폼, 미커밋 내용까지 포함한 소스·테스트 해시, 빌드 옵션, 실행 파일·사이드카 해시, 기대·실제 결과, 경과 시간을 기록한다. 의존 내용이 바뀌면 이전 증거는 무효다. 구조 범위·동작 검증·배포 승인은 별도 결과다.
 

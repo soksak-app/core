@@ -22,6 +22,8 @@ Missing implementations, missing tests, unregistered build targets, unresolved r
 
 Discovered Node test files require results from their own test execution. A successful file wrapper or command exit is insufficient: an empty file, an exit before registration, no selected tests, skipped cases and todo cases fail. Package scripts with support modules select test entrypoints with explicit globs. Directory arguments retain Node's selection of every JavaScript file, and every selected file must supply test evidence. Commands without a Node test contract retain command-result semantics.
 
+A unit check for a presentation wait holds the presentation unresolved until queue completion reactions have had a task in which to run. It checks both the current layout's incomplete result and the next queued layout's absence, then releases the presentation and requires both to complete. A missing await must fail that check; an observation before promise completion can propagate does not prove a wait.
+
 
 Evidence identifies the feature and test, verification level, language, host and platform, source and test content hashes including uncommitted content, build options, executable and sidecar hashes, expected and actual outcomes, and elapsed time. A changed dependency invalidates previous evidence. Structural coverage, behavior validation, and release approval are separate results.
 

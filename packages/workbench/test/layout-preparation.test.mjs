@@ -24,7 +24,7 @@ function fixture() {
     }));
   };
   const frame = () => { for (const callback of frames.splice(0)) callback(); };
-  return { calls, errors, prepared, presented, drawn, context, run, frame };
+  return { calls, errors, prepared, presented, drawn, context, layouts, run, frame };
 }
 
 test("the document waits for native preparation before drawing and retains the presentation barrier", { timeout: 1000 }, async () => {
@@ -37,11 +37,22 @@ test("the document waits for native preparation before drawing and retains the p
   assert.deepEqual(f.calls, ["prepare"], "the document drew before its draw task");
   let completed = false;
   done.then(() => { completed = true; });
-  f.frame(); await f.drawn.promise; await Promise.resolve();
-  assert.deepEqual(f.calls, ["prepare", "draw"]);
-  assert.equal(completed, false, "the layout queue released before matching presentation");
-  f.presented.resolve(); await done;
+  let nextStarted = false;
+  const next = f.layouts.run(() => { nextStarted = true; });
+  f.frame(); await f.drawn.promise;
+  // Let every queue completion reaction run. One microtask can observe an unfinished promise chain even when the wait is absent.
+  await new Promise((resolve) => setImmediate(resolve));
+  try {
+    assert.deepEqual(f.calls, ["prepare", "draw"]);
+    assert.equal(completed, false, "the layout queue released before matching presentation");
+    assert.equal(nextStarted, false, "the next layout started before matching presentation");
+  } finally {
+    f.presented.resolve();
+    await done;
+    await next;
+  }
   assert.equal(completed, true);
+  assert.equal(nextStarted, true);
   assert.deepEqual(f.errors, []);
 });
 
