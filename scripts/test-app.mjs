@@ -4,7 +4,8 @@
 // window-check script of their tier (`verify`, `test-app:activation`, `test-app:real`, `test-app:person`) and the native end-to-end target
 // of that tier. Each run makes a new configuration root under target/e2e, prepares the registry certificates and the plugins of the
 // applications in it, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
-// applications with host.quit and fails when a process of
+// applications through the Quit item of the application menu and the last one through Command+Q, and fails when an application ends
+// with another status than 0 or when a process of
 // the root or of a bundle remains. A passed run removes its root; a failed run keeps it with the logs of the applications, so a second
 // run starts from the same state as the first. Each step prints `running`, then `passed` or `failed` with its elapsed time, or `skipped`
 // with the failed step that skipped it.
@@ -23,7 +24,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const APPS = ['wailsv3', 'tauriv2', 'mygo'];
 /** The limit of a start step: the time that an application has to write endpoint.json. */
 const START_LIMIT_MS = 60_000;
-/** The limit of a quit step: the time that an application has to exit after host.quit. */
+/** The limit of a quit step: the time that an application has to exit after its Quit item or Command+Q. */
 const QUIT_LIMIT_MS = 60_000;
 
 const bundle = (root, app) => join(root, 'target', 'debug', `sok-${app}.app`);
@@ -40,7 +41,7 @@ export function newConfigRoot(root) {
 /**
  * The steps of a run. A step of the phase `prepare` that fails skips every later step except those of `cleanup`; a failed `check`
  * skips nothing. `run` runs a command to its end, `start` starts an application and ends when it writes endpoint.json, `quit` quits a
- * started application with host.quit, and `remaining` fails on a process whose command names the configuration root or a bundle.
+ * started application through the Quit item of its menu (`by` `menu`) or Command+Q (`by` `key`), and `remaining` fails on a process whose command names the configuration root or a bundle.
  */
 export function e2ePlan({ root, configRoot, script, native, whenIdle }) {
   const env = { SOKSAK_CONFIG_ROOT: configRoot };
@@ -64,7 +65,11 @@ export function e2ePlan({ root, configRoot, script, native, whenIdle }) {
       },
     },
     ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'run', argv: ['make', '-C', 'native/darwin', native], env }]),
-    ...APPS.map((app) => ({ name: `quit ${app}`, phase: 'cleanup', kind: 'quit', app, configDir: configDir(configRoot, app) })),
+    // A person quits through the Quit item of the application menu or its key equivalent: each application ends by the item and the
+    // last one by Command+Q, and the run, the parent of each process, checks that it exits with status 0.
+    ...APPS.map((app, index) => ({
+      name: `quit ${app}`, phase: 'cleanup', kind: 'quit', by: index === APPS.length - 1 ? 'key' : 'menu', app, configDir: configDir(configRoot, app),
+    })),
     { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map((app) => bundle(root, app))] },
   ];
 }
@@ -155,16 +160,46 @@ function crashReports(app, since) {
     .map((file) => `${file}: ${JSON.stringify(crashFault(readFileSync(file, 'utf8'), file))}`);
 }
 
+/** The key equivalent of the Quit item of the application menu, as host.menu writes it. */
+const QUIT_KEY = 'cmd+q';
+
+/**
+ * Quits the application through the path of a person (docs/operations/examples.md#end-to-end-run): `by` `menu` performs the item
+ * of the application menu whose key equivalent is Command+Q with host.menu.select, and `by` `key` sends Command+Q down and up to a
+ * window with input.key. Returns the name of the action for the messages of the step.
+ */
+async function requestQuit(client, by) {
+  if (by === 'menu') {
+    const { menus } = await client.request('status.get', { window: 'main', name: 'host.menu' });
+    const menu = menus.find((entry) => entry.items.some((entry) => entry.key === QUIT_KEY));
+    if (menu === undefined) throw new Error(`the application menu has no item with the key equivalent ${QUIT_KEY}`);
+    const { title } = menu.items.find((entry) => entry.key === QUIT_KEY);
+    const reply = await client.request('command.run', { window: 'main', name: 'host.menu.select', params: { menu: menu.title, title } });
+    if (reply !== null) throw new Error(`host.menu.select of ${title} returned ${JSON.stringify(reply)}, expected null`);
+    return `the item ${title}`;
+  }
+  if (by === 'key') {
+    const [first] = await client.request('windows.list', {});
+    if (first === undefined) throw new Error('the application has no window to take Command+Q');
+    for (const phase of ['down', 'up']) {
+      const reply = await client.request('input.key', { window: first.window, key: 'q', text: 'q', modifiers: ['command'], phase });
+      if (reply !== null) throw new Error(`input.key ${phase} of Command+Q returned ${JSON.stringify(reply)}, expected null`);
+    }
+    return 'Command+Q';
+  }
+  throw new Error(`unknown quit path ${JSON.stringify(by)}`);
+}
+
 async function quitApplication(item, children, since, write) {
   const child = children.get(item.app);
   const client = await connect({ configDir: item.configDir });
+  let action;
   try {
-    const reply = await client.request('command.run', { window: 'main', name: 'host.quit', params: {} });
-    if (reply !== null) throw new Error(`host.quit returned ${JSON.stringify(reply)}, expected null`);
+    action = await requestQuit(client, item.by);
   } finally {
     client.close();
   }
-  const bound = limit(QUIT_LIMIT_MS, `the application did not exit in ${QUIT_LIMIT_MS / 1000}s after host.quit`);
+  const bound = limit(QUIT_LIMIT_MS, `the application did not exit in ${QUIT_LIMIT_MS / 1000}s after ${action}`);
   let end;
   try {
     end = await Promise.race([exited(child), bound.promise]);
@@ -175,7 +210,7 @@ async function quitApplication(item, children, since, write) {
     for (const line of crashReports(item.app, since)) write(`crash ${line}`);
     throw new Error(`the application ended with ${describeExit(end)}`);
   }
-  await lockReleased(item.configDir);
+  await lockReleased(item.configDir, action);
 }
 
 /**
@@ -183,7 +218,7 @@ async function quitApplication(item, children, since, write) {
  * diagnostics.host.relaunch replaces it with a new process. lockf(1) takes the flock(2) lock that the host holds for its life, and
  * the kernel wakes it when the owner exits, so the wait needs no polling.
  */
-async function lockReleased(configDir) {
+async function lockReleased(configDir, action) {
   const lock = join(configDir, 'process.lock');
   if (!existsSync(lock)) return;
   const child = spawn('lockf', ['-s', '-t', String(QUIT_LIMIT_MS / 1000), lock, 'true'], { stdio: 'ignore' });
@@ -192,7 +227,7 @@ async function lockReleased(configDir) {
     once(child, 'error').then(([error]) => { throw new Error(`cannot start lockf: ${error.message}`); }),
   ]);
   if (end.code !== 0) {
-    throw new Error(`the process that holds ${lock} did not exit in ${QUIT_LIMIT_MS / 1000}s after host.quit (lockf ${describeExit(end)})`);
+    throw new Error(`the process that holds ${lock} did not exit in ${QUIT_LIMIT_MS / 1000}s after ${action} (lockf ${describeExit(end)})`);
   }
 }
 
