@@ -39,7 +39,7 @@ for (const app of Object.values(APPS)) {
       const marks = await terminalMarks(s);
       // The verifier of the page runs at every render and publishes the result as core.verify. The check collects all results during the drag.
       const verify = await s.collect("core.verify");
-      const run = await drag(t, s, plan, { capture: true });
+      const run = await drag(s, plan, { capture: true });
       const verified = (await verify.stop()).filter(Boolean);
       assert.ok(verified.length > 0, "the page never reported a check");
       const failed = verified.filter((result) => result.failed > 0);

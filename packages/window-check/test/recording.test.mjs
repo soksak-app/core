@@ -189,7 +189,7 @@ test("a captured drag remains available when the session fails", async (t) => {
       count: 1, limited: false, longestGap: 16 };
     throw new Error(`unexpected ${method}`);
   };
-  const result = await drag({ diagnostic() {} }, s,
+  const result = await drag(s,
     { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 }, { capture: true });
   assert.equal(result.frameDir, frames);
   assert.equal(s.recordings.has(realpathSync(frames)), true, "the drag capture was not registered with the session");

@@ -13,7 +13,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const initial = await s.get("host.window");
     const marks = await terminalMarks(s, { measured: true });
-    const run = await drag(t, s, { axis: "y", line: 1, dx: 0, dy: 173, ms: 400, times: 2 }, { capture: true });
+    const run = await drag(s, { axis: "y", line: 1, dx: 0, dy: 173, ms: 400, times: 2 }, { capture: true });
     const files = frames(run.frames);
     assert.ok(files.length > 30, `only ${files.length} frames recorded`);
     let measured = 0, low = Infinity, high = -Infinity;

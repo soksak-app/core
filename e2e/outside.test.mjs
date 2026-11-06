@@ -116,7 +116,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.rail", (rail) => rail.groups.length === 1, "the terminal override drew no rail");
     const marks = await terminalMarks(s, { measured: true });
     const offsets = currentEventOffsets(app.configDir);
-    const run = await drag(t, s, PLAN, { capture: true });
+    const run = await drag(s, PLAN, { capture: true });
     t.diagnostic(`page handling per step (ms): ${JSON.stringify(run.handled)}`);
     await s.flushLog();
     let supplierFrames = [];
@@ -142,10 +142,10 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     // Drags the boundary between the left fixed sidebar and the terminal card.
     const marks = await terminalMarks(s, { measured: true });
-    const narrow = await drag(t, s,
+    const narrow = await drag(s,
       { axis: "x", line: 1, dx: 290, dy: 0, ms: 96, times: 4 }, { capture: true });
     assertNoWhiteSurfaceBleed(narrow, "terminal divider drag to narrow", marks);
-    const wide = await drag(t, s,
+    const wide = await drag(s,
       { axis: "x", line: 1, dx: -70, dy: 0, ms: 96, times: 4 }, { capture: true });
     assertNoWhiteSurfaceBleed(wide, "terminal divider drag back to wide", marks);
   });
@@ -170,7 +170,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const surface = (await s.get("core.grid")).cards.find((card) => card.id === "terminal").active;
     await assertDocumentFillsFrame(s, surface, "at rest");
-    await drag(t, s, { axis: "x", line: 1, dx: 250, dy: 0, ms: 96, times: 1 });
+    await drag(s, { axis: "x", line: 1, dx: 250, dy: 0, ms: 96, times: 1 });
     await assertDocumentFillsFrame(s, surface, "after the drag");
   });
 }

@@ -112,7 +112,7 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
     const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
     const expectedFrames = states[name].fresh.window.surfaces.filter((item) => item.visible).map((item) => item.frame).sort(byPosition);
     const dragLog = await s.transcript(recordCatalog(s.app));
-    results[name] = await drag(t, s, PLAN);
+    results[name] = await drag(s, PLAN);
     // A settled layout also occurs at a moment where the drag is stopped. The drag returns to its place, so the check waits until the last settled layout equals the layout
     // before the drag.
     try {

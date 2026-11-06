@@ -4,7 +4,7 @@
 // <tmpdir>/soksak-check-<app>`, and the harness connects through the endpoint.json of that folder. The specification is
 // in docs/spec/endpoint.md and docs/spec/exposure.md.
 import { appendFileSync, closeSync, existsSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
@@ -1048,22 +1048,23 @@ if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset
  * Runs a boundary drag with the host clock. With capture, it records the window and returns the frame folder. The
  * recording is removed when the check passes and kept when the check fails.
  *
- * Fails when the drag does not run at the requested rate (after one retry). A pass of a slow drag is not a pass.
+ * Fails when the drag does not run at the requested rate. A pass of a slow drag is not a pass, and a second drag that
+ * runs at the rate would make the check pass by chance, so the first drag that is not paced fails the check.
  */
-export async function drag(t, s, plan, { capture = false, frameIdentity } = {}) {
+export async function drag(s, plan, { capture = false, frameIdentity } = {}) {
   if (frameIdentity !== undefined && typeof frameIdentity !== "boolean") {
     throw new TypeError("frameIdentity must be a boolean");
   }
   if (frameIdentity === true && capture !== true) {
     throw new TypeError("frameIdentity requires capture to be true");
   }
-  let result = await dragOnce(s, plan, capture, frameIdentity === true);
-  if (paced(result)) return result;
-  t.diagnostic(`the drag took ${result.took}ms for ${result.asked}ms; dragging again`);
-  result = await dragOnce(s, plan, capture, frameIdentity === true);
+  const result = await dragOnce(s, plan, capture, frameIdentity === true);
   if (!paced(result)) {
+    // The waits before the presses are not in took; they and the load of the machine tell a late host from a busy one.
     throw new Error(
-      `the drag ran slower than it was asked to, twice (${result.took}ms for ${result.asked}ms). The steps come ` +
+      `the drag did not run at the rate it was asked to: it took ${result.took}ms for ${result.asked}ms, not between ` +
+        `${Math.round(result.asked / MARGIN)}ms and ${Math.round(result.asked * MARGIN)}ms; pressWaits ` +
+        `${JSON.stringify(result.pressWaits ?? null)}; 1-minute load average ${loadavg()[0].toFixed(2)}. The steps come ` +
         "from the host, whose clock is not held wherever the window is. Nothing was measured: an unrendered area " +
         "shows itself at the speed a person drags at, and a slow drag passing is not a pass.",
     );

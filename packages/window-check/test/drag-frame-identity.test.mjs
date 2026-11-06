@@ -34,7 +34,7 @@ async function runDrag(t, options) {
       throw new Error(`unexpected method ${method}`);
     },
   };
-  const result = await drag(t, s, { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 }, options);
+  const result = await drag(s, { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 }, options);
   return { calls, result, stoppedIdentity };
 }
 
@@ -72,7 +72,7 @@ test("drag rejects invalid identity options before making a request", { timeout:
       request: async (...args) => { calls.push(args); return {}; },
     };
     await assert.rejects(
-      drag(t, s, { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 }, options),
+      drag(s, { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 }, options),
       /frameIdentity must be a boolean|frameIdentity requires capture to be true/,
     );
     assert.deepEqual(calls, []);

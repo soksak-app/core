@@ -77,7 +77,7 @@ for (const app of Object.values(APPS)) {
     const { surface, grid, card } = await openProbe(s, app, () => fresh(s, { performanceTrace: false }));
     const { frame } = (await s.get("host.window")).surfaces.find((item) => item.id === surface);
     const marks = { head: frame.y - 2, top: frame.y, bottom: frame.y + frame.height, colour: PROBE_COLOUR };
-    const run = await drag(t, s, { ...rightEdgeWidthDragPlan(grid, card), ms: 400, times: 2 }, { capture: true });
+    const run = await drag(s, { ...rightEdgeWidthDragPlan(grid, card), ms: 400, times: 2 }, { capture: true });
     const captured = frames(run.frames).map(readFrame);
     const { samples, unmeasured } = cardEdgeSamples(captured, (item) => {
       const at = outside(item, marks);
@@ -108,7 +108,7 @@ for (const app of Object.values(APPS)) {
     const { surface, grid, card } = await openProbe(s, app,
       () => fresh(s, { log: { frame: "trace" }, reads: ["plugin.probeplain.view.content_frame"] }));
     const traced = await withViewContentTrace(t, s, descriptor, surface, () =>
-      drag(t, s, rightEdgeWidthDragPlan(grid, card), { capture: true }));
+      drag(s, rightEdgeWidthDragPlan(grid, card), { capture: true }));
     const run = traced.action;
     const captured = frames(run.frames).map(readFrame);
     const mapped = requireViewContentFrameCoverage(mapViewContentFramesToCapture(traced.contentFrames, captured), {
