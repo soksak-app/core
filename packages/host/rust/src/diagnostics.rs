@@ -1097,15 +1097,18 @@ struct NativeDragPlan {
 /// Delivers the drag of plan from the boundary point from as native input of the primary button, as a person drags: for
 /// each round trip a press at from, each step as a drag of the button at from plus the offset times the fraction of the
 /// step, out and back, and a release at from after the last step. deliver delivers one input without activating the
-/// window or the application, and step returns at the host time of the next step. A failed input after a press releases
-/// the button at the last point, so no press stays open in the window. The reply is {from, steps, took, asked}: took is
-/// the time from the first press to the last release on the clock of the host and asked the time that the steps ask,
-/// both in milliseconds.
+/// window or the application, step returns at the host time of the next step, and presented returns when the window has
+/// presented its current layout; it runs before each press, because a press goes where the last frame drew. A failed
+/// input after a press releases the button at the last point, so no press stays open in the window. The reply is {from,
+/// steps, took, asked, pressWaits}: took is the time from the first press to the last release without the waits before
+/// the presses, on the clock of the host, asked the time that the steps ask, and pressWaits the wait before each press,
+/// all in milliseconds.
 fn native_drag(
     plan: &NativeDragPlan,
     from: (f64, f64),
     mut deliver: impl FnMut(platform::Pointer) -> Result<(), Failure>,
     mut step: impl FnMut(),
+    mut presented: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Value, Failure> {
     let input = |phase: i32, (x, y): (f64, f64)| platform::Pointer {
         x,
@@ -1119,7 +1122,23 @@ fn native_drag(
     };
     let at = |fraction: f64| (from.0 + plan.dx * fraction, from.1 + plan.dy * fraction);
     let began = Instant::now();
+    let mut waited = Duration::ZERO;
+    let mut press_waits = Vec::with_capacity(plan.times as usize);
     for turn in 0..plan.times {
+        let waiting = Instant::now();
+        presented().map_err(|error| {
+            Failure::new(
+                error.code,
+                format!(
+                    "native drag wait before the press of round trip {}: {}",
+                    turn + 1,
+                    error.message
+                ),
+            )
+        })?;
+        let wait = waiting.elapsed();
+        waited += wait;
+        press_waits.push(wait.as_millis() as u64);
         deliver(input(1, from)).map_err(|error| {
             Failure::new(
                 error.code,
@@ -1168,9 +1187,20 @@ fn native_drag(
     Ok(json!({
         "from": {"x": from.0, "y": from.1},
         "steps": steps,
-        "took": began.elapsed().as_millis() as u64,
+        "took": (began.elapsed() - waited).as_millis() as u64,
         "asked": steps * FRAME.as_millis() as u64,
+        "pressWaits": press_waits,
     }))
+}
+
+/// Reads the point of a boundary of a native drag after the window presented its current layout. A press goes where the
+/// last frame drew, so a boundary that a change just made takes no press before it.
+fn presented_boundary(
+    presented: impl FnOnce() -> Result<f64, Failure>,
+    boundary: impl FnOnce() -> Result<(f64, f64), Failure>,
+) -> Result<(f64, f64), Failure> {
+    presented()?;
+    boundary()
 }
 
 /// Asks the page for the point of the boundary of the drag in window content coordinates.
@@ -1218,7 +1248,10 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
     let steps = per * 2 * times;
     // With native, the page answers the point of the boundary, and the host delivers the drag as native input there.
     let from = if native {
-        Some(drag_boundary(host, window, &params)?)
+        Some(presented_boundary(
+            || exposure::presented(window, TIMEOUT),
+            || drag_boundary(host, window, &params),
+        )?)
     } else {
         None
     };
@@ -1268,17 +1301,18 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 per,
                 times,
             };
-            let began = Instant::now();
-            let mut due = 0;
+            // The steps of a round trip are timed from its press, not from before the wait.
+            let pressed = std::cell::Cell::new(Instant::now());
+            let due = std::cell::Cell::new(0);
             native_drag(
                 &plan,
                 from,
                 |pointer| host.input_pointer(window, pointer).map(|_| ()),
                 || {
-                    // Each step is delivered at its scheduled time relative to the start time, as tick sends the
-                    // steps of the page.
-                    due += 1;
-                    if let Some(left) = (FRAME * due).checked_sub(began.elapsed()) {
+                    // Each step is delivered at its scheduled time relative to the press of its round trip, as tick
+                    // sends the steps of the page.
+                    due.set(due.get() + 1);
+                    if let Some(left) = (FRAME * due.get()).checked_sub(pressed.get().elapsed()) {
                         std::thread::sleep(left);
                     }
                     if let Some(platform) = clock {
@@ -1288,6 +1322,12 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                             (_, Err(error)) => log_error("drag tick clock", error),
                         }
                     }
+                },
+                || {
+                    exposure::presented(window, TIMEOUT)?;
+                    pressed.set(Instant::now());
+                    due.set(0);
+                    Ok(())
                 },
             )
         }

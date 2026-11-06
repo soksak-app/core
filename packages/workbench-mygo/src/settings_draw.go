@@ -160,7 +160,7 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, mos
 				}
 			})
 			if model.folder != "" {
-				ui.Text(c, model.folder).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
+				ui.Text(s.binder.Name(c, "core.settings-modal.folder", ""), model.folder).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
 			}
 			// A grid of themes has as many columns of the least width as the pane holds, and they share the free width.
 			inner := width - 2*pane.paneX

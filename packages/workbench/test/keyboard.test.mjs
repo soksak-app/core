@@ -30,6 +30,7 @@ async function page() {
   document.head.appendChild(style);
 
   const calls = [];
+  const decisions = [];
   const modal = { open: null, listeners: new Set() };
   const actualHost = await import("../host.js");
   mock.module("../host.js", { exports: {
@@ -38,6 +39,11 @@ async function page() {
     surfaces: { ...actualHost.surfaces, focus: (surface) => { calls.push(surface); return Promise.resolve(); } },
     modalState: () => modal.open,
     onModalState: (fn) => { modal.listeners.add(fn); return () => modal.listeners.delete(fn); },
+  } });
+  const actualLog = await import("../page-log.js");
+  mock.module("../page-log.js", { exports: {
+    ...actualLog,
+    emitEvent: (level, event, fields) => { if (event === "workbench.keyboard.follow") decisions.push({ level, ...fields }); },
   } });
   mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
@@ -69,15 +75,16 @@ async function page() {
   let held = null;
   plane.onLayout((_made, draw) => { held = draw; });
 
-  /** The surfaces of the drawn plane: the active tab of each card. */
+  /** The surfaces of the drawn plane: the active tab of each card, and every tab, which the placement gives the host. */
   const shownSurfaces = () => plane.currentGrid().cards.map((card) => card.data.activeId);
+  const heldSurfaces = () => plane.currentGrid().cards.flatMap((card) => card.data.tabs.map((tab) => tab.id));
   /** Draws what a path changed and answers the placement, as the commit of the page does. */
   const placed = async () => {
     await flush();
     plane.settle();
     held?.();
     await flush();
-    keyboard.keyboardPlaced(shownSurfaces());
+    keyboard.keyboardPlaced(shownSurfaces(), heldSurfaces());
     await flush();
   };
   const ringSurface = () => plane.currentGrid().card(plane.focused()).data.activeId;
@@ -93,7 +100,7 @@ async function page() {
     await placed();
     calls.length = 0;
   };
-  return { calls, flush, keyboard, modal, openProject, placed, plane, reset, ringSurface, shownSurfaces };
+  return { calls, decisions, flush, keyboard, modal, openProject, placed, plane, reset, ringSurface, shownSurfaces };
 }
 
 const b = await page();
@@ -101,7 +108,11 @@ const b = await page();
 /** The card of the two that does not have the ring. */
 const otherCard = ({ plane }) => plane.currentGrid().cards.map(({ id }) => id).find((id) => id !== plane.focused());
 const tabElement = (id) => document.querySelector(`.tab[data-tab-id="${id}"]`);
+// A press of the page captures the pointer, which jsdom does not implement, as the press of a person does.
 const press = (element, type) => {
+  element.setPointerCapture ??= () => {};
+  element.hasPointerCapture ??= () => true;
+  element.releasePointerCapture ??= () => {};
   const event = new window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons: 1 });
   element.dispatchEvent(event);
   return event;
@@ -131,7 +142,9 @@ const paths = {
   },
   "a press on a tab": async (b) => {
     const other = b.plane.currentGrid().card(otherCard(b)).data.activeId;
-    press(tabElement(other), "pointerdown");
+    const tab = tabElement(other);
+    press(tab, "pointerdown");
+    press(tab, "pointerup");
     await b.placed();
   },
   "core.tab.select": async (b) => {
@@ -190,6 +203,37 @@ test("a surface that no placement shows yet takes the keyboard when a placement 
   assert.ok(!b.calls.includes(tab.tab ?? tab), "the keyboard went to a surface that no placement shows");
   await b.placed();
   assert.equal(b.calls.at(-1), b.ringSurface());
+});
+
+test("a press on a tab whose surface the host holds sends the call before the placement", { timeout: 5000 }, async () => {
+  await b.reset();
+  const card = b.plane.focused();
+  b.plane.addTabTo(card, pluginId, null);
+  await b.placed();
+  const hidden = b.plane.currentGrid().card(card).data.tabs.map(({ id }) => id).find((id) => id !== b.ringSurface());
+  b.calls.length = 0;
+  const tab = tabElement(hidden);
+  press(tab, "pointerdown");
+  await b.flush();
+  assert.deepEqual(b.calls, [hidden], "the keyboard call of the press waited for the placement");
+  press(tab, "pointerup");
+  await b.placed();
+});
+
+test("each decision of the keyboard is recorded with its cause", { timeout: 5000 }, async () => {
+  await b.reset();
+  const before = b.ringSurface();
+  b.plane.addTabTo(b.plane.focused(), pluginId, null);
+  await b.flush();
+  const added = b.ringSurface();
+  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "ring", target: added, sent: before, owed: true, decision: "wait" },
+    "the new tab waits for the placement that holds it");
+  await b.placed();
+  assert.equal(b.decisions.at(-1).cause, "placed");
+  assert.equal(b.decisions.at(-1).decision, "send");
+  b.keyboard.keyboardResponder({ owner: "workbench" });
+  await b.flush();
+  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "responder", target: added, sent: added, owed: true, decision: "send" });
 });
 
 test("a modal keeps the keyboard until it closes", { timeout: 5000 }, async () => {

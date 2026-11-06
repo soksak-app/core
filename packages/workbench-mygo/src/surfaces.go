@@ -162,8 +162,10 @@ type heldSurface struct {
 	section *sectionStart
 	// unload is the declaration of unload of a section surface.
 	unload *surfaceUnload
-	// declared tells that the host took its composition.
+	// declared tells that the host took its composition, and hosted that a placement that held it finished, so the host holds its
+	// view.
 	declared bool
+	hosted   bool
 }
 
 // sectionStart is the start value section of a section surface. A section of a window sidebar has no card.
@@ -190,11 +192,13 @@ type surfaceState struct {
 	order       []string
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
-	// seated holds the seats of the section surfaces of the sidebars of the current frame, and drawnPlane is the plane that the frame drew.
+	// seated holds the seats of the section surfaces of the sidebars of the current frame, drawnPlane is the plane that the frame drew,
+	// and drawnLibrary tells that the frame drew the library instead.
 	seated map[string]SidebarSeat
 	// behindDialog are the native views of the frame that wait to draw over the blurred workbench.
 	behindDialog []viewBehindDialog
 	drawnPlane   *layout.Grid
+	drawnLibrary bool
 	// dataWrites counts the writes of project data of each project that the store has not answered.
 	dataWrites map[string]int
 	// placed is the lines of the last request, and running tells that a placement has not finished.
@@ -438,10 +442,11 @@ func (s *Shell) cardHoldsTab(card, tab string) bool {
 	return false
 }
 
-// forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. Only a
-// frame of a plane tells, because the library draws no sidebar and its surfaces stay hidden.
+// forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. A frame
+// of the library holds none, as the page empties its plane for the library; a frame that drew neither the plane nor the library tells
+// nothing.
 func (s *Shell) forgetUnseated() {
-	if s.surfaces.drawnPlane == nil {
+	if s.surfaces.drawnPlane == nil && !s.surfaces.drawnLibrary {
 		return
 	}
 	var gone []string
@@ -652,6 +657,7 @@ func (s *Shell) placeSurfaces() {
 			})
 	}
 	settled := request["settled"]
+	requested := slices.Clone(s.surfaces.order)
 	s.calls.CallInOrder(surfaceOrder, "syncSurfaces", request, func(value any, err error) {
 		if err != nil {
 			s.placed(err)
@@ -673,6 +679,13 @@ func (s *Shell) placeSurfaces() {
 			func(answer any, err error) {
 				if err == nil {
 					err = s.seatRecord(record, answer)
+				}
+				if err == nil {
+					for _, id := range requested {
+						if held := s.surfaces.held[id]; held != nil {
+							held.hosted = true
+						}
+					}
 				}
 				s.placed(err)
 				s.options.Invalidate()

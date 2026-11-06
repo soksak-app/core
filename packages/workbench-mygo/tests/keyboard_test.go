@@ -165,6 +165,30 @@ func TestTheKeyboardCallFollowsThePlacementOfTheSurface(t *testing.T) {
 	}
 }
 
+// A press on a tab whose surface the host already holds sends the keyboard call ahead of the placement that shows it, so
+// the host gives the keyboard at the release of the press, before a key that follows the release
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+func TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, _ := keyboardCards(t, f)
+	keyboardAddTab(t, f, cards[0])
+	f.settle()
+	tabs := keyboardAddTab(t, f, cards[0])
+	f.settle()
+	held := tabs[cards[0]][len(tabs[cards[0]])-2]
+	stored.order, stored.keyboard = nil, nil
+	f.click("core.card.tab", held)
+	f.settle()
+	calls := strings.Join(stored.order, " ")
+	if !strings.HasPrefix(calls, "surfaceFocus syncSurfaces") {
+		t.Fatalf("the calls of the press are %s", calls)
+	}
+	got, ok := stored.keyboardTarget()
+	if !ok || got == nil || *got != held {
+		t.Fatalf("the press on %s gave the keyboard to %s (%v)", held, describeTarget(got), ok)
+	}
+}
+
 // While a modal is open the workbench holds the keyboard for it, and the host call does not name a surface.
 func TestAModalKeepsTheKeyboardUntilItCloses(t *testing.T) {
 	f, stored := surfaceShell(t)

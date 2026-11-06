@@ -13,6 +13,8 @@
     "./frontmost.mjs": "./frontmost.mjs",
     "./log-policy.mjs": "./log-policy.mjs",
     "./view-calls.mjs": "./view-calls.mjs",
+    "./view-edges.mjs": "./view-edges.mjs",
+    "./design-rects.mjs": "./design-rects.mjs",
     "./view-metrics.mjs": "./view-metrics.mjs",
     "./lz4.mjs": "./lz4.mjs",
     "./pasteboard.mjs": "./pasteboard.mjs",
@@ -26,6 +28,7 @@
   },
   "files": [
     "app.mjs",
+    "design-rects.mjs",
     "endpoint-wait.mjs",
     "folder-wait.mjs",
     "event-log.mjs",

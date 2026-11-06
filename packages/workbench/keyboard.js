@@ -1,13 +1,16 @@
 // The keyboard of the window follows the focus ring (docs/spec/exposure.md#keyboard-focus): while no modal is open and no editable
 // element of the workbench has the focus, the active surface of the card with the ring holds the keyboard. The plane moves the ring
-// in one function, which owes the keyboard here. The one host call surfaceFocus follows the placement that shows the surface, so a
-// surface that the host does not hold yet receives the keyboard when it stands.
+// in one function, which owes the keyboard here. The one host call surfaceFocus goes out at once for a surface that a placement
+// gave the host, so the host gives it the keyboard at the release of the press that moved the ring, before a key that follows the
+// release; a surface that the host does not hold yet receives the keyboard after the placement that shows it, when it stands.
 import { modalState, onModalState, report, surfaces } from "./host.js";
+import { emitEvent } from "./page-log.js";
 
 /* The surface of the ring, which the plane registers. */
 let ringSurface = () => null;
-/* The surfaces that the last drawn placement shows. */
+/* The surfaces that the last drawn placement shows, and held all that it placed, shown or hidden, which the host holds. */
 let shown = new Set();
+let held = new Set();
 /* owed: the keyboard has to move even when the target is the same. sent: the target of the last call, null for the workbench. */
 let owed = false;
 let sent = null;
@@ -29,40 +32,58 @@ function send(surface) {
   Promise.resolve(surfaces.focus(surface)).catch((why) => report(`surface focus: ${why}`));
 }
 
-/** Sends the call when the target stands. A target that no placement showed yet waits for the placement. */
-function follow() {
+/** Records one decision of the keyboard, the call it sent or why it sent none (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring). */
+function decided(cause, surface, decision) {
+  emitEvent("debug", "workbench.keyboard.follow", { cause, target: surface, sent, owed, decision });
+}
+
+/** Sends the call when the host holds the target. A target that no placement placed yet waits for the placement. */
+function follow(cause) {
   if (modalState() !== null) {
     owed = true;
+    decided(cause, null, "modal");
     return;
   }
   const surface = target();
-  if (surface === null || shown.has(surface)) send(surface);
+  if (surface !== null && !shown.has(surface) && !held.has(surface)) {
+    decided(cause, surface, "wait");
+    return;
+  }
+  decided(cause, surface, surface === sent && !owed ? "same" : "send");
+  send(surface);
 }
 
 /** Registers the function that reads the active surface of the card with the ring, null without one. */
 export function followRing(read) {
   ringSurface = read;
   // The close of a modal changes the state before it queues its host call, and this call follows that one.
-  onModalState(() => queueMicrotask(follow));
-  document.addEventListener("focusin", follow);
-  document.addEventListener("focusout", () => queueMicrotask(follow));
+  onModalState(() => queueMicrotask(() => follow("modal")));
+  document.addEventListener("focusin", () => follow("focusin"));
+  document.addEventListener("focusout", () => queueMicrotask(() => follow("focusout")));
 }
 
 /** The ring moved, so the keyboard moves even to the target that it had. It follows the state that the move leaves. */
 export function keyboardOwed() {
   owed = true;
-  queueMicrotask(follow);
+  queueMicrotask(() => follow("ring"));
 }
 
-/** A drawn placement answered with the surfaces it shows. The ring on a surface that it does not show leaves the keyboard with the workbench. */
-export function keyboardPlaced(ids) {
+/**
+ * A drawn placement answered with the surfaces it shows and the surfaces it placed. The ring on a surface that it does not show
+ * leaves the keyboard with the workbench.
+ */
+export function keyboardPlaced(ids, placedIds) {
   shown = new Set(ids);
+  held = new Set(placedIds);
   if (modalState() !== null) {
     owed = true;
+    decided("placed", null, "modal");
     return;
   }
   const surface = target();
-  send(surface !== null && shown.has(surface) ? surface : null);
+  const chosen = surface !== null && shown.has(surface) ? surface : null;
+  decided("placed", chosen, chosen === sent && !owed ? "same" : "send");
+  send(chosen);
 }
 
 /**
@@ -72,5 +93,5 @@ export function keyboardPlaced(ids) {
 export function keyboardResponder({ owner }) {
   if (owner !== "workbench" || (document.activeElement && document.activeElement !== document.body)) return;
   owed = true;
-  follow();
+  follow("responder");
 }

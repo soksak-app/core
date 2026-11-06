@@ -536,6 +536,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
             Ok(())
         },
         || ticks.set(ticks.get() + 1),
+        || Ok(()),
     )
     .expect("native drag");
     let trip = |after: u32| {
@@ -578,6 +579,7 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
             Ok(())
         },
         || {},
+        || Ok(()),
     )
     .expect_err("a failing step");
     assert_eq!(
@@ -585,6 +587,129 @@ fn native_drag_delivers_the_press_the_steps_and_the_release_of_each_round_trip()
         "native drag step 1: the window did not accept the input"
     );
     assert_eq!(*phases.borrow(), [1, 2, 3], "down, drag and the release up");
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+#[test]
+fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
+    // The window answers late: each press must follow the answer, and took leaves the waits out.
+    let late = Duration::from_millis(40);
+    let events = RefCell::new(Vec::<String>::new());
+    let answers = Cell::new(0);
+    let plan = NativeDragPlan {
+        dx: 20.0,
+        dy: 0.0,
+        per: 2,
+        times: 3,
+    };
+    let phase = |pointer: platform::Pointer| match pointer.phase {
+        1 => "down".to_string(),
+        2 => "drag".to_string(),
+        3 => "up".to_string(),
+        other => panic!("native drag input of phase {other}"),
+    };
+    let result = native_drag(
+        &plan,
+        (100.0, 50.0),
+        |pointer| {
+            events.borrow_mut().push(phase(pointer));
+            Ok(())
+        },
+        || {},
+        || {
+            std::thread::sleep(late);
+            answers.set(answers.get() + 1);
+            events
+                .borrow_mut()
+                .push(format!("presented {}", answers.get()));
+            Ok(())
+        },
+    )
+    .expect("native drag");
+    let mut want = Vec::new();
+    for answer in 1..=3 {
+        want.push(format!("presented {answer}"));
+        want.extend(["down", "drag", "drag", "drag", "drag", "up"].map(String::from));
+    }
+    assert_eq!(*events.borrow(), want, "native drag with a late window");
+    let waits = result["pressWaits"]
+        .as_array()
+        .expect("pressWaits is an array");
+    assert_eq!(waits.len(), 3, "the wait before each of the 3 presses");
+    for (i, wait) in waits.iter().enumerate() {
+        assert!(
+            wait.as_u64()
+                .is_some_and(|wait| wait >= late.as_millis() as u64),
+            "pressWaits[{i}] = {wait}, want at least the {late:?} the window took to answer"
+        );
+    }
+    assert!(
+        result["took"]
+            .as_u64()
+            .is_some_and(|took| took < late.as_millis() as u64),
+        "native drag took {} ms with steps that do not wait, want less than one wait of {late:?}",
+        result["took"]
+    );
+
+    // A wait that fails delivers no press.
+    events.borrow_mut().clear();
+    let error = native_drag(
+        &NativeDragPlan {
+            dx: 20.0,
+            dy: 0.0,
+            per: 2,
+            times: 2,
+        },
+        (100.0, 50.0),
+        |pointer| {
+            events.borrow_mut().push(phase(pointer));
+            Ok(())
+        },
+        || {},
+        || {
+            if events.borrow().is_empty() {
+                Ok(())
+            } else {
+                Err(Failure::params("the window did not present within 10s"))
+            }
+        },
+    )
+    .expect_err("a failing wait");
+    assert_eq!(
+        error.message,
+        "native drag wait before the press of round trip 2: the window did not present within 10s"
+    );
+    assert_eq!(
+        *events.borrow(),
+        ["down", "drag", "drag", "drag", "drag", "up"],
+        "only the first round trip"
+    );
+}
+
+// A press goes where the last frame drew, so a boundary that a change just made takes the press only after the window
+// presented it.
+#[test]
+fn a_native_drag_asks_for_its_boundary_after_the_window_presented_it() {
+    let order = RefCell::new(Vec::new());
+    let from = presented_boundary(
+        || {
+            order.borrow_mut().push("presented");
+            Ok(0.0)
+        },
+        || {
+            order.borrow_mut().push("boundary");
+            Ok((7.0, 9.0))
+        },
+    )
+    .expect("a presented boundary");
+    assert_eq!(from, (7.0, 9.0));
+    assert_eq!(*order.borrow(), ["presented", "boundary"]);
+    let error = presented_boundary(
+        || Err(Failure::params("the window did not present")),
+        || panic!("a window that did not present was asked for its boundary"),
+    )
+    .expect_err("a failed wait");
+    assert_eq!(error.message, "the window did not present");
 }
 
 // contract: diagnostics.drag.waits-for-the-last-placement

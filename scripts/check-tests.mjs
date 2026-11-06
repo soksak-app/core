@@ -256,6 +256,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F594",
+    implementation: [
+      { file: "packages/window-check/view-edges.mjs", symbol: "export function viewEdgeFaults(image, frame, scale, { view, lines }) {" },
+      { file: "e2e/view-edges.test.mjs", symbol: "viewEdgeFaults(image, declared, scale, colors)" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/view-edges.test.mjs", id: "a row of the card inside the slot of a view is a fault" },
+      { file: "packages/window-check/test/view-edges.test.mjs", id: "a row of the card between a view and its line is a fault" },
+    ],
+    expected: "A check reads the device pixels across each edge of a native view in a still, so a row of the card beside a view that stands where it declared is a fault.",
+    levels: ["unit"],
+  },
+  {
     id: "F525",
     implementation: [
       { file: "packages/window-check/folder-wait.mjs", symbol: "RESCAN_REPORT" },
@@ -517,7 +530,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/images.rs", symbol: "pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {" },
       { file: "packages/host/go/src/exposure.go", symbol: "type WindowFrameCounters struct {" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_frame_counters() -> serde_json::Map<String, Value> {" },
-      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func(), presented func() error) (map[string]any, error) {" },
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },
       { file: "packages/workbench/observe.js", symbol: "function boundaryPoint(axis, line) {" },
     ],
@@ -1658,6 +1671,18 @@ const FEATURE_LINKS = [
     ],
     expected: "A retain keeps the persistent sessions of the sections of every stored layout.",
     levels: ["unit"],
+  },
+  {
+    id: "F543",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void deliverGesture(NSView *hit, NSEvent *event, BOOL throughApplication) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "a local monitor sees the drag of a key window once" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "the gesture of a window that is not key passes no monitor" },
+    ],
+    expected: "A press, drag, and release of a key window pass -[NSApplication sendEvent:], so a local monitor sees each, and a window that is not the key window keeps direct delivery.",
+    levels: ["native"],
   },
   {
     id: "F539",

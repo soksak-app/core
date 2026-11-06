@@ -703,10 +703,16 @@ export function drawSettings() {
   body.append(tabs);
   if (scope === "project") {
     const folder = document.createElement("p");
-    folder.className = "set-caption";
+    folder.className = "set-caption set-folder";
+    folder.dataset.expose = "core.settings-modal.folder";
     const project = active();
     if (!project) throw new Error("the project settings scope has no active project");
-    folder.textContent = project.root;
+    // The whole path stays inside the pane: text breaks at a space by itself, and the caption adds a break after each
+    // separator and hyphen (docs/spec/settings.md).
+    for (const part of project.root.split(/(?<=[\/\\-])/)) {
+      folder.append(part);
+      if (/[\/\\-]$/.test(part)) folder.append(document.createElement("wbr"));
+    }
     body.append(folder);
   }
   SECTIONS.find(([id]) => id === here)[2]();
