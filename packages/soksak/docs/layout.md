@@ -21,6 +21,10 @@ about px, never about which card is where.
 Sidebar, rail and pane use one type, one rect rule, one corridor, one radius,
 one outline.
 
+An identifier names a card; it does not determine its role. Renaming identifiers
+and permuting the input card array preserve geometry, query decisions and
+corresponding operation results. Opaque card data is unchanged by renaming.
+
 A card may carry a `width` or `height` in px. That is an attribute, not a second
 type: no operation is refused because a card has one.
 
@@ -579,3 +583,12 @@ not. The original seed and complete trace remain unchanged beside the reduced
 trace. The result is minimal under deletion of one operation, not necessarily the
 shortest possible trace, and argument values are not reduced. The fuzz command
 prints the complete original before attempting reduction.
+
+Role-independence tests use a separate fixed operation trace. They pass every
+permutation of the fixture's card array and renamed identifiers into the public
+constructor, including renamed payer references. Only the comparison normalizes
+identifiers and card order. Every operation compares geometry, card attributes,
+close/split predictions and its result; controlled identifier-dependent and
+array-position-dependent defects must fail that comparison. Source ownership
+checks remain structural checks, and the independent slicing oracle remains
+separate from both the sequence generator and the role comparison.

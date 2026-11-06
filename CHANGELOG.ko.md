@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F503-3: 동작 비교는 원래 ID와 변경한 ID 각각에 대해 입력 card의 순열 120개 모두와 sequence별 공개 operation 18개를 다룬다. ID 의존 선택 및 첫 card geometry mutation은 추적 comparator에서 실패한다. macOS에서 equivalence와 rule case 24개가 모두 통과하며 독립 slicing 및 구조 소유권 검사는 유지한다.
+
 - F506: close 요청, tab save, window save의 modified guard를 격리한 복사본에서 각각 제거하면 해당 추적 소유 assertion이 실패한다. macOS에서 close 경계, tab report, view surface case 23개가 모두 통과한다. production guard는 변경하지 않았고 native application 승인은 실행하지 않았다.
 
 - F500-2: Cell sampling은 공통 crop 변환을 사용하고 한 pixel cell 안으로 sample을 제한하며 capture 밖의 cell을 거부한다. Red는 잘못된 pixel 결과 다섯 개와 누락된 거부 한 개를 재현한다. recording 수명주기를 유지한 macOS의 terminal-screen 및 view-content case 34개가 모두 통과한다. Native application 승인은 실행하지 않았다.

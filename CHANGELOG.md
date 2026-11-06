@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F503-3: Behavior comparisons cover all 120 input-card permutations with original and renamed IDs and 18 public operations per sequence. ID-dependent choices and first-card geometry mutations fail the tracked comparator. All 24 equivalence and rule cases pass on macOS; independent slicing and structural ownership checks remain.
+
 - F506: Removing each close-request, tab-save and window-save modified guard fails its tracked owner assertion in an isolated copy. All 23 close-boundary, tab-report and view-surface cases pass on macOS. Production guards are unchanged; native application acceptance was not run.
 
 - F500-2: Cell sampling uses the shared crop transform, clamps samples within one-pixel cells and rejects cells outside the capture. Red reproduces five wrong-pixel results and one missing rejection. All 34 terminal-screen and view-content cases pass on macOS with the recording lifecycle retained. Native application acceptance was not run.
