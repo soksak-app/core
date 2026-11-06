@@ -97,8 +97,8 @@ test("opening the release page asks the host to open the page of the candidate a
 const pluginState = {
   index: {
     plugins: [
-      { id: "tty", versions: [{ version: "0.1.0", engines: { soksak: "*" } }, { version: "0.2.0", engines: { soksak: "^0.0.8" } }, { version: "0.3.0", engines: { soksak: ">=0.0.9" } }, { version: "0.4.0", engines: { soksak: ">=0.0.9" } }] },
-      { id: "notes", versions: [{ version: "1.0.0", engines: { soksak: "^0.0.8" } }] },
+      { id: "tty", versions: [{ version: "0.1.0", engines: { soksak: "*" } }, { version: "0.2.0", engines: { soksak: "0.0.8" } }, { version: "0.3.0", engines: { soksak: ">=0.0.9" } }, { version: "0.4.0", engines: { soksak: ">=0.0.9" } }] },
+      { id: "notes", versions: [{ version: "1.0.0", engines: { soksak: "0.0.8" } }] },
       { id: "any", versions: [{ version: "1.0.0", engines: { soksak: "*" } }] },
       { id: "gone", versions: [{ version: "1.0.0", engines: { soksak: ">=0.0.9" } }] },
     ],
@@ -111,11 +111,11 @@ test("a plugin whose range does not contain the candidate is listed with its new
   const host = fakeHost({ appUpdateState: { version: "0.0.8", available: { ...available, version: "0.0.9" } } });
   const update = createAppUpdate({ host, changed: () => {}, plugins: () => pluginState });
   await update.refresh();
-  // tty 0.2.0 needs ^0.0.8; 0.4.0 is revoked, so 0.3.0 is the newest version for 0.0.9. notes has no version for 0.0.9.
+  // tty 0.2.0 needs 0.0.8; 0.4.0 is revoked, so 0.3.0 is the newest version for 0.0.9. notes has no version for 0.0.9.
   // A plugin whose installed version the index does not list is not judged.
   assert.deepEqual(update.status().incompatible, [
-    { id: "notes", installed: "1.0.0", range: "^0.0.8", compatible: null },
-    { id: "tty", installed: "0.2.0", range: "^0.0.8", compatible: "0.3.0" },
+    { id: "notes", installed: "1.0.0", range: "0.0.8", compatible: null },
+    { id: "tty", installed: "0.2.0", range: "0.0.8", compatible: "0.3.0" },
   ]);
 });
 

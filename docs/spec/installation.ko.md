@@ -12,7 +12,7 @@ Version은 숫자 부분으로 된 `x.y.z`이며 앞자리 0을 쓰지 않고, �
 | --- | --- |
 | `*` | `>=0.0.0`: 모든 version |
 | `x.y.z` | 그 version만 |
-| `^x.y.z` | `x.y.z`부터 첫 0이 아닌 자리가 바뀌기 전까지: `^1.2.3`은 `2.0.0` 미만, `^0.2.3`은 `0.3.0` 미만, `^0.0.2`는 `0.0.3` 미만 |
+| `^x.y.z` | `x.y.z`부터 다음 major version 미만이며, major 자리가 0이면 다음 minor version 미만: `^1.2.3`은 `2.0.0` 미만, `^0.2.3`은 `0.3.0` 미만, `^0.0.2`는 `0.1.0` 미만. patch release는 `0.0`에서도 호환 release다 |
 | `~x.y.z` | `x.y.z`부터 `x.(y+1).0` 미만 |
 | `>=x.y.z` | `x.y.z`와 그 뒤의 모든 version |
 | `>=x.y.z <a.b.c` | `x.y.z`부터 `a.b.c` 미만이며, 빈 범위는 거부한다 |
@@ -36,7 +36,7 @@ Plugin release는 plugin에 대해 `pnpm pack`이 쓰는 파일이며, package `
 
 `package.json`의 다른 필드는 package 도구의 것이므로 읽지 않는다. 다만 `soksak`은 거부한다. 플러그인의 sidecar와 그 범위는 `plugin.json`의 `dependencies`다([플러그인](plugins.ko.md#pluginjson)).
 
-plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드한다. 그 `engines.soksak`은 모든 core version이 만족하는 `*`, 그 release만 만족하는 그 `@soksak/plugin-api`의 `^<version>`, 또는 그 core release와 이후의 모든 release가 만족하는, 하한이 그 version을 넘지 않는 `>=<x.y.z>`이다. core가 어떤 release에서 더한 manifest 필드를 쓰는 plugin은 그 release로 `>=`를 선언한다. 각 plugin 저장소는 자기 test에서 이를 검사한다.
+plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드한다. 그 `engines.soksak`은 모든 core version이 만족하는 `*`, 그 release와 그 뒤의 patch release가 만족하는 그 `@soksak/plugin-api`의 `^<version>`, 또는 그 core release와 이후의 모든 release가 만족하는, 하한이 그 version을 넘지 않는 `>=<x.y.z>`이다. core가 어떤 release에서 더한 manifest 필드를 쓰는 plugin은 그 release로 `>=`를 선언한다. 각 plugin 저장소는 자기 test에서 이를 검사한다.
 
 `sok plugin install`은 `plugin.json`을 reader(`@soksak/plugin-api`)의 `validateManifest`의 모든 규칙으로 reader의 순서대로 검사하고, reader가 거부하는 manifest를 거부한다. 이때 `plugin.json`의 위치와 reader의 오류 문구로 실패하며 아무것도 쓰지 않는다. 또한 page의 binary 저장소가 예약한 경로인 `.binary` 부분 아래의 파일을 담거나([네이티브 표면](native-surfaces.ko.md#문서-영역)), `plugin.json`이 불러오는 surface module이나 view page가 없는 release를 거부한다. reader는 각 객체의 member를 정렬된 키 순서로 검사하며, install도 그렇게 하므로, 거부되는 첫 member는 파일 안의 member 순서와 무관하게 같다. 사례표 `docs/spec/cases/manifest-validation.json`이 manifest와 결과를 나열하며, reader와 두 `sok` 구현의 install이 이를 재생하고, 한 구현이라도 다르면 그 사례가 실패한다.
 

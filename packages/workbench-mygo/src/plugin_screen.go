@@ -162,7 +162,7 @@ func versionParts(version string) ([3]int, error) {
 	return parts, nil
 }
 
-// CompareVersions compares two versions by number, as compareVersions of packages/workbench/version-range.js does.
+// CompareVersions compares two versions by number, as compareVersions of @soksak/plugin-api does.
 func CompareVersions(a, b string) (int, error) {
 	left, err := versionParts(a)
 	if err != nil {

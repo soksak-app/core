@@ -12,7 +12,7 @@ A version is `x.y.z` with numeric parts and no leading zeros; versions compare b
 | --- | --- |
 | `*` | `>=0.0.0`: every version |
 | `x.y.z` | that version only |
-| `^x.y.z` | from `x.y.z` below the next change of the first non-zero part: `^1.2.3` is below `2.0.0`, `^0.2.3` below `0.3.0`, `^0.0.2` below `0.0.3` |
+| `^x.y.z` | from `x.y.z` below the next major version, and below the next minor version when the major part is 0: `^1.2.3` is below `2.0.0`, `^0.2.3` below `0.3.0`, `^0.0.2` below `0.1.0`. A patch release is a compatible release, also in `0.0` |
 | `~x.y.z` | from `x.y.z` below `x.(y+1).0` |
 | `>=x.y.z` | `x.y.z` and every later version |
 | `>=x.y.z <a.b.c` | from `x.y.z` below `a.b.c`; an empty range is rejected |
@@ -36,7 +36,7 @@ A plugin release is the file that `pnpm pack` writes for the plugin, `<scope>-<n
 
 Other `package.json` fields belong to package tools and are not read, except `soksak`, which is refused: the sidecars of a plugin and their ranges are the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)).
 
-A plugin repository builds against the `@soksak/plugin-api` of one core release. Its `engines.soksak` is `*`, which every core version satisfies, `^<version>` of that `@soksak/plugin-api`, which only that release satisfies, or `>=<x.y.z>` with a lower bound up to that version, which that core release and every later one satisfy; a plugin that uses a manifest field that core added in a release declares `>=` that release. Each plugin repository checks it in its own tests.
+A plugin repository builds against the `@soksak/plugin-api` of one core release. Its `engines.soksak` is `*`, which every core version satisfies, `^<version>` of that `@soksak/plugin-api`, which that release and its later patch releases satisfy, or `>=<x.y.z>` with a lower bound up to that version, which that core release and every later one satisfy; a plugin that uses a manifest field that core added in a release declares `>=` that release. Each plugin repository checks it in its own tests.
 
 `sok plugin install` checks `plugin.json` with every rule of the reader's `validateManifest` (`@soksak/plugin-api`) in the reader's order, and refuses each manifest that the reader refuses: it fails with the location of the `plugin.json` and the reader's error text, and writes nothing. It also refuses a release that holds a file under a `.binary` segment, the path that the binary store of a page reserves ([native surfaces](native-surfaces.md#document-regions)), or that lacks the surface module or the view page that `plugin.json` loads. The reader checks the members of each object in sorted key order, and so does install, so the first refused member is the same whatever the order of the members in the file. The case table `docs/spec/cases/manifest-validation.json` lists the manifests and their results; the reader and the install of both `sok` implementations replay it, and a case on which one of them differs fails.
 

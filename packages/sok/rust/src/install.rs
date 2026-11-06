@@ -123,8 +123,8 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
         "" => Version::new(major, minor, patch + 1),
         "~" => Version::new(major, minor + 1, 0),
         _ if major > 0 => Version::new(major + 1, 0, 0),
-        _ if minor > 0 => Version::new(0, minor + 1, 0),
-        _ => Version::new(0, 0, patch + 1),
+        // Below 1.0.0 the minor part changes for an incompatible release, and a patch release is compatible, also in 0.0.
+        _ => Version::new(0, minor + 1, 0),
     };
     Ok(Range {
         min,

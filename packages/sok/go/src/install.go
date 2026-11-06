@@ -117,10 +117,9 @@ func ParseRange(text string) (Range, error) {
 		below = semver.New(major, minor+1, 0, "", "")
 	case major > 0:
 		below = semver.New(major+1, 0, 0, "", "")
-	case minor > 0:
-		below = semver.New(0, minor+1, 0, "", "")
 	default:
-		below = semver.New(0, 0, patch+1, "", "")
+		// Below 1.0.0 the minor part changes for an incompatible release, and a patch release is compatible, also in 0.0.
+		below = semver.New(0, minor+1, 0, "", "")
 	}
 	return Range{v, below}, nil
 }

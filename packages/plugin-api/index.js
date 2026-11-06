@@ -187,6 +187,14 @@ function compareVersion(a, b) {
   return part === -1 ? 0 : x[part] - y[part];
 }
 
+/** Compares two versions by number; a version of another form than `x.y.z` (docs/spec/installation.md#versions-and-ranges) is an error. */
+export function compareVersions(a, b) {
+  for (const version of [a, b]) {
+    if (!VERSION.test(version)) throw new Error(`version ${version} must be x.y.z with numeric parts and no leading zeros`);
+  }
+  return compareVersion(a, b);
+}
+
 /** Checks that the version range has the format of docs/spec/installation.md#versions-and-ranges. */
 function isRange(range) {
   if (typeof range !== "string") return false;
@@ -260,7 +268,8 @@ export function rangeContains(range, version) {
   const low = `${major}.${minor}.${patch}`;
   const below = operator === "" ? `${major}.${minor}.${patch + 1}`
     : operator === "~" ? `${major}.${minor + 1}.0`
-    : major > 0 ? `${major + 1}.0.0` : minor > 0 ? `0.${minor + 1}.0` : `0.0.${patch + 1}`;
+    // Below 1.0.0 the minor part changes for an incompatible release, and a patch release is compatible, also in 0.0.
+    : major > 0 ? `${major + 1}.0.0` : `0.${minor + 1}.0`;
   return compareVersion(version, low) >= 0 && compareVersion(version, below) < 0;
 }
 

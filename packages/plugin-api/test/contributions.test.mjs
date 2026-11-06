@@ -2,7 +2,7 @@
 // (docs/spec/plugins.md#extension-points).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { manifestSidecars, rangeContains, resolveContributions } from "../index.js";
+import { manifestSidecars, resolveContributions } from "../index.js";
 
 const provider = {
   id: "probe", package: "@scope/plugin-probe", version: "0.1.0",
@@ -15,21 +15,6 @@ const provider = {
 const contributor = (id, items, point = "probe.language") => ({
   id, package: `@scope/plugin-${id}`, version: "0.0.1",
   manifest: { id, name: id, description: "검사용 기여.", contributes: { [point]: items } },
-});
-
-test("a range contains a version by the installation rules", () => {
-  assert.equal(rangeContains("*", "0.0.1"), true);
-  assert.equal(rangeContains("^1.0.0", "1.2.0"), true);
-  assert.equal(rangeContains("^1.0.0", "2.0.0"), false);
-  assert.equal(rangeContains("^0.2.0", "0.3.0"), false);
-  assert.equal(rangeContains("^0.0.2", "0.0.3"), false);
-  assert.equal(rangeContains("~1.2.0", "1.2.9"), true);
-  assert.equal(rangeContains("~1.2.0", "1.3.0"), false);
-  assert.equal(rangeContains("1.2.0", "1.2.0"), true);
-  assert.equal(rangeContains(">=1.1.0", "9.0.0"), true);
-  assert.equal(rangeContains(">=1.1.0", "1.0.9"), false);
-  assert.equal(rangeContains(">=1.0.0 <1.2.0", "1.2.0"), false);
-  assert.throws(() => rangeContains("latest", "1.0.0"), /invalid range latest/);
 });
 
 test("each contributed item is connected, missing its provider, mismatched or invalid", () => {

@@ -46,7 +46,7 @@ fn rejects<T: std::fmt::Debug>(result: Result<T, String>, want: &str) {
 fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     for (text, min, below) in [
         ("0.0.2", "0.0.2", "0.0.3"),
-        ("^0.0.2", "0.0.2", "0.0.3"),
+        ("^0.0.2", "0.0.2", "0.1.0"),
         ("^0.2.3", "0.2.3", "0.3.0"),
         ("^1.2.3", "1.2.3", "2.0.0"),
         ("~1.2.3", "1.2.3", "1.3.0"),

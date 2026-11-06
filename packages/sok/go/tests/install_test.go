@@ -70,7 +70,7 @@ func rejects(t *testing.T, err error, want string) {
 // contract: install.version.ranges-and-order
 func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 	for text, want := range map[string][2]string{
-		"0.0.2": {"0.0.2", "0.0.3"}, "^0.0.2": {"0.0.2", "0.0.3"}, "^0.2.3": {"0.2.3", "0.3.0"},
+		"0.0.2": {"0.0.2", "0.0.3"}, "^0.0.2": {"0.0.2", "0.1.0"}, "^0.2.3": {"0.2.3", "0.3.0"},
 		"^1.2.3": {"1.2.3", "2.0.0"}, "~1.2.3": {"1.2.3", "1.3.0"}, ">=0.0.2 <0.1.0": {"0.0.2", "0.1.0"},
 	} {
 		r, err := sok.ParseRange(text)
