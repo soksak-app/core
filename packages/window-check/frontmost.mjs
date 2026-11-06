@@ -60,17 +60,17 @@ export function placeIn(list, pid) {
 }
 
 /**
- * The number of windows of other processes behind the front window of process pid in a window list ordered front to back.
- * It fails when the process has no window in the list.
+ * The number of windows of other processes behind the front window of process pid in a window list ordered front to back,
+ * without the windows of the processes in except. It fails when the process has no window in the list.
  */
-export function behindIn(list, pid) {
+export function behindIn(list, pid, except = []) {
   const place = placeIn(list, pid);
-  return list.slice(place + 1).filter((item) => item.pid !== pid).length;
+  return list.slice(place + 1).filter((item) => item.pid !== pid && !except.includes(item.pid)).length;
 }
 
-/** The number of windows of other processes behind the front window of process pid on the screen. */
-export function windowsBehind(pid) {
-  return behindIn(windowList(), pid);
+/** The number of windows of other processes behind the front window of process pid on the screen, without those of except. */
+export function windowsBehind(pid, except = []) {
+  return behindIn(windowList(), pid, except);
 }
 
 /** The place of the front window of process pid among the windows of the ordinary layer on the screen. */

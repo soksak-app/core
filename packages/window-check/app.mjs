@@ -63,6 +63,17 @@ export const APPS = Object.fromEntries(requiredApps(process.env).map((name) => [
   configDir: process.env.SOKSAK_CONFIG_DIR ?? join(process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), `soksak-check-${name}`),
 }]));
 
+/**
+ * The processes of the applications of the run: each application of APP_NAMES whose configuration folder in the root of the run
+ * holds an endpoint, whether or not the session checks it. A run starts every application of its root without activation, so a
+ * check of the window order leaves their windows out of the windows of the applications that a person uses.
+ */
+export function runProcesses(env = process.env) {
+  const root = env.SOKSAK_CONFIG_ROOT ?? tmpdir();
+  return APP_NAMES.map((name) => join(root, `soksak-check-${name}`, "endpoint.json")).filter((file) => existsSync(file))
+    .map((file) => JSON.parse(readFileSync(file, "utf8")).pid);
+}
+
 // The applications that have a main page: their host draws the workbench in a web page; the mygo host draws it in native
 // UI and has no main page (docs/spec/hosts.md#mygo-host).
 const MAIN_PAGE_NAMES = ["wailsv3", "tauriv2"];

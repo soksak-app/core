@@ -39,3 +39,11 @@ test("the windows behind a window count the windows of other processes behind th
   assert.equal(behindIn(list, 11), 0);
   assert.throws(() => behindIn(list, 7), /process 7 has no window in the window list/);
 });
+
+test("the windows behind a window leave out the windows of the processes that the count excludes", async () => {
+  const { behindIn } = await import("../frontmost.mjs");
+  // 42 is checked; 11 and 12 are other applications of the same run, which open behind every window after 42 opened.
+  const list = [{ pid: 10 }, { pid: 42 }, { pid: 11 }, { pid: 12 }, { pid: 13 }];
+  assert.equal(behindIn(list, 42, [11, 12]), 1);
+  assert.equal(behindIn(list, 42, [11, 12, 13]), 0);
+});

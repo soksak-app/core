@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, runProcesses } from "@soksak/window-check/app.mjs";
 import { frontmostApp, windowPlace, windowsBehind } from "@soksak/window-check/frontmost.mjs";
 import { fresh } from "./fixture.mjs";
 
@@ -15,10 +15,12 @@ for (const app of Object.values(APPS)) {
     const pid = s.client.endpoint.pid;
     const front = frontmostApp();
     const first = windowPlace(pid);
-    const behind = windowsBehind(pid);
+    const others = runProcesses().filter((item) => item !== pid);
+    const behind = windowsBehind(pid, others);
     t.diagnostic(`front application ${front}; application ${pid}; first window at place ${first}, ${behind} windows of other applications behind it`);
     assert.notEqual(front, pid, `${app.name} is the front application, so the check ran without another application in front`);
-    // The first window of an application that shows no other window goes behind every window.
+    // The first window of an application that shows no other window goes behind every window. The other applications of the run
+    // open behind every window after it, so their windows are not counted.
     assert.equal(behind, 0, `the first window of ${app.name} is at place ${first}, in front of ${behind} windows of other applications`);
     assert.equal((await s.get("host.window")).active, false, `${app.name} is active`);
     await fresh(s);
