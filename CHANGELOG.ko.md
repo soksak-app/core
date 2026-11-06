@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F627: browser tab이 document region을 가진 동안의 quit은 mygo, Wails, Tauri host에서 그 tab의 session을 cause `flush`로 한 번 읽고, 창이 사라진 뒤에는 page를 부르지 않는다. `e2e/browser.test.mjs`는 `host.quit`과 같은 경로로 quit하는 `diagnostics.host.relaunch`로 각 host를 quit하고, quit한 process의 log를 읽는다.
 - F584-2: virtual key window로 보낸 Command나 Control이 있는 key down은 first responder가 받기 전에 창, 그다음 main menu에 key equivalent로 제시된다. 애플리케이션 dispatch가 key window에 하는 것과 같으므로, 비활성 애플리케이션에 보낸 Command+C와 Command+V가 menu의 Copy와 Paste 항목을 실행한다. 전에는 `sp_input_key`가 키를 `-[NSWindow sendEvent:]`로만 보내서 native first responder가 Command+C를 평범한 key down으로 받았다. 키의 `input inject` 기록은 `equivalent`를 밝힌다. Red: `input_virtual_key_equivalent_test`가 `copy:Copy` 대신 `keyDown:c`를 받았고, 창의 view가 가진 key equivalent가 실행되지 않았다. Green: 10회 중 10회.
 - F491: mygo workbench가 page처럼 `core.settings`의 `common`에 모든 설정의 common 값을 보고하므로, window check의 `keepCommonSettings`가 mygo host에서도 common 값을 되돌린다. 그곳의 check는 cleanup에서 `Cannot convert undefined or null to object`로 끝났다. Red: `TestTheStatusReportsTheCommonValueOfEverySetting`가 필드 없이 compile되지 않았다.
 - F584-5: `e2e/new-tab-keys.test.mjs`가 `e2e/activation/`을 떠나 기본 tier에서 돈다. activation 없이 pointer를 창 위로 옮기고 virtual key window를 기다린 뒤 key마다 text를 함께 보낸다. 새 `e2e/tab-press-keys.test.mjs`는 같은 tier에서 두 번째 terminal의 tab을 누르고 놓은 직후 key를 친다.

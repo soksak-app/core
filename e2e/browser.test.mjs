@@ -16,7 +16,7 @@ const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, reading, terminalCardSidebar } from "./fixture.mjs";
-import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, eventLine, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 /** A red block of CSS size 120x60 placed at the upper left of the block document. Its pixels grow with the page zoom. */
@@ -750,5 +750,38 @@ for (const app of Object.values(APPS)) {
     assert.equal(secondLoad.ok, true);
     assert.equal(typeof secondLoad.micros, "number");
     assert.ok(secondLoad.micros >= 0, `load micros must not be negative: ${secondLoad.micros}`);
+  });
+}
+
+// A quit while a browser tab holds a document region saves the sessions of the tab once and calls nothing of the page after its
+// window is gone: the quit records one `workbench.tab.session.read` of the tab with the cause `flush` and no `host.binding.call`
+// warn (docs/spec/logging.md). diagnostics.host.relaunch quits as host.quit does, so the check reads the log of the process that
+// quit once the new process has connected.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a quit with a browser tab reads its sessions once and calls no page after the window`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    const reads = ["workbench.tab.session.read", "host.binding.call"];
+    await fresh(s, { log: { lifecycle: "debug", call: "debug" }, reads });
+    const base = await serve(s);
+    const [browser] = await browsers(s);
+    const surface = browser.surface;
+    await s.run("browser.navigate", { url: `${base}/quit-session` }, surface);
+    await loaded(s, surface, `${base}/quit-session`);
+    await placed(s, surface, "quit document");
+    await s.flushLog();
+    const before = currentEventOffsets(app.configDir);
+    const previous = s.client.endpoint.pid;
+    await s.relaunch();
+    const { pid } = s.client.endpoint;
+    // The files of the new process start at their current end, so the events read are those of the process that quit.
+    const offsets = { ...before, ...Object.fromEntries(Object.entries(currentEventOffsets(app.configDir))
+      .filter(([name]) => name.endsWith(`-${pid}.jsonl`) || name.endsWith(`-${pid}.debug.jsonl`))) };
+    const { events } = readEvents(app.configDir, offsets);
+    const sessionReads = events.filter((event) => event.event === "workbench.tab.session.read" && event.fields?.tab === surface)
+      .map((event) => event.fields.cause);
+    assert.deepEqual(sessionReads.filter((cause) => cause === "flush"), ["flush"],
+      `process ${previous} read the sessions of ${surface} at its quit with the causes ${JSON.stringify(sessionReads)}`);
+    const failed = events.filter((event) => event.event === "host.binding.call" && event.level === "warn").map(eventLine);
+    assert.deepEqual(failed, [], `process ${previous} answered a page call as failed at its quit`);
   });
 }

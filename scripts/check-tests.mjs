@@ -1173,6 +1173,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F627",
+    implementation: [
+      { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func (s *TabSessions) Capture" },
+      { file: "packages/workbench/tab-session.js", symbol: "workbench.tab.session.read" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/tab_state_test.go", id: "TestEachReadOfTheSessionsOfATabRecordsItsCause" },
+      { file: "packages/workbench/test/tab-session.test.mjs", id: "each read of the sessions of a tab records its cause" },
+      { file: "e2e/browser.test.mjs", id: "a quit with a browser tab reads its sessions once and calls no page after the window" },
+    ],
+    expected: "A quit while a browser tab holds a document region reads the sessions of the tab once with the cause flush and calls no page after its window is gone.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F609",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "deliverKeptKeys" },
