@@ -1,7 +1,7 @@
 // The Node test files of the workspace run as processes of their own (docs/operations/examples.md#test-runner): the test script of
 // each package names its flags and files, and each file becomes one test with its folder and flags.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,10 +70,94 @@ test("a test script is a list of steps: a command before the tests, and the flag
     { before: [], flags: ["--experimental-test-module-mocks"], paths: ["test/"] });
   assert.deepEqual(parseTestScript("node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'", "e2e"),
     { before: [], flags: ["--test-concurrency=1", "--test-global-setup=./setup.mjs"], paths: ["activation/*.test.mjs"] });
-  assert.deepEqual(parseTestScript("pnpm build && node --test test/", "p"), { before: ["pnpm build"], flags: [], paths: ["test/"] });
+  assert.deepEqual(parseTestScript("pnpm build && node --test test/", "p"), { before: [{ name: "pnpm build", command: "pnpm", args: ["build"] }], flags: [], paths: ["test/"] });
   assert.deepEqual(parseTestScript("node --test scripts/test/*.test.mjs && pnpm -r test", "p"), { before: [], flags: [], paths: ["scripts/test/*.test.mjs"] });
   assert.throws(() => parseTestScript("jest", "p"), /p: the test script "jest" is not node --test/);
   assert.throws(() => parseTestScript("node --test test/ && echo done", "p"), /p: the test script step "echo done" is not node --test or pnpm/);
+});
+
+for (const [name, flag, selected, path] of [
+  ["declared Node selection executes only the named case: quoted joined pattern", "'--test-name-pattern=^required case$'", "required case", "test/*.test.mjs"],
+  ["declared Node selection executes only the named case: separate pattern containing an operator", "--test-name-pattern '^required case && operator$'", "required case && operator", "test/*.test.mjs"],
+  ["declared Node selection executes only the named case: double quoted pattern and path", '--test-name-pattern "^required case\\$"', "required case", '"test folder/*.test.mjs"'],
+  ["declared Node selection executes only the named case: escaped pattern and path", "--test-name-pattern=^required\\ case\\$", "required case", "test\\ folder/*.test.mjs"],
+]) {
+  test(name, { timeout: 30000 }, async (t) => {
+    const root = workspace();
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const directory = path.includes("folder") ? "test folder" : "test";
+    put(root, "a/package.json", JSON.stringify({ scripts: { test: `node ./run.mjs --test ${flag} ${path}` } }));
+    put(root, `a/${directory}/selected.test.mjs`, `import test from 'node:test';
+import { appendFileSync } from 'node:fs';
+test(${JSON.stringify(selected)}, () => appendFileSync('executed.jsonl', JSON.stringify(${JSON.stringify(selected)}) + '\\n'));
+test('unselected case', () => { appendFileSync('executed.jsonl', 'unselected\\n'); throw Error('unselected case executed'); });
+`);
+    const { tests } = discoverNodeTests({ root, packages: ["a"] });
+    assert.equal(tests.length, 1);
+    const commands = tests.map((item) => ({ ...item, env: { NODE_TEST_CONTEXT: undefined } }));
+    const { results } = await runTests({ tests: commands, concurrency: 1, write: () => {}, run: { id: "selection", folder: join(root, "run") } });
+    const [result] = results.values();
+    assert.equal(result.status, "pass", `${result.detail}\n${result.output}`);
+    assert.equal(readFileSync(join(root, "a/executed.jsonl"), "utf8"), `${JSON.stringify(selected)}\n`);
+  });
+}
+
+test("declared Node selection preserves quoted flags, literal dollars and prebuild arguments", () => {
+  const script = "pnpm --filter 'package with spaces' build && node --test --test-name-pattern '^literal $HOME && case$' --test-concurrency 1 'test folder/*.test.mjs'";
+  const parsed = parseTestScript(script, "a");
+  assert.deepEqual(parsed.flags, ["--test-name-pattern", "^literal $HOME && case$", "--test-concurrency", "1"]);
+  assert.deepEqual(parsed.paths, ["test folder/*.test.mjs"]);
+  const root = workspace();
+  try {
+    put(root, "a/package.json", JSON.stringify({ scripts: { test: script } }));
+    put(root, "a/test folder/selected.test.mjs", "");
+    const { before } = discoverNodeTests({ root, packages: ["a"] });
+    assert.equal(before.length, 1);
+    assert.equal(before[0].command, "pnpm");
+    assert.deepEqual(before[0].args, ["--filter", "package with spaces", "build"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("declared Node selection rejects malformed or unsupported shell syntax", () => {
+  for (const script of [
+    "node --test '--test-name-pattern=unfinished test/",
+    'node --test --test-name-pattern "^literal$" test/',
+    'node --test --test-name-pattern="$PATTERN" test/',
+    "node --test --test-name-pattern=$(printf selected) test/",
+    "node --test '--test-name-pattern=`printf selected`' test/",
+    "PATTERN=selected node --test test/",
+    "node --test test/ | cat",
+    "node --test test/ || pnpm build",
+    "node --test test/ > result.txt",
+    "node --test test/ &",
+    "node --test test/; pnpm build",
+    "node --test test/ && pnpm build",
+    "pnpm -r test && node --test test/",
+    "node --test --test-name-pattern",
+    "node --test --test-name-pattern --test-only test/",
+  ]) {
+    assert.throws(() => parseTestScript(script, "a"), /^Error: a: /, script);
+  }
+});
+
+test("declared Node selection rejects every missing path even beside a valid file", () => {
+  const root = workspace();
+  try {
+    put(root, "a/test/valid.test.mjs", "");
+    for (const missing of ["missing.test.mjs", "missing/*.test.mjs", "empty/"]) {
+      mkdirSync(join(root, "a/empty"), { recursive: true });
+      put(root, "a/package.json", JSON.stringify({ scripts: { test: `node --test test/valid.test.mjs ${missing}` } }));
+      assert.throws(() => discoverNodeTests({ root, packages: ["a"] }), (error) => {
+        assert.match(error.message, /a: the test script names no test file in/);
+        assert.ok(error.message.includes(missing));
+        return true;
+      }, missing);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("each test file of a package is a test with the folder and the flags of its package", () => {
@@ -280,7 +364,7 @@ test("a change under a package selects the test files of that package only", () 
 
 test("a change selects the deepest package that holds it, and a change outside every package selects the root", () => {
   const root = workspace();
-  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs" } }));
+  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs" } }));
   put(root, "scripts/test/s.test.mjs", "");
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   put(root, "a/test/one.test.mjs", "");

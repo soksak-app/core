@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F509-3: 선언한 Node script가 유지보수되는 parser를 통해 quoted 및 escaped argument, 분리한 pattern value와 literal command separator를 보존한다. 준비 command는 argument 경계를 유지하며 미지원 문법이나 하나라도 해석되지 않은 path는 실행 전에 실패한다. 추적 Red case 일곱 개에는 제외한 test를 실행한 실제 child가 포함되며 이제 argument 형태 네 가지 모두 선택한 case만 실행한다. macOS에서 discovery case 38개와 runner case 28개가 모두 통과한다. 양쪽 contract와 requirement mapping은 이 harness 수정과 아직 남은 두 초기 상태의 native acceptance를 구분한다.
+
 - F509-2: Close fixture는 선언된 exposure schema 부분집합을 사용하며 소유 test가 모든 실제 fixture manifest를 공개 production validator로 검사한다. 최초 native 설치 실패를 보존했고 같은 미지원 필드 선언이 수정 전 추적 소유 assertion에서 실패하며 수정 후 소유 case 두 개와 문서·exposure 검사가 통과한다. Validator는 변경하지 않았다. Focused native acceptance는 F509에 미완료로 남아 있다.
 
 - F507: 정본 feature-link inventory가 선언한 요구사항 시나리오와 플랫폼 적용 상태를 검사하고 누락되거나 잘못된 소유 test 참조를 거부하며 연결을 미실행으로 보고한다. 추적한 Red case 5개로 승인 공백을 확인했고 소유 case 45개와 문서·inventory gate가 모두 통과한다. 제품 동작과 플랫폼 acceptance는 별도로 판정한다.

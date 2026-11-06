@@ -220,6 +220,34 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F509-2",
+    implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function validateManifest" },
+      { file: "e2e/fixtures/save-close/probe/plugin.json", symbol: '"name": "probeclose.prepare"' }],
+    tests: [{ file: "e2e/test/view-fixture-pages.test.mjs", id: "each fixture plugin manifest satisfies the public installation contract" }],
+    expected: "Every actual window-check fixture manifest satisfies the public installation validator; the close fixture declares only supported parameter schema fields. Native application acceptance is separate.",
+    levels: ["unit"],
+  },
+  {
+    id: "F509-3",
+    requirement: { key: "execution-selection", platforms: PORTABLE_REQUIREMENT_PLATFORMS,
+      inapplicable: {
+        race: "Parsing and file selection finish synchronously before command execution; process lifecycle is outside this requirement.",
+        recovery: "A rejected script or unresolved path retains no parser state; a new declaration is validated independently.",
+      } },
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function parseTestScript" }, { file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" }],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "declared Node selection executes only the named case: quoted joined pattern", covers: ["normal"] },
+      { file: "scripts/test/node-tests.test.mjs", id: "declared Node selection executes only the named case: separate pattern containing an operator", covers: ["normal"] },
+      { file: "scripts/test/node-tests.test.mjs", id: "declared Node selection executes only the named case: double quoted pattern and path", covers: ["normal"] },
+      { file: "scripts/test/node-tests.test.mjs", id: "declared Node selection executes only the named case: escaped pattern and path", covers: ["normal"] },
+      { file: "scripts/test/node-tests.test.mjs", id: "declared Node selection preserves quoted flags, literal dollars and prebuild arguments", covers: ["normal"] },
+      { file: "scripts/test/node-tests.test.mjs", id: "declared Node selection rejects malformed or unsupported shell syntax", covers: ["failure"] },
+      { file: "scripts/test/node-tests.test.mjs", id: "declared Node selection rejects every missing path even beside a valid file", covers: ["failure"] },
+    ],
+    expected: "Declared Node selection preserves quoted and escaped arguments, runs only the named child case, and rejects unsupported syntax or any unresolved path before execution.",
+    levels: ["unit"],
+  },
+  {
     id: "F506-1",
     implementation: [{ file: "packages/workbench/plane.js", symbol: 'await registry.run(save, {}, t.id);' }],
     tests: [{ file: "packages/workbench/test/plane-close-modified.test.mjs", id: "a failed save can retry and close the same modified tab" },

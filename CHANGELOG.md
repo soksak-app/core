@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F509-3: Declared Node scripts preserve quoted and escaped arguments, separate pattern values and literal command separators through a maintained parser. Preparation commands retain their argument boundaries, and unsupported syntax or any unresolved path fails before execution. Seven tracked Red cases include an actual child that ran an excluded test; four argument forms now execute only their selected case. All 38 discovery cases and 28 runner cases pass on macOS. The paired contract and requirement mapping distinguish this harness correction from the pending two-state native acceptance.
+
 - F509-2: The close fixture now uses the declared exposure schema subset, and its owner checks every actual fixture manifest through the public production validator. The first native installation failure is preserved; the same unsupported-field declaration fails the tracked owner assertion before its correction, after which both owner cases and documentation and exposure checks pass. The validator is unchanged. Focused native acceptance remains pending under F509.
 
 - F507: The canonical feature-link inventory checks declared requirement scenarios and platform applicability, rejects missing or invalid owning test references, and reports mappings as unexecuted. Five tracked Red cases expose the acceptance gaps; all 45 owner cases and the documentation and inventory gates pass. Product behavior and platform acceptance remain separate.
