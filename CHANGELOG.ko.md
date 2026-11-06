@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F651: `@soksak/plugin-api`는 test가 읽는 version 범위 사례 표를 `specFiles`에 선언하므로, 표가 바뀌면 이 package가 선택된다.
 - F651: host contract의 합집합 행은 pipe를 escape하고, markdown 표를 읽는 모든 check는 `scripts/markdown-table.mjs`의 `tableCells`로 cell을 읽는다. 이 함수는 escape되지 않은 `|`에서만 cell을 끝내고 `\|`를 `|`로 읽는다. 이전에는 계약 reader가 합집합을 나눠 scope를 `\`로 읽었다.
 - F498: F212.11-2b가 test를 비운 workbench test file 13개를 지운다: 각 file은 자기 test를 하나도 실행하지 않아서 `node --test`가 그 file을 이름으로 가진 summary를 쓰지 않았고 runner는 `missing or incomplete test evidence`로 실패시켰다. 그 view path는 `test/surface-view-path.test.mjs`가 시험한다.
 - F584-5-1: mygo workbench 에서 열린 picker 의 Escape 와 바깥 press 는 shortcut table 과 page 처럼 binder 를 거쳐 `core.picker.close` 를 실행한다. 이전에는 popover 가 command 없이 layer 를 닫아 `workbench.command` 기록이 남지 않았다. `docs/spec/exposure.md` 는 네이티브 modal 메뉴가 Wails host 와 Tauri host 의 modal web view 라고 밝히고, `e2e/view-keyboard-routing.test.mjs` 는 mygo 에서 그 Escape 에 `core.picker.close` 한 번과 `core.modal.dismiss` 없음을 요구한다.

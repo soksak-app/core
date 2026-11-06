@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F651: `@soksak/plugin-api` declares the version range case table in `specFiles`, because its tests read it, so a change of the table selects the package.
 - F651: The union row of the host contract escapes its pipes, and every check that reads a markdown table reads its cells through `tableCells` of `scripts/markdown-table.mjs`, which ends a cell only at an unescaped `|` and reads `\|` as `|`; before, the contract reader split the union and read its scope as `\`.
 - F498: The 13 workbench test files that F212.11-2b emptied of tests are removed: each ran no test of its own, so `node --test` wrote no summary that names the file and the runner failed it with `missing or incomplete test evidence`. Their view paths are tested in `test/surface-view-path.test.mjs`.
 - F584-5-1: Escape and a press outside an open picker of the mygo workbench run `core.picker.close` through the binder, as the shortcut table and the page run it; before, the popover closed the layer without a command, so no `workbench.command` record was written. `docs/spec/exposure.md` states that a native modal menu is a modal web view of the Wails and the Tauri host, and `e2e/view-keyboard-routing.test.mjs` requires one `core.picker.close` and no `core.modal.dismiss` for that Escape on mygo.
