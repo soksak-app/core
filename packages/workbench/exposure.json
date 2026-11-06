@@ -4453,6 +4453,10 @@
         "many": true
       },
       {
+        "name": "core.settings-modal.folder",
+        "description": "The folder of the project below the scope buttons, shown in the project scope only."
+      },
+      {
         "name": "core.settings-modal.theme",
         "description": "The theme swatches in order.",
         "many": true
