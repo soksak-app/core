@@ -36,7 +36,7 @@ func TestE2EEachDeliveredDragIsOneStepOfItsCallback(t *testing.T) {
 		done := make(chan platform.PointerResult, 1)
 		var injected error
 		mygo.RunOnMain(func() {
-			injected = system.InjectPointer(window.NativeWindow(), input.x, 100, input.phase, 0, 0, 0, 1, 1, func(result platform.PointerResult, _ platform.ButtonHeld) {
+			injected = system.InjectPointer(window.NativeWindow(), "main", input.x, 100, input.phase, 0, 0, 0, 1, 1, func(result platform.PointerResult, _ platform.ButtonHeld) {
 				done <- result
 			})
 		})

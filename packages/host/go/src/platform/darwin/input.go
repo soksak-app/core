@@ -22,9 +22,13 @@ extern void goInputDelivered(void *context, int result, sp_input_held *held);
 static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
     hostRunOnWorker(^{ goInputDelivered(context, (int)result, (sp_input_held *)held); });
 }
-static void injectPointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
+// pointer is a C string that the block frees after the delivery took it.
+static void injectPointer(void *window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double receive, uintptr_t handle) {
-    hostRunOnMain(^{ sp_input_pointer_then(window, x, y, phase, button, deltaX, deltaY, clicks, receive, delivered, (void *)handle); });
+    hostRunOnMain(^{
+        sp_input_pointer_then(window, pointer, x, y, phase, button, deltaX, deltaY, clicks, receive, delivered, (void *)handle);
+        free(pointer);
+    });
 }
 
 // Announces whether a view that a press passes through is a surface. For a surface it returns a non-zero value, and the upward
@@ -145,7 +149,7 @@ func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (u
 }
 
 // InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application.
-func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window unsafe.Pointer, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	pointerSequence.Lock()
 	var once sync.Once
 	serialized := func(result platform.PointerResult, held platform.ButtonHeld) {
@@ -154,13 +158,13 @@ func (implementation) InjectPointer(window unsafe.Pointer, x, y float64, phase, 
 			done(result, held)
 		})
 	}
-	C.injectPointer(window, C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY), C.int(clicks),
+	C.injectPointer(window, C.CString(pointer), C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY), C.int(clicks),
 		C.double(receive), C.uintptr_t(cgo.NewHandle(serialized)))
 	return nil
 }
 
 // goInputDelivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD
-// and keeps it valid until done returns.
+// or SP_INPUT_POINTER_HELD and keeps it valid until done returns.
 //
 //export goInputDelivered
 func goInputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_held) {
@@ -178,6 +182,8 @@ func goInputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_hel
 		done(platform.PointerButtonHeld, buttonHeld(held))
 	case C.SP_INPUT_PRESS_OPEN:
 		done(platform.PointerPressOpen, platform.ButtonHeld{})
+	case C.SP_INPUT_POINTER_HELD:
+		done(platform.PointerHeld, pointerHeld(held))
 	default:
 		done(platform.PointerRejected, platform.ButtonHeld{})
 	}
@@ -197,6 +203,15 @@ func buttonHeld(held *C.sp_input_held) platform.ButtonHeld {
 		}
 	}
 	return result
+}
+
+// pointerHeld reads the pointer and the reason of sp_input_held. A notification of this result without them is a contract violation
+// of the library, so it stops and names the violation.
+func pointerHeld(held *C.sp_input_held) platform.ButtonHeld {
+	if held == nil || held.pointer == nil || held.reason == nil {
+		panic("sp_input_pointer_then reported SP_INPUT_POINTER_HELD without its pointer and reason")
+	}
+	return platform.ButtonHeld{Pointer: C.GoString(held.pointer), Reason: C.GoString(held.reason)}
 }
 
 type activation struct {

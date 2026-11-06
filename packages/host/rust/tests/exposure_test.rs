@@ -355,7 +355,7 @@ fn host_hit_declares_the_workbench_document_and_native_kinds() {
     );
 }
 
-// contract: endpoint.input.pointer-invalid-phase, endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-clicks-default, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask, endpoint.input.key-control-option-and-text, endpoint.input.key-invalid-phase-or-modifier-type
+// contract: endpoint.input.pointer-invalid-phase, endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-clicks-default, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-defaults, endpoint.input.pointer-right-button-accepted, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.pointer-name, endpoint.input.key-unknown-modifier-rejected, endpoint.input.key-shift-command-mask, endpoint.input.key-control-option-and-text, endpoint.input.key-invalid-phase-or-modifier-type
 #[test]
 fn pointer_and_key_params_are_validated() {
     let pointer = exposure::pointer(
@@ -409,6 +409,17 @@ fn pointer_and_key_params_are_validated() {
     assert!(moved.activate);
     assert!(!pointer.activate);
     assert_eq!((pointer.clicks, moved.clicks), (1, 1));
+    assert_eq!(pointer.pointer, "main");
+    for name in ["second-1".to_string(), "p".repeat(32)] {
+        let named = exposure::pointer(
+            &json!({"x": 7, "y": 8, "phase": "down", "pointer": name})
+                .as_object()
+                .unwrap()
+                .clone(),
+        )
+        .unwrap();
+        assert_eq!(named.pointer, name);
+    }
     for (phase, clicks) in [("down", 2), ("up", 3)] {
         let press = exposure::pointer(
             &json!({"window": "main", "x": 0, "y": 0, "phase": phase, "clicks": clicks})
@@ -434,6 +445,11 @@ fn pointer_and_key_params_are_validated() {
         json!({"x": 0, "y": 0, "phase": "scroll", "clicks": 2}),
         json!({"x": 0, "y": 0, "phase": "down", "clickCount": 2}),
         json!({"x": 0, "y": 0, "phase": "down", "Clicks": 2}),
+        json!({"x": 0, "y": 0, "phase": "down", "pointer": ""}),
+        json!({"x": 0, "y": 0, "phase": "down", "pointer": "Second"}),
+        json!({"x": 0, "y": 0, "phase": "down", "pointer": "a b"}),
+        json!({"x": 0, "y": 0, "phase": "down", "pointer": "p".repeat(33)}),
+        json!({"x": 0, "y": 0, "phase": "down", "pointer": 2}),
     ] {
         assert_eq!(
             exposure::pointer(params.as_object().unwrap())
@@ -553,6 +569,19 @@ fn button_held_message_reports_mask_and_frontmost_application() {
     for (held, want) in cases {
         assert_eq!(exposure::button_held_message(&held), want, "{held:?}");
     }
+}
+
+// contract: endpoint.input.pointer-held-message
+#[test]
+fn pointer_held_message_names_the_holding_pointer_and_its_reason() {
+    let held = exposure::PointerHeld {
+        pointer: "second".to_string(),
+        reason: "the page at the point holds its press".to_string(),
+    };
+    assert_eq!(
+        exposure::pointer_held_message(&held),
+        "pointer second holds a press that this input would share: the page at the point holds its press"
+    );
 }
 
 // contract: exposure.timeout.command-run-default-and-declared, exposure.timeout.every-forward-bounded, exposure.timeout.invalid-timeout-rejected
