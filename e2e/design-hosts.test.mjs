@@ -44,6 +44,10 @@ async function shownRects(s, name) {
 /** The shown elements of every workbench element name in the current state. */
 async function reading(s, names) {
   await s.presented();
+  // A host that creates modal web views answers the elements of an open modal from the rectangles that its document reported
+  // (docs/spec/exposure.md); the other hosts report no modal document.
+  await s.until("core.modal", (modal) => !modal || !("document" in modal) || Boolean(modal.document?.elements),
+    "the open modal did not report its elements");
   const found = {};
   for (let start = 0; start < names.length; start += AT_ONCE) {
     await Promise.all(names.slice(start, start + AT_ONCE).map(async (name) => {
