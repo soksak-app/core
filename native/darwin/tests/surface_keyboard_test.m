@@ -37,6 +37,24 @@ static void typeKeys(NSWindow *window, const char *text) {
     }
 }
 
+// Runs the event queue of the application, where the input that a hold gives back takes its turns, for the interval.
+static void runEvents(NSTimeInterval interval) {
+    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:interval];
+    while (until.timeIntervalSinceNow > 0) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+            inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
+}
+
+// The fields of the first event named name in events, nil without one.
+static NSDictionary *eventFields(NSArray<NSDictionary *> *events, NSString *name) {
+    for (NSDictionary *event in events) {
+        if ([event[@"name"] isEqual:name]) return event[@"fields"];
+    }
+    return nil;
+}
+
 static void placeRegion(void *region) {
     sp_region_place(region, 0, 0, 0, 0, true);
     // A region applies its geometry in a later turn of the main loop.
@@ -394,6 +412,110 @@ int main(void) { @autoreleasepool {
     [closing close];
     sp_region_close(ownedRegion);
     sp_window_end_responder_observation(closingObservation);
+
+    // The input of a window waits for the decision of the workbench from the release of a press on the workbench
+    // (docs/spec/native-surfaces.md#keyboard-of-a-surface). The workbench of this window is the left half, its surface the right.
+    NSWindow *holding = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    holding.releasedWhenClosed = NO;
+    WKWebView *holdingMain = [[[WKWebView alloc] initWithFrame:holding.contentView.bounds] autorelease];
+    [holding.contentView addSubview:holdingMain];
+    void *holdingObservation = sp_window_observe_responder(holding, ^{});
+    void *holdingComposition = sp_window_set_main_webview(holding, holdingMain);
+    void *heldHost = sp_surface_create(holdingComposition);
+    webviewSetFrame(heldHost, 400, 0, 400, 500);
+    webviewSetSurfaceHidden(heldHost, false);
+    WKWebView *heldPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(heldHost, heldPage), "the page of the surface of the holding window is placed");
+    void *heldRegion = sp_region_create(heldHost, "view", regionEvent, NULL);
+    placeRegion(heldRegion);
+    sp_window_focus_workbench(holding);
+    check(holding.firstResponder == holdingMain, "the workbench of the holding window holds the keyboard");
+
+    // A press on a surface holds nothing: the key that follows its release reaches the region at once.
+    NSString *unheld = regionKeys(^{
+        sp_input_pointer(holding, 600, 250, 1, 0, 0, 0);
+        sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
+        [holding makeFirstResponder:(NSResponder *)heldRegion];
+        typeKeys(holding, "x");
+    });
+    check([unheld isEqual:@"x"], "a key after the release of a press on a surface reaches the region at once");
+    sp_window_focus_workbench(holding);
+
+    // R1: the keys after the release of a press on the workbench wait for the decided call and reach its target in order.
+    NSString *waiting = regionKeys(^{
+        check(sp_input_pointer(holding, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the workbench is delivered");
+        check(sp_input_pointer(holding, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "its release is delivered");
+        typeKeys(holding, "abcdefghijklm");
+        runEvents(0.05);
+    });
+    check([waiting isEqual:@""], [NSString stringWithFormat:@"no key reaches the region before the decision, got \"%@\"", waiting].UTF8String);
+    NSString *decided = regionKeys(^{
+        sp_surface_focus(heldHost);
+        sp_window_keyboard_decided(holding);
+        runEvents(0.1);
+    });
+    check([decided isEqual:@"abcdefghijklm"],
+        [NSString stringWithFormat:@"the 13 keys reach the region of the decided surface in order, got \"%@\"", decided].UTF8String);
+    NSString *after = regionKeys(^{ typeKeys(holding, "y"); });
+    check([after isEqual:@"y"], "a key after the decision reaches the region at once");
+
+    // R3: a call without the decision moves the keyboard and the keys keep waiting. R2: the hold that no decided call ends gives
+    // the keys to the first responder of the end of its bound and records its expiry as a warning.
+    sp_window_focus_workbench(holding);
+    __block NSString *undecided = nil;
+    NSArray<NSDictionary *> *expiry = capturedEvents(^{
+        undecided = [regionKeys(^{
+            sp_input_pointer(holding, 200, 250, 1, 0, 0, 0);
+            sp_input_pointer(holding, 200, 250, 3, 0, 0, 0);
+            typeKeys(holding, "abc");
+            sp_surface_focus(heldHost);
+            runEvents(0.05);
+        }) retain];
+        check(holding.firstResponder == (NSResponder *)heldRegion, "a call without the decision moves the keyboard");
+        runEvents(1.1);
+    });
+    [undecided autorelease];
+    check([undecided isEqual:@""], [NSString stringWithFormat:@"the keys wait after a call without the decision, got \"%@\"", undecided].UTF8String);
+    NSMutableString *expired = [NSMutableString string];
+    for (NSDictionary *event in expiry) {
+        if ([event[@"name"] isEqual:@"native.input.key_down"]) [expired appendString:event[@"fields"][@"characters"]];
+    }
+    check([expired isEqual:@"abc"], [NSString stringWithFormat:@"the expired hold gives the keys to the region, got \"%@\"", expired].UTF8String);
+    NSDictionary *expiredFields = eventFields(expiry, @"native.keyboard.hold_expired");
+    check([expiredFields[@"held"] intValue] == 6 && [expiredFields[@"ms"] doubleValue] >= 1000,
+        [NSString stringWithFormat:@"the expiry records the 6 held key events and its duration, got %@", expiredFields].UTF8String);
+
+    // A hold keeps 256 pieces of input and records the rest as dropped.
+    sp_window_focus_workbench(holding);
+    __block NSUInteger delivered = 0;
+    NSArray<NSDictionary *> *overflow = capturedEvents(^{
+        sp_window_keyboard_hold(holding);
+        for (int i = 0; i < 150; i++) {
+            sp_input_key(holding, "k", "k", 0, true);
+            sp_input_key(holding, "k", "k", 0, false);
+        }
+        sp_surface_focus(heldHost);
+        sp_window_keyboard_decided(holding);
+        runEvents(0.1);
+    });
+    for (NSDictionary *event in overflow) delivered += [event[@"name"] isEqual:@"native.input.key_down"];
+    NSDictionary *droppedFields = eventFields(overflow, @"native.keyboard.hold_dropped");
+    check(delivered == 128 && [droppedFields[@"count"] intValue] == 44 && [droppedFields[@"reason"] isEqual:@"full"],
+        [NSString stringWithFormat:@"a full hold gives back 128 keys and drops 44 events, got %lu and %@", (unsigned long)delivered, droppedFields].UTF8String);
+
+    // A window that closes with a hold drops what it held.
+    NSArray<NSDictionary *> *closedHold = capturedEvents(^{
+        sp_window_keyboard_hold(holding);
+        typeKeys(holding, "z");
+        [holding close];
+        runEvents(0.05);
+    });
+    NSDictionary *closedFields = eventFields(closedHold, @"native.keyboard.hold_dropped");
+    check([closedFields[@"count"] intValue] == 2 && [closedFields[@"reason"] isEqual:@"closed"],
+        [NSString stringWithFormat:@"a closed window drops the 2 held key events, got %@", closedFields].UTF8String);
+    sp_region_close(heldRegion);
+    sp_window_end_responder_observation(holdingObservation);
 
     sp_window_end_responder_observation(observation);
     return failures ? 1 : 0;

@@ -31,12 +31,16 @@ async function page() {
 
   const calls = [];
   const decisions = [];
+  // The decided calls, each the surface of a decided surfaceFocus or "modal" for keyboardDecided.
+  const ends = [];
   const modal = { open: null, listeners: new Set() };
   const actualHost = await import("../host.js");
   mock.module("../host.js", { exports: {
     ...actualHost,
     report: (line) => assert.fail(`the page reported: ${line}`),
-    surfaces: { ...actualHost.surfaces, focus: (surface) => { calls.push(surface); return Promise.resolve(); } },
+    surfaces: { ...actualHost.surfaces,
+      focus: (surface, decided) => { calls.push(surface); if (decided) ends.push(surface); return Promise.resolve(); },
+      keyboardDecided: () => { ends.push("modal"); return Promise.resolve(); } },
     modalState: () => modal.open,
     onModalState: (fn) => { modal.listeners.add(fn); return () => modal.listeners.delete(fn); },
   } });
@@ -100,7 +104,7 @@ async function page() {
     await placed();
     calls.length = 0;
   };
-  return { calls, decisions, flush, keyboard, modal, openProject, placed, plane, reset, ringSurface, shownSurfaces };
+  return { calls, decisions, ends, flush, keyboard, modal, openProject, placed, plane, reset, ringSurface, shownSurfaces };
 }
 
 const b = await page();
@@ -226,15 +230,45 @@ test("each decision of the keyboard is recorded with its cause", { timeout: 5000
   b.plane.addTabTo(b.plane.focused(), pluginId, null);
   await b.flush();
   const added = b.ringSurface();
-  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "ring", target: added, sent: before, owed: true, decision: "wait" },
+  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "ring", target: added, sent: before, owed: true, decided: false, decision: "wait" },
     "the new tab waits for the placement that holds it");
   await b.placed();
   assert.equal(b.decisions.at(-1).cause, "placed");
   assert.equal(b.decisions.at(-1).decision, "send");
   b.keyboard.keyboardResponder({ owner: "workbench" });
   await b.flush();
-  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "responder", target: added, sent: added, owed: true, decision: "send" });
+  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "responder", target: added, sent: added, owed: true, decided: false, decision: "send" });
 });
+
+// The host holds the input of the window from the release of a press on the workbench until a decided call, so every press of the
+// page, on any element, is answered by one decided call after its handlers ran (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+const pressTargets = {
+  "a hidden tab": (b) => tabElement(b.plane.currentGrid().card(b.plane.focused()).data.tabs.map(({ id }) => id).find((id) => id !== b.ringSurface())),
+  "the active tab": (b) => tabElement(b.ringSurface()),
+  "a card header": () => document.querySelector('[data-expose="core.card.header"]'),
+  "a card": () => document.querySelector(".card"),
+  "a divider": () => document.querySelector('[data-expose="core.divider"]'),
+  "the plane": () => document.getElementById("plane"),
+  "the chrome bar": () => document.querySelector('[data-expose="core.chrome.bar"]'),
+  "the space bar": () => document.getElementById("spaceBar"),
+  "the body": () => document.body,
+};
+for (const [name, element] of Object.entries(pressTargets)) {
+  test(`a press on ${name} ends with one decided call`, { timeout: 5000 }, async () => {
+    await b.reset();
+    b.plane.addTabTo(b.plane.focused(), pluginId, null);
+    await b.placed();
+    const target = element(b);
+    assert.ok(target, `the page has no ${name}`);
+    b.ends.length = 0;
+    press(target, "pointerdown");
+    press(target, "pointerup");
+    await new Promise((done) => setTimeout(done, 10));
+    await b.placed();
+    assert.equal(b.ends.length, 1, `the decided calls of the press: ${JSON.stringify(b.ends)}`);
+    assert.equal(b.ends[0], b.ringSurface(), "the decided call and the ring disagree");
+  });
+}
 
 test("a modal keeps the keyboard until it closes", { timeout: 5000 }, async () => {
   await b.reset();

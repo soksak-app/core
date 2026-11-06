@@ -1027,10 +1027,13 @@ fn cancel_layout_after_setup_error(
     }
 }
 
-/// Names the surface that takes the keyboard of the window, and null names the workbench.
+/// Names the surface that takes the keyboard of the window, and null names the workbench. `decided` ends the hold of the input
+/// of the window after the keyboard moved (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 #[derive(Deserialize)]
 pub struct FocusRequest {
     surface: Option<String>,
+    #[serde(default)]
+    decided: bool,
 }
 
 /// Gives the keyboard of the window to the surface of the request or to the workbench on the main thread
@@ -1038,10 +1041,58 @@ pub struct FocusRequest {
 pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
     let platform = platform::current()?;
     let focus_window = window.clone();
-    exposure::on_main(window, move || match request.surface {
+    let decided = request.decided;
+    exposure::on_main(window, move || {
+        let focused = focus_on_main(platform, &focus_window, request.surface);
+        // A refused surface still ends the hold: the input waits for no later decision of this call.
+        if decided {
+            platform.keyboard_decided(
+                focus_window
+                    .native_window()
+                    .map_err(|error| error.to_string())? as Handle,
+            )?;
+        }
+        focused
+    })
+}
+
+/// Holds the input of the window until the decision of the workbench about the keyboard, and answers after the hold is open
+/// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+pub fn keyboard_hold(window: &Window) -> Result<(), String> {
+    let platform = platform::current()?;
+    let hold_window = window.clone();
+    exposure::on_main(window, move || {
+        platform.keyboard_hold(
+            hold_window
+                .native_window()
+                .map_err(|error| error.to_string())? as Handle,
+        )
+    })
+}
+
+/// Ends the hold of the input of the window and leaves the keyboard where it is.
+pub fn keyboard_decided(window: &Window) -> Result<(), String> {
+    let platform = platform::current()?;
+    let decided_window = window.clone();
+    exposure::on_main(window, move || {
+        platform.keyboard_decided(
+            decided_window
+                .native_window()
+                .map_err(|error| error.to_string())? as Handle,
+        )
+    })
+}
+
+/// Gives the keyboard of focus_window to surface, or to the workbench for none. Runs on the main thread.
+fn focus_on_main(
+    platform: &'static dyn platform::Platform,
+    focus_window: &Window,
+    surface: Option<String>,
+) -> Result<(), String> {
+    match surface {
         Some(surface) => {
-            let handle = surface_handle(&focus_window, &surface)?;
-            let declared = window_data(&focus_window)?
+            let handle = surface_handle(focus_window, &surface)?;
+            let declared = window_data(focus_window)?
                 .compositions
                 .lock()
                 // default: a lock that a panicking thread poisoned still holds the composition declarations, which are only
@@ -1060,7 +1111,7 @@ pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
                 .native_window()
                 .map_err(|error| error.to_string())? as Handle,
         ),
-    })
+    }
 }
 
 /// Names the preparation that the page does not present.

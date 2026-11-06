@@ -397,6 +397,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
+	s.pointer.released = s.keyboardPressed
 	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)

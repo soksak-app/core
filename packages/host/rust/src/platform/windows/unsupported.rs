@@ -121,6 +121,12 @@ pub fn focus_surface_for_region(_surface: Handle) -> Result<(), String> {
 pub fn focus_workbench(_window: Handle) -> Result<(), String> {
     missing("workbench keyboard")
 }
+pub fn keyboard_hold(_window: Handle) -> Result<(), String> {
+    missing("workbench keyboard")
+}
+pub fn keyboard_decided(_window: Handle) -> Result<(), String> {
+    missing("workbench keyboard")
+}
 pub fn set_surface_alpha_handle(_surface: Handle, _alpha: f64) -> Result<(), String> {
     missing("surface opacity")
 }

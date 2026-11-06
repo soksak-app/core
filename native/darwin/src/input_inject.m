@@ -373,6 +373,8 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             // The monitor of the press origin records the press of the application as it records a person's press. A press
             // delivered directly passes no monitor, so the driver records it.
             if (!throughApplication) sp_input_press_origin_set(window, button, point.x, point.y);
+            // A press that passes the application is followed there; this one passes no hold of the keyboard on its way.
+            if (!throughApplication && button == 0) surfaceLayoutPointerPassing(window, true, point.x, point.y);
             syntheticButtonPress(window, button);
             // NSApp.currentEvent is not this event, so the explicit context lets click-through native regions classify the
             // synchronous responder change.
@@ -401,6 +403,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
                     ? mouseEvent(window, right ? NSEventTypeRightMouseDragged : NSEventTypeLeftMouseDragged, point, 0, 1)
                     : mouseEvent(window, right ? NSEventTypeRightMouseUp : NSEventTypeLeftMouseUp, point, clicks, 0);
                 if (phase == 3) syntheticButtonRelease(window, button);
+                if (phase == 3 && button == 0 && !gestureThroughApplication) surfaceLayoutPointerPassing(window, false, point.x, point.y);
                 deliverGesture(hit, event, gestureThroughApplication);
             } @finally {
                 if (hasOrigin) sp_input_press_context_pop(&context);

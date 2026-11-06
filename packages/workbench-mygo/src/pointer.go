@@ -26,6 +26,8 @@ type PointerSequence struct {
 	status   PointerStatus
 	// pressed is the path of the element of the press, from the root of the tree to the element, empty outside the tree.
 	pressed []ui.ElementNode
+	// released runs at the release of each left press of the workbench, on any element.
+	released func()
 }
 
 // NewPointerSequence makes the sequence of the window with the elements. changed runs on each change of its status, and fail
@@ -65,6 +67,9 @@ func (p *PointerSequence) down(ev ui.InputEvent) {
 }
 
 func (p *PointerSequence) up(ev ui.InputEvent) {
+	if ev.Button == 0 && p.released != nil {
+		p.released()
+	}
 	tree := p.tree()
 	path := pathAt(tree, ev.X, ev.Y)
 	name := pathName(path)

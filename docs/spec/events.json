@@ -698,15 +698,16 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
-          "cause": { "enum": ["ring", "placed", "responder", "modal", "focusin", "focusout"] },
+          "cause": { "enum": ["ring", "press", "placed", "responder", "modal", "focusin", "focusout"] },
           "target": { "type": ["string", "null"] },
           "sent": { "type": ["string", "null"] },
           "owed": { "type": "boolean" },
+          "decided": { "type": "boolean" },
           "decision": { "enum": ["send", "same", "wait", "modal"] }
         },
-        "required": ["cause", "target", "sent", "owed", "decision"]
+        "required": ["cause", "target", "sent", "owed", "decided", "decision"]
       },
-      "description": "One decision of the keyboard of the page workbench: `cause` is what asked for it (`ring` a move of the focus ring, `placed` the answer of a drawn placement, `responder` a first responder that reached the workbench, `modal` a change of the modal state, `focusin` and `focusout` the element focus), `target` the surface it chose or null for the workbench, `sent` and `owed` the state before it, and `decision` whether it sent the call `surfaceFocus` (`send`), sent it for the same target (`same`), waited for a placement that holds the target (`wait`), or kept the keyboard in an open modal (`modal`)."
+      "description": "One decision of the keyboard of the page workbench: `cause` is what asked for it (`ring` a move of the focus ring, `press` the release of a left press of the page, `placed` the answer of a drawn placement, `responder` a first responder that reached the workbench, `modal` a change of the modal state, `focusin` and `focusout` the element focus), `target` the surface it chose or null for the workbench, `sent` and `owed` the state before it, `decided` whether a released press waits for this decision, and `decision` whether it sent the call `surfaceFocus` (`send`), sent it for the same target (`same`), waited for a placement that holds the target (`wait`), or kept the keyboard in an open modal (`modal`)."
     },
     "host.call.timeout": {
       "layer": "host",
@@ -4544,6 +4545,51 @@
           },
           "reason": {
             "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "reason"
+        ]
+      }
+    },
+    "native.keyboard.hold_expired": {
+      "layer": "native",
+      "class": "input",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "held": {
+            "type": "number"
+          },
+          "ms": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "held",
+          "ms"
+        ]
+      }
+    },
+    "native.keyboard.hold_dropped": {
+      "layer": "native",
+      "class": "input",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "reason": {
+            "enum": [
+              "full",
+              "closed"
+            ]
           }
         },
         "required": [

@@ -569,7 +569,10 @@ export const surfaces = native ? {
     report: (line) => reportRecord("error", line),
 
     /** Gives the keyboard of the window to a surface, and to the workbench for null (docs/spec/native-surfaces.md#keyboard-of-a-surface). */
-    focus: (surface) => tellInTurn("surfaceFocus", { surface }),
+    focus: (surface, decided = false) => tellInTurn("surfaceFocus", decided ? { surface, decided: true } : { surface }),
+
+    /** Ends the hold of the input of the window and leaves the keyboard where it is, in an open modal (docs/spec/native-surfaces.md#keyboard-of-a-surface). */
+    keyboardDecided: () => tellInTurn("keyboardDecided"),
 
     theme(values) {
       themeReply = tellInTurn("setTheme", values);
@@ -720,6 +723,7 @@ export const surfaces = native ? {
   // A failure of a document without a host is written to the error level of the console (docs/spec/plugins.md).
   report: (line) => console.error(line),
   focus: () => {},
+  keyboardDecided: () => {},
   theme: () => {},
   menuLanguage: () => {},
   // Without a host, the place where this document seats the surface is the actual place. The compositor records that reply.

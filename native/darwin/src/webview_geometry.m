@@ -509,6 +509,25 @@ bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_dro
 }
 
 static void observeKeyboardWindowClose(void);
+static SPSurfaceHost *surfaceHost(NSView *view);
+
+// Whether view holds the view of a surface, outside the web views, whose documents hold no surface.
+static BOOL holdsSurface(NSView *view) {
+    for (NSView *child in view.subviews) {
+        if ([child isKindOfClass:SPSurfaceHost.class]) return YES;
+        if (![child isKindOfClass:WKWebView.class] && holdsSurface(child)) return YES;
+    }
+    return NO;
+}
+
+// A press on the workbench: a press in the content view of a window that holds a surface, outside the views of its surfaces
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+static bool pressOnWorkbench(void *owner, double x, double y) {
+    NSView *content = ((NSWindow *)owner).contentView;
+    if (!content || !holdsSurface(content)) return false;
+    NSView *hit = [content hitTest:[content.superview convertPoint:NSMakePoint(x, y) fromView:nil]];
+    return hit && !surfaceHost(hit);
+}
 
 void *sp_surface_create(void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
@@ -518,6 +537,7 @@ void *sp_surface_create(void *handle) {
         return NULL;
     }
     observeKeyboardWindowClose();
+    surfaceLayoutObserveWorkbench(^bool(void *window, double x, double y) { return pressOnWorkbench(window, x, y); });
     SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
     surface.hidden = YES;
     [surfaceContainer(view) addSubview:surface];
@@ -539,7 +559,10 @@ void *sp_surface_native_plane(void *handle) {
 }
 
 // The left press of the window that is open: a physical press that AppKit reports, or a diagnostic press of sp_input_pointer.
+// While the input of the window is held for the decision of the keyboard, only a press that reached a view is open: a press
+// that waits in the hold reaches its view after the keyboard moved.
 static BOOL leftPressOpen(NSWindow *window) {
+    if (surfaceLayoutKeyboardHeld(window) && !surfaceLayoutLeftPressPassed(window)) return NO;
     return (sp_input_physical_buttons() & 1) != 0 || sp_input_press_open(window, 0);
 }
 
@@ -744,6 +767,16 @@ void sp_window_focus_workbench(void *handle) {
             sp_log_error("surface keyboard", [NSString stringWithFormat:@"%@ refused the keyboard", NSStringFromClass(target.class)].UTF8String);
         }
     });
+}
+
+void sp_window_keyboard_hold(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    surfaceLayoutKeyboardHold(handle);
+}
+
+void sp_window_keyboard_decided(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    surfaceLayoutKeyboardDecided(handle);
 }
 
 void *sp_surface_main_webview(void *handle) {

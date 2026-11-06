@@ -419,6 +419,10 @@ type Platform interface {
 	// FocusSurfaceForRegion gives the keyboard to a surface that declared an image region, which keeps the keys until the region shows.
 	FocusSurfaceForRegion(surface unsafe.Pointer)
 	FocusWorkbench(window unsafe.Pointer)
+	// KeyboardHold holds the input of window until KeyboardDecided, the decision of the workbench about the keyboard
+	// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
+	KeyboardHold(window unsafe.Pointer)
+	KeyboardDecided(window unsafe.Pointer)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.
 	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)

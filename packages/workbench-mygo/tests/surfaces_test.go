@@ -66,8 +66,10 @@ type surfaceHost struct {
 	calls map[string]workbench.HostCall
 	// tabs gives the shell its tab ports.
 	tabs func(*workbench.Shell) workbench.TabPorts
-	// keyboard holds the argument of each surfaceFocus, and order the host calls of a placement in their order.
+	// keyboard holds the argument of each surfaceFocus, decided whether each carried decided, and order the host calls of a
+	// placement in their order.
 	keyboard []*string
+	decided  []bool
 	order    []string
 }
 
@@ -104,11 +106,13 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	table["surfaceFocus"] = func(_ context.Context, argument json.RawMessage) (any, error) {
 		var request struct {
 			Surface *string `json:"surface"`
+			Decided bool    `json:"decided"`
 		}
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
 		}
 		h.keyboard = append(h.keyboard, request.Surface)
+		h.decided = append(h.decided, request.Decided)
 		h.order = append(h.order, "surfaceFocus")
 		return nil, nil
 	}

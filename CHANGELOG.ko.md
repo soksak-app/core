@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-34: 창의 input은 키보드에 대한 워크벤치의 결정을 기다린다. surface를 가진 창에서 워크벤치 위 left press의 release와 새 호스트 호출 `keyboardHold`는 `surfaceFocus {surface, decided: true}`나 새 `keyboardDecided`까지 그 창의 이후 pointer와 key event를 붙잡고, 붙잡힌 input은 그 뒤 키보드를 가진 view에 순서대로 닿는다. 붙잡기는 1000 ms 뒤 경고 `native.keyboard.hold_expired`와 함께 끝나고 event를 256개까지 담으며, 나머지는 `native.keyboard.hold_dropped`로 기록한다. mygo workbench와 page는 어떤 element에 대한 press든 press가 반영된 뒤 decided 호출 하나로 답한다. 전에는 page의 호출이 release 뒤 45~86 ms에 와서, Wails와 Tauri에서 탭 press 뒤의 키가 이전 surface에 닿았다.
 - F502-13: 설정의 프로젝트 범위 폴더 caption 은 page 에서도 mygo workbench 처럼 경로 전체를 pane 안에 보인다. 줄은 공백에서, 하이픈 뒤에서, 경로 구분자 뒤에서 바뀌고, 줄보다 긴 이름은 줄 끝에서 바뀐다. caption 은 두 workbench 에서 element `core.settings-modal.folder` 다. Red: page 는 긴 경로를 card 밖으로 한 줄에 두었고, `settings-folder-caption.test.mjs` 가 element 도 구분자 뒤 줄바꿈도 찾지 못했다.
 - F502-34: page workbench는 키보드의 각 결정을 `workbench.keyboard.follow`로 기록한다. 무엇이 요청했는지, 고른 surface, `surfaceFocus`를 보냈는지, placement를 기다렸는지, modal에 키보드를 두었는지를 담는다. Wails와 Tauri 호스트에서 탭 press의 호출이 release 뒤 45~86 ms에 나갔는데 그 이유를 알려 주는 기록이 없었다. Red: 기록된 결정의 test가 하나도 찾지 못했다.
 - F634: `native`를 쓰는 `diagnostics.drag`는 첫 누름 전만이 아니라 매 누름 전에 창이 현재 layout을 표시할 때까지 기다린다. 그래서 왕복마다 누름이 마지막 프레임이 그린 divider에 닿는다. 응답에는 각 누름 전 대기인 `pressWaits`가 있고, `took`은 그 대기를 뺀다. Tauri host도 이제 경계 점을 읽기 전에 기다린다.

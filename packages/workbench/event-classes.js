@@ -82,6 +82,8 @@ const EXACT = new Map([
   ["native.input.query", "input"],
   ["native.input.report", "input"],
   ["native.input.source_changed", "input"],
+  ["native.keyboard.hold_dropped", "input"],
+  ["native.keyboard.hold_expired", "input"],
   ["native.log.gated", "lifecycle"],
   ["native.memory.pressure", "lifecycle"],
   ["native.observe.counted", "frame"],
