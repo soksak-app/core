@@ -47,7 +47,7 @@ mock.module("node:child_process", {
   },
 });
 mock.module("../pasteboard.mjs", {
-  namedExports: { readPasteboard: () => ({ items: [] }), writePasteboard: () => [], restoreFailure: () => null },
+  namedExports: { readPasteboard: () => ({ items: [], unreadable: [] }), writePasteboard: () => [], restorableItems: () => ({ items: [], skipped: [] }), restoreFailure: () => null },
 });
 mock.module("../event-log.mjs", {
   namedExports: { readEventErrors: () => ({ errors: [] }), sessionEventBoot: () => 0, sessionEventStart: () => ({}) },

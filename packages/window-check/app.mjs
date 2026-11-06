@@ -15,7 +15,7 @@ import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
-import { readPasteboard, restoreFailure, writePasteboard } from "./pasteboard.mjs";
+import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
 
 // The launch declares the application executables that are checked. SOKSAK_BINARY_WAILSV3 and SOKSAK_BINARY_TAURIV2
 // hold the executable path inside the bundle of each application (docs/operations/examples.md#window-checks). The
@@ -213,8 +213,10 @@ export async function open(t, app) {
   // inserted at the start of this list and runs after the pasteboard restoration.
   const pasteboard = readPasteboard();
   session.cleanup(() => {
-    const written = writePasteboard(pasteboard.items);
-    const failure = restoreFailure(pasteboard.items, written, readPasteboard());
+    const { items, skipped } = restorableItems(pasteboard);
+    for (const line of skipped) t.diagnostic(`${app.name}: pasteboard ${line}`);
+    const written = writePasteboard(items);
+    const failure = restoreFailure(items, written, readPasteboard());
     if (failure !== null) {
       throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${failure}`);
     }

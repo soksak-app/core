@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F496: window check의 pasteboard 복원이 data 없는 type을 모두 밝히고, 읽은 item만 다시 쓴다.
 - F493: Tauri host가 다른 application을 무시하지 않을 때 launch에서 activation을 부르지 않는 tao fork commit을 써, background relaunch가 background에 남는다.
 - F495: hosts check가 project, space, card id에 종류마다 번호를 매겨, card 이름이 다른 종류의 id를 세지 않는다.
 - F494: release candidate는 0.0.38입니다.
