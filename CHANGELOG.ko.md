@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F506-1: Close 경계 소유 test는 save 실패 뒤 같은 modified tab에서 재시도하고, 대기 중 dirty 상태와 error를 유지하며, clean save 응답을 기다린 뒤 다른 tab을 바꾸지 않고 정확히 한 번 닫히는지 검증한다. Retry를 막는 통제한 mutation은 해당 소유 assertion에서 실패하며 macOS에서 close 경계, report, view surface case 25개가 모두 통과한다. Production 동작은 변경하지 않았으며 native application acceptance는 별도다.
+
 - F509-1: Verification build는 해당 checkout의 output을 소유한다. Shared target과 다른 checkout의 정리를 권한 guide는 application recipe의 checkout-relative 실행 파일 복사와 모순되며 source 확인과 build dry-run으로 해당 경로를 확인했다. 양쪽 guide는 target 공유와 다른 checkout host crate 정리를 금지한다. 문서 검사는 통과하며 application acceptance를 주장하지 않는다.
 
 - F501-3: 플랫폼 audit를 바꾸지 않고 증거의 플랫폼 선택을 선언된 dispatcher로 옮긴다. Native process 조회는 요청할 때 실행하고 알 수 없는 플랫폼은 명시적으로 실패하며 sidecar release key는 선언된 운영체제 이름을 사용한다. 공통 fixture는 플랫폼 데이터를 명시하고 macOS owner는 kernel 일치·불일치, 경로 공백, process SHA만 바꾸는 drift 검사를 보존한다. 소유 case 121개가 모두 통과하고 child 제한을 둔 selector case 세 개도 통과한다. Linux metadata import는 macOS child에서 모의 검증했으며 native application acceptance와 전체 suite는 다시 실행하지 않았다.

@@ -1,5 +1,7 @@
 # 기능 상태
 
+- [o] F506-1 — P2, F506의 후속이며 F507에 연결: 같은 modified tab의 save 실패 뒤 복구를 검증한다. 입력: 기존 close 경계 소유 case는 실패한 save와 성공한 save 사이에 새 tab을 만들므로 실패한 tab의 복구를 입증하지 않는다. 기대: save 실패는 해당 tab을 modified·열림 상태와 error를 유지한다. Retry는 같은 tab을 대상으로 하고 대기 중에는 열린 상태를 유지하며 save 성공과 표면의 clean 보고 뒤 정확히 한 번 닫는다. 검증: 추적하는 공개 close·picker·report case가 통과하며 retry를 막는 mutation은 해당 소유 assertion에서 실패한다. macOS에서 close 경계, report, view surface case 25개가 모두 통과한다. 결과: 소유 검증과 통합 검토가 통과했다. Production 동작은 변경하지 않았으며 native acceptance는 별도다.
+
 - [o] F509-1 — P2, F509의 선행 조건: verification build output을 해당 checkout 안에 둔다. 입력: build guide는 main checkout의 Cargo target 공유와 이후 host crate 정리를 권하지만 application recipe는 checkout-relative target 경로에서 실행 파일을 복사한다. 기대: 각 verification checkout이 선언된 output을 직접 빌드하고 보존하며 다른 checkout의 artifact를 정리하거나 검사 candidate로 재사용하지 않는다. 검증: 실제 build recipe와 dry-run 출력을 확인하고 양쪽 guide를 수정한 뒤 문서 검사를 실행한다. 결과: build recipe와 dry-run 출력으로 checkout-relative bundle·실행 파일 경로를 확인했다. 양쪽 guide는 checkout이 output을 소유하고 다른 checkout의 host crate를 정리하지 않도록 수정했다. 문서 검사는 통과하며 이 절차 수정은 native acceptance를 증명하지 않는다.
 
 - [ ] F510 — P1, F507·F508·F509에 연결: 경계 test 개선을 마친 뒤 최종 회귀 검증 집합을 실행한다. 기대: 최종 source로 core Node 전체 suite와 Editor suite를 한 번 실행하고 격리 checkout에서 `make test-native`로 native·두 host 소유 suite 및 영향받는 구조 검사를 수행하며 최초 실패를 보존하고 소유 원인을 해결한다. 검증: 필수 skip·cancel·timeout 없이 실제 발견한 file과 case 결과를 기록하고 한글·영문 checklist identifier와 상태를 대조하며 push 전에 커밋한 source가 깨끗한지 확인한다. F507·F508·F509와 Editor E50의 구현 및 집중 검증이 끝날 때까지 기다린다.

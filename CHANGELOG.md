@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F506-1: The close-boundary owner test retries the same modified tab after a failed save, preserves its dirty state and error while retrying, waits for the clean save reply, and observes exactly one close without changing the other tab. A controlled mutation that blocks retry fails its owning assertion; all 25 close-boundary, report and view-surface cases pass on macOS. Production behavior is unchanged; native application acceptance is separate.
+
 - F509-1: Verification builds keep their own checkout output. The shared-target and cross-checkout cleanup guidance contradicted the application recipes' checkout-relative executable copies; source inspection and the build dry-run confirm those paths. Both guides now prohibit shared targets and cleaning another checkout's host crate. Documentation checks pass; no application acceptance is claimed.
 
 - F501-3: Evidence platform selection moves into the declared dispatcher without changing the platform audit. Native process lookup is deferred until requested; unknown platforms fail explicitly and sidecar release keys use their declared OS names. Shared fixtures use explicit platform data, while the macOS owner retains matching/mismatching kernel probes, path whitespace and SHA-only process drift checks. All 121 focused cases pass, followed by three bounded selector cases. Linux metadata import is simulated in a macOS child; native application acceptance and the complete suite were not rerun.
