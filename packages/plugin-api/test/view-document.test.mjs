@@ -99,8 +99,12 @@ test("the bridge registers the actual view document without plugin exposure setu
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 20, y: 30 } }), true);
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 0, y: 0 } }), false);
   view.performance.now = () => 1234.5;
+  // The view start installs sokView; its page identity names the document, which performance.timeOrigin does not.
+  view.sokView = { page: "page-probe" };
   assert.deepEqual(await request("command.run", "core.surface.clock", { params: {} }),
-    { timeOrigin: view.performance.timeOrigin, now: 1234.5 }, "the clock command reads the document clock");
+    { page: "page-probe", timeOrigin: view.performance.timeOrigin, now: 1234.5 }, "the clock command reads the document clock");
+  delete view.sokView;
+  await assert.rejects(request("command.run", "core.surface.clock", { params: {} }), /the view document has no page identity/);
 });
 
 test("the document status preserves null view start params", { timeout: 5000 }, async (t) => {

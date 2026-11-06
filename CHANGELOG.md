@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F483-1: `core.surface.clock` returns the page identity of the document, and the content trace names the document by it instead of by its time origin.
 - F435-8-1: During a run the next drawn commit writes the paint holes of the acknowledged presentation, so no animation frame adds a layer commit before the next draw.
 - F435-7: The placement of a composition records a frame dispatch that names its surface, on both hosts.
 - F483: Every view registers `core.surface.clock`, and the content trace maps document times through the narrowest of five clock readings.

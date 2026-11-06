@@ -3924,7 +3924,7 @@
       },
       {
         "name": "core.surface.clock",
-        "description": "Registered by every plugin surface page: the time origin and the current time of the document clock in milliseconds, which a check reads to map document times to the host clock.",
+        "description": "Registered by every plugin surface page: the page identity of the document, and the time origin and the current time of the document clock in milliseconds, which a check reads to map document times to the host clock.",
         "params": {
           "type": "object",
           "properties": {}
@@ -3932,6 +3932,9 @@
         "result": {
           "type": "object",
           "properties": {
+            "page": {
+              "type": "string"
+            },
             "timeOrigin": {
               "type": "number"
             },

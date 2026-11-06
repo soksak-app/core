@@ -83,7 +83,12 @@ export function observeSurfaceDocument(view) {
     document: { read: readDocument, subscribe: subscribe(documentListeners) },
     input: { read: readInput, subscribe: subscribe(inputListeners) },
     hit: ({ x, y }) => document.elementFromPoint(x, y) !== null,
-    clock: () => ({ timeOrigin: view.performance.timeOrigin, now: view.performance.now() }),
+    clock: () => {
+      // The view start installs sokView with the page identity of the document; performance.timeOrigin does not identify it.
+      const page = view.sokView?.page;
+      if (typeof page !== "string" || page === "") throw new Error("the view document has no page identity");
+      return { page, timeOrigin: view.performance.timeOrigin, now: view.performance.now() };
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
