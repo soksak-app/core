@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F684: `capture_text_test` reports a failure that Vision reports for a request, such as the `e5rtError` of a text recognition model that the system cannot load, as `error: the system text recognizer failed: <error>` with exit status 3 instead of a recognition result with status 1, and its default invocation checks that report with an injected failure.
 - F682: `make check-tests` fails a language case whose `expectedTests` differs from the tests that its test files declare, and the Go and Rust registry cases expect the seven tests that F651 left at six.
 - F677: `make check-docs` requires the document and the anchor of every section reference `docs/<path>.md#<anchor>` of a text file, and every such reference of the repository names an existing section; a backtick that no run closes no longer hides the links after it.
 - F680: The scripts and checks that start cargo resolve it through `cargoCommand` of `@soksak/window-check`, in the order of the Makefile, which exports `CARGO`, so they run in a shell whose `PATH` holds no cargo folder.
