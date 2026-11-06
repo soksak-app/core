@@ -47,7 +47,9 @@ func startCapture(window uintptr, done func([]byte, error)) error {
 	if err != nil {
 		return err
 	}
+	// default: IsIconic sets no error that GetLastError reads, so its value is the whole answer and the error of Call holds nothing.
 	minimized, _, _ := procIsIconic.Call(view.window)
+	// default: IsWindowVisible sets no error that GetLastError reads, so its value is the whole answer and the error of Call holds nothing.
 	shown, _, _ := procIsWindowVisible.Call(view.window)
 	var visible int32
 	if result := comCall(view.controller, controllerGetIsVisible, uintptr(unsafe.Pointer(&visible))); failedResult(result) {
@@ -57,6 +59,7 @@ func startCapture(window uintptr, done func([]byte, error)) error {
 		return err
 	}
 	var stream uintptr
+	// default: CreateStreamOnHGlobal reports its failure in the HRESULT that this line checks, not through GetLastError.
 	if result, _, _ := procCreateStreamOnHGlobal.Call(0, 1, uintptr(unsafe.Pointer(&stream))); failedResult(result) {
 		return resultError("capture: stream", result)
 	}

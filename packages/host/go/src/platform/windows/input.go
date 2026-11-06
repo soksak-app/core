@@ -68,6 +68,7 @@ func (implementation) ActivateWindow(window unsafe.Pointer, _, _, timeout float6
 	deadline := time.Now().Add(time.Duration(timeout * float64(time.Second)))
 	var check func()
 	check = func() {
+		// default: GetForegroundWindow sets no error that GetLastError reads, so its value is the whole answer and the error of Call holds nothing.
 		foreground, _, _ := procGetForegroundWindow.Call()
 		switch {
 		case foreground == view.window:

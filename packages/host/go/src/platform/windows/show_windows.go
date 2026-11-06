@@ -12,6 +12,7 @@ var procShowWindow = user32.NewProc("ShowWindow")
 
 // holdsForeground reports whether the foreground window belongs to this process. No foreground window means that it does not.
 func holdsForeground() bool {
+	// default: GetForegroundWindow sets no error that GetLastError reads, so its value is the whole answer and the error of Call holds nothing.
 	foreground, _, _ := procGetForegroundWindow.Call()
 	var process uint32
 	// The thread that it answers is not needed, and a window that is gone leaves process 0.

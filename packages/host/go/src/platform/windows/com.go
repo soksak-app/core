@@ -37,6 +37,7 @@ func comCall(object uintptr, slot int, args ...uintptr) uintptr {
 	vtable := *(*uintptr)(comPointer(object))
 	method := *(*uintptr)(unsafe.Add(comPointer(vtable), slot*int(unsafe.Sizeof(uintptr(0)))))
 	all := append([]uintptr{object}, args...)
+	// default: a COM method reports its failure in the HRESULT that it returns, which every caller checks, not through GetLastError.
 	result, _, _ := syscall.SyscallN(method, all...)
 	return result
 }
