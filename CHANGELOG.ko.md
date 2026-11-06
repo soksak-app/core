@@ -8,7 +8,7 @@
 - F496: window check의 pasteboard 복원이 data 없는 type을 모두 밝히고, 읽은 item만 다시 쓴다.
 - F493: Tauri host가 다른 application을 무시하지 않을 때 launch에서 activation을 부르지 않는 tao fork commit을 써, background relaunch가 background에 남는다.
 - F495: hosts check가 project, space, card id에 종류마다 번호를 매겨, card 이름이 다른 종류의 id를 세지 않는다.
-- F494: release candidate는 0.0.38입니다.
+- F494: core 0.0.38을 게시했고, registry가 이를 요구하는 plugin release와 함께 올립니다.
 - F491: `core.settings`가 모든 설정의 common 값을 `common`으로 보고하고, window check의 준비가 그 값으로 common 설정을 되돌리므로, project가 덮어쓴 값이 더는 common 설정으로 옮겨지지 않습니다. browser 홈 check는 common scope에 씁니다.
 - F490: `make test-app`이 `build-registry`로 workspace registry를 만들고 native end-to-end target `test-app`을 실행하며, 기록이 Makefile이 선언한 make target을 가리킵니다. end-to-end target의 test가 prerequisite, window-check script, native target을 검사합니다.
 - F489: native test의 focus fixture가 main web view의 title을 끝난 navigation과 함께 기다립니다. navigation이 끝날 때 title이 아직 비어 있을 수 있기 때문입니다. 실패는 page 상태를 보고합니다.
