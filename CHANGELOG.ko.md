@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F491: mygo workbench가 page처럼 `core.settings`의 `common`에 모든 설정의 common 값을 보고하므로, window check의 `keepCommonSettings`가 mygo host에서도 common 값을 되돌린다. 그곳의 check는 cleanup에서 `Cannot convert undefined or null to object`로 끝났다. Red: `TestTheStatusReportsTheCommonValueOfEverySetting`가 필드 없이 compile되지 않았다.
 - F584-5: `e2e/new-tab-keys.test.mjs`가 `e2e/activation/`을 떠나 기본 tier에서 돈다. activation 없이 pointer를 창 위로 옮기고 virtual key window를 기다린 뒤 key마다 text를 함께 보낸다. 새 `e2e/tab-press-keys.test.mjs`는 같은 tier에서 두 번째 terminal의 tab을 누르고 놓은 직후 key를 친다.
 - F502-34: mygo workbench는 surface를 담은 placement가 끝난 뒤에만 그 surface에 `surfaceFocus`를 보낸다. 앞선 placement가 도는 동안 frame이 그린 tab은 그 placement가 끝날 때 대상이 되었는데, 그 placement는 tab의 surface를 담지 않았고 host는 `surface … is not attached`로 호출을 거부했다. 이제 workbench는 page처럼 tab의 placement가 끝날 때까지 키보드를 workbench에 둔다. test의 fake host는 마지막 `syncSurfaces`가 담지 않은 surface를 거부한다. Red: `TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement`가 그 오류를 기록했다.
 - F584-1: virtual key window의 image region은 활성 application의 key window에만 답하는 input method 없이 key를 친다. 호출자가 text를 밝힌 key는 그 text를 치고, text가 없는 key는 현재 input source의 keyboard layout이 만드는 문자를 dead key와 함께 치며, input method 아래에서 text가 없는 key는 source 이름과 함께 거부된다. `native/darwin/tests/image_region_virtual_typing_test.m`이 네 경우를 검사한다: 20회 중 20회 통과.

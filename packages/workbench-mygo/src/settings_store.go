@@ -173,7 +173,9 @@ type SaveSettings func(project string, patch map[string]any, remove []string)
 
 // SettingsStatus is the value of the status core.settings.
 type SettingsStatus struct {
-	Values     map[string]any `json:"values"`
+	Values map[string]any `json:"values"`
+	// Common is the common value of every setting: the stored common value, or the default when the common settings store none.
+	Common     map[string]any `json:"common"`
 	Project    *string        `json:"project"`
 	Overridden []string       `json:"overridden"`
 	Saving     bool           `json:"saving"`
@@ -355,7 +357,12 @@ func (s *SettingsStore) Status() SettingsStatus {
 		project = &s.project
 	}
 	overridden := slices.Sorted(maps.Keys(s.overrides))
-	return SettingsStatus{Values: s.effective(s.common, s.overrides), Project: project, Overridden: overridden, Saving: s.saving > 0}
+	values := s.effective(s.common, s.overrides)
+	common := make(map[string]any, len(values))
+	for key := range values {
+		common[key] = s.Scoped(key, "common")
+	}
+	return SettingsStatus{Values: values, Common: common, Project: project, Overridden: overridden, Saving: s.saving > 0}
 }
 
 // BeginSave counts a write that the host has not answered, and EndSave its answer.

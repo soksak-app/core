@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -333,5 +334,26 @@ func TestTheApplicationIsWrittenInTheLanguagesOfItsMenu(t *testing.T) {
 		if !slices.Contains(languages, language.ID) {
 			t.Fatalf("the languages %v lack %s", languages, language.ID)
 		}
+	}
+}
+
+// core.settings reports the common value of every setting apart from its effective value: a setting that the selected project
+// overrides has its project value in values and its common value in common, the default when the common settings store none
+// (docs/spec/settings.md#reported-state).
+func TestTheStatusReportsTheCommonValueOfEverySetting(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	if err := store.Begin(map[string]any{"gap": 8.0}, map[string]any{"gap": 12.0}, "prj-a"); err != nil {
+		t.Fatal(err)
+	}
+	status := store.Status()
+	if status.Values["gap"] != 12.0 || status.Common["gap"] != 8.0 {
+		t.Fatalf("the gap is %v in values and %v in common", status.Values["gap"], status.Common["gap"])
+	}
+	if status.Common["mode"] != store.Defaults()["mode"] {
+		t.Fatalf("the common mode is %v, not the default %v", status.Common["mode"], store.Defaults()["mode"])
+	}
+	if !slices.Equal(slices.Sorted(maps.Keys(status.Common)), slices.Sorted(maps.Keys(status.Values))) {
+		t.Fatalf("common holds %v and values %v", slices.Sorted(maps.Keys(status.Common)), slices.Sorted(maps.Keys(status.Values)))
 	}
 }
