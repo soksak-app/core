@@ -38,7 +38,7 @@ function commandsOf(target, targets, variables) {
 }
 
 const GO_COMMAND = /(?:^|[\s;&|(])go(?: -C \S+)? (build|test|run|vet)\b/;
-const RUST_COMMAND = /(?:^|[\s;&|(])cargo (build|test|check|clippy|bench|run|doc)\b/;
+const RUST_COMMAND = /(?:^|[\s;&|(])(?:\S*\/)?cargo (build|test|check|clippy|bench|run|doc)\b/;
 
 /** The toolchains that a command line runs, and whether its Go programs link: a go command or a runner script of the repository. */
 function toolchains(line) {

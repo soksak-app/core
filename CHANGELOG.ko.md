@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F672: Makefile의 모든 recipe는 export한 `PATH`로 찾은 `CARGO`로 cargo를 실행하므로, GNU Make 3.81이 rustup의 cargo folder 없는 `PATH`로 시작해도 cargo를 찾는다. cargo가 없으면 `check-cargo`가 cargo를 실행하는 target을 멈춘다.
 - F667: 모든 compile과 link가 선언된 macOS 최소 버전 하나를 사용하고, object가 link보다 새 macOS version으로 build되었다는 linker 경고는 object와 두 version을 밝히며 build나 test를 실패시킨다. Wails host link의 중복 `-lobjc` 경고는 보류한다(F667-1).
 - F669: bounded command는 `killGroup`으로 process group을 끝내고, `killGroup`은 reap되지 않은 member만 남은 group의 `EPERM` 거부를 끝난 group으로 다룬다. mutant deadline은 test process의 reap 시점에 따라 environment error로 분류되지 않는다. `killGroup`은 실행 중 member 판정과 함께 `scripts/test-command.mjs`로 옮겼다. Red: `a command group whose last member has ended but is not reaped ends without an error`가 `EPERM: kill EPERM`으로 실패했다. Green: 그 test가 통과하고, mutation runner case가 10회 run에서 통과한다.
 - F668: terminal cell sampling test의 fake session은 `dom.rect` 제거 뒤 `Session.rect`가 보내는 `element.rect`에 답한다. `actual 'element.rect'`로 실패하던 10개 case가 통과하고 sampling 순서는 바뀌지 않는다.

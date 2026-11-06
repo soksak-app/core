@@ -37,7 +37,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/make-cargo.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("Window check capture recognizer target", "js-ts", ["e2e/platform/darwin/darwin.js"], ["scripts/test/platform/darwin/capture-text-target.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
@@ -315,6 +315,21 @@ const FEATURE_LINKS = [
       { file: "scripts/test/markdown-table.test.mjs", id: "an escaped pipe is a pipe of its cell and the cells after it keep their places" },
     ],
     expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, a union of forms joined by exactly ` || ` contains what one part contains, the registry build and the installation read a union in plugin dependencies, the workbench reads ranges only through @soksak/plugin-api, and the checks read the escaped pipes of a union in a table row as pipes of its cell.",
+    levels: ["unit"],
+  },
+  {
+    id: "F672",
+    implementation: [
+      { file: "Makefile", symbol: "CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" },
+      { file: "Makefile", symbol: "check-cargo:" },
+    ],
+    tests: [
+      { file: "scripts/test/make-cargo.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" },
+      { file: "scripts/test/make-cargo.test.mjs", id: "no recipe or variable of the Makefile runs cargo other than through CARGO" },
+      { file: "scripts/test/make-cargo.test.mjs", id: "each target whose recipe runs CARGO requires check-cargo" },
+      { file: "scripts/test/make-cargo.test.mjs", id: "check-cargo stops with a message when neither the PATH of make nor the cargo folder of HOME holds cargo" },
+    ],
+    expected: "Every recipe of the Makefile runs cargo through CARGO, which the exported PATH resolves, so GNU Make 3.81 finds cargo when it starts without the cargo folder of rustup, and check-cargo stops a target that runs cargo when none is found.",
     levels: ["unit"],
   },
   {
@@ -12920,7 +12935,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-264",
-    implementation: [{ file: "Makefile", symbol: "sok-tauriv2 = $(CARGO_ENV) cargo build --locked" }],
+    implementation: [{ file: "Makefile", symbol: "sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked" }],
     tests: [{ file: "scripts/test/native-pkgconfig.test.mjs", id: "Tauri app and bundled CLI Cargo commands use the declared deployment target" }],
     expected: "Application and bundled CLI Cargo commands use the same declared macOS deployment target in debug and release builds.",
     levels: ["unit"],

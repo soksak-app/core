@@ -52,8 +52,8 @@ test("Tauri app and bundled CLI Cargo commands use the declared deployment targe
     });
     const cargo = output.split(/\r?\n/).filter((line) => /\bcargo build\b.*-p (?:sok-tauriv2|soksak-sok)(?:\s|$)/.test(line));
     assert.equal(cargo.length, 2, `${target} must expand to one app build and one bundled CLI build:\n${output}`);
-    assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p sok-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
-    assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-sok(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
+    assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 (?:\S*\/)?cargo build\b.*-p sok-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
+    assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 (?:\S*\/)?cargo build\b.*-p soksak-sok(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
     for (const command of cargo) assert.match(command, /--locked/, `${target} does not preserve the Cargo.lock: ${command}`);
   }
 });

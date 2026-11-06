@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F672: Every recipe of the Makefile runs cargo through `CARGO`, which the exported `PATH` resolves, so GNU Make 3.81 finds cargo when it starts without the cargo folder of rustup in its `PATH`; `check-cargo` stops a target that runs cargo when none is found.
 - F667: Every compile and link uses the one declared macOS minimum, and a linker warning of an object built for a newer macOS version than the link fails the build or test with the object and both versions. The duplicate `-lobjc` warning of the Wails host link is held (F667-1).
 - F669: A bounded command ends its process group through `killGroup`, which treats the `EPERM` refusal of a group that holds only unreaped members as an ended group, so a mutant deadline is no longer classified as an environment error depending on when its test processes are reaped. `killGroup` moves into `scripts/test-command.mjs` with the running-member predicate. Red: `a command group whose last member has ended but is not reaped ends without an error` failed with `EPERM: kill EPERM`. Green: it passes, and the mutation runner cases pass in ten runs.
 - F668: The fake session of the terminal cell sampling tests answers `element.rect`, the request that `Session.rect` sends since `dom.rect` was removed; the 10 cases that failed with `actual 'element.rect'` pass, and the sampling order is unchanged.

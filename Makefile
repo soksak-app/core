@@ -178,7 +178,7 @@ check-hosts-same:
 
 # JS/TS, Rust, Go, Objective-C, and shell test cases use the same observable case contract. The cases build with the declared
 # macOS minimum: go-env holds MACOSX_DEPLOYMENT_TARGET, which cargo also reads.
-test-language: build-native
+test-language: check-cargo build-native
 	@$(MAKE) -C native/darwin $(CURDIR)/native/darwin/build/appearance_test
 	@$(call go-env) node scripts/language-test-adapters.mjs scripts/language-test-cases.json
 
@@ -192,22 +192,22 @@ BENCH_TIMEOUT ?= 300
 ifneq ($(origin TEST_TARGET),undefined)
 export TEST_TARGET
 endif
-test-rust-alone:
+test-rust-alone: check-cargo
 	@case "$(PACKAGE)" in '') echo "test-rust-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
-	@$(CARGO_ENV) cargo test --locked -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
+	@$(CARGO_ENV) $(CARGO) test --locked -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
 	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --count 1 --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of a Rust package COUNT times in sequence. With TEST, runs only the test of that name.
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
 # Measures the cost of the recorder. It is not a test: it prints numbers and asserts nothing. The Rust writer is measured with cargo bench and the native ring with the benchmark of native/darwin.
-benchmark-rust:
-	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_log_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark
-	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_native_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_native_benchmark
+benchmark-rust: check-cargo
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_log_benchmark --timeout $(BENCH_TIMEOUT) -- $(CARGO) bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_native_benchmark --timeout $(BENCH_TIMEOUT) -- $(CARGO) bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_native_benchmark
 
 benchmark-go:
 	@$(GO_ENV) node scripts/benchmarks.mjs go ./packages/host/go/tests 'EventLogEmit|NativePull' --timeout $(BENCH_TIMEOUT) --ldflags='$(GO_LINK)'
 
-repeat-rust:
+repeat-rust: check-cargo
 	@case "$(PACKAGE)" in '') echo "repeat-rust requires PACKAGE=<cargo package> COUNT=<n> [TEST_TARGET=lib|test:<target>] [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-rust requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(filter undefined,$(origin TEST_TARGET)),,--test-target "$$TEST_TARGET") $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT)
@@ -269,9 +269,9 @@ check-windows-build:
 # Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.
 # A source behind a diagnostic feature or tag fails here and not in the build of an app. The core frontend is staged because the apps
 # include it at compile time.
-check-host-debug: build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
+check-host-debug: check-cargo build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
 	@echo "START: Rust hosts cargo check --tests --features $(TAURI_DEBUG_FEATURES)"
-	@$(CARGO_ENV) cargo check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
+	@$(CARGO_ENV) $(CARGO) check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
 	@echo "PASS: Rust hosts in the debug configuration"
 	@echo "START: Go hosts go vet -tags \"$(WAILS_DEBUG_TAGS)\""
 	@$(GO_ENV) go vet -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...
@@ -321,6 +321,14 @@ DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
 # does not read the profile.
 export PATH := $(HOME)/.cargo/bin:$(PATH)
+# GNU Make 3.81 runs a recipe line without shell characters itself and looks its program up in its own PATH, not in the
+# exported one, and $(shell) does not receive the exported PATH either; so cargo is resolved once with that PATH and every
+# recipe runs $(CARGO). check-cargo stops a target that runs cargo when none was found.
+CARGO := $(shell PATH="$(PATH)" command -v cargo)
+
+.PHONY: check-cargo
+check-cargo:
+	@test -n "$(CARGO)" || { echo "make: cargo is on neither PATH nor $(HOME)/.cargo/bin; rustup installs it there" >&2; exit 1; }
 
 # The minimum macOS version of the native apps. The capture code uses the macOS 14.4 API
 # getCurrentProcessShareableContentWithCompletionHandler. This is the one declaration of the version: native/darwin reads it,
@@ -372,7 +380,7 @@ bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "$(WAILS_DEBUG_TAGS)",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-mygo = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-tauriv2 = $(CARGO_ENV) cargo build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 build-native:
 	@$(MAKE) -C native/darwin
@@ -399,8 +407,8 @@ WORKSPACE_REGISTRY = target/registry
 PUBLIC_REGISTRY_INDEX = https://soksak-app.github.io/registry/index.json
 REGISTRY = $(if $(filter public,$(PLUGINS)),target/registry-public,$(WORKSPACE_REGISTRY))
 
-build-registry:
-	@$(CARGO_ENV) cargo build --locked -p soksak-sok
+build-registry: check-cargo
+	@$(CARGO_ENV) $(CARGO) build --locked -p soksak-sok
 	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) $(if $(SIDECARS),--sidecars $(SIDECARS)) \
 		$(if $(PLUGINS),--plugins $(PLUGINS) --sidecar-registry $(WORKSPACE_REGISTRY) --public-index $(PUBLIC_REGISTRY_INDEX))
 
@@ -452,20 +460,20 @@ copy-core-frontend-mygo: build
 	@$(call copy-mygo,--diagnostics)
 
 # generate_context! includes the frontend, so this rebuilds the crate.
-build-tauriv2: build-native copy-frontend-tauriv2
+build-tauriv2: check-cargo build-native copy-frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build --locked -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
+	@$(CARGO_ENV) $(CARGO) build --locked -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
 	@cp target/debug/sok-tauriv2 $(TAURI_DEBUG)
 	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
 
-build-tauriv2-release: build-native build
+build-tauriv2-release: check-cargo build-native build
 	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
 	@$(call copy-tauriv2,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@touch apps/tauriv2/src/main.rs
-	@$(CARGO_ENV) cargo build --locked --release -p sok-tauriv2 $(if $(DIAGNOSTIC_RELEASE),--features diagnostics)
+	@$(CARGO_ENV) $(CARGO) build --locked --release -p sok-tauriv2 $(if $(DIAGNOSTIC_RELEASE),--features diagnostics)
 	@cp target/release/sok-tauriv2 $(TAURI_RELEASE)
 	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
@@ -534,27 +542,27 @@ check-go-format:
 
 # Checks every package and test of the Rust workspace in the diagnostic build and the default build without clippy warnings.
 # generate_context! of sok-tauriv2 reads the staged frontend (frontendDist), so the check stages it first, as test-native does.
-check-rust-clippy: build-native copy-core-frontend-tauriv2
-	@$(CARGO_ENV) cargo clippy --locked --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
-	@$(CARGO_ENV) cargo clippy --locked --workspace --tests -- -D warnings
+check-rust-clippy: check-cargo build-native copy-core-frontend-tauriv2
+	@$(CARGO_ENV) $(CARGO) clippy --locked --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
+	@$(CARGO_ENV) $(CARGO) clippy --locked --workspace --tests -- -D warnings
 	@echo "Rust clippy check passed: 1 workspace, diagnostics and default builds"
 
 # Checks that every package of the Rust workspace is in rustfmt form.
-check-rust-format:
-	@cargo fmt --all --check
+check-rust-format: check-cargo
+	@$(CARGO) fmt --all --check
 	@echo "Rust format check passed: 1 workspace"
 
 # Runs the tests of the hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
 # (docs/spec/host-contract.md) run at the same level.
 # Host contract tests build their fixture plugins and sidecars under test-owned temporary directories.
-test-hosts: build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
+test-hosts: check-cargo build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
 	@$(GO_ENV) $(CARGO_ENV) node scripts/test-hosts.mjs --go-ldflags="$(GO_LINK)"
 
 # Per-language CI checks use the same selected host contract without discovering or building the other host.
 test-wailsv3: build-native copy-core-frontend-wailsv3
 	@$(GO_ENV) node scripts/test-hosts.mjs --host wailsv3 --go-ldflags="$(GO_LINK)"
 
-test-tauriv2: build-native copy-core-frontend-tauriv2
+test-tauriv2: check-cargo build-native copy-core-frontend-tauriv2
 	@$(CARGO_ENV) node scripts/test-hosts.mjs --host tauriv2
 
 # The contract run of the mygo host, and the unit tests of its workbench and of its application.
