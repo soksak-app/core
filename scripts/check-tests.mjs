@@ -247,6 +247,16 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F668",
+    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds(session, surface, cells) {" }],
+    tests: [
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds preserve a capture when the view read fails" },
+    ],
+    expected: "The terminal cell sampling tests answer the element.rect request that Session.rect sends, and cell sampling reads the view after it stops the recording.",
+    levels: ["unit"],
+  },
+  {
     id: "F584-5-2",
     implementation: [
       { file: "packages/workbench-mygo/src/dividers.go", symbol: "func outside(area layout.Rect, holes []layout.Rect) []layout.Rect {" },

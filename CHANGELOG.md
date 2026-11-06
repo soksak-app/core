@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F668: The fake session of the terminal cell sampling tests answers `element.rect`, the request that `Session.rect` sends since `dom.rect` was removed; the 10 cases that failed with `actual 'element.rect'` pass, and the sampling order is unchanged.
 - F510-1: Final acceptance completion retains its owning native test links, and verification-only execution is classified separately. The actual inventory and all 45 owner cases pass.
 - F664: All 12 focused cases across both hosts pass from two independent initial states using the frozen local candidate and installed component cohort. Complete audits and cleanup pass, and raw input identities frozen after preparation remain unchanged after each run. Initial fixture and selection failures are retained and corrected. Earlier F658 guard-mutation evidence, the actual Editor baseline, the separate native close fixture and Editor E58 file-write race verification keep their distinct scopes; this does not establish native acceptance of the latest Editor source.
 - F510: All 465 core Node files, the 23 subsequent installation-stage owner cases and all 215 integrated current Editor cases pass. Isolated native verification passes formatting and clippy, 96 native entries, 4201 host/CLI executions and every applicable contract (1009 distinct contracts). Tested bundles, registry and release payloads are unchanged. Ordinary application, benchmark and activation acceptance remain pending under F665 and F666.
