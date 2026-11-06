@@ -25,7 +25,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { compareVersions, satisfies } from "../packages/workbench/version-range.js";
+import { compareVersions, rangeContains } from "../packages/plugin-api/index.js";
 
 const ROOT = new URL("../", import.meta.url);
 const DECLARATION = "scripts/workspace-registry.json";
@@ -307,7 +307,7 @@ export function publicRegistryEntries(index, sidecars) {
     const left = [];
     const versions = plugin.versions.filter((item) => {
       const unmet = Object.entries(item.sidecars)
-        .filter(([name, range]) => !(releases.get(name) ?? []).some((version) => satisfies(range, version)));
+        .filter(([name, range]) => !(releases.get(name) ?? []).some((version) => rangeContains(range, version)));
       for (const [sidecar, range] of unmet) dropped.push({ id: plugin.id, version: item.version, sidecar, range });
       if (unmet.length > 0) left.push({ item, unmet });
       return unmet.length === 0;

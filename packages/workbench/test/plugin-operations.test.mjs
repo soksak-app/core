@@ -66,7 +66,7 @@ test("the latest version of a row is the newest version whose range contains the
     registry: "file:///registry/index.json",
     index: { plugins: [
       ranged("pad", [["0.0.4", ">=0.0.18", { "@x/old": "^0.0.1" }], ["0.0.7", "^0.0.21", { "@x/old": "^0.0.2" }], ["0.0.9", "^0.0.24", { "@x/new": "^0.0.8" }]]),
-      ranged("sheet", [["0.0.5", "^0.0.21"], ["0.0.6", "^0.0.23"]]),
+      ranged("sheet", [["0.0.5", "0.0.21"], ["0.0.6", "0.0.23"]]),
     ], revoked: { plugins: [{ id: "pad", version: "0.0.4", reason: "r" }], sidecars: [], core: [] } },
     installed: { format: 3, plugins: { pad: { version: "0.0.3", enabled: true, sidecars: {} } }, sidecars: {} },
   };
@@ -82,6 +82,7 @@ test("the latest version of a row is the newest version whose range contains the
 
 test("a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update", () => {
   const withdrawn = {
+    core: "0.0.24",
     registry: "file:///registry/index.json",
     index: {
       plugins: [entry("appview", "AppView", ["0.0.2"]), entry("tty", "Terminal", ["0.1.0", "0.10.0"])],

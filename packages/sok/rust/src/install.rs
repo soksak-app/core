@@ -62,27 +62,66 @@ pub fn parse_version(text: &str) -> Result<Version, String> {
     Ok(version)
 }
 
-/// An inclusive lower bound min and an exclusive upper bound below. The bounds are the forms of
+/// The inclusive lower bound min and the exclusive upper bound below of one form of a range. The bounds are the forms of
 /// docs/spec/installation.md, and the versions are compared with the library.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Range {
+pub struct Bounds {
     pub min: Version,
     /// The exclusive upper bound. None means there is no upper bound.
     pub below: Option<Version>,
 }
 
-impl Range {
-    /// Whether the version is inside the range.
+impl Bounds {
+    /// Whether the version is inside the bounds.
     pub fn contains(&self, version: &Version) -> bool {
         version >= &self.min && self.below.as_ref().is_none_or(|below| version < below)
     }
 }
 
-/// Reads the ranges `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`. `*` is `>=0.0.0`, that is, every version.
-/// The forms are matched here before the versions of a form are read by parse_version.
+/// The union of the bounds of its parts, in the order of the text; a range of one form has one part.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Range {
+    pub parts: Vec<Bounds>,
+}
+
+impl Range {
+    /// Whether the version is inside the bounds of a part of the range.
+    pub fn contains(&self, version: &Version) -> bool {
+        self.parts.iter().any(|bounds| bounds.contains(version))
+    }
+}
+
+/// Joins the parts of a union of ranges; no other spacing around `||` separates parts.
+pub(crate) const RANGE_SEPARATOR: &str = " || ";
+
+/// Reads a range: one of the forms `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`, or a union of such
+/// forms joined by RANGE_SEPARATOR. A part that is not one of the forms refuses the whole range and names it.
 pub fn parse_range(text: &str) -> Result<Range, String> {
+    let parts: Vec<&str> = text.split(RANGE_SEPARATOR).collect();
+    let many = parts.len() > 1;
+    let parts = parts
+        .into_iter()
+        .map(|part| {
+            parse_bounds(part).map_err(|error| {
+                if many {
+                    format!(
+                        "invalid version range {}: {error}",
+                        quote(&Value::from(text))
+                    )
+                } else {
+                    error
+                }
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Range { parts })
+}
+
+/// Reads one form of a range. `*` is `>=0.0.0`, that is, every version. The forms are matched here before the versions of a
+/// form are read by parse_version.
+fn parse_bounds(text: &str) -> Result<Bounds, String> {
     if text == "*" {
-        return Ok(Range {
+        return Ok(Bounds {
             min: Version::new(0, 0, 0),
             below: None,
         });
@@ -95,7 +134,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
                 if min >= below {
                     return Err(format!("invalid version range {text}: empty"));
                 }
-                return Ok(Range {
+                return Ok(Bounds {
                     min,
                     below: Some(below),
                 });
@@ -103,7 +142,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
         } else if !rest.is_empty() && !rest.contains(' ') {
             // >=x.y.z has only a lower bound and no upper bound.
             if let Ok(min) = parse_version(rest) {
-                return Ok(Range { min, below: None });
+                return Ok(Bounds { min, below: None });
             }
         }
     }
@@ -114,7 +153,7 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
     };
     let min = parse_version(&text[operator.len()..]).map_err(|_| {
         format!(
-            "invalid version range {}: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z or >=x.y.z <a.b.c",
+            "invalid version range {}: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z, >=x.y.z <a.b.c or such ranges joined by \" || \"",
             quote(&Value::from(text))
         )
     })?;
@@ -123,10 +162,10 @@ pub fn parse_range(text: &str) -> Result<Range, String> {
         "" => Version::new(major, minor, patch + 1),
         "~" => Version::new(major, minor + 1, 0),
         _ if major > 0 => Version::new(major + 1, 0, 0),
-        _ if minor > 0 => Version::new(0, minor + 1, 0),
-        _ => Version::new(0, 0, patch + 1),
+        // Below 1.0.0 the minor part changes for an incompatible release, and a patch release is compatible, also in 0.0.
+        _ => Version::new(0, minor + 1, 0),
     };
-    Ok(Range {
+    Ok(Bounds {
         min,
         below: Some(below),
     })

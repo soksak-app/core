@@ -187,9 +187,27 @@ function compareVersion(a, b) {
   return part === -1 ? 0 : x[part] - y[part];
 }
 
-/** Checks that the version range has the format of docs/spec/installation.md#versions-and-ranges. */
+/** Compares two versions by number; a version of another form than `x.y.z` (docs/spec/installation.md#versions-and-ranges) is an error. */
+export function compareVersions(a, b) {
+  for (const version of [a, b]) {
+    if (!VERSION.test(version)) throw new Error(`version ${version} must be x.y.z with numeric parts and no leading zeros`);
+  }
+  return compareVersion(a, b);
+}
+
+/** The separator of the parts of a union of ranges; no other spacing around `||` separates parts. */
+const RANGE_SEPARATOR = " || ";
+
+/**
+ * Checks that the version range has the format of docs/spec/installation.md#versions-and-ranges: one form, or a union of forms
+ * joined by RANGE_SEPARATOR.
+ */
 function isRange(range) {
-  if (typeof range !== "string") return false;
+  return typeof range === "string" && range.split(RANGE_SEPARATOR).every(isRangeForm);
+}
+
+/** Whether the text is one form of a range. */
+function isRangeForm(range) {
   if (range === "*") return true;
   const bounded = /^>=(\S+) <(\S+)$/.exec(range);
   if (bounded) return VERSION.test(bounded[1]) && VERSION.test(bounded[2]) && compareVersion(bounded[1], bounded[2]) < 0;
@@ -246,10 +264,18 @@ export function manifestSidecars(manifest, plugins = new Set()) {
   return Object.keys(manifest.dependencies ?? {}).filter((name) => !plugins.has(name));
 }
 
-/** Whether version is in range, a range of the form in docs/spec/installation.md#versions-and-ranges. */
+/**
+ * Whether version is in range, a range of the form in docs/spec/installation.md#versions-and-ranges; a union contains the
+ * versions that one of its parts contains.
+ */
 export function rangeContains(range, version) {
   if (!isRange(range)) throw new Error(`invalid range ${range}`);
   if (!VERSION.test(version)) throw new Error(`invalid version ${version}`);
+  return range.split(RANGE_SEPARATOR).some((part) => formContains(part, version));
+}
+
+/** Whether version is in one form of a range; both were checked. */
+function formContains(range, version) {
   if (range === "*") return true;
   const bounded = /^>=(\S+) <(\S+)$/.exec(range);
   if (bounded) return compareVersion(version, bounded[1]) >= 0 && compareVersion(version, bounded[2]) < 0;
@@ -260,7 +286,8 @@ export function rangeContains(range, version) {
   const low = `${major}.${minor}.${patch}`;
   const below = operator === "" ? `${major}.${minor}.${patch + 1}`
     : operator === "~" ? `${major}.${minor + 1}.0`
-    : major > 0 ? `${major + 1}.0.0` : minor > 0 ? `0.${minor + 1}.0` : `0.0.${patch + 1}`;
+    // Below 1.0.0 the minor part changes for an incompatible release, and a patch release is compatible, also in 0.0.
+    : major > 0 ? `${major + 1}.0.0` : `0.${minor + 1}.0`;
   return compareVersion(version, low) >= 0 && compareVersion(version, below) < 0;
 }
 

@@ -46,18 +46,20 @@ fn rejects<T: std::fmt::Debug>(result: Result<T, String>, want: &str) {
 fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     for (text, min, below) in [
         ("0.0.2", "0.0.2", "0.0.3"),
-        ("^0.0.2", "0.0.2", "0.0.3"),
+        ("^0.0.2", "0.0.2", "0.1.0"),
         ("^0.2.3", "0.2.3", "0.3.0"),
         ("^1.2.3", "1.2.3", "2.0.0"),
         ("~1.2.3", "1.2.3", "1.3.0"),
         (">=0.0.2 <0.1.0", "0.0.2", "0.1.0"),
     ] {
         let range = install::parse_range(text).expect(text);
+        assert_eq!(range.parts.len(), 1, "{text}");
         assert_eq!(
             (
-                range.min.to_string(),
-                range
+                range.parts[0].min.to_string(),
+                range.parts[0]
                     .below
+                    .as_ref()
                     .map(|below| below.to_string())
                     .unwrap_or_default()
             ),
@@ -67,11 +69,40 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     }
     assert!(install::satisfies("0.0.9", ">=0.0.2 <0.1.0"));
     assert!(!install::satisfies("0.1.0", ">=0.0.2 <0.1.0"));
+    // A union has the bounds of each part in the order of the text.
+    let union = install::parse_range("^0.0.39 || >=1.0.0 <2.0.0").expect("union");
+    let bounds: Vec<(String, String)> = union
+        .parts
+        .iter()
+        .map(|part| {
+            (
+                part.min.to_string(),
+                part.below
+                    .as_ref()
+                    .map(|below| below.to_string())
+                    .unwrap_or_default(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        bounds,
+        [("0.0.39", "0.1.0"), ("1.0.0", "2.0.0")]
+            .map(|(min, below)| (min.to_string(), below.to_string()))
+    );
+    // A part that is not one of the forms refuses the whole range, and the error names the range and the part.
+    assert_eq!(
+        install::parse_range("^0.0.1 || latest"),
+        Err(r#"invalid version range "^0.0.1 || latest": invalid version range "latest": expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z, >=x.y.z <a.b.c or such ranges joined by " || ""#.to_string())
+    );
     // * is >=0.0.0, that is, every version, with no upper bound.
     let any = install::parse_range("*").expect("*");
     assert_eq!(
-        (any.min.to_string(), any.below),
-        ("0.0.0".to_string(), None)
+        (
+            any.parts.len(),
+            any.parts[0].min.to_string(),
+            any.parts[0].below.clone()
+        ),
+        (1, "0.0.0".to_string(), None)
     );
     for version in [
         "0.0.0",
@@ -87,8 +118,12 @@ fn version_ranges_accept_exact_caret_tilde_and_bounded_forms() {
     // >=x.y.z has only a lower bound and no upper bound.
     let lower = install::parse_range(">=0.0.6").expect(">=0.0.6");
     assert_eq!(
-        (lower.min.to_string(), lower.below),
-        ("0.0.6".to_string(), None)
+        (
+            lower.parts.len(),
+            lower.parts[0].min.to_string(),
+            lower.parts[0].below.clone()
+        ),
+        (1, "0.0.6".to_string(), None)
     );
     assert!(install::satisfies("0.0.6", ">=0.0.6"));
     assert!(install::satisfies("0.1.0", ">=0.0.6"));
@@ -143,7 +178,6 @@ fn versions_and_ranges_refuse_the_forms_that_the_library_accepts() {
         "!=1.2.3",
         "=1.2.3",
         "1.2.3, 1.2.4",
-        "^1.2.3 || ^2.0.0",
         "*.*.*",
         "x",
         "~1.2.3-beta",

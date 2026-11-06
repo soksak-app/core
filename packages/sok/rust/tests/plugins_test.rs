@@ -1128,6 +1128,37 @@ fn plugin_install_installs_the_plugin_dependencies() {
     );
 }
 
+// contract: cli.plugin.dependencies-install
+#[test]
+fn plugin_install_reads_a_union_in_the_plugin_dependencies() {
+    // The provider gets the newest version inside one part of the union, and the installed record keeps the text of a
+    // sidecar range.
+    let registry = dependency_registry(&[
+        base("1.0.0"),
+        base("1.1.0"),
+        base("2.0.0"),
+        base("3.0.0"),
+        Dependent {
+            id: "ext",
+            version: "1.0.0",
+            dependencies: vec![
+                ("@scope/plugin-base", "1.0.0 || ^2.0.0"),
+                ("@scope/sidecar-worker", "^0.3.0 || ^0.1.0"),
+            ],
+        },
+    ]);
+    let config = Folder::new("plugins");
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
+    let state = installed_of(&config);
+    assert_eq!(state.plugins["base"].version, "2.0.0");
+    assert_eq!(
+        serde_json::to_string(&state.plugins["ext"].sidecars).unwrap(),
+        r#"{"@scope/sidecar-worker":"^0.3.0 || ^0.1.0"}"#
+    );
+    assert_eq!(state.sidecars["@scope/sidecar-worker"].version, "0.1.0");
+}
+
 /// The names in the plugins folder of the configuration directory.
 fn plugin_folders(config: &Folder) -> String {
     let mut names: Vec<String> = std::fs::read_dir(config.path().join("plugins"))
