@@ -69,6 +69,8 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	if w.moved {
 		s.clampCard()
 	}
+	// default: the card takes its height from its rows, and this frame measures that height again into drawnHeight below, so the
+	// height of the last frame is not needed here.
 	x, y, cardW, _ := s.settingsCard()
 	pane := s.readSettingsPane()
 	ui.Overlay(c, func() {

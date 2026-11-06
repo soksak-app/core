@@ -81,6 +81,8 @@ type screenPoint struct{ x, y int32 }
 type systemMouse struct{}
 
 func (systemMouse) swapped() bool {
+	// default: GetSystemMetrics answers 0 when it fails and GetLastError gives no extended error information, so a failure reads as
+	// buttons that are not swapped.
 	swapped, _, _ := procGetSystemMetrics.Call(smSwapButton)
 	return swapped != 0
 }
@@ -91,15 +93,22 @@ func (systemMouse) hit() (uintptr, []uintptr, error) {
 		return 0, nil, fmt.Errorf("mouse input: the pointer position: %w", err)
 	}
 	// A POINT goes by value in one register on the 64-bit targets of this platform.
+	// default: WindowFromPoint sets no error that GetLastError reads, so its value is the whole answer and the error of Call holds nothing. No window at the point is a press over no window.
 	hit, _, _ := procWindowFromPoint.Call(uintptr(uint32(at.x)) | uintptr(uint32(at.y))<<32)
 	if hit == 0 {
 		return 0, nil, nil
 	}
-	root, _, _ := procGetAncestor.Call(hit, gaRoot)
+	root, _, err := procGetAncestor.Call(hit, gaRoot)
+	if root == 0 {
+		return 0, nil, fmt.Errorf("mouse input: the window of %#x: %w", hit, err)
+	}
 	var views []uintptr
-	for view := hit; view != 0 && view != root; {
+	for view := hit; view != root; {
 		views = append(views, view)
-		parent, _, _ := procGetAncestor.Call(view, gaParent)
+		parent, _, err := procGetAncestor.Call(view, gaParent)
+		if parent == 0 {
+			return 0, nil, fmt.Errorf("mouse input: the parent of %#x: %w", view, err)
+		}
 		view = parent
 	}
 	return root, views, nil
@@ -158,6 +167,7 @@ func mouseWindowProc(window, message, wParam, lParam uintptr) uintptr {
 		}
 	}
 	// A WM_INPUT also needs the default handling, which releases the input.
+	// default: DefWindowProcW sets no error that GetLastError reads, so its value is the whole answer and the error of Call holds nothing.
 	result, _, _ := procDefWindowProcW.Call(window, message, wParam, lParam)
 	return result
 }
@@ -180,6 +190,8 @@ func runMouseSource(started chan<- error) {
 	}
 	mouse.mu.Lock()
 	mouse.mask = mouseButtonsHeld(func(key int) bool {
+		// default: GetAsyncKeyState answers 0 also when it cannot read the key, as for the foreground of another desktop, and has no
+		// error code, so such a key reads as not held.
 		state, _, _ := procGetAsyncKeyState.Call(uintptr(key))
 		return state&keyHeldBit != 0
 	})

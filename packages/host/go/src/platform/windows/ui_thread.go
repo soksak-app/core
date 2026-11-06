@@ -87,6 +87,7 @@ func createMessageWindow(className string, proc uintptr) (uintptr, error) {
 var startUIThread = sync.OnceValue(func() error {
 	window, err := createMessageWindow("soksak-ui-tasks", syscall.NewCallback(func(window, message, wParam, lParam uintptr) uintptr {
 		if message != wmRunTasks {
+			// default: DefWindowProcW sets no error that GetLastError reads, so its value is the whole answer and the error of Call holds nothing.
 			result, _, _ := procDefWindowProcW.Call(window, message, wParam, lParam)
 			return result
 		}
