@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F683-2: The test runner of `pnpm test` fails a process whose output holds a process warning of node, through `processWarnings` of `scripts/node-warnings.mjs`, the rule that the language adapter also uses.
 - F683-1: The test runners give each node --test file two reporters, the TAP form on the standard output and the events on the standard error, because node --test adds end listeners to its root test stream for each reporter and a third one made Node print a MaxListenersExceededWarning; a language case whose output holds a process warning of node fails with the warning.
 - F683: Each language case of a compiled language declares its build, which runs before its tests under a limit of its own, so a cold build cache no longer times out `make test-language`; a failed build reports its status and runs no test. The command supervisor judges every group signal and probe by the rule of `killGroup`, so a refusal of a group of zombies is no error.
 - F682: `make check-tests` fails a language case whose `expectedTests` differs from the tests that its test files declare, and the Go and Rust registry cases expect the seven tests that F651 left at six.

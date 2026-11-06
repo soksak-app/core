@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
+import { processWarnings } from './node-warnings.mjs';
 import { runCommand } from './test-command.mjs';
 import { runWithEvidence, persistEvidence } from './test-evidence.mjs';
 import { readNodeTestEvidence, testExecutionErrors, withNodeTestReporters } from './node-test-evidence.mjs';
@@ -132,14 +133,6 @@ export function parseLanguageResult(language, stdout, stderr) {
   if (language === 'objective-c') return parseObjectiveC(output);
   if (language === 'shell') return parseShell(output);
   throw invalid(`unsupported language: ${language}`);
-}
-
-// A process warning of node: `(node:<pid>) [<code>] <Name>Warning: <message>`. A warning is a failure of the case that printed it.
-const PROCESS_WARNING = /^\(node:\d+\) (?:\[[A-Z0-9_]+\] )?([A-Za-z]*Warning): (.*)$/gm;
-
-/** The process warnings of node in `output`, each once, as errors that name the warning and its message. */
-export function processWarnings(output) {
-  return [...new Set([...output.matchAll(PROCESS_WARNING)].map(([, name, message]) => `node printed ${name}: ${message}`))];
 }
 
 // A case that names cargo runs the cargo that cargoCommand resolves, as every script of the repository does.

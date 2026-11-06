@@ -53,7 +53,7 @@ const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/test-hosts.mjs"], ["scripts/test/test-hosts.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
-lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs", "scripts/macos-minimum.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs", "scripts/test/macos-minimum.test.mjs"], { sharedTests: true }),
+lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs", "scripts/macos-minimum.mjs", "scripts/node-warnings.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs", "scripts/test/macos-minimum.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("Node execution evidence", "js-ts", ["scripts/node-test-evidence.mjs"], ["scripts/test/node-test-evidence.test.mjs"]),
@@ -359,10 +359,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F683-2",
+    implementation: [
+      { file: "scripts/node-warnings.mjs", symbol: "export function processWarnings(output) {" },
+      { file: "scripts/test-runner.mjs", symbol: "const nodeWarnings = processWarnings(output);" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a process whose output holds a process warning of node fails with the warning" },
+    ],
+    expected: "The test runner fails a process whose output holds a process warning of node with the warning, through the same rule as the language adapter.",
+    levels: ["unit"],
+  },
+  {
     id: "F683-1",
     implementation: [
       { file: "scripts/node-test-evidence.mjs", symbol: "export const NODE_TEST_REPORTERS = Object.freeze([" },
-      { file: "scripts/language-test-adapters.mjs", symbol: "export function processWarnings(output) {" },
+      { file: "scripts/node-warnings.mjs", symbol: "export function processWarnings(output) {" },
     ],
     tests: [
       { file: "scripts/test/node-test-evidence.test.mjs", id: "a node --test run with the shared reporters prints no process warning" },
