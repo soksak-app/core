@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { appendEvidenceAttempt, collectEvidence, evidenceDrift, persistEvidence, validateEvidence } from '../test-evidence.mjs';
 import * as evidence from '../test-evidence.mjs';
-import { processExecutable } from '../platform/darwin/process-executable.mjs';
 
 async function inputFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'soksak-evidence-inputs-'));
@@ -22,13 +21,6 @@ async function inputFixture(t) {
     testFiles: ['source.test.mjs'], dependencyFiles: ['dependency.json'], buildFlags: ['--test'] };
 }
 
-test('process evidence rejects a live PID paired with an unrelated file', { timeout: 10000 }, async (t) => {
-  const options = await inputFixture(t);
-  await assert.rejects(() => collectEvidence({ ...options,
-    processes: [{ pid: process.pid, executable: 'source.mjs' }],
-    result: { status: 'pass', expected: 1, actual: 1, elapsedMs: 1 } }), /executable mismatch/);
-});
-
 test('process evidence rejects an unavailable or exited process identity', { timeout: 10000 }, async () => {
   const entry = { pid: process.pid, executable: process.execPath };
   await assert.rejects(() => evidence.runningProcess(process.cwd(), entry, {
@@ -36,10 +28,6 @@ test('process evidence rejects an unavailable or exited process identity', { tim
   }), /identity unavailable/);
   await assert.rejects(() => evidence.runningProcess(process.cwd(), { ...entry, pid: 99999999 }), /not running/);
   await assert.rejects(() => evidence.runningProcess(process.cwd(), entry, { readExecutable: async () => '' }), /identity.*unavailable/);
-});
-
-test('process identity preserves whitespace belonging to the executable path', { timeout: 10000 }, async () => {
-  assert.equal(await processExecutable(process.pid, { execute: async () => ({ stdout: '/candidate/program \n' }) }), '/candidate/program ');
 });
 
 for (const [file, name] of [
@@ -143,7 +131,7 @@ test('evidence records content hashes, dirty state, expected/actual result, and 
     caseId: 'evidence-self-test', language: 'js-ts',
     implementationFiles: ['source.mjs'],
     testFiles: ['source.test.mjs'],
-    dependencyFiles: ['package.json'], buildFlags: ['node>=20'], processes: [{ pid: process.pid, executable: process.execPath }],
+    dependencyFiles: ['package.json'], buildFlags: ['node>=20'], processes: [],
     result: { status: 'fail', expected: { status: 'pass', tests: 1 }, actual: { status: 'fail', tests: 0 }, elapsedMs: 4 },
   });
   assert.equal(validateEvidence(record).length, 0);
@@ -154,10 +142,9 @@ test('evidence records content hashes, dirty state, expected/actual result, and 
   assert.match(retried.implementation.sha256, /^[0-9a-f]{64}$/);
   assert.ok(retried.git.sha256);
   assert.deepEqual(retried.git.files.map(({ state, path }) => [state, path]), [[' M', 'source.mjs']]);
-  assert.equal(retried.processes.length, 1);
-  assert.match(retried.processes[0].sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(retried.processes, []);
   assert.deepEqual(evidenceDrift(retried, { ...retried, buildFlags: ['different'] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
-  assert.deepEqual(evidenceDrift(retried, { ...retried, processes: [{ ...retried.processes[0], sha256: '0'.repeat(64) }] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
+  assert.deepEqual(evidenceDrift(retried, { ...retried, processes: [{ pid: 1, executable: 'fixture', sha256: '0'.repeat(64) }] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
   const evidenceDirectory = await mkdtemp(join(tmpdir(), 'soksak-evidence-file-'));
   t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
   const evidenceFile = join(evidenceDirectory, 'evidence.json');

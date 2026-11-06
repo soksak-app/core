@@ -10,6 +10,7 @@ import { CANDIDATE_HOSTS } from './candidate-policy.mjs';
 import { encodeAcceptanceReport } from './candidate-report.mjs';
 import { runningProcess } from './test-evidence.mjs';
 import { runCommand } from './test-command.mjs';
+import { releasePlatform } from './platform/platform.js';
 
 async function installReference(command, args, { signal } = {}) {
   const result = await runCommand({ id: `candidate reference ${args[0]} ${args[1]}`, command, args,
@@ -110,7 +111,7 @@ async function installedComponents(config, context, index, checkTree = true) {
     const item = actual[i], wanted = expected[i];
     requireValue(item.version === wanted.version, `component ${item.id} version differs from the frozen cohort`);
     if (item.kind === 'plugin') requireValue(item.enabled === true, `component ${item.id} must be enabled`);
-    releaseOf(index, wanted, context.platform ?? `${process.platform}-${process.arch}`);
+    releaseOf(index, wanted, context.platform ?? releasePlatform());
     const directory = await componentDirectory(config, item.path);
     const pkg = await json(join(directory, 'package.json'));
     requireValue(pkg.version === item.version, `component ${item.id} package version differs from its installation`);

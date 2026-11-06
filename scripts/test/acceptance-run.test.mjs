@@ -9,6 +9,7 @@ import { decodeAcceptanceReport } from '../candidate-report.mjs';
 import { collectAcceptanceInputs, finishAcceptanceRun, prepareCandidate, sourceIdentity, writeAcceptanceReport } from '../acceptance-run.mjs';
 
 const hosts = ['tauriv2', 'wailsv3'];
+const platform = 'darwin-arm64';
 async function put(file, value) {
   await mkdir(join(file, '..'), { recursive: true });
   await writeFile(file, typeof value === 'string' ? value : JSON.stringify(value));
@@ -17,7 +18,7 @@ async function put(file, value) {
 async function installed(config, { text = 'plugin bytes', enabled = true, version = '0.0.1', extra = false, worker } = {}) {
   const plugins = { fixture: { path: 'plugins/fixture/0.0.1', version, enabled, sidecars: worker ? { '@fixture/worker': '^0.0.1' } : {} } };
   if (extra) plugins.extra = { ...plugins.fixture, path: 'plugins/extra/0.0.1' };
-  const sidecars = worker ? { '@fixture/worker': { version: worker.version ?? '0.0.1', path: `sidecars/fixture-worker/0.0.1/${process.platform}-${process.arch}` } } : {};
+  const sidecars = worker ? { '@fixture/worker': { version: worker.version ?? '0.0.1', path: `sidecars/fixture-worker/0.0.1/${platform}` } } : {};
   await put(join(config, 'plugins/installed.json'), { format: 3, plugins, sidecars });
   await put(join(config, plugins.fixture.path, 'package.json'), { name: '@fixture/plugin', version });
   await put(join(config, plugins.fixture.path, 'plugin.json'), { id: 'fixture', ...(worker ? { dependencies: { '@fixture/worker': '^0.0.1' } } : {}) });
@@ -47,6 +48,7 @@ async function fixture(t, { worker } = {}) {
     'commit', '-qm', 'fixture'], { cwd: root });
   await put(join(root, 'node_modules/fixture/index.js'), 'installed dependency bytes');
   const context = {
+    platform,
     schema: 1, candidate: { repository: 'fixture/core', workflow: 'release.yml', runId: 1, runAttempt: 1,
       sha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), version: '0.0.1', artifacts: [{ id: 1, name: 'candidate' }] },
     assets: [], registry: { path: join(folder, 'registry.json'), pack: 'required', components: [
@@ -62,7 +64,7 @@ async function fixture(t, { worker } = {}) {
     index.plugins[0].versions[0].sidecars = { '@fixture/worker': '^0.0.1' };
     context.registry.components.push({ kind: 'sidecar', id: '@fixture/worker', version: '0.0.1', releaseSha256: '2'.repeat(64) });
     index.sidecars.push({ name: '@fixture/worker', versions: [{ version: '0.0.1', protocol: 1,
-      releases: { [`${process.platform}-${process.arch}`]: { url: 'https://example.invalid/worker.tgz', sha256: '2'.repeat(64) } } }] });
+      releases: { [platform]: { url: 'https://example.invalid/worker.tgz', sha256: '2'.repeat(64) } } }] });
     await put(context.registry.path, index);
   }
   context.registry.sha256 = await hashFile(context.registry.path);

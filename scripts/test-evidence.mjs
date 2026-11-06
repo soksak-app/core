@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { open, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { processExecutable } from './platform/platform.js';
 
 export const EVIDENCE_SCHEMA = 1;
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -109,12 +110,6 @@ async function dirtyState(root) {
     patchSha256,
     sha256: digest(JSON.stringify({ files, patchSha256 })),
   };
-}
-
-async function processExecutable(pid) {
-  if (process.platform !== 'darwin') throw new Error(`process executable identity unavailable on ${process.platform}`);
-  const platform = await import('./platform/darwin/process-executable.mjs');
-  return platform.processExecutable(pid);
 }
 
 /** Binds the supplied path to the kernel identity before and after hashing the live executable. */
