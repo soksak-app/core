@@ -80,6 +80,23 @@ test("a check session releases every press it left open", async () => {
   ]);
 });
 
+test("a check session releases the press of each named pointer", async () => {
+  const client = fakeClient();
+  const s = new Session(app, client);
+  await s.pointer(10, 20, "down", { pointer: "first" });
+  await s.pointer(30, 40, "down", { pointer: "second" });
+  assert.deepEqual(open(s), [
+    { window: "main", pointer: "first", x: 10, y: 20, button: "left" },
+    { window: "main", pointer: "second", x: 30, y: 40, button: "left" },
+  ]);
+  await s.releasePresses();
+  assert.deepEqual(open(s), []);
+  assert.deepEqual(client.requests.filter((request) => request.method === "input.pointer").slice(-2), [
+    { method: "input.pointer", window: "main", x: 10, y: 20, phase: "up", button: "left", pointer: "first" },
+    { method: "input.pointer", window: "main", x: 30, y: 40, phase: "up", button: "left", pointer: "second" },
+  ]);
+});
+
 test("a refused release keeps the press open until the held button is released", async (t) => {
   // Stops the time functions so that a time limit cannot create progress. The cleanup progresses only by the
   // notification of host.buttons.
