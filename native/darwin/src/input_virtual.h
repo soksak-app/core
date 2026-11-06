@@ -36,3 +36,8 @@ bool sp_input_virtual_real_key(void *window);
 // through its text input. Another client, such as an image region, types the stated text itself and is not served here. Main
 // thread.
 bool sp_input_virtual_type_stated_text(void *window, void *event);
+
+// Whether input of window passes -[NSApplication sendEvent:]: the application is really active and window is its key window.
+// AppKit also holds a key window in an application that is not active, such as a window that a host shows while another window
+// is the virtual key window; its input is input of an application that is not active and goes to the window or the view.
+bool sp_input_virtual_through_application(void *window);

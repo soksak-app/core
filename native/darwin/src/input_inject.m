@@ -235,6 +235,13 @@ static bool enterVirtual(NSWindow *window) {
     return true;
 }
 
+// Whether input of window is input of a key window: the key window of the application that is really active, or the virtual
+// key window.
+static BOOL keyForInput(NSWindow *window) {
+    void *handle = (__bridge void *)window;
+    return sp_input_virtual_is(handle) || sp_input_virtual_through_application(handle);
+}
+
 @implementation SPPress
 // Takes the button of the press out of the buttons that the pages see. The press stays open until it ends.
 - (void)hide {
@@ -477,7 +484,7 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
     NSPoint point = windowPoint(window, x, y);
     if (phase == 0) {
         if (heldByOther(pointer, window, pageAt(window, point), 0, NO, held)) return SP_INPUT_POINTER_HELD;
-        if (!window.isKeyWindow && !enterVirtual(window)) {
+        if (!keyForInput(window) && !enterVirtual(window)) {
             held->why = "the application is active and the window is not its key window";
             return SP_INPUT_INACTIVE;
         }
@@ -536,15 +543,15 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
         case 1: {
             // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
             if (pointer->presses[button]) { held->why = "a press of this button of the pointer is still open"; return SP_INPUT_PRESS_OPEN; }
-            // AppKit reads its real state in -[NSApplication sendEvent:] and drops a first click, so a virtual key window takes
-            // the direct path.
-            BOOL throughApplication = window.isKeyWindow && !sp_input_virtual_is(handle);
+            // AppKit reads its real state in -[NSApplication sendEvent:] and drops a first click, so a press of an application that
+            // is not really active, also of a window that AppKit holds as its key window, takes the direct path.
+            BOOL throughApplication = sp_input_virtual_through_application(handle);
             if (heldByOther(pointer, window, pageOf(hit), 1, throughApplication, held)) return SP_INPUT_POINTER_HELD;
             sp_input_virtual_set_point(handle, point.x, point.y);
             // The left press of the window passes its hold of the keyboard once, while any pointer holds it.
             BOOL firstLeft = button == 0 && !otherPressIn(pointer, window, 0);
             // A person moves to the point before the press. A window that is not the key window hears no move.
-            if (window.isKeyWindow) moveTo(window, point);
+            if (keyForInput(window)) moveTo(window, point);
             openPress(pointer, button, window, hit, throughApplication);
             // The monitor of the press origin records the press of the application as it records a person's press. A press
             // delivered directly passes no monitor, so the driver records it.
@@ -749,7 +756,7 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
         return;
     }
     const char *reason = NULL;
-    if (phase == 0 && !window.isKeyWindow && !heldBy(pointer, window, pageAt(window, windowPoint(window, x, y)), 0, NO, &reason)
+    if (phase == 0 && !keyForInput(window) && !heldBy(pointer, window, pageAt(window, windowPoint(window, x, y)), 0, NO, &reason)
         && enterVirtual(window)) {
         // WebKit drops a move until the page has heard that it is active, so the move waits for the state of the web views.
         __block BOOL finished = NO;
