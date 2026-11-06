@@ -1690,6 +1690,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F617",
+    implementation: [
+      { file: "packages/host/go/src/sidecar_routes.go", symbol: "func viewSidecarMessage(id string, cids []string, body json.RawMessage) []byte" },
+      { file: "packages/host/rust/src/sidecar_routes.rs", symbol: "pub(crate) fn view_message(id: &str, cids: &[String], body: &RawValue) -> String" },
+      { file: "packages/plugin-api/view.js", symbol: "(data) => listener(data.body, data.cids ?? [])" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecar_routes_test.go", id: "TestTheViewMessageNamesTheIdentifiersOfTheRequestsThatItAnswers" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestAMessageOfASidecarReachesItsOwnerWithTheIdentifiersOfItsRequest" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAMessageOfAPersistentServiceReachesItsOwnerWithTheIdentifiersOfItsRequest" },
+      { file: "packages/host/rust/src/sidecar_routes_test.rs", id: "the_view_message_names_the_identifiers_of_the_requests_that_it_answers" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_message_of_a_persistent_service_reaches_its_owner_with_the_identifiers_of_its_request" },
+      { file: "packages/plugin-api/test/view.test.mjs", id: "runtime.sidecar(name).on passes the identifiers of the requests that a message answers" },
+      { file: "packages/workbench/test/window-sidecar-listen.test.mjs", id: "a listener receives the identifiers of the requests that a message answers" },
+    ],
+    expected: "A message of a sidecar reaches the owner of its surface and a view with the cids of its line, on the standard input and output and the persistent transports of both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F638",
     implementation: [
       { file: "packages/window-check/app.mjs", symbol: "export async function drag(s, plan, { capture = false, frameIdentity } = {})" },
