@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F671: stall watch 의 stop 은 실행 중인 thread sample 을 기다리고, stop 뒤에 watch 는 stall 을 기록하지 않고 sample 도 시작하지 않는다. Go host 는 shutdown 의 시작에서, Tauri host 는 exit 의 시작에서 event log 의 flush 전에 watch 를 멈추므로, 어떤 `/usr/bin/sample` process 도 host 보다 오래 살지 않고 stall 은 dump 를 유지한다. contract case `host.stall.stop-waits-for-the-sample` 이 모든 host 를 다룬다.
 - F670: Go language host library 의 두 show test 가 host contract case `application.window.show-reaches-the-registered-platform-before-the-host-starts` 와 `application.window.show-without-a-registered-platform-ends-through-the-fatal-error` 를 선언한다. run time 에 platform 을 등록하는 것은 Go language host library 뿐이므로 scope 는 Wails host 와 mygo host 이고, host specification 의 H58 행이 `src/windows_show_test.go` 를 Go 쪽에만 있는 파일로 나열한다. 두 Go host 의 host contract check 와 `make check-host-files` 가 이 파일에 대해 통과한다.
 - F510-1: 최종 acceptance 완료에 소유 native test 연결을 유지하고 검증 실행 기록은 별도로 분류한다. 실제 inventory와 소유 case 45개가 모두 통과한다.
 - F664: 고정한 로컬 candidate와 설치 component 집합을 사용한 두 host의 focused case 12개가 독립 초기 상태 두 번에서 모두 통과한다. 전체 audit와 cleanup을 완료하고 준비 후 동결한 입력의 raw identity가 실행 후에도 동일함을 확인했다. 최초 fixture·selection 실패는 보존하고 수정했다. 이전 F658 guard-mutation 근거, 실제 Editor baseline, 별도 native close fixture와 Editor E58 파일 write-race 검증은 각각의 범위를 유지하며 최신 Editor source의 native 승인을 주장하지 않는다.

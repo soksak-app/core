@@ -285,6 +285,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F671",
+    implementation: [
+      { file: "packages/host/go/src/stall_watch.go", symbol: "samples.Wait()" },
+      { file: "packages/host/go/src/host.go", symbol: "func (s *Session) stopStallWatch() {" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "sample.join().is_err()" },
+      { file: "packages/host/rust/src/host.rs", symbol: "struct StallWatchStop(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestStoppingTheWatchWaitsForTheRunningSample" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "stopping_the_watch_waits_for_the_running_sample" },
+    ],
+    expected: "The stop of the stall watch returns after the running sample ended and stored its host.stall.sampled, the watch records no stall and starts no sample after the stop, and each host stops the watch before the flush of its event log, so no sample process outlives the host.",
+    levels: ["unit"],
+  },
+  {
     id: "F651",
     implementation: [
       { file: "packages/sok/go/src/install.go", symbol: "func ParseRange" },

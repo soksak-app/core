@@ -482,3 +482,47 @@ func TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds(t *testing.T) {
 		t.Fatalf("stalled_ms %d, want at least 1000", got)
 	}
 }
+
+// contract: host.stall.stop-waits-for-the-sample
+func TestStoppingTheWatchWaitsForTheRunningSample(t *testing.T) {
+	// The main thread never answers, so the beats after 1 s of the controlled clock are a stall that starts a sample. The sample
+	// lasts for its own time, as the sample of the system lasts for a second, and the stop of the watch comes while it runs.
+	const sampleTime = 300 * time.Millisecond
+	ct := &controlledTime{}
+	records := &stallRecords{}
+	started := make(chan struct{})
+	var samples atomic.Int32
+	var ended atomic.Bool
+	stop := host.StartStallWatch(host.StallWatchOptions{
+		Heartbeat:  func() (time.Duration, time.Duration) { return ct.clock(), 0 },
+		AwaitAwake: neverWaits,
+		Sample: func(string) error {
+			if samples.Add(1) == 1 {
+				close(started)
+			}
+			time.Sleep(sampleTime)
+			ended.Store(true)
+			return nil
+		},
+		Folder:   t.TempDir(),
+		EmitHost: records.emit,
+		Clock:    ct.clock,
+		Wait:     ct.wait,
+	})
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		stop()
+		t.Fatal("no sample started")
+	}
+	stop()
+	if !ended.Load() {
+		t.Fatal("the stop of the watch returned while the sample of the threads still ran")
+	}
+	if got := records.joined(); got != "host.stall,host.stall.sampled" {
+		t.Fatalf("events %q when the stop returned, want the stall and its sample", got)
+	}
+	if got := samples.Load(); got != 1 {
+		t.Fatalf("%d samples, want the one of the stall", got)
+	}
+}
