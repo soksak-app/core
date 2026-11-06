@@ -52,6 +52,9 @@ function validate(options) {
     if (names.has(item.name)) throw new TypeError(`the test ${item.name} is listed twice`);
     names.add(item.name);
     if (typeof item.command !== 'string' || !Array.isArray(item.args)) throw new TypeError(`${item.name}: command and args are required`);
+    if (item.nodeTestFile !== undefined && (typeof item.nodeTestFile !== 'string' || item.nodeTestFile.length === 0)) {
+      throw new TypeError(`${item.name}: nodeTestFile must name the file whose test evidence is required`);
+    }
     // The runner applies no run-wide or file-wide limit (AGENTS.md Verification). A declared limit is checked; an absent one means
     // that the process has no limit of the runner.
     if (item.timeoutMs !== undefined && (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS)) {
@@ -280,12 +283,21 @@ function runOne(item, limitMs, env, outputPath) {
     let fileExit = null;
     // The tests that the process ran: the summary of each file counts its started tests, of which the skipped ones did not run.
     let ran = 0;
+    // The evidence of a node test file (`nodeTestFile`): its own summary and the skipped or todo tests that the process completed.
+    let testSummary = null;
+    const omittedTests = [];
     const count = (tests, key, step) => {
       const left = (tests.get(key) ?? 0) + step;
       if (left === 0) tests.delete(key);
       else tests.set(key, left);
     };
     const track = (event) => {
+      if (item.nodeTestFile !== undefined) {
+        if (event.type === 'test:summary' && event.file === item.nodeTestFile) testSummary = event;
+        if (event.type === 'test:complete' && (event.skip || event.todo)) {
+          omittedTests.push(`${event.skip ? 'skipped' : 'todo'}: ${event.name}`);
+        }
+      }
       const key = `${event.nesting}\0${event.name}`;
       if (event.type === 'test:enqueue') count(queued, key, 1);
       else if (event.type === 'test:dequeue') {
@@ -369,6 +381,16 @@ function runOne(item, limitMs, env, outputPath) {
         const waiting = queued.size > 0 ? `; queued without a start: ${names(queued)}` : '';
         finish({ status: 'fail', elapsedMs, output, detail: `the test process ended by ${end} while a test ran; started without a result: ${names(running)}${waiting}${left}` });
       } else if (exitLeftovers.length > 0) finish({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
+      // A node test file passes only on its own successful summary with at least one passed test and no skipped, todo, failed or
+      // cancelled test: a skipped or todo test is a test that did not run.
+      else if (code === 0 && item.nodeTestFile !== undefined && omittedTests.length > 0) {
+        finish({ status: 'fail', elapsedMs, output, detail: `incomplete test evidence: ${omittedTests.join('; ')}` });
+      } else if (code === 0 && item.nodeTestFile !== undefined && (testSummary === null
+        || testSummary.success !== true || !Number.isInteger(testSummary.counts?.tests) || testSummary.counts.tests < 1
+        || !Number.isInteger(testSummary.counts?.passed) || testSummary.counts.passed < 1
+        || ['failed', 'cancelled', 'skipped', 'todo'].some((key) => testSummary.counts[key] !== 0))) {
+        finish({ status: 'fail', elapsedMs, output, detail: `missing or incomplete test evidence for ${item.nodeTestFile}: ${JSON.stringify(testSummary?.counts ?? null)}` });
+      }
       // A process that reports its test events and ran no test passes, and its detail says so.
       else if (code === 0) finish({ status: 'pass', elapsedMs, output, detail: reporting && ran === 0 ? 'no test ran' : '' });
       else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
@@ -381,7 +403,8 @@ function runOne(item, limitMs, env, outputPath) {
  * processes at once. `stacksAtLimit` declares a process that writes its stacks and exits at its own limit of `timeoutMs`; its exit
  * after that limit is its timeout, and its group is ended at that exit or STACK_LIMIT_MS after the limit.
  * `eventLimitMs` is the event watchdog of a process that reports its test events (scripts/test-event-reporter.mjs), and `exitLimitMs`
- * the limit of its exit after its `test:summary` event, which needs `run`. `write(line)`
+ * the limit of its exit after its `test:summary` event, which needs `run`. `nodeTestFile`, when given, requires that file's own
+ * successful, nonempty test summary and refuses skipped or todo cases; command-only items do not carry it. `write(line)`
  * receives one line per event: `RUN`, `PASS`, `FAIL`, `TIME`, a `RUNNING` line every `heartbeatMs` that names the tests in
  * flight with their running time, the `SLOWEST` tests, and the `TOTAL`. Resolves with `{results, slowest, passed}`; a result is
  * `{status, elapsedMs, output, detail}` with the status `pass`, `fail` or `timeout`. The processes of a run either all report their test

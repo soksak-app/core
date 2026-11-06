@@ -30,7 +30,7 @@ import {
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
 import { expectedPresentations, rasterIdentity, viewPresentationJoins } from "./view-display.mjs";
 import {
-  cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground,
+  cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground, terminalBackgroundSample,
 } from "./terminal-screen.mjs";
 
 // A 1x1 RGBA PNG image.
@@ -42,20 +42,6 @@ async function closeTerminalTabs(session) {
   for (const tab of grid.cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === "terminal")) {
     await session.run("core.tab.close", { tab: tab.id });
   }
-}
-
-async function terminalBackgroundSample(session, rect) {
-  await session.request("diagnostics.capture.start", {});
-  const displayed = await session.presented();
-  const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
-  const files = frames(frameDir);
-  assert.ok(files.length > 0, "terminal theme capture produced no frames");
-  const frame = readFrame(files.at(-1));
-  const x = Math.round(rect.x + rect.width * 0.75);
-  const y = Math.round(rect.y + rect.height * 0.75);
-  const sample = pixel(frame, x, y);
-  rmSync(frameDir, { recursive: true, force: true });
-  return sample;
 }
 
 async function terminalCursorCell(session, surface) {

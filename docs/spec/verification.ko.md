@@ -8,6 +8,8 @@ View display acceptance는 설치되고 활성화된 view plugin을 열거하고
 
 macOS에서는 검사 전용 executable의 공개 Vision text recognizer로 녹화된 view content를 확인한다. 설치된 각 view에는 선언 readiness와 고정된 예상 text가 있다. Browser empty-state 안내문, editor text fixture, HWP fixture 문단 및 terminal 출력 marker를 사용한다. 전체 녹화를 decode하고 확정 frame count를 확인하며 마지막 frame crop에 예상 text가 있어야 한다. Crop은 적용된 view rectangle과 capture content origin 및 scale을 정확히 한 번 적용한다. Recognition은 application이나 rendering 경로에서 실행하지 않는다. Captured-pixel verifier 없이 readiness만 제공하는 case는 거부한다.
 
+Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. Sample은 성공하거나 decoding 또는 geometry가 실패했을 때 멈춘 capture folder를 제거한다.
+
 작업 상태 정본은 [기능 상태](../features.ko.md)다. 소스 파일 목록은 구조적 증거일 뿐 기능 동등성이나 애플리케이션의 정상 동작을 판정하지 않는다.
 
 Core test 소유권은 독립적으로 선언된 core package를 따른다. Root `e2e` package가 window check와 `e2e/fixtures/` 아래 설치 가능한 payload를 소유한다. Fixture의 `package.json`은 설치 payload를 설명하며 별도의 core test 소유자를 만들지 않는다. E2E test는 자기 fixture manifest와 source를 읽을 수 있다. Core package test는 계속 E2E fixture 파일을 읽을 수 없고, E2E test도 다른 core package의 구현 경로를 읽을 수 없다.
@@ -19,6 +21,10 @@ Core test 소유권은 독립적으로 선언된 core package를 따른다. Root
 워크스페이스 패키지, 빌드 매니페스트, 구현 언어, 공개 명령·상태·설정·호스트 연산을 발견한다. 지원하는 모든 기능을 명시적인 구현 진입점, 동작 테스트 식별자, 기대 결과, 필수 검증 수준에 연결한다. 저장소 목록에서 실행 가능한 구현 언어를 도출하며, 언어 어댑터 매니페스트가 실행 가능한 구현 언어를 빠뜨리거나 구현이 없는 언어를 선언하면 `make check-tests`가 실패해야 한다. 각 언어 어댑터는 이름이 있는 테스트를 실행하고 실제 수, 실패, 건너뜀, 취소, todo, 충돌, 시간 초과를 같은 결과 계약으로 보고한다. 현재 JS/TS·Rust·Go·Objective-C·셸의 증거 의무는 같다. 공용 네이티브 검사는 각 호스트를 거친 통합 검사를 대체하지 않는다. 호스트 비교는 같은 기대 결과를 사용하며, 둘 다 똑같이 잘못된 결과도 실패한다. Wails와 Tauri 호스트 테스트는 실행하는 [호스트 계약 사례](host-contract.ko.md)를 선언하고, `make test-hosts`는 두 호스트의 테스트를 실행해 호스트 범위의 사례에 통과한 테스트가 없으면 실패한다. `make test-native`가 이 검사를 실행하므로, 어느 호스트에든 통과하는 테스트가 없는 사례를 남기는 호스트 변경은 네이티브 게이트에서 실패한다.
 
 구현·테스트 누락, 미등록 빌드 대상, 해석 불가 참조, 필수 테스트 실행 제외, 테스트 0개, 필수 검사 생략, 오래된 증거, 충돌, 시간 초과는 해당 게이트를 실패시킨다. 감사 자체 테스트로 이 실패들을 입증한다. 동작 변이 검사는 구현을 무동작으로 바꾸거나 필수 효과·응답을 제거하고 대응 테스트의 실패를 요구한다. 파일 이름과 소스 패턴으로 동작을 입증하지 않는다.
+
+발견한 Node test file은 자체 test 실행의 result를 요구한다. 성공한 file wrapper나 command exit만으로는 부족하며 empty file, 등록 전 exit, 선택한 test 없음, skipped case와 todo case는 실패한다. Support module이 있는 package script는 명시한 glob으로 test entrypoint를 선택한다. Directory argument는 모든 JavaScript file을 선택하는 Node 동작을 유지하며 선택한 모든 file은 test evidence를 제공해야 한다. Node test contract가 없는 command는 command-result 의미를 유지한다.
+
+Presentation wait의 unit check는 queue completion reaction이 실행될 task를 가질 때까지 presentation을 미완료 상태로 둔다. 현재 layout의 미완료 result와 다음 queued layout의 미실행을 함께 검사하고 presentation을 완료시킨 뒤 둘 다 끝나야 한다. Await 누락은 이 check를 실패시켜야 하며 promise completion이 전파될 수 있기 전의 관찰은 wait를 입증하지 않는다.
 
 
 증거에는 기능·테스트, 검증 수준, 언어·호스트·플랫폼, 미커밋 내용까지 포함한 소스·테스트 해시, 빌드 옵션, 실행 파일·사이드카 해시, 기대·실제 결과, 경과 시간을 기록한다. 의존 내용이 바뀌면 이전 증거는 무효다. 구조 범위·동작 검증·배포 승인은 별도 결과다.

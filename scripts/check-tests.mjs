@@ -234,6 +234,34 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F652",
+    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }],
+    tests: [
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background samples the captured view at combined scale and origin" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background rejects an empty capture and removes its folder" },
+    ],
+    expected: "Terminal background sampling reads a pixel inside the transformed capture view and removes the stopped recording on success or failure.",
+    levels: ["unit"],
+  },
+  {
+    id: "F499",
+    implementation: [{ file: "packages/workbench/layout-queue.js", symbol: "export async function drawPrepared" }],
+    tests: [{ file: "packages/workbench/test/layout-preparation.test.mjs", id: "the document waits for native preparation before drawing and retains the presentation barrier" }],
+    expected: "A pending native presentation keeps the layout incomplete and prevents the next queued layout from starting after completion reactions run.",
+    levels: ["unit"],
+  },
+  {
+    id: "F498",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" },
+      { file: "scripts/test-runner.mjs", symbol: "function runOne" },
+      { file: "scripts/test-event-reporter.mjs", symbol: "export default async function* testEvents" },
+    ],
+    tests: [{ file: "scripts/test/node-tests.test.mjs", id: "discovered Node evidence: skipped case" }],
+    expected: "Node files require their own nonempty successful test results without skipped or todo cases, while command-only outcomes remain separate.",
+    levels: ["unit"],
+  },
+  {
     id: "F645",
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "function scriptWords(step, script, where) {" },
