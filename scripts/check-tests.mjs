@@ -182,6 +182,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   ], { sharedTests: true }),
   lane("Darwin input", "objective-c", [
     "native/darwin/src/input_inject.m",
+    "native/darwin/src/input_virtual.m",
     "native/darwin/src/input_source.m",
     "native/darwin/src/input_reference.m",
     "native/darwin/src/webview_input.m",
@@ -190,6 +191,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/tests/input_activate_test.m",
     "native/darwin/tests/input_reference_test.m",
     "native/darwin/tests/input_inject_test.m",
+    "native/darwin/tests/input_virtual_test.m",
     "native/darwin/tests/webview_focus_test.m",
     "native/darwin/tests/webview_input_test.m",
   ], { sharedTests: true }),
@@ -1093,6 +1095,13 @@ const FEATURE_LINKS = [
     levels: ["native", "unit", "application"],
   },
   {
+    id: "F598",
+    implementation: [{ file: "native/darwin/src/input_inject.m", symbol: "keyInput" }],
+    tests: [{ file: "native/darwin/tests/input_inject_test.m", id: "a key that answers delivered reaches the first responder" }],
+    expected: "A key passes the application only while the application is active, so a key that answers delivered reaches the first responder.",
+    levels: ["unit"],
+  },
+  {
     id: "F595",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutHoldCall" }],
     tests: [
@@ -1138,6 +1147,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "spRegionShowsPoint" }],
     tests: [
       { file: "native/darwin/tests/surface_keyboard_test.m", id: "a press over the frame of a hidden region stays with the view that it reached" },
+      { file: "native/darwin/tests/press_release_test.m", id: "the release does not wait for the page of a hidden surface" },
     ],
     expected: "A region that does not show takes no press, so a press over the frame of a hidden region leaves the first responder with the view that it reached.",
     levels: ["unit"],

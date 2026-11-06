@@ -12,7 +12,8 @@
 //
 // WebKit updates hover from a move without a button only when the page is active (the window is the key window)
 // (WebFrame::handleMouseEvent). A move in a window that is not the key window is therefore rejected with
-// SP_INPUT_INACTIVE, and a caller that needs hover activates the window with sp_input_activate before sending the move.
+// SP_INPUT_INACTIVE only by an application that is really active; in an inactive application the move and a key enter the
+// virtual key window (input_virtual.h), whose input never passes -[NSApplication sendEvent:].
 #import <Cocoa/Cocoa.h>
 #import <Carbon/Carbon.h>
 #import <objc/runtime.h>
@@ -20,6 +21,7 @@
 #import "input_inject.h"
 #import "input_activity_wait.h"
 #import "input_press_context.h"
+#import "input_virtual.h"
 #import "observe.h"
 #import "surface_layout.h"
 #import "application_log.h"
@@ -139,7 +141,8 @@ static NSUInteger (*appKitPressedButtons)(id, SEL);
 // to a view does not change that value. It is replaced at the first delivered press, so an application that receives only
 // a person's input keeps the implementation of AppKit. It adds the buttons of open synthetic presses to the value of AppKit.
 static NSUInteger pressedButtonsWithSynthetic(id self, SEL selector) {
-    NSUInteger buttons = appKitPressedButtons(self, selector);
+    // A real button never enters a page event of a virtual key window.
+    NSUInteger buttons = sp_input_virtual_any() ? 0 : appKitPressedButtons(self, selector);
     if (atomic_load(&syntheticPresses[0]) > 0) buttons |= 1;
     if (atomic_load(&syntheticPresses[1]) > 0) buttons |= 2;
     return buttons;
@@ -157,6 +160,17 @@ static void showSyntheticButtons(void) {
 
 unsigned long sp_input_physical_buttons(void) {
     return appKitPressedButtons ? appKitPressedButtons(NSEvent.class, @selector(pressedMouseButtons)) : NSEvent.pressedMouseButtons;
+}
+
+unsigned long sp_input_person_buttons(void) {
+    return sp_input_virtual_any() ? 0 : sp_input_physical_buttons();
+}
+
+// Enters the virtual key window. WebKit reads the buttons of a page event from then on through the replacement.
+static bool enterVirtual(NSWindow *window) {
+    if (!sp_input_virtual_enter((__bridge void *)window)) return false;
+    showSyntheticButtons();
+    return true;
 }
 
 // One synthetic button that the page sees as pressed. The window holds it, so a window that goes away with an open press
@@ -306,7 +320,11 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     if (!window || !NSThread.isMainThread) { held->why = "no window or not the main thread"; return SP_INPUT_REJECTED; }
     NSPoint point = windowPoint(window, x, y);
     if (phase == 0) {
-        if (!window.isKeyWindow) { held->why = "the window is not the key window"; return SP_INPUT_INACTIVE; }
+        if (!window.isKeyWindow && !enterVirtual(window)) {
+            held->why = "the application is active and the window is not its key window";
+            return SP_INPUT_INACTIVE;
+        }
+        sp_input_virtual_set_point(handle, point.x, point.y);
         if (!moveTo(window, point)) { held->why = "no tracking area at the point"; return SP_INPUT_REJECTED; }
         return SP_INPUT_DELIVERED;
     }
@@ -349,7 +367,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
     // While AppKit reports a pressed button, WebKit can handle a press and a release as pointermove instead of pointerdown
     // or pointerup, so they are not delivered and the rejection is reported. This state alone does not identify the cause
     // of the button state, so the mask and the frontmost application are measured in the same rejected turn and reported together.
-    NSUInteger buttons = sp_input_physical_buttons();
+    NSUInteger buttons = sp_input_person_buttons();
     if ((phase == 1 || phase == 3) && buttons != 0) {
         held->buttons = buttons;
         held->front = [NSWorkspace.sharedWorkspace.frontmostApplication retain];
@@ -361,6 +379,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         return SP_INPUT_REJECTED;
     }
     BOOL right = button == 1;
+    sp_input_virtual_set_point(handle, point.x, point.y);
     switch (phase) {
         case 1:
             // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
@@ -368,7 +387,9 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             // A person moves to the point before the press. A window that is not the key window hears no move.
             if (window.isKeyWindow) moveTo(window, point);
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            BOOL throughApplication = window.isKeyWindow;
+            // AppKit reads its real state in -[NSApplication sendEvent:] and drops a first click, so a virtual key window takes
+            // the direct path.
+            BOOL throughApplication = window.isKeyWindow && !sp_input_virtual_is(handle);
             objc_setAssociatedObject(window, throughApplicationKey(button), throughApplication ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             // The monitor of the press origin records the press of the application as it records a person's press. A press
             // delivered directly passes no monitor, so the driver records it.
@@ -503,6 +524,8 @@ static WKWebView *webViewAt(NSWindow *window, double x, double y) {
 
 static void pointerThen(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double timeoutSeconds, sp_input_done done, void *context);
+static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll,
+    void (^done)(void), void (^waitCreated)(SPInputActivityWait *));
 
 void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double timeoutSeconds, sp_input_done done, void *context) {
@@ -519,6 +542,22 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
 static void pointerThen(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
+    if (phase == 0 && window && NSThread.isMainThread && !window.isKeyWindow && enterVirtual(window)) {
+        // WebKit drops a move until the page has heard that it is active, so the move waits for the state of the web views.
+        __block BOOL finished = NO;
+        afterWebViewsActive(window, nil, YES, ^{
+            if (finished) return;
+            finished = YES;
+            pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
+        }, nil);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (finished) return;
+            finished = YES;
+            logPointer(x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the web views did not hear the virtual key window within the limit");
+            done(context, SP_INPUT_UNRECEIVED, NULL);
+        });
+        return;
+    }
     NSView *pressed = window && NSThread.isMainThread ? pointerTarget(window, windowPoint(window, x, y), phase, button) : nil;
     while (pressed && ![pressed isKindOfClass:WKWebView.class]) pressed = pressed.superview;
     WKWebView *target = (WKWebView *)pressed;
@@ -712,6 +751,8 @@ static void report(sp_activate_done done, void *context, sp_activate_result resu
 
 static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll, double timeoutSeconds, sp_activate_done done, void *context) {
     if (!window || !NSThread.isMainThread) { report(done, context, SP_ACTIVATE_REJECTED); return; }
+    // A real activation replaces the virtual state before its order, which the virtual key window would refuse.
+    sp_input_virtual_end("activate");
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     __block bool finished = false;
     __block bool waiting = true;
@@ -862,12 +903,18 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
             isARepeat:NO keyCode:code];
     }
     if (!event) { *why = "the key event cannot be created"; return SP_INPUT_REJECTED; }
-    // A human key goes only to the key window. When another window is the key window, the key is not delivered to the target window and the rejection is reported.
+    // An inactive application has no key window for a key, and -[NSApplication sendEvent:] drops it while it answers delivered.
+    // The key enters the virtual key window and is sent to the window, which gives it to the first responder.
+    if (enterVirtual(window)) {
+        [window sendEvent:event];
+        return SP_INPUT_DELIVERED;
+    }
+    // A human key goes only to the key window. When another window is the key window, the key is not delivered to the target window and the
+    // result says so.
     NSWindow *keyWindow = NSApp.keyWindow;
     if (keyWindow && keyWindow != window) { *why = "another window is the key window"; return SP_INPUT_INACTIVE; }
     // When the target window is the key window, the key is dispatched with -[NSApplication sendEvent:] like a human key.
-    // AppKit also decides the menu key equivalents (Command+C, Command+V). An inactive application with no key window
-    // receives no human key, so the key is sent to the target window for checks that do not activate the window.
+    // AppKit also decides the menu key equivalents (Command+C, Command+V).
     if (keyWindow == window) [NSApp sendEvent:event];
     else [window sendEvent:event];
     return SP_INPUT_DELIVERED;

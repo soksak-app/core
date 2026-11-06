@@ -53,6 +53,8 @@
 - F502-23: `native`를 쓰는 `diagnostics.drag`는 창이 현재 layout을 표시한 뒤에 경계 점을 읽는다. 그래서 split 직후의 누름이 divider에 닿는다.
 - F502-13: `element.rect` 는 모든 host 에서 element 의 ARIA role 인 `role` 을 답하고, 묶거나 글자만 담는 element 에는 null 을 답한다. Red: mygo workbench 의 request test 가 role 을 답하지 않았다.
 - F502-13: mygo debug view 의 select 는 element 이름과 command 를 감싸는 group 이 아니라 trigger 에 둔다. audit 은 select 의 list box 와 option 을 select 의 일부로 본다. Red: TestALongSelectStaysInsideTheWindow 가 trigger, list box, option 201 개를 나열했다.
+- F584-1: 비활성 애플리케이션의 뒤에 있는 창이 virtual key window로서 `input.pointer`와 `input.key`의 hover, press, key를 받고, 시스템의 key window와 앞 애플리케이션은 그대로다. 이전에는 1006을 답하거나 delivered를 답하면서 key를 잃었다. `host.window`의 `key`와 `active`는 시스템 상태를 보고하고 새 상태는 `virtualKey`로 보고한다. 키보드를 쥔 채 닫히는 surface는 끝난다.
+- F598: 활성이 아닌 애플리케이션의 key는 창이 key window로 지목되어도 first responder에 닿는다. 전에는 `input.key`가 delivered로 답하면서 key가 버려졌다. Red: first responder가 key를 받지 못했다.
 - F595: 합성 입력은 layout을 기다리는 입력 뒤에서 순서를 지킨다.
 - F586: lease 방식 영역이 있는 창을 닫아도 Tauri host가 `image view released: project window is closed`를 기록하지 않는다. Red: 창이 닫힌 뒤의 해제가 그 실패를 보고했다.
 - F502-16: Wails host의 window는 요청한 크기를 갖고 web view는 content 크기를 가지므로, page의 마지막 row가 보이고 native view가 page 위 제자리에 선다. F592가 fork를 publish할 때까지 Wails module은 fork의 local checkout을 읽는다.

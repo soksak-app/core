@@ -4,6 +4,7 @@
 #import <objc/runtime.h>
 #import <CommonCrypto/CommonDigest.h>
 #import "window_facts.h"
+#import "input_virtual.h"
 #import "observe.h"
 #import "application_log.h"
 #import "event_ring.h"
@@ -116,6 +117,14 @@ static void collectSurfaces(NSWindow *window, NSView *view, NSMutableArray *foun
     for (NSView *child in view.subviews) collectSurfaces(window, child, found);
 }
 
+// The system pointer in screen coordinates, or the injected position of a virtual key window, which is the position of its pages.
+static NSDictionary *pointerFact(NSWindow *window) {
+    NSPoint at = NSEvent.mouseLocation;
+    double x = 0, y = 0;
+    if (sp_input_virtual_point((__bridge void *)window, &x, &y)) at = [window convertPointToScreen:NSMakePoint(x, y)];
+    return @{ @"x": @(at.x), @"y": @(primaryTop() - at.y) };
+}
+
 char *sp_window_facts(void *handle, void *surfaceView) {
     NSWindow *window = (NSWindow *)handle;
     if (!window || !window.contentView || ((NSView *)surfaceView).window != window) {
@@ -184,14 +193,15 @@ char *sp_window_facts(void *handle, void *surfaceView) {
     return copyJSON(@{
         @"responder": responder,
         @"frame": screenRect(window.frame),
-        @"pointer": @{ @"x": @(NSEvent.mouseLocation.x), @"y": @(primaryTop() - NSEvent.mouseLocation.y) },
+        @"pointer": pointerFact(window),
         @"content": @{ @"width": @(content.bounds.size.width), @"height": @(content.bounds.size.height) },
         @"scale": @(window.backingScaleFactor),
         // The refresh rate cannot be determined when the window is on no screen, so it is null.
         @"refreshRate": window.screen ? (id)@(window.screen.maximumFramesPerSecond) : (id)NSNull.null,
-        @"key": @(window.isKeyWindow),
+        @"key": @(sp_input_virtual_real_key(handle)),
+        @"virtualKey": @(sp_input_virtual_is(handle)),
         @"zoomed": @(window.isZoomed),
-        @"active": @(NSApp.isActive),
+        @"active": @(sp_input_virtual_real_active()),
         // WebKit delays drawing of a window that other windows fully cover, which is a condition
         // of the presentation measurement.
         @"occluded": @((BOOL)((window.occlusionState & NSWindowOcclusionStateVisible) == 0)),
@@ -316,7 +326,7 @@ char *sp_preferred_language(void) {
 }
 
 bool sp_application_active(void) {
-    return NSApp.isActive;
+    return sp_input_virtual_real_active();
 }
 
 char *sp_menu_items(void) {

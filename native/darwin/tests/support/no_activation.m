@@ -13,7 +13,8 @@ void sp_test_declare_activation(void) { declared = true; }
 
 // Changes the exit code to 1 if the process of a check that did not declare activation is active at exit.
 static void failWhenActive(void) {
-    if (declared || NSApp == nil || !NSApp.isActive) return;
+    // NSApp.isActive answers for a virtual key window (input_virtual.h); the running application reads the system.
+    if (declared || NSApp == nil || !NSRunningApplication.currentApplication.active) return;
     fprintf(stderr, "FAIL: the test process is active at exit; a make test check must not activate the application\n");
     _exit(1);
 }

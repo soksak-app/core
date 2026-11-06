@@ -14,6 +14,7 @@
 #include <math.h>
 #include <stdlib.h>
 #import "application_log.h"
+#import "input_virtual.h"
 #import "capture_frame_identity.h"
 #import "declared_color_space.h"
 #import "event_ring.h"
@@ -1049,7 +1050,7 @@ static void spEnsurePressOriginMonitor(void) {
 - (void)passToInputMethod:(NSEvent *)event {
     NSUInteger before = self.reports;
     [self interpretKeyEvents:@[event]];
-    if (self.reports == before && !(NSApp.isActive && self.window.isKeyWindow)) {
+    if (self.reports == before && !(sp_input_virtual_real_active() && sp_input_virtual_real_key((__bridge void *)self.window))) {
         NSString *reason = [NSString stringWithFormat:
             @"input method did not answer native keyCode=%hu outside the key window of the active application",
             event.keyCode];
@@ -1915,8 +1916,7 @@ void sp_region_close(void *handle) {
     BOOL opened = [view enterInput];
     @try {
         [view commitPending];
-        NSWindow *window = view.window;
-        if (window.firstResponder == view) [window makeFirstResponder:window.contentView];
+        sp_view_give_up_keyboard(view);
         [view.inputContext discardMarkedText];
         view.givenInputContext = nil;
         view.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:@""] autorelease];

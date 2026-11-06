@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import "webview_input.h"
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "application_log.h"
 #import "event_ring.h"
 #import "observe.h"
@@ -19,7 +20,7 @@ static NSMapTable<NSWindow *, WKWebView *> *pointerHolders;
 // The move that turns tracking on may not reach the tracking owner of WebKit.
 // Delivering the first move of the new target lets the page compute the cursor at the current position.
 static void refreshPointerCursor(WKWebView *view, NSEvent *event) {
-    if (sp_input_physical_buttons() != 0) return;
+    if (sp_input_person_buttons() != 0) return;
     [view updateTrackingAreas];
     for (NSTrackingArea *area in view.trackingAreas) {
         if ((area.options & NSTrackingMouseMoved) && [area.owner respondsToSelector:@selector(mouseMoved:)]) {
@@ -220,7 +221,7 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
     NSResponder *first = window.firstResponder;
     BOOL targetOwnsResponder = first == view ||
         ([first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:view]);
-    if (window && !window.isKeyWindow && !targetOwnsResponder) [window makeFirstResponder:view];
+    if (window && (!window.isKeyWindow || sp_input_virtual_is((__bridge void *)window)) && !targetOwnsResponder) [window makeFirstResponder:view];
     // When a timeout or an unregistration ended the wait before the drain, completion is already
     // reported, so nothing is sent.
     void (^sendAfterDrain)(void) = ^{
@@ -272,7 +273,7 @@ static NSEvent *routePointer(NSEvent *event) {
     for (WKWebView *view in inputViews) {
         if (view.window == window) [view _setIgnoresMouseMoveEvents:view != target];
     }
-    if (sp_input_physical_buttons() != 0) {
+    if (sp_input_person_buttons() != 0) {
         [lastPointerTargets removeObjectForKey:window];
     } else if (target != previous) {
         if (target) [lastPointerTargets setObject:(WKWebView *)target forKey:window];

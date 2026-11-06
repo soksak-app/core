@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "input_virtual.h"
 #import "input_activity_wait.h"
 #import "support/records.h"
 #import "event_ring.h"
@@ -641,7 +642,38 @@ static void checkButtonsByWindow(void) {
         @"the last release leaves no button");
 }
 
+// A key of an application that is not really active passes no -[NSApplication sendEvent:], which drops it and leaves no trace, also
+// when the application names the window as its key window.
+@interface SPKeyView : NSView
+@property(nonatomic) NSUInteger keys;
+@end
+@implementation SPKeyView
+- (BOOL)acceptsFirstResponder { return YES; }
+- (void)keyDown:(NSEvent *)event { self.keys++; }
+@end
+static NSWindow *namedKeyWindow;
+static NSWindow *(*appKitKeyWindow)(id, SEL);
+static NSWindow *keyWindowWithNamed(id self, SEL selector) { return namedKeyWindow ?: appKitKeyWindow(self, selector); }
+static void checkKeyOfInactiveApplicationArrives(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(240, 120))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    SPKeyView *view = [[[SPKeyView alloc] initWithFrame:NSMakeRect(0, 0, 240, 120)] autorelease];
+    window.contentView = view;
+    [window orderBack:nil];
+    [window makeFirstResponder:view];
+    namedKeyWindow = window;
+    check(sp_input_key(window, "a", "a", 0, true) == SP_INPUT_DELIVERED, @"a key of a named key window of an inactive application answers delivered");
+    check(view.keys == 1, [NSString stringWithFormat:@"a key that answers delivered reaches the first responder (%lu)", (unsigned long)view.keys]);
+    sp_input_key(window, "a", "a", 0, false);
+    namedKeyWindow = nil;
+    [window close];
+    [window release];
+}
+
 int main(void) { @autoreleasepool {
+    appKitKeyWindow = (NSWindow *(*)(id, SEL))method_setImplementation(
+        class_getInstanceMethod(NSApplication.class, @selector(keyWindow)), (IMP)keyWindowWithNamed);
     IMP appKitButtons = pressedButtonsImplementation();
     check(sp_input_pointer(NULL, 0, 0, 1, 0, 0, 0) == SP_INPUT_REJECTED && pressedButtonsImplementation() == appKitButtons,
         @"a press that is not delivered leaves the buttons to AppKit");
@@ -653,6 +685,7 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    checkKeyOfInactiveApplicationArrives();
     checkActivityWaitAggregation();
     checkActivityWaitDelayedRegistration();
     checkActivityWaitRegistrationTimeout();
@@ -682,9 +715,6 @@ int main(void) { @autoreleasepool {
     [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
     until(^BOOL { return painted; });
 
-    check(sp_input_pointer(window, 150, 100, 0, 0, 0, 0) == SP_INPUT_INACTIVE, @"a move without a button is reported as inactive in a window that is not key");
-    drain(view);
-    check([evaluate(view, @"probe.events.filter(e=>e.type==='pointermove').length") intValue] == 0, @"a rejected move sends nothing to the page");
     evaluate(view, @"probe.events.length=0; null");
     pointerOutside(window);
     check(sp_input_pointer(window, 150, 100, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"press delivered");
@@ -801,7 +831,7 @@ int main(void) { @autoreleasepool {
     check([evaluate(view, @"document.getElementById('field').value") isEqual:@"a"], @"the previous webview keeps its text");
     [child release];
 
-    check(!NSApp.isActive, @"application stays inactive");
+    check(!sp_input_virtual_real_active(), @"application stays inactive");
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid(), @"this process did not become the frontmost application");
     [window close];
     checkIndependentWindowKeys();
