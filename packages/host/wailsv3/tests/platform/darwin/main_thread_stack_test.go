@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -72,6 +71,26 @@ func onMain(system platform.Platform, work func() error) error {
 		return err
 	}
 	return <-result
+}
+
+// stallCheck runs the stall check of the test support package with the stall watch of the host and the heartbeat of the platform.
+// The support package cannot import the Go language host library, whose tests import it, so the watch is passed in.
+func stallCheck(t *testing.T, system platform.Platform, sendInWait bool) (sampler.StallCheck, error) {
+	return sampler.CheckStallWatch(sampler.StallCheckOptions{
+		Start: func(heartbeat func() (time.Duration, time.Duration), emit func(string)) func() {
+			return host.StartStallWatch(host.StallWatchOptions{
+				Heartbeat:  heartbeat,
+				AwaitAwake: system.StallAwaitAwake,
+				Sample:     func(string) error { return nil },
+				Folder:     t.TempDir(),
+				EmitHost:   func(_ host.Level, name string, _ map[string]any) { emit(name) },
+			})
+		},
+		Heartbeat:  host.StallHeartbeat(system),
+		Step:       func(duration time.Duration) error { return onMain(system, func() error { spin(duration); return nil }) },
+		Log:        t.Logf,
+		SendInWait: sendInWait,
+	})
 }
 
 // The main thread runs no code on a stack other than its own while the host runs its main-thread steps
@@ -141,115 +160,15 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 			}
 			return nil
 		}},
+		// The stall watch of the host over the main run loop (docs/spec/host-contract.md,
+		// host.stall.waiting-run-loop-takes-no-heartbeat): its heartbeats are answered on the main thread, and through a wait it
+		// sends nothing.
 		{"stall heartbeat", func() error {
-			var emittedLock sync.Mutex
-			var emitted []string
-			names := func() string {
-				emittedLock.Lock()
-				defer emittedLock.Unlock()
-				return strings.Join(emitted, ",")
-			}
-			// Each heartbeat of the watch, in its order: the time of the call, its lateness, which is 0 for a heartbeat that read a
-			// wait of the run loop, and the clock time at which it returned. A failure lists the heartbeats that it judged.
-			type beat struct {
-				now, late time.Duration
-				at        time.Time
-			}
-			var beatsLock sync.Mutex
-			var beats []beat
-			// waited receives the index of the first heartbeat that reads a wait of the run loop once the test armed it with
-			// waitArmed; both are held by beatsLock.
-			waited := make(chan int, 1)
-			waitArmed := false
-			heartbeat := host.StallHeartbeat(system)
-			resumed := make(chan struct{}, 1)
-			stop := host.StartStallWatch(host.StallWatchOptions{
-				Heartbeat: func() (time.Duration, time.Duration) {
-					now, answered := heartbeat()
-					beatsLock.Lock()
-					defer beatsLock.Unlock()
-					beats = append(beats, beat{now, now - answered, time.Now()})
-					if now == answered && waitArmed {
-						waitArmed = false
-						waited <- len(beats) - 1
-					}
-					return now, answered
-				},
-				AwaitAwake: system.StallAwaitAwake,
-				Sample:     func(string) error { return nil },
-				Folder:     t.TempDir(),
-				EmitHost: func(_ host.Level, name string, _ map[string]any) {
-					emittedLock.Lock()
-					defer emittedLock.Unlock()
-					emitted = append(emitted, name)
-					if name == "host.stall.resumed" {
-						select {
-						case resumed <- struct{}{}:
-						default:
-						}
-					}
-				},
-			})
-			defer stop()
-			// beatsFrom returns the heartbeats from the index on.
-			beatsFrom := func(index int) []beat {
-				beatsLock.Lock()
-				defer beatsLock.Unlock()
-				return append([]beat(nil), beats[index:]...)
-			}
-			// A step that does not end in time for the next beat wakes the watch, and the heartbeats go on while it runs. A short
-			// step does not stall.
-			if err := onMain(system, func() error { spin(600 * time.Millisecond); return nil }); err != nil {
+			check, err := stallCheck(t, system, false)
+			if err != nil {
 				return err
 			}
-			stepEnd := time.Now()
-			if len(beatsFrom(0)) == 0 {
-				return fmt.Errorf("no heartbeat in a step of 600 ms on the main thread")
-			}
-			if got := names(); got != "" {
-				return fmt.Errorf("the stall watch stored %s for a step of 600 ms", got)
-			}
-			// The run loop then waits. The watch reads the wait with its next heartbeat and from then on sends nothing: no heartbeat
-			// follows the one that read the wait for a second. The last heartbeat may already have read it.
-			beatsLock.Lock()
-			if last := beats[len(beats)-1]; last.late == 0 {
-				waited <- len(beats) - 1
-			} else {
-				waitArmed = true
-			}
-			beatsLock.Unlock()
-			var settled int
-			select {
-			case settled = <-waited:
-			case <-time.After(10 * time.Second):
-				return fmt.Errorf("no heartbeat read a wait of the run loop within 10 s of the step; heartbeats %v", beatsFrom(0))
-			}
-			// The heartbeats from the end of the step to the one that read the wait, each with its clock time after the end and its
-			// lateness, show how long the run loop took to wait after the step.
-			var settling []string
-			for _, b := range beatsFrom(0)[:settled+1] {
-				if b.at.After(stepEnd) {
-					settling = append(settling, fmt.Sprintf("+%v late %v", b.at.Sub(stepEnd).Round(time.Millisecond), b.late))
-				}
-			}
-			t.Logf("stall heartbeat: after the step, %s", strings.Join(settling, ", "))
-			time.Sleep(time.Second)
-			if later := beatsFrom(settled + 1); len(later) != 0 {
-				return fmt.Errorf("%d heartbeats in a second of a run loop that waits, after the heartbeat %v that read the wait: %v",
-					len(later), beatsFrom(settled)[0], later)
-			}
-			// A step that holds the main thread is a stall, and its end is recorded.
-			if err := onMain(system, func() error { spin(1600 * time.Millisecond); return nil }); err != nil {
-				return err
-			}
-			select {
-			case <-resumed:
-			case <-time.After(5 * time.Second):
-			}
-			if got := names(); got != "host.stall,host.stall.sampled,host.stall.resumed" {
-				return fmt.Errorf("the stall watch stored %q for a step of 1.6 s", got)
-			}
-			return nil
+			return check.Err()
 		}},
 		// The kernel delivers a signal that is sent to the process to a thread that does not block it, the main thread among
 		// them, and the Go signal handler runs on the signal stack of its thread, which the Go heap holds. The main thread
@@ -271,11 +190,15 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 		t.Fatal(err)
 	}
 	var driveErrors []string
+	// The time of each entry tells where a slow run spent its time.
+	durations := make([]time.Duration, len(entries))
 	for phase, entry := range entries {
 		sampler.SetPhase(phase)
+		start := time.Now()
 		if err := entry.drive(); err != nil {
 			driveErrors = append(driveErrors, fmt.Sprintf("%s: %v", entry.name, err))
 		}
+		durations[phase] = time.Since(start)
 	}
 	sampler.SetPhase(-1)
 	counts, err := sampler.StopSampler()
@@ -293,7 +216,7 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 		if count.Samples == 0 {
 			t.Fatalf("%s: the sampler took no sample", entry.name)
 		}
-		line := fmt.Sprintf("%s: %d of %d samples outside", entry.name, count.Outside, count.Samples)
+		line := fmt.Sprintf("%s: %d of %d samples outside in %v", entry.name, count.Outside, count.Samples, durations[phase].Round(time.Millisecond))
 		if count.Outside > 0 {
 			outside = true
 			line += fmt.Sprintf(" (first stack pointer %#x)", count.FirstOutside)
@@ -304,4 +227,25 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 		t.Fatalf("the main thread ran outside its stack [%#x, %#x]: %s", low, high, strings.Join(report, "; "))
 	}
 	t.Logf("stack [%#x, %#x]: %s", low, high, strings.Join(report, "; "))
+}
+
+// A watch that sends a heartbeat into a wait of the main run loop fails the stall check through the count of its sends into a wait
+// and through the wake that its send causes, while the judgment of the waits that the heartbeats read alone does not see it: the
+// run loop wakes from the send and waits again, so the next heartbeat reads a later wait.
+func TestAHeartbeatSentIntoAWaitFailsTheStallCheck(t *testing.T) {
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	check, err := stallCheck(t, system, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if check.SentInWait == nil {
+		t.Error("the stall check counts no send into a wait of a watch that sent one")
+	}
+	if check.WokeByWatch == nil {
+		t.Error("the stall check finds no wake that ended a wait into which the watch sent")
+	}
+	t.Logf("the judgment of the waits that the heartbeats read: %v", check.SameWait)
 }

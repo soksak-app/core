@@ -54,6 +54,8 @@ int main(void) { @autoreleasepool {
 
     // The run loop waits, and a thread sends a heartbeat every 50 ms from the start of the wait. The stop of the run is its one wake.
     uint64_t wakesBefore = sp_observe_count("stall_watch.wakes");
+    uint64_t sentBefore = 0, sentInWaitBefore = 0, answeredBefore = 0;
+    sp_stall_counts(&sentBefore, &sentInWaitBefore, &answeredBefore);
     __block _Atomic int equalTimes = 0;
     atomic_store(&waitArmed, 1);
     onWorker(^{
@@ -70,6 +72,11 @@ int main(void) { @autoreleasepool {
     uint64_t wakes = sp_observe_count("stall_watch.wakes") - wakesBefore;
     check(wakes <= 1, [NSString stringWithFormat:@"16 heartbeats wake a waiting run loop %llu times, at most the end of the run", (unsigned long long)wakes]);
     check(atomic_load(&equalTimes) == 16, [NSString stringWithFormat:@"%d of 16 heartbeats read no lateness in a wait", atomic_load(&equalTimes)]);
+    uint64_t sentAfter = 0, sentInWaitAfter = 0, answeredAfter = 0;
+    sp_stall_counts(&sentAfter, &sentInWaitAfter, &answeredAfter);
+    check(sentAfter == sentBefore && sentInWaitAfter == sentInWaitBefore,
+        [NSString stringWithFormat:@"16 heartbeats in a wait send nothing, got %llu sent and %llu sent into a wait",
+            (unsigned long long)(sentAfter - sentBefore), (unsigned long long)(sentInWaitAfter - sentInWaitBefore)]);
 
     // A watch blocks for as long as the run loop waits, and it returns while the run loop handles an event, which holds until it
     // does. The wait lasts 1.2 s from the call of the watch; after it the wake is the reference, so a heartbeat is not late.
@@ -161,6 +168,33 @@ int main(void) { @autoreleasepool {
     check(atomic_load(&commitHeldUntilBeat) == 0, @"the commit is held until the heartbeat during the hold");
     check(milliseconds(commitNow - commitAnswered) >= 1000,
         [NSString stringWithFormat:@"a heartbeat during a held commit before the wait is %.1f ms late", milliseconds(commitNow - commitAnswered)]);
+
+    // The fault injection of a watch that does not block through a wait: its send into the wait is counted, and its block wakes
+    // the run loop and runs.
+    uint64_t faultWakesBefore = sp_observe_count("stall_watch.wakes");
+    uint64_t faultSentBefore = 0, faultSentInWaitBefore = 0, faultAnsweredBefore = 0;
+    sp_stall_counts(&faultSentBefore, &faultSentInWaitBefore, &faultAnsweredBefore);
+    atomic_store(&waitArmed, 1);
+    onWorker(^{
+        awaitSignal(waitStarted);
+        // Armed while the run loop waits, the signal comes from the first wait after the wake that the injected send causes, and
+        // the run ends there.
+        atomic_store(&waitArmed, 1);
+        sp_stall_set_send_in_next_wait_for_test(true);
+        sp_stall_await_awake();
+        awaitSignal(waitStarted);
+        stopMain();
+    });
+    check(runUntilStopped(), @"the injected send ends with the stop of the run");
+    uint64_t faultSentAfter = 0, faultSentInWait = 0, faultAnswered = 0;
+    sp_stall_counts(&faultSentAfter, &faultSentInWait, &faultAnswered);
+    check(faultSentInWait - faultSentInWaitBefore == 1 && faultSentAfter - faultSentBefore == 1,
+        [NSString stringWithFormat:@"the injected send into a wait is counted once, got %llu sent and %llu sent into a wait",
+            (unsigned long long)(faultSentAfter - faultSentBefore), (unsigned long long)(faultSentInWait - faultSentInWaitBefore)]);
+    check(faultAnswered - faultAnsweredBefore == 1 && sp_observe_count("stall_watch.wakes") > faultWakesBefore,
+        [NSString stringWithFormat:@"the injected send wakes the run loop and its block runs, got %llu blocks and %llu wakes",
+            (unsigned long long)(faultAnswered - faultAnsweredBefore),
+            (unsigned long long)(sp_observe_count("stall_watch.wakes") - faultWakesBefore)]);
 
     CFRunLoopRemoveTimer(CFRunLoopGetMain(), far, kCFRunLoopCommonModes);
     CFRelease(far);

@@ -12,6 +12,13 @@ static atomic_bool runLoopWaits;
 // The threads that wait for a wake of the run loop. Each one is signaled once.
 static _Atomic uint32_t blockedThreads;
 static dispatch_semaphore_t runLoopWoke;
+// The counts of sp_stall_counts: the heartbeats that sent their block to the main thread, the sends whose wake reached a run loop
+// that waited, and the blocks of heartbeats that ran.
+static _Atomic uint64_t heartbeatsSent;
+static _Atomic uint64_t heartbeatsSentInWait;
+static _Atomic uint64_t heartbeatsAnswered;
+// Set by sp_stall_set_send_in_next_wait_for_test until the next sp_stall_await_awake that finds the run loop waiting.
+static atomic_bool sendInNextWait;
 
 static void wakeBlockedThreads(void) {
     for (uint32_t count = atomic_exchange(&blockedThreads, 0); count > 0; count--) dispatch_semaphore_signal(runLoopWoke);
@@ -36,6 +43,19 @@ static void observeRunLoop(void) {
     });
 }
 
+// Sends the block of a heartbeat to the main run loop and wakes it. The state of the run loop is read again right before the wake,
+// so a wake that reaches a wait is counted.
+static void sendHeartbeat(void) {
+    CFRunLoopRef loop = CFRunLoopGetMain();
+    CFRunLoopPerformBlock(loop, kCFRunLoopCommonModes, ^{
+        atomic_store(&lastAnswer, sp_mono_ns());
+        atomic_fetch_add(&heartbeatsAnswered, 1);
+    });
+    atomic_fetch_add(&heartbeatsSent, 1);
+    if (atomic_load(&runLoopWaits)) atomic_fetch_add(&heartbeatsSentInWait, 1);
+    CFRunLoopWakeUp(loop);
+}
+
 void sp_stall_heartbeat(uint64_t *now, uint64_t *answered) {
     observeRunLoop();
     uint64_t sent = sp_mono_ns();
@@ -47,15 +67,17 @@ void sp_stall_heartbeat(uint64_t *now, uint64_t *answered) {
         *answered = waitStarted;
         return;
     }
-    CFRunLoopRef loop = CFRunLoopGetMain();
-    CFRunLoopPerformBlock(loop, kCFRunLoopCommonModes, ^{ atomic_store(&lastAnswer, sp_mono_ns()); });
-    CFRunLoopWakeUp(loop);
+    sendHeartbeat();
     *now = sent;
     *answered = atomic_load(&lastAnswer);
 }
 
 void sp_stall_await_awake(void) {
     observeRunLoop();
+    if (atomic_load(&runLoopWaits) && atomic_exchange(&sendInNextWait, false)) {
+        sendHeartbeat();
+        return;
+    }
     while (atomic_load(&runLoopWaits)) {
         atomic_fetch_add(&blockedThreads, 1);
         // A wake between the check above and the addition did not count this thread, so it signals for itself.
@@ -63,3 +85,11 @@ void sp_stall_await_awake(void) {
         dispatch_semaphore_wait(runLoopWoke, DISPATCH_TIME_FOREVER);
     }
 }
+
+void sp_stall_counts(uint64_t *sent, uint64_t *sent_in_wait, uint64_t *answered) {
+    *sent = atomic_load(&heartbeatsSent);
+    *sent_in_wait = atomic_load(&heartbeatsSentInWait);
+    *answered = atomic_load(&heartbeatsAnswered);
+}
+
+void sp_stall_set_send_in_next_wait_for_test(bool send) { atomic_store(&sendInNextWait, send); }
