@@ -290,7 +290,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   await s.presented();
   const measurement = await withDragTraceMode(s, () =>
-    withViewContentTrace(t, s, descriptor, surface, async () => drag(t, s, plan, { capture: true })));
+    withViewContentTrace(t, s, descriptor, surface, async () => drag(s, plan, { capture: true })));
   const traced = measurement.result;
   const run = traced.action;
   mkdirSync(join(configDir, "logs"), { recursive: true });
@@ -468,7 +468,7 @@ async function prepareViewDrag(t, s, surface, configDir, prepare) {
 
 /** Runs the captured drag that prepareViewDrag prepared and returns its evidence. */
 async function captureViewDrag(t, s, configDir, { marks, cornerRadiusPt, slotInsetsPt, targetRect }) {
-  const run = await drag(t, s, TERMINAL_DRAG_PLAN, { capture: true });
+  const run = await drag(s, TERMINAL_DRAG_PLAN, { capture: true });
   mkdirSync(join(configDir, "logs"), { recursive: true });
   const directory = mkdtempSync(join(configDir, "logs", "view-drag-benchmark-"));
   writeTerminalDragLayouts(directory, run.layouts);

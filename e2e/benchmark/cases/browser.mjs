@@ -187,7 +187,7 @@ async function dragObservation(t, s, descriptor, surface, card, slotInsetsPt, co
   const plan = rightEdgeWidthDragPlan(beforeGrid, pane);
   await s.presented();
   const { result: traced, phaseMode } = await withDragTraceMode(s, () => withViewContentTrace(t, s, descriptor, surface, async () =>
-    drag(t, s, plan, { capture: true })));
+    drag(s, plan, { capture: true })));
   const run = traced.action;
   const files = frames(run.frames);
   assert.equal(files.length, run.count, "browser drag recording omitted finalized frame files");

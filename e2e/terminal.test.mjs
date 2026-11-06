@@ -557,7 +557,7 @@ for (const app of Object.values(APPS)) {
         "the terminal did not return to its width", { surface: opened.surface });
       await consistent(cols, `after widening to ${cols} columns`, prompt);
       // Dragging the boundary changes the size repeatedly, also while the shell redraws.
-      await drag(t, s, { axis: "x", line: card.c0, dx: Math.round(card.w / 2), dy: 0, ms: 96, times: 1 });
+      await drag(s, { axis: "x", line: card.c0, dx: Math.round(card.w / 2), dy: 0, ms: 96, times: 1 });
       await s.until("terminal.session", (session) => session.cols === cols,
         "the terminal did not return to its width after the drag", { surface: opened.surface });
       await consistent(cols, `after a divider drag`, prompt);
@@ -927,7 +927,7 @@ for (const app of Object.values(APPS)) {
       await s.flushLog();
       const baselineRows = traceRows(readEvents(s.app.configDir, placementRowsFrom).events);
       const offsets = currentEventOffsets(s.app.configDir);
-      const result = await drag(t, s, {
+      const result = await drag(s, {
         axis: "x", line: cards[0].c1, dx: 500, dy: 0, ms: 96, times: roundTripsPerSet,
       }, { capture: true });
       const describe = (joins) => joins.map((entry) =>
@@ -2016,7 +2016,7 @@ for (const app of Object.values(APPS)) {
     const terminalCard = beforeGrid.cards.filter((card) => terminals.some((surface) => card.active === surface.surface))
       .sort((a, b) => a.x - b.x)[0];
     assert.ok(terminalCard, "terminal card is missing");
-    const result = await drag(t, s, { axis: "x", line: terminalCard.c1, dx: 500, dy: 0, ms: 96, times: 1 }, { capture: true });
+    const result = await drag(s, { axis: "x", line: terminalCard.c1, dx: 500, dy: 0, ms: 96, times: 1 }, { capture: true });
     // A recording holds only changed frames, so the frame count follows the refresh rate of the display. Requires at least 7/8 of the frames that the display can draw during the drag time.
     // At 120Hz a drag of 192ms gives 21 frames, the same as the earlier criterion.
     const { refreshRate } = await s.get("host.window");

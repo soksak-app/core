@@ -79,7 +79,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: stopping a window recording leaves the native buttons centred`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await drag(t, s, PLAN, { capture: true });
+    await drag(s, PLAN, { capture: true });
     // When the window title or the recording indicator changes, AppKit takes the buttons back, and the library puts them again before the next run loop
     // turn. A request that is processed in the same turn can read the position in between, so the next
     // position after the display is measured.

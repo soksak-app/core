@@ -32,7 +32,7 @@ const plan = { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 };
 
 test("a drag of a covered window draws its regions during the gesture and ends the drawing after it", { timeout: 5000 }, async (t) => {
   const calls = [];
-  const refusal = await drag(t, session({ active: false, occluded: true }, calls), plan).then(() => null, (error) => error.message);
+  const refusal = await drag(session({ active: false, occluded: true }, calls), plan).then(() => null, (error) => error.message);
   assert.equal(refusal, null, "the drag of a covered window was refused");
   assert.deepEqual(calls.map(({ method, params }) => method === "diagnostics.drag" ? method : `${method} ${params.draw}`),
     ["diagnostics.window.draw-covered true", "diagnostics.drag", "diagnostics.window.draw-covered false"]);
@@ -49,13 +49,13 @@ test("a drag that fails still ends the drawing of the covered window", { timeout
     }
     return request(method, params);
   };
-  const failure = await drag(t, s, plan).then(() => null, (error) => error.message);
+  const failure = await drag(s, plan).then(() => null, (error) => error.message);
   assert.equal(failure, "drag failed", "the drag of a covered window failed for another reason than the drag");
   assert.deepEqual(calls.at(-1), { method: "diagnostics.window.draw-covered", params: { draw: false } });
 });
 
 test("a drag of an active window is refused before anything is requested", { timeout: 5000 }, async (t) => {
   const calls = [];
-  await assert.rejects(drag(t, session({ active: true, occluded: false, pointer: {}, frame: {} }, calls), plan), /host\.window\.active is true/);
+  await assert.rejects(drag(session({ active: true, occluded: false, pointer: {}, frame: {} }, calls), plan), /host\.window\.active is true/);
   assert.deepEqual(calls, []);
 });

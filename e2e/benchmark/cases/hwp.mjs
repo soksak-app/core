@@ -471,7 +471,7 @@ async function dragObservation(t, s, descriptor, surface, card, theme, cornerRad
   const { result: traced, phaseMode } = await withDragTraceMode(s, () => withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
     return withHwpNativeMarker(s, surface, async () => {
-      const run = await drag(t, s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true });
+      const run = await drag(s, { axis: "x", line: 1, dx: 80, dy: 0, ms: 500, times: 1 }, { capture: true });
       const studioViewport = await readHwpPaintViewport(s, surface);
       return { run, studioViewport };
     });

@@ -45,7 +45,7 @@ for (const app of Object.values(APPS)) {
           },
           readProcesses: () => dragProcesses({ run: execute, rows: async () => windowApplicationRows({
             configDir: app.configDir, statuses: [{ ...(await s.get("host.window")), window: s.window }] }) }),
-          nativeDrag: () => drag(t, s, NATIVE_DRAG_PLAN),
+          nativeDrag: () => drag(s, NATIVE_DRAG_PLAN),
           firstDragRead: async (figures) => {
             t.diagnostic(`${app.name} first drag: ${JSON.stringify(figures)}`);
             if (run.state === "0") Object.assign(run.measurements, viewDragB3Values("0", { firstDrag: figures }));
@@ -64,7 +64,7 @@ for (const app of Object.values(APPS)) {
           untilFramesQuiet: () => untilFramesQuiet({ frames: async () => [(await s.get("host.window")).frames] }),
           frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, app.configDir),
           gcLoop: (on) => s.request("diagnostics.gc.loop", { on }),
-          uncapturedDrag: () => drag(t, s, TERMINAL_DRAG_PLAN),
+          uncapturedDrag: () => drag(s, TERMINAL_DRAG_PLAN),
           record: async (gesture) => {
             if (pageProcess === null) return recordGesture(s, gesture);
             await gesture();

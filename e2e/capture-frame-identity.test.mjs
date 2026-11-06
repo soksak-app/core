@@ -166,7 +166,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: diagnostic drag retains opt-in frame identity artifacts`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { settings: { memorySaver: false, "terminal.cursor.blink": "Never" } });
-    const result = await drag(t, s,
+    const result = await drag(s,
       { axis: "x", line: 1, dx: 40, dy: 0, ms: 200, times: 1 },
       { capture: true, frameIdentity: true });
     assert.equal(result.frameIdentity?.status, "complete", "drag did not finalize requested frame identity");

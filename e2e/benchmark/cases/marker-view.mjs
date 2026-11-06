@@ -178,7 +178,7 @@ export async function markerLayoutObservation(t, s, descriptor, surface, card, {
 export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {
   await s.presented();
   const { result: traced, phaseMode } = await withDragTraceMode(s, () =>
-    withViewContentTrace(t, s, descriptor, surface, async () => drag(t, s, plan, { capture: true })));
+    withViewContentTrace(t, s, descriptor, surface, async () => drag(s, plan, { capture: true })));
   const dragPalette = paletteWithMarkerColor(palette, traced.start?.markerColor, owner);
   const run = traced.action;
   const files = frames(run.frames);
