@@ -172,9 +172,9 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 | command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
 | command | `core.surface.clock` | `{}`. `{page, timeOrigin, now}`을 반환한다: view start가 설치한 문서의 page identity와, 문서의 time origin과 `performance.now()`(밀리초)이며, check가 두 native clock 읽기 사이에서 읽어 문서 시각을 native clock에 대응시킨다. WebKit은 읽을 때마다 wall clock에서 time origin을 구해 밀리초 단위로 줄이므로, 문서를 밝히는 것은 time origin이 아니라 page identity다 |
 
-마운트된 모듈은 애플리케이션 문서에서 자기 요청 콜백을 소유한다. 해제는 같은 논리 표면 식별자로 다시 마운트하기 전에 콜백과 등록을 제거한다. 반복 해제는 그 식별자의 이후 소유자에게 영향을 주지 않는다. 해제 후 요청은 해제된 모듈에 전달되지 않는다.
+mount된 view는 애플리케이션 문서에서 자기 exposure를 소유한다: `runtime.command.register`로 등록한 명령의 요청 콜백과, main page가 그 view 대신 전달한 status·element·command 등록이다. view의 dispose는 같은 논리 표면 식별자로 다시 mount하기 전에 그 콜백과 등록을 제거한다. view가 명령을 등록하지 않았을 때와 view process가 아직 살아 있을 때도 그렇다. 호스트는 place가 그 표면을 뺄 때, 표면이 다른 문서를 읽을 때, main page가 다시 읽힐 때 표면의 close를 알리고, 제거된 project의 탭 해제처럼 place가 앞서지 않은 dispose는 그중 어느 것도 일으키지 않는다. 따라서 닫히거나 unload된 탭은 항목 이름으로 선택되지 않고, `exposure.list`는 그 등록을 세지 않는다. 반복 dispose는 그 식별자의 이후 소유자에게 영향을 주지 않는다. dispose 후 요청은 dispose된 view에 전달되지 않는다.
 
-네이티브 표면을 사용하는 모듈의 코어·플러그인 항목은 그 표면의 네이티브 승인이 완료된 뒤 등록한다. 승인 대기 중 받은 종료 알림이 이후 마운트의 코어 항목만 제거할 수 없어야 한다.
+view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그인 항목을 등록한다. 호스트는 승인된 표면이 composition을 선언할 때 view를 만들기 때문이다. 승인 대기 중 받은 종료 알림이 이후 마운트의 코어 항목만 제거할 수 없어야 한다.
 
 ### 모달 문서
 

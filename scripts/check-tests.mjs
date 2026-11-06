@@ -423,6 +423,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F661",
+    implementation: [{ file: "packages/workbench/host.js", symbol: "export function surfaceContextRuntime" }, { file: "packages/workbench/surface-modules.js", symbol: "export async function disposeSurface" }],
+    tests: [
+      { file: "packages/workbench/test/surface-runtime.test.mjs", id: "disposing the exposure of a view removes the registrations it relayed, and a second disposal keeps its new owner" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "the dispose of a view removes its registrations before the same surface is mounted again" },
+    ],
+    expected: "The dispose of a view removes its exposure registrations once before the same surface mounts again, also without a registered command and while its view process runs, and a repeated dispose keeps the registrations of the next mount.",
+    levels: ["unit"],
+  },
+  {
     id: "F660",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }, { file: "packages/workbench/host.js", symbol: "export function onSurfacePrepared(listener) {" }],
     tests: [

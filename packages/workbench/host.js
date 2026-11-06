@@ -272,6 +272,10 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     };
   };
   let removeExposurePort = null;
+  // A view relays its status and element registrations to the registry without a request callback of this port, so the end of the
+  // port removes the registrations of the surface whether or not a callback was added. It removes them once: a later mount of the
+  // same surface owns the registrations made after it (docs/spec/exposure.md).
+  let unregistered = false;
   const port = {
     register: (kind, name) => registry.registered({ surface: surfaceId, kind, name }),
     // A surface module in this document gives each value of a watched status to the registry (docs/spec/exposure.md#relay).
@@ -286,8 +290,9 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     },
     report: (message) => reportRecord("error", message),
     unregister: () => {
-      if (removeExposurePort === null) return;
-      removeExposurePort();
+      if (unregistered) return;
+      unregistered = true;
+      removeExposurePort?.();
       removeExposurePort = null;
       registry.unregisterSurface(surfaceId);
     },

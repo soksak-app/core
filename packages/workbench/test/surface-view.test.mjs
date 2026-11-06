@@ -1030,6 +1030,72 @@ test("a view process end removes its status registrations and preserves replacem
   }
 });
 
+// The dispose of a view removes its registrations while its view process still runs, so a closed tab is not found by the name
+// of its status (docs/spec/exposure.md), and the next mount of the same surface registers again.
+test("the dispose of a view removes its registrations before the same surface is mounted again", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = sourceListenerMap();
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async () => null } };
+    },
+  } });
+  const { registry } = await import("../exposure.js");
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-exposure-dispose");
+  const pluginId = "fixture-view-exposure-dispose";
+  const surfaceId = "fixture-view-exposure-dispose-surface";
+  const statusId = `${pluginId}.lines`;
+  recordOrigin(surfaceId, null, "test fixture");
+  registry.configure({ surfacePlugin: () => pluginId });
+  registry.declare(pluginId, { status: [{ name: statusId, description: "Lines.", schema: { type: "array" } }], commands: [], element: [] });
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" } };
+  const registerStatus = (id) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id,
+    command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: statusId } } });
+  const settleRegistration = async (present) => {
+    for (let turn = 0; turn < 100; turn += 1) {
+      if (registry.registrants("status", statusId).includes(surfaceId) === present) return;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(registry.registrants("status", statusId).includes(surfaceId), present, "the exposure registration did not settle");
+  };
+  try {
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId, 1);
+    await mountSurface(document.querySelector("#slot"), surface);
+    registerStatus(1);
+    await settleRegistration(true);
+
+    await disposeSurface(surfaceId);
+    assert.equal(sourceOrigin(pluginId, surfaceId), 1, "the view process of the fixture ended with the dispose");
+    assert.deepEqual(registry.registrants("status", statusId), [], "the disposed view kept its registration");
+    assert.equal(registry.chosen("status", statusId, surfaceId, true), null, "a request that names the disposed surface chose it");
+    assert.equal(registry.list().status.find(({ name }) => name === statusId).registered, false, "exposure.list kept the disposed registration");
+
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    registerStatus(2);
+    await settleRegistration(true);
+    assert.deepEqual(registry.registrants("status", statusId), [surfaceId], "the next mount did not register again");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // A view watches a status only when the exposure declares it: a watch of an undeclared status is refused with its name and
 // replies with that refusal (docs/spec/native-surfaces.md#view-surfaces, view calls).
 test("a view watch of a status that the exposure does not declare is refused with its name", { timeout: 20000 }, async (t) => {

@@ -250,6 +250,30 @@ test("a disposed surface ID can be reused and previous disposal cannot remove it
   }
 });
 
+// A view relays its status and element registrations to the registry without a request callback of the surface port, so the
+// disposal of the exposure removes them although the view registered no command.
+test("disposing the exposure of a view removes the registrations it relayed, and a second disposal keeps its new owner", async () => {
+  const { surfaceContextRuntime } = await import("../host.js");
+  const { registry } = await import("../exposure.js");
+  const surface = "relayed-port-surface", plugin = "relayed-port-plugin";
+  const status = `${plugin}.lines`;
+  const declarations = { status: [{ name: status, description: "Lines.", schema: { type: "array" } }] };
+  registry.declare(plugin, declarations);
+  registry.configure({ surfacePlugin: (id) => id === surface ? plugin : null });
+  const first = surfaceContextRuntime({ surfaceId: surface }, declarations);
+  registry.registered({ surface, kind: "status", name: status });
+  await first.exposure.dispose();
+  assert.deepEqual(registry.registrants("status", status), [], "the disposed view kept its relayed registration");
+  const next = surfaceContextRuntime({ surfaceId: surface }, declarations);
+  try {
+    registry.registered({ surface, kind: "status", name: status });
+    await first.exposure.dispose();
+    assert.deepEqual(registry.registrants("status", status), [surface], "a repeated disposal removed the registration of the new owner");
+  } finally {
+    await next.exposure.dispose();
+  }
+});
+
 test("a surface sidecar send to another surface is rejected instead of being redirected", async () => {
   const { surfaceContextRuntime } = await import("../host.js");
   calls.length = 0;

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F661: The dispose of a view removes its status, element and command registrations also when the view registered no command and its view process still runs, so `exposure.list` and a request that names an entry no longer find a closed or unloaded tab; a repeated dispose keeps the registrations of the next mount.
 - F660: The view surface behaviors that lost their tests with the module mount have owner tests on the view path: tab state after a dispose, keep busy and modified, unload and close reports, the label cache, a mount after a pending dispose, mount listeners of a failed mount, sidecar sends during a place, and the presentation tickets. A mount that a dispose ends before its authorization now resolves null instead of never settling.
 - F644: The record of the raster stage of a presentation on the Rust host, `present-raster-wait` with its ticket after the refresh and the wait, is stated by the test `the_raster_wait_of_a_presentation_records_its_refresh_and_its_wait`, and its Red and Green wait for a run.
 - F584-5-2: `TestAViewTakesThePointerUpToItsEdges` fails on the grab areas that reached into the views and passes on the change, so a native view of the mygo workbench taking the pointer up to its edges is shown by a run.

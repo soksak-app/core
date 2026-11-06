@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F661: view의 dispose가 view가 명령을 등록하지 않았고 view process가 아직 살아 있을 때도 그 status, element, command 등록을 지우므로, `exposure.list`와 항목 이름을 가진 요청은 닫히거나 unload된 탭을 더 찾지 않는다. 반복 dispose는 다음 mount의 등록을 유지한다.
 - F660: module mount와 함께 test를 잃은 view surface 동작이 view path에 소유 test를 갖는다: dispose 뒤 tab state, keep busy와 modified, unload와 close report, label cache, 대기 중인 dispose 뒤 mount, 실패한 mount의 mount listener, place 동안의 sidecar send, presentation ticket. authorization 전에 dispose가 끝낸 mount는 끝나지 않는 대신 null로 끝난다.
 - F644: Rust host에서 presentation의 raster 단계 기록, 즉 refresh와 대기 뒤 ticket을 담은 `present-raster-wait`는 test `the_raster_wait_of_a_presentation_records_its_refresh_and_its_wait`가 확인하며, 그 Red와 Green은 run을 기다린다.
 - F584-5-2: `TestAViewTakesThePointerUpToItsEdges` 는 view 안으로 닿던 grab area 에서 실패하고 변경 위에서 통과하므로, mygo workbench 의 native view 가 가장자리까지 pointer 를 받는 것이 run 으로 보인다.
