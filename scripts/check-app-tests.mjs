@@ -273,13 +273,15 @@ function invokesCallback(node, executor, effectName, environment, shadowed, acti
   return invokesEffect(node, executor, effectName, environment, shadowed, active, depth + 1);
 }
 
+// A callback that is not a function, such as the name of the resolve function, neither rejects nor reports.
 function timeoutRejects(callback, executor) {
   const rejectName = identifier(executor?.params?.[1]);
-  return Boolean(rejectName && callback && invokesEffect(callback.body, executor, rejectName, new Map(), functionBindings(callback)));
+  return Boolean(rejectName && isFunction(callback)
+    && invokesEffect(callback.body, executor, rejectName, new Map(), functionBindings(callback)));
 }
 
 function timeoutReports(callback, executor) {
-  return Boolean(callback && invokesEffect(callback.body, executor, "report", new Map(), functionBindings(callback)));
+  return Boolean(isFunction(callback) && invokesEffect(callback.body, executor, "report", new Map(), functionBindings(callback)));
 }
 
 function* sources(dir) {

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F487: window check audit의 timer 규칙이 callback이 이름인 timer에서 실패하지 않고 그것을 보고합니다.
 - F485: window check의 folder wait가 watch가 시작하지 않거나 끝나지 않을 때에도 deadline에서 결정되고, check의 끝이 끝나지 않은 watch를 보고합니다.
 - F484: layout epoch 변경이 draw를 cancel한 preparation은 열린 transaction을 commit하지 않고 창의 다음 preparation에 넘기므로, 그 native frame이 더는 앞 layout의 DOM 위에 화면에 나오지 않습니다.
 - F435-8-2: diagnostic build의 ResizeObserver loop recorder가 다음 task에서 slot을 비우므로, observation round가 animation frame을 더하지 않습니다.

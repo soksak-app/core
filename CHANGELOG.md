@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F487: The timer rule of the window check audit reports a timer whose callback is a name instead of failing on it.
 - F485: A folder wait of the window checks settles at its deadline also when its watch does not start or end, and the end of a check reports a watch that has not ended.
 - F484: A preparation whose draw a layout epoch change cancelled hands its open transaction to the next preparation of the window instead of committing it, so its native frames no longer reach the screen over the DOM of the earlier layout.
 - F435-8-2: The ResizeObserver loop recorder of diagnostic builds clears its slots in the next task, so an observation round adds no animation frame.
