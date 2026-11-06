@@ -1,7 +1,9 @@
 // HWP check in the active key window: native keys type at the caret of the editor in a document region, Shift-ArrowLeft selects
 // the typed letter, a pointer drag selects text, and Command-S writes the file, which the surface reads back
-// (docs/spec/native-surfaces.md#document-regions). Typed text reaches a document region only in the key window of the active
-// application, so this check runs in the activation tier; e2e/hwp.test.mjs covers the opening while the application is inactive.
+// (docs/spec/native-surfaces.md#document-regions). A document region passes its character keys to the input context of WebKit,
+// which the OS input method serves only in the key window of the active application, so the virtual key window types nothing
+// into it and this check activates the application (docs/spec/exposure.md#virtual-key-window); e2e/hwp.test.mjs covers the
+// opening while the application is inactive.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";

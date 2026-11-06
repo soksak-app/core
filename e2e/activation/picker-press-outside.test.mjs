@@ -1,5 +1,8 @@
 // Checks that a press on the plane of the active key window closes the open picker, as a person's press does. A press of a key
-// window passes the application, so the host that closes the picker from a local monitor sees it.
+// window passes the application, so the host that closes the picker from a local monitor sees it. Only the key window of the
+// application that the system holds as active takes a press through -[NSApplication sendEvent:]; the virtual key window gives
+// it to the view directly, where no local monitor sees it (docs/spec/exposure.md#virtual-key-window), so this check activates
+// the application.
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";

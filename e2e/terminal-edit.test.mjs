@@ -1,13 +1,12 @@
-// Activation-tier window check: checks that the diagnostic keys Command+C and Command+V run the Edit menu like human keys.
-//
-// A diagnostic key goes through the dispatch of NSApplication. The key-equivalent behavior of the menu goes to the key window of the active application, so this check
-// activates the app. A run that the user approved runs it only through make test-app-activation.
+// Checks that the keys Command+C and Command+V run the Edit menu like a person's keys. The window takes the drag and the keys
+// as the virtual key window, and the key equivalent reaches the menu through the same path as in the key window of the active
+// application, so the application of the person keeps the keyboard (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
-import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
+import { fresh } from "./fixture.mjs";
+import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -21,9 +20,9 @@ for (const app of Object.values(APPS)) {
     const row = lines.indexOf("EDITMENU");
     const session = await s.get("terminal.session", surface);
     const view = await s.rect("terminal.view", undefined, surface);
-    await s.keepPointerOutside();
-    await s.pointer(view.document.x + view.x + 5, view.document.y + view.y + 5, "move", { activate: true });
-    await s.until("host.window", (window) => window.active === true && window.key === true, "the window did not become key");
+    // A pointer move that presses nothing makes the window the virtual key window.
+    await s.pointer(view.document.x + view.x + 5, view.document.y + view.y + 5, "move");
+    await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
 
     // After a drag selection, when another app changes the clipboard, Command+C copies the selection again.
     const cell = (column) => ({ x: view.document.x + view.x + (column + 0.5) * session.cellWidth,
