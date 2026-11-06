@@ -1,13 +1,12 @@
-// A document region takes typed text when its application is active and its window is the key window: the same press and keys
-// as the check of e2e/browser.test.mjs, which runs while the application is inactive. A document region passes its character
-// keys to the input context of WebKit, which the OS input method serves only in the key window of the active application, so
-// the virtual key window types nothing into it and this check activates the application (docs/spec/exposure.md#virtual-key-window).
+// A document region takes typed text on the virtual key window: the window takes the press and the keys without activation, and
+// each character key states its text, which the web view of the region inserts through its text input, so the application and
+// the input source of the person stay as they are (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
+import { fresh } from "./fixture.mjs";
 
 /** A document with one text field at the top left whose title shows the keys, the typed text and the focus. */
 async function serve(s) {
@@ -26,7 +25,7 @@ async function serve(s) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: an active key window gives a document region typed text`, async (t) => {
+  test(`${app.name}: the virtual key window gives a document region typed text`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const base = await serve(s);
@@ -40,22 +39,19 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     const rect = await s.rect("browser.document", undefined, surface);
     const region = { x: rect.document.x + rect.x, y: rect.document.y + rect.y };
-    // The application becomes active and its window the key window before the press.
-    await s.pointer(region.x + 100, region.y + 20, "move", { activate: true });
-    await s.until("host.window", (state) => state.active && state.key, "the window did not become the active key window");
+    // A pointer move that presses nothing makes the window the virtual key window.
+    await s.pointer(region.x + 100, region.y + 20, "move");
+    await s.until("host.window", (state) => state.virtualKey, "the window did not become the virtual key window");
     await s.click(region.x + 100, region.y + 20);
     await s.until("host.window", (value) => value.documents.some((item) => item.surface === surface && item.focused),
       "a press on the field did not give the region the keyboard focus");
-    // Activation and the change of the first responder can bring back the input source of the person, so the ABC source
-    // is selected right before the keys.
-    await s.selectInputSource("com.apple.keylayout.ABC");
-    await s.press("x");
-    await s.press("y");
+    await s.press("x", { text: "x" });
+    await s.press("y", { text: "y" });
     try {
       await s.until("browser.location", (value) => / typed:xy /.test(value.title), "typed keys did not reach the field", { surface });
     } catch (error) {
-      const { key, active: isActive, responder, documents, input } = await s.get("host.window");
-      error.message += `; title ${JSON.stringify((await s.get("browser.location", surface)).title)}; host.window ${JSON.stringify({ key, active: isActive, responder, documents, input })}`;
+      const { key, virtualKey, active, responder, documents, input } = await s.get("host.window");
+      error.message += `; title ${JSON.stringify((await s.get("browser.location", surface)).title)}; host.window ${JSON.stringify({ key, virtualKey, active, responder, documents, input })}`;
       throw error;
     }
     assert.ok(true);

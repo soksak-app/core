@@ -192,6 +192,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/tests/input_inject_test.m",
     "native/darwin/tests/input_virtual_test.m",
     "native/darwin/tests/webview_focus_test.m",
+    "native/darwin/tests/webview_virtual_typing_test.m",
     "native/darwin/tests/webview_input_test.m",
   ], { sharedTests: true }),
   lane("Darwin window", "objective-c", ["native/darwin/src/window_*.m"], ["native/darwin/tests/window_*_test.m"], { sharedTests: true }),
@@ -8541,9 +8542,9 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "native/darwin/tests/document_typing_test.m", id: "the field takes the typed text" },
-      { file: "e2e/activation/document-typing.test.mjs", id: "an active key window gives a document region typed text" },
+      { file: "e2e/document-typing.test.mjs", id: "the virtual key window gives a document region typed text" },
     ],
-    expected: "A document region takes typed characters in the field that a native press focuses, in a plain AppKit window and in an active key window of both hosts.",
+    expected: "A document region takes typed characters in the field that a native press focuses, in a plain AppKit window and in the virtual key window of both hosts.",
     levels: ["native", "application"],
   },
   {
