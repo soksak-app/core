@@ -18,8 +18,8 @@ import { subscribe } from "@parcel/watcher";
 
 /**
  * Resolves with the first value other than undefined that `read()` returns. `read` runs once after the watch of `folder`
- * (recursive) is active and again at each change; an error that `read` throws or that the watch reports rejects the
- * wait. At the deadline `timeout` (ms) `read` runs once more, and the wait rejects with the error that `expired()` returns
+ * (recursive) is active and again at each change and at each report of dropped events; an error that `read` throws or
+ * another error that the watch reports rejects the wait. At the deadline `timeout` (ms) `read` runs once more, and the wait rejects with the error that `expired()` returns
  * when it returns undefined. An abort of `signal` rejects the wait with its reason, as a process whose state the wait
  * awaits that ends first. The deadline bounds the wait also when the watch does not start or does not end: at a high load
  * of the file system events service the start and the end of a watch can take minutes. The wait settles first and the
@@ -58,13 +58,19 @@ export function untilFolderState(folder, read, timeout, expired, signal) {
     // watch can become active or deliver a change after the deadline, so the state is read once more there.
     const timer = setTimeout(() => check(true), timeout);
     signal?.addEventListener("abort", () => finish(reject, signal.reason), { once: true });
-    const subscribed = subscribe(folder, (error) => (error ? finish(reject, error) : check()));
+    const subscribed = subscribe(folder, (error) => (error && !RESCAN.test(error.message) ? finish(reject, error) : check()));
     subscribed.then(() => {
       active = true;
       check();
     }, (error) => finish(reject, error));
   });
 }
+
+// The report of dropped events. The FSEvents backend of @parcel/watcher reports it for an event with
+// kFSEventStreamEventFlagMustScanSubDirs and keeps the callbacks of the watch (src/macos/FSEventsBackend.cc), while a failure
+// of the backend removes them (Watcher::notifyError). The library tells the two apart only by the text of the error, so the
+// wait matches that text: a dropped notification means that `read`, which reads the whole state, runs again.
+const RESCAN = /File system must be re-scanned\.$/;
 
 // The watch ends that have not finished, each with the promise of its end, and the errors of the watch ends since the last report.
 const ending = new Map();
