@@ -233,6 +233,24 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F645",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "function scriptWords(step, script, where) {" },
+      { file: "scripts/node-tests.mjs", symbol: "function filesOf(folder, path, where) {" },
+      { file: "scripts/test-runner.mjs", symbol: "write(`FAIL no test ran in the ${plural(results.size, 'file')} of the run`);" },
+      { file: "scripts/gate-tests.mjs", symbol: "timeoutMs, eventLimitMs: MAX_TEST_TIMEOUT_MS," },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "a word of a test script keeps the spaces of its quoted parts and loses its quotes, and an unclosed quote names the script" },
+      { file: "scripts/test/node-tests.test.mjs", id: "each path of a test script names a file, and a path or a glob that names none is an error that names the path and the package folder" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a test file that ran no test passes with `no test ran`, and a run in which no file ran a test fails with a line that says so" },
+      { file: "scripts/test/test-runner.test.mjs", id: "the total counts the tests that the files ran, not the files, and a run passes when a file ran a test" },
+      { file: "scripts/test/gate-tests.test.mjs", id: "a gate file that ran no test passes with no test ran, and a gate in which no file ran a test fails with a line that says so" },
+    ],
+    expected: "A test script passes the arguments that it names, each of its paths names a file, and a run in which no file ran a test fails.",
+    levels: ["unit"],
+  },
+  {
     id: "F632",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "s.errors.Show(where, report.Error, \"\")" },
