@@ -133,12 +133,18 @@ func compareVersion(a, b string) int {
 }
 
 // isRange reports whether the value is a version range of docs/spec/installation.md#versions-and-ranges, with the reader's
-// forms: `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z`, and `>=x.y.z <a.b.c` whose lower bound is below the upper bound.
+// forms: `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z`, and `>=x.y.z <a.b.c` whose lower bound is below the upper bound, or a
+// union of such forms joined by rangeSeparator.
 func isRange(value any) bool {
 	s, ok := value.(string)
 	if !ok {
 		return false
 	}
+	return !slices.ContainsFunc(strings.Split(s, rangeSeparator), func(part string) bool { return !isRangeForm(part) })
+}
+
+// isRangeForm reports whether the text is one form of a range, as isRange reads it.
+func isRangeForm(s string) bool {
 	if s == "*" {
 		return true
 	}

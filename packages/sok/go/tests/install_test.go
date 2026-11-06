@@ -74,15 +74,25 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 		"^1.2.3": {"1.2.3", "2.0.0"}, "~1.2.3": {"1.2.3", "1.3.0"}, ">=0.0.2 <0.1.0": {"0.0.2", "0.1.0"},
 	} {
 		r, err := sok.ParseRange(text)
-		if err != nil || r.Min.String() != want[0] || r.Below == nil || r.Below.String() != want[1] {
+		if err != nil || len(r) != 1 || r[0].Min.String() != want[0] || r[0].Below == nil || r[0].Below.String() != want[1] {
 			t.Fatalf("%s: %v %v", text, r, err)
 		}
 	}
 	if !sok.Satisfies("0.0.9", ">=0.0.2 <0.1.0") || sok.Satisfies("0.1.0", ">=0.0.2 <0.1.0") {
 		t.Fatal("bounded range bounds")
 	}
+	// A union has the bounds of each part in the order of the text.
+	if r, err := sok.ParseRange("^0.0.39 || >=1.0.0 <2.0.0"); err != nil || len(r) != 2 || r[0].Min.String() != "0.0.39" || r[0].Below.String() != "0.1.0" ||
+		r[1].Min.String() != "1.0.0" || r[1].Below.String() != "2.0.0" {
+		t.Fatalf("union: %v %v", r, err)
+	}
+	// A part that is not one of the forms refuses the whole range, and the error names the range and the part.
+	want := `invalid version range "^0.0.1 || latest": invalid version range "latest": expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z, >=x.y.z <a.b.c or such ranges joined by " || "`
+	if _, err := sok.ParseRange("^0.0.1 || latest"); err == nil || err.Error() != want {
+		t.Fatalf("union with a bad part: %v, want %s", err, want)
+	}
 	// is >=0.0.0, that is, every version without an upper bound.
-	if r, err := sok.ParseRange("*"); err != nil || r.Min.String() != "0.0.0" || r.Below != nil {
+	if r, err := sok.ParseRange("*"); err != nil || len(r) != 1 || r[0].Min.String() != "0.0.0" || r[0].Below != nil {
 		t.Fatalf("*: %v %v", r, err)
 	}
 	for _, version := range []string{"0.0.0", "0.0.4", "1.2.3", "4294967295.4294967295.4294967295"} {
@@ -91,7 +101,7 @@ func TestVersionRangesAcceptExactCaretTildeAndBoundedForms(t *testing.T) {
 		}
 	}
 	// >=x.y.z has only a lower bound and no upper bound.
-	if r, err := sok.ParseRange(">=0.0.6"); err != nil || r.Min.String() != "0.0.6" || r.Below != nil {
+	if r, err := sok.ParseRange(">=0.0.6"); err != nil || len(r) != 1 || r[0].Min.String() != "0.0.6" || r[0].Below != nil {
 		t.Fatalf(">=0.0.6: %v %v", r, err)
 	}
 	if !sok.Satisfies("0.0.6", ">=0.0.6") || !sok.Satisfies("0.1.0", ">=0.0.6") || sok.Satisfies("0.0.5", ">=0.0.6") {
@@ -121,7 +131,7 @@ func TestVersionsAndRangesRefuseTheFormsThatTheLibraryAccepts(t *testing.T) {
 			t.Fatalf("version %q: %v", bad, err)
 		}
 	}
-	for _, bad := range []string{"1.x", "~>1.2", "1.2.3 - 2.3.4", ">1.2.3", "<2.0.0", "!=1.2.3", "=1.2.3", "1.2.3, 1.2.4", "^1.2.3 || ^2.0.0", "*.*.*", "x", "~1.2.3-beta", ">=4294967296.0.0", "^4294967296.0.0", ">=1.0.0<2.0.0"} {
+	for _, bad := range []string{"1.x", "~>1.2", "1.2.3 - 2.3.4", ">1.2.3", "<2.0.0", "!=1.2.3", "=1.2.3", "1.2.3, 1.2.4", "*.*.*", "x", "~1.2.3-beta", ">=4294967296.0.0", "^4294967296.0.0", ">=1.0.0<2.0.0"} {
 		if _, err := sok.ParseRange(bad); err == nil || !strings.Contains(err.Error(), "invalid version") {
 			t.Fatalf("range %q: %v", bad, err)
 		}

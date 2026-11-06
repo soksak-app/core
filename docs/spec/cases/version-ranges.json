@@ -1,5 +1,5 @@
 {
-  "description": "Cases of the version ranges (docs/spec/installation.md#versions-and-ranges), replayed by the range readers of sok in Go and Rust and of @soksak/plugin-api. Each case of `contains` states whether its range contains its version; each range of `refused` is refused by every reader.",
+  "description": "Cases of the version ranges (docs/spec/installation.md#versions-and-ranges), replayed by the range readers of sok in Go and Rust and of @soksak/plugin-api. Each case of `contains` states whether its range, one form or a union of forms joined by ` || `, contains its version; each range of `refused` is refused by every reader.",
   "contains": [
     { "range": "^0.0.39", "version": "0.0.38", "inside": false },
     { "range": "^0.0.39", "version": "0.0.39", "inside": true },
@@ -27,7 +27,22 @@
     { "range": ">=0.0.6", "version": "0.0.6", "inside": true },
     { "range": ">=0.0.6", "version": "3.0.0", "inside": true },
     { "range": ">=0.0.2 <0.1.0", "version": "0.0.9", "inside": true },
-    { "range": ">=0.0.2 <0.1.0", "version": "0.1.0", "inside": false }
+    { "range": ">=0.0.2 <0.1.0", "version": "0.1.0", "inside": false },
+    { "range": "^0.0.39 || ^0.1.0", "version": "0.0.38", "inside": false },
+    { "range": "^0.0.39 || ^0.1.0", "version": "0.0.40", "inside": true },
+    { "range": "^0.0.39 || ^0.1.0", "version": "0.1.5", "inside": true },
+    { "range": "^0.0.39 || ^0.1.0", "version": "0.2.0", "inside": false },
+    { "range": "0.0.3 || >=1.0.0 <2.0.0", "version": "0.0.3", "inside": true },
+    { "range": "0.0.3 || >=1.0.0 <2.0.0", "version": "0.0.4", "inside": false },
+    { "range": "0.0.3 || >=1.0.0 <2.0.0", "version": "1.5.0", "inside": true },
+    { "range": "0.0.3 || >=1.0.0 <2.0.0", "version": "2.0.0", "inside": false },
+    { "range": "0.0.1 || 0.0.3 || ~0.2.0", "version": "0.0.2", "inside": false },
+    { "range": "0.0.1 || 0.0.3 || ~0.2.0", "version": "0.0.3", "inside": true },
+    { "range": "0.0.1 || 0.0.3 || ~0.2.0", "version": "0.2.4", "inside": true },
+    { "range": "0.0.1 || 0.0.3 || ~0.2.0", "version": "0.3.0", "inside": false },
+    { "range": ">=0.0.6 || 0.0.2", "version": "0.0.2", "inside": true },
+    { "range": ">=0.0.6 || 0.0.2", "version": "0.0.4", "inside": false },
+    { "range": "* || 1.0.0", "version": "9.9.9", "inside": true }
   ],
   "refused": [
     "",
@@ -50,6 +65,22 @@
     ">1.2.3",
     "<2.0.0",
     "=1.2.3",
-    "1.2.3 - 2.3.4"
+    "1.2.3 - 2.3.4",
+    "||",
+    " || ",
+    "^0.0.1 ||",
+    "^0.0.1 || ",
+    "|| ^0.0.1",
+    " || ^0.0.1",
+    "^0.0.1 || || ^0.0.2",
+    "^0.0.1||^0.0.2",
+    "^0.0.1 ||^0.0.2",
+    "^0.0.1|| ^0.0.2",
+    "^0.0.1  || ^0.0.2",
+    "^0.0.1 ||  ^0.0.2",
+    "^0.0.1\t|| ^0.0.2",
+    "^0.0.1 | ^0.0.2",
+    "^0.0.1 || latest",
+    "^0.0.1 || >=0.2.0 <0.1.0"
   ]
 }

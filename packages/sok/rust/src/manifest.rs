@@ -8,6 +8,8 @@ use std::collections::BTreeSet;
 
 use serde_json::{Map, Value};
 
+use crate::install::RANGE_SEPARATOR;
+
 /// The limits that the reader names (PLUGIN_DESCRIPTION_MAX, SETTING_LABEL_MAX, SETTING_DESCRIPTION_MAX, ADDRESS_MAX,
 /// SET_TITLE_MAX, the menu title limit and COMMAND_TIMEOUT_MAX).
 const PLUGIN_DESCRIPTION_MAX: usize = 200;
@@ -222,11 +224,17 @@ fn compare_version(a: &str, b: &str) -> std::cmp::Ordering {
 }
 
 /// Whether the member is a version range with the reader's forms: `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z`, and
-/// `>=x.y.z <a.b.c` whose lower bound is below the upper bound (isRange of the reader).
+/// `>=x.y.z <a.b.c` whose lower bound is below the upper bound, or a union of such forms joined by RANGE_SEPARATOR (isRange
+/// of the reader).
 fn is_range(value: Option<&Value>) -> bool {
     let Some(text) = value.and_then(Value::as_str) else {
         return false;
     };
+    text.split(RANGE_SEPARATOR).all(is_range_form)
+}
+
+/// Whether the text is one form of a range, as is_range reads it.
+fn is_range_form(text: &str) -> bool {
     if text == "*" {
         return true;
     }

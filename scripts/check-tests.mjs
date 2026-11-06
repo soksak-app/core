@@ -246,8 +246,12 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/tests/version_range_cases_test.rs", id: "a_range_reads_the_version_range_case_table" },
       { file: "packages/plugin-api/test/version-range-cases.test.mjs", id: "a range contains each version of the version range case table as the table states" },
       { file: "packages/plugin-api/test/version-range-cases.test.mjs", id: "each range that the version range case table refuses is an invalid range" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallReadsAUnionInThePluginDependencies" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_reads_a_union_in_the_plugin_dependencies" },
+      { file: "packages/sok/go/tests/registry_test.go", id: "TestRegistryBuildReadsAUnionInThePluginDependencies" },
+      { file: "packages/sok/rust/tests/registry_test.rs", id: "registry_build_reads_a_union_in_the_plugin_dependencies" },
     ],
-    expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, and the workbench reads ranges only through @soksak/plugin-api.",
+    expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, a union of forms joined by exactly ` || ` contains what one part contains, the registry build and the installation read a union in plugin dependencies, and the workbench reads ranges only through @soksak/plugin-api.",
     levels: ["unit"],
   },
   {

@@ -213,6 +213,33 @@ func TestRegistryBuildChecksPluginDependencies(t *testing.T) {
 	}
 }
 
+// contract: cli.registry.checks-plugin-dependencies
+func TestRegistryBuildReadsAUnionInThePluginDependencies(t *testing.T) {
+	// A union is satisfied when a listed version is inside one of its parts, and the index keeps its text.
+	dir := dependencyRegistry(t, base("1.0.0"), dependent{"ext", "1.0.0", map[string]string{"@scope/plugin-base": "^2.0.0 || ^1.0.0", "@scope/sidecar-worker": "^0.3.0 || ^0.1.0"}})
+	index := filepath.Join(dir, "index.json")
+	if err := os.Remove(index); err != nil {
+		t.Fatal(err)
+	}
+	succeeds(t, "registry", "build", dir)
+	var built map[string]any
+	if err := json.Unmarshal([]byte(readText(t, index)), &built); err != nil {
+		t.Fatal(err)
+	}
+	if sidecars := jsonText(t, at(built, "plugins", 1, "versions", 0, "sidecars")); sidecars != `{"@scope/sidecar-worker":"^0.3.0 || ^0.1.0"}` {
+		t.Fatalf("ext sidecars %s", sidecars)
+	}
+	// A union of which no part holds a listed version is refused with its text.
+	dir = dependencyRegistry(t, base("1.0.0"), ext("^2.0.0 || ^3.0.0"))
+	if err := os.Remove(filepath.Join(dir, "index.json")); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run("registry", "build", dir)
+	if want := "sok: ext 1.0.0: plugin dependency @scope/plugin-base ^2.0.0 || ^3.0.0 is satisfied by no listed version\n"; code != 1 || stderr != want {
+		t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
+	}
+}
+
 func replaceIn(t *testing.T, path, old, replacement string, count int) {
 	t.Helper()
 	data, err := os.ReadFile(path)

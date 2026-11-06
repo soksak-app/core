@@ -791,6 +791,21 @@ func TestPluginInstallInstallsThePluginDependencies(t *testing.T) {
 	}
 }
 
+// contract: cli.plugin.dependencies-install
+func TestPluginInstallReadsAUnionInThePluginDependencies(t *testing.T) {
+	// The provider gets the newest version inside one part of the union, and the installed record keeps the text of a
+	// sidecar range.
+	config := t.TempDir()
+	useRegistry(t, config, dependencyRegistry(t, base("1.0.0"), base("1.1.0"), base("2.0.0"), base("3.0.0"),
+		dependent{"ext", "1.0.0", map[string]string{"@scope/plugin-base": "1.0.0 || ^2.0.0", "@scope/sidecar-worker": "^0.3.0 || ^0.1.0"}}))
+	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
+	state := installedOf(t, config)
+	if state.Plugins["base"].Version != "2.0.0" || fmt.Sprint(state.Plugins["ext"].Sidecars) != "map[@scope/sidecar-worker:^0.3.0 || ^0.1.0]" ||
+		state.Sidecars["@scope/sidecar-worker"].Version != "0.1.0" {
+		t.Fatalf("installed %+v", state)
+	}
+}
+
 // pluginFolders lists the names in the plugins folder of the configuration directory.
 func pluginFolders(t *testing.T, config string) string {
 	t.Helper()

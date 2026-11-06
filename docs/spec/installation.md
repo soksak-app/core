@@ -16,8 +16,9 @@ A version is `x.y.z` with numeric parts and no leading zeros; versions compare b
 | `~x.y.z` | from `x.y.z` below `x.(y+1).0` |
 | `>=x.y.z` | `x.y.z` and every later version |
 | `>=x.y.z <a.b.c` | from `x.y.z` below `a.b.c`; an empty range is rejected |
+| `<range> \|\| <range>` | the union of its parts: a version is inside when one part contains it. Each part is one of the forms above, and the parts are joined by exactly one space, two vertical bars and one space, as in `^0.0.39 \|\| ^0.1.0` |
 
-Other forms, such as `latest`, `**` or pre-release suffixes, are rejected.
+Other forms, such as `latest`, `**` or pre-release suffixes, are rejected, and so is a union with an empty part or with other spacing around `\|\|`.
 
 ## Core release identity
 
