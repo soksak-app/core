@@ -70,7 +70,27 @@ async function clickLastPixel(s, surface, scale) {
   assert.equal((await s.get("host.window")).active, state.active, "native input must not change application activation");
 }
 
+// A window has the size that it was asked for, and a main page has that size too: a web view larger than the content lays out a page
+// whose last rows the window does not show, and a native view stands where the page reports it, off the page that the window shows.
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: the page fills the content of the window`, async (t) => {
+    const s = await open(t, app);
+    await prepare(s);
+    const fills = async (state) => {
+      const { width, height } = state.content;
+      assert.deepEqual([state.frame.width, state.frame.height], [width, height], "a window with a hidden bar has a frame of the size of its content");
+      const main = state.webviews.find((webview) => webview.main);
+      if (app.name === "mygo") assert.equal(main, undefined, "the mygo host has no main page");
+      else assert.deepEqual(main.frame, { x: 0, y: 0, width, height }, "the main web view must fill the content");
+      const workbench = await s.get("core.window.workbench");
+      assert.deepEqual([workbench.width, workbench.height], [width, height], "the page must have the size of the content");
+    };
+    await fills(await s.get("host.window"));
+    await s.run("host.window.resize", { width: 997, height: 647 });
+    await s.until("host.window", (w) => w.frame.width === 997 && w.frame.height === 647, "the window did not take the size 997×647");
+    await fills(await s.get("host.window"));
+  });
+
   test(`${app.name}: resizing preserves document geometry and native input`, async (t) => {
     const s = await open(t, app);
     const shell = await prepare(s);
