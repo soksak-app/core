@@ -14,6 +14,7 @@ import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from './
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
+import { processWarnings } from './node-warnings.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -322,6 +323,7 @@ function runOne(item, limitMs, env, outputPath) {
       const output = Buffer.concat(chunks).toString('utf8').split('\n').filter((line) => !line.startsWith(EVENT_PREFIX)).join('\n');
       const evidenceErrors = testEvidence?.result().errors ?? [];
       const linkerFailures = linkerWarnings(output).failures;
+      const nodeWarnings = processWarnings(output);
       if (groupError) {
         finish({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
       } else if (limit !== null) {
@@ -342,6 +344,8 @@ function runOne(item, limitMs, env, outputPath) {
       // A build or test whose output holds a linker warning of an object built for a newer macOS version than the link compiled or linked
       // for another version than the declared minimum (macos-minimum.mjs).
       else if (code === 0 && linkerFailures.length > 0) finish({ status: 'fail', elapsedMs, output, detail: linkerFailures.join('; ') });
+      // A process whose output holds a process warning of node (node-warnings.mjs).
+      else if (code === 0 && nodeWarnings.length > 0) finish({ status: 'fail', elapsedMs, output, detail: nodeWarnings.join('; ') });
       // A process that reports its test events and ran no test passes, and its detail says so.
       else if (code === 0) finish({ status: 'pass', elapsedMs, output, detail: reporting && ran === 0 ? 'no test ran' : '' });
       else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });

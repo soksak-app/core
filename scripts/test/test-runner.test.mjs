@@ -366,7 +366,8 @@ test("a test file whose tests each pass within their own limits is not ended by 
     const file = join(directory, "pair.test.mjs");
     const body = "() => new Promise((resolve) => setTimeout(resolve, 600))";
     writeFileSync(file, `import test from "node:test";\ntest("first", { timeout: 5000 }, ${body});\ntest("second", { timeout: 5000 }, ${body});\n`);
-    const { results } = await run([{ name: "pair", command: process.execPath, args: ["--test", file] }], { concurrency: 1 });
+    // Without NODE_TEST_CONTEXT of this test, which would make node --test skip the file with a warning and run no test.
+    const { results } = await run([{ name: "pair", command: "/usr/bin/env", args: ["-u", "NODE_TEST_CONTEXT", process.execPath, "--test", file] }], { concurrency: 1 });
     const result = results.get("pair");
     assert.equal(result.status, "pass", result.detail);
   } finally {
@@ -601,6 +602,14 @@ test("a run of processes that do not report their test events counts the process
 test("a run in which some processes report their test events and others do not is refused", async () => {
   await assert.rejects(runTests({ tests: [node("plain", "0"), node("events", "0", { eventLimitMs: 1000 })], concurrency: 1, write() {} }),
     /^TypeError: events: every test of a run reports its test events \(eventLimitMs\) or none does$/);
+});
+
+test("a process whose output holds a process warning of node fails with the warning", async () => {
+  const warning = "(node:123) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 end listeners added to [TestsStream].";
+  const { results } = await run([node("warns::node", `console.error(${JSON.stringify(warning)})`)], { concurrency: 1 });
+  assert.equal(results.get("warns::node").status, "fail", results.get("warns::node").detail);
+  assert.equal(results.get("warns::node").detail,
+    "node printed MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 end listeners added to [TestsStream].");
 });
 
 test("a process whose output holds a linker warning of an object newer than the link fails with the object and both versions", async () => {

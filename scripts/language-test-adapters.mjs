@@ -3,11 +3,14 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
+import { processWarnings } from './node-warnings.mjs';
 import { runCommand } from './test-command.mjs';
 import { runWithEvidence, persistEvidence } from './test-evidence.mjs';
 import { readNodeTestEvidence, testExecutionErrors, withNodeTestReporters } from './node-test-evidence.mjs';
 
-// The languages that a case may name. Each case declares its own timeoutMs in the manifest.
+// The languages that a case may name. Each case declares its own timeoutMs in the manifest. A case of a compiled language also
+// declares its build, which runs before the test command under a limit of its own, so the limit of the case measures only the
+// tests and a cold build cache does not fail them.
 export const SUPPORTED_LANGUAGES = Object.freeze(['js-ts', 'rust', 'go', 'objective-c', 'shell', 'application']);
 
 const supportedLanguages = new Set(SUPPORTED_LANGUAGES);
@@ -22,10 +25,18 @@ function requireString(value, name) {
   if (typeof value !== 'string' || value.length === 0) throw invalid(`${name} must be a non-empty string`);
 }
 
-function validateTimeout(timeoutMs, id) {
-  if (timeoutMs === undefined) throw invalid(`case ${id} has no timeoutMs; each case declares its own limit`);
-  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 600_000) throw invalid(`case ${id}.timeoutMs must be an integer from 1 through 600000`);
+function validateTimeout(timeoutMs, name) {
+  if (timeoutMs === undefined) throw invalid(`case ${name} has no timeoutMs; each case declares its own limit`);
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 600_000) throw invalid(`case ${name}.timeoutMs must be an integer from 1 through 600000`);
   return timeoutMs;
+}
+
+/** The build of a case: the command that compiles what its test command runs, with its own limit. It runs in the folder of the case. */
+function validateBuild(build, id) {
+  if (!build || typeof build !== 'object' || Array.isArray(build)) throw invalid(`case ${id}.build must be an object`);
+  requireString(build.command, `case ${id}.build.command`);
+  if (!Array.isArray(build.args) || build.args.some((arg) => typeof arg !== 'string')) throw invalid(`case ${id}.build.args must be an array of strings`);
+  return { command: build.command, args: build.args, timeoutMs: validateTimeout(build.timeoutMs, `${id}.build`) };
 }
 
 /** Finds explicit cases in the manifest. It neither infers a case nor drops one silently. */
@@ -53,6 +64,7 @@ export function discoverLanguageCases(manifest) {
       args: entry.args,
       ...(entry.cwd === undefined ? {} : { cwd: entry.cwd }),
       timeoutMs: validateTimeout(entry.timeoutMs, entry.id),
+      ...(entry.build === undefined ? {} : { build: validateBuild(entry.build, entry.id) }),
       expectedTests: entry.expectedTests,
       ...(entry.implementationFiles === undefined ? {} : { implementationFiles: entry.implementationFiles }),
       ...(entry.testFiles === undefined ? {} : { testFiles: entry.testFiles }),
@@ -123,7 +135,41 @@ export function parseLanguageResult(language, stdout, stderr) {
   throw invalid(`unsupported language: ${language}`);
 }
 
-function caseResult(caseSpec, commandResult) {
+// A case that names cargo runs the cargo that cargoCommand resolves, as every script of the repository does.
+const executable = (command) => (command === 'cargo' ? cargoCommand() : command);
+
+/** The result of the build of a case. Its link output is judged as the output of the case is (macos-minimum.mjs). */
+function buildResult(commandResult) {
+  const errors = [];
+  if (commandResult.status !== 'pass') errors.push(`build status ${commandResult.status}`);
+  errors.push(...linkerWarnings(`${commandResult.stdout}\n${commandResult.stderr}`).failures);
+  errors.push(...processWarnings(`${commandResult.stdout}\n${commandResult.stderr}`));
+  return {
+    status: commandResult.status === 'pass' && errors.length > 0 ? 'fail' : commandResult.status,
+    exitCode: commandResult.exitCode,
+    signal: commandResult.signal,
+    elapsedMs: commandResult.elapsedMs,
+    errors,
+  };
+}
+
+/** The result of a case whose build failed: its test command does not run, so no test is counted. */
+function unbuiltResult(caseSpec, build) {
+  return {
+    id: caseSpec.id,
+    language: caseSpec.language,
+    status: 'fail',
+    expected: { status: 'pass', ...(caseSpec.expectedTests === undefined ? {} : { tests: caseSpec.expectedTests }) },
+    build,
+    actual: { status: 'not-run', signal: null, tests: 0, failed: 0, skipped: 0, cancelled: 0, todo: 0 },
+    elapsedMs: 0,
+    stdout: '',
+    stderr: '',
+    errors: [...build.errors, 'the build failed, so no test ran'],
+  };
+}
+
+function caseResult(caseSpec, build, commandResult) {
   const nodeEvidence = caseSpec.language === 'js-ts' ? readNodeTestEvidence(`${commandResult.stdout}\n${commandResult.stderr}`,
     (caseSpec.testFiles ?? []).map((file) => resolve(caseSpec.cwd ?? process.cwd(), file))) : null;
   const actual = nodeEvidence?.actual ?? parseLanguageResult(caseSpec.language, commandResult.stdout, commandResult.stderr);
@@ -132,6 +178,7 @@ function caseResult(caseSpec, commandResult) {
   if (commandResult.signal) errors.push(`process crashed with ${commandResult.signal}`);
   // A build of the case whose link reports an object newer than the link compiled or linked for another macOS version (macos-minimum.mjs).
   errors.push(...linkerWarnings(`${commandResult.stdout}\n${commandResult.stderr}`).failures);
+  errors.push(...processWarnings(`${commandResult.stdout}\n${commandResult.stderr}`));
   if (caseSpec.expectedTests !== undefined && actual.tests !== caseSpec.expectedTests) {
     errors.push(`expected ${caseSpec.expectedTests} tests, observed ${actual.tests}`);
   }
@@ -140,6 +187,7 @@ function caseResult(caseSpec, commandResult) {
     language: caseSpec.language,
     status: errors.length === 0 ? 'pass' : 'fail',
     expected: { status: 'pass', ...(caseSpec.expectedTests === undefined ? {} : { tests: caseSpec.expectedTests }) },
+    build,
     actual: { status: commandResult.status, signal: commandResult.signal, ...actual },
     elapsedMs: commandResult.elapsedMs,
     stdout: commandResult.stdout,
@@ -152,15 +200,25 @@ export async function runLanguageCases(cases, { onEvent, evidence = false, root 
   if (!Array.isArray(cases) || cases.length === 0) throw invalid('at least one discovered case is required');
   const results = [];
   for (const caseSpec of cases) {
-    const execute = async () => caseResult(caseSpec, await runCommand({
-      id: caseSpec.id,
-      // A case that names cargo runs the cargo that cargoCommand resolves, as every script of the repository does.
-      command: caseSpec.language === 'js-ts' ? '/usr/bin/env' : caseSpec.command === 'cargo' ? cargoCommand() : caseSpec.command,
-      args: caseSpec.language === 'js-ts' ? ['-u', 'NODE_TEST_CONTEXT', caseSpec.command, ...withNodeTestReporters(caseSpec.args)] : caseSpec.args,
-      cwd: caseSpec.cwd,
-      timeoutMs: caseSpec.timeoutMs,
-      onEvent: (event) => onEvent?.({ ...event, language: caseSpec.language, caseId: caseSpec.id }),
-    }));
+    const report = (phase) => (event) => onEvent?.({ ...event, phase, language: caseSpec.language, caseId: caseSpec.id });
+    const execute = async () => {
+      let build = null;
+      if (caseSpec.build) {
+        build = buildResult(await runCommand({
+          id: caseSpec.id, command: executable(caseSpec.build.command), args: caseSpec.build.args, cwd: caseSpec.cwd,
+          timeoutMs: caseSpec.build.timeoutMs, onEvent: report('build'),
+        }));
+        if (build.status !== 'pass') return unbuiltResult(caseSpec, build);
+      }
+      return caseResult(caseSpec, build, await runCommand({
+        id: caseSpec.id,
+        command: caseSpec.language === 'js-ts' ? '/usr/bin/env' : executable(caseSpec.command),
+        args: caseSpec.language === 'js-ts' ? ['-u', 'NODE_TEST_CONTEXT', caseSpec.command, ...withNodeTestReporters(caseSpec.args)] : caseSpec.args,
+        cwd: caseSpec.cwd,
+        timeoutMs: caseSpec.timeoutMs,
+        onEvent: report('test'),
+      }));
+    };
     const result = evidence ? await runWithEvidence({
         root,
         caseId: caseSpec.id,
@@ -210,7 +268,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
       const cases = await readLanguageCaseManifest(manifestPath);
       const result = await runLanguageCases(cases, { evidence: true, onEvent: (event) => process.stdout.write(`${JSON.stringify(event)}\n`) });
       if (evidenceFile) await persistEvidence(evidenceFile, result.cases.map(({ evidence: record }) => record));
-      process.stdout.write(`${JSON.stringify({ type: 'suite-final', status: result.status, evidenceFile: evidenceFile ?? null, cases: result.cases.map(({ id, language, status, expected, actual, elapsedMs, errors, evidence: record }) => ({ id, language, status, expected, actual, elapsedMs, errors, evidence: record ? { git: record.git, implementation: record.implementation, tests: record.tests, dependencies: record.dependencies, buildFlags: record.buildFlags, processes: record.processes, attempts: record.attempts } : null })) })}\n`);
+      process.stdout.write(`${JSON.stringify({ type: 'suite-final', status: result.status, evidenceFile: evidenceFile ?? null, cases: result.cases.map(({ id, language, status, expected, build, actual, elapsedMs, errors, evidence: record }) => ({ id, language, status, expected, build, actual, elapsedMs, errors, evidence: record ? { git: record.git, implementation: record.implementation, tests: record.tests, dependencies: record.dependencies, buildFlags: record.buildFlags, processes: record.processes, attempts: record.attempts } : null })) })}\n`);
       process.exitCode = result.status === 'pass' ? 0 : 1;
   } catch (error) {
     process.stderr.write(`${error.code ?? 'LANGUAGE_TEST_ERROR'}: ${error.message}\n`);

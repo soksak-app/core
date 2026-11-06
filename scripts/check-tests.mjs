@@ -53,7 +53,7 @@ const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/test-hosts.mjs"], ["scripts/test/test-hosts.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
-lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs", "scripts/macos-minimum.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs", "scripts/test/macos-minimum.test.mjs"], { sharedTests: true }),
+lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs", "scripts/macos-minimum.mjs", "scripts/node-warnings.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs", "scripts/test/macos-minimum.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("Node execution evidence", "js-ts", ["scripts/node-test-evidence.mjs"], ["scripts/test/node-test-evidence.test.mjs"]),
@@ -356,6 +356,49 @@ const FEATURE_LINKS = [
       { file: "scripts/test/markdown-table.test.mjs", id: "an escaped pipe is a pipe of its cell and the cells after it keep their places" },
     ],
     expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, a union of forms joined by exactly ` || ` contains what one part contains, the registry build and the installation read a union in plugin dependencies, the workbench reads ranges only through @soksak/plugin-api, and the checks read the escaped pipes of a union in a table row as pipes of its cell.",
+    levels: ["unit"],
+  },
+  {
+    id: "F683-2",
+    implementation: [
+      { file: "scripts/node-warnings.mjs", symbol: "export function processWarnings(output) {" },
+      { file: "scripts/test-runner.mjs", symbol: "const nodeWarnings = processWarnings(output);" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a process whose output holds a process warning of node fails with the warning" },
+    ],
+    expected: "The test runner fails a process whose output holds a process warning of node with the warning, through the same rule as the language adapter.",
+    levels: ["unit"],
+  },
+  {
+    id: "F683-1",
+    implementation: [
+      { file: "scripts/node-test-evidence.mjs", symbol: "export const NODE_TEST_REPORTERS = Object.freeze([" },
+      { file: "scripts/node-warnings.mjs", symbol: "export function processWarnings(output) {" },
+    ],
+    tests: [
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "a node --test run with the shared reporters prints no process warning" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case whose ${phase} prints a process warning of node fails with the warning" },
+    ],
+    expected: "A node --test file of the runners runs with two reporters and prints no MaxListenersExceededWarning, and a language case whose build or test output holds a process warning of node fails with the warning.",
+    levels: ["unit"],
+  },
+  {
+    id: "F683",
+    implementation: [
+      { file: "scripts/language-test-adapters.mjs", symbol: "function validateBuild(build, id) {" },
+      { file: "scripts/language-test-adapters.mjs", symbol: "function unbuiltResult(caseSpec, build) {" },
+      { file: "scripts/language-test-cases.json", symbol: "\"build\": { \"command\": \"cargo\"" },
+      { file: "scripts/test-command.mjs", symbol: "async function cleanupGroup(pid, termAlreadySent = false) {" },
+    ],
+    tests: [
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case builds before its test runs, so the limit of the case measures only the test" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "refuses a build without its own limit and names the case" },
+      { file: "scripts/test/test-language-test-manifest.test.mjs", id: "each committed case of a compiled language declares its build, so the limit of the case measures only the test" },
+      { file: "scripts/test/test-command.test.mjs", id: "a refused SIGTERM at the limit to a group that holds only zombies still reports timeout" },
+      { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
+    ],
+    expected: "Each language case of a compiled language runs its declared build before its tests under a limit of its own, a failed build runs no test and reports its status, the limit of the case measures only the tests, and the command supervisor judges each group signal and probe by the rule of killGroup.",
     levels: ["unit"],
   },
   {
@@ -1987,7 +2030,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F526-1",
-    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "function caseResult(caseSpec, commandResult) {" }],
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "function caseResult(caseSpec, build, commandResult) {" }],
     tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" }],
     expected: "A case that a signal ends is reported as crashed with that signal, and the case of the test ends with a signal that leaves no crash report.",
     levels: ["unit"],
@@ -13483,7 +13526,7 @@ function topLevelBlocks(text, head) {
 /**
  * The number of tests that a language case runs, counted from the declarations of its test files in the way that the adapter of
  * its language counts results (scripts/language-test-adapters.mjs): a passed or failed top-level `test()` of node:test, a
- * `#[test]` function without `#[ignore]`, a Go test function that the `-run` pattern selects, and a `PASS:` line of an
+ * `#[test]` function without `#[ignore]`, a Go test function that the `-run` or `-test.run` pattern selects, and a `PASS:` line of an
  * Objective-C or shell test, written once by each call of the function that writes it or by each line that writes it. Returns
  * `{ tests }`, or `{ reason }` when the declarations do not fix the count, such as a test declared in a loop or a subtest.
  */
@@ -13514,7 +13557,9 @@ export function declaredLanguageCaseTests({ language, args = [], testFiles = [] 
         if (!/#\[ignore\b/.test(attributes[0])) tests += 1;
       }
     } else if (language === "go") {
-      const run = args.indexOf("-run") === -1 ? null : args[args.indexOf("-run") + 1];
+      // go test selects with -run; a case that runs its test binary selects with the -test.run of the binary.
+      const option = args.findIndex((arg) => arg === "-run" || arg === "-test.run");
+      const run = option === -1 ? null : args[option + 1];
       if (run?.includes("/")) return { reason: `the -run pattern ${run} selects subtests` };
       const selected = run ? new RegExp(run) : /^/;
       for (const block of topLevelBlocks(text, "func (Test[\\w]*)\\(\\w+ \\*testing\\.T\\)")) {

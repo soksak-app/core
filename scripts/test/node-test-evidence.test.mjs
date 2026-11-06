@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { createNodeTestEvidence, readNodeTestEvidence, withNodeTestReporters, NODE_TEST_REPORTERS, testExecutionErrors } from '../node-test-evidence.mjs';
 import testEvents, { EVENT_PREFIX } from '../test-event-reporter.mjs';
 
@@ -59,4 +61,15 @@ test('the shared acceptance rule rejects unexecuted and incomplete cases', { tim
 test('reporter installation preserves selection flags and replaces both reporter argument forms', { timeout: 10_000 }, () => {
   assert.deepEqual(withNodeTestReporters(['--test', '--test-reporter', 'tap', '--test-reporter-destination=stdout', '--test-name-pattern=selected', '/case.test.mjs']),
     ['--test', ...NODE_TEST_REPORTERS, '--test-name-pattern=selected', '/case.test.mjs']);
+});
+
+test('a node --test run with the shared reporters prints no process warning', { timeout: 30_000 }, () => {
+  // node --test composes its root test stream with each reporter, and each composition adds end listeners to that stream; a third
+  // reporter passes the listener limit of 10 and Node prints a MaxListenersExceededWarning.
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const run = spawnSync(process.execPath, ['--test', ...NODE_TEST_REPORTERS, 'scripts/test/fixtures/node-color-count.mjs'], { cwd: root, env, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(run.stderr.split('\n').filter((line) => /^\(node:\d+\) /.test(line)), []);
 });

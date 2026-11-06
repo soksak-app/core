@@ -5,6 +5,9 @@
 ## 미배포
 
 - F684: `capture_text_test`는 system이 load하지 못한 text recognition model의 `e5rtError`처럼 Vision이 request에 대해 보고한 실패를 status 1의 인식 결과 대신 `error: the system text recognizer failed: <error>`와 exit status 3으로 보고하고, 기본 실행은 주입한 실패로 이 보고를 검사한다.
+- F683-2: `pnpm test`의 test runner는 출력에 node의 process warning이 있는 process를, language 어댑터도 쓰는 `scripts/node-warnings.mjs`의 `processWarnings` 규칙으로 실패시킨다.
+- F683-1: test runner는 각 node --test 파일에 reporter 두 개, 표준 출력의 TAP 형식과 표준 오류의 이벤트를 준다. node --test는 reporter마다 root test stream에 end listener를 더하며, 세 번째 reporter 때문에 Node가 MaxListenersExceededWarning을 출력했기 때문이다. 출력에 node의 process warning이 있는 language case는 그 warning으로 실패한다.
+- F683: 컴파일 언어의 각 language case는 테스트 전에 자기 한도로 실행되는 build를 선언하므로, cold build cache가 더 이상 `make test-language`를 timeout시키지 않는다. 실패한 build는 그 상태를 보고하고 테스트를 실행하지 않는다. 명령 감독기는 모든 group signal과 확인을 `killGroup`의 규칙으로 판정하므로 zombie group의 거부는 오류가 아니다.
 - F682: `make check-tests`는 `expectedTests`가 test file이 선언한 테스트 수와 다른 language case를 실패시키고, Go와 Rust registry case는 F651이 6개로 남긴 일곱 테스트를 기대한다.
 - F677: `make check-docs`는 text file의 모든 절 참조 `docs/<path>.md#<anchor>`에 그 문서와 anchor를 요구하고, 저장소의 그런 참조는 모두 있는 절을 가리킨다. 닫는 run이 없는 backtick이 그 뒤의 link를 더는 숨기지 않는다.
 - F680: cargo를 시작하는 script와 check는 Makefile의 순서대로 `@soksak/window-check`의 `cargoCommand`로 cargo를 찾고 Makefile은 `CARGO`를 export하므로, `PATH`에 cargo folder가 없는 shell에서도 실행된다.
