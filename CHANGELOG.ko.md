@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-34: Go host가 Tauri host처럼 `decided` 없는 `surfaceFocus {surface}`를 다시 받는다. 이 호출은 키보드를 옮기고 붙잡기를 열어 둔다. 붙잡기가 들어온 뒤 Wails와 mygo host는 이 호출을 `argument request.decided is missing`으로 거부했고, 그래서 결정 없는 키보드 이동이 그곳에서 모두 실패했다. Go 요청의 `decided`는 생략할 수 있고, `TestADecidedCallEndsTheHoldAndAPlainCallDoesNot`가 같은 contract의 Rust test처럼 두 호출을 decode한다. Red: `decided` 없는 호출이 거부되었다. Green: 20회 중 20회.
 - F488: event 1,000,000개 로그 query의 contract case(이제 `log.query.reads-what-each-query-of-a-million-events-needs`)가 경과 시간 대신 각 query의 행과 그 query가 읽은 색인의 segment와 line을 판정하며, 두 host에서 같다. 경과 시간은 공유 runner의 부하가 정했다. 245 segment 중 1개, 4096 line을 읽은 첫 page가 737 ms로 실패했다. test는 여전히 각 시간을 출력하고, 그 시간은 benchmark target이 잰다.
 - F536: 두 host의 정지 감시가 run loop의 대기로 끝나는 정지의 끝을 그 대기가 시작할 때 기록한다. 검사의 heartbeat가 대기의 시작보다 먼저일 수 있으므로, 감시는 열린 정지가 없을 때만 대기 동안 막힌다. 이전에는 그 heartbeat 뒤에 막혀 다음 깨어남에서야 `host.stall.resumed`를 썼다. Red: `TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds`가 18회 중 1회, 그 Rust 짝이 60회 중 9회 실패했다. Green: 60회 중 60회, 100회 중 100회.
 - F636: Rust workspace가 다시 `make check-rust-clippy`를 통과한다. document web view를 만드는 platform method는 두 host 모두 따로 받던 인자 5개 대신 `DocumentOptions`로 값을 받고, test는 clippy가 보고한 붙잡힌 실행과 callback 타입에 이름을 붙인다.

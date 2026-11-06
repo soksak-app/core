@@ -621,6 +621,20 @@ func (p *keyboardHoldPlatform) KeyboardDecided(unsafe.Pointer) {
 }
 
 // contract: surface-layout.keyboard-waits-for-the-decision
+func TestADecidedCallEndsTheHoldAndAPlainCallDoesNot(t *testing.T) {
+	decided, err := argument[FocusRequest]("request", json.RawMessage(`{"surface":null,"decided":true}`))
+	if err != nil || decided.Surface != nil || !decided.Decided {
+		t.Fatalf("a decided call = %+v, %v; want the workbench and decided", decided, err)
+	}
+	plain, err := argument[FocusRequest]("request", json.RawMessage(`{"surface":"tab-1"}`))
+	if err != nil || plain.Surface == nil || *plain.Surface != "tab-1" || plain.Decided {
+		t.Fatalf("a call without decided = %+v, %v; want tab-1 and not decided", plain, err)
+	}
+	if _, err := argument[FocusRequest]("request", json.RawMessage(`{"surface":"tab-1","decided":"yes"}`)); err == nil {
+		t.Fatalf("a decided that is not a boolean was accepted")
+	}
+}
+
 func TestTheInputOfTheWindowWaitsForTheDecisionOfTheWorkbench(t *testing.T) {
 	fake := &keyboardHoldPlatform{}
 	saved := system

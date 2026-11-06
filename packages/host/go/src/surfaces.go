@@ -1349,10 +1349,11 @@ func (s *Surfaces) CancelSurfaces(req CancelRequest) error {
 }
 
 // FocusRequest names the surface that takes the keyboard of the window, and null names the workbench. Decided ends the hold of
-// the input of the window after the keyboard moved (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+// the input of the window after the keyboard moved, and a call without it leaves the hold open
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 type FocusRequest struct {
 	Surface *string `json:"surface"`
-	Decided bool    `json:"decided"`
+	Decided bool    `json:"decided,omitempty"`
 }
 
 // FocusSurface gives the keyboard of the window to the surface of the request or to the workbench on the UI thread
