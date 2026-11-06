@@ -359,11 +359,13 @@ func parseDragNative(params json.RawMessage) (bool, error) {
 // nativeDrag delivers the drag of plan from the boundary point from as native input of the primary button, as a person
 // drags: for each round trip a press at from, each step as a drag of the button at from plus the offset times the
 // fraction of the step, out and back, and a release at from after the last step. deliver delivers one input without
-// activating the window or the application, and step returns at the host time of the next step. A failed input after a
-// press releases the button at the last point, so no press stays open in the window. The reply is {from, steps, took,
-// asked}: took is the time from the first press to the last release on the clock of the host and asked the time that
-// the steps ask, both in milliseconds.
-func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {
+// activating the window or the application, step returns at the host time of the next step, and presented returns when
+// the window has presented its current layout; it runs before each press, because a press goes where the last frame
+// drew. A failed input after a press releases the button at the last point, so no press stays open in the window. The
+// reply is {from, steps, took, asked, pressWaits}: took is the time from the first press to the last release without the
+// waits before the presses, on the clock of the host, asked the time that the steps ask, and pressWaits the wait before
+// each press, all in milliseconds.
+func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func(), presented func() error) (map[string]any, error) {
 	per := plan.steps()
 	at := func(fraction float64) point {
 		return point{X: from.X + plan.DX*fraction, Y: from.Y + plan.DY*fraction}
@@ -372,7 +374,16 @@ func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, ste
 		return PointerInput{X: p.X, Y: p.Y, Phase: phase, Button: "left", Clicks: 1}
 	}
 	began := time.Now()
+	var waited time.Duration
+	pressWaits := make([]int64, 0, plan.Times)
 	for turn := 0; turn < plan.Times; turn++ {
+		waiting := time.Now()
+		if err := presented(); err != nil {
+			return nil, fmt.Errorf("native drag wait before the press of round trip %d: %w", turn+1, err)
+		}
+		wait := time.Since(waiting)
+		waited += wait
+		pressWaits = append(pressWaits, wait.Milliseconds())
 		if err := deliver(input("down", from)); err != nil {
 			return nil, fmt.Errorf("native drag press of round trip %d: %w", turn+1, err)
 		}
@@ -397,8 +408,8 @@ func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, ste
 		}
 	}
 	steps := plan.Times * 2 * per
-	return map[string]any{"from": from, "steps": steps, "took": time.Since(began).Milliseconds(),
-		"asked": steps * int(frameStep/time.Millisecond)}, nil
+	return map[string]any{"from": from, "steps": steps, "took": (time.Since(began) - waited).Milliseconds(),
+		"asked": steps * int(frameStep/time.Millisecond), "pressWaits": pressWaits}, nil
 }
 
 // steps is the number of steps of a one-way move. The page counts them in the same way.
@@ -697,6 +708,15 @@ func nativeDragPresented(h *Host, s *Surfaces, plan dragPlan, from point, sent f
 		func() {
 			<-tick.C
 			sent()
+		}, func() error {
+			_, err := s.presented()
+			// The steps of the round trip are timed from its press, not from before the wait.
+			tick.Reset(frameStep)
+			select {
+			case <-tick.C:
+			default:
+			}
+			return err
 		})
 	if err != nil {
 		return nil, err

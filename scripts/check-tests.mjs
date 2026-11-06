@@ -530,7 +530,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/images.rs", symbol: "pub fn presented_frames(&self, key: &Key) -> Result<u64, String> {" },
       { file: "packages/host/go/src/exposure.go", symbol: "type WindowFrameCounters struct {" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_frame_counters() -> serde_json::Map<String, Value> {" },
-      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func()) (map[string]any, error) {" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(plan dragPlan, from point, deliver func(PointerInput) error, step func(), presented func() error) (map[string]any, error) {" },
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },
       { file: "packages/workbench/observe.js", symbol: "function boundaryPoint(axis, line) {" },
     ],
