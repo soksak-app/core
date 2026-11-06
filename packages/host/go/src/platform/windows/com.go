@@ -23,8 +23,13 @@ const (
 	controllerMoveFocus    = 12
 
 	// ICoreWebView2.
+	webviewAddProcessFailed           = 25
+	webviewRemoveProcessFailed        = 26
 	webviewCapturePreview             = 30
 	webviewCallDevToolsProtocolMethod = 36
+
+	// ICoreWebView2ProcessFailedEventArgs.
+	processFailedArgsGetKind = 3
 )
 
 // comPointer gives the address that a COM call returned as a pointer. COM memory is not memory of Go, so it does not move.

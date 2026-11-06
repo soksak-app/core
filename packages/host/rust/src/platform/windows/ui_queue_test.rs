@@ -51,6 +51,7 @@ fn noted(log: &Log) -> Vec<String> {
     log.lock().unwrap().clone()
 }
 
+// contract: platform.windows.ui-queue.tasks-run-in-order-once
 #[test]
 fn ui_tasks_run_in_their_order_once() {
     let (queue, _, _) = started();
@@ -63,6 +64,7 @@ fn ui_tasks_run_in_their_order_once() {
     assert_eq!(noted(&log), ["first", "second"]);
 }
 
+// contract: platform.windows.ui-queue.task-queued-by-task-waits-for-later-step
 #[test]
 fn a_ui_task_that_a_task_queues_waits_for_a_later_step() {
     let (queue, _, _) = started();
@@ -82,6 +84,7 @@ fn a_ui_task_that_a_task_queues_waits_for_a_later_step() {
     assert_eq!(noted(&log), ["first", "second"]);
 }
 
+// contract: platform.windows.ui-queue.refused-task-never-runs
 #[test]
 fn a_ui_task_that_the_queue_refuses_never_runs() {
     let (queue, _, _) = queue();
@@ -94,6 +97,7 @@ fn a_ui_task_that_the_queue_refuses_never_runs() {
     assert_eq!(noted(&log), ["accepted"]);
 }
 
+// contract: platform.windows.ui-queue.refuses-before-its-thread
 #[test]
 fn a_ui_queue_before_its_thread_refuses_a_task() {
     let (queue, timers, _) = queue();
@@ -104,6 +108,7 @@ fn a_ui_queue_before_its_thread_refuses_a_task() {
     assert!(timers.lock().unwrap().is_empty());
 }
 
+// contract: platform.windows.ui-queue.delayed-task-runs-as-step-after-wait
 #[test]
 fn a_delayed_ui_task_runs_as_a_step_after_its_wait() {
     let (queue, timers, _) = started();
@@ -120,6 +125,7 @@ fn a_delayed_ui_task_runs_as_a_step_after_its_wait() {
     assert_eq!(noted(&log), ["late"]);
 }
 
+// contract: platform.windows.ui-queue.refused-delayed-task-enters-later
 #[test]
 fn a_delayed_ui_task_that_the_queue_refuses_enters_later() {
     let (queue, timers, reports) = queue();

@@ -76,7 +76,7 @@ packages/host/go/                          packages/host/rust/
         capture.go     still capture                    capture.rs
         capture_diagnostics.go  diagnostic method      차이 H54
         com.go         COM table                        차이 H53
-        (없음)                                          process_failure.rs   차이 H55
+        process_failure.go  process failure 의 의미      process_failure.rs
         show.go        show 명령                        show.rs
         show_windows.go  앞을 지키는 show               show_windows.rs
         ui_thread.go   UI thread 와 그 대기             ui_thread.rs
@@ -217,7 +217,7 @@ Wayland에서 client는 toplevel을 배치하거나 focus할 수 없다. 둘 다
 
 ## Windows 상태
 
-Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`), WebView2 의 pointer·키 입력(`platform/windows/input.*`, `devtools_input.*`), still capture(`capture.*`), 앞을 지키는 show(`show.*`, `show_windows.*`), UI thread 의 queue(`ui_queue.*`, `ui_thread.*`), mouse 버튼과 창 입력의 감시(`mouse_watch.*`)를 구현한다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
+Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`), WebView2 의 pointer·키 입력(`platform/windows/input.*`, `devtools_input.*`), still capture(`capture.*`), 앞을 지키는 show(`show.*`, `show_windows.*`), UI thread 의 queue(`ui_queue.*`, `ui_thread.*`), mouse 버튼과 창 입력의 감시(`mouse_watch.*`), WebView2 process failure 의 의미(`process_failure.*`)를 구현한다. Go platform 은 `SetWebview` 가 이름 붙인 web view 의 `ProcessFailed` 를 구독하고, browser process 나 render process 가 끝나면 `SetWebview` 가 받은 `ended` 를 UI thread 에서 부르며, 다른 종류는 standard error 에 쓴다. web view 를 set 하는 framework adapter 는 자기 창의 window event `WindowWorkbenchEnded` 를 내는 `ended` 를 넘기고, 그 listener 는 macOS 와 같이 `web_process_ended` 를 기록하고 error line 을 쓴다. 아직 web view 를 set 하는 framework adapter 는 없다. `platform/windows/unsupported.*`의 나머지 연산은 `<operation> is not implemented on windows` 형식의 오류를 반환한다. Windows에서는 애플리케이션 시작이 첫 platform 연산에서 실패한다. Wails의 `Run`과 Tauri의 `run`은 창을 열기 전에 `window resize animation is not implemented on windows`와 상태 1로 끝난다. Linux 구현은 없으며, 그곳에서 `platform.Current()`와 `platform::current()`는 오류를 반환한다.
 
 `make check-host-files`는 `make check-windows-build`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
@@ -307,7 +307,6 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | C10 | `src/event_log_idle_test.go` | `src/event_log_flush_test.rs`, `tests/event_log_idle_test.rs` | 두 언어는 writer의 같은 잠듦과 flush의 같은 응답을 확인한다. Go test는 file system fixture 때문에 `package sok`에 있고, Rust flush test는 비공개 `wait_for_flush` 때문에 `event_log.rs`의 자식이다 |
 | H53 | `src/platform/windows/com.go` | 없음 | Go host 는 cgo 없이 COM table 로 WebView2 를 호출한다. Rust host 는 그 table 을 `webview2-com` crate 에서 얻는다 |
 | H54 | `src/platform/windows/capture_diagnostics.go` | 없음 | Go build tag 는 파일 전체를 고르므로 diagnostic build 의 method 가 자기 파일을 가진다. Rust 는 `src/platform/windows/windows.rs` 에서 method 마다 feature 로 고른다 |
-| H55 | 없음 | `src/platform/windows/process_failure.rs`, `src/platform/windows/process_failure_test.rs` | Tauri framework adapter 는 자기 web view 의 process failure 를 읽는다. Go host 는 아직 창의 WebView2 를 쥐지 못하므로 거기서는 failure 를 읽을 수 없다 |
 
 ### Framework 표
 

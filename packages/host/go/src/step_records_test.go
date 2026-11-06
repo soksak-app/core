@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// contract: window.frames.steps-reach-the-class-frame
 func TestStepRecordsReachTheClassFrame(t *testing.T) {
 	isolateTraceRecords(t)
 	writeStepRecord(StepRecord{Window: "main", Kind: "selector", Callback: "mouseMoved:", Entry: 10, Return: 40, Forwarded: 3, Wait: 7})
@@ -36,6 +37,7 @@ func (f *fakeStepFramework) RecordSteps(report func(StepRecord), lost func(uint6
 	return func() { f.stops++ }
 }
 
+// contract: window.frames.step-recording-follows-the-policy
 func TestStepRecordingFollowsTheStoredLevelOfTheClassFrame(t *testing.T) {
 	fake := &fakeStepFramework{}
 	stored := false
@@ -70,12 +72,14 @@ func TestStepRecordingFollowsTheStoredLevelOfTheClassFrame(t *testing.T) {
 	}
 }
 
+// contract: window.frames.step-recording-follows-the-policy
 func TestStepRecordingWithoutFrameworkStepsRecordsNothing(t *testing.T) {
 	recording := newStepRecording(func(func(StepRecord), func(uint64)) func() { return nil }, func() bool { return true }, func(uint64) {})
 	recording.sync()
 	recording.stop()
 }
 
+// contract: window.frames.step-listener-hears-without-the-policy
 func TestAListenerHearsEachStepWithoutThePolicyAndEndsWithADrain(t *testing.T) {
 	fake := &fakeStepFramework{}
 	stored := false

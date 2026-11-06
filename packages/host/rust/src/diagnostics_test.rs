@@ -686,6 +686,7 @@ fn a_native_drag_presses_only_after_the_window_presented_its_layout() {
     );
 }
 
+// contract: diagnostics.drag.native-reads-boundary-after-presentation
 // A press goes where the last frame drew, so a boundary that a change just made takes the press only after the window
 // presented it.
 #[test]

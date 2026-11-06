@@ -48,6 +48,7 @@ impl PersistentStream for RecordingStream {
     }
 }
 
+// contract: sidecars-transport.hello.deadline-ends-with-its-answer
 #[test]
 fn a_connection_after_its_hello_has_no_read_deadline() {
     let deadlines = Arc::new(Mutex::new(Vec::new()));
@@ -58,6 +59,7 @@ fn a_connection_after_its_hello_has_no_read_deadline() {
     assert_eq!(*deadlines.lock().unwrap(), vec![None]);
 }
 
+// contract: sidecars-transport.hello.deadline-ends-with-its-answer
 #[test]
 fn a_read_after_the_hello_deadline_waits_past_that_deadline() {
     let folder = tempfile::tempdir().unwrap();

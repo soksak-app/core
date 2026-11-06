@@ -603,11 +603,14 @@ type attachPlatform struct {
 	platform.Platform
 	created, closed []unsafe.Pointer
 	onScreen        error
+	// released is the release callback of the last region created.
+	released func(generation, raster uint64, sequence int)
 }
 
 func (p *attachPlatform) CreateImage(surface unsafe.Pointer, name string, event func(json string), released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error) {
 	handle := unsafe.Pointer(new(int))
 	p.created = append(p.created, handle)
+	p.released = released
 	return handle, nil
 }
 
@@ -649,6 +652,37 @@ func attachSurfaces(t *testing.T) (*Surfaces, *attachPlatform, *queuedFramework)
 	system, framework = fake, steps
 	t.Cleanup(func() { system, framework = savedSystem, savedFramework })
 	return surfaces, fake, steps
+}
+
+// contract: images.lease.failed-release-is-reported
+func TestAReleaseThatFailsInAnOpenWindowReportsTheFailure(t *testing.T) {
+	surfaces, fake, _ := attachSurfaces(t)
+	key := ImageKey{Surface: "surface-a", Name: "view"}
+	if _, err := surfaces.createImage(key, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}, true); err != nil {
+		t.Fatalf("the lease region was not created: %v", err)
+	}
+	if fake.released == nil {
+		t.Fatal("a lease region has no release")
+	}
+	surfaces.sidecars.mu.Lock()
+	surfaces.sidecars.stopped = true
+	surfaces.sidecars.mu.Unlock()
+	fake.released(1, 2, 3)
+	records.Lock()
+	defer records.Unlock()
+	for _, record := range records.buffer {
+		if record.event != "host.record.error" {
+			continue
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(record.fields, &fields); err != nil {
+			t.Fatalf("an error record is not JSON: %v", err)
+		}
+		if fields["where"] == "image view released" && fields["text"] == "sidecars are stopped" {
+			return
+		}
+	}
+	t.Fatal("the failed release of an open window recorded no error")
 }
 
 // contract: images.attach.one-main-step

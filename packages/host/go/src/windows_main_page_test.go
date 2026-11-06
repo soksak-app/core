@@ -94,6 +94,7 @@ func (p *goneWindowPlatform) WindowOnScreen(window unsafe.Pointer) (bool, error)
 }
 
 // A window that closes may still report a change of its state, and with no native window there is nothing to read.
+// contract: application.window.gone-window-reads-no-state-on-change
 func TestAWindowThatIsGoneReadsNoStateOnAChange(t *testing.T) {
 	window := &eventWindow{pagelessWindow: pagelessWindow{native: unsafe.Pointer(new(byte))}, listeners: map[WindowEvent][]func(){}}
 	previousFramework, previousSystem := framework, system

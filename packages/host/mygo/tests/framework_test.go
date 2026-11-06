@@ -572,6 +572,7 @@ func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
 
 // A window answers commands once its workbench started, and they read the elements of its last frame, so the start follows the
 // first frame.
+// contract: mygo.framework.start-builds-the-workbench
 func TestAWorkbenchStartsAfterTheFirstFrameOfItsWindow(t *testing.T) {
 	_, workbench, window := open(t, "started")
 	window.Show()
@@ -610,6 +611,7 @@ func TestAShownWindowCountsItsFramesAndThenDrawsNone(t *testing.T) {
 
 // A step of the workbench can read the scale after its window closed, when the framework holds no native window. Native code
 // receives no window then, because it records every such read as an error: the read gives the error of a closed window.
+// contract: mygo.framework.window-operations
 func TestAScaleOfAClosedWindowCallsNoNativeCode(t *testing.T) {
 	window := 1
 	native := unsafe.Pointer(&window)

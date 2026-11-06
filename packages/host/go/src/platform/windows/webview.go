@@ -5,6 +5,7 @@ package windows
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"unsafe"
 
@@ -16,6 +17,9 @@ type nativeWebview struct {
 	window, core, controller uintptr
 	presses                  pressState
 	queue                    inputQueue
+	// failed is the handler of ProcessFailed, and failedToken its subscription.
+	failed      uintptr
+	failedToken int64
 }
 
 var (
@@ -24,10 +28,11 @@ var (
 )
 
 // SetWebview makes a WebView2 the one that takes the input and the capture of the window, whose handle is the HWND. core is its
-// ICoreWebView2 and controller its ICoreWebView2Controller, which this package holds until EndWebview. Call it on the UI thread.
-func SetWebview(window, core, controller unsafe.Pointer) error {
-	if window == nil || core == nil || controller == nil {
-		return errors.New("a web view needs its window, its ICoreWebView2 and its controller")
+// ICoreWebView2 and controller its ICoreWebView2Controller, which this package holds until EndWebview. ended runs on the UI thread when the
+// process of its page ended (processFailureOf). Call it on the UI thread.
+func SetWebview(window, core, controller unsafe.Pointer, ended func()) error {
+	if window == nil || core == nil || controller == nil || ended == nil {
+		return errors.New("a web view needs its window, its ICoreWebView2, its controller and the function of the end of its page")
 	}
 	if err := startUIThread(); err != nil {
 		return err
@@ -36,6 +41,10 @@ func SetWebview(window, core, controller unsafe.Pointer) error {
 	view.queue = inputQueue{send: view.callDevTools, after: afterOnUIThread}
 	comCall(view.core, slotAddRef)
 	comCall(view.controller, slotAddRef)
+	if err := view.watchProcessFailures(ended); err != nil {
+		view.release()
+		return err
+	}
 	webviewsMu.Lock()
 	previous := webviews[view.window]
 	webviews[view.window] = view
@@ -58,8 +67,37 @@ func EndWebview(window unsafe.Pointer) {
 }
 
 func (v *nativeWebview) release() {
+	if v.failed != 0 {
+		comCall(v.core, webviewRemoveProcessFailed, uintptr(v.failedToken))
+		comCall(v.failed, slotRelease)
+	}
 	comCall(v.controller, slotRelease)
 	comCall(v.core, slotRelease)
+}
+
+// watchProcessFailures subscribes to the process failures of the web view, which WebView2 raises on the UI thread.
+func (v *nativeWebview) watchProcessFailures(ended func()) error {
+	window := v.window
+	handler := newHandler(handlerVtables().valued, func(_, args uintptr) {
+		var kind int32
+		if result := comCall(args, processFailedArgsGetKind, uintptr(unsafe.Pointer(&kind))); failedResult(result) {
+			fmt.Fprintf(os.Stderr, "web view process: window %#x: %v\n", window, resultError("ProcessFailedKind", result))
+			return
+		}
+		switch processFailureOf(kind) {
+		case pageEnded:
+			ended()
+		case pageStays:
+			fmt.Fprintf(os.Stderr, "web view process: window %#x: process failure %d\n", window, kind)
+		}
+	})
+	var token int64
+	if result := comCall(v.core, webviewAddProcessFailed, handler, uintptr(unsafe.Pointer(&token))); failedResult(result) {
+		comCall(handler, slotRelease)
+		return resultError("add_ProcessFailed", result)
+	}
+	v.failed, v.failedToken = handler, token
+	return nil
 }
 
 // webviewOf returns the WebView2 of the window.

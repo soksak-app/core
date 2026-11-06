@@ -25,6 +25,7 @@ fn poison<T>(lock: &Mutex<T>) {
 
 /// The switch belongs to the process, so a test that switches the trace without holding `test_switch` changes what another test
 /// stores. Such a test fails on its first call, on every run.
+// contract: verification.trace-switch.requires-the-test-switch
 #[test]
 fn a_test_that_switches_the_trace_without_holding_the_switch_fails_at_once() {
     let unheld = std::thread::spawn(|| command(json!({"action": "off"}))).join();

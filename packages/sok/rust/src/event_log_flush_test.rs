@@ -105,6 +105,7 @@ fn a_writer_that_ended_is_not_reported_as_a_deadline() {
     );
 }
 
+// contract: log.writer.flush-at-exit
 #[test]
 fn a_flush_that_gets_no_answer_reports_its_deadline() {
     let (_done, wait) = sync_channel::<()>(1);
