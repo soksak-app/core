@@ -239,6 +239,33 @@ test("a view declares its composition only after the host authorizes its surface
   h.close();
 });
 
+test("a remounted view sends a higher composition revision in the same document", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = h.modules;
+  const { recordOrigin } = await import("../tab-reports.js");
+  const id = "view-remounted-revision";
+  try {
+    for (const generation of [1, 2]) {
+      recordOrigin(id, null, "test fixture");
+      seedSourceOrigins({ floor: generation, views: { [id]: generation } });
+      authorizeSurface(id);
+      await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
+      await waitSurfaceCompositionDeclared(id);
+      const reply = await h.viewCall("composition.place", { regions: [], overlays: [] }, generation);
+      assert.equal(reply.error, undefined, "the placement of the current view was refused");
+      assert.equal(reply.generation, generation, "the placement reply belongs to another view generation");
+      await disposeSurface(id);
+    }
+    const revisions = h.calls.filter(({ name }) => name === "compositionPlace").map(({ payload }) => payload.revision);
+    assert.equal(revisions.length, 2, "both view generations must send their placement");
+    assert.ok(Number.isInteger(revisions[0]) && revisions[0] > 0, "the first placement needs a positive revision");
+    assert.ok(revisions[1] > revisions[0], `a remounted view reused a composition revision: ${revisions.join(", ")}`);
+  } finally {
+    await disposeSurface(id);
+    h.close();
+  }
+});
+
 
 test("a later retained mount waits for the preceding placement release", { timeout: 5000 }, async (t) => {
   const h = await harness(t);

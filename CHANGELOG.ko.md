@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F498-2: test를 등록하지 않는 미사용 진입점 13개를 제거하고 엄격한 discovery를 유지하며, 소유 view test에 누락된 remount revision assertion을 추가한다. macOS에서 동작 case 215개와 discovery/inventory case 67개가 통과하고 revision 고정 mutation은 해당 assertion에서 실패한다.
+
 - F502-1: Random layout 검사는 profile 가중치와 독립 slicing oracle을 유지하며 operation 생성과 전이 invariant를 공유한다. Report는 각 method의 결과를 세고 중간 결함은 복구 전에 실패한다. macOS에서 집중 소유 및 consumer test와 세 profile의 seed 12개가 모두 통과한다.
 
 - F504-1: 필수 및 탐색 mutation command는 stdout, stderr와 실행 기록을 보존한다. Assertion, runtime error와 mutant deadline은 유효한 검출로 유지하며, dependency 누락, cancel과 출처 불명 signal은 실험을 실패시킨다. macOS에서 소유 case 19개와 command smoke case 세 개가 모두 통과한다.
