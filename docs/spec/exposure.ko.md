@@ -293,7 +293,7 @@ Windows 에서 `host.buttons` 와 창의 press·drag 는 system hook 이 아니�
 - 창 순서의 자리를 지킨다. `orderFront:`, `makeKeyAndOrderFront:`, `orderFrontRegardless`는 이 창에 대해 거부되고 각각 event `native.input.virtual`을 남긴다.
 - 실제 활성화는 그 순간부터 이 상태를 끝내고 실제 상태가 우선한다. `activate: true`는 활성화하기 전에 끝낸다. 창이 닫히면 끝난다. 끝날 때마다 `reason`이 있는 `native.input.virtual`을 하나 남긴다.
 - 실제 move, 실제 cursor 위치, 실제 button mask는 이 창의 page에 들어가지 않는다. `host.window`는 합성 입력 위치를 `pointer`로 보고하고, `key`와 `active`는 계속 시스템 상태를 보고하며 그 옆에 `virtualKey`가 있다. 실제 scroll과 실제 press는 그대로 도착하고, 이 창의 실제 press는 애플리케이션을 활성화한다.
-- 키보드를 쥔 채 닫히는 surface와 document 영역은 창을 떠나기 전에 키보드를 content view에 넘긴다. 그러지 않으면 AppKit이 key window의 마지막 first responder로 붙들어, 닫힌 page와 그 data store가 끝나지 않는다.
+- 키보드를 쥔 채 닫히는 surface와 document 영역은 떠나기 전에 키보드를 content view에 넘긴다. 그러지 않으면 AppKit이 다음 first responder 변경까지 그 view를 붙들어, 닫힌 page와 그 data store가 끝나지 않는다.
 
 실제 입력 경로를 검사하는 테스트는 `input.pointer`와 `input.key`만 사용한다. 테스트는 상태 준비에만 `element.act`를 사용한다.
 

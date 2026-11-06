@@ -293,7 +293,7 @@ In an application that is not really active, `input.key` and a `move` of `input.
 - It stays at its place in the order of windows: `orderFront:`, `makeKeyAndOrderFront:` and `orderFrontRegardless` are refused for it, each with the event `native.input.virtual`.
 - A real activation ends it from its first moment, and real state wins. `activate: true` ends it before it activates. A window that closes ends it. Each end writes one `native.input.virtual` with its `reason`.
 - A real move, a real cursor position and a real button mask do not enter its pages. `host.window` reports the injected position as `pointer`, and `key` and `active` keep reporting the system state, with `virtualKey` beside them. A real scroll and a real press still arrive, and a real press of the window activates the application.
-- A surface or a document region that closes with the keyboard gives it to the content view before it leaves its window. AppKit otherwise keeps it as the last first responder of the key window, and the closed page and its data store do not end.
+- A surface or a document region that closes with the keyboard gives it to the content view before it leaves. AppKit otherwise keeps the view until the next change of the first responder, and the closed page and its data store do not end.
 
 Tests that check a real input path use `input.pointer` and `input.key` only. Tests use `element.act` only to set up state.
 

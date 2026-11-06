@@ -35,7 +35,8 @@ void *webviewSurfaceNativePlane(void *surface);
 // and the regions of the view are drawn above it. Returns false when the surface has no host.
 bool sp_surface_place_view(void *surface, void *view);
 // Gives the keyboard to the content view when the view or a view inside it holds it. A view calls this before it closes: AppKit
-// keeps the last first responder of a key window until the next one, which would keep the closed view.
+// keeps the view that held the keyboard when it leaves the window until the next change of the first responder, and a move to
+// the window itself does not release a page of a surface.
 void sp_view_give_up_keyboard(void *view);
 // Forgets the web view of a view placed in its surface, before the view is closed.
 void sp_surface_unplace_view(void *view);

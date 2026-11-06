@@ -86,10 +86,17 @@ static NSArray *eventTypes(WKWebView *view) {
     spin(0.2);
     return evaluate(view, @"events.map(e=>e.type)");
 }
-static NSDictionary *facts(NSWindow *window) {
+// The facts of host.window; nil for a window without its composition, which has none (window_facts.h).
+static NSDictionary *factsOf(NSWindow *window) {
     char *json = sp_window_facts(window, sp_window_composition(window));
+    if (!json) return nil;
     NSDictionary *value = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:json length:strlen(json)] options:0 error:NULL];
     free(json);
+    return value;
+}
+static NSDictionary *facts(NSWindow *window) {
+    NSDictionary *value = factsOf(window);
+    check(value != nil, @"the window has facts");
     return value;
 }
 static NSString *frontName(void) { return NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier ?: @"none"; }
@@ -139,6 +146,11 @@ int main(void) { @autoreleasepool {
 
     for (int i = 0; i < 5; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
     for (int i = 0; i < 3; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
+
+    // A window that registered no page has no facts, and reading them fails the check instead of the process.
+    NSWindow *bare = makeWindow(0);
+    check(factsOf(bare) == nil, @"a window without its composition answers no facts");
+    [bare release];
 
     NSString *front = frontName();
     NSWindow *window = makeWindow(0), *cover = makeWindow(0), *second = makeWindow(440);
