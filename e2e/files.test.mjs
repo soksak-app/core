@@ -1,9 +1,11 @@
 // Files section views check: the files sections of a sidebar are section surfaces that mount with their document and run the
-// files commands on their own surface, and a file that the tree view opens with no plugin for it stays out of the error display.
-// The rows and bookmark entries that the views draw are not observable through the core exposure, because the files plugin
-// declares no status or element entry for them. The checks that need them are held until the plugin declares them (docs/features.md, F332-4-4).
+// files commands on their own surface, a file that the tree view opens with no plugin for it stays out of the error display, a
+// double click on a row opens its file, and the bookmarks of the project data keep two adds at once and reach the next window of
+// the project. The tree view reports its visible rows in its status `files.tree` and exposes each row as the element
+// `files.tree.row`, in the same order.
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -135,5 +137,126 @@ for (const app of Object.values(APPS)) {
     // files.open answers null when no plugin opens the file: the tree view shows the failure, so the error display stays empty.
     assert.equal(await s.run("files.open", { path: `${folder}/note.zzz` }, tree), null);
     assert.equal(await s.get("core.workbench.error"), null, "the failure to open a file reached the error display");
+  });
+}
+
+// A double click on a file row of the files tree opens the file in an editor tab, as it does for a person: the pointer of the
+// application presses twice with the click counts 1 and 2, so the page receives the dblclick that AppKit makes of a person's
+// double click (docs/spec/exposure.md). The pointer move makes the window the virtual key window and activates nothing.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a double click on a file row of the files tree opens the file in an editor tab`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    const project = await s.get("core.project");
+    const folder = `files-double-click-${process.pid}`;
+    const path = `${folder}/note.txt`;
+    mkdirSync(join(project.root, folder));
+    writeFileSync(join(project.root, path), "double click\n");
+    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
+    await s.until("core.sidebars", (sidebars) => sectionOf(sidebars, "left", "files.tree")?.phase === "ready",
+      "the files tree section view was not ready");
+    const tree = `${project.activeSpaceId}/left/files.tree`;
+    await documentsReady(s, [tree]);
+    await s.run("files.refresh", {}, tree);
+    await s.until("files.tree", (value) => value.rows.some((row) => row.path === folder), `the tree did not list ${folder}`, { surface: tree });
+    await s.run("files.tree.toggle", { path: folder, expanded: true }, tree);
+    const { rows } = await s.until("files.tree", (value) => value.rows.some((row) => row.path === path),
+      `the tree did not list ${path} after the folder expanded`, { surface: tree });
+    const index = rows.findIndex((row) => row.path === path);
+    const before = new Set((await s.get("core.grid")).cards.flatMap((card) => (card.tabs ?? []).map((tab) => tab.id)));
+    s.cleanup(async () => {
+      for (const card of (await s.get("core.grid")).cards) {
+        for (const tab of card.tabs ?? []) if (!before.has(tab.id)) await s.run("core.tab.close", { tab: tab.id });
+      }
+    });
+    const rect = await s.rect("files.tree.row", index, tree);
+    const x = rect.document.x + rect.x + Math.min(40, rect.width / 2);
+    const y = rect.document.y + rect.y + rect.height / 2;
+    const active = (await s.get("host.window")).active;
+    await s.pointer(x, y, "move");
+    await s.until("host.window", (state) => state.virtualKey, "the window did not become the virtual key window");
+    for (const clicks of [1, 2]) {
+      await s.pointer(x, y, "down", { clicks });
+      await s.pointer(x, y, "up", { clicks });
+    }
+    const grid = await s.until("core.grid", (value) => value.cards.some((card) => (card.tabs ?? []).some((tab) => !before.has(tab.id))),
+      "the double click opened no tab");
+    const opened = grid.cards.flatMap((card) => card.tabs ?? []).filter((tab) => !before.has(tab.id));
+    assert.equal(opened.length, 1, `the double click opened ${opened.length} tabs: ${JSON.stringify(opened)}`);
+    await s.until("editor.document", (value) => value.path === path, `the opened tab does not show ${path}`, { surface: opened[0].id });
+    assert.equal((await s.get("host.window")).active, active, `the double click changed whether ${app.name} is active`);
+  });
+}
+
+// Two views of the files plugin add a bookmark at the same moment, and the project data keeps both (docs/spec/plugins.md#project-data).
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: two bookmarks that two views add at the same moment both stay`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    const project = await s.get("core.project");
+    const folder = `files-bookmarks-${process.pid}`;
+    const paths = [`${folder}/one.txt`, `${folder}/two.txt`];
+    mkdirSync(join(project.root, folder));
+    for (const path of paths) writeFileSync(join(project.root, path), `${path}\n`);
+    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
+    // The tree of the left sidebar and the tree of a card sidebar are two views of the same project that add bookmarks.
+    await terminalCardSidebar(s, { sections: ["files.tree"] });
+    const space = project.activeSpaceId;
+    const trees = [`${space}/left/files.tree`, `${space}/terminal:left/files.tree`];
+    const bookmarks = `${space}/left/files.bookmarks`;
+    await s.until("core.sidebars", (sidebars) => sectionOf(sidebars, "left", "files.tree")?.phase === "ready"
+      && sectionOf(sidebars, "terminal:left", "files.tree")?.phase === "ready" && sectionOf(sidebars, "left", "files.bookmarks")?.phase === "ready",
+    "the two files trees and the bookmarks did not report ready");
+    await documentsReady(s, [...trees, bookmarks]);
+    s.cleanup(async () => {
+      for (const path of paths) await s.run("files.bookmarks.remove", { path }, bookmarks);
+    });
+    await Promise.all(paths.map((path, index) => s.run("files.bookmarks.add", { path }, trees[index])));
+    const stored = await s.until("files.bookmarks", (value) => paths.every((path) => value.includes(path)),
+      "the bookmarks did not keep both adds", { surface: bookmarks });
+    assert.equal(stored.filter((path) => paths.includes(path)).length, 2, `the bookmarks hold ${JSON.stringify(stored)}`);
+  });
+}
+
+// A bookmark that one window wrote reaches the views of the window that opens the project after it: only one window holds a
+// project, so the project closes with its window and opens again in a new window (docs/spec/projects.md).
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a bookmark that one window wrote reaches the window that opens the project after it`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-files-window-")));
+    writeFileSync(join(root, "note.txt"), "note\n");
+    s.cleanup(() => rmSync(root, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const window of await s.get("host.windows")) {
+        if (window.window !== s.window) await s.on(window.window).close();
+      }
+      await s.windows(1, "the check left an extra window");
+      for (const project of await s.get("core.projects")) {
+        if (project.root.startsWith(root)) await s.run("core.project.close", { id: project.id });
+      }
+      await s.run("core.projects.flush");
+    });
+    await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
+    const projectWindow = async (color) => {
+      const opened = await s.run("core.project.open", { root, color });
+      const windows = await s.windows(2, "the project window did not open");
+      const child = s.on(windows.find((item) => item.window !== s.window).window);
+      const project = await child.until("core.project", (value) => value?.id === opened.id, "the project did not become active");
+      const [tree, bookmarks] = FILES_SECTIONS.map((id) => `${project.activeSpaceId}/left/${id}`);
+      await child.until("core.sidebars", (sidebars) => FILES_SECTIONS.every((id) => sectionOf(sidebars, "left", id)?.phase === "ready"),
+        "the files sections of the project window did not report ready");
+      await documentsReady(child, [tree, bookmarks]);
+      return { child, tree, bookmarks };
+    };
+    const first = await projectWindow("#7fe3b0");
+    await first.child.run("files.bookmarks.add", { path: "note.txt" }, first.tree);
+    await first.child.until("files.bookmarks", (value) => value.includes("note.txt"), "the first window did not store the bookmark",
+      { surface: first.bookmarks });
+    await first.child.close();
+    await s.windows(1, "the first project window did not close");
+    const second = await projectWindow("#7db4ff");
+    await second.child.until("files.bookmarks", (value) => value.includes("note.txt"),
+      "the window that opened the project after the first did not read its bookmark", { surface: second.bookmarks });
   });
 }
