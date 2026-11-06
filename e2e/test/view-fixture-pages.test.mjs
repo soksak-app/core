@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { validateManifest } from "@soksak/plugin-api";
 
 const FIXTURES = fileURLToPath(new URL("../fixtures/", import.meta.url));
 
@@ -17,6 +18,14 @@ function manifests(folder) {
     return entry.name === "plugin.json" ? [path] : [];
   });
 }
+
+test("each fixture plugin manifest satisfies the public installation contract", { timeout: 5000 }, () => {
+  const paths = manifests(FIXTURES);
+  assert.ok(paths.length > 0, "no fixture plugin manifest was found");
+  for (const path of paths) {
+    assert.doesNotThrow(() => validateManifest(JSON.parse(readFileSync(path, "utf8"))), path);
+  }
+});
 
 test("each view page of the fixture plugins starts with a doctype and holds no import map", { timeout: 5000 }, () => {
   const pages = manifests(FIXTURES).flatMap((path) => {

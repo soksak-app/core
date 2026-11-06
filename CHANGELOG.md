@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F509-2: The close fixture now uses the declared exposure schema subset, and its owner checks every actual fixture manifest through the public production validator. The first native installation failure is preserved; the same unsupported-field declaration fails the tracked owner assertion before its correction, after which both owner cases and documentation and exposure checks pass. The validator is unchanged. Focused native acceptance remains pending under F509.
+
 - F507: The canonical feature-link inventory checks declared requirement scenarios and platform applicability, rejects missing or invalid owning test references, and reports mappings as unexecuted. Five tracked Red cases expose the acceptance gaps; all 45 owner cases and the documentation and inventory gates pass. Product behavior and platform acceptance remain separate.
 - F508: Layout role checks retain the fixed 120 permutations and add 21 deterministic cases spanning topology, card counts, dimensions and layout options. Every case observes refusal and recovery before its generated trace; reports preserve per-method outcomes and complete failure inputs. Isolated ID, array-order and size mutants pass the previous R2 case and fail the expanded owner assertions. All 63 focused cases pass on macOS. The 714 baseline transitions include 489 successes and 225 refusals; the varied sample does not replace the separate successful-merge case or claim exhaustive layout coverage.
 
