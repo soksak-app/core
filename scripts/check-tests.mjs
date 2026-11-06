@@ -6154,7 +6154,7 @@ const FEATURE_LINKS = [
   {
     id: "F388",
     implementation: [
-      { file: "package.json", symbol: "soksak-kit-0.0.13.tgz" },
+      { file: "package.json", symbol: "github.com/soksak-app/kit/releases/download/" },
     ],
     tests: [
       { file: "scripts/test/workflows.test.mjs", id: "the kit release that core pins defines the presentation mode terms" },
