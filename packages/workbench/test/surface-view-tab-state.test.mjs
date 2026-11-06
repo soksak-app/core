@@ -1,5 +1,6 @@
 // A view that declares surface.unload reads its tab state while the page is still opening the tab state store (projects.initialise):
-// its calls wait for the store to be tried, so the first call of the view does not fail with "the tab state store is not open".
+// its calls wait for the store to be tried, so the first call of the view does not fail with "the tab state store is not open", and
+// a title and a state that the view sends meanwhile reach the store once it opens.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
@@ -62,15 +63,28 @@ test("a view call of a surface with surface.unload waits for the tab state store
     authorizeSurface(surfaceId);
     const mounted = mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     await viewCallListenerRegistered;
-    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "tab.state.read", params: null });
-    // The store is still opening: no reply of the call has been sent.
+    const reported = [];
+    const originalDispatchEvent = globalThis.dispatchEvent;
+    globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+    t.after(() => { globalThis.dispatchEvent = originalDispatchEvent; });
+    const call = (id, command, params) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id, command, params });
+    call(1, "tab.state.read", null);
+    call(2, "tab.title", "Early");
+    call(3, "tab.state.write", { page: 4 });
+    // The store is still opening: no reply of the calls has been sent.
     await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.deepEqual(replies, [], "the call was answered before the tab state store opened");
-    storeNow = { entry: () => null, cacheLabel() {}, write() {} };
+    assert.deepEqual(replies, [], "a call was answered before the tab state store opened");
+    const labels = [];
+    const writes = [];
+    storeNow = { entry: () => null, cacheLabel: (...label) => labels.push(label), write: (...write) => writes.push(write) };
     openStore();
     await mounted;
     await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.deepEqual(replies.map(({ id, result, error }) => ({ id, result: result ?? null, error: error ?? null })), [{ id: 1, result: null, error: null }]);
+    assert.deepEqual(replies.map(({ id, result, error }) => ({ id, result: result ?? null, error: error ?? null })),
+      [1, 2, 3].map((id) => ({ id, result: null, error: null })));
+    assert.deepEqual(labels, [[surfaceId, pluginId, "Early"]], "the title sent before the store opened left no label");
+    assert.deepEqual(writes, [[surfaceId, { format: 2, value: { page: 4 } }]], "the state sent before the store opened was not stored");
+    assert.deepEqual(reported, []);
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();

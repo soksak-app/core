@@ -399,6 +399,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F660",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }, { file: "packages/workbench/host.js", symbol: "export function onSurfacePrepared(listener) {" }],
+    tests: [
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "keep busy of a view protects its tab until an unload dispose, and keep modified follows the modified report" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "an unload dispose keeps the tab reports of a view except its error, and a close forgets them" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a title report of a declaring view writes the label cache, and a removed title removes it" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a tab state write that a view sent before its dispose and that runs after it is not answered and stores nothing" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a sidecar send of a view waits for a failed place that leaves the view out, and a place that releases the view sends none" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a mount of a view waits for a pending dispose of the same tab and creates a new surface" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "each view mount reports its end to the mount listeners, with the error of a failed mount" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a view mount that a dispose ends before its authorization resolves null and declares no composition" },
+      { file: "packages/workbench/test/surface-view-tab-state.test.mjs", id: "a view call of a surface with surface.unload waits for the tab state store to open" },
+      { file: "packages/workbench/test/surface-remount-composition.test.mjs", id: "disposing a mount releases resolved listeners before pending registration settles" },
+      { file: "packages/workbench/test/host-chrome.test.mjs", id: "a view preparation notifies its prepared listeners, presents each ticket once, and a rejected stage is not reused" },
+    ],
+    expected: "Each surface behavior that views keep is exercised by an owning case: the tab state, keep and reports of a view across its dispose modes, the label cache, the remount after a pending dispose, the mount listeners of a failed mount, the sidecar sends during a place, the host of a pending mount until it ends, a mount whose dispose comes before its authorization resolving null, and the preparation and presentation of a placement.",
+    levels: ["unit"],
+  },
+  {
     id: "F653-1",
     implementation: [{ file: "scripts/test-evidence.mjs", symbol: "export async function runWithEvidence" }, { file: "scripts/language-test-adapters.mjs", symbol: "export async function runLanguageCases" }],
     tests: [
