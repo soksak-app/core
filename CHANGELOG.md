@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F506: Removing each close-request, tab-save and window-save modified guard fails its tracked owner assertion in an isolated copy. All 23 close-boundary, tab-report and view-surface cases pass on macOS. Production guards are unchanged; native application acceptance was not run.
+
 - F500-2: Cell sampling uses the shared crop transform, clamps samples within one-pixel cells and rejects cells outside the capture. Red reproduces five wrong-pixel results and one missing rejection. All 34 terminal-screen and view-content cases pass on macOS with the recording lifecycle retained. Native application acceptance was not run.
 
 - F498-3: Realistic separate output and package-skip events preserve legitimate support packages while named skips and empty selections fail. The inaccurate synthetic fixture is removed. Red also exposes an executed failing test counted as zero; passing and failing named cases now both count as executed. All 21 adapter cases pass on macOS.
