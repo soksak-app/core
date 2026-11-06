@@ -70,13 +70,15 @@ export function createLayoutQueue({ failed, superseded }) {
  * by the start of the request alone, the new DOM would be shown first under the earlier native region. The drawing runs in the next task after the preparation
  * (frame(work), nextTask). The microtask checkpoint where the preparation reply was fulfilled can belong to a ResizeObserver callback, and
  * a task runs outside the observation round (F43). After drawing, it waits for the host presentation (presented) so that the next layout cannot
- * replace the DOM first. If current() differs from epoch while preparing or while waiting to draw, it does not draw. A preparation that does not reach its presentation is cancelled (cancel).
+ * replace the DOM first. If current() differs from epoch while preparing or while waiting to draw, it does not draw and hands the open transaction to the
+ * next layout (cancel({ handover: true })). A preparation that fails or whose draw fails is cancelled (cancel({ handover: false })), which also ends a
+ * transaction that an earlier layout handed over.
  */
 export async function drawPrepared({ epoch, current, prepare, draw, frame, presented, cancel }) {
   if (epoch !== current()) return;
-  await prepare();
   let drawn = false;
   try {
+    await prepare();
     if (epoch === current()) {
       await frame(() => {
         if (epoch !== current()) return;
@@ -87,14 +89,15 @@ export async function drawPrepared({ epoch, current, prepare, draw, frame, prese
   } catch (error) {
     // A preparation holds the layout transaction of its window, and other windows wait for that transaction.
     try {
-      await cancel();
+      await cancel({ handover: false });
     } catch (failure) {
       throw new Error(`${errorText(error)}; cancelling layout: ${errorText(failure)}`, { cause: error });
     }
     throw error;
   }
   if (!drawn) {
-    await cancel();
+    // Only a layout epoch change skips the draw, and the change has queued the next layout, so that layout takes over the transaction.
+    await cancel({ handover: true });
     return;
   }
   await presented();

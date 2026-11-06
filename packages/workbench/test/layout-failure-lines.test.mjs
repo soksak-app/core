@@ -45,7 +45,7 @@ function reportRejectionsAsPage() {
 const page = createPageLayout({
   document, showError, setVerify: () => {}, log: () => {}, surfaces,
   plane: {},
-  compositor: { publishAhead: () => Promise.reject(new Error(TIMEOUT)) },
+  compositor: { publishAhead: () => Promise.reject(new Error(TIMEOUT)), cancelPrepared: async () => {} },
   textSize: () => 1,
   rendered: () => Promise.resolve(),
   waitSurfaceCompositionDeclared: async () => {},

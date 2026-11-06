@@ -53,7 +53,7 @@ test("a rejected native preparation reports failure without drawing the document
   f.frame();
   f.prepared.reject(failure);
   assert.deepEqual(await done, { status: "failed" });
-  assert.deepEqual(f.calls, ["prepare"], "a rejected preparation changed the document");
+  assert.deepEqual(f.calls, ["prepare", "cancel"], "a rejected preparation changed the document or left a handed-over transaction open");
   assert.deepEqual(f.errors, [failure]);
 });
 

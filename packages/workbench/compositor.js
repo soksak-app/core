@@ -402,12 +402,12 @@ function placementAnswer(record, answer) {
   return placements;
 }
 
-/** Cancels the preparation that its draw did not reach. The next commit then prepares again. */
-export function cancelPrepared() {
+/** Cancels the preparation that its draw did not reach; options.handover hands its open transaction to the next preparation. The next commit then prepares again. */
+export function cancelPrepared(options) {
   aheadRecord = null;
   // No drawing of this preparation follows, so a run that only waited for that drawing ends.
   endRun();
-  return app.cancelPrepared();
+  return app.cancelPrepared(options);
 }
 
 /**

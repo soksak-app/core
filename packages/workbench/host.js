@@ -6,6 +6,7 @@
 //
 // This file is not duplicated per application. The only difference between applications is the transport, which the
 // runtime module (@soksak/runtime) handles.
+import { errorText } from "./error-text.js";
 import { emitEvent, reportRecord } from "./page-log.js";
 import { trace } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
@@ -446,6 +447,11 @@ function orderedSurfacePlacement(operation) {
   return previous.then(operation).finally(release);
 }
 let layoutPresented = false;
+/* The ticket of a preparation whose draw a layout epoch change cancelled. Its transaction stays open, and the next preparation of the window
+   extends it: that preparation places every surface again and commits both with its own presentation, because a commit of the undrawn
+   preparation would show its native frames over the DOM of the earlier layout. A failed next preparation or a cancel without a handover
+   cancels it (docs/spec/native-surfaces.md#placement-sequence). */
+let handedTicket = null;
 /* The window button area and title bar height ({controls, row}) of the most recent preparation whose display the host confirmed. It is committed state, and
    it is null before a display is confirmed (docs/spec/native-surfaces.md#title-bar-height). */
 let presentedChrome = null;
@@ -632,6 +638,9 @@ export const surfaces = native ? {
           // It does not also wait for the global command turn: doing so would let an unrelated
           // host call add one frame per divider step.
           const hasView = record.surfaces.some(({ surface }) => surface?.composition?.kind === "view");
+          // This preparation takes over a handed-over transaction: a successful one commits it, and a failed one cancels it.
+          const handed = handedTicket;
+          handedTicket = null;
           const scheduled = layoutTurn.then(async () => {
             if (hasView) {
               await Promise.all(record.surfaces
@@ -646,8 +655,17 @@ export const surfaces = native ? {
               } while (reply !== themeReply);
             }
             return syncSurfaces(request, surfaceModules, normalized.declarationBytes);
-          }).catch((error) => {
+          }).catch(async (error) => {
             heldStarts = new Map();
+            // A rejected preparation leaves no begun transaction (the host cancels it), so no preparation is open to cancel.
+            if (layoutFrame === scheduled) layoutFrame = layoutTurnStart;
+            if (handed !== null) {
+              try {
+                await tell("cancelSurfaces", { ticket: handed });
+              } catch (failure) {
+                throw new Error(`${errorText(error)}; cancelling the handed-over layout: ${errorText(failure)}`, { cause: error });
+              }
+            }
             throw error;
           });
           layoutFrame = scheduled;
@@ -687,13 +705,19 @@ export const surfaces = native ? {
       });
     },
     /** Cancels the preparation that no presentation confirmed. A presentation that fails is cancelled by the host. */
-    cancelPrepared() {
+    cancelPrepared({ handover }) {
       return orderedSurfacePlacement(async () => {
+        if (!handover && handedTicket !== null) {
+          const ticket = handedTicket;
+          handedTicket = null;
+          await tell("cancelSurfaces", { ticket });
+        }
         if (layoutPresented || layoutFrame === layoutTurnStart) return;
         const frame = await layoutFrame;
         layoutPresented = true;
         last = ""; lastRequest = null;
-        await tell("cancelSurfaces", { ticket: frame.ticket });
+        if (handover) handedTicket = frame.ticket;
+        else await tell("cancelSurfaces", { ticket: frame.ticket });
       });
     },
     // Call it after the surface placement RPC has ended so that the page can keep handling native raster events.

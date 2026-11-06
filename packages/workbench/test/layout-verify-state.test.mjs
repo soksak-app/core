@@ -25,7 +25,7 @@ function layoutWith(state) {
     log: () => {},
     surfaces: { waitPresented: async () => {} },
     plane: {},
-    compositor: { publishAhead: () => (state.fail ? Promise.reject(new Error(TIMEOUT)) : Promise.resolve()) },
+    compositor: { publishAhead: () => (state.fail ? Promise.reject(new Error(TIMEOUT)) : Promise.resolve()), cancelPrepared: async () => {} },
     textSize: () => 1,
     rendered: async () => {},
     waitSurfaceCompositionDeclared: async () => {},

@@ -166,7 +166,7 @@ export function createPageLayout({
         },
         frame: async (work) => { await nextTask(work); mark("frame"); },
         presented: async () => { await rendered(); mark("presented"); },
-        cancel: async () => { await compositor.cancelPrepared(); mark("cancelled"); },
+        cancel: async (options) => { await compositor.cancelPrepared(options); mark("cancelled"); },
       }));
     },
     /**

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F484: A preparation whose draw a layout epoch change cancelled hands its open transaction to the next preparation of the window instead of committing it, so its native frames no longer reach the screen over the DOM of the earlier layout.
 - F435-8-2: The ResizeObserver loop recorder of diagnostic builds clears its slots in the next task, so an observation round adds no animation frame.
 - F483-1: `core.surface.clock` returns the page identity of the document, and the content trace names the document by it instead of by its time origin.
 - F435-8-1: During a run the next drawn commit writes the paint holes of the acknowledged presentation, so no animation frame adds a layer commit before the next draw.
