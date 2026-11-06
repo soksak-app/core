@@ -1,6 +1,6 @@
 // A window behind another window is captured with the pixels of its three kinds of layers: a web view registered as a
-// host registers it, a Metal layer and an IOSurface layer. Each layer changes while the window stays covered, and the
-// capture shows the change. The check uses no activation, no real input and no window position outside the screen.
+// host registers it, a Metal layer and an IOSurface layer, and with its child window, as a modal stands over it. Each
+// layer changes while the window stays covered, and the capture shows the change. The check uses no activation, no real input and no window position outside the screen.
 // A failure of ScreenCaptureKit keeps its error code, because its text depends on the language of the person.
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
@@ -87,7 +87,12 @@ typedef struct { size_t width, height; uint8_t *bytes; } Image;
 static Image capture(NSWindow *window, NSString *directory, NSString *name) {
     NSString *path = [directory stringByAppendingPathComponent:[name stringByAppendingString:@".png"]];
     char *error = NULL;
-    bool written = sp_capture_still(window.windowNumber, path.fileSystemRepresentation, &error);
+    // The window first, then its child windows, as a host lists them.
+    NSMutableArray<NSNumber *> *listed = [NSMutableArray arrayWithObject:@(window.windowNumber)];
+    for (NSWindow *child in window.childWindows) [listed addObject:@(child.windowNumber)];
+    long numbers[listed.count];
+    for (NSUInteger index = 0; index < listed.count; index++) numbers[index] = listed[index].longValue;
+    bool written = sp_capture_still(numbers, (int)listed.count, path.fileSystemRepresentation, &error);
     check(written && error == NULL, [NSString stringWithFormat:@"the %@ capture has no error (%s)", name, error ?: ""]);
     free(error);
     Image image = {0, 0, NULL};
@@ -280,6 +285,14 @@ int main(void) { @autoreleasepool {
     paintMetal(metal, queue, 0x10);
     IOSurfaceRef surface = surfaceOf(144 * scale, 128 * scale, 0xc0);
     showSurface(surfaceView.layer, surface);
+    // A child window stands over the window from x 150 to 210 and y 250 to 310 of the content view, as a modal does.
+    NSWindow *child = [[NSWindow alloc] initWithContentRect:[window convertRectToScreen:
+        [content convertRect:NSMakeRect(150, kHeight - 310, 60, 60) toView:nil]]
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    child.releasedWhenClosed = NO;
+    child.animationBehavior = NSWindowAnimationBehaviorNone;
+    child.backgroundColor = [NSColor colorWithSRGBRed:0x28 / 255.0 green:0xc8 / 255.0 blue:0x50 / 255.0 alpha:1];
+    [window addChildWindow:child ordered:NSWindowAbove];
     settle(1);
     waitForPresentation(web);
 
@@ -288,6 +301,7 @@ int main(void) { @autoreleasepool {
     // The window controls of a window that has just appeared can still change: the second capture is the state before the cover.
     Image back = capture(window, directory, @"back");
     fprintf(stderr, "two captures before the cover: %s\n", differences(first, back, scale).UTF8String);
+    if (back.bytes != NULL) expectPixel(back, scale, 180, 280, 0x28c850, @"the child window");
 
     NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, kWidth + 160, kHeight + 160)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
@@ -296,21 +310,23 @@ int main(void) { @autoreleasepool {
     cover.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:1 alpha:1];
     [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
     // A window behind other windows is occluded already, so the place of the cover in the window list says that it covers.
-    __block NSInteger targetIndex = -1, coverIndex = -1;
+    __block NSInteger targetIndex = -1, childIndex = -1, coverIndex = -1;
     BOOL (^coverIsOver)(void) = ^BOOL {
         NSArray *stack = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID) autorelease];
-        targetIndex = coverIndex = -1;
+        targetIndex = childIndex = coverIndex = -1;
         NSInteger index = 0;
         for (NSDictionary *entry in stack) {
             if ([entry[(id)kCGWindowNumber] longValue] == window.windowNumber) targetIndex = index;
+            if ([entry[(id)kCGWindowNumber] longValue] == child.windowNumber) childIndex = index;
             if ([entry[(id)kCGWindowNumber] longValue] == cover.windowNumber) coverIndex = index;
             index++;
         }
-        return coverIndex >= 0 && targetIndex > coverIndex;
+        return coverIndex >= 0 && targetIndex > coverIndex && childIndex > coverIndex;
     };
     BOOL coverOver = pumpUntil(10, coverIsOver);
-    check(coverOver && NSContainsRect(cover.frame, window.frame),
-        [NSString stringWithFormat:@"the cover is over the whole window (cover %ld, window %ld)", (long)coverIndex, (long)targetIndex]);
+    check(coverOver && NSContainsRect(cover.frame, window.frame) && NSContainsRect(cover.frame, child.frame),
+        [NSString stringWithFormat:@"the cover is over the whole window and its child (cover %ld, window %ld, child %ld)",
+            (long)coverIndex, (long)targetIndex, (long)childIndex]);
     check((window.occlusionState & NSWindowOcclusionStateVisible) == 0, @"the window server reports the window as occluded");
     // WebKit hides the document of an occluded window after a delay. It stays shown with the registered web view.
     settle(3);
@@ -327,6 +343,8 @@ int main(void) { @autoreleasepool {
         expectPixel(covered, scale, 70, 160, 0x10a820, @"the Metal layer");
         expectPixel(covered, scale, 360, 128, 0x1032c0, @"the IOSurface layer");
         expectPixel(covered, scale, 240, 285, 0x333340, @"the window background");
+        expectPixel(covered, scale, 180, 280, 0x28c850, @"the child window of the covered window");
+        // The cover is a window of the same application outside the list: the capture holds the listed windows only.
         check(pixelsOfColor(covered, 0xff00ff) == 0, @"no pixel of the cover is in the capture");
     }
 
@@ -345,6 +363,7 @@ int main(void) { @autoreleasepool {
         expectPixel(changed, scale, 340, 250, 0xc8c832, @"the changed composited layer");
         expectPixel(changed, scale, 70, 160, 0x90a820, @"the changed Metal layer");
         expectPixel(changed, scale, 360, 128, 0x103240, @"the changed IOSurface layer");
+        expectPixel(changed, scale, 180, 280, 0x28c850, @"the child window after the change");
         check(pixelsOfColor(changed, 0xff00ff) == 0, @"no pixel of the cover is in the changed capture");
     }
     check(generalContentQueries == 0, @"the capture does not query the content that needs the screen recording permission");
@@ -355,12 +374,12 @@ int main(void) { @autoreleasepool {
     NSString *path = [directory stringByAppendingPathComponent:@"failed.png"];
     char *error = NULL;
     stillFailure = systemFailure(SCStreamErrorInternalError);
-    check(!sp_capture_still(window.windowNumber, path.fileSystemRepresentation, &error), @"a failed still capture reports failure");
+    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, &error), @"a failed still capture reports failure");
     expectError(error, @"a failed still capture", SCStreamErrorInternalError);
     free(error); error = NULL;
     stillFailure = nil;
     contentFailure = systemFailure(SCStreamErrorNoWindowList);
-    check(!sp_capture_still(window.windowNumber, path.fileSystemRepresentation, &error), @"a failed content query reports failure");
+    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, &error), @"a failed content query reports failure");
     expectError(error, @"the content query of a still capture", SCStreamErrorNoWindowList);
     free(error); error = NULL;
     check(!sp_capture_open(window.windowNumber, false, &error), @"a failed content query fails a recording");
@@ -380,6 +399,8 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"the capture does not activate the application");
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front, @"the front application does not change");
     [cover close];
+    [window removeChildWindow:child];
+    [child close];
     [window close];
     CFRelease(surface);
     CFRelease(changedSurface);

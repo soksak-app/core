@@ -552,7 +552,11 @@ impl Platform for Windows {
         unsupported::capture_clock()
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
+    fn capture_still(&self, window_numbers: &[isize], path: &str) -> Result<(), String> {
+        // `window_numbers` holds the window alone here, so its first number is the whole list.
+        let window_number = *window_numbers
+            .first()
+            .ok_or_else(|| "still capture needs the number of a window".to_owned())?;
         capture::capture_still(window_number, path)
     }
     #[cfg(feature = "diagnostics")]

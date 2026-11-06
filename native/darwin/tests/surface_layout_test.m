@@ -589,7 +589,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
             @"root presentation while the app-DOM barrier is pending keeps the existing keyboard owner");
         NSString *pendingStillPath = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"pending.png"];
         char *stillError = NULL;
-        BOOL stillCaptured = sp_capture_still(window.windowNumber, pendingStillPath.fileSystemRepresentation, &stillError);
+        BOOL stillCaptured = sp_capture_still((long[]){window.windowNumber}, 1, pendingStillPath.fileSystemRepresentation, &stillError);
         check(stillCaptured, [NSString stringWithFormat:@"the pending first-show window is captured (%s)",
             stillError == NULL ? "no error" : stillError]);
         free(stillError);

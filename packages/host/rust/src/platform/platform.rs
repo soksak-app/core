@@ -833,9 +833,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// The current time (ms). It is on the same clock as the presentation time of the recorded frames.
     fn capture_clock(&self) -> Result<f64, String>;
     #[cfg(feature = "diagnostics")]
-    /// Takes one still image of the window with the window number without giving it focus and writes it as PNG to path.
+    /// Takes one still image of a window without giving it focus and writes it as PNG to path. `window_numbers` are those
+    /// of `window_numbers`: the window first, then its child windows, which the image shows in their places over it.
     /// It is observation material.
-    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String>;
+    fn capture_still(&self, window_numbers: &[isize], path: &str) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Gives done the notifications of this application that the notification center still shows as JSON [{identifier,
     /// title, body}]. Call it on the main thread, and done is called on the main thread too.

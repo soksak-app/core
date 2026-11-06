@@ -36,14 +36,13 @@ double sp_capture_longest_gap(void);
 // The current time (ms), on the same clock as the display times of recorded frames. Used to compare the time an input
 // was sent with the frames.
 double sp_capture_clock(void);
-// Takes one still of the window with window server number windowNumber without giving it focus and writes it to path
-// as PNG.
+// Takes one still of a window without giving it focus and writes it to path as PNG. windowNumbers holds count window
+// server numbers: the window first, then its child windows, which the still shows in their places over it.
 // It produces observation material for visual inspection during development. Measurement uses recorded frames. On
-// failure
-// it returns false and stores an error string owned by the caller in error. On success error is NULL, and the caller
-// releases the error string with free(). It is independent of recording errors, and the error output pointer is
+// failure it returns false and stores an error string owned by the caller in error. On success error is NULL, and the
+// caller releases the error string with free(). It is independent of recording errors, and the error output pointer is
 // required.
-bool sp_capture_still(long windowNumber, const char *path, char **error);
+bool sp_capture_still(const long *windowNumbers, int count, const char *path, char **error);
 
 #ifdef SOKSAK_DIAGNOSTIC
 // Injects a capture failure on the calling thread for lifecycle cleanup tests.

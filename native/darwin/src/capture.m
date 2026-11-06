@@ -1842,12 +1842,16 @@ double sp_capture_longest_gap(void) {
 @end
 
 
-bool sp_capture_still(long windowNumber, const char *path, char **errorOut) {
+bool sp_capture_still(const long *windowNumbers, int count, const char *path, char **errorOut) {
     if (errorOut == NULL) {
         sp_log_error("still capture", "an error output is required");
         return false;
     }
     *errorOut = NULL;
+    if (windowNumbers == NULL || count < 1) {
+        return captureOperationFailure(errorOut, @"still capture needs the number of a window");
+    }
+    long windowNumber = windowNumbers[0];
     if (path == NULL) {
         return captureOperationFailure(errorOut, @"still capture needs a path");
     }

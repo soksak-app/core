@@ -207,7 +207,7 @@ int main(void) { @autoreleasepool {
     captureStream = (SCStream *)[NSObject new];
     setCaptureError(@"fixture active recording failure");
     char *stillError = NULL;
-    check(!sp_capture_still(-1, NULL, &stillError), @"a null still path is rejected during recording");
+    check(!sp_capture_still((long[]){-1}, 1, NULL, &stillError), @"a null still path is rejected during recording");
     check(strstr(sp_capture_error(), "fixture active recording failure") != NULL,
         @"a failed still request preserves the existing recording error");
     check(stillError != NULL && strstr(stillError, "needs a path") != NULL,
@@ -219,7 +219,7 @@ int main(void) { @autoreleasepool {
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
     captureStream = (SCStream *)[NSObject new];
     NSString *stillPath = [directory stringByAppendingPathComponent:@"invalid-window.png"];
-    check(!sp_capture_still(-1, stillPath.UTF8String, &stillError),
+    check(!sp_capture_still((long[]){-1}, 1, stillPath.UTF8String, &stillError),
         @"an asynchronous invalid-window still capture is rejected");
     check(sp_capture_wait() == 1,
         @"an unrelated asynchronous still failure preserves healthy recording readiness");
@@ -228,7 +228,7 @@ int main(void) { @autoreleasepool {
         @"the asynchronous still call returns its own window failure");
     free(stillError); stillError = NULL;
     BOOL invalidRejected = NO;
-    @try { invalidRejected = !sp_capture_still(-1, "\xff", &stillError); }
+    @try { invalidRejected = !sp_capture_still((long[]){-1}, 1, "\xff", &stillError); }
     @catch (NSException *exception) {
         fprintf(stderr, "UTF8 fixture exception: %s\n", exception.reason.UTF8String);
     }
@@ -244,7 +244,7 @@ int main(void) { @autoreleasepool {
     if (query != NULL) {
         IMP original = method_setImplementation(query, (IMP)holdStillQuery);
         stillError = NULL;
-        BOOL timedOut = !sp_capture_still(-1, stillPath.UTF8String, &stillError);
+        BOOL timedOut = !sp_capture_still((long[]){-1}, 1, stillPath.UTF8String, &stillError);
         method_setImplementation(query, original);
         check(timedOut && stillError != NULL && strstr(stillError, "timed out") != NULL,
             @"a held still query returns its own bounded timeout error");

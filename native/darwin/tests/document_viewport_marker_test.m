@@ -54,7 +54,7 @@ static size_t greenPixelCount(NSBitmapImageRep *image) {
 
 static NSBitmapImageRep *still(NSWindow *window, NSString *path) {
     char *error = NULL;
-    BOOL captured = sp_capture_still(window.windowNumber, path.fileSystemRepresentation, &error);
+    BOOL captured = sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, &error);
     check(captured, [NSString stringWithFormat:@"the nonactivating window capture succeeds (%s)", error ?: "no error"]);
     free(error);
     if (!captured) return nil;

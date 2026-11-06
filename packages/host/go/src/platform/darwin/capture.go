@@ -67,8 +67,8 @@ static bool main_sp_capture_has_stream(void) { return ON_MAIN(bool, sp_capture_h
 static int main_sp_capture_wait(void) { return ON_MAIN(int, sp_capture_wait()); }
 static bool main_sp_capture_limited(void) { return ON_MAIN(bool, sp_capture_limited()); }
 static double main_sp_capture_longest_gap(void) { return ON_MAIN(double, sp_capture_longest_gap()); }
-static bool main_sp_capture_still(long windowNumber, const char *path, char **error) {
-    return ON_MAIN(bool, sp_capture_still(windowNumber, path, error));
+static bool main_sp_capture_still(const long *windowNumbers, int count, const char *path, char **error) {
+    return ON_MAIN(bool, sp_capture_still(windowNumbers, count, path, error));
 }
 static void main_surfaceLayoutTraceStart(void) { hostRunOnMain(^{ surfaceLayoutTraceStart(); }); }
 static size_t main_surfaceLayoutTraceStop(double *out, size_t capacity) {
@@ -205,14 +205,21 @@ func (implementation) LayoutTraceStop() ([][5]float64, error) {
 	return records, nil
 }
 
-func (implementation) CaptureStill(windowNumber int, path string) error {
+func (implementation) CaptureStill(windowNumbers []int, path string) error {
 	if strings.IndexByte(path, 0) >= 0 {
 		return errors.New("still capture: path contains NUL")
+	}
+	if len(windowNumbers) == 0 {
+		return errors.New("still capture needs the number of a window")
+	}
+	numbers := make([]C.long, len(windowNumbers))
+	for i, number := range windowNumbers {
+		numbers[i] = C.long(number)
 	}
 	target := C.CString(path)
 	defer C.free(unsafe.Pointer(target))
 	var nativeError *C.char
-	written := bool(C.main_sp_capture_still(C.long(windowNumber), target, &nativeError))
+	written := bool(C.main_sp_capture_still(&numbers[0], C.int(len(numbers)), target, &nativeError))
 	return captureCallError("still", written, nativeError)
 }
 func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {

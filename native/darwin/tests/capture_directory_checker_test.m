@@ -29,10 +29,10 @@ static int stopWithFaults(double after) {
     return count;
 }
 
-static bool stillAfterListing(long window, const char *path, char **error) {
+static bool stillAfterListing(const long *windows, int count, const char *path, char **error) {
     // Restores the folder permissions after the listing and before the first still capture.
     if (stillCalls++ == 0 && chmod(fixtureDirectory, 0700) != 0) fprintf(stderr, "fixture permission restore failed: %s\n", strerror(errno));
-    return sp_capture_still(window, path, error);
+    return sp_capture_still(windows, count, path, error);
 }
 
 #define sp_capture_start startWithDirectory

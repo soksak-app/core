@@ -77,7 +77,7 @@ int main(void) { @autoreleasepool {
     // Still capture: captures a window that is not activated as PNG. It is observation data; the content is checked by size and color.
     NSString *still = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"still.png"];
     char *stillError = NULL;
-    check(!sp_capture_still(-1, still.UTF8String, &stillError) && stillError != NULL && strlen(stillError) > 0,
+    check(!sp_capture_still((long[]){-1}, 1, still.UTF8String, &stillError) && stillError != NULL && strlen(stillError) > 0,
         @"a still capture of a missing window reports an error");
     free(stillError); stillError = NULL;
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 200, 100)
@@ -99,7 +99,7 @@ int main(void) { @autoreleasepool {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
     check(onScreen(), @"the window server shows the capture window");
-    bool stillWritten = sp_capture_still(window.windowNumber, still.UTF8String, &stillError);
+    bool stillWritten = sp_capture_still((long[]){window.windowNumber}, 1, still.UTF8String, &stillError);
     check(stillWritten, [NSString stringWithFormat:@"a still capture of an inactive window is written (%@)",
         [NSString stringWithUTF8String:stillError == NULL ? "" : stillError]]);
     free(stillError);

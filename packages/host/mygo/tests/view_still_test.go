@@ -37,7 +37,7 @@ func (s *viewSession) stillPixel(t *testing.T) [3]uint32 {
 		t.Fatal("the window has no window server number")
 	}
 	path := filepath.Join(t.TempDir(), fmt.Sprintf("window-%d.png", os.Getpid()))
-	if err := capturer.CaptureStill(numbers[0], path); err != nil {
+	if err := capturer.CaptureStill(numbers, path); err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.Open(path)
