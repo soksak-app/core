@@ -1609,6 +1609,35 @@ func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
 }
 
 // contract: performance.surface.dispatch-records-the-raster-wait
+// A presentation records each of its stages with its ticket, in the order in which they run: the preparation of the views, the
+// registration and the callback of the presentation notice, the raster wait, and the commit.
+func TestAPresentationRecordsEachOfItsStagesInOrder(t *testing.T) {
+	isolateTraceRecords(t)
+	performanceOn.Store(false)
+	notice, fake, finished := presentThroughFixture(t, 9)
+	notice(nil)
+	select {
+	case <-fake.commits:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the layout did not commit after the presentation notice")
+	}
+	if err := <-finished; err != nil {
+		t.Fatalf("the present failed: %v", err)
+	}
+	var stages []string
+	for _, record := range bufferedTraces(t, "host.frame.surface.dispatch") {
+		if record["operation"] != "present" || record["ticket"] != float64(9) {
+			t.Fatalf("a presentation record names another operation or ticket: %#v", record)
+		}
+		stages = append(stages, record["stage"].(string))
+	}
+	want := []string{"present-prepare-ui", "present-dom-register-ui", "present-dom-callback", "present-raster-wait", "present-commit-ui"}
+	if !reflect.DeepEqual(stages, want) {
+		t.Fatalf("the presentation recorded the stages %v, want %v", stages, want)
+	}
+}
+
+// contract: performance.surface.dispatch-records-the-raster-wait
 // The raster stage of a presentation records when its refresh started, when its wait started and when the wait ended, also for a
 // wait that fails, and a refresh that fails starts no wait and records nothing.
 func TestTheRasterWaitOfAPresentationRecordsItsRefreshAndItsWait(t *testing.T) {
