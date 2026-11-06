@@ -1,8 +1,8 @@
 # 기능 상태
 
 - [o] F498 — P2: 실행한 test evidence가 없는 Node test file을 거부한다. 입력: skipped test, todo test, empty file과 test 등록 전 exit가 passing file result를 받는다. 기대: 발견한 Node test는 file-owned result, 실행한 test 한 개 이상, skipped 또는 todo case 없음을 요구하며 support module은 독립 test file이 아니다. Red: 아홉 case가 fail 대신 pass를 받는다. Green: discovery와 runner case 58개 모두 통과하며 evidence mapping 추가 후 discovery와 inventory-audit case 70개 모두 통과한다. macOS에서 문서, inventory와 boundary check가 통과한다.
-- [~] F499 — P2: layout queue에서 presentation wait 누락을 검출한다. 입력: presentation callback의 await를 제거해도 기존 queue test가 통과한다. 기대: owning test는 asynchronous completion이 전파될 수 있는 시점 이후 queue를 관찰하고 pending presentation이 다음 layout을 막음을 입증하며 wait를 제거하면 실패한다. Active: 구현과 검증을 완료했고 commit이 남았다. Red: 격리한 복사본에서 presentation await를 제거하면 tracked assertion이 false 대신 true로 실패한다. Green: 변경하지 않은 구현은 macOS에서 preparation, queue와 frame-text case 23개 모두 통과한다.
-- [ ] F500 — P2: terminal theme pixel을 capture coordinate에서 읽는다. 입력: theme check가 document coordinate를 buffer coordinate로 직접 사용한다. 기대: sample coordinate는 capture scale, content scale과 content origin을 포함하며 owning case가 terminal pixel과 주변 card를 구분한다.
+- [o] F499 — P2: layout queue에서 presentation wait 누락을 검출한다. 입력: presentation callback의 await를 제거해도 기존 queue test가 통과한다. 기대: owning test는 asynchronous completion이 전파될 수 있는 시점 이후 queue를 관찰하고 pending presentation이 다음 layout을 막음을 입증하며 wait를 제거하면 실패한다. Red: 격리한 복사본에서 presentation await를 제거하면 tracked assertion이 false 대신 true로 실패한다. Green: 변경하지 않은 구현은 macOS에서 preparation, queue와 frame-text case 23개 모두 통과한다.
+- [o] F500 — P2: terminal theme pixel을 capture coordinate에서 읽는다. 입력: theme check가 document coordinate를 buffer coordinate로 직접 사용한다. 기대: sample coordinate는 capture scale, content scale과 content origin을 포함하며 owning case가 terminal pixel과 주변 card를 구분한다. Red: 네 변환이 표시한 terminal pixel 대신 white를 읽고 empty capture가 folder를 남긴다. Green: macOS에서 one-pixel view, corrupt frame과 outside geometry를 포함한 terminal-screen과 view-content case 16개 모두 통과한다. Check helper는 기존 crop 변환을 사용한다. Native application acceptance는 다시 실행하지 않았다.
 
 ## 현재 개발 acceptance
 

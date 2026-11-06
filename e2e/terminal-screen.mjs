@@ -3,6 +3,21 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { cropViewPixels } from "./view-content.mjs";
+
+export async function terminalBackgroundSample(session, rect) {
+  await session.request("diagnostics.capture.start", {});
+  const displayed = await session.presented();
+  const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
+  try {
+    const files = frames(frameDir);
+    assert.ok(files.length > 0, "terminal theme capture produced no frames");
+    const crop = cropViewPixels(readFrame(files.at(-1)), { x: rect.x, y: rect.y, w: rect.width, h: rect.height });
+    return pixel({ ...crop, stride: crop.width * 4 }, Math.floor(crop.width * 0.75), Math.floor(crop.height * 0.75));
+  } finally {
+    rmSync(frameDir, { recursive: true, force: true });
+  }
+}
 
 export function textLines(screen) {
   assert.ok(screen && Array.isArray(screen.lines), `invalid terminal screen: ${JSON.stringify(screen)}`);

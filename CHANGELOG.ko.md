@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F500: Terminal theme check는 capture origin, display scale과 content scale을 적용한 view crop을 읽고 sampling 실패 시에도 멈춘 recording을 제거한다. Owner Red는 wrong-pixel result 네 개와 empty-capture cleanup 실패를 재현하며 Green은 macOS에서 terminal-screen과 view-content case 16개 모두 통과한다. Native application acceptance는 다시 실행하지 않았다.
+
 - F499: Layout preparation test는 completion reaction을 기다리고 pending presentation이 다음 layout을 막는지 검증한다. 격리한 mutation에서 presentation await를 제거하면 tracked assertion이 실패하며, 변경하지 않은 구현은 macOS에서 preparation, queue와 frame-text case 23개 모두 통과한다.
 
 - F498: Node test discovery는 각 file 자체의 비어 있지 않은 passing result를 요구하며 skipped 또는 todo case를 거부한다. 네 package script가 support module 없이 test entrypoint를 선택한다. Owner Red에서 false pass 아홉 개를 관찰했고 Green은 macOS에서 discovery와 runner case 58개 모두 통과한다.

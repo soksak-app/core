@@ -8,6 +8,8 @@ View display acceptance enumerates installed enabled view plugins and identifies
 
 On macOS, recorded view content is checked with the public Vision text recognizer in a check-only executable. Each installed view has declared readiness and fixed expected text: the browser empty-state instruction, the editor text fixture, the HWP fixture paragraph and the terminal output marker. The complete recording is decoded and its finalized frame count is checked; the final frame crop must contain the expected text. The crop uses the applied view rectangle and the capture content origin and scale exactly once. Recognition does not run in the application or on its rendering path. Readiness without a captured-pixel verifier is rejected.
 
+Terminal background samples use the same view crop conversion: buffer coordinates include the capture content origin, display scale and content scale. A sample lies inside that crop, including at small sizes. Unit fixtures distinguish the requested pixel from surrounding pixels independently for each transform. The sample removes its stopped capture folder on success and on decoding or geometry failure.
+
 The canonical work status is [features](../features.md). A source-file inventory is structural evidence only. It must not report feature parity or application correctness.
 
 Core test ownership follows independently declared core packages. The root `e2e` package owns its window checks and the installable payloads under `e2e/fixtures/`; a fixture `package.json` describes an installed payload, not an independent core test owner. E2E tests may read their fixture manifests and sources. Core package tests remain unable to read E2E fixture files, and E2E tests remain unable to read another core package's implementation paths.
