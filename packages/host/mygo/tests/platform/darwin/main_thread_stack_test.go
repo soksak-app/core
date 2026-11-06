@@ -149,9 +149,19 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 					emitted = append(emitted, name)
 				},
 			})
-			// Eight heartbeats of 250 ms each.
-			for range 8 {
-				<-beats
+			// Eight heartbeats of 250 ms each. The watch sends no heartbeat while the main run loop waits for an event
+			// (docs/spec/host-contract.md, host.stall.waiting-run-loop-takes-no-heartbeat), and this process has no window that
+			// wakes it, so main-thread steps keep the run loop awake until the eighth heartbeat.
+			for received := 0; received < 8; {
+				select {
+				case <-beats:
+					received++
+				default:
+					if err := onMain(system, func() error { spin(work); return nil }); err != nil {
+						stop()
+						return err
+					}
+				}
 			}
 			stop()
 			emittedLock.Lock()

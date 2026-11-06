@@ -13,7 +13,8 @@ use super::{
     create_in_open_window, create_registered_surface, mark_first_commit,
     prepare_surface_visibility, pressed_surface, read_press_then_deliver, removed_surfaces,
     surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
-    surface_dispatch_result_with, surface_raster_wait_with, with_registered_surface,
+    surface_dispatch_result_with, surface_raster_wait_with, uncommitted_presentation,
+    with_registered_surface,
 };
 
 // contract: view.start-values.omitted-keeps-held
@@ -1261,5 +1262,24 @@ fn a_composition_dispatch_names_its_surface() {
             "entered_ns": "120",
             "returned_ns": "140"
         }),
+    );
+}
+
+// contract: surface-layout.cancelled-ticket-is-no-longer-current
+// A presentation whose ticket was cancelled while it waited ends the presentation waits of the ticket once and answers that its
+// preparation is no longer current, with the failure of that end when it fails.
+#[test]
+fn a_presentation_whose_ticket_was_cancelled_is_no_longer_current() {
+    let mut abandoned = 0;
+    let answer = uncommitted_presentation(9, || {
+        abandoned += 1;
+        Ok(())
+    });
+    assert_eq!(answer, "surface preparation 9 is no longer current");
+    assert_eq!(abandoned, 1, "the waits of the cancelled ticket end once");
+    let answer = uncommitted_presentation(9, || Err("window data is gone".to_owned()));
+    assert_eq!(
+        answer,
+        "surface preparation 9 is no longer current; window data is gone"
     );
 }

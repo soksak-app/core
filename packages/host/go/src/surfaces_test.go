@@ -1,12 +1,15 @@
 package host
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -1515,6 +1518,8 @@ func (stepFramework) Step(task func()) { task() }
 type layoutPlatform struct {
 	platform.Platform
 	commits, cancels chan uint64
+	// clock counts the reads of the monotonic clock, so each read is later than the previous one.
+	clock atomic.Uint64
 }
 
 func (*layoutPlatform) EnqueueUI(task func()) error {
@@ -1522,7 +1527,7 @@ func (*layoutPlatform) EnqueueUI(task func()) error {
 	return nil
 }
 
-func (*layoutPlatform) MonotonicNanos() (uint64, error) { return 1, nil }
+func (p *layoutPlatform) MonotonicNanos() (uint64, error) { return p.clock.Add(1), nil }
 
 func (p *layoutPlatform) CommitLayout(_ unsafe.Pointer, ticket uint64) bool {
 	p.commits <- ticket
@@ -1605,6 +1610,54 @@ func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
 	case ticket := <-fake.commits:
 		t.Fatalf("a failed notice committed ticket %d", ticket)
 	default:
+	}
+}
+
+// contract: performance.surface.dispatch-records-the-raster-wait
+// A presentation records each of its stages with its ticket, and the entries of the stages follow the order in which they run: the
+// preparation of the views, the registration and the callback of the presentation notice, the raster wait, and the commit. The
+// callback of the notice and the commit hand their result on before their end, where they write their record (returned_ns,
+// docs/spec/performance-trace.md), so the order of the records in the buffer, and their presence when the present answers, are
+// not the order of the stages; entered_ns is.
+func TestAPresentationRecordsEachOfItsStagesInOrder(t *testing.T) {
+	isolateTraceRecords(t)
+	performanceOn.Store(false)
+	notice, fake, finished := presentThroughFixture(t, 9)
+	notice(nil)
+	select {
+	case <-fake.commits:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the layout did not commit after the presentation notice")
+	}
+	if err := <-finished; err != nil {
+		t.Fatalf("the present failed: %v", err)
+	}
+	want := []string{"present-prepare-ui", "present-dom-register-ui", "present-dom-callback", "present-raster-wait", "present-commit-ui"}
+	var records []map[string]any
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		records = bufferedTraces(t, "host.frame.surface.dispatch")
+		if len(records) >= len(want) || time.Now().After(deadline) {
+			break
+		}
+	}
+	entered := func(record map[string]any) uint64 {
+		text, _ := record["entered_ns"].(string)
+		value, err := strconv.ParseUint(text, 10, 64)
+		if err != nil {
+			t.Fatalf("a presentation record has no entered_ns: %#v", record)
+		}
+		return value
+	}
+	slices.SortStableFunc(records, func(a, b map[string]any) int { return cmp.Compare(entered(a), entered(b)) })
+	var stages []string
+	for _, record := range records {
+		if record["operation"] != "present" || record["ticket"] != float64(9) {
+			t.Fatalf("a presentation record names another operation or ticket: %#v", record)
+		}
+		stages = append(stages, record["stage"].(string))
+	}
+	if !reflect.DeepEqual(stages, want) {
+		t.Fatalf("the presentation recorded the stages %v by their entries, want %v", stages, want)
 	}
 }
 
