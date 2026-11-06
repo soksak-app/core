@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F495: The hosts check numbers project, space and card ids per kind, so a card name does not count the ids of another kind.
 - F494: The release candidate is 0.0.38.
 - F491: `core.settings` reports the common value of every setting in `common`, and the preparation of a window check restores the common settings by those values, so a value that a project overrides no longer moves into the common settings; the browser home check writes the common scope.
 - F490: `make test-app` builds the workspace registry through `build-registry` and runs the native end-to-end target `test-app`, and the records name the make targets that the Makefiles declare; a test of the end-to-end targets checks their prerequisites, window-check scripts and native targets.

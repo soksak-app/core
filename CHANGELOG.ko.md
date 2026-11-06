@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F495: hosts check가 project, space, card id에 종류마다 번호를 매겨, card 이름이 다른 종류의 id를 세지 않는다.
 - F494: release candidate는 0.0.38입니다.
 - F491: `core.settings`가 모든 설정의 common 값을 `common`으로 보고하고, window check의 준비가 그 값으로 common 설정을 되돌리므로, project가 덮어쓴 값이 더는 common 설정으로 옮겨지지 않습니다. browser 홈 check는 common scope에 씁니다.
 - F490: `make test-app`이 `build-registry`로 workspace registry를 만들고 native end-to-end target `test-app`을 실행하며, 기록이 Makefile이 선언한 make target을 가리킵니다. end-to-end target의 test가 prerequisite, window-check script, native target을 검사합니다.
