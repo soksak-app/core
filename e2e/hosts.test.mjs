@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { fresh, recordCatalog } from "./fixture.mjs";
+import { orderNames } from "@soksak/window-check/order-names.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
@@ -15,13 +16,10 @@ const LINE = /^info workbench workbench: host (\w+) (\{.*\}|\[.*\]|null) -> (.*)
 /** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name,
  * and the configuration directory of each host, which holds the project root of the start values, by one name. */
 function transcript(lines) {
-  const names = new Map();
-  const same = (text) =>
+  const ordered = orderNames();
+  const same = (text) => ordered(
     Object.values(APPS).reduce((result, app) => result.replaceAll(app.configDir, "<config-dir>"), text)
-      .replace(/"ticket":\d+,/g, "").replace(/(prj|spc|tab)-[a-z0-9]+/g, (id, kind) => {
-      if (!names.has(id)) names.set(id, `${kind}-${names.size}`);
-      return names.get(id);
-    });
+      .replace(/"ticket":\d+,/g, ""));
   const calls = new Map();
   for (const line of lines) {
     const found = LINE.exec(line);

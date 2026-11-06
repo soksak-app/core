@@ -583,7 +583,7 @@ test-app-host-go: build-native
 	@for package in $(E2E_GO_PACKAGES); do $(GO_ENV) go -C $$package test -tags e2e,diagnostics -run '^TestE2E' -ldflags "$(GO_LINK)" ./tests/... || exit 1; done
 
 test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
-	@node scripts/test-app.mjs --script test-app --native e2e $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+	@node scripts/test-app.mjs --script test-app --native test-app $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
 
 test-app-activation: $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:activation --native test-app-activation

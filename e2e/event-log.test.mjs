@@ -92,9 +92,16 @@ for (const app of Object.values(APPS)) {
     const reads = ["host.app.event", "native.observe.registered"];
     await fresh(s, { log: { lifecycle: "info" }, reads });
     const previous = s.client.endpoint.pid;
+    const before = await s.get("host.window");
     await s.relaunch();
     const { pid } = s.client.endpoint;
     assert.notEqual(pid, previous, "the relaunch connected to the process that quit");
+    // A relaunch starts the application without activating it, and the host does not activate itself when it finishes
+    // launching (docs/spec/hosts.md#launch-activation): an application that was not active stays inactive.
+    if (!before.active) {
+      const after = await s.get("host.window");
+      assert.equal(after.active, false, `process ${pid} became active at its relaunch`);
+    }
     await s.flushLog();
     const logs = join(app.configDir, "logs");
     const offsets = Object.fromEntries(Object.entries(currentEventOffsets(app.configDir))

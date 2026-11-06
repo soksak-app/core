@@ -3362,7 +3362,7 @@ dependencies = [
 
 [[package]]
 name = "sok-tauriv2"
-version = "0.0.37"
+version = "0.0.39"
 dependencies = [
  "soksak-host-tauriv2",
  "tauri",
@@ -3371,7 +3371,7 @@ dependencies = [
 
 [[package]]
 name = "soksak-host"
-version = "0.0.37"
+version = "0.0.39"
 dependencies = [
  "base64 0.22.1",
  "block2",
@@ -3400,7 +3400,7 @@ dependencies = [
 
 [[package]]
 name = "soksak-host-tauriv2"
-version = "0.0.37"
+version = "0.0.39"
 dependencies = [
  "serde",
  "serde_json",
@@ -3417,7 +3417,7 @@ dependencies = [
 
 [[package]]
 name = "soksak-sok"
-version = "0.0.37"
+version = "0.0.39"
 dependencies = [
  "flate2",
  "libc",
@@ -3582,8 +3582,7 @@ dependencies = [
 [[package]]
 name = "tao"
 version = "0.37.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5777b06fe6435126ae8d816eba269e050e1e10d302cf5461e9c49eccabc3548"
+source = "git+https://github.com/min-0-max/tao?rev=1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6#1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6"
 dependencies = [
  "bitflags 2.13.1",
  "block2",
@@ -3610,7 +3609,7 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "raw-window-handle",
- "tao-macros",
+ "tao-macros 0.1.4 (git+https://github.com/min-0-max/tao?rev=1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6)",
  "unicode-segmentation",
  "url",
  "windows",
@@ -3624,6 +3623,16 @@ name = "tao-macros"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f7eeb6d99155545da6150a1795945f16ac9c178deb2a5f2e74d776107bd5849"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "tao-macros"
+version = "0.1.4"
+source = "git+https://github.com/min-0-max/tao?rev=1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6#1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5149,7 +5158,7 @@ dependencies = [
  "raw-window-handle",
  "sha2",
  "soup3",
- "tao-macros",
+ "tao-macros 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 2.0.20",
  "url",
  "webkit2gtk",

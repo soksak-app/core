@@ -359,6 +359,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onFilesDropped((drop) => { dropFiles(drop).then(coreChanged); });
   status("core.settings", () => ({
     values: Object.fromEntries(Object.keys(defaults).map((key) => [key, value(key)])),
+    common: Object.fromEntries(Object.keys(defaults).map((key) => [key, scopedValue(key, "common")])),
     project: settingProject(),
     overridden: Object.keys(defaults).filter(overridden),
     saving: saving(),

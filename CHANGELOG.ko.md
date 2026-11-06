@@ -210,6 +210,15 @@
 - F527: `core.settings.change`는 설정의 type을 그 선언에서 정하므로, `applyTrace`, `make app-usage TRACE=0`, `make terminal-redraw-usage TRACE=0`이 `diagnostics.log`를 객체로 설정한다. 컨트롤의 문자열은 설정이 선언한 boolean이나 number가 되고, 다른 type의 값은 -32602와 그 설정의 검사로 실패하며, scope가 없으면 command는 common 값을 설정한다
 - F502-10: framework는 scene을 보여 주는 frame의 결과를 알리고(`Window.AfterPresent`), release build를 포함한 모든 build에서 element tree를 읽으며(`Content.ElementTree`), `WindowOptions.DrawWhileOccluded`로 화면 밖 window의 frame을 그린다. 두 language host library에서 `Frontend` port의 presentation notice는 실패를 전달하고 그 실패는 layout transaction을 취소하며, port의 settled presentation은 platform의 settled wait가 받는 block을 만들어 transaction도 wait도 main web view를 이름으로 부르지 않는다. Wails와 Tauri framework adapter는 Surface layout group의 새 operation `MainPresentation`으로 그 block을 만든다. main-thread audit은 block 호출을 native 함수 호출로 센다.
 - F502-13: exposure kind `dom`은 모든 host와 모든 plugin 선언에서 `element`가 된다: `exposes.element`, `expose.element`, `element.rect`, `element.act`, `sok element`, MCP tool `element_rect`와 `element_act`, `exposure.list`의 member `element`. `exposes.dom`을 가진 manifest는 거부된다. workbench status는 workbench에 대해 정의된다: `core.window.workbench`, `core.workbench.error`, 행이 `{role, expose, command, text}`인 `core.workbench.audit`, responder owner와 `host.hit` kind `workbench`. window check는 `core.window.workbench`의 새 `start`를 기다리고, 각각 `Object.values(APPS)` 또는 `MAIN_PAGE_APPS`를 순회하며, `scripts/check-e2e-host-parity.mjs`가 이를 검사한다.
+- F497: release candidate는 0.0.39입니다.
+- F492: 개발 뒤의 window-check run이 두 host에서 통과한다: 파일 91개 중 91개, native end-to-end test 13개 중 13개.
+- F496: window check의 pasteboard 복원이 data 없는 type을 모두 밝히고, 읽은 item만 다시 쓴다.
+- F493: Tauri host가 다른 application을 무시하지 않을 때 launch에서 activation을 부르지 않는 tao fork commit을 써, background relaunch가 background에 남는다.
+- F495: hosts check가 project, space, card id에 종류마다 번호를 매겨, card 이름이 다른 종류의 id를 세지 않는다.
+- F494: core 0.0.38을 게시했고, registry가 이를 요구하는 plugin release와 함께 올립니다.
+- F491: `core.settings`가 모든 설정의 common 값을 `common`으로 보고하고, window check의 준비가 그 값으로 common 설정을 되돌리므로, project가 덮어쓴 값이 더는 common 설정으로 옮겨지지 않습니다. browser 홈 check는 common scope에 씁니다.
+- F490: `make test-app`이 `build-registry`로 workspace registry를 만들고 native end-to-end target `test-app`을 실행하며, 기록이 Makefile이 선언한 make target을 가리킵니다. end-to-end target의 test가 prerequisite, window-check script, native target을 검사합니다.
+- F489: native test의 focus fixture가 main web view의 title을 끝난 navigation과 함께 기다립니다. navigation이 끝날 때 title이 아직 비어 있을 수 있기 때문입니다. 실패는 page 상태를 보고합니다.
 - F486: window check의 folder wait가 watch의 dropped events 보고에서 실패하지 않고 folder의 상태를 다시 읽습니다.
 - F487: window check audit의 timer 규칙이 callback이 이름인 timer에서 실패하지 않고 그것을 보고합니다.
 - F485: window check의 folder wait가 watch가 시작하지 않거나 끝나지 않을 때에도 deadline에서 결정되고, check의 끝이 끝나지 않은 watch를 보고합니다.

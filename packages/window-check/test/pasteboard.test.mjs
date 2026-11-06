@@ -2,7 +2,7 @@
 // The content is data of the user, so only the length and the first part of the sha256 are stated.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { pasteboardDifference, restoreFailure } from "../pasteboard.mjs";
+import { pasteboardDifference, restorableItems, restoreFailure } from "../pasteboard.mjs";
 
 const text = (value) => Buffer.from(value).toString("base64");
 
@@ -32,4 +32,18 @@ test("a write of another process after the restore is named with both change cou
 test("a restore that the comparison reads unchanged states the first difference, and an equal one is no failure", () => {
   assert.equal(restoreFailure([{ a: text("x") }], 7, { changeCount: 7, items: [] }), "0 items instead of 1");
   assert.equal(restoreFailure([{ a: text("x") }], 7, { changeCount: 7, items: [{ a: text("x") }] }), null);
+});
+
+test("an item without readable data is not written back and is named with its types (F496)", () => {
+  const saved = {
+    items: [{ "public.utf8-plain-text": text("a") }, {}, { "public.text": text("b") }],
+    unreadable: [[], ["com.apple.is-remote-clipboard", "public.utf8-plain-text"], ["public.rtf"]],
+  };
+  assert.deepEqual(restorableItems(saved), {
+    items: [{ "public.utf8-plain-text": text("a") }, { "public.text": text("b") }],
+    skipped: [
+      "item 2: no readable data for com.apple.is-remote-clipboard, public.utf8-plain-text, so it is not restored",
+      "item 3: no readable data for public.rtf, so only its other types are restored",
+    ],
+  });
 });

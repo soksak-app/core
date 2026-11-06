@@ -24,7 +24,8 @@ function fixture(settings) {
     "core.window.workbench": { start: "start-1", startedAt: 2, readyState: "complete" },
     "core.verify": { rows: [] },
   };
-  const read = (name) => (name === "core.settings" ? { values: { ...settings } } : statuses[name]);
+  // The application selects no project, so the common values are the effective values.
+  const read = (name) => (name === "core.settings" ? { values: { ...settings }, common: { ...settings } } : statuses[name]);
   const client = {
     endpoint: { pid: 1 },
     on: () => () => {},

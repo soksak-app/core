@@ -1,6 +1,6 @@
 {
   "name": "@soksak/host-tauriv2",
-  "version": "0.0.37",
+  "version": "0.0.39",
   "private": true,
   "description": "Tauri v2 framework adapter: the run of the Tauri application and the framework port of the Rust language host library."
 }

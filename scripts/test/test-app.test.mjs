@@ -236,3 +236,20 @@ test("an interrupting signal ends the running step, runs the cleanup steps and f
   const pid = Number(readFileSync(pidFile, "utf8"));
   assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, `the process ${pid} of the interrupted step remains`);
 });
+
+test("each end-to-end target of the Makefile names prerequisites, a window-check script and a native target that exist", { timeout: 5000 }, () => {
+  const declared = (makefile) => new Set([...readFileSync(makefile, "utf8").matchAll(/^([a-z][a-z0-9-]*):/gm)].map((match) => match[1]));
+  const makefile = readFileSync("Makefile", "utf8");
+  const scripts = JSON.parse(readFileSync("e2e/package.json", "utf8")).scripts;
+  const root = declared("Makefile");
+  const native = declared("native/darwin/Makefile");
+  const build = /^E2E_BUILD = (.*)$/m.exec(makefile);
+  assert.ok(build !== null, "the Makefile declares E2E_BUILD");
+  for (const prerequisite of build[1].split(/\s+/)) assert.ok(root.has(prerequisite), `E2E_BUILD: the Makefile declares no target ${prerequisite}`);
+  const runs = [...makefile.matchAll(/^\t@node scripts\/test-app\.mjs --script (\S+)(?: --native (\S+))?/gm)];
+  assert.ok(runs.length > 0, "the Makefile runs scripts/test-app.mjs");
+  for (const [line, script, target] of runs) {
+    assert.ok(scripts[script] !== undefined, `${line.trim()}: e2e/package.json declares no script ${script}`);
+    if (target !== undefined) assert.ok(native.has(target), `${line.trim()}: native/darwin/Makefile declares no target ${target}`);
+  }
+});

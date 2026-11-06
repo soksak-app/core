@@ -20,19 +20,23 @@ function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
 const readItems = jxa(`
 const board = $.NSPasteboard.generalPasteboard;
 const items = [];
+const unreadable = [];
 const list = board.pasteboardItems;
 for (let i = 0; i < list.count; i++) {
   const item = list.objectAtIndex(i);
   const entry = {};
+  const missing = [];
   const types = item.types;
   for (let k = 0; k < types.count; k++) {
     const type = types.objectAtIndex(k).js;
     const data = item.dataForType(type);
-    if (!data.isNil()) entry[type] = data.base64EncodedStringWithOptions(0).js;
+    if (data.isNil()) missing.push(type);
+    else entry[type] = data.base64EncodedStringWithOptions(0).js;
   }
   items.push(entry);
+  unreadable.push(missing);
 }
-return JSON.stringify({ changeCount: board.changeCount, items });`);
+return JSON.stringify({ changeCount: board.changeCount, items, unreadable });`);
 
 // An item can exceed the size limit of command arguments, so it is passed as a file.
 const writeItems = jxa(`
@@ -48,10 +52,15 @@ for (const entry of input.items) {
   }
   objects.addObject(item);
 }
-if (input.items.length > 0 && !board.writeObjects(objects)) throw new Error("pasteboard write failed");
+if (input.items.length > 0 && !board.writeObjects(objects)) {
+  throw new Error("pasteboard write failed for items with the types " + JSON.stringify(input.items.map((entry) => Object.keys(entry))));
+}
 return JSON.stringify(board.changeCount);`);
 
-/** Reads every item of the general pasteboard as base64 by format. */
+/**
+ * Reads every item of the general pasteboard as base64 by format. unreadable lists, for each item, the types whose
+ * data the pasteboard does not return, such as the type of a provider that has quit.
+ */
 export function readPasteboard() {
   return readItems();
 }
@@ -66,6 +75,25 @@ export function writePasteboard(items) {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+/**
+ * The items of a reading that a restore writes back, and a line for each item that loses types. An item whose types
+ * return no data cannot be written, and an item without any type is refused by the pasteboard, so such an item is
+ * left out and named.
+ */
+export function restorableItems({ items, unreadable }) {
+  const restored = [];
+  const skipped = [];
+  for (const [index, item] of items.entries()) {
+    const missing = unreadable[index];
+    const empty = Object.keys(item).length === 0;
+    if (missing.length > 0) {
+      skipped.push(`item ${index + 1}: no readable data for ${missing.join(", ")}, so ${empty ? "it is not restored" : "only its other types are restored"}`);
+    }
+    if (!empty) restored.push(item);
+  }
+  return { items: restored, skipped };
 }
 
 /** The text of the general pasteboard; null when there is no text. */

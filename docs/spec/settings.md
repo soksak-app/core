@@ -212,7 +212,7 @@ The focus ring of such a control is the focus color of the system in the dark ap
 
 [Plugin screen](installation.md#plugin-screen) defines `core.plugins`.
 
-`core.settings` reports every effective value, including `sets`, `links`, and the layout values. `core.themes` reports the theme catalog in order: each theme's `name`, `shape` values, and the color tokens of its `dark` and `light` modes.
+`core.settings` reports every effective value, including `sets`, `links`, and the layout values, in `values`, and the common value of every key in `common`: the stored common value, or the default when the common settings store none. A key that the selected project overrides has its project value in `values` and its common value in `common`. `core.themes` reports the theme catalog in order: each theme's `name`, `shape` values, and the color tokens of its `dark` and `light` modes.
 
 ## Acceptance
 

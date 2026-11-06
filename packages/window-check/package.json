@@ -1,6 +1,6 @@
 {
   "name": "@soksak/window-check",
-  "version": "0.0.37",
+  "version": "0.0.39",
   "private": true,
   "description": "Harness for window checks against running soksak applications.",
   "type": "module",
@@ -17,6 +17,7 @@
     "./design-rects.mjs": "./design-rects.mjs",
     "./view-metrics.mjs": "./view-metrics.mjs",
     "./lz4.mjs": "./lz4.mjs",
+    "./order-names.mjs": "./order-names.mjs",
     "./pasteboard.mjs": "./pasteboard.mjs",
     "./png.mjs": "./png.mjs",
     "./repeat.mjs": "./repeat.mjs",
@@ -38,6 +39,7 @@
     "view-calls.mjs",
     "view-metrics.mjs",
     "lz4.mjs",
+    "order-names.mjs",
     "pasteboard.mjs",
     "png.mjs",
     "repeat.mjs",

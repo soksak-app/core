@@ -212,7 +212,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 `core.plugins`는 [plugin 화면](installation.ko.md#plugin-화면)이 정한다.
 
-`core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 보고한다. `core.themes`는 theme catalog를 순서대로 보고한다. 각 theme의 `name`, `shape` 값, `dark`와 `light` mode의 color token이다.
+`core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 `values`로, 모든 key의 common 값을 `common`으로 보고한다. common 값은 저장된 common 값이고, common 설정에 저장된 값이 없으면 기본값이다. 선택된 project가 덮어쓴 key는 `values`에 project 값을, `common`에 common 값을 가진다. `core.themes`는 theme catalog를 순서대로 보고한다. 각 theme의 `name`, `shape` 값, `dark`와 `light` mode의 color token이다.
 
 ## 완료 기준
 
