@@ -66,9 +66,11 @@ type surfaceHost struct {
 	// theme is the argument of setTheme, and themeFirst tells that no placement preceded it.
 	theme      string
 	themeFirst bool
-	// elements tells that the host holds the views of the surfaces, and views the view of each surface, one for each, as the host
-	// makes them.
+	// elements tells that the host holds the views of the surfaces. Without ownViews every surface has the same view, which the
+	// framework places once, so a press over any other surface reaches the content as while the host holds the views of a placement
+	// out of the pointer; with ownViews views holds the view of each surface, one for each, as the host makes them.
 	elements bool
+	ownViews bool
 	views    map[string]uintptr
 	// calls replaces the calls of the table.
 	calls map[string]workbench.HostCall
@@ -241,6 +243,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 func (h *surfaceHost) element(id string) (uintptr, uintptr, bool) {
 	if !h.elements {
 		return 0, 0, false
+	}
+	if !h.ownViews {
+		return 1, 2, true
 	}
 	if h.views == nil {
 		h.views = map[string]uintptr{}
@@ -713,8 +718,12 @@ func TestAViewTouchesTheHeadAndTheFootOfItsCard(t *testing.T) {
 // a boundary, which reaches over the edges of the cards beside it, stays out of the view. A press near the left edge of the first cell
 // of a terminal reaches the terminal, not the boundary.
 func TestAViewTakesThePointerUpToItsEdges(t *testing.T) {
-	f, stored := surfaceShell(t)
-	stored.elements = true
+	// A theme without a gap leaves the passage between two cards narrower than the grab area of their boundary, which then reaches
+	// over the edge of the view of each card beside it. The plane takes the gap as it opens.
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
+	stored.common = map[string]any{"theme": "slate", "gap": 0.0}
+	f := surfaceShellOn(t, installedDocument, stored)
+	stored.elements, stored.ownViews = true, true
 	// The frame has the backing scale of the window, at whose device pixels the framework stands each view.
 	f.tester.SetScale(float32(stored.window.Scale))
 	f.settle()
