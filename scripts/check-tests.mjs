@@ -271,6 +271,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F670",
+    implementation: [
+      { file: "docs/spec/host-contract.md", symbol: "| `application.window.show-reaches-the-registered-platform-before-the-host-starts` |" },
+      { file: "docs/spec/host-contract.md", symbol: "| `application.window.show-without-a-registered-platform-ends-through-the-fatal-error` |" },
+      { file: "docs/spec/hosts.md", symbol: "| H58 | `src/windows_show_test.go` | none |" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/windows_show_test.go", id: "TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts" },
+      { file: "packages/host/go/src/windows_show_test.go", id: "TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError" },
+    ],
+    expected: "The two show tests of the Go language host library declare host contract cases of the Wails and the mygo host, and their file is a Go-only row of the allowed differences of the language host libraries.",
+    levels: ["unit"],
+  },
+  {
     id: "F651",
     implementation: [
       { file: "packages/sok/go/src/install.go", symbol: "func ParseRange" },

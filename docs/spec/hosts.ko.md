@@ -282,6 +282,7 @@ Go language host library의 header `src/platform/darwin/main_thread.h`는 두 ma
 | H51 | `src/diagnostics_no_main_page_test.go` | 없음 | Go framework 에만 main page 가 없는 경우가 있고, 이 test 는 그 창의 diagnostics 답을 지킨다 |
 | H56 | `src/diagnostics_cpu_profile_test.go` | 없음 | row E3 의 endpoint method 를 시험한다. 그 method 는 Go language host library 에만 있다 |
 | H57 | 없음 | `tests/support/drawing.rs` | Rust integration test 는 crate 가 따로이므로 image region 의 그리기 상태 시험들은 이 module 로 helper 를 함께 쓴다. 같은 파일들의 Go 시험은 package `host_test` 안에서 helper 를 함께 쓰므로 Go language host library 에는 이 파일이 없다 |
+| H58 | `src/windows_show_test.go` | 없음 | Go framework 는 보이는 window 마다 `ShowWindow` 에 넘기고 `ShowWindow` 는 `platform.Register` 가 등록한 platform 에 묻으므로, show 는 host 의 start 전에도, 등록이 없을 때도 실행될 수 있다. 이 test 는 `platform.Substitute` 로 등록을 바꾼다. Rust language host library 는 platform 을 등록하지 않는다. `platform::current` 는 build 가 그 operating system 용으로 compile 한 구현을 돌려준다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make check-hosts-same`가 그 행을 읽는다 |
 | E2 | `diagnostics.gc.loop` | 없음 | 이 endpoint method는 Go runtime의 `runtime.GC`를 쉬지 않고 돈다. Rust language host library에는 수집할 garbage-collected heap이 없다 |
 | E3 | `diagnostics.cpu.profile` | 없음 | 이 endpoint method는 Go runtime을 profile한다(`runtime/pprof`). `sample`은 goroutine을 호출자 frame 없이 읽지만, Rust language host library의 frame은 모두 읽는다 |

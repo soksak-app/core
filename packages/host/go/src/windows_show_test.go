@@ -25,6 +25,7 @@ func (p *showPlatform) ShowWindow(window unsafe.Pointer) error {
 	return nil
 }
 
+// contract: application.window.show-reaches-the-registered-platform-before-the-host-starts
 // The show of a framework window reaches the registered platform although no start of the host selected one, as in a process
 // that configures the mygo application without starting the host (docs/spec/hosts.md#launch-activation).
 func TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts(t *testing.T) {
@@ -40,6 +41,7 @@ func TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts(t *testing.
 	}
 }
 
+// contract: application.window.show-without-a-registered-platform-ends-through-the-fatal-error
 // A show with no registered platform ends the process with status 1 through the fatal error of the host instead of a panic.
 // Without a registration no event log opens, so the child shows the window with no log attached.
 func TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError(t *testing.T) {
