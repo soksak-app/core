@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F501-2: 살아 있는 process의 kernel executable 경로가 hash 전후에 일치해야 한다. 추적 Red로 무관한 file과 살아 있는 PID의 조합을 거부하고 executable 경로의 공백 보존을 검증한다. macOS에서 evidence case 16개가 모두 통과한다. 다른 platform은 identity 확인 불가를 명시하며, 이는 메모리에 mapping한 executable byte의 원자적 증명은 아니다.
+
 - F502-2: 실패한 layout sequence는 원래 seed, option과 trace를 보존하며 결정적인 replay는 같은 이름의 invariant가 계속 실패할 때만 호출을 축소한다. 통과, 다른 invariant 또는 분류하지 않은 실패로 축소를 승인할 수 없다. macOS에서 sequence 소유 case 열 개가 모두 통과한다.
 
 - F500-1: Terminal 및 cell 배경 sample은 session recording 소유권을 사용한다. Stop은 한 번 수행하고 실패 capture와 원래 실패를 보존하며 성공 capture는 finalization 뒤에만 제거한다. macOS에서 집중 수명주기 및 geometry case 43개가 모두 통과했고 native application 승인은 실행하지 않았다.

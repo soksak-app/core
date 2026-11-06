@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F501-2: The kernel executable path must match before and after hashing a live process. Tracked Red rejects an unrelated file paired with a live PID and preserves whitespace in executable paths. All 16 evidence cases pass on macOS. Other platforms report unavailable identity explicitly; this is not an atomic proof of mapped executable bytes.
+
 - F502-2: Failing layout sequences retain their original seed, options and trace while deterministic replay reduces calls only when the same named invariant still fails. Passing, different-invariant and unclassified failures cannot validate a reduction. All ten sequence-owner cases pass on macOS.
 
 - F500-1: Terminal and cell background samples use session recording ownership. Stop runs once, failed captures and original failures remain available, and successful captures are removed only after finalization. All 43 focused lifecycle and geometry cases pass on macOS; native application acceptance was not run.

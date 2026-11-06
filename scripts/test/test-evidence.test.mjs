@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { appendEvidenceAttempt, collectEvidence, evidenceDrift, persistEvidence, validateEvidence } from '../test-evidence.mjs';
 import * as evidence from '../test-evidence.mjs';
+import { processExecutable } from '../platform/darwin/process-executable.mjs';
 
 async function inputFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'soksak-evidence-inputs-'));
@@ -20,6 +21,26 @@ async function inputFixture(t) {
   return { root, caseId: 'input-binding', language: 'js-ts', implementationFiles: ['source.mjs'],
     testFiles: ['source.test.mjs'], dependencyFiles: ['dependency.json'], buildFlags: ['--test'] };
 }
+
+test('process evidence rejects a live PID paired with an unrelated file', { timeout: 10000 }, async (t) => {
+  const options = await inputFixture(t);
+  await assert.rejects(() => collectEvidence({ ...options,
+    processes: [{ pid: process.pid, executable: 'source.mjs' }],
+    result: { status: 'pass', expected: 1, actual: 1, elapsedMs: 1 } }), /executable mismatch/);
+});
+
+test('process evidence rejects an unavailable or exited process identity', { timeout: 10000 }, async () => {
+  const entry = { pid: process.pid, executable: process.execPath };
+  await assert.rejects(() => evidence.runningProcess(process.cwd(), entry, {
+    readExecutable: async () => { throw new Error('identity unavailable'); },
+  }), /identity unavailable/);
+  await assert.rejects(() => evidence.runningProcess(process.cwd(), { ...entry, pid: 99999999 }), /not running/);
+  await assert.rejects(() => evidence.runningProcess(process.cwd(), entry, { readExecutable: async () => '' }), /identity.*unavailable/);
+});
+
+test('process identity preserves whitespace belonging to the executable path', { timeout: 10000 }, async () => {
+  assert.equal(await processExecutable(process.pid, { execute: async () => ({ stdout: '/candidate/program \n' }) }), '/candidate/program ');
+});
 
 for (const [file, name] of [
   [null, 'executed evidence binds unchanged inputs before the command'],

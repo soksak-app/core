@@ -111,7 +111,14 @@ async function dirtyState(root) {
   };
 }
 
-async function runningProcess(root, entry) {
+async function processExecutable(pid) {
+  if (process.platform !== 'darwin') throw new Error(`process executable identity unavailable on ${process.platform}`);
+  const platform = await import('./platform/darwin/process-executable.mjs');
+  return platform.processExecutable(pid);
+}
+
+/** Binds the supplied path to the kernel identity before and after hashing the live executable. */
+export async function runningProcess(root, entry, { readExecutable = processExecutable } = {}) {
   if (!entry || typeof entry !== 'object' || !Number.isInteger(entry.pid) || entry.pid <= 0) throw invalid('process.pid must be a positive integer');
   requiredText(entry.executable, `process ${entry.pid}.executable`);
   try {
@@ -120,8 +127,18 @@ async function runningProcess(root, entry) {
     throw new Error(`process ${entry.pid} is not running: ${error.code ?? error.message}`);
   }
   const executable = await realpath(resolve(root, entry.executable));
+  const verify = async () => {
+    const observed = await readExecutable(entry.pid);
+    if (typeof observed !== 'string' || observed.length === 0) throw new Error(`process ${entry.pid}: executable identity unavailable`);
+    const canonical = await realpath(observed);
+    if (canonical !== executable) throw new Error(`process ${entry.pid}: executable mismatch: expected ${executable}, observed ${canonical}`);
+    try { process.kill(entry.pid, 0); }
+    catch (error) { throw new Error(`process ${entry.pid} is not running: ${error.code ?? error.message}`); }
+  };
+  await verify();
   const relative = executable.startsWith(`${resolve(root)}/`) ? executable.slice(resolve(root).length + 1) : executable;
   const file = await hashFile(root, relative);
+  await verify();
   return { pid: entry.pid, executable: relative, sha256: file.sha256 };
 }
 
