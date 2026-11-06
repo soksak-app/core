@@ -590,7 +590,8 @@ func TestTheStepAfterAFrameReadsAClosedProjectAsNoPlane(t *testing.T) {
 }
 
 // A read between a change of the plane and the next frame finds a frame of the plane that left, so it states no rows of it. The rows
-// come back with the frame of the new plane.
+// come back with the frame of the new plane. The activation restores the focus ring of the space, so it answers after that frame
+// placed the surfaces and the host answered the keyboard call (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
 func TestAReadBeforeTheFrameOfAnotherPlaneStatesNoRows(t *testing.T) {
 	f, _ := placingShell(t)
 	resized(f, 1000)
@@ -608,14 +609,18 @@ func TestAReadBeforeTheFrameOfAnotherPlaneStatesNoRows(t *testing.T) {
 	}
 	f.shell.Registry().RunLater("core.space.activate", raw, func(_ any, err error) { answered, done = err, true })
 	f.pending.drain(t)
-	if !done || answered != nil {
-		t.Fatalf("the activation answered %v, done %t", answered, done)
+	if done {
+		t.Fatalf("the activation answered %v before the frame of the plane", answered)
 	}
 	verify := status[workbench.VerifyStatus](t, f, "core.verify")
 	if verify.Failed != 0 || len(verify.Rows) != 0 {
 		t.Fatalf("core.verify before the frame of the plane is %+v", verify)
 	}
 	f.settle()
+	f.settle()
+	if !done || answered != nil {
+		t.Fatalf("after the frame of the plane the activation answered %v, done %t", answered, done)
+	}
 	verifyRow(t, status[workbench.VerifyStatus](t, f, "core.verify"), "V2 ")
 }
 

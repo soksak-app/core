@@ -394,6 +394,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
 	s.registry.Record(s.events.Command)
+	s.registry.Follow(s.followCommand)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
