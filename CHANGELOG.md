@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F488: The contract case of the query on a log of 1,000,000 events judges the rows and the segments and lines that each query reads instead of its elapsed time, so the load of a shared runner no longer fails it; it still prints each time.
 - F486: A folder wait of the window checks reads the state of the folder again when its watch reports dropped events, instead of failing.
 - F487: The timer rule of the window check audit reports a timer whose callback is a name instead of failing on it.
 - F485: A folder wait of the window checks settles at its deadline also when its watch does not start or end, and the end of a check reports a watch that has not ended.

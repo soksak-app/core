@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F488: event 1,000,000개 로그의 query contract case가 경과 시간 대신 query마다 행과 읽은 segment와 줄로 판정하므로, 공유 runner의 부하로 실패하지 않습니다. 시간은 계속 출력합니다.
 - F486: window check의 folder wait가 watch의 dropped events 보고에서 실패하지 않고 folder의 상태를 다시 읽습니다.
 - F487: window check audit의 timer 규칙이 callback이 이름인 timer에서 실패하지 않고 그것을 보고합니다.
 - F485: window check의 folder wait가 watch가 시작하지 않거나 끝나지 않을 때에도 deadline에서 결정되고, check의 끝이 끝나지 않은 watch를 보고합니다.
