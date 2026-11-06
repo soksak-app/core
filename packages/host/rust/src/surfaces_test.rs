@@ -13,7 +13,7 @@ use super::{
     create_in_open_window, create_registered_surface, mark_first_commit,
     prepare_surface_visibility, pressed_surface, read_press_then_deliver, removed_surfaces,
     surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
-    surface_dispatch_result_with, with_registered_surface,
+    surface_dispatch_result_with, surface_raster_wait_with, with_registered_surface,
 };
 
 // contract: view.start-values.omitted-keeps-held
@@ -1168,6 +1168,73 @@ fn an_image_region_declaration_keeps_the_keys_of_its_surface() {
         ])
         .declares_image_region()
     );
+}
+
+// contract: performance.surface.dispatch-records-the-raster-wait
+// The raster stage of a presentation records when its refresh started, when its wait started and when the wait ended, also for a
+// wait that fails, and a refresh that fails starts no wait and records nothing.
+#[test]
+fn the_raster_wait_of_a_presentation_records_its_refresh_and_its_wait() {
+    let dispatch = |queued| {
+        surface_dispatch_context_with(
+            || Some((queued, SurfaceDispatchMode::Frame)),
+            || "main".to_owned(),
+            Some(12),
+            None,
+            "present",
+            "present-raster-wait",
+        )
+    };
+    let mut clock_values = [130, 1130, 2010, 2020].into_iter();
+    let mut observed = Vec::new();
+    let steps = std::cell::RefCell::new(Vec::new());
+    let mut run = |queued, refresh: Result<(), String>, wait: Result<(), String>| {
+        surface_raster_wait_with(
+            dispatch(queued),
+            || clock_values.next(),
+            |dispatch, entered, returned| {
+                observed.push(surface_dispatch_fields(dispatch, entered, returned))
+            },
+            || {
+                steps.borrow_mut().push("refresh");
+                refresh
+            },
+            || {
+                steps.borrow_mut().push("wait");
+                wait
+            },
+        )
+    };
+    assert_eq!(run(100, Ok(()), Ok(())), Ok(()));
+    assert_eq!(
+        run(2000, Ok(()), Err("raster failed".to_owned())),
+        Err("raster failed".to_owned())
+    );
+    assert_eq!(
+        run(3000, Err("refresh failed".to_owned()), Ok(())),
+        Err("refresh failed".to_owned())
+    );
+    assert_eq!(
+        *steps.borrow(),
+        ["refresh", "wait", "refresh", "wait", "refresh"]
+    );
+    let record = |queued: &str, entered: &str, returned: &str| {
+        serde_json::json!({
+            "event": "surface.dispatch",
+            "window": "main",
+            "ticket": 12,
+            "operation": "present",
+            "stage": "present-raster-wait",
+            "queued_ns": queued,
+            "entered_ns": entered,
+            "returned_ns": returned
+        })
+    };
+    assert_eq!(
+        observed,
+        [record("100", "130", "1130"), record("2000", "2010", "2020")]
+    );
+    assert_eq!(clock_values.next(), None);
 }
 
 // contract: performance.surface.dispatch-names-its-surface

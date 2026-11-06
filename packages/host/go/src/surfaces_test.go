@@ -1608,6 +1608,57 @@ func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
 	}
 }
 
+// contract: performance.surface.dispatch-records-the-raster-wait
+// The raster stage of a presentation records when its refresh started, when its wait started and when the wait ended, also for a
+// wait that fails, and a refresh that fails starts no wait and records nothing.
+func TestTheRasterWaitOfAPresentationRecordsItsRefreshAndItsWait(t *testing.T) {
+	isolateTraceRecords(t)
+	wasOn := performanceOn.Swap(false)
+	t.Cleanup(func() { performanceOn.Store(wasOn) })
+	oldSystem := system
+	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 130, 1130, 2000, 2010, 2020, 3000}}
+	system = clock
+	t.Cleanup(func() { system = oldSystem })
+	ticket := uint64(12)
+	var steps []string
+	if err := waitSurfaceRasters("main", &ticket, func() error {
+		steps = append(steps, "refresh")
+		return nil
+	}, func() error {
+		steps = append(steps, "wait")
+		return nil
+	}); err != nil {
+		t.Fatalf("the raster stage failed: %v", err)
+	}
+	waitFailure := errors.New("the current image raster did not present")
+	if err := waitSurfaceRasters("main", &ticket, func() error { return nil }, func() error { return waitFailure }); err != waitFailure {
+		t.Fatalf("the failed wait answered %v, want %v", err, waitFailure)
+	}
+	refreshFailure := errors.New("the raster refresh failed")
+	if err := waitSurfaceRasters("main", &ticket, func() error { return refreshFailure }, func() error {
+		steps = append(steps, "wait after a failed refresh")
+		return nil
+	}); err != refreshFailure {
+		t.Fatalf("the failed refresh answered %v, want %v", err, refreshFailure)
+	}
+	if want := []string{"refresh", "wait"}; !reflect.DeepEqual(steps, want) {
+		t.Fatalf("the raster stage ran %v, want %v", steps, want)
+	}
+	want := []map[string]any{{
+		"window": "main", "ticket": float64(ticket), "operation": "present", "stage": "present-raster-wait",
+		"queued_ns": "100", "entered_ns": "130", "returned_ns": "1130",
+	}, {
+		"window": "main", "ticket": float64(ticket), "operation": "present", "stage": "present-raster-wait",
+		"queued_ns": "2000", "entered_ns": "2010", "returned_ns": "2020",
+	}}
+	if got := bufferedTraces(t, "host.frame.surface.dispatch"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("raster stage records = %#v, want %#v", got, want)
+	}
+	if clock.reads != 7 {
+		t.Fatalf("monotonic clock reads = %d, want three for each wait and one for the failed refresh", clock.reads)
+	}
+}
+
 // contract: performance.surface.dispatch-names-its-surface
 func TestSurfaceDispatchOfACompositionNamesItsSurface(t *testing.T) {
 	isolateTraceRecords(t)

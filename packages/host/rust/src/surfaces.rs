@@ -918,6 +918,29 @@ fn surface_dispatch_result_with<T>(
     result
 }
 
+/// The raster stage of a presentation: the refresh of the rasters of its image regions and the wait until they present, recorded
+/// as the stage `present-raster-wait` with `queued_ns` before the refresh (the dispatch context), `entered_ns` when the wait starts
+/// and `returned_ns` when it ends, also when the wait fails. A refresh that fails starts no wait and records nothing.
+fn surface_raster_wait_with(
+    dispatch: Option<SurfaceDispatch>,
+    mut clock: impl FnMut() -> Option<u64>,
+    mut observe: impl FnMut(&SurfaceDispatch, u64, u64),
+    refresh: impl FnOnce() -> Result<(), String>,
+    wait: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    refresh()?;
+    let Some(dispatch) = dispatch else {
+        return wait();
+    };
+    let entered = clock();
+    let result = wait();
+    let returned = clock();
+    if let (Some(entered), Some(returned)) = (entered, returned) {
+        observe(&dispatch, entered, returned);
+    }
+    result
+}
+
 fn root_placements_without_join(
     placed: &[Placement],
     joined: &[(String, u64)],
@@ -1941,20 +1964,34 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                 || ask_presentation_notice(&presentation_work_window, ticket, dom_tx),
                 || await_presentation_notice(&dom_rx),
                 || {
-                    crate::composition::refresh_image_rasters(&raster_window)?;
-                    images
-                        .wait_layout_rasters(exposure::TIMEOUT, presentation_settled)
-                        .map_err(|reason| {
-                            if reason == "presentationTimeout" {
-                                format!(
-                                    "the current image raster did not present within {:?}; pending {}",
-                                    exposure::TIMEOUT,
-                                    images.pending_rasters()
-                                )
-                            } else {
-                                format!("the current image raster failed to present: {reason}")
-                            }
-                        })
+                    surface_raster_wait_with(
+                        surface_dispatch(
+                            &raster_window,
+                            Some(ticket),
+                            "present",
+                            "present-raster-wait",
+                        ),
+                        surface_dispatch_timestamp,
+                        record_surface_dispatch,
+                        || crate::composition::refresh_image_rasters(&raster_window),
+                        || {
+                            images
+                                .wait_layout_rasters(exposure::TIMEOUT, presentation_settled)
+                                .map_err(|reason| {
+                                    if reason == "presentationTimeout" {
+                                        format!(
+                                            "the current image raster did not present within {:?}; pending {}",
+                                            exposure::TIMEOUT,
+                                            images.pending_rasters()
+                                        )
+                                    } else {
+                                        format!(
+                                            "the current image raster failed to present: {reason}"
+                                        )
+                                    }
+                                })
+                        },
+                    )
                 },
                 || {
                     let (prepared_tx, prepared_rx) = mpsc::channel();
