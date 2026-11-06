@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F681: The Makefile puts `$(CARGO_HOME)/bin`, which is `~/.cargo/bin` unless the environment sets `CARGO_HOME`, before the `PATH` of make, so it finds the cargo that rustup installs on a hosted runner.
 - F679: The process identity package compiles and declares in its pkg-config file the `MACOS_MINIMUM` that `native/darwin` passes, or alone the one of the root Makefile, instead of a 14.4 of its own.
 - F678: `measure-trace-share` runs `measure-object-counts`, the target that its earlier `object-counts` named, and a test requires each run of `$(MAKE)` in a Makefile recipe to name a target of the Makefile that it runs.
 - F672: Every recipe of the Makefile runs cargo through `CARGO`, which the exported `PATH` resolves, so GNU Make 3.81 finds cargo when it starts without the cargo folder of rustup in its `PATH`; `check-cargo` stops a target that runs cargo when none is found.

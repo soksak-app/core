@@ -318,6 +318,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F681",
+    implementation: [
+      { file: "Makefile", symbol: "CARGO_HOME ?= $(HOME)/.cargo" },
+      { file: "Makefile", symbol: "export PATH := $(CARGO_HOME)/bin:$(PATH)" },
+    ],
+    tests: [
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "a recipe line runs the cargo of CARGO_HOME when CARGO_HOME is not the cargo folder of HOME" },
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" },
+    ],
+    expected: "The Makefile puts $(CARGO_HOME)/bin, ~/.cargo/bin unless the environment sets CARGO_HOME, before the PATH of make and resolves CARGO there, so it finds the cargo that rustup installs on a hosted runner.",
+    levels: ["unit"],
+  },
+  {
     id: "F679",
     implementation: [
       { file: "native/darwin/process-identity/Makefile", symbol: "MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p' $(CURDIR)/../../../Makefile)" },

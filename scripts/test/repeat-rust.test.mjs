@@ -1,6 +1,6 @@
 // Verifies that `make repeat-rust` names each test of a package when it starts, reports its result and elapsed time, and kills a
-// test at its own limit. The Rust toolchain is replaced by a fake `cargo` on PATH; `make` gets its HOME in the same folder so that
-// the cargo of `$(HOME)/.cargo/bin` does not shadow the fake.
+// test at its own limit. The Rust toolchain is replaced by a fake `cargo` on PATH; `make` gets its HOME and its CARGO_HOME in the
+// same folder so that the cargo of `$(CARGO_HOME)/bin` does not shadow the fake.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -151,7 +151,7 @@ function selectedTargetTest(t, selection, argument, cargoArgs, expected) {
   const result = spawnSync('make', [
     'repeat-rust', 'PACKAGE=fixture', 'COUNT=1', `TEST=${argument}`, `TEST_TARGET=${selection}`,
   ], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
     encoding: 'utf8', timeout: 60000,
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -175,7 +175,7 @@ test('make repeat-rust selects only the test:integration Cargo target before dis
 test('make repeat-rust keeps package-wide target and doctest discovery by default', (t) => {
   const { directory, targetLog } = targetCargo(t);
   const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1'], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
     encoding: 'utf8', timeout: 60000,
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -192,7 +192,7 @@ test('make repeat-rust rejects an invalid Cargo target before invoking Cargo', (
   const result = spawnSync('make', [
     'repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TARGET=test:bad/name',
   ], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
     encoding: 'utf8', timeout: 60000,
   });
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
@@ -206,7 +206,7 @@ test('make repeat-rust rejects shell syntax in a Cargo target without executing 
   const result = spawnSync('make', [
     'repeat-rust', 'PACKAGE=fixture', 'COUNT=1', `TEST_TARGET=test:bad'; touch ${marker}; #`,
   ], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` },
     encoding: 'utf8', timeout: 60000,
   });
   assert.equal(existsSync(marker), false, 'shell syntax in the selector ran as a command');
@@ -239,7 +239,7 @@ test('cargoTargetArgs rejects non-string selectors instead of coercing them', ()
 test('make repeat-rust names each test when it starts, reports its result and elapsed time, and kills a test at its limit', (t) => {
   const directory = fakeCargo(t);
   const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TIMEOUT=2'], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
+    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
   });
   assert.match(result.stdout, /^RUN  fixture::alpha \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS fixture::alpha \d+\.\d{3}s$/m, result.stdout + result.stderr);
@@ -255,7 +255,7 @@ test('make repeat-rust names each test when it starts, reports its result and el
 test('make repeat-rust passes its features to every cargo test call', (t) => {
   const directory = fakeCargo(t);
   const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'FEATURES=diagnostics', 'TEST=fixture::alpha'], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
+    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n').filter((call) => call.startsWith('test '));
@@ -282,7 +282,7 @@ test('make repeat-rust runs each documentation test of the library with its own 
   const directory = fakeCargo(t);
   // The make target passes the name quoted: a doc-test name holds spaces and parentheses, which the recipe shell would split.
   const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'TEST=src/lib.rs - doc_example (line 3)', 'TEST_TIMEOUT=2'], {
-    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
+    cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /^RUN  src\/lib\.rs - doc_example \(line 3\) \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);

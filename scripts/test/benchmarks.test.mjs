@@ -47,7 +47,7 @@ exit 0
 function make(directory, target) {
   return spawnSync('make', target, {
     cwd: root, encoding: 'utf8', timeout: 90000,
-    env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, BENCH_TIMEOUT: '6' },
+    env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}`, BENCH_TIMEOUT: '6' },
   });
 }
 
@@ -66,7 +66,7 @@ test('make benchmark-go fails a benchmark build whose link reports an object new
   const directory = toolchain(t);
   const result = spawnSync('make', ['benchmark-go'], {
     cwd: root, encoding: 'utf8', timeout: 90000,
-    env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, BENCH_TIMEOUT: '6',
+    env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}`, BENCH_TIMEOUT: '6',
       FAKE_GO_LINKER: "ld: warning: object file (/tmp/go-link-2/000031.o) was built for newer 'macOS' version (27.0) than being linked (14.4)" },
   });
   assert.notEqual(result.status, 0, result.stdout + result.stderr);

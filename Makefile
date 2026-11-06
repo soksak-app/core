@@ -318,9 +318,10 @@ WAILS_DEBUG_TAGS     = diagnostics dev
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
 .PHONY: build-native fetch-native build-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
-# rustup installs cargo here and adds the path to the shell profile. The shell of make
-# does not read the profile.
-export PATH := $(HOME)/.cargo/bin:$(PATH)
+# rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
+# the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
+CARGO_HOME ?= $(HOME)/.cargo
+export PATH := $(CARGO_HOME)/bin:$(PATH)
 # GNU Make 3.81 runs a recipe line without shell characters itself and looks its program up in its own PATH, not in the
 # exported one, and $(shell) does not receive the exported PATH either; so cargo is resolved once with that PATH and every
 # recipe runs $(CARGO). check-cargo stops a target that runs cargo when none was found.
@@ -328,7 +329,7 @@ CARGO := $(shell PATH="$(PATH)" command -v cargo)
 
 .PHONY: check-cargo
 check-cargo:
-	@test -n "$(CARGO)" || { echo "make: cargo is on neither PATH nor $(HOME)/.cargo/bin; rustup installs it there" >&2; exit 1; }
+	@test -n "$(CARGO)" || { echo "make: cargo is on neither PATH nor $(CARGO_HOME)/bin; rustup installs it there" >&2; exit 1; }
 
 # The minimum macOS version of the native apps. The capture code uses the macOS 14.4 API
 # getCurrentProcessShareableContentWithCompletionHandler. This is the one declaration of the version: native/darwin reads it,

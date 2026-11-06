@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F681: Makefile은 make의 `PATH` 앞에 `$(CARGO_HOME)/bin`(환경이 `CARGO_HOME`을 정하지 않으면 `~/.cargo/bin`)을 두므로 hosted runner에서 rustup이 설치한 cargo를 찾는다.
 - F679: process identity package는 자체 14.4 대신 `native/darwin`이 넘기는 `MACOS_MINIMUM`, 단독 실행 때는 루트 Makefile의 값으로 compile하고 pkg-config file에 선언한다.
 - F678: `measure-trace-share`는 이전 `object-counts`가 가리키던 `measure-object-counts`를 실행하고, test는 Makefile recipe의 각 `$(MAKE)` 실행이 그것이 실행하는 Makefile의 target을 지정하기를 요구한다.
 - F672: Makefile의 모든 recipe는 export한 `PATH`로 찾은 `CARGO`로 cargo를 실행하므로, GNU Make 3.81이 rustup의 cargo folder 없는 `PATH`로 시작해도 cargo를 찾는다. cargo가 없으면 `check-cargo`가 cargo를 실행하는 target을 멈춘다.

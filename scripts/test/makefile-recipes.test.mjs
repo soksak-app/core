@@ -3,7 +3,7 @@
 // Makefile exports; and every recipe that runs $(MAKE) names a target of the Makefile that it runs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,10 +12,22 @@ const root = resolve(import.meta.dirname, "../..");
 // The PATH of a shell that did not read the profile, which adds the cargo folder of rustup.
 const BARE_PATH = "/usr/bin:/bin";
 
-function make(home, makefiles, target) {
-  return spawnSync("/usr/bin/env", [`HOME=${home}`, `PATH=${BARE_PATH}`, "make", ...makefiles.flatMap((file) => ["-f", file]), target], {
+// Runs make with only HOME, the bare PATH and, when given, CARGO_HOME in its environment, so no variable of the environment of
+// the test (CARGO, CARGO_HOME, MAKEFLAGS) reaches it.
+function make({ home, cargoHome }, makefiles, target) {
+  return spawnSync("/usr/bin/make", [...makefiles.flatMap((file) => ["-f", file]), target], {
     cwd: root, encoding: "utf8", timeout: 60000,
+    env: { HOME: home, PATH: BARE_PATH, ...(cargoHome === undefined ? {} : { CARGO_HOME: cargoHome }) },
   });
+}
+
+// A make file that runs $(CARGO) --version on a recipe line without shell characters.
+function cargoProbe(t) {
+  const folder = mkdtempSync(join(tmpdir(), "soksak-make-cargo-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const probe = join(folder, "probe.mk");
+  writeFileSync(probe, "probe-cargo:\n\t$(CARGO) --version\n");
+  return { folder, probe };
 }
 
 // The programs that a line of shell runs: the first word of each command, after its variable assignments and the
@@ -32,15 +44,26 @@ function programs(line) {
 }
 
 test("a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder", (t) => {
-  const cargo = join(homedir(), ".cargo", "bin", "cargo");
+  // rustup installs cargo in $CARGO_HOME/bin, which is ~/.cargo/bin when CARGO_HOME is not set.
+  const cargoHome = process.env.CARGO_HOME;
+  const cargo = join(cargoHome ?? join(homedir(), ".cargo"), "bin", "cargo");
   assert.ok(existsSync(cargo), `the test needs the cargo of rustup at ${cargo}`);
-  const folder = mkdtempSync(join(tmpdir(), "soksak-make-cargo-"));
-  t.after(() => rmSync(folder, { recursive: true, force: true }));
-  const probe = join(folder, "probe.mk");
-  writeFileSync(probe, "probe-cargo:\n\t$(CARGO) --version\n");
-  const result = make(homedir(), ["Makefile", probe], "probe-cargo");
+  const { probe } = cargoProbe(t);
+  const result = make({ home: homedir(), cargoHome }, ["Makefile", probe], "probe-cargo");
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /^cargo \d+\.\d+\.\d+/m, result.stdout + result.stderr);
+});
+
+test("a recipe line runs the cargo of CARGO_HOME when CARGO_HOME is not the cargo folder of HOME", (t) => {
+  // A hosted runner sets CARGO_HOME to a folder outside HOME; the fake cargo there stands for its toolchain.
+  const { folder, probe } = cargoProbe(t);
+  const cargoHome = join(folder, "cargo-home");
+  mkdirSync(join(cargoHome, "bin"), { recursive: true });
+  writeFileSync(join(cargoHome, "bin", "cargo"), "#!/bin/sh\necho 'cargo 9.9.9 (the cargo of CARGO_HOME)'\n");
+  chmodSync(join(cargoHome, "bin", "cargo"), 0o755);
+  const result = make({ home: "/nonexistent", cargoHome }, ["Makefile", probe], "probe-cargo");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^cargo 9\.9\.9 \(the cargo of CARGO_HOME\)$/m, result.stdout + result.stderr);
 });
 
 test("no recipe or variable of the Makefile runs cargo other than through CARGO", () => {
@@ -75,7 +98,7 @@ test("each target whose recipe runs CARGO requires check-cargo", () => {
 });
 
 test("check-cargo stops with a message when neither the PATH of make nor the cargo folder of HOME holds cargo", () => {
-  const result = make("/nonexistent", ["Makefile"], "check-cargo");
+  const result = make({ home: "/nonexistent" }, ["Makefile"], "check-cargo");
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stderr, /cargo is on neither PATH nor \/nonexistent\/\.cargo\/bin; rustup installs it there/, result.stderr);
 });
