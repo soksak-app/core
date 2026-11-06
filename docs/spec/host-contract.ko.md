@@ -921,6 +921,7 @@ fn invalid_json_closes_connection() {
 | `debug.save-all.reports-progress` | tar writer는 나열한 byte를 1 MiB 이상 더 쓸 때마다, 그리고 마지막 파일 뒤에 쓴 byte가 전체와 같게 한 번 보고한다. | all |
 | `overlay.pick.dropped-is-recorded` | id와 instance가 열린 모달의 것이 아닌 모달의 응답은 기록 `host.overlay.dropped`의 field `{id, instance, key, open}`과 함께 버려지며, 열린 모달이 없으면 `open`은 빈 글이다. 열린 모달의 응답은 버려지지 않는다. | all |
 | `modal.ready-visible` | 열린 모달의 ready 요청은 모달을 표시하고 visible 플래그를 설정한 뒤, 둘 다 끝난 후에 메인 스레드에서 응답한다. 표시가 실패하면 그 오류로 응답하고 모달은 다음 ready 요청까지 대기 상태로 남는다. id와 instance가 열린 모달의 것이 아닌 ready 요청은 오래된 요청이다. 아무것도 바꾸지 않고 ok로 응답하며, 이벤트 `host.trace.modal.stale-ready`를 `modal`과 `instance`와 함께 기록한다. | all |
+| `modal.keyboard-hold` | 모달 web view 의 show 는 이전 모달을 제거하기 전에 window 의 input 을 hold 한다. hold 는 ready 요청에서 모달이 keyboard 를 받은 뒤에 끝나고, 그 전에 모달이 닫히거나 show 가 실패하거나 main page 가 시작하면 그때 끝난다. 모달을 교체하는 show 는 교체한 모달을 위해 hold 를 유지한다. | all |
 | `modal.dialog-blurs-each-document-and-image-region` | Dialog를 열면 window의 각 document web view와 각 image region에 native blur를 걸고, 닫으면 걷는다. | all |
 | `modal.region-under-a-dialog-starts-blurred` | Dialog가 열린 동안 만든 image region은 흐린 상태로 시작하고, dialog가 없는 동안 만든 것은 blur 없이 시작한다. | all |
 | `reload.timeout.names-running-calls` | 범위 안에 workbench가 준비를 알리지 않은 다시 읽기는 `the reloaded page did not report ready within <bound>; running host calls: <calls>`로 실패하며, `<calls>`는 그 window에서 돌아오지 않은 호출을 시작 순서로 각각 소수 한 자리의 `<name> <seconds>s`로 적거나 `none`이다. | all |

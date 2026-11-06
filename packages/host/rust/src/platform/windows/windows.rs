@@ -172,6 +172,12 @@ impl Platform for Windows {
     fn keyboard_decided(&self, window: Handle) -> Result<(), String> {
         unsupported::keyboard_decided(window)
     }
+    fn modal_hold(&self, window: Handle) -> Result<(), String> {
+        unsupported::modal_hold(window)
+    }
+    fn modal_hold_end(&self, window: Handle) -> Result<(), String> {
+        unsupported::modal_hold_end(window)
+    }
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String> {
         unsupported::set_surface_alpha_handle(surface, alpha)
     }

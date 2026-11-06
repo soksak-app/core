@@ -2,8 +2,13 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"reflect"
 	"testing"
+	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // contract: modal.ready-visible
@@ -34,4 +39,115 @@ func TestAStaleModalReadyChangesNothingAndWritesTheTrace(t *testing.T) {
 		return
 	}
 	t.Fatalf("no host.trace.modal.stale-ready record was written; the buffered records are %d", len(records.buffer))
+}
+
+// modalKeyboardPlatform is the platform of a modal keyboard test: it records the calls that concern the keyboard of the window in
+// their order, and creates a web view that loads, or refuses it when refuse is set.
+type modalKeyboardPlatform struct {
+	platform.Platform
+	calls  []string
+	refuse bool
+}
+
+func (p *modalKeyboardPlatform) AlignRect(_ unsafe.Pointer, at platform.Rect) (platform.Rect, error) {
+	return at, nil
+}
+
+func (p *modalKeyboardPlatform) CreateWebview(unsafe.Pointer, platform.WebviewOptions) (unsafe.Pointer, error) {
+	if p.refuse {
+		return nil, errors.New("refused")
+	}
+	return unsafe.Pointer(new(int)), nil
+}
+
+func (*modalKeyboardPlatform) NavigateWebview(unsafe.Pointer, string) bool    { return true }
+func (*modalKeyboardPlatform) ConfigureModal(unsafe.Pointer, string, float64) {}
+func (*modalKeyboardPlatform) SetWebviewHidden(unsafe.Pointer, bool)          {}
+func (*modalKeyboardPlatform) CloseWebview(unsafe.Pointer)                    {}
+func (*modalKeyboardPlatform) EvaluateScript(unsafe.Pointer, string)          {}
+func (p *modalKeyboardPlatform) ModalHold(unsafe.Pointer)                     { p.calls = append(p.calls, "hold") }
+func (p *modalKeyboardPlatform) ModalHoldEnd(unsafe.Pointer)                  { p.calls = append(p.calls, "end") }
+func (p *modalKeyboardPlatform) FocusModal(_ unsafe.Pointer, take bool) {
+	p.calls = append(p.calls, fmt.Sprintf("focus %t", take))
+}
+
+// modalFrontend is the window of a modal keyboard test: it takes the events and the workbench calls of the host.
+type modalFrontend struct{ noticeFrontend }
+
+func (*modalFrontend) Emit(string, ...any)  {}
+func (*modalFrontend) CallWorkbench(string) {}
+
+func modalKeyboardSurfaces(t *testing.T, refuse bool) (*Surfaces, *modalKeyboardPlatform) {
+	t.Helper()
+	fake := &modalKeyboardPlatform{refuse: refuse}
+	savedSystem, savedFramework := system, framework
+	system, framework = fake, stepFramework{}
+	t.Cleanup(func() { system, framework = savedSystem, savedFramework })
+	s := &Surfaces{window: &modalFrontend{}, documents: NewDocuments(), images: NewImages(), invoke: func(task func()) { task() }}
+	return s, fake
+}
+
+func showPicker(t *testing.T, s *Surfaces, id string) {
+	t.Helper()
+	if _, err := s.OverlayShow(OverlayRequest{ID: id, Mode: "menu", Rect: Rect{W: 10, H: 10}}); err != nil {
+		t.Fatalf("OverlayShow %s: %v", id, err)
+	}
+}
+
+// contract: modal.keyboard-hold
+func TestTheInputWaitsFromTheShowOfAModalUntilItTakesTheKeyboard(t *testing.T) {
+	s, fake := modalKeyboardSurfaces(t, false)
+	showPicker(t, s, "picker")
+	if want := []string{"hold"}; !reflect.DeepEqual(fake.calls, want) {
+		t.Fatalf("the show of a modal made the calls %v, want %v: the input of the window waits until the modal takes the keyboard", fake.calls, want)
+	}
+	if err := s.ModalReady("picker", s.modal.instance); err != nil {
+		t.Fatalf("ModalReady: %v", err)
+	}
+	if want := []string{"hold", "focus true", "end"}; !reflect.DeepEqual(fake.calls, want) {
+		t.Fatalf("the ready modal made the calls %v, want %v: the input that waited reaches the modal after it took the keyboard", fake.calls, want)
+	}
+}
+
+// contract: modal.keyboard-hold
+func TestAModalThatClosesOrFailsBeforeItTookTheKeyboardEndsTheWait(t *testing.T) {
+	s, fake := modalKeyboardSurfaces(t, false)
+	showPicker(t, s, "picker")
+	if err := s.OverlayHide("picker"); err != nil {
+		t.Fatalf("OverlayHide: %v", err)
+	}
+	if want := []string{"hold", "focus false", "end"}; !reflect.DeepEqual(fake.calls, want) {
+		t.Fatalf("a modal closed before it was ready made the calls %v, want %v", fake.calls, want)
+	}
+
+	started, discarded := modalKeyboardSurfaces(t, false)
+	showPicker(t, started, "picker")
+	started.discardOverlay()
+	if want := []string{"hold", "end"}; !reflect.DeepEqual(discarded.calls, want) {
+		t.Fatalf("a main page that started under a modal that was not ready made the calls %v, want %v", discarded.calls, want)
+	}
+
+	failed, refused := modalKeyboardSurfaces(t, true)
+	if _, err := failed.OverlayShow(OverlayRequest{ID: "picker", Mode: "menu", Rect: Rect{W: 10, H: 10}}); err == nil {
+		t.Fatalf("OverlayShow of a refused web view answered no error")
+	}
+	if want := []string{"hold", "end"}; !reflect.DeepEqual(refused.calls, want) {
+		t.Fatalf("a failed show made the calls %v, want %v: no input waits for a modal that does not exist", refused.calls, want)
+	}
+}
+
+// contract: modal.keyboard-hold
+func TestAModalThatReplacesAnotherKeepsTheWaitUntilItTakesTheKeyboard(t *testing.T) {
+	s, fake := modalKeyboardSurfaces(t, false)
+	showPicker(t, s, "picker")
+	showPicker(t, s, "menu")
+	if want := []string{"hold", "hold", "focus false"}; !reflect.DeepEqual(fake.calls, want) {
+		t.Fatalf("a show that replaced a modal made the calls %v, want %v: the wait stands from the first show until the second modal takes the keyboard", fake.calls, want)
+	}
+	if err := s.ModalReady("menu", s.modal.instance); err != nil {
+		t.Fatalf("ModalReady: %v", err)
+	}
+	if want := []string{"hold", "hold", "focus false", "focus true", "end"}; !reflect.DeepEqual(fake.calls, want) {
+		t.Fatalf("the ready replacement made the calls %v, want %v", fake.calls, want)
+	}
 }

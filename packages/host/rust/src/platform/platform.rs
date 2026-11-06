@@ -481,6 +481,11 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
     fn keyboard_hold(&self, window: Handle) -> Result<(), String>;
     fn keyboard_decided(&self, window: Handle) -> Result<(), String>;
+    /// Holds the input of window from the show of a modal web view until modal_hold_end, which the host calls when the modal
+    /// took the keyboard or closed (docs/spec/native-modals.md#keyboard). The hold stands while this wait or the decision of
+    /// keyboard_hold stands. Call them on the main thread.
+    fn modal_hold(&self, window: Handle) -> Result<(), String>;
+    fn modal_hold_end(&self, window: Handle) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
     /// Receives the files dropped on the window of the main webview. receive receives {"urls":[...],"x":..,"y":..}
     /// (page coordinates).

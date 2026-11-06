@@ -797,6 +797,16 @@ void sp_window_keyboard_decided(void *handle) {
     surfaceLayoutKeyboardDecided(handle);
 }
 
+void sp_window_modal_hold(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    surfaceLayoutModalHold(handle);
+}
+
+void sp_window_modal_hold_end(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    surfaceLayoutModalHoldEnd(handle);
+}
+
 void *sp_surface_main_webview(void *handle) {
     SPSurfaceHost *host = surfaceHost((NSView *)handle);
     return host.webview;

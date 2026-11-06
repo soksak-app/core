@@ -508,6 +508,50 @@ int main(void) { @autoreleasepool {
     check(delivered == 128 && [droppedFields[@"count"] intValue] == 44 && [droppedFields[@"reason"] isEqual:@"full"],
         [NSString stringWithFormat:@"a full hold gives back 128 keys and drops 44 events, got %lu and %@", (unsigned long)delivered, droppedFields].UTF8String);
 
+    // M1: the input waits from the show of a modal until the modal takes the keyboard (docs/spec/native-modals.md#keyboard). The
+    // decided call of the workbench does not end the wait; the end of the modal hold gives the keys in order to the view that
+    // took the keyboard, the region here standing for the modal web view.
+    sp_window_focus_workbench(holding);
+    NSString *beforeModal = regionKeys(^{
+        sp_window_modal_hold(holding);
+        typeKeys(holding, "pq");
+        sp_window_keyboard_decided(holding);
+        runEvents(0.05);
+    });
+    check([beforeModal isEqual:@""],
+        [NSString stringWithFormat:@"no key passes before the modal takes the keyboard, also after a decided call, got \"%@\"", beforeModal].UTF8String);
+    NSString *modalTook = regionKeys(^{
+        [holding makeFirstResponder:(NSResponder *)heldRegion];
+        sp_window_modal_hold_end(holding);
+        runEvents(0.1);
+    });
+    check([modalTook isEqual:@"pq"],
+        [NSString stringWithFormat:@"the end of the modal hold gives the keys to the view that took the keyboard, got \"%@\"", modalTook].UTF8String);
+
+    // M2: a modal hold that ends while the decision of the workbench waits leaves the keys waiting for the decided call.
+    sp_window_focus_workbench(holding);
+    NSString *stillDeciding = regionKeys(^{
+        sp_window_keyboard_hold(holding);
+        sp_window_modal_hold(holding);
+        typeKeys(holding, "rs");
+        sp_window_modal_hold_end(holding);
+        runEvents(0.05);
+    });
+    check([stillDeciding isEqual:@""],
+        [NSString stringWithFormat:@"the keys wait for the decision after the modal hold ended, got \"%@\"", stillDeciding].UTF8String);
+    NSString *bothEnded = regionKeys(^{
+        sp_surface_focus(heldHost);
+        sp_window_keyboard_decided(holding);
+        runEvents(0.1);
+    });
+    check([bothEnded isEqual:@"rs"],
+        [NSString stringWithFormat:@"the decided call gives the keys in order once the modal hold ended, got \"%@\"", bothEnded].UTF8String);
+    NSString *free = regionKeys(^{
+        sp_window_modal_hold_end(holding);
+        typeKeys(holding, "t");
+    });
+    check([free isEqual:@"t"], "the end of a modal hold that a window does not hold changes nothing");
+
     // A window that closes with a hold drops what it held.
     NSArray<NSDictionary *> *closedHold = capturedEvents(^{
         sp_window_keyboard_hold(holding);

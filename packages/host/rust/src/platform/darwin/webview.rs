@@ -104,6 +104,20 @@ pub fn keyboard_decided(window: Handle) {
     unsafe { sp_window_keyboard_decided(window as *mut c_void) }
 }
 
+pub fn modal_hold(window: Handle) {
+    unsafe extern "C" {
+        fn sp_window_modal_hold(window: *mut c_void);
+    }
+    unsafe { sp_window_modal_hold(window as *mut c_void) }
+}
+
+pub fn modal_hold_end(window: Handle) {
+    unsafe extern "C" {
+        fn sp_window_modal_hold_end(window: *mut c_void);
+    }
+    unsafe { sp_window_modal_hold_end(window as *mut c_void) }
+}
+
 pub fn set_surface_alpha_handle(surface: Handle, alpha: f64) {
     unsafe extern "C" {
         fn webviewSetSurfaceAlpha(view: *mut c_void, alpha: f64);

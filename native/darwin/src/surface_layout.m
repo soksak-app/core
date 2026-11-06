@@ -38,10 +38,12 @@
 - (void)dealloc { [_event release]; [_call release]; [super dealloc]; }
 @end
 
-// SPKeyboardHold is the wait of the input of a window for the decision of the workbench about the keyboard
-// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+// SPKeyboardHold is the wait of the input of a window for the decision of the workbench about the keyboard and for the modal web
+// view that takes the keyboard (docs/spec/native-surfaces.md#keyboard-of-a-surface). The hold stands while either waits.
 @interface SPKeyboardHold : NSObject
 @property(nonatomic, assign) NSUInteger dropped;
+@property(nonatomic, assign) BOOL decision;
+@property(nonatomic, assign) BOOL modal;
 @end
 @implementation SPKeyboardHold
 @end
@@ -406,19 +408,44 @@ static void observeHoldClose(void) {
     });
 }
 
-void surfaceLayoutKeyboardHold(void *owner) {
-    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    if (!owner || keyboardHold(owner)) return;
+// The hold of owner, opened when the window holds none.
+static SPKeyboardHold *openKeyboardHold(void *owner) {
+    SPKeyboardHold *hold = keyboardHold(owner);
+    if (hold) return hold;
     watchInput();
     observeHoldClose();
-    SPKeyboardHold *hold = [[[SPKeyboardHold alloc] init] autorelease];
+    hold = [[[SPKeyboardHold alloc] init] autorelease];
     if (!keyboardHolds) keyboardHolds = [[NSMutableDictionary alloc] init];
     keyboardHolds[[NSValue valueWithPointer:owner]] = hold;
+    return hold;
+}
+
+void surfaceLayoutKeyboardHold(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    if (!owner) return;
+    openKeyboardHold(owner).decision = YES;
 }
 
 void surfaceLayoutKeyboardDecided(void *owner) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    endKeyboardHold(owner, "decided");
+    SPKeyboardHold *hold = keyboardHold(owner);
+    if (!hold) return;
+    hold.decision = NO;
+    if (!hold.modal) endKeyboardHold(owner, "decided");
+}
+
+void surfaceLayoutModalHold(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    if (!owner) return;
+    openKeyboardHold(owner).modal = YES;
+}
+
+void surfaceLayoutModalHoldEnd(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    SPKeyboardHold *hold = keyboardHold(owner);
+    if (!hold) return;
+    hold.modal = NO;
+    if (!hold.decision) endKeyboardHold(owner, "decided");
 }
 
 bool surfaceLayoutKeyboardHeld(void *owner) {

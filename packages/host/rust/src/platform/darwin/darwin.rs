@@ -316,6 +316,14 @@ impl Platform for Darwin {
         webview::keyboard_decided(window);
         Ok(())
     }
+    fn modal_hold(&self, window: Handle) -> Result<(), String> {
+        webview::modal_hold(window);
+        Ok(())
+    }
+    fn modal_hold_end(&self, window: Handle) -> Result<(), String> {
+        webview::modal_hold_end(window);
+        Ok(())
+    }
     fn create_document(
         &self,
         surface: Handle,

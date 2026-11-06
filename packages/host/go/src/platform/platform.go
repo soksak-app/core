@@ -440,6 +440,10 @@ type Platform interface {
 	// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
 	KeyboardHold(window unsafe.Pointer)
 	KeyboardDecided(window unsafe.Pointer)
+	// ModalHold holds the input of window from the show of a modal web view until ModalHoldEnd, after the modal took the
+	// keyboard or closed before that (docs/spec/native-modals.md#keyboard). Call them on the main thread.
+	ModalHold(window unsafe.Pointer)
+	ModalHoldEnd(window unsafe.Pointer)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.
 	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)

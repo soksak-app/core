@@ -401,6 +401,15 @@ const tellInTurn = (name, payload) => {
   return answered;
 };
 
+/**
+ * Ends when the host answered every ordered call sent so far, also a call that failed, whose failure tellInTurn wrote to the
+ * application log. A core command answers after it, so a modal that the command opened holds the input of the window when the
+ * command answers (docs/spec/native-modals.md#keyboard).
+ */
+export function orderedCallsAnswered() {
+  return turn;
+}
+
 let last = "";
 // The request of the preparation that the next drawn commit presents, kept only to name what a second request changes.
 let lastRequest = null;

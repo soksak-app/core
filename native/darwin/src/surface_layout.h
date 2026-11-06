@@ -35,6 +35,11 @@ void surfaceLayoutTracePresented(uint64_t ticket);
 void surfaceLayoutKeyboardHold(void *owner);
 void surfaceLayoutKeyboardDecided(void *owner);
 bool surfaceLayoutKeyboardHeld(void *owner);
+// The wait of the input of owner for the modal web view that takes the keyboard joins the same hold: surfaceLayoutModalHold
+// opens it, and surfaceLayoutModalHoldEnd ends that wait. The input comes back in its order once neither the decision of the
+// workbench nor the modal waits. Call on the UI thread.
+void surfaceLayoutModalHold(void *owner);
+void surfaceLayoutModalHoldEnd(void *owner);
 // Follows a left press and its release that pass to the views of owner, at the point in window coordinates, before they reach a
 // view. The release of a press that began on the workbench opens the hold of the keyboard. Events that pass
 // -[NSApplication sendEvent:] are followed by the library; a driver that delivers a press to a window directly calls it.

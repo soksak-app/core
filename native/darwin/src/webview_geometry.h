@@ -64,6 +64,15 @@ void sp_window_keyboard_hold(void *window);
 // Ends the hold of the input of window and gives the input back in its order, to the view that holds the keyboard after the
 // keyboard calls before it. A window without a hold changes nothing.
 void sp_window_keyboard_decided(void *window);
+// Holds the input of window from the show of a modal web view until that view takes the keyboard
+// (docs/spec/native-modals.md#keyboard): every later pointer and key event of the window waits in its order, in the same hold as
+// the decision of the workbench, so a key pressed as the modal opens reaches the modal and not the view behind it. An open modal
+// hold stays as it is.
+void sp_window_modal_hold(void *window);
+// Ends the modal hold of window, after the modal web view took the keyboard or when the modal closed or failed before that. The
+// input comes back in its order to the view that holds the keyboard, once the decision of the workbench does not hold it either.
+// A window without a modal hold changes nothing.
+void sp_window_modal_hold_end(void *window);
 // Records a move of the first responder of a window for the surfaces that it leaves and enters. The observation of the first
 // responder calls it.
 void sp_surface_responder_moved(void *from, void *to);

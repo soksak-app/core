@@ -30,7 +30,9 @@ import {
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
-import { behindDialog, filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, overlayElementRect } from "./host.js";
+import {
+  behindDialog, filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, orderedCallsAnswered, overlayElementRect,
+} from "./host.js";
 import { keyboardResponder } from "./keyboard.js";
 import { plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
@@ -667,7 +669,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onModalState(coreChanged);
   onSaved(coreChanged);
 
-  await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn, report,
+  await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged,
+    // A modal that the command opened holds the input of the window once the host answered its show
+    // (docs/spec/native-modals.md#keyboard).
+    settled: async () => { await drawn(); await orderedCallsAnswered(); }, report,
     surfaceFrame: (surface) => {
       const record = seated()?.surfaces.find((entry) => entry.id === surface);
       return record ? shift(record.applied, planeOrigin()) : null;
