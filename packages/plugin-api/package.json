@@ -47,7 +47,7 @@
     "contract/"
   ],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test 'test/**/*.test.mjs'"
   },
   "specFiles": [
     "docs/spec/cases/manifest-validation.json"

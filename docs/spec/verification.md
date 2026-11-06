@@ -20,6 +20,8 @@ Discover workspace packages, build manifests, implementation languages, public c
 
 Missing implementations, missing tests, unregistered build targets, unresolved references, excluded required tests, zero tests, mandatory skips, stale evidence, crashes, and timeouts fail the applicable gate. Audit self-tests must demonstrate those failures. Behavioral mutation checks replace an implementation with a no-op or remove a required effect or response and require the corresponding test to fail. File names and source patterns do not establish behavior.
 
+Discovered Node test files require results from their own test execution. A successful file wrapper or command exit is insufficient: an empty file, an exit before registration, no selected tests, skipped cases and todo cases fail. Package scripts with support modules select test entrypoints with explicit globs. Directory arguments retain Node's selection of every JavaScript file, and every selected file must supply test evidence. Commands without a Node test contract retain command-result semantics.
+
 
 Evidence identifies the feature and test, verification level, language, host and platform, source and test content hashes including uncommitted content, build options, executable and sidecar hashes, expected and actual outcomes, and elapsed time. A changed dependency invalidates previous evidence. Structural coverage, behavior validation, and release approval are separate results.
 

@@ -208,6 +208,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F498",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" },
+      { file: "scripts/test-runner.mjs", symbol: "function runOne" },
+      { file: "scripts/test-event-reporter.mjs", symbol: "export default async function* testEvents" },
+    ],
+    tests: [{ file: "scripts/test/node-tests.test.mjs", id: "discovered Node evidence: skipped case" }],
+    expected: "Node files require their own nonempty successful test results without skipped or todo cases, while command-only outcomes remain separate.",
+    levels: ["unit"],
+  },
+  {
     id: "F397",
     implementation: [
       { file: "packages/host/tauriv2/src/event_record.rs", symbol: "pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {" },

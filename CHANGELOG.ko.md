@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F498: Node test discovery는 각 file 자체의 비어 있지 않은 passing result를 요구하며 skipped 또는 todo case를 거부한다. 네 package script가 support module 없이 test entrypoint를 선택한다. Owner Red에서 false pass 아홉 개를 관찰했고 Green은 macOS에서 discovery와 runner case 58개 모두 통과한다.
+
 - F497: core 0.0.39를 게시했고, registry가 이를 요구하는 plugin release와 함께 올립니다.
 - F492: 개발 뒤의 window-check run이 두 host에서 통과한다: 파일 91개 중 91개, native end-to-end test 13개 중 13개.
 - F496: window check의 pasteboard 복원이 data 없는 type을 모두 밝히고, 읽은 item만 다시 쓴다.

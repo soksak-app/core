@@ -37,6 +37,9 @@ function validate(options) {
     if (names.has(item.name)) throw new TypeError(`the test ${item.name} is listed twice`);
     names.add(item.name);
     if (typeof item.command !== 'string' || !Array.isArray(item.args)) throw new TypeError(`${item.name}: command and args are required`);
+    if (item.nodeTestFile !== undefined && (typeof item.nodeTestFile !== 'string' || item.nodeTestFile.length === 0)) {
+      throw new TypeError(`${item.name}: nodeTestFile must name the file whose test evidence is required`);
+    }
     // The runner applies no run-wide or file-wide limit (AGENTS.md Verification). A declared limit is checked; an absent one means
     // that the process has no limit of the runner.
     if (item.timeoutMs !== undefined && (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS)) {
@@ -274,12 +277,20 @@ function runOne(item, limitMs, env, outputPath) {
     const queued = new Map();
     const running = new Map();
     let fileExit = null;
+    let testSummary = null;
+    const omittedTests = [];
     const count = (tests, key, step) => {
       const left = (tests.get(key) ?? 0) + step;
       if (left === 0) tests.delete(key);
       else tests.set(key, left);
     };
     const track = (event) => {
+      if (item.nodeTestFile !== undefined) {
+        if (event.type === 'test:summary' && event.file === item.nodeTestFile) testSummary = event;
+        if (event.type === 'test:complete' && (event.skip || event.todo)) {
+          omittedTests.push(`${event.skip ? 'skipped' : 'todo'}: ${event.name}`);
+        }
+      }
       const key = `${event.nesting}\0${event.name}`;
       if (event.type === 'test:enqueue') count(queued, key, 1);
       else if (event.type === 'test:dequeue') {
@@ -353,7 +364,14 @@ function runOne(item, limitMs, env, outputPath) {
         const waiting = queued.size > 0 ? `; queued without a start: ${names(queued)}` : '';
         resolve({ status: 'fail', elapsedMs, output, detail: `the test process ended by ${end} while a test ran; started without a result: ${names(running)}${waiting}${left}` });
       } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
-      else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
+      else if (code === 0 && item.nodeTestFile !== undefined && omittedTests.length > 0) {
+        resolve({ status: 'fail', elapsedMs, output, detail: `incomplete test evidence: ${omittedTests.join('; ')}` });
+      } else if (code === 0 && item.nodeTestFile !== undefined && (testSummary === null
+        || testSummary.success !== true || !Number.isInteger(testSummary.counts?.tests) || testSummary.counts.tests < 1
+        || !Number.isInteger(testSummary.counts?.passed) || testSummary.counts.passed < 1
+        || ['failed', 'cancelled', 'skipped', 'todo'].some((key) => testSummary.counts[key] !== 0))) {
+        resolve({ status: 'fail', elapsedMs, output, detail: `missing or incomplete test evidence for ${item.nodeTestFile}: ${JSON.stringify(testSummary?.counts ?? null)}` });
+      } else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
       else resolve({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
     });
   });
@@ -363,7 +381,8 @@ function runOne(item, limitMs, env, outputPath) {
  * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, stackSignal?, eventLimitMs?, exitLimitMs?}`) with at most `concurrency`
  * processes at once. `stackSignal` is the signal that asks a process over its `timeoutMs` for its stacks before its group is ended.
  * `eventLimitMs` is the event watchdog of a process that reports its test events (scripts/test-event-reporter.mjs), and `exitLimitMs`
- * the limit of its exit after its `test:summary` event, which needs `run`. `write(line)`
+ * the limit of its exit after its `test:summary` event, which needs `run`. `nodeTestFile`, when given, requires that file's own
+ * successful, nonempty test summary and refuses skipped or todo cases; command-only items do not carry it. `write(line)`
  * receives one line per event: `RUN`, `PASS`, `FAIL`, `TIME`, a `RUNNING` line every `heartbeatMs` that names the tests in
  * flight with their running time, the `SLOWEST` tests, and the `TOTAL`. Resolves with `{results, slowest}`; a result is
  * `{status, elapsedMs, output}` with the status `pass`, `fail` or `timeout`. `beforeEach(item)`, when given, is awaited before each test

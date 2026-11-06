@@ -1,5 +1,9 @@
 # 기능 상태
 
+- [~] F498 — P2: 실행한 test evidence가 없는 Node test file을 거부한다. 입력: skipped test, todo test, empty file과 test 등록 전 exit가 passing file result를 받는다. 기대: 발견한 Node test는 file-owned result, 실행한 test 한 개 이상, skipped 또는 todo case 없음을 요구하며 support module은 독립 test file이 아니다. Active: 구현과 owner 검증을 완료했고 commit이 남았다. Red: 아홉 case가 fail 대신 pass를 받는다. Green: discovery와 runner case 58개 모두 통과하며 evidence mapping 추가 후 discovery와 inventory-audit case 70개 모두 통과한다. macOS에서 문서, inventory와 boundary check가 통과한다.
+- [ ] F499 — P2: layout queue에서 presentation wait 누락을 검출한다. 입력: presentation callback의 await를 제거해도 기존 queue test가 통과한다. 기대: owning test는 asynchronous completion이 전파될 수 있는 시점 이후 queue를 관찰하고 pending presentation이 다음 layout을 막음을 입증하며 wait를 제거하면 실패한다.
+- [ ] F500 — P2: terminal theme pixel을 capture coordinate에서 읽는다. 입력: theme check가 document coordinate를 buffer coordinate로 직접 사용한다. 기대: sample coordinate는 capture scale, content scale과 content origin을 포함하며 owning case가 terminal pixel과 주변 card를 구분한다.
+
 ## 현재 개발 acceptance
 
 - **Terminal 연속 모음 입력과 Backspace** — 현재 양쪽 host check-shell cohort에서 구현 O, 검증 O다. F239-47-6의 전체 document, glyph, underline, capture identity, 오류 감사, 복원 및 종료 acceptance가 통과한다. 별도 zsh follow-up은 해당 상태를 유지한다. Latin-prefix Korean 입력은 F239-204의 별도 실패이며 이 repeated-vowel 통과 범위에 포함되지 않는다.

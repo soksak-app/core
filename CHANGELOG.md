@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F498: Node test discovery requires each file's own nonempty passing results and rejects skipped or todo cases. Four package scripts select test entrypoints without support modules. Owner Red observes nine false passes; Green passes all 58 discovery and runner cases on macOS.
+
 - F497: Core 0.0.39 is published, and the registry lists it with the plugin releases that require it.
 - F492: The window-check run after development passes on both hosts: 91 of 91 files and 13 of 13 native end-to-end tests.
 - F496: The pasteboard restore of a window check names each type without data and writes back only the items that it could read.
