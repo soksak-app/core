@@ -1,6 +1,6 @@
 {
   "name": "@sok-check/probe-plain",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "private": true,
   "type": "module",
   "description": "Benchmark fixture: a view whose page has no content beyond the observer of its document size, the floor of a view drag.",
