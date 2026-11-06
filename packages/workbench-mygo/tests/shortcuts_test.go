@@ -162,7 +162,7 @@ func projectWithoutOwnKeyRows(t *testing.T) *shellFixture {
 	if removed := len(declared.Shortcuts) - len(table.Shortcuts); removed != 4 {
 		t.Fatalf("the table holds %d rows of the places, not 4", removed)
 	}
-	f := startedShellOf(t, acme(), &table)
+	f := startedShellOf(t, recordingCommands(acme()), &table)
 	f.settle()
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
@@ -170,8 +170,8 @@ func projectWithoutOwnKeyRows(t *testing.T) *shellFixture {
 	return f
 }
 
-// The rename field takes Enter and Escape with its own handlers, as the field of the page does, so the keys save and leave a
-// rename without a row of the table.
+// The rename field takes Enter and Escape with its own handlers, which run the command of the row once, as the field of the page
+// does, so the keys save and leave a rename without a row of the table.
 func TestTheRenameFieldTakesItsKeysItself(t *testing.T) {
 	f := projectWithoutOwnKeyRows(t)
 	id := f.host.projects[0]["id"].(string)
@@ -183,6 +183,9 @@ func TestTheRenameFieldTakesItsKeysItself(t *testing.T) {
 	if got := status[*renameRead](t, f, "core.rename"); got != nil || storedTitle(f) != "beta" {
 		t.Fatalf("after Enter the rename is %+v and the title %q", got, storedTitle(f))
 	}
+	if got := f.commandRecords("core.rename.commit"); got != 1 {
+		t.Fatalf("Enter left %d records of core.rename.commit, not 1", got)
+	}
 	doubleClick(f, f.box("core.project-tab", id))
 	f.tester.Type("gamma")
 	f.tester.Frame()
@@ -191,10 +194,13 @@ func TestTheRenameFieldTakesItsKeysItself(t *testing.T) {
 	if got := status[*renameRead](t, f, "core.rename"); got != nil || storedTitle(f) != "beta" {
 		t.Fatalf("after Escape the rename is %+v and the title %q", got, storedTitle(f))
 	}
+	if got := f.commandRecords("core.rename.cancel"); got != 1 {
+		t.Fatalf("Escape left %d records of core.rename.cancel, not 1", got)
+	}
 }
 
-// The popover of the picker layer takes Escape and closes the layer, as the layer of the page does, so the key closes it without
-// a row of the table.
+// The popover of the picker layer takes Escape and runs core.picker.close once, as the layer of the page does, so the key closes
+// the layer without a row of the table.
 func TestThePickerLayerTakesEscapeItself(t *testing.T) {
 	f := projectWithoutOwnKeyRows(t)
 	f.click("core.card.add", f.tabbedCards()[0])
@@ -205,5 +211,8 @@ func TestThePickerLayerTakesEscapeItself(t *testing.T) {
 	f.settle()
 	if f.menu().Open {
 		t.Fatal("Escape leaves the menu open")
+	}
+	if got := f.commandRecords("core.picker.close"); got != 1 {
+		t.Fatalf("Escape left %d records of core.picker.close, not 1", got)
 	}
 }
