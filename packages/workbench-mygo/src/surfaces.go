@@ -190,8 +190,10 @@ type surfaceState struct {
 	layoutFault bool
 	held        map[string]*heldSurface
 	order       []string
-	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
+	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates, and shown the boxes of the native
+	// views that the current frame draws in the workbench.
 	drawn map[string]layout.Rect
+	shown []layout.Rect
 	// seated holds the seats of the section surfaces of the sidebars of the current frame, drawnPlane is the plane that the frame drew,
 	// and drawnLibrary tells that the frame drew the library instead.
 	seated map[string]SidebarSeat
@@ -378,6 +380,7 @@ func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rec
 				s.surfaces.behindDialog = append(s.surfaces.behindDialog, viewBehindDialog{view, key, box, width, height})
 				return
 			}
+			s.surfaces.shown = append(s.surfaces.shown, box)
 			ui.NativeView(c, view, key).Size(width, height).ObserveInput(func(ev ui.InputEvent) {
 				// A press reaches the content here while the host holds the views of a placement out of the pointer.
 				if ev.Kind == ui.InputPointerDown {

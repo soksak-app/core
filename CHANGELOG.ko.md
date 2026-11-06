@@ -4,11 +4,15 @@
 
 ## 미배포
 
+- F502-24-1: `go.work.sum`은 pin된 fork로 workspace module의 `go mod download`가 쓰는 내용을 담으므로, 그 download 뒤 checksum file의 변경을 거부하는 CI job의 guard가 변경을 보지 않는다.
+- F502-24-1: mygo module은 형제 folder 대신 push된 framework fork commit을 그 pseudo-version으로 가리키므로, worktree나 runner처럼 그 folder가 없는 checkout에서도 workspace의 모든 Go module이 import를 해석한다.
+- F592: Wails module은 window와 web view에 요청한 크기를 주는 push된 fork commit을 한 checkout에만 있는 형제 folder 대신 그 pseudo-version으로 가리키고, 그 sum을 담는다.
 - F659: release candidate는 0.0.40입니다.
 - F502-3: mygo host는 아무것도 배치하지 않는 frame을 framework의 native call 때문에 할당하지 않고 그린다. pin된 fork는 receiver로 call을 판정하고 할당 없이 실행한다. 전에는 calling thread에서 실행되는 `CFRelease`나 `release` 하나가 4번 할당했다. diff scene의 sidebar를 scroll하는 frame은 이제 166번 대신 102번 할당한다.
 - F651: `@soksak/plugin-api`는 test가 읽는 version 범위 사례 표를 `specFiles`에 선언하므로, 표가 바뀌면 이 package가 선택된다.
 - F651: host contract의 합집합 행은 pipe를 escape하고, markdown 표를 읽는 모든 check는 `scripts/markdown-table.mjs`의 `tableCells`로 cell을 읽는다. 이 함수는 escape되지 않은 `|`에서만 cell을 끝내고 `\|`를 `|`로 읽는다. 이전에는 계약 reader가 합집합을 나눠 scope를 `\`로 읽었다.
 - F498: F212.11-2b가 test를 비운 workbench test file 13개를 지운다: 각 file은 자기 test를 하나도 실행하지 않아서 `node --test`가 그 file을 이름으로 가진 summary를 쓰지 않았고 runner는 `missing or incomplete test evidence`로 실패시켰다. 그 view path는 `test/surface-view-path.test.mjs`가 시험한다.
+- F584-5-2: mygo workbench 의 native view 는 Wails 와 Tauri host 의 native view 가 page 위에서 그러듯 가장자리까지 pointer 를 받는다. boundary 의 grab area 는 view 옆에서만 pointer 를 받는다. 이전에는 두 card 사이 통로가 grab area 보다 좁은 theme(`sand`, `slate`, `paper`)에서 grab area 가 boundary 옆 각 card 의 view 안으로 닿아 그곳의 press 를 boundary 의 drag 로 받았다. `docs/spec/native-surfaces.md` 가 규칙을 밝힌다.
 - F584-5-1: mygo workbench 에서 열린 picker 의 Escape 와 바깥 press 는 shortcut table 과 page 처럼 binder 를 거쳐 `core.picker.close` 를 실행한다. 이전에는 popover 가 command 없이 layer 를 닫아 `workbench.command` 기록이 남지 않았다. `docs/spec/exposure.md` 는 네이티브 modal 메뉴가 Wails host 와 Tauri host 의 modal web view 라고 밝히고, `e2e/view-keyboard-routing.test.mjs` 는 mygo 에서 그 Escape 에 `core.picker.close` 한 번과 `core.modal.dismiss` 없음을 요구한다.
 - F651: patch release는 호환 release이므로 `^0.0.z`는 `0.0.z`부터 `0.1.0` 미만의 모든 version을 포함한다. 전에는 `^0.0.39`가 `0.0.40` 미만에서 끝나서 core 0.0.40이 `^0.0.39`를 선언한 plugin을 설치하지 않았다. Go와 Rust의 `sok`, `@soksak/plugin-api`는 공유 표 `docs/spec/cases/version-ranges.json`을 재생하고, workbench는 자기 `version-range.js` 대신 `@soksak/plugin-api`로 범위를 읽으며, registry의 later-core 검사는 범위 `^0.0.z`가 포함하는 뒤의 `0.0` core를 보고하지 않는다.
 - F651: version 범위는 앞의 형식들을 정확히 ` || `로 이은 합집합 `<range> || <range>`이기도 하며, Go와 Rust의 `sok`, `@soksak/plugin-api`의 manifest reader와 `rangeContains`에서 한 부분이 포함하는 version을 포함한다. 빈 부분이 있거나 `||` 둘레의 공백이 다른 합집합은 거부한다.

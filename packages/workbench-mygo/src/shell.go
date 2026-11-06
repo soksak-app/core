@@ -689,6 +689,7 @@ func (s *Shell) View(c *ui.Context) {
 	s.exposedFocus.Frame(c)
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
+	s.surfaces.shown = s.surfaces.shown[:0]
 	clear(s.picker.drawn)
 	clear(s.heads)
 	clear(s.surfaces.seated)
