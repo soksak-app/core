@@ -289,7 +289,7 @@ func (s *Surfaces) discardOverlay() {
 	}
 	s.modal = nil
 	s.mu.Unlock()
-	mainThreadStep(s.endModalHold)
+	s.invoke(s.endModalHold)
 	if view != nil {
 		view.Close()
 	}
