@@ -1,0 +1,11 @@
+{
+  "name": "@sok-check/probe-close",
+  "version": "0.0.39",
+  "private": true,
+  "type": "module",
+  "description": "Window check fixture for a save reply that retains modified tab state.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}

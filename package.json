@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz",
+    "@yarnpkg/parsers": "3.1.0",
     "acorn": "8.18.0",
     "yaml": "2.9.1"
   }

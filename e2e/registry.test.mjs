@@ -2,7 +2,7 @@
 //
 // The check application is a diagnostic build and must have been started with the certificate authority that `make create-test-certificates` creates:
 // `--registry-ca <root>/soksak-check-registry-tls/ca.pem` (docs/operations/examples.md). The check serves the workspace registry
-// (target/registry that `make install-plugins` creates) over https and restores the original registry and installation when it ends.
+// (target/registry that `make build-registry` creates) over https and restores the original registry and installation when it ends.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:https";
@@ -23,7 +23,7 @@ async function serveRegistry() {
   for (const file of ["server.pem", "server-key.pem", "ca.pem"]) {
     if (!existsSync(join(TLS, file))) throw new Error(`${join(TLS, file)} is missing; run make create-test-certificates and start the check applications with --registry-ca ${join(TLS, "ca.pem")}`);
   }
-  if (!existsSync(join(REGISTRY, "index.json"))) throw new Error(`${join(REGISTRY, "index.json")} is missing; run make install-plugins for the check configuration`);
+  if (!existsSync(join(REGISTRY, "index.json"))) throw new Error(`${join(REGISTRY, "index.json")} is missing; run make build-registry before the check configuration`);
   const original = JSON.parse(readFileSync(join(REGISTRY, "index.json"), "utf8"));
   const prefix = pathToFileURL(REGISTRY).href;
   const server = createServer({ cert: readFileSync(join(TLS, "server.pem")), key: readFileSync(join(TLS, "server-key.pem")) });

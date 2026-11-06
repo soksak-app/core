@@ -9,6 +9,7 @@ import { existsSync, globSync, readdirSync, readFileSync, statSync, writeFileSyn
 import { cpus } from 'node:os';
 import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseShell, stringifyCommand } from '@yarnpkg/parsers';
 import { auditRunWithCatalog } from './audit-run.mjs';
 import { MAX_TEST_TIMEOUT_MS, runTests } from './test-runner.mjs';
 import { NODE_TEST_REPORTERS } from './node-test-evidence.mjs';
@@ -54,52 +55,74 @@ const TEST_TIMEOUT_MS = 120_000;
 const EXIT_LIMIT_MS = 20_000;
 const SOURCE = /\.(?:[cm]?js)$/;
 
+// These Node test options take a separate value as well as --name=value. Other long options retain their
+// declared form and Node validates them; an undeclared separate value is a path and must resolve to a file.
+const NODE_VALUE_OPTIONS = Object.fromEntries([
+  'test-name-pattern', 'test-skip-pattern', 'test-concurrency', 'test-timeout', 'test-global-setup',
+  'test-shard', 'test-isolation', 'test-reporter', 'test-reporter-destination',
+].map((name) => [name, { type: 'string', multiple: true }]));
+
 /**
- * The words of a step of a test script, read as the shell of a package script reads single and double quotes: whitespace outside a
- * quote ends a word, and a quoted part keeps its spaces and loses its quotes (`--flag="a b"` is `--flag=a b`). No other shell syntax is
- * read. An unclosed quote is an error that names the script.
+ * The literal commands of a test script separated by &&, parsed without evaluating any shell input: a quoted part keeps its spaces
+ * and loses its quotes (`--flag="a b"` is `--flag=a b`), and any other shell syntax is an error that names the script or the step.
  */
-function scriptWords(step, script, where) {
-  const words = [];
-  let word = null;
-  for (let index = 0; index < step.length; index += 1) {
-    const char = step[index];
-    if (char === "'" || char === '"') {
-      const end = step.indexOf(char, index + 1);
-      if (end === -1) throw new Error(`${where}: the test script "${script}" has an unclosed ${char} quote`);
-      word = (word ?? '') + step.slice(index + 1, end);
-      index = end;
-    } else if (/\s/.test(char)) {
-      if (word !== null) words.push(word);
-      word = null;
-    } else {
-      word = (word ?? '') + char;
-    }
+function scriptSteps(script, where) {
+  let parsed;
+  try {
+    parsed = parseShell(script);
+  } catch (error) {
+    throw new Error(`${where}: the test script "${script}" has invalid syntax: ${error.message}`, { cause: error });
   }
-  if (word !== null) words.push(word);
-  return words;
+  const unsupported = () => new Error(`${where}: the test script supports only literal commands joined by &&`);
+  if (parsed.length !== 1 || parsed[0].type !== ';') throw unsupported();
+  const steps = [];
+  for (let line = parsed[0].command; line; line = line.then?.line) {
+    const { chain } = line;
+    if ((line.then && line.then.type !== '&&') || chain.type !== 'command' || chain.envs.length || chain.then) throw unsupported();
+    const words = chain.args.map((arg) => {
+      if (arg.type !== 'argument' || arg.segments.some((segment) => segment.type !== 'text')) throw unsupported();
+      const word = arg.segments.map((segment) => segment.text).join('');
+      // Yarn treats backticks as text, so refuse them rather than reinterpret a shell substitution as a literal pattern.
+      if (word.includes('`')) throw unsupported();
+      return word;
+    });
+    steps.push({ name: stringifyCommand(chain), words });
+  }
+  return steps;
 }
 
 /**
- * The steps of a test script: the commands to run before the tests (`before`, each as its words), and the flags and paths of
+ * The steps of a test script: the commands to run before the tests (`before`, each with its name, command and arguments), and the flags and paths of
  * `node --test`. The step `pnpm -r test` runs the tests of the packages, which this runner discovers itself, so it is not a step.
  */
 export function parseTestScript(script, where) {
-  const steps = script.split('&&').map((step) => step.trim());
+  const steps = scriptSteps(script, where);
   const before = [];
   let tests = null;
-  for (const step of steps) {
-    if (step.startsWith('node --test ') || step.startsWith('node ./run.mjs --test ')) {
+  for (const [index, { name: step, words }] of steps.entries()) {
+    const prefix = words[0] === 'node' && words[1] === '--test' ? 2
+      : words[0] === 'node' && words[1] === './run.mjs' && words[2] === '--test' ? 3 : 0;
+    if (prefix) {
       if (tests !== null) throw new Error(`${where}: the test script "${script}" runs node --test twice`);
-      const command = step.startsWith('node ./run.mjs --test ')
-        ? step.slice('node ./run.mjs --test '.length)
-        : step.slice('node --test '.length);
-      const words = scriptWords(command, script, where);
-      tests = { flags: words.filter((word) => word.startsWith('--')), paths: words.filter((word) => !word.startsWith('--')) };
-    } else if (step === 'pnpm -r test') {
+      const args = words.slice(prefix);
+      const { tokens, positionals } = parseArgs({ args, options: NODE_VALUE_OPTIONS, allowPositionals: true, strict: false, tokens: true });
+      const flags = [];
+      for (const token of tokens) {
+        if (token.kind === 'positional') continue;
+        if (token.kind === 'option-terminator') { flags.push('--'); continue; }
+        if (!token.rawName.startsWith('--')) throw new Error(`${where}: unsupported Node test option ${token.rawName}`);
+        if (NODE_VALUE_OPTIONS[token.name] && (token.value === undefined || (!token.inlineValue && token.value.startsWith('--')))) {
+          throw new Error(`${where}: ${token.rawName} requires a value`);
+        }
+        flags.push(args[token.index]);
+        if (token.value !== undefined && !token.inlineValue) flags.push(args[token.index + 1]);
+      }
+      tests = { flags, paths: positionals };
+    } else if (words.length === 3 && words[0] === 'pnpm' && words[1] === '-r' && words[2] === 'test') {
+      if (tests === null || index !== steps.length - 1) throw new Error(`${where}: pnpm -r test is supported only after the Node tests`);
       continue;
-    } else if (step.startsWith('pnpm ')) {
-      before.push(scriptWords(step, script, where));
+    } else if (words[0] === 'pnpm' && words.length > 1 && tests === null) {
+      before.push({ name: step, command: words[0], args: words.slice(1) });
     } else if (tests === null && before.length === 0 && steps.length === 1) {
       throw new Error(`${where}: the test script "${script}" is not node --test`);
     } else {
@@ -125,7 +148,7 @@ function filesUnder(directory) {
  */
 function filesOf(folder, path, where) {
   const full = join(folder, path);
-  const files = path.includes('*') ? globSync(path, { cwd: folder }).map((file) => join(folder, file))
+  const files = path === '' ? [] : path.includes('*') ? globSync(path, { cwd: folder }).map((file) => join(folder, file))
     : !existsSync(full) ? [] : statSync(full).isDirectory() ? filesUnder(full) : [full];
   if (files.length === 0) throw new Error(`${where}: the test script path ${path} names no file in the package folder ${where}`);
   return files;
@@ -213,8 +236,8 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
     const key = folder === '.' && scriptName === 'test' ? 'test:scripts' : scriptName;
     if (manifest.scripts?.[key] === undefined) continue;
     const script = parseTestScript(manifest.scripts[key], folder);
-    for (const [command, ...args] of script.before) {
-      before.push({ name: `${folder}: ${[command, ...args].join(' ')}`, command, args, cwd: directory });
+    for (const step of script.before) {
+      before.push({ ...step, name: `${folder}: ${step.name}`, cwd: directory });
     }
     const files = [...new Set(script.paths.flatMap((path) => filesOf(directory, path, folder)))].sort();
     for (const file of files) {

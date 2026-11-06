@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
+import { guillotine } from "./slicing-oracle.mjs";
 import { assertRoleIndependence } from "../scripts/layout-equivalence.mjs";
 import { H, W, fuzz, three } from "./helpers.mjs";
 
@@ -118,27 +119,6 @@ test("R3 — no card ever spans over a card, and the check is integers", () => {
   }
   assert.deepEqual(["x", "y"].map((a) => grid.standings(a).join(",")), before);
 });
-
-/**
- * Can these spans be cut apart by whole-width and whole-height cuts?
- *
- * Worked out here rather than asked of the grid: `isSlicing` is the answer
- * under test, and a test that asks the implementation for it passes whatever
- * the implementation defines.
- */
-function guillotine(spans) {
-  if (spans.length <= 1) return true;
-  for (const [lo, hi] of [["c0", "c1"], ["r0", "r1"]]) {
-    for (const line of [...new Set(spans.map((s) => s[lo]))].sort((a, b) => a - b)) {
-      const before = spans.filter((s) => s[hi] <= line);
-      const after = spans.filter((s) => s[lo] >= line);
-      if (before.length && after.length && before.length + after.length === spans.length) {
-        return guillotine(before) && guillotine(after);
-      }
-    }
-  }
-  return false;
-}
 
 test("R4 — nothing reachable is outside what splitting could build", () => {
   for (let seed = 0; seed < 60; seed++) {

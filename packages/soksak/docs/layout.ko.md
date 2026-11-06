@@ -555,3 +555,43 @@ payer reference도 함께 변경한다. 비교 단계에서만 identifier와 car
 비교하며, identifier 또는 array 위치에 의존하는 결함을 주입하면 비교가
 실패해야 한다. Source ownership 검사는 구조 검사로 유지하며, 독립적인
 slicing oracle은 sequence generator 및 role 비교와 별도로 유지한다.
+
+
+## 다양한 role-independence case
+
+한정된 입력 선택은 고정한 5-card test와 입력 순열 120개를 보완한다. Seed
+0부터 20까지 public split operation으로 유효한 topology를 만든 뒤 선언한
+option을 적용한다. 각 case는 실제 card 수, topology, dimension과 option을
+검사하므로 generation이 하나의 입력군으로 축소되면 실패한다. 입력군은 다음과 같다.
+
+| 입력 | 선택 |
+| --- | --- |
+| Topology | columns, rows와 mixed cut |
+| Initial card | 2부터 8까지; mixed cut은 3개 이상 |
+| Width / height | 320, 640, 1730 / 180, 900, 1440 px |
+| Gap / minimum size | 0, 17, 64 / 24, 96, 160 px |
+| Snap / fill order | merge와 off / h와 v |
+| Snap distance / grab size | 3과 29 / 7과 23 px |
+| Card 속성 | fixed 및 sharing card, 선언한 px size와 constrained 상태의 크기 0인 card |
+| Trace | refusal/recovery 호출 14개와 이어지는 seed 기반 호출 20개 |
+
+각 initial array는 순환 이동하고, 뒤집고, case seed로 두 번 섞는다. 중복
+순서를 제거하고 card 수에 3을 더한 개수 이하의 순서를 원래 identifier 및
+변경한 identifier로 비교한다. 이 선택은 모든 조합이나 가능한 모든 layout을
+검증한다고 주장하지 않는다. 고정 5-card test는 별도로 순열 120개를 모두 다룬다.
+
+Fixed card의 split은 거부되어야 하며 fixed flag를 해제하고 공간을 주면
+성공해야 한다. 1-pixel plane의 split은 거부되어야 하며 공간을 복원하면
+성공해야 한다. 새 card를 닫아 각 회복 뒤에도 작업을 계속할 수 있음을 확인한다.
+모든 전이는 successful 또는 refused 결과를 보고하고 거부는 serialized state와
+public 관측값을 보존한다. Report는 입력군과 method별 결과 수를 assert하고
+출력한다. 별도 control은 gap, minimum size, snapping, grab size와 fill order가
+해당 geometry나 판단을 바꾼다는 것을 검증한다.
+
+Slicing oracle은 layout 구현을 import하지 않는 순수 test module이며 기존
+negative pinwheel case와 다양한 전이 검사가 사용한다. Mutation 검사는 정상
+구현으로 입력을 만들고 검증한 뒤 동일한 입력을 격리한 구현 복사본에서 재생한다.
+Identifier·array-order·size 의존 결함은 기존 R2 test를 통과하지만 새 narrow-plane
+case의 지정한 assertion에서는 실패해야 한다. Loader, runtime, environment 오류는
+검출로 세지 않는다. 실패는 seed, initial state, option, 전체 호출 목록과 선택한
+입력 순서를 보존한다.

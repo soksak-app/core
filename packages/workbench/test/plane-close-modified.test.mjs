@@ -144,6 +144,64 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   assert.equal(has(id), true, "a failed save must retain the tab");
   assert.equal(reports.tabError(id), `저장하지 못했습니다 · ${saveName}: write refused`);
 
+  await t.test("a failed save can retry and close the same modified tab", { timeout: 5000 }, async () => {
+    const dirty = fresh();
+    const other = tabs()[1].id;
+    let present = true, closures = 0;
+    const observe = () => {
+      const current = has(dirty);
+      if (present && !current) closures++;
+      present = current;
+    };
+    decisions.add(observe);
+    try {
+      reports.reportModified(dirty, true);
+      await ask(dirty);
+      plane.pickItem(0);
+      const failed = decision(dirty);
+      reply.reject(new Error("first write refused"));
+      await failed;
+      assert.equal(has(dirty), true, "the failed attempt must retain the same dirty tab for retry");
+      assert.equal(reports.tabModified(dirty), true);
+      const failure = `저장하지 못했습니다 · ${saveName}: first write refused`;
+      assert.equal(reports.tabError(dirty), failure);
+      assert.equal(closures, 0);
+      draw();
+      assert.ok(logged.some((line) => line.includes(failure)), "the failed attempt must remain observable in the error log");
+
+      reply = deferred();
+      await ask(dirty);
+      plane.pickItem(0);
+      assert.deepEqual(saves, [dirty, dirty], "retry must run save again for the same dirty tab");
+      assert.equal(has(dirty), true, "the retry must retain the same tab while its save is pending");
+      assert.equal(reports.tabModified(dirty), true);
+      assert.equal(reports.tabError(dirty), failure, "starting a retry must not erase the first failure");
+      const closed = new Promise((resolve) => {
+        const check = () => {
+          if (has(dirty)) return;
+          decisions.delete(check);
+          resolve();
+        };
+        decisions.add(check);
+      });
+      // The surface clears its own operation error and reports clean state before its successful reply arrives.
+      reports.reportError(dirty, null);
+      reports.reportModified(dirty, false);
+      assert.equal(has(dirty), true, "a clean retry report must still wait for that retry's reply");
+      assert.equal(closures, 0, "the failed attempt must not close the tab during the retry");
+      reply.resolve(null);
+      await closed;
+      assert.equal(closures, 1, "the same tab must close exactly once after its retry succeeds");
+      assert.deepEqual(tabs().map(({ id }) => id), [other], "save recovery must leave the other tab unchanged");
+      assert.equal(reports.tabError(dirty), null);
+      reports.reportTitle(other, "still open");
+      assert.equal(closures, 1, "a later report must not repeat the recovered close");
+      assert.deepEqual(saves, [dirty, dirty]);
+    } finally {
+      decisions.delete(observe);
+    }
+  });
+
   id = fresh();
   reports.reportModified(id, true);
   await ask(id);
@@ -182,7 +240,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   assert.equal(has(id), true, "window-close permission does not remove the tab itself");
 });
 
-test("close boundary owner assertions detect each removed modified-state guard", { timeout: 30000 }, (t) => {
+test("close boundary owner assertions detect missing guards and blocked save recovery", { timeout: 30000 }, (t) => {
   const source = fileURLToPath(new URL("..", import.meta.url));
   const folder = mkdtempSync(join(tmpdir(), "soksak-close-guards-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
@@ -202,7 +260,8 @@ test("close boundary owner assertions detect each removed modified-state guard",
   const baseline = run();
   assert.equal(baseline.error, undefined, baseline.error?.message);
   assert.equal(baseline.status, 0, `${baseline.stdout}\n${baseline.stderr}`);
-  assert.match(baseline.stdout, /# pass 1\b/);
+  assert.match(baseline.stdout, new RegExp(`^ok \\d+ - ${behaviorName}$`, "m"));
+  assert.match(baseline.stdout, /^\s+ok \d+ - a failed save can retry and close the same modified tab$/m);
   const mutations = [
     { name: "close request", before: "if (tabModified(tabId)) {\n    askBeforeClose", after: "if (false) {\n    askBeforeClose",
       assertion: /modified tab close must ask before removing it/ },
@@ -212,6 +271,9 @@ test("close boundary owner assertions detect each removed modified-state guard",
     { name: "window save reply", before: "if (tabModified(t.id)) {\n          reportError(t.id, `저장하지 못했습니다 · ${save} left the tab modified`);",
       after: "if (false) {\n          reportError(t.id, `저장하지 못했습니다 · ${save} left the tab modified`);",
       assertion: /window closure must be refused when a save leaves unsaved edits/ },
+    { name: "save recovery", before: 'if (key === "save") {\n      try {\n        await registry.run(save, {}, t.id);',
+      after: 'if (key === "save") {\n      if (tabError(t.id)) return;\n      try {\n        await registry.run(save, {}, t.id);',
+      assertion: /retry must run save again for the same dirty tab/ },
   ];
   for (const mutation of mutations) {
     assert.equal(original.split(mutation.before).length - 1, 1, `${mutation.name} has exactly one site`);
@@ -221,6 +283,6 @@ test("close boundary owner assertions detect each removed modified-state guard",
     assert.equal(result.status, 1, `${mutation.name}: ${result.stdout}\n${result.stderr}`);
     assert.match(result.stdout, mutation.assertion, `${mutation.name}: the intended owner assertion must fail`);
     assert.match(result.stdout, /ERR_ASSERTION/);
-    t.diagnostic(`${mutation.name}: the owner assertion rejected the removed guard`);
+    t.diagnostic(`${mutation.name}: the owner assertion rejected the mutation`);
   }
 });

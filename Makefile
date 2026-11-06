@@ -315,7 +315,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native fetch-native build-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native fetch-native build-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
 # does not read the profile.
@@ -408,9 +408,11 @@ install-registry:
 # Installs every plugin of the workspace registry into the CONFIG configuration folder. Applications do not hold plugins in the bundle, so
 # window checks and development runs install with this target before they start the application. Workspace plugins are changed without changing
 # the version, so when the same version is already installed the installation changes nothing. Therefore the installed plugins are
-# removed first and installed again.
-install-plugins: build-registry
+# removed first and installed again. Build the registry explicitly before installation; each host consumes the same built inputs.
+install-plugins:
 	@test -n "$(CONFIG)" || { echo "make install-plugins CONFIG=<configuration directory>" >&2; exit 2; }
+	@test -x target/debug/sok || { echo "target/debug/sok is missing or not executable; run make build-registry before installation" >&2; exit 2; }
+	@test -f "$(REGISTRY)/index.json" || { echo "$(REGISTRY)/index.json is missing; run make build-registry before installation" >&2; exit 2; }
 	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir "$(CONFIG)"
 	@for id in $$(node -e 'const f = "$(CONFIG)/plugins/installed.json"; const fs = require("fs"); console.log(fs.existsSync(f) ? Object.keys(JSON.parse(fs.readFileSync(f, "utf8")).plugins).join(" ") : "")'); do \
 		target/debug/sok plugin remove $$id --config-dir "$(CONFIG)" || exit 1; done
@@ -584,6 +586,10 @@ test-app-host-go: build-native
 
 test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app --native test-app $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+
+# Focused native application checks; preparation, auditing and cleanup use the ordinary window runner.
+test-app-capture-input-close: check-docs check-app-tests check-exposure $(E2E_BUILD)
+	@node scripts/test-app.mjs --script test-app:capture-input-close $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
 
 # Acceptance consumes the downloaded candidate bundles and frozen component context without rebuilding them.
 test-app-candidate:

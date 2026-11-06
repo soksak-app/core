@@ -1,0 +1,19 @@
+{
+  "id": "probeclose",
+  "name": "Save close probe",
+  "description": "Reports modified tab state independently of a successful save reply.",
+  "surface": { "save": "probeclose.save", "composition": { "kind": "view", "page": "ui/page.html" } },
+  "mark": "C",
+  "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
+  "exposes": {
+    "status": [{ "name": "probeclose.state", "description": "The observed save count and reported modified state.",
+      "schema": { "type": "object", "properties": { "saves": { "type": "integer" }, "modified": { "type": "boolean" } } } }],
+    "commands": [
+      { "name": "probeclose.prepare", "description": "Marks the tab modified and chooses whether its next save retains changes.",
+        "params": { "type": "object", "properties": { "keepModified": { "type": "boolean" } } }, "result": { "type": "null" } },
+      { "name": "probeclose.save", "description": "Completes a save and reports the configured modified state.",
+        "params": { "type": "object" }, "result": { "type": "null" } }
+    ],
+    "element": []
+  }
+}
