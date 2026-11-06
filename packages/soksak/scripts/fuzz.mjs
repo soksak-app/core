@@ -1,5 +1,5 @@
 /** Seeded layout profiles, checked after every public operation. */
-import { createProfile, runSequence } from "./layout-sequences.mjs";
+import { createProfile, reduceSequence, runSequence } from "./layout-sequences.mjs";
 
 const seeds = Number(process.argv[2] ?? 400);
 const steps = Number(process.argv[3] ?? 120);
@@ -21,7 +21,12 @@ for (let seed = 1; seed <= seeds; seed++) {
     }
     if (report.failure) {
       failed = true;
-      console.error(JSON.stringify(report));
+      // Publish the complete original before reduction, including if replay fails.
+      console.error(JSON.stringify({ original: report }));
+      if (report.failure.invariant !== "assertion" && !report.failure.invariant.startsWith("operation:")) {
+        const { reduced, attempts } = reduceSequence(report);
+        console.error(JSON.stringify({ reduced, attempts }));
+      }
     }
   }
   if (failed) failures++;

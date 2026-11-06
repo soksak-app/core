@@ -212,3 +212,46 @@ export function assertSequence(report) {
   assert.equal(report.failure, null, JSON.stringify(report));
   return report;
 }
+
+export function replaySequence(report, operations = report.trace, { create = ({ state, options }) => Soksak.from(state, options), check = assertInvariants } = {}) {
+  return runSequence(create(structuredClone(report.initial)), {
+    seed: report.seed, profile: report.profile, operations, check,
+  });
+}
+
+/**
+ * Generic value shrinkers do not supply the recorded-call replay contract:
+ * retain the original evidence and accept only the same named invariant.
+ * Deterministic chunk deletion gives a one-operation-minimal failing trace;
+ * it does not claim the shortest possible trace or shrink argument values.
+ */
+export function reduceSequence(report, options = {}) {
+  if (!report.failure) throw new Error("cannot reduce a passing sequence");
+  const invariant = report.failure.invariant;
+  if (!invariant || invariant === "assertion" || invariant.startsWith("operation:")) {
+    throw new Error("reduction requires a named invariant; unclassified assertions and operation errors retain their original trace");
+  }
+  const original = structuredClone(report);
+  let reduced = replaySequence(original, original.trace, options);
+  if (reduced.failure?.invariant !== invariant) throw new Error(`original sequence does not reproduce ${invariant}`);
+  let attempts = 1;
+  let chunks = 2;
+  while (reduced.trace.length) {
+    const size = Math.ceil(reduced.trace.length / chunks);
+    let accepted = false;
+    for (let start = 0; start < reduced.trace.length; start += size) {
+      const candidate = reduced.trace.slice(0, start).concat(reduced.trace.slice(start + size));
+      const replayed = replaySequence(original, candidate, options);
+      attempts++;
+      if (replayed.failure?.invariant !== invariant) continue;
+      reduced = replayed;
+      chunks = Math.max(2, chunks - 1);
+      accepted = true;
+      break;
+    }
+    if (accepted) continue;
+    if (chunks >= reduced.trace.length) break;
+    chunks = Math.min(reduced.trace.length, chunks * 2);
+  }
+  return { original, reduced, attempts };
+}

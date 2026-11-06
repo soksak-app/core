@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F502-2: 실패한 layout sequence는 원래 seed, option과 trace를 보존하며 결정적인 replay는 같은 이름의 invariant가 계속 실패할 때만 호출을 축소한다. 통과, 다른 invariant 또는 분류하지 않은 실패로 축소를 승인할 수 없다. macOS에서 sequence 소유 case 열 개가 모두 통과한다.
+
 - F500-1: Terminal 및 cell 배경 sample은 session recording 소유권을 사용한다. Stop은 한 번 수행하고 실패 capture와 원래 실패를 보존하며 성공 capture는 finalization 뒤에만 제거한다. macOS에서 집중 수명주기 및 geometry case 43개가 모두 통과했고 native application 승인은 실행하지 않았다.
 
 - F501-1: 언어 evidence는 실행 전에 수집한 입력에 command 결과를 연결하고 입력 변경을 거부한다. 승인 실패는 원래 snapshot, command 결과와 attempt 이력을 보존하며 metadata-only와 실행에 연결된 attempt를 혼용할 수 없다. macOS에서 evidence 및 adapter case 29개가 모두 통과한다.

@@ -534,3 +534,12 @@ changed/unchanged state 수를 전체 및 operation별로 기록한다. Profile�
 Coincident-line 고정 fixture는 merge 성공을 증명한다. 거부된 호출은 state를 변경하면
 안 된다. 실패 report는 seed, initial state와 전체 operation trace를 보존한다.
 독립적인 slicing oracle과 명시적인 geometry 기대값은 별도 test로 유지한다.
+
+실패는 기록된 initial state와 snapping distance를 포함한 모든 layout option으로
+재실행할 수 있다. Reduction은 먼저 같은 실패를 재현한 뒤 일정한 순서로
+operation 묶음을 제거한다. 같은 이름의 invariant 실패만 후보로 수용하고,
+성공한 sequence, 다른 invariant와 이름 없는 assertion은 수용하지 않는다.
+원래 seed와 전체 trace는 reduced trace와 별도로 변경 없이 보존한다. 결과는
+operation 하나를 제거하는 범위에서 최소이며, 가능한 가장 짧은 trace를
+보장하지 않고 argument 값은 줄이지 않는다. Fuzz command는 reduction을
+시도하기 전에 전체 원본을 출력한다.

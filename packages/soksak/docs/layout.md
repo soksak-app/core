@@ -570,3 +570,12 @@ merge call. A controlled coincident-line fixture proves an accepted merge. A
 refused call must leave the state unchanged. Failure reports retain the seed,
 initial state and complete operation trace. The independent slicing oracle and
 explicit geometry expectations remain separate tests.
+
+A failure can be replayed from its recorded initial state and all layout options,
+including snapping distance. Reduction first reproduces that failure, then deletes
+operation chunks in a deterministic order. Only the same named invariant accepts
+a candidate; passing sequences, different invariants and untagged assertions do
+not. The original seed and complete trace remain unchanged beside the reduced
+trace. The result is minimal under deletion of one operation, not necessarily the
+shortest possible trace, and argument values are not reduced. The fuzz command
+prints the complete original before attempting reduction.
