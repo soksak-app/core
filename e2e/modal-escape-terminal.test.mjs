@@ -5,6 +5,7 @@
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 import { echoed, ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 
@@ -50,18 +51,28 @@ for (const app of Object.values(APPS)) {
   });
 }
 
+// The injection records of the native input of the key after offsets: the first responder, whether the key waited behind the held
+// input of the window and the result of each phase (docs/spec/exposure.md#virtual-key-window).
+async function keyRecords(s, offsets, key) {
+  await s.flushLog();
+  return readEvents(s.app.configDir, offsets).events
+    .filter((event) => event.event === "native.record.info" && event.fields?.where === "input inject")
+    .map((event) => JSON.parse(event.fields.text)).filter((record) => record.kind === "key" && record.key === key);
+}
+
 // A person can press a key as soon as the add picker opens, before its page has drawn. The key reaches the picker or nothing,
-// and the terminal behind it reads only what follows the close.
+// and the terminal behind it reads only what follows the close. A failure states the injection records of the key.
 for (const app of Object.values(APPS)) {
   for (const [name, key, options] of [["Escape", "Escape", {}], ["a character", "q", { text: "q" }]]) {
     test(`${app.name}: ${name} pressed as the add picker opens does not reach the terminal`, async (t) => {
       const s = await open(t, app);
-      await fresh(s);
+      await fresh(s, { log: { input: "info" }, reads: ["native.record.info"] });
       const [{ surface }] = await ensureTerminals(s, 1);
       await s.presented();
       await focusTerminal(s, surface);
       const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface)).id;
       await s.run("core.card.menu", { card, menu: "add" });
+      const offsets = currentEventOffsets(s.app.configDir);
       await s.press(key, options);
       t.diagnostic(`after the key: ${JSON.stringify((await s.get("host.window")).responder)}`);
       if ((await s.get("core.picker")).open) {
@@ -74,7 +85,12 @@ for (const app of Object.values(APPS)) {
         "the keyboard did not return to the terminal");
       await type(s, "echo modalleak");
       await s.press("Enter");
-      await readScreenUntil(s, surface, (lines) => echoed(lines, "modalleak"), "the key pressed as the picker opened reached the terminal");
+      try {
+        await readScreenUntil(s, surface, (lines) => echoed(lines, "modalleak"), "the key pressed as the picker opened reached the terminal");
+      } catch (error) {
+        error.message = `key records ${JSON.stringify(await keyRecords(s, offsets, key))}; ${error.message}`;
+        throw error;
+      }
     });
   }
 }

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
@@ -12,7 +13,7 @@ import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard
 for (const app of Object.values(APPS)) {
   test(`${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    await fresh(s, { log: { input: "info" }, reads: ["native.record.info"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     await s.run("terminal.input", { bytes: "clear; printf 'EDITMENU\\n'\r" }, surface);
@@ -31,11 +32,22 @@ for (const app of Object.values(APPS)) {
     // A selection covers a cell only when the pointer passes the middle of the cell, so the press is near the left edge of the first cell and the release is after the middle of the last cell
     // (docs/spec/persistent-services.md).
     const shift = 0.3 * session.cellWidth;
+    const pressed = currentEventOffsets(s.app.configDir);
     await s.pointer(cell(0).x - shift, cell(0).y, "down");
     await s.pointer(cell(3).x, cell(3).y, "drag");
     await s.pointer(cell(7).x + shift, cell(7).y, "drag");
     await s.pointer(cell(7).x + shift, cell(7).y, "up");
-    await s.until("terminal.session", (value) => value.selectionReleases === before + 1, "the selection was not released", { surface });
+    try {
+      await s.until("terminal.session", (value) => value.selectionReleases === before + 1, "the selection was not released", { surface });
+    } catch (error) {
+      // A failure states the injection record of each phase of the drag: its point, its result and the pointer that held it.
+      await s.flushLog();
+      const records = readEvents(s.app.configDir, pressed).events
+        .filter((event) => event.event === "native.record.info" && event.fields?.where === "input inject")
+        .map((event) => JSON.parse(event.fields.text)).filter((record) => record.kind === "pointer");
+      error.message = `pointer records ${JSON.stringify(records)}; responder ${JSON.stringify((await s.get("host.window")).responder)}; ${error.message}`;
+      throw error;
+    }
     await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("CHANGED").toString("base64") }]);
     await s.press("c", { modifiers: ["command"] });
