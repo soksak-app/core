@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F510: Complete core Node verification passes all 465 files. After the installation-stage correction, its 23 owner cases pass. The integrated current Editor passes all 215 cases. Native owner suites, benchmark acceptance and activation acceptance retain their separate checklist states.
+
 - F509-4: Plugin installation consumes the already-built workspace registry instead of rebuilding it for each host. Missing executable or index inputs fail with the build prerequisite before any CLI mutation. The actual Makefile dry run first rejects the implicit rebuild; all 23 runner-owner cases now pass on macOS, including existing-file preservation and command-fixture installation. Ordinary application targets retain their explicit registry build. Actual installed payload identity and native acceptance remain separate.
 
 - F509-3: Declared Node scripts preserve quoted and escaped arguments, separate pattern values and literal command separators through a maintained parser. Preparation commands retain their argument boundaries, and unsupported syntax or any unresolved path fails before execution. Seven tracked Red cases include an actual child that ran an excluded test; four argument forms now execute only their selected case. All 38 discovery cases and 28 runner cases pass on macOS. The paired contract and requirement mapping distinguish this harness correction from the pending two-state native acceptance.
