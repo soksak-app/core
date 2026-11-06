@@ -1,50 +1,61 @@
-/**
- * Run one command with a deadline, outliving neither it nor this script's parent.
- *
- *   node scripts/bounded.mjs <ms> <command> [args...]
- *
- * `node --test` spawns a process per file. A mutant that turns a loop in the
- * library into one that never ends leaves those spinning, and killing the
- * harness does not reach them: they are reparented and keep a core each. The run
- * goes in its own process group, and the group is killed when the deadline
- * passes, when a signal arrives, or when the harness that asked for the run is
- * gone.
- *
- * Exits with the command's code, or 124 when something above ended the run.
- */
+/** Run a command in its own process group and report why it ended. */
 import { spawn } from "node:child_process";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const [ms, command, ...args] = process.argv.slice(2);
-const parent = process.ppid;
-const child = spawn(command, args, { stdio: "ignore", detached: true });
+export function runBounded(command, args, { timeout, cwd, stdout = "inherit", stderr = "inherit", signal, onSpawn } = {}) {
+  if (!Number.isFinite(timeout) || timeout <= 0) throw new Error("The command deadline must be positive");
+  const started = performance.now();
+  return new Promise((done) => {
+    const parent = process.ppid;
+    const env = { ...process.env };
+    // A new test command must not inherit the outer Node runner's IPC context.
+    delete env.NODE_TEST_CONTEXT;
+    const child = spawn(command, args, { cwd, env, stdio: ["ignore", stdout, stderr], detached: true });
+    let reason = "exit", error = null;
+    const kill = () => {
+      if (!child.pid) return;
+      try { process.kill(-child.pid, "SIGKILL"); }
+      catch (failure) { if (failure.code !== "ESRCH") error = `${failure.code}: ${failure.message}`; }
+    };
+    const stop = (cause) => {
+      if (reason !== "exit") return;
+      reason = cause;
+      kill();
+    };
+    const cancel = () => stop("cancelled");
+    const handlers = ["SIGINT", "SIGTERM", "SIGHUP"].map((name) => {
+      const handler = () => stop(`signal:${name}`);
+      // Kill the command group before a caller's signal handler exits.
+      process.prependListener(name, handler);
+      return [name, handler];
+    });
+    const deadline = setTimeout(() => stop("deadline"), timeout);
+    // There is no parent-exit event when the harness is killed outright.
+    const orphaned = setInterval(() => { if (process.ppid !== parent) stop("orphaned"); }, 500);
+    signal?.addEventListener("abort", cancel, { once: true });
+    child.once("error", (failure) => { reason = "spawn-error"; error = `${failure.code}: ${failure.message}`; });
+    child.once("exit", kill);
+    child.once("close", (code, exitSignal) => {
+      clearTimeout(deadline);
+      clearInterval(orphaned);
+      for (const [name, handler] of handlers) process.removeListener(name, handler);
+      signal?.removeEventListener("abort", cancel);
+      done({ code, signal: exitSignal, reason, error, elapsed: Math.round(performance.now() - started) });
+    });
+    if (signal?.aborted) cancel();
+    onSpawn?.(child);
+  });
+}
 
-const stop = () => {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [ms, command, ...args] = process.argv.slice(2);
   try {
-    process.kill(-child.pid, "SIGKILL");
-  } catch {
-    // The group is already gone.
+    const result = await runBounded(command, args, { timeout: Number(ms) });
+    if (result.reason !== "exit" || result.error) console.error(`${result.reason}: ${result.error ?? result.signal ?? "command stopped"}`);
+    process.exitCode = result.reason === "deadline" ? 124 : result.reason !== "exit" || result.error ? 125 : result.signal ? 128 : result.code;
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 125;
   }
-  process.exit(124);
-};
-
-const deadline = setTimeout(stop, Number(ms));
-for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, stop);
-// A harness can be killed outright, with no signal it can act on. Nothing else
-// would then end the run.
-const orphaned = setInterval(() => {
-  if (process.ppid !== parent) stop();
-}, 500);
-
-child.on("exit", (code, signal) => {
-  clearTimeout(deadline);
-  clearInterval(orphaned);
-  // The command can exit while something it started is still in the group. Node's
-  // test runner runs a process per file, and those are reparented rather than
-  // ended when the runner above them goes. Take the group away with it.
-  try {
-    process.kill(-child.pid, "SIGKILL");
-  } catch {
-    // The group is already gone.
-  }
-  process.exit(signal ? 124 : (code ?? 1));
-});
+}

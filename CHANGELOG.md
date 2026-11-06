@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F504-1: Required and exploratory mutation commands retain stdout, stderr and execution records. Assertions, runtime errors and mutant deadlines remain valid detections; missing dependencies, cancellation and unattributed signals fail the experiment. All 19 owner cases and three command smoke cases pass on macOS.
+
 - F498-1: Discovery, repeated Node selections and language adapters share executed-test acceptance. Empty wrappers, skipped suites, todo, cancelled and failed cases are rejected, and Rust results include every target. The 58 discovery/runner and 31 evidence/repeat/adapter cases pass on macOS.
 
 - F503-1: The audit self-check executes the actual feature-link audit and detects omitted error reporting and responses in isolated mutations. The baseline and three focused audit cases pass on macOS; this evidence covers the audit itself.

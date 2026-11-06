@@ -5,13 +5,13 @@
  *
  * Exits non-zero if any break survives or no longer applies.
  */
-import { spawn } from "node:child_process";
 import {
   cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BREAKS } from "./breaks.mjs";
+import { mutationVerdict, runMutationTest } from "./mutation-runner.mjs";
 
 const REPO = new URL("../", import.meta.url).pathname;
 const ROOT = new URL("../../../", import.meta.url).pathname;
@@ -39,6 +39,8 @@ if (listOnly) {
 // nobody wrote, for as long as this takes.
 // The copy keeps the workspace layout, because the suite reads the root's
 // toolchain declarations through the same relative paths.
+const EVIDENCE = mkdtempSync(join(process.env.SOKSAK_MUTATION_RUN_FOLDER ?? tmpdir(), "soksak-break-evidence-"));
+console.log(`Evidence: ${EVIDENCE}`);
 const TOP = `${mkdtempSync(join(tmpdir(), "soksak-breaks-"))}/`;
 const HERE = `${TOP}packages/soksak/`;
 const drop = () => rmSync(TOP, { recursive: true, force: true });
@@ -60,6 +62,9 @@ for (const part of ["dist", "test", "scripts", "src", "docs", "package.json", "t
 }
 for (const part of ["package.json", "Makefile", ".node-version"]) {
   cpSync(`${ROOT}${part}`, `${TOP}${part}`, { recursive: true });
+}
+for (const part of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) {
+  cpSync(`${ROOT}scripts/${part}`, `${TOP}scripts/${part}`);
 }
 // The suite reads more than the built code: jsdom is what the view is rendered
 // into. Link the tree rather than copy it — the run only reads it.
@@ -89,21 +94,9 @@ const BASELINE_TIMEOUT = 120_000;
 const baselineTime = {};
 const breakTimeout = (file) => Math.max(20_000, 3 * baselineTime[file]);
 
-/**
- * Run one test file in a copy. Bounded, so a hang cannot outlive it. The
- * result says whether it failed, whether the bound ended it, and how long it took.
- */
-const runFile = (root, file, timeout) =>
-  new Promise((done) => {
-    const start = performance.now();
-    const child = spawn(
-      "node",
-      [`${root}scripts/bounded.mjs`, String(timeout), "node", "--test", file],
-      { cwd: root, stdio: "ignore" },
-    );
-    child.on("exit", (code) =>
-      done({ failed: code !== 0, timedOut: code === 124, elapsed: Math.round(performance.now() - start) }));
-  });
+const runFile = (root, file, timeout, label) => runMutationTest({
+  root, file, timeout, evidence: join(EVIDENCE, label, file),
+});
 
 // A copy that does not pass before a break is applied measures nothing: the run
 // below stops at the first file that fails, and that file would be the same one
@@ -111,10 +104,10 @@ const runFile = (root, file, timeout) =>
 const broken = [];
 for (const file of TESTS) {
   console.log(`START baseline test=${file} timeout_ms=${BASELINE_TIMEOUT}`);
-  const result = await runFile(HERE, file, BASELINE_TIMEOUT);
+  const result = await runFile(HERE, file, BASELINE_TIMEOUT, "baseline");
   baselineTime[file] = result.elapsed;
-  if (result.failed) broken.push(`${file} (${result.timedOut ? "timed out" : "failed"} after ${result.elapsed} ms)`);
-  console.log(`${result.failed ? "FAIL" : "PASS"} baseline test=${file} elapsed_ms=${result.elapsed}`);
+  if (result.classification !== "passed") broken.push(`${file} (${result.classification} after ${result.elapsed} ms)`);
+  console.log(`${result.classification !== "passed" ? "FAIL" : "PASS"} baseline test=${file} result=${result.classification} elapsed_ms=${result.elapsed}`);
 }
 if (broken.length) {
   console.error(
@@ -127,6 +120,7 @@ let caught = 0;
 const missed = [];
 const many = [];
 const survived = [];
+const invalid = [];
 const applicable = [];
 for (const b of BREAKS) {
   if (only && !only.has(b.id)) continue;
@@ -156,6 +150,8 @@ const copy = () => {
     cpSync(`${REPO}${part}`, `${root}${part}`, { recursive: true });
   for (const part of ["package.json", "Makefile", ".node-version"])
     cpSync(`${ROOT}${part}`, `${top}${part}`, { recursive: true });
+  for (const part of ["node-test-evidence.mjs", "test-event-reporter.mjs"])
+    cpSync(`${ROOT}scripts/${part}`, `${top}scripts/${part}`);
   symlinkSync(`${REPO}node_modules`, `${root}node_modules`);
   return { top, root };
 };
@@ -168,17 +164,16 @@ const run = async (b) => {
     for (const file of order(b.file)) {
       const timeout = breakTimeout(file);
       console.log(`START break=${b.id} test=${file} timeout_ms=${timeout}`);
-      const result = await runFile(root, file, timeout);
-      if (result.failed) {
-        // A break that makes the file hang is caught by the bound; the result names that.
-        const how = result.timedOut ? "caught-by-timeout" : "caught";
-        console.log(`PASS break=${b.id} result=${how} test=${file} elapsed_ms=${result.elapsed}`);
-        return { b, caught: true };
+      const result = await runFile(root, file, timeout, b.id);
+      const verdict = mutationVerdict(result);
+      if (verdict !== "survived") {
+        console.log(`${verdict === "caught" ? "PASS" : "FAIL"} break=${b.id} result=${result.classification} test=${file} elapsed_ms=${result.elapsed}`);
+        return { b, verdict };
       }
       console.log(`PASS break=${b.id} test=${file} elapsed_ms=${result.elapsed}`);
     }
     console.log(`FAIL break=${b.id} result=survived`);
-    return { b, caught: false };
+    return { b, verdict: "survived" };
   } finally {
     rmSync(top, { recursive: true, force: true });
   }
@@ -190,14 +185,15 @@ const workers = Array.from({ length: Math.min(8, queue.length) }, async () => {
     const b = queue.shift();
     if (!b) return;
     const result = await run(b);
-    if (result.caught) caught++;
+    if (result.verdict === "caught") caught++;
+    else if (result.verdict === "invalid") invalid.push(result.b);
     else survived.push(result.b);
   }
 });
 await Promise.all(workers);
 
 console.log(
-  `\ncaught ${caught} · survived ${survived.length} · stale ${missed.length} · ambiguous ${many.length}`,
+  `\ncaught ${caught} · survived ${survived.length} · stale ${missed.length} · ambiguous ${many.length} · invalid ${invalid.length}`,
 );
 if (survived.length) console.log("A break that survives names a promise no test holds the code to.");
 if (missed.length) console.log("A stale break no longer applies: follow the code it patched, or delete it.");
@@ -207,4 +203,5 @@ if (many.length) {
       "site it names, or write one entry per site.",
   );
 }
-process.exit(survived.length || missed.length || many.length ? 1 : 0);
+writeFileSync(join(EVIDENCE, "summary.json"), `${JSON.stringify({ caught, survived, stale: missed, ambiguous: many, invalid }, null, 2)}\n`);
+process.exit(invalid.length ? 2 : survived.length || missed.length || many.length ? 1 : 0);

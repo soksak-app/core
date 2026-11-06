@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F504-1: 필수 및 탐색 mutation command는 stdout, stderr와 실행 기록을 보존한다. Assertion, runtime error와 mutant deadline은 유효한 검출로 유지하며, dependency 누락, cancel과 출처 불명 signal은 실험을 실패시킨다. macOS에서 소유 case 19개와 command smoke case 세 개가 모두 통과한다.
+
 - F498-1: Discovery, Node 선택 반복과 언어 adapter가 실행 test 승인 판정을 공유한다. 빈 wrapper, skip suite, todo, cancel, 실패 case를 거부하고 Rust 결과는 모든 target을 포함한다. macOS에서 discovery/runner 58개와 evidence/repeat/adapter 31개 case가 통과한다.
 
 - F503-1: Audit 자체 검사는 실제 feature-link audit를 실행하고 격리한 mutation의 error 기록 및 response 누락을 검출한다. macOS에서 baseline과 집중 audit case 세 개가 통과하며 이 근거는 audit 자체를 검증한다.
