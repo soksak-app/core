@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F502-1: Random layout 검사는 profile 가중치와 독립 slicing oracle을 유지하며 operation 생성과 전이 invariant를 공유한다. Report는 각 method의 결과를 세고 중간 결함은 복구 전에 실패한다. macOS에서 집중 소유 및 consumer test와 세 profile의 seed 12개가 모두 통과한다.
+
 - F504-1: 필수 및 탐색 mutation command는 stdout, stderr와 실행 기록을 보존한다. Assertion, runtime error와 mutant deadline은 유효한 검출로 유지하며, dependency 누락, cancel과 출처 불명 signal은 실험을 실패시킨다. macOS에서 소유 case 19개와 command smoke case 세 개가 모두 통과한다.
 
 - F498-1: Discovery, Node 선택 반복과 언어 adapter가 실행 test 승인 판정을 공유한다. 빈 wrapper, skip suite, todo, cancel, 실패 case를 거부하고 Rust 결과는 모든 target을 포함한다. macOS에서 discovery/runner 58개와 evidence/repeat/adapter 31개 case가 통과한다.

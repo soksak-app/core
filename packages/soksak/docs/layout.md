@@ -555,3 +555,18 @@ person change its gap changes this with it.
 ## License
 
 MIT
+
+## Random sequence verification
+
+The unit tests and fuzz command share one seeded operation generator and one
+transition invariant checker. Ordinary layouts retain minimum-size checks;
+fixed layouts also check fixed-size proportions and close predictions;
+constrained layouts permit zero-size cards and reduced corridors. Each public
+call is checked before the next call, including refused calls. Reports count
+successful and refused calls separately from changed and unchanged states,
+both in total and per operation. Profile-specific weights retain the original
+creation and removal frequencies; ordinary drags retain a separately checked
+merge call. A controlled coincident-line fixture proves an accepted merge. A
+refused call must leave the state unchanged. Failure reports retain the seed,
+initial state and complete operation trace. The independent slicing oracle and
+explicit geometry expectations remain separate tests.

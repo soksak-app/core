@@ -521,3 +521,16 @@ DOM 바인딩은 화면 해상도 변경을 관찰하고 호스트 CSS 크기가
 ## 라이선스
 
 MIT
+
+## Random sequence 검증
+
+Unit test와 fuzz command는 하나의 seed 기반 operation generator와 transition
+invariant checker를 공유한다. Ordinary layout은 minimum-size를 검사하고,
+fixed layout은 fixed-size 비율과 close 예측도 검사한다. Constrained layout은
+크기가 0인 card와 축소된 corridor를 허용한다. 거부된 호출을 포함하여 각 public
+호출을 다음 호출 전에 검사한다. Report는 successful/refused 호출 수와
+changed/unchanged state 수를 전체 및 operation별로 기록한다. Profile별 weight는
+기존 생성·제거 빈도를 유지하고, ordinary drag 후 merge 호출도 별도로 검사한다.
+Coincident-line 고정 fixture는 merge 성공을 증명한다. 거부된 호출은 state를 변경하면
+안 된다. 실패 report는 seed, initial state와 전체 operation trace를 보존한다.
+독립적인 slicing oracle과 명시적인 geometry 기대값은 별도 test로 유지한다.

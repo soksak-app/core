@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F502-1: Random layout checks share operation generation and transition invariants while preserving profile weights and the independent slicing oracle. Reports count each method outcome, and intermediate defects fail before recovery. Focused owner and consumer tests and all 12 three-profile seeds pass on macOS.
+
 - F504-1: Required and exploratory mutation commands retain stdout, stderr and execution records. Assertions, runtime errors and mutant deadlines remain valid detections; missing dependencies, cancellation and unattributed signals fail the experiment. All 19 owner cases and three command smoke cases pass on macOS.
 
 - F498-1: Discovery, repeated Node selections and language adapters share executed-test acceptance. Empty wrappers, skipped suites, todo, cancelled and failed cases are rejected, and Rust results include every target. The 58 discovery/runner and 31 evidence/repeat/adapter cases pass on macOS.
