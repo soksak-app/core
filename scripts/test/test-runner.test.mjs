@@ -246,25 +246,41 @@ test("a process that outlives its test process is ended at that exit, and the fa
   assert.ok(result.elapsedMs < 15000, `the process ran ${result.elapsedMs} ms, to its limit instead of its exit`);
 });
 
-test("a test over its limit with a stack signal receives that signal first, and its output keeps what it printed on the signal", async () => {
-  // The process prints its stacks on SIGQUIT and exits, as a Go test binary does; a runner that kills the group without the signal
-  // leaves the output without the stacks.
-  const source = `process.on("SIGQUIT", () => { console.log("goroutine 1 [the stacks]"); process.exit(2); }); console.log("waiting"); ${sleeping(60000)}`;
-  const { results, lines } = await run([node("hangs", source, { timeoutMs: 1000, stackSignal: "SIGQUIT" })], { concurrency: 1 });
+test("a test that writes its stacks at its own limit is a timeout whose output keeps the stacks, and it receives no signal", async () => {
+  // The process ends itself at its limit with its stacks, as a Go test binary with -test.timeout does; its limit starts with the process,
+  // after the runner's. A signal from the runner during that write ends a Go runtime with no stacks, so the process records any signal.
+  const source = `process.on("SIGQUIT", () => console.log("signalled")); process.on("SIGTERM", () => console.log("signalled"));
+    setTimeout(() => { console.log("goroutine 1 [the stacks]"); process.exit(2); }, 1000); console.log("waiting"); ${sleeping(60000)}`;
+  const { results, lines } = await run([node("hangs", source, { timeoutMs: 1000, stacksAtLimit: true })], { concurrency: 1 });
   const result = results.get("hangs");
   assert.equal(result.status, "timeout", result.detail);
   assert.match(result.output, /^goroutine 1 \[the stacks\]$/m, result.output);
-  assert.match(lines.find((line) => line.startsWith("TIME hangs")), /^TIME hangs \d+\.\d{3}s exceeded 1\.000s and was sent SIGQUIT for its stacks$/);
-  assert.ok(result.elapsedMs < 5000, `the test ran ${result.elapsedMs} ms against its limit of 1000 ms`);
+  assert.doesNotMatch(result.output, /signalled/, result.output);
+  assert.match(lines.find((line) => line.startsWith("TIME hangs")), /^TIME hangs \d+\.\d{3}s exceeded 1\.000s and ended itself with its stacks$/);
+  assert.ok(result.elapsedMs >= 1000 && result.elapsedMs < 5000, `the test ran ${result.elapsedMs} ms against its limit of 1000 ms`);
 });
 
-test("a test over its limit that does not exit on its stack signal is ended at the stack limit", async () => {
-  const source = `process.on("SIGQUIT", () => console.log("ignored")); ${sleeping(60000)}`;
-  const { results } = await run([node("ignores", source, { timeoutMs: 500, stackSignal: "SIGQUIT" })], { concurrency: 1 });
+test("a test that writes its stacks at its own limit and fails before that limit is a failure", async () => {
+  const source = `setTimeout(() => process.exit(1), 100); ${sleeping(60000)}`;
+  const { results } = await run([node("fails", source, { timeoutMs: 1000, stacksAtLimit: true })], { concurrency: 1 });
+  const result = results.get("fails");
+  assert.equal(result.status, "fail", result.detail);
+  assert.equal(result.detail, "exit 1");
+});
+
+test("a test that does not end itself at its own limit is ended at the stack limit after it", async () => {
+  const source = `process.on("SIGQUIT", () => console.log("signalled")); ${sleeping(60000)}`;
+  const { results } = await run([node("ignores", source, { timeoutMs: 500, stacksAtLimit: true })], { concurrency: 1 });
   const result = results.get("ignores");
   assert.equal(result.status, "timeout", result.detail);
-  assert.match(result.detail, /^exceeded 0\.500s and was sent SIGQUIT for its stacks; it did not exit within 10\.000s and was killed$/, result.detail);
-  assert.match(result.output, /^ignored$/m, result.output);
+  assert.match(result.detail, /^exceeded 0\.500s and did not end itself with its stacks within 10\.000s; it was killed$/, result.detail);
+  assert.doesNotMatch(result.output, /signalled/, result.output);
+  assert.ok(result.elapsedMs >= 10500, `the test ended after ${result.elapsedMs} ms, before its limit and the stack limit`);
+});
+
+test("stacksAtLimit needs a limit of the test", async () => {
+  await assert.rejects(run([{ name: "unlimited", command: process.execPath, args: ["-e", ""], stacksAtLimit: true }], { concurrency: 1 }),
+    /unlimited: stacksAtLimit must be true and needs timeoutMs/);
 });
 
 test("a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop", async () => {

@@ -1368,6 +1368,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F635",
+    implementation: [
+      { file: "scripts/test-runner.mjs", symbol: "if (limit === null && item.stacksAtLimit && performance.now() - started >= limitMs) {" },
+      { file: "scripts/test-discovery.mjs", symbol: "timeoutMs, stacksAtLimit: true });" },
+      { file: "scripts/go-tests.mjs", symbol: "passedAs: item.name, timeoutMs, stacksAtLimit: true," },
+    ],
+    tests: [
+      { file: "scripts/test/test-discovery.test.mjs", id: "a Go test over its limit prints the stacks of its goroutines before its group is ended" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a test that writes its stacks at its own limit is a timeout whose output keeps the stacks, and it receives no signal" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a test that does not end itself at its own limit is ended at the stack limit after it" },
+    ],
+    expected: "A Go test over its limit ends itself at its -test.timeout with the stack of every goroutine; the runner sends it no signal and reads its exit after the limit as its timeout.",
+    levels: ["unit"],
+  },
+  {
     id: "F630",
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "const unread = new Map();" },
