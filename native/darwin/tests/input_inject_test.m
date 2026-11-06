@@ -204,7 +204,7 @@ static void timed(void *context, sp_input_result result, const sp_input_held *he
 static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase, double timeout) {
     SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view, NO};
     SPReceipt *state = &receipt;
-    sp_input_pointer_then(window, x, y, phase, 0, 0, 0, 1, timeout, received, state);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, timeout, received, state);
     until(^BOOL { return state->done; });
     return receipt;
 }
@@ -245,7 +245,7 @@ static void checkReceipts(void) {
     [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed late = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *lateState = &late;
-    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 1, 5, timed, lateState);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 5, timed, lateState);
     until(^BOOL { return lateState->done; });
     check(late.result == SP_INPUT_DELIVERED && late.took >= 0.9,
         [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
@@ -255,7 +255,7 @@ static void checkReceipts(void) {
     [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *busyState = &busy;
-    sp_input_pointer_then(window, 50, 50, 1, 0, 0, 0, 1, 0.5, timed, busyState);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 0.5, timed, busyState);
     until(^BOOL { return busyState->done; });
     check(busy.result == SP_INPUT_UNRECEIVED && busy.took >= 0.45 && busy.took < 2,
         [NSString stringWithFormat:@"a press a busy document does not receive in time is reported (%d after %.3fs)", busy.result, busy.took]);
@@ -616,7 +616,7 @@ static IMP pressedButtonsImplementation(void) {
     return method_getImplementation(class_getClassMethod(NSEvent.class, @selector(pressedMouseButtons)));
 }
 
-// A right press has its own bit, two windows hold their presses apart, and a window that goes away ends its press.
+// A right press has its own bit, a pointer holds one press of a button in any window, and a window that goes away ends its press.
 static void checkButtonsByWindow(void) {
     NSWindow *first = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(200, 100))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
@@ -630,16 +630,17 @@ static void checkButtonsByWindow(void) {
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
         [second setReleasedWhenClosed:NO];
         second.contentView = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
-        check(sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(second, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED
-            && NSEvent.pressedMouseButtons == 3, @"presses of two windows add up");
-        check(sp_input_pointer(second, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 3,
-            @"a release in one window keeps the right press of the other window");
+        check(sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_PRESS_OPEN,
+            @"a press of a button whose press the pointer holds in another window answers press open");
+        check(sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED
+            && sp_input_pointer(second, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 3,
+            @"after the release the pointer presses both buttons in the second window");
         [second release];
     }
-    until(^BOOL { return NSEvent.pressedMouseButtons == 2; });
-    check(NSEvent.pressedMouseButtons == 2, @"a window that goes away ends its open press");
-    check(sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 0,
-        @"the last release leaves no button");
+    until(^BOOL { return NSEvent.pressedMouseButtons == 0; });
+    check(NSEvent.pressedMouseButtons == 0, @"a window that goes away ends its open presses");
+    check(sp_input_pointer(first, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED
+        && NSEvent.pressedMouseButtons == 0, @"the pointer presses again after the window went away, and the last release leaves no button");
 }
 
 // A key of an application that is not really active passes no -[NSApplication sendEvent:], which drops it and leaves no trace, also
@@ -767,7 +768,7 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"a delivered key is recorded with its arguments (got %@)", records]);
         check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"responder\":"]),
             [NSString stringWithFormat:@"a key record names the first responder that receives the key (got %@)", records]);
-        check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press for the drag or release\""]),
+        check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"pointer\":\"main\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press of the pointer and button in the window\""]),
             [NSString stringWithFormat:@"a rejected pointer input is recorded with its reason (got %@)", records]);
     }
     until(^BOOL { return [evaluate(view, @"probe.events.filter(e=>e.type==='keydown').length") intValue] >= 2; });

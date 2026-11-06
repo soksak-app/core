@@ -31,9 +31,63 @@
 #import "private/coregraphics.h"
 #import "private/webkit.h"
 
+@class SPPress;
+
+// One named pointer. It holds the open press of each of its buttons. Pointers are created at their first input and live as long
+// as the process; they are read and changed on the main thread.
+@interface SPPointer : NSObject {
+@public
+    NSString *name;
+    SPPress *presses[2]; // not retained: the window of a press holds it, and the press clears its slot when it ends
+}
+@end
+@implementation SPPointer
+@end
+
+// The open press of one button of a pointer. Its window holds it, so a window that goes away ends the press.
+@interface SPPress : NSObject {
+@public
+    SPPointer *pointer; // not retained: pointers live as long as the process
+    int button;
+    NSWindow *window; // not retained: the window holds the press
+    NSView *view; // the press target, which receives the drags and the release
+    NSView *page; // the web view that contains the target, or the target: what hears the gesture
+    BOOL throughApplication; // the press passed -[NSApplication sendEvent:], and the gesture keeps that path
+    BOOL shown; // the button of the press is in the buttons that +[NSEvent pressedMouseButtons] answers
+}
+@end
+
+static NSMutableDictionary<NSString *, SPPointer *> *pointers;
+// The pointer whose input is delivered on this thread, or nil outside a delivery.
+static _Thread_local SPPointer *deliveringPointer = nil;
 static _Thread_local sp_input_press_context *currentPressContext = NULL;
 static char pressOriginsKey;
 static uint64_t nextPressOriginToken = 1;
+
+// The pointer of a name, or nil for a name that is not 1 to SP_INPUT_POINTER_NAME_MAX characters of a-z, 0-9 and -.
+static SPPointer *pointerNamed(const char *name) {
+    size_t length = name ? strlen(name) : 0;
+    if (length == 0 || length > SP_INPUT_POINTER_NAME_MAX) return nil;
+    for (size_t index = 0; index < length; index++) {
+        char c = name[index];
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return nil;
+    }
+    NSString *key = [NSString stringWithUTF8String:name];
+    if (!pointers) pointers = [[NSMutableDictionary alloc] init];
+    SPPointer *pointer = pointers[key];
+    if (!pointer) {
+        pointer = [[[SPPointer alloc] init] autorelease];
+        pointer->name = [key copy];
+        pointers[key] = pointer;
+    }
+    return pointer;
+}
+
+// The origins of a window are kept by pointer and button. The pointer is the one whose input is delivered; outside a delivery it is
+// SP_INPUT_POINTER_MAIN, the pointer that also stands for a person's press.
+static NSString *originKey(int button) {
+    return [NSString stringWithFormat:@"%@ %d", deliveringPointer ? deliveringPointer->name : @SP_INPUT_POINTER_MAIN, button];
+}
 
 void sp_input_press_context_push(sp_input_press_context *context, void *window, double x, double y) {
     NSCAssert(NSThread.isMainThread, @"synthetic press contexts belong to the main thread");
@@ -73,7 +127,7 @@ uint64_t sp_input_press_origin_set(void *handle, int button, double x, double y)
     }
     uint64_t token = nextPressOriginToken++;
     if (token == 0) token = nextPressOriginToken++;
-    origins[@(button)] = @{ @"token": @(token), @"x": @(x), @"y": @(y), @"active": @(NSApp.isActive), @"key": @(window.isKeyWindow) };
+    origins[originKey(button)] = @{ @"token": @(token), @"x": @(x), @"y": @(y), @"active": @(NSApp.isActive), @"key": @(window.isKeyWindow) };
     return token;
 }
 
@@ -81,7 +135,7 @@ bool sp_input_press_origin_point(void *handle, int button, double *x, double *y,
     NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
     NSWindow *window = (__bridge NSWindow *)handle;
     NSDictionary *origins = window ? objc_getAssociatedObject(window, &pressOriginsKey) : nil;
-    NSDictionary *origin = origins[@(button)];
+    NSDictionary *origin = origins[originKey(button)];
     if (!origin) return false;
     if (x) *x = [origin[@"x"] doubleValue];
     if (y) *y = [origin[@"y"] doubleValue];
@@ -92,7 +146,7 @@ bool sp_input_press_origin_point(void *handle, int button, double *x, double *y,
 bool sp_input_press_origin_state(void *handle, int button, bool *active, bool *key) {
     NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
     NSWindow *window = (__bridge NSWindow *)handle;
-    NSDictionary *origin = window ? objc_getAssociatedObject(window, &pressOriginsKey)[@(button)] : nil;
+    NSDictionary *origin = window ? objc_getAssociatedObject(window, &pressOriginsKey)[originKey(button)] : nil;
     if (!origin) return false;
     *active = [origin[@"active"] boolValue];
     *key = [origin[@"key"] boolValue];
@@ -103,8 +157,9 @@ void sp_input_press_origin_clear(void *handle, int button, uint64_t token) {
     NSCAssert(NSThread.isMainThread, @"mouse press origins belong to the main thread");
     NSWindow *window = (__bridge NSWindow *)handle;
     NSMutableDictionary *origins = window ? objc_getAssociatedObject(window, &pressOriginsKey) : nil;
-    NSDictionary *origin = origins[@(button)];
-    if (origin && [origin[@"token"] unsignedLongLongValue] == token) [origins removeObjectForKey:@(button)];
+    NSString *key = originKey(button);
+    NSDictionary *origin = origins[key];
+    if (origin && [origin[@"token"] unsignedLongLongValue] == token) [origins removeObjectForKey:key];
 }
 
 // Converts coordinates relative to the top-left of the content area into window coordinates. Follows the coordinate system direction of the content view.
@@ -128,21 +183,28 @@ static NSView *hitView(NSWindow *window, NSPoint point) {
     return [content hitTest:[content.superview convertPoint:point fromView:nil]];
 }
 
-// The view that received the press of a window and button receives the same gesture until the release.
-static char leftPressedViewKey, rightPressedViewKey;
-static const void *pressedViewKey(int button) {
-    return button == 1 ? &rightPressedViewKey : &leftPressedViewKey;
-}
-// The buttons of open synthetic presses, by button. They are written on the main thread and read on any thread.
+// The buttons of open synthetic presses of every pointer, by button. They are written on the main thread and read on any thread.
 static _Atomic unsigned syntheticPresses[2];
 static NSUInteger (*appKitPressedButtons)(id, SEL);
 
+// The buttons of the open presses of a pointer that the pages see.
+static NSUInteger pointerButtons(SPPointer *pointer) {
+    NSUInteger buttons = 0;
+    for (int button = 0; button < 2; button++) {
+        SPPress *press = pointer->presses[button];
+        if (press && press->shown) buttons |= 1u << button;
+    }
+    return buttons;
+}
+
 // WebKit makes the buttons of a page event from +[NSEvent pressedMouseButtons], not from the event, and an event delivered
 // to a view does not change that value. It is replaced at the first delivered press, so an application that receives only
-// a person's input keeps the implementation of AppKit. It adds the buttons of open synthetic presses to the value of AppKit.
+// a person's input keeps the implementation of AppKit. During the delivery of the input of a pointer it adds the buttons of that
+// pointer to the value of AppKit, so a page sees the buttons of its own gesture; otherwise it adds the buttons of every pointer.
 static NSUInteger pressedButtonsWithSynthetic(id self, SEL selector) {
     // A real button never enters a page event of a virtual key window.
     NSUInteger buttons = sp_input_virtual_any() ? 0 : appKitPressedButtons(self, selector);
+    if (deliveringPointer) return buttons | pointerButtons(deliveringPointer);
     if (atomic_load(&syntheticPresses[0]) > 0) buttons |= 1;
     if (atomic_load(&syntheticPresses[1]) > 0) buttons |= 2;
     return buttons;
@@ -173,51 +235,119 @@ static bool enterVirtual(NSWindow *window) {
     return true;
 }
 
-// One synthetic button that the page sees as pressed. The window holds it, so a window that goes away with an open press
-// does not leave the button pressed.
-@interface SPSyntheticButton : NSObject
-@property(nonatomic) int button;
-@end
-@implementation SPSyntheticButton
+@implementation SPPress
+// Takes the button of the press out of the buttons that the pages see. The press stays open until it ends.
+- (void)hide {
+    if (!shown) return;
+    shown = NO;
+    atomic_fetch_sub(&syntheticPresses[button], 1);
+}
 - (void)dealloc {
-    atomic_fetch_sub(&syntheticPresses[self.button], 1);
+    [self hide];
+    if (pointer->presses[button] == self) pointer->presses[button] = nil;
+    [view release];
+    [page release];
     [super dealloc];
 }
 @end
 
-static char leftSyntheticButtonKey, rightSyntheticButtonKey;
-static const void *syntheticButtonKey(int button) {
-    return button == 1 ? &rightSyntheticButtonKey : &leftSyntheticButtonKey;
+// The web view that contains view, or view itself: the page whose gesture a press on view is.
+static NSView *pageOf(NSView *view) {
+    for (NSView *ancestor = view; ancestor; ancestor = ancestor.superview) {
+        if ([ancestor isKindOfClass:WKWebView.class]) return ancestor;
+    }
+    return view;
 }
 
-static void syntheticButtonPress(NSWindow *window, int button) {
+// Opens the press of a button of a pointer on view. The window holds the press, and the pages see its button.
+static SPPress *openPress(SPPointer *pointer, int button, NSWindow *window, NSView *view, BOOL throughApplication) {
     showSyntheticButtons();
-    SPSyntheticButton *held = [[SPSyntheticButton alloc] init];
-    held.button = button;
+    SPPress *press = [[SPPress alloc] init];
+    press->pointer = pointer;
+    press->button = button;
+    press->window = window;
+    press->view = [view retain];
+    press->page = [pageOf(view) retain];
+    press->throughApplication = throughApplication;
+    press->shown = YES;
     atomic_fetch_add(&syntheticPresses[button], 1);
-    objc_setAssociatedObject(window, syntheticButtonKey(button), held, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [held release];
+    pointer->presses[button] = press;
+    objc_setAssociatedObject(window, press, press, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [press release];
+    return press;
 }
 
-static void syntheticButtonRelease(NSWindow *window, int button) {
-    objc_setAssociatedObject(window, syntheticButtonKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+// Ends a press: the pointer no longer holds it, and its window lets it go.
+static void endPress(SPPress *press) {
+    [press retain];
+    [press hide];
+    if (press->pointer->presses[press->button] == press) press->pointer->presses[press->button] = nil;
+    objc_setAssociatedObject(press->window, press, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [press release];
 }
 
-static NSView *pointerTarget(NSWindow *window, NSPoint point, int phase, int button) {
-    return phase == 2 || phase == 3 ? objc_getAssociatedObject(window, pressedViewKey(button)) : hitView(window, point);
+// The first open press of a pointer other than pointer for which match answers YES, or nil.
+static SPPress *otherPress(SPPointer *pointer, BOOL (^match)(SPPress *press)) {
+    for (SPPointer *other in pointers.objectEnumerator) {
+        if (other == pointer) continue;
+        for (int button = 0; button < 2; button++) {
+            SPPress *press = other->presses[button];
+            if (press && match(press)) return press;
+        }
+    }
+    return nil;
+}
+
+// Whether a press of button by a pointer other than pointer is open in window.
+static BOOL otherPressIn(SPPointer *pointer, NSWindow *window, int button) {
+    return otherPress(pointer, ^BOOL(SPPress *press) { return press->window == window && press->button == button; }) != nil;
+}
+
+// Whether the input method of the system serves the input context of page: the application is really active, the window is
+// really its key window, and the context is the current one. WebKit passes a mouse event of a page with an input context to that
+// context first (the mouse handlers of WebViewImpl), and the input method answers after the delivery has returned, so WebKit reads
+// +[NSEvent pressedMouseButtons] outside the delivery of the pointer. A context that the input method does not serve answers inside
+// the delivery (tests/input_pointers_test.m).
+static BOOL passesInputMethod(NSView *page) {
+    if (![page isKindOfClass:WKWebView.class] || !page.window) return NO;
+    NSTextInputContext *context = page.inputContext;
+    return context && context == NSTextInputContext.currentInputContext && sp_input_virtual_real_active()
+        && sp_input_virtual_real_key((__bridge void *)page.window);
+}
+
+// The open press of another pointer that refuses an input of pointer, with the reason, or nil. page is the page of the input (nil
+// when there is none) and window its window. A press shares no page with another press, a press of a window that passes the
+// application and a move share no window with another press, and no input shares a page of the input method with another press.
+static SPPress *heldBy(SPPointer *pointer, NSWindow *window, NSView *page, int phase, BOOL throughApplication, const char **reason) {
+    __block const char *why = NULL;
+    SPPress *found = otherPress(pointer, ^BOOL(SPPress *press) {
+        if (passesInputMethod(page) || passesInputMethod(press->page)) {
+            why = "the input method of a page answers after the delivery";
+            return YES;
+        }
+        if (press->window != window) return NO;
+        if (phase == 0) {
+            why = "the window has one hover position";
+            return YES;
+        }
+        if (phase == 1 && throughApplication) {
+            why = "AppKit keeps one press of a window that passes the application";
+            return YES;
+        }
+        if (phase == 1 && press->page == page) {
+            why = "the page at the point holds its press";
+            return YES;
+        }
+        return NO;
+    });
+    *reason = why;
+    return found;
 }
 
 bool sp_input_press_open(void *handle, int button) {
     NSCAssert(NSThread.isMainThread, @"mouse presses belong to the main thread");
     NSWindow *window = (__bridge NSWindow *)handle;
-    return window && objc_getAssociatedObject(window, pressedViewKey(button)) != nil;
-}
-
-// The press of a window and button that passes the application: the window was the key window at the press. The gesture keeps
-// the path of its press.
-static char leftThroughApplicationKey, rightThroughApplicationKey;
-static const void *throughApplicationKey(int button) {
-    return button == 1 ? &rightThroughApplicationKey : &leftThroughApplicationKey;
+    return window && otherPressIn(nil, window, button);
 }
 
 // Delivers one event of a gesture on the path of its press.
@@ -304,22 +434,49 @@ static bool moveTo(NSWindow *window, NSPoint point) {
     return heard;
 }
 
-// Measurement of the turn rejected with SP_INPUT_BUTTON_HELD. front is a retained reference that heldDone releases.
+// Measurement of the turn rejected with SP_INPUT_BUTTON_HELD, or the pointer whose press rejected the input with
+// SP_INPUT_POINTER_HELD. front is a retained reference that heldDone releases.
 typedef struct {
     NSUInteger buttons;
     NSRunningApplication *front;
+    SPPointer *holder;
     // Reason for the rejection; an empty string when the input was delivered.
     const char *why;
 } SPHeld;
 
-// When the result is SP_INPUT_BUTTON_HELD, held receives the mask of the rejected turn and the frontmost application.
-static sp_input_result pointerInput(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    SPHeld *held) {
-    NSWindow *window = (__bridge NSWindow *)handle;
-    held->why = "";
-    if (!window || !NSThread.isMainThread) { held->why = "no window or not the main thread"; return SP_INPUT_REJECTED; }
+// The view that receives an input of pointer: for a drag and a release the target of the press of the pointer and button in
+// window, otherwise the view at the point.
+static NSView *pointerTarget(SPPointer *pointer, NSWindow *window, NSPoint point, int phase, int button) {
+    if (phase != 2 && phase != 3) return hitView(window, point);
+    SPPress *press = pointer->presses[button];
+    return press && press->window == window ? press->view : nil;
+}
+
+// Whether the open press of another pointer refuses the input; held then names that pointer and the reason.
+static bool heldByOther(SPPointer *pointer, NSWindow *window, NSView *page, int phase, BOOL throughApplication, SPHeld *held) {
+    const char *reason = NULL;
+    SPPress *press = heldBy(pointer, window, page, phase, throughApplication, &reason);
+    if (!press) return false;
+    held->holder = press->pointer;
+    held->why = reason;
+    return true;
+}
+
+// The page under a point of window, or nil.
+static NSView *pageAt(NSWindow *window, NSPoint point) {
+    NSView *hit = hitView(window, point);
+    return hit ? pageOf(hit) : nil;
+}
+
+// Delivers an input of pointer while +[NSEvent pressedMouseButtons] answers the buttons of that pointer. When the result is
+// SP_INPUT_BUTTON_HELD, held receives the mask of the rejected turn and the frontmost application; when it is
+// SP_INPUT_POINTER_HELD, held names the pointer whose press rejected it.
+static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, double x, double y, int phase, int button,
+    double deltaX, double deltaY, int clicks, SPHeld *held) {
+    void *handle = (__bridge void *)window;
     NSPoint point = windowPoint(window, x, y);
     if (phase == 0) {
+        if (heldByOther(pointer, window, pageAt(window, point), 0, NO, held)) return SP_INPUT_POINTER_HELD;
         if (!window.isKeyWindow && !enterVirtual(window)) {
             held->why = "the application is active and the window is not its key window";
             return SP_INPUT_INACTIVE;
@@ -350,16 +507,12 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         [window sendEvent:event];
         return SP_INPUT_DELIVERED;
     }
-    NSView *hit = pointerTarget(window, point, phase, button);
-    if (!hit) { held->why = phase == 2 || phase == 3 ? "no open press for the drag or release" : "no view at the point"; return SP_INPUT_REJECTED; }
+    NSView *hit = pointerTarget(pointer, window, point, phase, button);
+    if (!hit) { held->why = phase == 2 || phase == 3 ? "no open press of the pointer and button in the window" : "no view at the point"; return SP_INPUT_REJECTED; }
     if (hit.window != window) {
-        objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        syntheticButtonRelease(window, button);
-        objc_setAssociatedObject(window, throughApplicationKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         uint64_t token = 0;
-        if (sp_input_press_origin_point(window, button, NULL, NULL, &token)) {
-            sp_input_press_origin_clear(window, button, token);
-        }
+        if (sp_input_press_origin_point(window, button, NULL, NULL, &token)) sp_input_press_origin_clear(window, button, token);
+        endPress(pointer->presses[button]);
         held->why = "the target view left the window";
         return SP_INPUT_REJECTED;
     }
@@ -379,24 +532,25 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
         return SP_INPUT_REJECTED;
     }
     BOOL right = button == 1;
-    sp_input_virtual_set_point(handle, point.x, point.y);
     switch (phase) {
-        case 1:
+        case 1: {
             // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
-            if (objc_getAssociatedObject(window, pressedViewKey(button))) { held->why = "a press of this button is still open"; return SP_INPUT_PRESS_OPEN; }
-            // A person moves to the point before the press. A window that is not the key window hears no move.
-            if (window.isKeyWindow) moveTo(window, point);
-            objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (pointer->presses[button]) { held->why = "a press of this button of the pointer is still open"; return SP_INPUT_PRESS_OPEN; }
             // AppKit reads its real state in -[NSApplication sendEvent:] and drops a first click, so a virtual key window takes
             // the direct path.
             BOOL throughApplication = window.isKeyWindow && !sp_input_virtual_is(handle);
-            objc_setAssociatedObject(window, throughApplicationKey(button), throughApplication ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (heldByOther(pointer, window, pageOf(hit), 1, throughApplication, held)) return SP_INPUT_POINTER_HELD;
+            sp_input_virtual_set_point(handle, point.x, point.y);
+            // The left press of the window passes its hold of the keyboard once, while any pointer holds it.
+            BOOL firstLeft = button == 0 && !otherPressIn(pointer, window, 0);
+            // A person moves to the point before the press. A window that is not the key window hears no move.
+            if (window.isKeyWindow) moveTo(window, point);
+            openPress(pointer, button, window, hit, throughApplication);
             // The monitor of the press origin records the press of the application as it records a person's press. A press
             // delivered directly passes no monitor, so the driver records it.
             if (!throughApplication) sp_input_press_origin_set(window, button, point.x, point.y);
             // A press that passes the application is followed there; this one passes no hold of the keyboard on its way.
-            if (!throughApplication && button == 0) surfaceLayoutPointerPassing(window, true, point.x, point.y);
-            syntheticButtonPress(window, button);
+            if (!throughApplication && firstLeft) surfaceLayoutPointerPassing(window, true, point.x, point.y);
             // NSApp.currentEvent is not this event, so the explicit context lets click-through native regions classify the
             // synchronous responder change.
             sp_input_press_context context = {0};
@@ -411,28 +565,33 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
                 sp_input_press_context_pop(&context);
             }
             return SP_INPUT_DELIVERED;
+        }
         case 2:
         case 3: {
+            SPPress *press = [[pointer->presses[button] retain] autorelease];
+            if (heldByOther(pointer, window, press->page, phase, press->throughApplication, held)) return SP_INPUT_POINTER_HELD;
+            sp_input_virtual_set_point(handle, point.x, point.y);
+            BOOL lastLeft = button == 0 && !otherPressIn(pointer, window, 0);
             double originX = point.x, originY = point.y;
             uint64_t originToken = 0;
             bool hasOrigin = sp_input_press_origin_point(window, button, &originX, &originY, &originToken);
-            BOOL gestureThroughApplication = objc_getAssociatedObject(window, throughApplicationKey(button)) != nil;
+            BOOL gestureThroughApplication = press->throughApplication;
             sp_input_press_context context = {0};
             if (hasOrigin) sp_input_press_context_push(&context, window, originX, originY);
             @try {
                 NSEvent *event = phase == 2
                     ? mouseEvent(window, right ? NSEventTypeRightMouseDragged : NSEventTypeLeftMouseDragged, point, 0, 1)
                     : mouseEvent(window, right ? NSEventTypeRightMouseUp : NSEventTypeLeftMouseUp, point, clicks, 0);
-                if (phase == 3) syntheticButtonRelease(window, button);
-                if (phase == 3 && button == 0 && !gestureThroughApplication) surfaceLayoutPointerPassing(window, false, point.x, point.y);
+                // The release has no button, and the press stays open for the view until the release returns.
+                if (phase == 3) [press hide];
+                if (phase == 3 && lastLeft && !gestureThroughApplication) surfaceLayoutPointerPassing(window, false, point.x, point.y);
                 deliverGesture(hit, event, gestureThroughApplication);
             } @finally {
                 if (hasOrigin) sp_input_press_context_pop(&context);
                 if (phase == 3) {
-                    objc_setAssociatedObject(window, pressedViewKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                    objc_setAssociatedObject(window, throughApplicationKey(button), nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    endPress(press);
                     if (hasOrigin && !gestureThroughApplication) sp_input_press_origin_clear(window, button, originToken);
-                    if (button == 0) sp_surface_press_released(window);
+                    if (lastLeft) sp_surface_press_released(window);
                 }
             }
             return SP_INPUT_DELIVERED;
@@ -441,6 +600,32 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             held->why = "unknown phase";
             return SP_INPUT_REJECTED;
     }
+}
+
+// Delivers an input of pointer. pointer is nil for a name that is not of its form.
+static sp_input_result pointerInput(SPPointer *pointer, void *handle, double x, double y, int phase, int button, double deltaX,
+    double deltaY, int clicks, SPHeld *held) {
+    NSWindow *window = (__bridge NSWindow *)handle;
+    held->why = "";
+    if (!window || !NSThread.isMainThread) { held->why = "no window or not the main thread"; return SP_INPUT_REJECTED; }
+    if (!pointer) { held->why = "the pointer name is not 1 to 32 characters of a-z, 0-9 and -"; return SP_INPUT_REJECTED; }
+    if (button != 0 && button != 1) { held->why = "the button is not left or right"; return SP_INPUT_REJECTED; }
+    SPPointer *previous = deliveringPointer;
+    deliveringPointer = pointer;
+    @try {
+        return deliverPointer(pointer, window, x, y, phase, button, deltaX, deltaY, clicks, held);
+    } @finally {
+        deliveringPointer = previous;
+    }
+}
+
+// The origin of the press of button of pointer in window.
+static bool pointerOrigin(SPPointer *pointer, NSWindow *window, int button, double *x, double *y) {
+    SPPointer *previous = deliveringPointer;
+    deliveringPointer = pointer;
+    bool found = sp_input_press_origin_point(window, button, x, y, NULL);
+    deliveringPointer = previous;
+    return found;
 }
 
 // Name of the result of the injected input.
@@ -452,35 +637,39 @@ static const char *resultName(sp_input_result result) {
         case SP_INPUT_UNRECEIVED: return "unreceived";
         case SP_INPUT_BUTTON_HELD: return "button held";
         case SP_INPUT_PRESS_OPEN: return "press open";
+        case SP_INPUT_POINTER_HELD: return "pointer held";
     }
     return "unknown";
 }
 
-// Records one injected pointer input with its arguments, result, and rejection reason. Every path by which the caller receives a result uses it.
-static void logPointer(double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    sp_input_result result, const char *why) {
+// Records one injected pointer input with its pointer, arguments, result, and rejection reason, and the pointer whose press rejected
+// it. Every path by which the caller receives a result uses it. A pointer name has only a-z, 0-9 and -, so it needs no escape.
+static void logPointer(SPPointer *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
+    sp_input_result result, const char *why, SPPointer *holder) {
     NSString *text = [NSString stringWithFormat:
-        @"{\"kind\":\"pointer\",\"x\":%g,\"y\":%g,\"phase\":%d,\"button\":%d,\"deltaX\":%g,\"deltaY\":%g,\"clicks\":%d,\"result\":\"%s\",\"reason\":\"%s\"}",
-        x, y, phase, button, deltaX, deltaY, clicks, resultName(result), why ?: ""];
+        @"{\"kind\":\"pointer\",\"pointer\":%@,\"x\":%g,\"y\":%g,\"phase\":%d,\"button\":%d,\"deltaX\":%g,\"deltaY\":%g,\"clicks\":%d,\"result\":\"%s\",\"reason\":\"%s\",\"holder\":%@}",
+        pointer ? [NSString stringWithFormat:@"\"%@\"", pointer->name] : @"null", x, y, phase, button, deltaX, deltaY, clicks,
+        resultName(result), why ?: "", holder ? [NSString stringWithFormat:@"\"%@\"", holder->name] : @"null"];
     sp_log_info("input inject", text.UTF8String);
 }
 
-// Delivers a phase of a gesture behind the input of its window that waits. Whether the input is kept is the only answer the
-// caller has until its turn, and the record of that turn states the result.
+// Delivers a phase of a gesture of the pointer SP_INPUT_POINTER_MAIN behind the input of its window that waits. Whether the input is
+// kept is the only answer the caller has until its turn, and the record of that turn states the result.
 static sp_input_result pointerAt(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks) {
     NSWindow *window = (__bridge NSWindow *)handle;
+    SPPointer *pointer = NSThread.isMainThread ? pointerNamed(SP_INPUT_POINTER_MAIN) : nil;
     NSPoint at = window && NSThread.isMainThread ? windowPoint(window, x, y) : NSZeroPoint;
     if (window && NSThread.isMainThread && surfaceLayoutHoldCall(window, phase == 1, at.x, at.y, ^{
-            SPHeld kept = {0, nil, ""};
-            sp_input_result result = pointerInput(window, x, y, phase, button, deltaX, deltaY, clicks, &kept);
-            logPointer(x, y, phase, button, deltaX, deltaY, clicks, result, kept.why);
+            SPHeld kept = {0, nil, nil, ""};
+            sp_input_result result = pointerInput(pointer, window, x, y, phase, button, deltaX, deltaY, clicks, &kept);
+            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, result, kept.why, kept.holder);
             [kept.front release];
         })) {
         return SP_INPUT_DELIVERED;
     }
-    SPHeld held = {0, nil, ""};
-    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
-    logPointer(x, y, phase, button, deltaX, deltaY, clicks, result, held.why);
+    SPHeld held = {0, nil, nil, ""};
+    sp_input_result result = pointerInput(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
+    logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, result, held.why, held.holder);
     [held.front release];
     return result;
 }
@@ -493,8 +682,15 @@ sp_input_result sp_input_pointer_clicks(void *handle, double x, double y, int ph
     return pointerAt(handle, x, y, phase, button, 0, 0, clicks);
 }
 
-// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD.
+// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD or
+// SP_INPUT_POINTER_HELD.
 static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held) {
+    if (result == SP_INPUT_POINTER_HELD) {
+        sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = held.holder->name.UTF8String, .reason = held.why };
+        [held.front release];
+        done(context, result, &report);
+        return;
+    }
     if (result != SP_INPUT_BUTTON_HELD) {
         [held.front release];
         done(context, result, NULL);
@@ -504,17 +700,19 @@ static void heldDone(sp_input_done done, void *context, sp_input_result result, 
         .mask = held.buttons,
         .pid = held.front ? held.front.processIdentifier : -1,
         .bundleIdentifier = held.front.bundleIdentifier.UTF8String,
+        .pointer = NULL,
+        .reason = NULL,
     };
     done(context, result, &report);
     [held.front release];
 }
 
 // Delivers the input and reports the result to done immediately.
-static void pointerNow(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    sp_input_done done, void *context) {
-    SPHeld held = {0, nil, ""};
-    sp_input_result result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
-    logPointer(x, y, phase, button, deltaX, deltaY, clicks, result, held.why);
+static void pointerNow(SPPointer *pointer, void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+    int clicks, sp_input_done done, void *context) {
+    SPHeld held = {0, nil, nil, ""};
+    sp_input_result result = pointerInput(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
+    logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, result, held.why, held.holder);
     heldDone(done, context, result, held);
 }
 
@@ -525,43 +723,50 @@ static WKWebView *webViewAt(NSWindow *window, double x, double y) {
     return (WKWebView *)view;
 }
 
-static void pointerThen(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    double timeoutSeconds, sp_input_done done, void *context);
+static void pointerThen(SPPointer *pointer, void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+    int clicks, double timeoutSeconds, sp_input_done done, void *context);
 static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll,
     void (^done)(void), void (^waitCreated)(SPInputActivityWait *));
 
-void sp_input_pointer_then(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    double timeoutSeconds, sp_input_done done, void *context) {
+void sp_input_pointer_then(void *handle, const char *name, double x, double y, int phase, int button, double deltaX,
+    double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
+    SPPointer *pointer = NSThread.isMainThread ? pointerNamed(name) : nil;
     NSPoint at = window && NSThread.isMainThread ? windowPoint(window, x, y) : NSZeroPoint;
     // A press that has no target before the open layout reaches the screen waits for that, and all input waits behind it.
     if (!(window && NSThread.isMainThread && surfaceLayoutHoldCall(window, phase == 1, at.x, at.y, ^{
-            pointerThen(window, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+            pointerThen(pointer, window, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
         }))) {
-        pointerThen(handle, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
+        pointerThen(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, timeoutSeconds, done, context);
     }
 }
 
-static void pointerThen(void *handle, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    double timeoutSeconds, sp_input_done done, void *context) {
+static void pointerThen(SPPointer *pointer, void *handle, double x, double y, int phase, int button, double deltaX, double deltaY,
+    int clicks, double timeoutSeconds, sp_input_done done, void *context) {
     NSWindow *window = (__bridge NSWindow *)handle;
-    if (phase == 0 && window && NSThread.isMainThread && !window.isKeyWindow && enterVirtual(window)) {
+    if (!pointer || !window || !NSThread.isMainThread || (button != 0 && button != 1)) {
+        pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
+        return;
+    }
+    const char *reason = NULL;
+    if (phase == 0 && !window.isKeyWindow && !heldBy(pointer, window, pageAt(window, windowPoint(window, x, y)), 0, NO, &reason)
+        && enterVirtual(window)) {
         // WebKit drops a move until the page has heard that it is active, so the move waits for the state of the web views.
         __block BOOL finished = NO;
         afterWebViewsActive(window, nil, YES, ^{
             if (finished) return;
             finished = YES;
-            pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
+            pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         }, nil);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (finished) return;
             finished = YES;
-            logPointer(x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the web views did not hear the virtual key window within the limit");
+            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the web views did not hear the virtual key window within the limit", nil);
             done(context, SP_INPUT_UNRECEIVED, NULL);
         });
         return;
     }
-    NSView *pressed = window && NSThread.isMainThread ? pointerTarget(window, windowPoint(window, x, y), phase, button) : nil;
+    NSView *pressed = pointerTarget(pointer, window, windowPoint(window, x, y), phase, button);
     while (pressed && ![pressed isKindOfClass:WKWebView.class]) pressed = pressed.superview;
     WKWebView *target = (WKWebView *)pressed;
     if (phase == 4 && target) {
@@ -571,28 +776,28 @@ static void pointerThen(void *handle, double x, double y, int phase, int button,
         [target _doAfterNextPresentationUpdate:^{
             if (finished) return;
             finished = YES;
-            pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
+            pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         }];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (finished) return;
             finished = YES;
-            logPointer(x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the scroll target did not present within the limit");
+            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, "the scroll target did not present within the limit", nil);
             done(context, SP_INPUT_UNRECEIVED, NULL);
         });
         return;
     }
     if (phase != 1 && phase != 3) {
-        pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
+        pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         return;
     }
     if (!target) {
-        pointerNow(handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
+        pointerNow(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         return;
     }
     // Completes after the document has received pointerdown or pointerup. After receipt, it waits for the pending mouse
     // handling of WebKit, so the click that a release creates is also processed before the next request.
     __block sp_input_result result = SP_INPUT_REJECTED;
-    __block SPHeld held = {0, nil, "the press or release was not sent"};
+    __block SPHeld held = {0, nil, nil, "the press or release was not sent"};
     double originX = 0, originY = 0;
     BOOL hasPressContext = NO;
     if (phase == 1) {
@@ -601,19 +806,19 @@ static void pointerThen(void *handle, double x, double y, int phase, int button,
         originY = pressPoint.y;
         hasPressContext = YES;
     } else if (phase == 3) {
-        hasPressContext = sp_input_press_origin_point(window, button, &originX, &originY, NULL);
+        hasPressContext = pointerOrigin(pointer, window, button, &originX, &originY);
     }
     sp_input_press_context pressContext = {0};
     if (hasPressContext) sp_input_press_context_push(&pressContext, window, originX, originY);
     @try {
         webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
-            result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
+            result = pointerInput(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
             return result == SP_INPUT_DELIVERED;
         }, ^(BOOL received) {
             sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
                 result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
-            logPointer(x, y, phase, button, deltaX, deltaY, clicks, final,
-                final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why);
+            logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, final,
+                final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why, held.holder);
             heldDone(done, context, final, held);
         });
     } @finally {
@@ -873,12 +1078,14 @@ static CGEventFlags cgFlags(unsigned modifiers) {
     return result;
 }
 
-// equivalent is set when a key down of the virtual key window is taken as a key equivalent.
+// equivalent is set when a key down of the virtual key window is taken as a key equivalent, and typed when a key down of the
+// virtual key window types its stated text through the text input of a web view.
 static sp_input_result keyInput(void *handle, const char *key, const char *text, unsigned modifiers, bool down,
-    const char **why, bool *equivalent) {
+    const char **why, bool *equivalent, bool *typed) {
     NSWindow *window = (__bridge NSWindow *)handle;
     *why = "";
     *equivalent = false;
+    *typed = false;
     if (!window || !key || !NSThread.isMainThread) { *why = "no window, no key or not the main thread"; return SP_INPUT_REJECTED; }
     NSString *name = [NSString stringWithUTF8String:key];
     unsigned short code = USHRT_MAX;
@@ -888,6 +1095,7 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
             break;
         }
     }
+    BOOL named = code != USHRT_MAX;
     if (code == USHRT_MAX) {
         if (name.length != 1) { *why = "unknown key name"; return SP_INPUT_REJECTED; }
         code = characterKeyCode([name characterAtIndex:0]);
@@ -916,6 +1124,12 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
         CGEventRef marked = event ? CGEventCreateCopy(event.CGEvent) : NULL;
         if (marked) {
             CGEventSetIntegerValueField(marked, kCGEventSourceUserData, SP_INPUT_STATED_TEXT);
+            // The copy of an event whose text has more than one character carries the character of the key code instead, so the
+            // whole text is set on it again. AppKit still gives a key up of such a text the character of the key code.
+            unichar *units = malloc(characters.length * sizeof(unichar));
+            [characters getCharacters:units range:NSMakeRange(0, characters.length)];
+            CGEventKeyboardSetUnicodeString(marked, characters.length, units);
+            free(units);
             event = [NSEvent eventWithCGEvent:marked];
             CFRelease(marked);
         }
@@ -924,12 +1138,14 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     // An inactive application has no key window for a key, and -[NSApplication sendEvent:] drops it while it answers delivered.
     // The key enters the virtual key window. A key down with Command or Control is offered as a key equivalent to the window
     // and then to the main menu, as -[NSApplication sendEvent:] does for its key window, so Command+C and Command+V run the
-    // items of the menu; a key that neither takes is sent to the window, which gives it to the first responder.
+    // items of the menu; a key that neither takes is sent to the window, which gives it to the first responder. A character key
+    // down with a stated text to a web view types that text through the text input of the web view.
     if (enterVirtual(window)) {
         if (down && (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl))) {
             *equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];
         }
-        if (!*equivalent) [window sendEvent:event];
+        if (!*equivalent) *typed = down && text && !named && sp_input_virtual_type_stated_text(window, event);
+        if (!*equivalent && !*typed) [window sendEvent:event];
         return SP_INPUT_DELIVERED;
     }
     // A human key goes only to the key window. When another window is the key window, the key is not delivered to the target window and the
@@ -968,17 +1184,17 @@ sp_input_result sp_input_key(void *handle, const char *key, const char *text, un
 
 static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     const char *why = "";
-    bool equivalent = false;
+    bool equivalent = false, typed = false;
     // The view that holds the keyboard when the key is sent receives it; the record names it with the key window.
     NSWindow *window = (__bridge NSWindow *)handle;
     NSResponder *responder = window.firstResponder;
     NSString *responderName = responder ? NSStringFromClass(responder.class) : @"none";
-    sp_input_result result = keyInput(handle, key, text, modifiers, down, &why, &equivalent);
+    sp_input_result result = keyInput(handle, key, text, modifiers, down, &why, &equivalent, &typed);
     NSString *record = [NSString stringWithFormat:
         @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\","
-        "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s}",
+        "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s,\"virtualKeyText\":%s}",
         jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why, responderName,
-        window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false"];
+        window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false", typed ? "true" : "false"];
     sp_log_info("input inject", record.UTF8String);
     return result;
 }

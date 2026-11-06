@@ -1,7 +1,12 @@
 use super::*;
 
 fn pointer(phase: i32, button: i32, clicks: i32) -> Pointer {
+    named("main", phase, button, clicks)
+}
+
+fn named(name: &str, phase: i32, button: i32, clicks: i32) -> Pointer {
     Pointer {
+        pointer: name.to_string(),
         x: 10.5,
         y: 20.0,
         phase,
@@ -80,7 +85,7 @@ fn a_pointer_phase_becomes_its_mouse_event() {
             json!({"type": "mouseWheel", "x": 10.5, "y": 20.0, "button": "none", "buttons": 0, "clickCount": 0, "deltaX": 3.0, "deltaY": -4.0}),
         ),
     ] {
-        let call = PressState { open }
+        let call = PressState { open, holder: None }
             .call(&pointer(phase, button, 2))
             .unwrap();
         assert_eq!(call.method, "Input.dispatchMouseEvent");
@@ -101,7 +106,8 @@ fn a_pointer_that_breaks_the_press_rules_is_not_sent() {
         (closed, 5, 0, 1, Delivery::Rejected),
         (closed, PHASE_PRESS, 2, 1, Delivery::Rejected),
     ] {
-        let got = PressState { open }.call(&pointer(phase, button, clicks));
+        let holder = open.contains(&true).then(|| "main".to_string());
+        let got = PressState { open, holder }.call(&pointer(phase, button, clicks));
         assert_eq!(got, Err(want));
     }
 }
@@ -110,12 +116,38 @@ fn a_pointer_that_breaks_the_press_rules_is_not_sent() {
 #[test]
 fn only_a_delivered_pointer_changes_the_press() {
     let mut state = PressState::default();
-    state.delivered(PHASE_PRESS, 1);
+    state.delivered("main", PHASE_PRESS, 1);
     assert_eq!(state.open, [false, true]);
-    state.delivered(PHASE_DRAG, 1);
+    assert_eq!(state.holder.as_deref(), Some("main"));
+    state.delivered("main", PHASE_DRAG, 1);
     assert_eq!(state.open, [false, true]);
-    state.delivered(PHASE_RELEASE, 1);
+    state.delivered("main", PHASE_RELEASE, 1);
     assert_eq!(state.open, [false, false]);
+    assert_eq!(state.holder, None);
+}
+
+// A page has one mouse pointer: while one pointer holds a press, the move, press, drag and release of another pointer are
+// not sent, its scroll is sent, and after the release the other pointer presses.
+// contract: platform.windows.input.pointer-held-by-another-pointer
+#[test]
+fn another_pointer_waits_for_the_release_of_a_page() {
+    let mut state = PressState::default();
+    state.delivered("a", PHASE_PRESS, 0);
+    let held = Delivery::PointerHeld(PointerHeld {
+        pointer: "a".to_string(),
+        reason: POINTER_HELD_REASON.to_string(),
+    });
+    for phase in [PHASE_MOVE, PHASE_PRESS, PHASE_DRAG, PHASE_RELEASE] {
+        assert_eq!(
+            state.call(&named("b", phase, 1, 1)),
+            Err(held.clone()),
+            "phase {phase} of another pointer"
+        );
+    }
+    assert!(state.call(&named("b", PHASE_SCROLL, 0, 1)).is_ok());
+    assert!(state.call(&named("a", PHASE_DRAG, 0, 1)).is_ok());
+    state.delivered("a", PHASE_RELEASE, 0);
+    assert!(state.call(&named("b", PHASE_PRESS, 0, 1)).is_ok());
 }
 
 // contract: platform.windows.input.key-becomes-key-event

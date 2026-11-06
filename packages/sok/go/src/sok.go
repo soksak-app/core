@@ -28,7 +28,7 @@ commands:
   exposures [window]
   status NAME [window] [--surface S] [--watch]
   element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
-  input pointer [window] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
+  input pointer [window] [--pointer NAME] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
                             prints one page of the events of the event files that pass the filter
@@ -67,7 +67,7 @@ var booleans = map[string]bool{"watch": true, "activate": true, "help": true}
 // options are the flags that take a value.
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
-	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "delta-x": true, "clicks": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
+	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "pointer": true, "delta-x": true, "clicks": true, "delta-y": true, "key": true, "text": true, "modifiers": true,
 	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true,
 	"channel": true, "class": true, "event-prefix": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true, "until": true,
 }
@@ -308,7 +308,7 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 				activate = true
 			}
 			return withWindow(func(w string) (request, error) {
-				return request{method: "input.pointer", params: compact("window", w, "x", x, "y", y, "phase", phase,
+				return request{method: "input.pointer", params: compact("window", w, "pointer", optional(a, "pointer"), "x", x, "y", y, "phase", phase,
 					"button", optional(a, "button"), "deltaX", deltaX, "deltaY", deltaY, "clicks", clicks, "activate", activate)}, nil
 			})
 		case "key":

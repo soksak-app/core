@@ -1,6 +1,7 @@
 // A window that becomes the key window reads the plugin state again, because the remote registry sends no change event
-// (docs/spec/installation.md#plugin-operations-in-the-application). Only a window of the active application becomes the key window, so the check runs in the
-// activation tier, which activates the application.
+// (docs/spec/installation.md#plugin-operations-in-the-application). The host focuses the window of a project that opens, and
+// a focused window becomes the key window only in the active application; the virtual key window comes only from input and
+// refuses makeKeyAndOrderFront: (docs/spec/exposure.md#virtual-key-window), so this check activates the application.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

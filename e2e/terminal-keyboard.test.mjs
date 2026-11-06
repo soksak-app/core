@@ -1,9 +1,6 @@
-// Activation-tier window check: types, edits and runs commands in three terminals with native keys.
-//
-// The terminal drawing region passes ordinary characters to the input method (input context). The OS input method answers only the key window of the active application,
-// and once the application has been activated it does not answer character keys that arrive at any other window. So this check
-// activates the app and takes the user's focus. It is not part of the default window check (make test-app);
-// a run that the user approved runs it only through make test-app-activation.
+// Types, edits and runs commands in three terminals with native keys. The window takes the presses and the keys as the virtual
+// key window and each character key states its text, so the terminal image region types it without the input method, and the
+// application and the input source of the person stay as they are (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -11,25 +8,29 @@ import { tmpdir } from "node:os";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
-import { echoed, ensureTerminals, readScreenUntil, textLines } from "../terminal-screen.mjs";
+import { fresh } from "./fixture.mjs";
+import { echoed, ensureTerminals, readScreenUntil, textLines } from "./terminal-screen.mjs";
 
-const ABC = "com.apple.keylayout.ABC";
+// Presses each character of text with that text stated, and a space as Space.
+async function type(session, text) {
+  for (const ch of text) await session.press(ch === " " ? "Space" : ch, { text: ch });
+}
 
-// An input context remembers an input source per document and can switch to that input source when it receives focus.
-// So before typing English commands, the check gives focus and then selects the English layout.
-async function selectABC(session) {
-  const selected = await session.request("diagnostics.input.source", { select: ABC });
-  assert.equal(selected.current, ABC, `input source ${ABC} was not selected`);
+// A pointer move that presses nothing makes the window of the session the virtual key window, as a person moves to a point
+// before pressing it.
+async function moveOnto(session, x, y) {
+  await session.pointer(x, y, "move");
+  await session.until("host.window", (host) => host.virtualKey, "the window did not become the virtual key window");
 }
 
 async function clickAndExecute(session, surface, marker) {
   const view = await session.rect("terminal.view", undefined, surface);
-  await session.click(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2);
-  await session.until("host.window", (host) => host.active === true && host.regions.some((region) =>
-    region.surface === surface && region.focused), `${surface} did not receive native focus in the active window`);
-  await selectABC(session);
-  for (const ch of `echo ${marker}`) await session.press(ch === " " ? "Space" : ch);
+  const x = view.document.x + view.x + view.width / 2, y = view.document.y + view.y + view.height / 2;
+  await moveOnto(session, x, y);
+  await session.click(x, y);
+  await session.until("host.window", (host) => host.virtualKey && host.regions.some((region) =>
+    region.surface === surface && region.focused), `${surface} did not receive native focus in the virtual key window`);
+  await type(session, `echo ${marker}`);
   await session.press("Enter");
   // The window of a later context can be narrow enough to wrap the command and its output.
   await readScreenUntil(session, surface, (lines) => echoed(lines, marker),
@@ -63,14 +64,8 @@ for (const app of Object.values(APPS)) {
     const terminals = await ensureTerminals(s, 3);
     assert.equal(terminals.length, 3);
     await s.presented();
-    // The input method answers only the key window of the active application, so the app is activated. The key window receives the pointer position as a movement, so
-    // the window is placed away from the pointer.
-    await s.keepPointerOutside();
     const first = await s.rect("terminal.view", undefined, terminals[0].surface);
-    await s.pointer(first.document.x + first.x + first.width / 2, first.document.y + first.y + first.height / 2,
-      "move", { activate: true });
-    // When the check ends, the previous input source is restored.
-    await s.selectInputSource(ABC);
+    await moveOnto(s, first.document.x + first.x + first.width / 2, first.document.y + first.y + first.height / 2);
     for (const [index, terminal] of terminals.entries()) {
       await t.test(`terminal ${index + 1}`, { timeout: 30000 }, async () => {
         const surface = terminal.surface;
@@ -89,14 +84,13 @@ for (const app of Object.values(APPS)) {
           throw error;
         }
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} pointer focus`);
-        await s.until("host.window", (host) => host.active === true &&
+        await s.until("host.window", (host) => host.virtualKey &&
           host.regions.some((region) => region.surface === surface && region.focused),
-        `terminal ${index + 1} did not receive keyboard focus in the active window`);
-        await selectABC(s);
+        `terminal ${index + 1} did not receive keyboard focus in the virtual key window`);
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} native focus`);
         const marker = `typed${index}`;
         const line = `echo ${marker}`;
-        for (const ch of `${line}x`) await s.press(ch === " " ? "Space" : ch);
+        await type(s, `${line}x`);
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} typed line`);
         const sessionAfterTyping = await s.get("terminal.session", surface);
         const screenAfterTyping = await s.get("terminal.screen", surface);
@@ -116,13 +110,13 @@ for (const app of Object.values(APPS)) {
         await readScreenUntil(s, surface, (lines) => lines.some((row) => row.endsWith("$")) && !lines.some((row) => row.includes(marker)),
           "native Ctrl+U did not clear the input line");
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} editing`);
-        for (const ch of line) await s.press(ch === " " ? "Space" : ch);
+        await type(s, line);
         await s.press("Enter");
         const output = await readScreenUntil(s, surface, (lines) => lines.includes(marker), "native Enter did not execute the command");
         assert.equal(output.filter((row) => row === marker).length, 1, "command output must occur once");
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} command`);
         const continued = `continued${index}`;
-        for (const ch of `echo ${continued}`) await s.press(ch === " " ? "Space" : ch);
+        await type(s, `echo ${continued}`);
         await s.press("Enter");
         const next = await readScreenUntil(s, surface, (lines) => lines.includes(continued),
           "typing after output required another click");
@@ -130,9 +124,9 @@ for (const app of Object.values(APPS)) {
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} continued input`);
         // Arrow keys: input after two Left presses goes into the middle of the line, and Up recalls the previous command.
         const arrowed = `a${index}q${index}bc`;
-        for (const ch of `echo a${index}${index}bc`) await s.press(ch === " " ? "Space" : ch);
+        await type(s, `echo a${index}${index}bc`);
         for (let step = 0; step < 3; step++) await s.press("ArrowLeft");
-        await s.press("q");
+        await s.press("q", { text: "q" });
         await s.press("Enter");
         await readScreenUntil(s, surface, (lines) => lines.includes(arrowed), "native Left did not move the insertion point");
         await s.press("ArrowUp");
@@ -141,7 +135,7 @@ for (const app of Object.values(APPS)) {
           "native Up did not recall the previous command");
         assert.equal(recalled.filter((row) => row === arrowed).length, 2, "the recalled command must run once more");
         // After the input line of read is shown, Ctrl+C is sent; after the new prompt is confirmed, the next line is typed.
-        for (const ch of "read x") await s.press(ch === " " ? "Space" : ch);
+        await type(s, "read x");
         await s.press("Enter");
         await readScreenUntil(s, surface, (lines) => lines.join("").includes("read x") &&
           !lines.filter(Boolean).at(-1)?.endsWith("$"), "the read command did not start");
@@ -149,7 +143,7 @@ for (const app of Object.values(APPS)) {
         await readScreenUntil(s, surface, (lines) => lines.filter(Boolean).at(-1)?.endsWith("$"),
           "native Ctrl+C did not return the shell to its prompt");
         const interrupted = `interrupted${index}`;
-        for (const ch of `echo ${interrupted}`) await s.press(ch === " " ? "Space" : ch);
+        await type(s, `echo ${interrupted}`);
         await s.press("Enter");
         await readScreenUntil(s, surface, (lines) => lines.includes(interrupted), "native Ctrl+C did not interrupt the running command");
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} arrows and interrupt`);
@@ -181,7 +175,6 @@ for (const app of Object.values(APPS)) {
     const beforeResize = await s.get("terminal.session", returnedTerminal.surface);
     await s.run("host.window.resize", { width: 800, height: 920 });
     await s.until("host.window", (host) => host.content.width === 800, "window did not resize for focus test");
-    await s.keepPointerOutside();
     await s.until("terminal.session", (state) => state.cols < beforeResize.cols,
       "terminal did not resize before focus was tested again", { surface: returnedTerminal.surface });
     await clickAndExecute(s, returnedTerminal.surface, "afterresize");
@@ -227,46 +220,9 @@ for (const app of Object.values(APPS)) {
     await child.presented();
     const childTerminal = (await child.get("core.surfaces")).find((item) =>
       item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
-    await child.keepPointerOutside();
     await clickAndExecute(child, childTerminal.surface, "afterwindow");
     await child.close();
     await s.windows(1, "focus test child window did not close");
     t.diagnostic(`${app.name}: PASS focus after window switch`);
-  });
-}
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: a key to a window that is not the key window is rejected instead of delivered`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    const [terminal] = await ensureTerminals(s, 1);
-    const surface = terminal.surface;
-    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
-    await s.keepPointerOutside();
-    const view = await s.rect("terminal.view", undefined, surface);
-    const x = view.document.x + view.x + view.width / 2;
-    const y = view.document.y + view.y + view.height / 2;
-    await s.pointer(x, y, "move", { activate: true });
-    await s.selectInputSource(ABC);
-    await s.click(x, y);
-    await s.until("host.window", (host) => host.active === true &&
-      host.regions.some((region) => region.surface === surface && region.focused),
-    "the terminal did not receive native focus in the active window");
-
-    // When another project window becomes the key window, human keys do not reach the first window. The diagnostic key does not deliver to another window either and is rejected.
-    const project = temporaryProject(s, "soksak-terminal-key-window-");
-    await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
-    await s.run("core.project.open", { root: project, color: "#7fe3b0" });
-    const child = s.on((await s.windows(2, "the second project window did not open"))
-      .find((window) => window.window !== s.window).window);
-    await child.until("host.window", (host) => host.active === true && host.key === true,
-      "the second project window did not become the key window");
-    await s.until("host.window", (host) => host.key === false && host.regions.some((region) =>
-      region.surface === surface && region.focused), "the first window lost its terminal responder");
-
-    await assert.rejects(s.press("e"), /keys reach only the key window of the active application/);
-    assert.equal((await s.get("terminal.session", surface)).error, undefined, "the rejected key reached the terminal");
-    await child.close();
-    await s.windows(1, "the second project window did not close");
   });
 }

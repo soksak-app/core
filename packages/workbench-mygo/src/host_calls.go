@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
@@ -185,6 +186,8 @@ type Calls struct {
 	mu       sync.Mutex
 	// orders holds the calls that wait for the previous call of their order, and an order exists while a call of it runs.
 	orders map[string][]func()
+	// ended tells that the workbench of the calls ended (End).
+	ended atomic.Bool
 }
 
 // NewCalls returns the calls of table. post runs a task as a later step of the main thread.
@@ -203,6 +206,11 @@ func NewHostCalls(h *host.Host, window host.Frontend, post func(task func())) *C
 func (c *Calls) Observe(observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)) {
 	c.observer = observer
 }
+
+// End ends the calls with their workbench: a call after it reaches no handler, and a call that still runs gives no answer. A reload
+// ends the workbench of the window as it ends a main page, whose calls end with its document, and the host leaves the previous
+// workbench, so the answer of such a call is no state of the window (docs/spec/hosts.md#native-views).
+func (c *Calls) End() { c.ended.Store(true) }
 
 // Call runs the handler name with argument and gives answer its result in a later step.
 func (c *Calls) Call(name string, argument any, answer func(value any, err error)) {
@@ -261,11 +269,18 @@ func (c *Calls) next(order string) {
 // start runs the handler on a goroutine of its own, posts its answer and calls finished.
 func (c *Calls) start(name string, argument any, cids []string, answer func(value any, err error), finished func()) {
 	routine.Go("host-call", func() {
+		if c.ended.Load() {
+			finished()
+			return
+		}
 		started := time.Now()
 		value, err := c.invoke(name, argument, cids)
 		elapsed := time.Since(started)
 		finished()
 		c.post(func() {
+			if c.ended.Load() {
+				return
+			}
 			if c.observer != nil {
 				c.observer(name, argument, cids, elapsed, err)
 			}

@@ -44,6 +44,7 @@ const (
 	codeInactive      = 1006
 	codeButtonHeld    = 1007
 	codePressOpen     = 1008
+	codePointerHeld   = 1011
 )
 
 // RPCError is the JSON-RPC error object.
@@ -101,10 +102,11 @@ type WindowEntry struct {
 	Ready bool `json:"ready"`
 }
 
-// PointerInput is the value of input.pointer. Phase is one of move, down, drag, up, and scroll, and
-// Button is left or right. Activate can be true only for move. Clicks is the click count of the event of a
-// down or an up, from 1 to pointerClicksMax.
+// PointerInput is the value of input.pointer. Pointer names the pointer, mainPointer when the request names none.
+// Phase is one of move, down, drag, up, and scroll, and Button is left or right. Activate can be true only for move.
+// Clicks is the click count of the event of a down or an up, from 1 to pointerClicksMax.
 type PointerInput struct {
+	Pointer        string
 	X, Y           float64
 	Phase          string
 	Button         string
@@ -116,9 +118,28 @@ type PointerInput struct {
 // pointerClicksMax is the largest click count of input.pointer: a person's triple click.
 const pointerClicksMax = 3
 
+// mainPointer is the pointer of an input.pointer request that names none.
+const mainPointer = "main"
+
+// pointerNameMax is the longest pointer name: a name has 1 to pointerNameMax characters of a-z, 0-9 and -.
+const pointerNameMax = 32
+
+// pointerName reports whether name has the form of a pointer name.
+func pointerName(name string) bool {
+	if name == "" || len(name) > pointerNameMax {
+		return false
+	}
+	for _, c := range name {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // pointerFields names every field of input.pointer. A field outside it is rejected, so a misspelled or an
 // unsupported field does not deliver a different gesture than the caller asked for.
-var pointerFields = map[string]bool{"window": true, "x": true, "y": true, "phase": true, "button": true,
+var pointerFields = map[string]bool{"window": true, "pointer": true, "x": true, "y": true, "phase": true, "button": true,
 	"deltaX": true, "deltaY": true, "activate": true, "clicks": true}
 
 // KeyInput is the value of input.key. Modifiers is a bit sum: 1 Shift, 2 Control, 4 Option, 8 Command.
@@ -1202,6 +1223,7 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 		return nil, err
 	}
 	var p struct {
+		Pointer        *string
 		X, Y           *float64
 		Phase          string
 		Button         *string
@@ -1220,6 +1242,13 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 		if !pointerFields[field] {
 			return nil, rpcError(codeInvalidParams, "input.pointer has no field %s", field)
 		}
+	}
+	pointer := mainPointer
+	if p.Pointer != nil {
+		pointer = *p.Pointer
+	}
+	if !pointerName(pointer) {
+		return nil, rpcError(codeInvalidParams, "pointer must be 1 to %d characters of a-z, 0-9 and -", pointerNameMax)
 	}
 	if p.X == nil || p.Y == nil {
 		return nil, rpcError(codeInvalidParams, "x and y are required")
@@ -1247,7 +1276,7 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 		}
 		clicks = *p.Clicks
 	}
-	return nil, e.backend.Pointer(window, PointerInput{X: *p.X, Y: *p.Y, Phase: p.Phase, Button: button,
+	return nil, e.backend.Pointer(window, PointerInput{Pointer: pointer, X: *p.X, Y: *p.Y, Phase: p.Phase, Button: button,
 		DeltaX: p.DeltaX, DeltaY: p.DeltaY, Activate: p.Activate, Clicks: clicks})
 }
 

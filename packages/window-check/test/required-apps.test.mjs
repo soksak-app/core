@@ -100,3 +100,21 @@ test("MAIN_PAGE_APPS holds the same application objects as APPS", async () => {
   const module = await appsUnder(undefined);
   for (const app of module.MAIN_PAGE_APPS) assert.equal(app, module.APPS[app.name]);
 });
+
+test("the processes of the run are the applications of the root that hold an endpoint, checked or not", async () => {
+  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const root = mkdtempSync(join(tmpdir(), "soksak-run-processes-"));
+  try {
+    for (const [name, pid] of [["wailsv3", 101], ["mygo", 303]]) {
+      mkdirSync(join(root, `soksak-check-${name}`));
+      writeFileSync(join(root, `soksak-check-${name}`, "endpoint.json"), JSON.stringify({ pid }));
+    }
+    // tauriv2 has a folder without an endpoint: it has not started, so it has no process.
+    mkdirSync(join(root, "soksak-check-tauriv2"));
+    assert.deepEqual(harness.runProcesses({ SOKSAK_CONFIG_ROOT: root, SOKSAK_APP: "mygo" }), [101, 303]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

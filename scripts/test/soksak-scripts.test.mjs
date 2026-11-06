@@ -759,7 +759,7 @@ test("exposure audit verifies every declared core entry", { timeout: TREE_AUDIT_
 });
 
 // The limit bounds a hang: the audit starts the node, pnpm and shasum commands, and `pnpm --version` takes about 2 s alone, more than
-// 5 s when the push gate runs the package tests in parallel (F244-1).
+// 5 s when scripts/node-tests.mjs runs the package tests in parallel, as `pnpm test` and CI do (F244-1).
 test("build environment audit reports the measured toolchain", { timeout: 30000 }, async () => {
   const result = await run("sh", [join(root, "scripts/check-tools.sh")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);

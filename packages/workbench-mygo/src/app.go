@@ -177,6 +177,7 @@ func (a *App) Close(window host.Frontend) {
 	delete(a.shells, window)
 	a.mu.Unlock()
 	if shell != nil {
+		shell.calls.End()
 		shell.events.End()
 		a.options.Post(shell.Closed)
 	}

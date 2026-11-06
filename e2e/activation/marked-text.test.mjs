@@ -1,11 +1,13 @@
-// Activation-tier window check: confirms that, when the composition of a macOS Japanese input method that uses marked text ends, the terminal writes that string
-// to the PTY exactly once (F8-7).
+// Confirms that, when the composition of a macOS Japanese input method that uses marked text ends, the terminal writes that
+// string to the PTY exactly once (F8-7).
 //
 // The Japanese (romaji) input method keeps the typed kana as marked text (and converts it to kanji when live conversion is on),
-// and ends the composition when the input source changes. The expected committed string is the marked text that the input method reported last. This check
-// activates the app and takes the user's focus, switches the input source through diagnostics.input.source of the diagnostic build,
-// and restores the previous input source at the end. It fails when the input source is not enabled. A run that the user approved runs it
-// only through make test-app-activation.
+// and ends the composition when the input source changes. The expected committed string is the marked text that the input method
+// reported last. The subject is the marked text of the OS input method and the end of its composition at a change of the input
+// source, which the input method gives only the key window of the active application
+// (docs/spec/exposure.md#virtual-key-window), so this check activates the application, switches the input source through
+// diagnostics.input.source of the diagnostic build and restores the previous source at the end. It fails when the input source
+// is not enabled.
 import assert from "node:assert/strict";
 import test from "node:test";
 

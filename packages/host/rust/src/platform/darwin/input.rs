@@ -13,12 +13,15 @@ use objc2::runtime::{AnyClass, AnyObject, Bool};
 
 use std::time::Duration;
 
-use super::super::{ButtonHeld, Delivery, Frame, FrontmostApplication, Handle, Hit, Key, Pointer};
+use super::super::{
+    ButtonHeld, Delivery, Frame, FrontmostApplication, Handle, Hit, Key, Pointer, PointerHeld,
+};
 use super::{NSPoint, NSRect};
 
 unsafe extern "C" {
     fn sp_input_pointer_then(
         window: *mut c_void,
+        pointer: *const c_char,
         x: f64,
         y: f64,
         phase: i32,
@@ -53,8 +56,10 @@ const SP_INPUT_INACTIVE: i32 = 2;
 const SP_INPUT_UNRECEIVED: i32 = 3;
 const SP_INPUT_BUTTON_HELD: i32 = 4;
 const SP_INPUT_PRESS_OPEN: i32 = 5;
+const SP_INPUT_POINTER_HELD: i32 = 6;
 
-/// sp_input_held of native/darwin. The state of the attempt that was rejected with SP_INPUT_BUTTON_HELD.
+/// sp_input_held of native/darwin. The state of the attempt that was rejected with SP_INPUT_BUTTON_HELD or
+/// SP_INPUT_POINTER_HELD.
 #[repr(C)]
 struct SpInputHeld {
     mask: u64,
@@ -62,6 +67,10 @@ struct SpInputHeld {
     pid: i32,
     /// The bundle identifier. It is NULL when there is none.
     bundle_identifier: *const c_char,
+    /// The pointer that holds the press of an SP_INPUT_POINTER_HELD rejection.
+    pointer: *const c_char,
+    /// The state that the press of that pointer holds.
+    reason: *const c_char,
 }
 
 type Delivered = Box<dyn FnOnce(Delivery) + Send>;
@@ -79,8 +88,32 @@ extern "C" fn delivered(context: *mut c_void, result: i32, held: *const SpInputH
                 .expect("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state"),
         )),
         SP_INPUT_PRESS_OPEN => Delivery::PressOpen,
+        // The library passes held with its pointer and reason for SP_INPUT_POINTER_HELD.
+        SP_INPUT_POINTER_HELD => Delivery::PointerHeld(pointer_held(
+            unsafe { held.as_ref() }
+                .expect("sp_input_pointer_then reported SP_INPUT_POINTER_HELD without its state"),
+        )),
         _ => Delivery::Rejected,
     });
+}
+
+/// Reads the pointer and the reason of sp_input_held. A notification of SP_INPUT_POINTER_HELD without them is a contract
+/// violation of the library, so it stops and names the violation.
+fn pointer_held(held: &SpInputHeld) -> PointerHeld {
+    if held.pointer.is_null() || held.reason.is_null() {
+        panic!(
+            "sp_input_pointer_then reported SP_INPUT_POINTER_HELD without its pointer and reason"
+        );
+    }
+    let text = |value: *const c_char| {
+        unsafe { std::ffi::CStr::from_ptr(value) }
+            .to_string_lossy()
+            .into_owned()
+    };
+    PointerHeld {
+        pointer: text(held.pointer),
+        reason: text(held.reason),
+    }
 }
 
 /// Reads sp_input_held. When pid is -1, there is no frontmost application.
@@ -102,10 +135,13 @@ fn button_held(held: &SpInputHeld) -> ButtonHeld {
 /// Delivers pointer input to the window and reports the result with done. A press and a release are reported after the
 /// document received them. Call it on the main thread.
 pub fn pointer(window: Handle, pointer: Pointer, receive: Duration, done: Delivered) {
+    // exposure::pointer accepts only names of a-z, 0-9 and -, so the name holds no NUL.
+    let name = CString::new(pointer.pointer).expect("a pointer name holds no NUL");
     let context = Box::into_raw(Box::new(done)) as *mut c_void;
     unsafe {
         sp_input_pointer_then(
             window as *mut c_void,
+            name.as_ptr(),
             pointer.x,
             pointer.y,
             pointer.phase,

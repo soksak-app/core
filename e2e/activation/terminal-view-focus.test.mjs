@@ -1,4 +1,7 @@
-// Activation-tier comparison of identical native keys in a same-window AppKit control and terminal view.
+// Compares identical native keys in a same-window AppKit control and terminal view. The AppKit reference takes characters only
+// through the OS input method, and the second check composes Korean through it; the input method serves only the key window of
+// the active application (docs/spec/exposure.md#virtual-key-window), so this check activates the application and selects the
+// input source.
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";

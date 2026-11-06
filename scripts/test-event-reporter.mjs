@@ -2,7 +2,9 @@
 // standard error, prefixed by EVENT_PREFIX, so the runner resets the event watchdog of the file at each event. The other lines of the
 // standard error are the TAP form, which the runner keeps as the output of the file. A line also carries the `nesting` of the test, so
 // the runner pairs the `test:dequeue` of each test with its `test:complete`, and the `exitCode` and `signal` of the error of a
-// `test:complete`, which node --test sets on the result of a test file whose process ended with a status other than 0 or a signal.
+// `test:complete`, which node --test sets on the result of a test file whose process ended with a status other than 0 or a signal. The
+// `test:summary` of a file (the summary that names its `file`) carries the `counts` of its tests, from which the runner reads how many
+// tests the file ran; the last summary of node --test names no file and counts a file that ran no test as one test.
 export const EVENT_PREFIX = "@soksak-test-event ";
 
 export default async function* testEvents(source) {
@@ -12,6 +14,7 @@ export default async function* testEvents(source) {
     const line = { type: event.type, name, nesting: event.data?.nesting };
     const error = event.type === "test:complete" ? event.data?.details?.error : undefined;
     if (error !== undefined && error !== null && Object.hasOwn(error, "exitCode")) Object.assign(line, { exitCode: error.exitCode, signal: error.signal });
+    if (event.type === "test:summary" && typeof event.data?.file === "string") Object.assign(line, { file: event.data.file, counts: event.data.counts });
     yield `${EVENT_PREFIX}${JSON.stringify(line)}\n`;
   }
 }

@@ -534,3 +534,61 @@ test("a test file of suites, subtests, skipped, todo and filtered tests that end
     rmSync(folder, { recursive: true, force: true });
   }
 });
+
+// A process that reports its test events counts the tests that it ran from the summary of its file: node --test counts every started
+// test, and a skipped test did not run. A name pattern that matches no test leaves a file that ran no test and exits with 0.
+test("a test file that ran no test passes with `no test ran`, and a run in which no file ran a test fails with a line that says so", async () => {
+  const { file, folder } = await nodeTestFile('import test from "node:test";\ntest("a quit with a browser tab", () => {});\n');
+  try {
+    const item = eventsOf(file, { eventLimitMs: 60_000 });
+    item.args.splice(item.args.indexOf("--test") + 1, 0, '--test-name-pattern="a');
+    const { results, passed, lines } = await run([item], { concurrency: 1 });
+    const result = results.get("events");
+    assert.equal(result.status, "pass", result.output);
+    assert.equal(result.tests, 0, result.output);
+    assert.match(lines.find((line) => line.startsWith("PASS events")), /^PASS events \d+\.\d{3}s no test ran$/);
+    assert.match(lines.find((line) => line.startsWith("TOTAL ")), /^TOTAL 0 tests ran in 1 file: 1 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
+    assert.equal(lines.at(-1), "FAIL no test ran in the 1 file of the run");
+    assert.equal(passed, false);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("the total counts the tests that the files ran, not the files, and a run passes when a file ran a test", async () => {
+  const ran = await nodeTestFile([
+    'import { describe, it, test } from "node:test";',
+    'test("one", () => {});',
+    'test("two", () => {});',
+    'test.skip("skipped", () => {});',
+    'describe("suite", () => { it("inner", () => {}); });',
+  ].join("\n") + "\n");
+  const none = await nodeTestFile('import test from "node:test";\n');
+  try {
+    const { results, passed, lines } = await run([
+      eventsOf(ran.file, { name: "ran", eventLimitMs: 60_000 }), eventsOf(none.file, { name: "none", eventLimitMs: 60_000 }),
+    ], { concurrency: 2 });
+    assert.equal(results.get("ran").tests, 3, results.get("ran").output);
+    assert.equal(results.get("none").tests, 0, results.get("none").output);
+    assert.match(lines.find((line) => line.startsWith("PASS ran")), /^PASS ran \d+\.\d{3}s$/);
+    assert.match(lines.find((line) => line.startsWith("PASS none")), /^PASS none \d+\.\d{3}s no test ran$/);
+    assert.match(lines.at(-1), /^TOTAL 3 tests ran in 2 files: 2 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
+    assert.equal(passed, true);
+  } finally {
+    rmSync(ran.folder, { recursive: true, force: true });
+    rmSync(none.folder, { recursive: true, force: true });
+  }
+});
+
+test("a run of processes that do not report their test events counts the processes and passes when each passes", async () => {
+  const { results, passed, lines } = await run([node("a", "process.exit(0)")], { concurrency: 1 });
+  assert.equal(results.get("a").tests, undefined);
+  assert.match(lines.at(-1), /^TOTAL 1 tests: 1 pass, 0 fail, 0 timeout in \d+\.\d{3}s$/);
+  assert.equal(passed, true);
+  assert.equal((await run([node("b", "process.exit(3)")], { concurrency: 1 })).passed, false);
+});
+
+test("a run in which some processes report their test events and others do not is refused", async () => {
+  await assert.rejects(runTests({ tests: [node("plain", "0"), node("events", "0", { eventLimitMs: 1000 })], concurrency: 1, write() {} }),
+    /^TypeError: events: every test of a run reports its test events \(eventLimitMs\) or none does$/);
+});

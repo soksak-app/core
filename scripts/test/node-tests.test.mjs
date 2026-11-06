@@ -25,10 +25,37 @@ test("a test script is a list of steps: a command before the tests, and the flag
     { before: [], flags: ["--experimental-test-module-mocks"], paths: ["test/"] });
   assert.deepEqual(parseTestScript("node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'", "e2e"),
     { before: [], flags: ["--test-concurrency=1", "--test-global-setup=./setup.mjs"], paths: ["activation/*.test.mjs"] });
-  assert.deepEqual(parseTestScript("pnpm build && node --test test/", "p"), { before: ["pnpm build"], flags: [], paths: ["test/"] });
+  assert.deepEqual(parseTestScript("pnpm build && node --test test/", "p"), { before: [["pnpm", "build"]], flags: [], paths: ["test/"] });
   assert.deepEqual(parseTestScript("node --test scripts/test/*.test.mjs && pnpm -r test", "p"), { before: [], flags: [], paths: ["scripts/test/*.test.mjs"] });
   assert.throws(() => parseTestScript("jest", "p"), /p: the test script "jest" is not node --test/);
   assert.throws(() => parseTestScript("node --test test/ && echo done", "p"), /p: the test script step "echo done" is not node --test or pnpm/);
+});
+
+test("a word of a test script keeps the spaces of its quoted parts and loses its quotes, and an unclosed quote names the script", () => {
+  assert.deepEqual(parseTestScript('node --test --test-name-pattern="a quit with a browser tab" e2e/browser.test.mjs', "p"),
+    { before: [], flags: ["--test-name-pattern=a quit with a browser tab"], paths: ["e2e/browser.test.mjs"] });
+  assert.deepEqual(parseTestScript("node --test --test-name-pattern='a b' 'dir/*.mjs' \"x y\"'z'", "p"),
+    { before: [], flags: ["--test-name-pattern=a b"], paths: ["dir/*.mjs", "x yz"] });
+  assert.deepEqual(parseTestScript(`node --test --flag="it's" 'say "hi"'`, "p"), { before: [], flags: ["--flag=it's"], paths: ['say "hi"'] });
+  assert.throws(() => parseTestScript('node --test --test-name-pattern="a quit test/', "p"),
+    /^Error: p: the test script "node --test --test-name-pattern=\"a quit test\/" has an unclosed " quote$/);
+  assert.throws(() => parseTestScript("node --test 'test/", "p"), /^Error: p: the test script "node --test 'test\/" has an unclosed ' quote$/);
+});
+
+test("each path of a test script names a file, and a path or a glob that names none is an error that names the path and the package folder", () => {
+  const root = workspace();
+  put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: 'node --test --test-name-pattern="a quit with a browser tab" test/browser.test.mjs' } }));
+  put(root, "a/test/browser.test.mjs", "");
+  const { tests } = discoverNodeTests({ root, packages: ["a"] });
+  assert.deepEqual(tests.map((item) => [item.name, item.args.slice(-2)]), [["a/test/browser.test.mjs", ["--test-name-pattern=a quit with a browser tab", join(root, "a/test/browser.test.mjs")]]]);
+  put(root, "b/package.json", JSON.stringify({ name: "b", scripts: { test: "node --test test/ missing.test.mjs" } }));
+  put(root, "b/test/one.test.mjs", "");
+  assert.throws(() => discoverNodeTests({ root, packages: ["a", "b"] }), /^Error: b: the test script path missing\.test\.mjs names no file in the package folder b$/);
+  put(root, "c/package.json", JSON.stringify({ name: "c", scripts: { test: "node --test test/ 'gone/*.test.mjs'" } }));
+  put(root, "c/test/one.test.mjs", "");
+  assert.throws(() => discoverNodeTests({ root, packages: ["c"] }), /^Error: c: the test script path gone\/\*\.test\.mjs names no file in the package folder c$/);
+  // A package that a changed range does not select is not read, so its script does not stop the run of the packages that it selects.
+  assert.deepEqual(discoverNodeTests({ root, packages: ["a", "b", "c"], changed: ["a/src/x.js"] }).tests.map((item) => item.name), ["a/test/browser.test.mjs"]);
 });
 
 test("each test file of a package is a test with the folder and the flags of its package", () => {
@@ -87,7 +114,7 @@ test("a package whose test script names no file, or whose script cannot be read,
   const root = workspace();
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   mkdirSync(join(root, "a/test"), { recursive: true });
-  assert.throws(() => discoverNodeTests({ root, packages: ["a"] }), /a: the test script names no test file in test\//);
+  assert.throws(() => discoverNodeTests({ root, packages: ["a"] }), /a: the test script path test\/ names no file in the package folder a/);
   put(root, "b/package.json", JSON.stringify({ name: "b", scripts: { test: "make test" } }));
   assert.throws(() => discoverNodeTests({ root, packages: ["b"] }), /b: the test script "make test" is not node --test/);
 });
@@ -222,7 +249,7 @@ test("the audit of the logs runs after a run of window checks and of the activat
   assert.equal(lines.at(-1), "AUDIT FAIL marks.jsonl: the run left no test marks");
 });
 
-// The push gate runs the test files of the packages whose files the push range changes, and no other package.
+// --changed runs the test files of the packages whose files the revision range changes, and no other package.
 test("a change under a package selects the test files of that package only", () => {
   const root = workspace();
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
@@ -235,7 +262,7 @@ test("a change under a package selects the test files of that package only", () 
 
 test("a change selects the deepest package that holds it, and a change outside every package selects the root", () => {
   const root = workspace();
-  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs" } }));
+  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs" } }));
   put(root, "scripts/test/s.test.mjs", "");
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   put(root, "a/test/one.test.mjs", "");

@@ -309,6 +309,7 @@ NATIVE_TESTS = observe_test \
   image_region_input_transaction_test \
   image_region_hangul_test \
   image_region_virtual_typing_test \
+  webview_virtual_typing_test \
   image_region_input_document_test \
   activity_observers_test \
   activity_observers_allocation_test \
@@ -326,6 +327,7 @@ NATIVE_TESTS = observe_test \
   input_inject_test \
   input_virtual_test \
   input_virtual_key_equivalent_test \
+  input_pointers_test \
   input_reference_test \
   mouse_buttons_test \
   webview_input_receipts_test \
