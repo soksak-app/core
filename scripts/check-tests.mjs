@@ -97,6 +97,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("break and mutation inventory", "js-ts", [
     "packages/soksak/scripts/check-breaks.mjs",
     "packages/soksak/scripts/mutate.mjs",
+    "packages/soksak/scripts/workspace-copy.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("host structure audit", "js-ts", ["scripts/check-host-files.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/main-thread-calls.test.mjs"], { sharedTests: true }),
   lane("main-thread audit Go reader", "go", ["scripts/cgo-sources.go"], ["scripts/test/main-thread-calls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),

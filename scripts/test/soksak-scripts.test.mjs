@@ -790,6 +790,25 @@ test("break inventory lists only requested, known entries", { timeout: 5000 }, a
     "listing or rejecting break ids left a package copy");
 });
 
+test("a workspace copy holds the package and the root files its suite reads", { timeout: 10000 }, async () => {
+  const { copyWorkspace } = await import(pathToFileURL(join(packageRoot, "scripts/workspace-copy.mjs")).href);
+  const { top, root: copied } = copyWorkspace("soksak-copy-test-");
+  try {
+    for (const part of ["package.json", "Makefile", ".node-version"]) {
+      assert.equal(await readFile(join(top, part), "utf8"), await readFile(join(root, part), "utf8"), part);
+    }
+    // The layout cases test reads the shared cases through the root (F502-15).
+    const cases = "docs/spec/cases/layout";
+    assert.deepEqual((await readdir(join(top, cases))).sort(), (await readdir(join(root, cases))).sort());
+    for (const part of ["test", "scripts", "src", "package.json", "tsconfig.json"]) {
+      assert.ok(existsSync(join(copied, part)), `the copy has no ${part}`);
+    }
+    assert.ok(existsSync(join(copied, "node_modules/jsdom")), "the copy does not reach the package dependencies");
+  } finally {
+    await rm(top, { recursive: true, force: true });
+  }
+});
+
 test("mutation inventory lists candidates without running the mutation suite", { timeout: 5000 }, async () => {
   const result = await run(node, [join(packageRoot, "scripts/mutate.mjs"), "--list"]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
