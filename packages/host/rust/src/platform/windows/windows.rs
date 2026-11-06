@@ -166,6 +166,12 @@ impl Platform for Windows {
     fn focus_workbench(&self, window: Handle) -> Result<(), String> {
         unsupported::focus_workbench(window)
     }
+    fn keyboard_hold(&self, window: Handle) -> Result<(), String> {
+        unsupported::keyboard_hold(window)
+    }
+    fn keyboard_decided(&self, window: Handle) -> Result<(), String> {
+        unsupported::keyboard_decided(window)
+    }
     fn set_surface_alpha_handle(&self, surface: Handle, alpha: f64) -> Result<(), String> {
         unsupported::set_surface_alpha_handle(surface, alpha)
     }

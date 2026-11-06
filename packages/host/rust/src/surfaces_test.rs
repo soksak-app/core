@@ -1006,6 +1006,16 @@ fn the_page_names_the_surface_that_takes_the_keyboard() {
     assert!(serde_json::from_str::<super::FocusRequest>(r#"{"surface":5}"#).is_err());
 }
 
+// contract: surface-layout.keyboard-waits-for-the-decision
+#[test]
+fn a_decided_call_ends_the_hold_and_a_plain_call_does_not() {
+    let decided: super::FocusRequest =
+        serde_json::from_str(r#"{"surface":null,"decided":true}"#).unwrap();
+    assert!(decided.decided);
+    let plain: super::FocusRequest = serde_json::from_str(r#"{"surface":"tab-1"}"#).unwrap();
+    assert!(!plain.decided);
+}
+
 // contract: surface-layout.keyboard-follows-the-focus-ring
 #[test]
 fn a_surface_that_the_window_does_not_hold_cannot_take_the_keyboard() {

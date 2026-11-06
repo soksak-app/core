@@ -1333,9 +1333,11 @@ func (s *Surfaces) CancelSurfaces(req CancelRequest) error {
 	return <-done
 }
 
-// FocusRequest names the surface that takes the keyboard of the window, and null names the workbench.
+// FocusRequest names the surface that takes the keyboard of the window, and null names the workbench. Decided ends the hold of
+// the input of the window after the keyboard moved (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 type FocusRequest struct {
 	Surface *string `json:"surface"`
+	Decided bool    `json:"decided"`
 }
 
 // FocusSurface gives the keyboard of the window to the surface of the request or to the workbench on the UI thread
@@ -1353,6 +1355,10 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 	done := make(chan error, 1)
 	window := s.window.NativeWindow()
 	if err := system.EnqueueUI(func() {
+		// A refused surface still ends the hold: the input waits for no later decision of this call.
+		if req.Decided {
+			defer system.KeyboardDecided(window)
+		}
 		if req.Surface == nil {
 			system.FocusWorkbench(window)
 			done <- nil
@@ -1373,6 +1379,34 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 		return err
 	}
 	return <-done
+}
+
+// KeyboardHold holds the input of the window until the decision of the workbench about the keyboard, and answers after the
+// hold is open (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+func (s *Surfaces) KeyboardHold() error {
+	return s.onWindowUI(system.KeyboardHold)
+}
+
+// KeyboardDecided ends the hold of the input of the window and leaves the keyboard where it is.
+func (s *Surfaces) KeyboardDecided() error {
+	return s.onWindowUI(system.KeyboardDecided)
+}
+
+// onWindowUI runs call with the native window on the UI thread and returns after it ran.
+func (s *Surfaces) onWindowUI(call func(window unsafe.Pointer)) error {
+	if s.window == nil {
+		return errNoWindow
+	}
+	window := s.window.NativeWindow()
+	done := make(chan struct{})
+	if err := system.EnqueueUI(func() {
+		call(window)
+		close(done)
+	}); err != nil {
+		return err
+	}
+	<-done
+	return nil
 }
 
 // finishLayoutPresentation reads the actual surface frames and commits an accepted presentation on the UI thread.

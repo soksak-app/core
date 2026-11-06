@@ -57,6 +57,13 @@ void sp_surface_focus_for_region(void *surface);
 // Gives the keyboard of window to the workbench: the registered main web view, or the view of the framework that draws the
 // workbench of a window without a main web view. An open left press delays it as in sp_surface_focus.
 void sp_window_focus_workbench(void *window);
+// Holds the input of window until the workbench decided where the keyboard goes (docs/spec/native-surfaces.md#keyboard-of-a-surface):
+// every later pointer and key event of the window waits in its order. The release of a left press on the workbench of a window
+// that holds a surface opens the same hold. An open hold stays as it is.
+void sp_window_keyboard_hold(void *window);
+// Ends the hold of the input of window and gives the input back in its order, to the view that holds the keyboard after the
+// keyboard calls before it. A window without a hold changes nothing.
+void sp_window_keyboard_decided(void *window);
 // Records a move of the first responder of a window for the surfaces that it leaves and enters. The observation of the first
 // responder calls it.
 void sp_surface_responder_moved(void *from, void *to);

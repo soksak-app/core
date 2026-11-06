@@ -190,6 +190,39 @@ func TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement(t *testing.T) {
 	}
 }
 
+// The host holds the input of the window from the release of a press on the workbench until a decided call, so every press of
+// the workbench, on any element, is answered by one decided call (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+func TestEveryPressOfTheWorkbenchEndsWithOneDecidedCall(t *testing.T) {
+	presses := []struct{ name, item string }{
+		{"core.card.tab", ""}, {"core.card.header", ""}, {"core.card", ""}, {"core.divider", ""}, {"core.chrome.bar", ""},
+		{"core.chrome.left", ""}, {"core.sidebar.fold", ""}, {"core.card.add", ""}, {"core.chrome.settings", ""},
+	}
+	for _, press := range presses {
+		t.Run(press.name, func(t *testing.T) {
+			f, stored := surfaceShell(t)
+			cards, _ := keyboardCards(t, f)
+			keyboardAddTab(t, f, cards[0])
+			f.settle()
+			if !f.has(press.name, press.item) {
+				t.Fatalf("the workbench shows no %s", press.name)
+			}
+			stored.keyboard, stored.decided = nil, nil
+			f.click(press.name, press.item)
+			f.settle()
+			f.settle()
+			decided := 0
+			for _, one := range stored.decided {
+				if one {
+					decided++
+				}
+			}
+			if decided != 1 {
+				t.Fatalf("the press on %s sent %d decided calls of %d calls", press.name, decided, len(stored.decided))
+			}
+		})
+	}
+}
+
 // While a modal is open the workbench holds the keyboard for it, and the host call does not name a surface.
 func TestAModalKeepsTheKeyboardUntilItCloses(t *testing.T) {
 	f, stored := surfaceShell(t)

@@ -84,6 +84,12 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["CancelSurfaces", [{ ticket: 7 }]]);
   await host.call("surfaceFocus", { surface: "s1" });
   assert.deepEqual(recorded.at(-1), ["SurfaceFocus", [{ surface: "s1" }]]);
+  await host.call("surfaceFocus", { surface: "s1", decided: true });
+  assert.deepEqual(recorded.at(-1), ["SurfaceFocus", [{ surface: "s1", decided: true }]]);
+  await host.call("keyboardHold");
+  assert.deepEqual(recorded.at(-1), ["KeyboardHold", []]);
+  await host.call("keyboardDecided");
+  assert.deepEqual(recorded.at(-1), ["KeyboardDecided", []]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["WaitPresented", []]);
   assert.deepEqual(await host.call("viewSourceOrigins"), { floor: 0, views: {} });

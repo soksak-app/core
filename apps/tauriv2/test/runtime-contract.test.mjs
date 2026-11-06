@@ -114,6 +114,12 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["cancel_surfaces", { request: { ticket: 7 } }]);
   await host.call("surfaceFocus", { surface: "s1" });
   assert.deepEqual(recorded.at(-1), ["surface_focus", { request: { surface: "s1" } }]);
+  await host.call("surfaceFocus", { surface: "s1", decided: true });
+  assert.deepEqual(recorded.at(-1), ["surface_focus", { request: { surface: "s1", decided: true } }]);
+  await host.call("keyboardHold");
+  assert.deepEqual(recorded.at(-1), ["keyboard_hold", {}]);
+  await host.call("keyboardDecided");
+  assert.deepEqual(recorded.at(-1), ["keyboard_decided", {}]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["wait_presented", {}]);
   assert.deepEqual(await host.call("viewSourceOrigins"), { floor: 0, views: {} });

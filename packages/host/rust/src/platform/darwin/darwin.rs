@@ -308,6 +308,14 @@ impl Platform for Darwin {
         webview::focus_workbench(window);
         Ok(())
     }
+    fn keyboard_hold(&self, window: Handle) -> Result<(), String> {
+        webview::keyboard_hold(window);
+        Ok(())
+    }
+    fn keyboard_decided(&self, window: Handle) -> Result<(), String> {
+        webview::keyboard_decided(window);
+        Ok(())
+    }
     fn create_document(
         &self,
         surface: Handle,

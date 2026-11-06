@@ -3,6 +3,7 @@
 #import <objc/runtime.h>
 #import "surface_layout.h"
 #import "application_log.h"
+#import "event_ring.h"
 #import "observe.h"
 #import "window_controls.h"
 #import "window_facts.h"
@@ -37,6 +38,15 @@
 - (void)dealloc { [_event release]; [_call release]; [super dealloc]; }
 @end
 
+// SPKeyboardHold is the wait of the input of a window for the decision of the workbench about the keyboard
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+@interface SPKeyboardHold : NSObject
+@property(nonatomic, assign) double opened;
+@property(nonatomic, assign) NSUInteger dropped;
+@end
+@implementation SPKeyboardHold
+@end
+
 // SPViewJoin is a view that the open layout transaction waits for. It ends once: by its presentation or by an abandon.
 @interface SPViewJoin : NSObject
 @property(nonatomic, retain) WKWebView *view;
@@ -68,6 +78,15 @@ static NSMutableDictionary<NSNumber *, SPHeldInput *> *heldTurns;
 static long nextHeldTurn;
 // The subtype of an application event that is a turn of held input.
 static const short kHeldTurnSubtype = 0x6869;
+// The windows whose input waits for the decision of the workbench about the keyboard.
+static NSMutableDictionary<NSValue *, SPKeyboardHold *> *keyboardHolds;
+// The windows whose open left press began on the workbench, and the windows whose open left press reached a view.
+static NSMutableSet<NSValue *> *workbenchPresses;
+static NSMutableSet<NSValue *> *passedPresses;
+static bool (^pressOnWorkbench)(void *, double, double);
+// A person types about 10 keys in a second and a pointer moves about 120 times, so the limit holds more than the bound of a hold.
+static const NSUInteger kKeyboardHoldLimit = 256;
+static const double kKeyboardHoldBound = 1.0;
 
 static void releaseSettled(void);
 
@@ -128,7 +147,20 @@ static BOOL inputHeld(void *owner) {
     return held;
 }
 
+static SPKeyboardHold *keyboardHold(void *owner) {
+    return keyboardHolds[[NSValue valueWithPointer:owner]];
+}
+
 static void keepInput(void *owner, NSEvent *event, void (^call)(void)) {
+    SPKeyboardHold *hold = keyboardHold(owner);
+    if (hold) {
+        NSUInteger count = 0;
+        for (SPHeldInput *earlier in heldInput) count += earlier.owner == owner;
+        if (count >= kKeyboardHoldLimit) {
+            hold.dropped++;
+            return;
+        }
+    }
     SPHeldInput *input = [[[SPHeldInput alloc] init] autorelease];
     input.owner = owner;
     input.event = event;
@@ -145,8 +177,8 @@ static BOOL holdInput(NSEvent *event) {
     NSEventMask type = NSEventMaskFromType(event.type);
     NSWindow *window = event.window;
     // A release puts its events at the start of the queue, so while it returns every event of the window is in its turn.
-    BOOL waits = window && (type & later) && ![returning containsObject:[NSValue valueWithPointer:window]]
-        && (inputHeld(window) || ((type & presses) && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y)));
+    BOOL waits = window && (type & later) && (keyboardHold(window) || (![returning containsObject:[NSValue valueWithPointer:window]]
+        && (inputHeld(window) || ((type & presses) && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y)))));
     if (waits) keepInput(window, event, nil);
     return waits;
 }
@@ -155,21 +187,35 @@ static void (*applicationSendEvent)(id, SEL, NSEvent *);
 
 static void releaseInput(void *owner);
 
-// Runs one turn of a release: an injected call, or the end of the release, which sends on what arrived while it returned.
+// Gives the input of owner back when neither its open transaction nor the decision about its keyboard holds it.
+static void releaseWhenFree(void *owner) {
+    if (activeOwner != owner && !keyboardHold(owner)) releaseInput(owner);
+}
+
+// Runs one turn of a release: an injected call, or the end of the release, which sends on what arrived while it returned. A call
+// that comes back while a hold of the keyboard opened waits again, in its order.
 static void runHeldTurn(long turn) {
     SPHeldInput *input = [[heldTurns[@(turn)] retain] autorelease];
     [heldTurns removeObjectForKey:@(turn)];
     if (input.call) {
-        input.call();
+        if (keyboardHold(input.owner)) keepInput(input.owner, nil, input.call);
+        else input.call();
     } else {
         [returning removeObject:[NSValue valueWithPointer:input.owner]];
-        if (activeOwner != input.owner) releaseInput(input.owner);
+        releaseWhenFree(input.owner);
     }
 }
 
 static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
-    if (event.type == NSEventTypeApplicationDefined && event.subtype == kHeldTurnSubtype) runHeldTurn(event.data1);
-    else if (!holdInput(event)) applicationSendEvent(application, selector, event);
+    if (event.type == NSEventTypeApplicationDefined && event.subtype == kHeldTurnSubtype) {
+        runHeldTurn(event.data1);
+    } else if (!holdInput(event)) {
+        if (event.window && (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeLeftMouseUp)) {
+            surfaceLayoutPointerPassing(event.window, event.type == NSEventTypeLeftMouseDown, event.locationInWindow.x,
+                event.locationInWindow.y);
+        }
+        applicationSendEvent(application, selector, event);
+    }
 }
 
 // -[NSApplication sendEvent:] calls the local monitors, in no fixed order, and a monitor that returns nil ends the others. A
@@ -265,7 +311,7 @@ static void finishTransaction(void) {
     [CATransaction commit];
     traceMark(ticket, 3);
     if (layoutEnded) layoutEnded(owner);
-    releaseInput(owner);
+    releaseWhenFree(owner);
     nextLayout();
     releaseSettled();
 }
@@ -320,10 +366,106 @@ bool surfaceLayoutPressWaits(void *owner, double x, double y) {
 
 bool surfaceLayoutHoldCall(void *owner, bool press, double x, double y, void (^call)(void)) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    BOOL waits = [returning containsObject:[NSValue valueWithPointer:owner]] || inputHeld(owner)
+    BOOL waits = keyboardHold(owner) || [returning containsObject:[NSValue valueWithPointer:owner]] || inputHeld(owner)
         || (press && surfaceLayoutPressWaits(owner, x, y));
     if (waits) keepInput(owner, nil, call);
     return waits;
+}
+
+static double nowMs(void) {
+    return CACurrentMediaTime() * 1000;
+}
+
+static void recordHoldDropped(NSUInteger count, const char *reason) {
+    NSString *fields = [NSString stringWithFormat:@"{\"count\":%lu,\"reason\":\"%s\"}", (unsigned long)count, reason];
+    sp_event(SP_CLASS_INPUT, SP_EVENT_WARN, "native.keyboard.hold_dropped", fields.UTF8String);
+}
+
+// Ends the hold of the keyboard of owner. An expired hold gives the input to the first responder of that moment, and a closed
+// window drops what it held.
+static void endKeyboardHold(void *owner, const char *end) {
+    SPKeyboardHold *hold = [[keyboardHold(owner) retain] autorelease];
+    if (!hold) return;
+    [keyboardHolds removeObjectForKey:[NSValue valueWithPointer:owner]];
+    NSUInteger held = 0;
+    for (SPHeldInput *input in heldInput) held += input.owner == owner;
+    BOOL closed = strcmp(end, "closed") == 0;
+    if (closed) {
+        for (SPHeldInput *input in [[heldInput copy] autorelease]) {
+            if (input.owner == owner) [heldInput removeObjectIdenticalTo:input];
+        }
+    }
+    if (hold.dropped) recordHoldDropped(hold.dropped, "full");
+    if (closed && held) recordHoldDropped(held, "closed");
+    if (strcmp(end, "expired") == 0) {
+        NSString *fields = [NSString stringWithFormat:@"{\"held\":%lu,\"ms\":%.1f}", (unsigned long)held, nowMs() - hold.opened];
+        sp_event(SP_CLASS_INPUT, SP_EVENT_WARN, "native.keyboard.hold_expired", fields.UTF8String);
+    }
+    if (!closed) releaseWhenFree(owner);
+}
+
+static void observeHoldClose(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        sp_observe_notification("surface_layout.keyboard_hold_close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification, nil, nil,
+            ^(NSNotification *note) {
+                [workbenchPresses removeObject:[NSValue valueWithPointer:note.object]];
+                [passedPresses removeObject:[NSValue valueWithPointer:note.object]];
+                endKeyboardHold(note.object, "closed");
+            });
+    });
+}
+
+void surfaceLayoutKeyboardHold(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    if (!owner || keyboardHold(owner)) return;
+    watchInput();
+    observeHoldClose();
+    SPKeyboardHold *hold = [[[SPKeyboardHold alloc] init] autorelease];
+    hold.opened = nowMs();
+    if (!keyboardHolds) keyboardHolds = [[NSMutableDictionary alloc] init];
+    keyboardHolds[[NSValue valueWithPointer:owner]] = hold;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kKeyboardHoldBound * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (keyboardHold(owner) == hold) endKeyboardHold(owner, "expired");
+    });
+}
+
+void surfaceLayoutKeyboardDecided(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    endKeyboardHold(owner, "decided");
+}
+
+bool surfaceLayoutKeyboardHeld(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    return keyboardHold(owner) != nil;
+}
+
+void surfaceLayoutObserveWorkbench(bool (^onWorkbench)(void *window, double x, double y)) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    if (pressOnWorkbench) return;
+    pressOnWorkbench = [onWorkbench copy];
+    watchInput();
+}
+
+bool surfaceLayoutLeftPressPassed(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    return [passedPresses containsObject:[NSValue valueWithPointer:owner]];
+}
+
+void surfaceLayoutPointerPassing(void *owner, bool down, double x, double y) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    NSValue *key = [NSValue valueWithPointer:owner];
+    if (!passedPresses) passedPresses = [[NSMutableSet alloc] init];
+    if (down) [passedPresses addObject:key];
+    else [passedPresses removeObject:key];
+    if (down) {
+        if (!workbenchPresses) workbenchPresses = [[NSMutableSet alloc] init];
+        if (pressOnWorkbench && pressOnWorkbench(owner, x, y)) [workbenchPresses addObject:key];
+        else [workbenchPresses removeObject:key];
+    } else if ([workbenchPresses containsObject:key]) {
+        [workbenchPresses removeObject:key];
+        surfaceLayoutKeyboardHold(owner);
+    }
 }
 
 void surfaceLayoutCancel(void *owner) {

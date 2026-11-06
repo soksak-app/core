@@ -4,7 +4,9 @@ import "fmt"
 
 // The keyboard of the window follows the focus ring (docs/spec/exposure.md#keyboard-focus): while no modal is open, the active
 // surface of the card with the ring holds the keyboard. Every move of the ring goes through focusCard, and the frame that shows
-// the move sends the one host call surfaceFocus. A surface that an earlier placement gave the host receives the call ahead of the
+// the move sends the one host call surfaceFocus. The host holds the input of the window from the release of a press on the
+// workbench until a call that carries decided, so each release owes one decided call, sent by the frame that shows what the
+// press changed, also for the same target or for the workbench. A surface that an earlier placement gave the host receives the call ahead of the
 // placement of the frame, so the host gives it the keyboard at the release of the press that moved the ring, before a key that
 // follows the release; a surface that the host does not hold yet receives the call after the placement that holds it, when it
 // stands. A command that moved the ring answers after the host answered the keyboard call that the move owes, so a key that the
@@ -15,6 +17,9 @@ type keyboardState struct {
 	// owed tells that the keyboard has to move even when the target is the same: a path moved the ring, or the first responder
 	// left the target.
 	owed bool
+	// due tells that a press released on the workbench waits for the call, which carries decided and ends the hold of the
+	// input of the window.
+	due bool
 	// target is the surface of the last call. It starts nil, because a window starts with the keyboard in its workbench.
 	target *string
 	// moves counts the moves of the ring, so a command reads whether it moved the ring.
@@ -23,6 +28,14 @@ type keyboardState struct {
 	// wait for the keyboard calls that run. sending counts those calls.
 	decided, answered []func(err error)
 	sending           int
+}
+
+// keyboardPressed follows the release of a left press on the workbench: the host holds the input of the window until the
+// decided call of the frame that shows what the press changed.
+func (s *Shell) keyboardPressed() {
+	s.keyboard.owed = true
+	s.keyboard.due = true
+	s.options.Invalidate()
 }
 
 // focusCard moves the focus ring to card and owes the keyboard to its active surface.
@@ -99,9 +112,13 @@ func (s *Shell) followKeyboard(ahead bool) {
 		s.answerKeyboard(nil)
 		return
 	}
-	s.keyboard.owed, s.keyboard.target = false, target
+	request := map[string]any{"surface": target}
+	if s.keyboard.due {
+		request["decided"] = true
+	}
+	s.keyboard.owed, s.keyboard.due, s.keyboard.target = false, false, target
 	s.keyboard.sending++
-	s.calls.CallInOrder(surfaceOrder, "surfaceFocus", map[string]any{"surface": target}, func(_ any, err error) {
+	s.calls.CallInOrder(surfaceOrder, "surfaceFocus", request, func(_ any, err error) {
 		s.keyboard.sending--
 		if err != nil {
 			err = fmt.Errorf("surface focus: %w", err)

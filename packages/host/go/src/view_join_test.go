@@ -3,9 +3,12 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 const presentationJoinTrace = "host.trace.view.presentation-join"
@@ -598,6 +601,62 @@ func TestSurfaceFocusRefusesAWindowlessCallAndAMissingMember(t *testing.T) {
 	surface := "gone"
 	if err := s.FocusSurface(FocusRequest{Surface: &surface}); err == nil || err.Error() != `surface "gone" is not attached` {
 		t.Fatalf("FocusSurface of a surface that is not attached = %v", err)
+	}
+}
+
+// keyboardHoldPlatform records the keyboard calls of the host in their order and runs the work of the UI thread at once.
+type keyboardHoldPlatform struct {
+	platform.Platform
+	calls []string
+}
+
+func (p *keyboardHoldPlatform) EnqueueUI(run func()) error {
+	run()
+	return nil
+}
+func (p *keyboardHoldPlatform) FocusWorkbench(unsafe.Pointer) { p.calls = append(p.calls, "workbench") }
+func (p *keyboardHoldPlatform) KeyboardHold(unsafe.Pointer)   { p.calls = append(p.calls, "hold") }
+func (p *keyboardHoldPlatform) KeyboardDecided(unsafe.Pointer) {
+	p.calls = append(p.calls, "decided")
+}
+
+// contract: surface-layout.keyboard-waits-for-the-decision
+func TestTheInputOfTheWindowWaitsForTheDecisionOfTheWorkbench(t *testing.T) {
+	fake := &keyboardHoldPlatform{}
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	s := &Surfaces{}
+	if err := s.KeyboardHold(); err != errNoWindow {
+		t.Fatalf("KeyboardHold without a window = %v, want %v", err, errNoWindow)
+	}
+	if err := s.KeyboardDecided(); err != errNoWindow {
+		t.Fatalf("KeyboardDecided without a window = %v, want %v", err, errNoWindow)
+	}
+	s.window = &noticeFrontend{}
+	if err := s.KeyboardHold(); err != nil {
+		t.Fatalf("KeyboardHold: %v", err)
+	}
+	if err := s.FocusSurface(FocusRequest{}); err != nil {
+		t.Fatalf("a call without the decision: %v", err)
+	}
+	if err := s.FocusSurface(FocusRequest{Decided: true}); err != nil {
+		t.Fatalf("a decided call: %v", err)
+	}
+	gone := "gone"
+	if err := s.FocusSurface(FocusRequest{Surface: &gone, Decided: true}); err == nil {
+		t.Fatalf("a decided call for a surface that is not attached was not refused")
+	}
+	if err := s.KeyboardDecided(); err != nil {
+		t.Fatalf("KeyboardDecided: %v", err)
+	}
+	want := []string{"hold", "workbench", "workbench", "decided", "decided", "decided"}
+	if !slices.Equal(fake.calls, want) {
+		t.Fatalf("the keyboard calls of the host are %v, want %v: a decided call ends the hold after the keyboard moved, also when it is refused", fake.calls, want)
+	}
+	request, err := argument[FocusRequest]("request", json.RawMessage(`{"surface":null,"decided":true}`))
+	if err != nil || !request.Decided || request.Surface != nil {
+		t.Fatalf("the decided request reads as %+v, %v", request, err)
 	}
 }
 

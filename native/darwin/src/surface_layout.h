@@ -28,7 +28,23 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity);
 uint64_t surfaceLayoutTraceRequested(void);
 // Diagnostics only. Records the time at which the presentation of the transaction of the ticket was confirmed.
 void surfaceLayoutTracePresented(uint64_t ticket);
+// The decision of the workbench about the keyboard (docs/spec/native-surfaces.md#keyboard-of-a-surface). surfaceLayoutKeyboardHold
+// opens the hold of the input of owner: every later pointer and key event of the window waits, with the input that waits for a
+// layout transaction, until surfaceLayoutKeyboardDecided ends the hold, or until the bound of 1000 ms, which records
+// native.keyboard.hold_expired. A hold keeps up to 256 pieces of input. An open hold leaves the hold as it is. Call on the UI thread.
+void surfaceLayoutKeyboardHold(void *owner);
+void surfaceLayoutKeyboardDecided(void *owner);
+bool surfaceLayoutKeyboardHeld(void *owner);
+// Follows a left press and its release that pass to the views of owner, at the point in window coordinates, before they reach a
+// view. The release of a press that began on the workbench opens the hold of the keyboard. Events that pass
+// -[NSApplication sendEvent:] are followed by the library; a driver that delivers a press to a window directly calls it.
+void surfaceLayoutPointerPassing(void *owner, bool down, double x, double y);
+// Returns whether a left press of owner passed to its view and its release did not.
+bool surfaceLayoutLeftPressPassed(void *owner);
 #ifdef __BLOCKS__
+// Registers once the test of a press on the workbench: a press at the point, in window coordinates, outside the surfaces of a
+// window that holds a surface.
+void surfaceLayoutObserveWorkbench(bool (^onWorkbench)(void *window, double x, double y));
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
 // Keeps an injected call behind the input of owner that waits and returns true, or returns false when it runs now. A press at the
 // point, in window coordinates, waits as surfaceLayoutPressWaits says. The event loop of the application runs the call in its turn.

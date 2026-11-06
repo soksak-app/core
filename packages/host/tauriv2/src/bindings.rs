@@ -296,6 +296,18 @@ fn surface_focus(window: Window, request: Argument<FocusRequest>) -> Result<(), 
     surfaces::focus(&window, request)
 }
 
+/// Holds the input of the window until the workbench decided where the keyboard goes.
+#[tauri::command]
+fn keyboard_hold(window: Window) -> Result<(), String> {
+    surfaces::keyboard_hold(&window)
+}
+
+/// Ends the hold of the input of the window and leaves the keyboard where it is.
+#[tauri::command]
+fn keyboard_decided(window: Window) -> Result<(), String> {
+    surfaces::keyboard_decided(&window)
+}
+
 /// Ends a preparation that the page does not present, so the windows that wait for its transaction continue.
 #[tauri::command]
 fn cancel_surfaces(window: Window, request: Argument<CancelRequest>) -> Result<(), String> {

@@ -477,6 +477,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String>;
     /// Gives the keyboard of window to the workbench. Call it on the main thread.
     fn focus_workbench(&self, window: Handle) -> Result<(), String>;
+    /// Holds the input of window until keyboard_decided, the decision of the workbench about the keyboard
+    /// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
+    fn keyboard_hold(&self, window: Handle) -> Result<(), String>;
+    fn keyboard_decided(&self, window: Handle) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;
     /// Receives the files dropped on the window of the main webview. receive receives {"urls":[...],"x":..,"y":..}
     /// (page coordinates).

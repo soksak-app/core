@@ -416,6 +416,14 @@ func (implementation) FocusWorkbench(unsafe.Pointer) {
 	unreachable("workbench keyboard")
 }
 
+func (implementation) KeyboardHold(unsafe.Pointer) {
+	unreachable("workbench keyboard")
+}
+
+func (implementation) KeyboardDecided(unsafe.Pointer) {
+	unreachable("workbench keyboard")
+}
+
 func (implementation) SetSurfaceAlphaHandle(unsafe.Pointer, float64) {
 	unreachable("surface opacity")
 }
