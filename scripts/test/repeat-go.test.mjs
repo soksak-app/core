@@ -29,7 +29,7 @@ case "$*" in
       support) printf 'fixture/tests/support\\t%s\\t0\\t0\\nfixture/tests\\t%s\\t1\\t0\\n' ${JSON.stringify(directory)} ${JSON.stringify(directory)}; exit 0 ;;
       *) printf 'fixture/src\\t%s\\t1\\t0\\n' ${JSON.stringify(directory)}; exit 0 ;;
     esac ;;
-  "test -c"*) out=""; while [ $# -gt 0 ]; do if [ "$1" = "-o" ]; then out="$2"; fi; shift; done
+  "test -c"*) if [ -n "\${FAKE_GO_LINKER-}" ]; then printf '%s\\n' "$FAKE_GO_LINKER" >&2; fi; out=""; while [ $# -gt 0 ]; do if [ "$1" = "-o" ]; then out="$2"; fi; shift; done
     cat > "$out" <<'BINARY'
 #!/bin/sh
 printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'binary-args'))}
@@ -104,6 +104,18 @@ test('make repeat-go passes a pattern whose tested package passed while a suppor
   assert.equal(status, 0, stdout + stderr);
   assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
   assert.match(stdout, /1 of 1 runs pass/, stdout + stderr);
+});
+
+test('make repeat-go fails a test build whose link reports an object newer than the link, and names the object and both versions', (t) => {
+  const directory = fakeGo(t);
+  const warning = "ld: warning: object file (/tmp/go-link-1/000029.o) was built for newer 'macOS' version (27.0) than being linked (14.4)";
+  const result = spawnSync('make', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestAlpha'], {
+    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run', FAKE_GO_LINKER: warning },
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /ld built \/tmp\/go-link-1\/000029\.o for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /^RUN  TestAlpha/m, 'a test of a build with a linker failure ran');
 });
 
 test('make repeat-go fails a run in which no test matched', (t) => {

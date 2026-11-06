@@ -117,6 +117,9 @@ pub struct LogNoticeState(pub std::sync::Arc<debug_follow::LogNotices>);
 /// The stop of the thread that brings the index of the event files up to date after the writer wrote.
 struct LogIndexStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
 
+/// The stop of the watch of the main thread, which waits for its running sample (docs/spec/logging.md, stalls).
+struct StallWatchStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
+
 /// The watch of the policy file of the event log, which ends with the application.
 struct LogPolicyStop(std::sync::Mutex<Option<log_policy::LogPolicyWatch>>);
 
@@ -361,9 +364,9 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
         }),
     )?;
     app.manage(workspace::Workspace::new(directory.clone()));
-    // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The
-    // watch runs until the process ends.
-    let _runs_until_exit = stall_watch::start_stall_watch(stall_watch::StallWatchOptions {
+    // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The exit
+    // stops the watch and waits for its running sample.
+    let stop_stall_watch = stall_watch::start_stall_watch(stall_watch::StallWatchOptions {
         heartbeat: Box::new(|| {
             let (now, answered) = platform::current()?.stall_heartbeat()?;
             Ok((
@@ -378,6 +381,9 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
         clock: None,
         wait: None,
     });
+    app.manage(StallWatchStop(std::sync::Mutex::new(Some(Box::new(
+        stop_stall_watch,
+    )))));
     let handle = app.clone();
     // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
     // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
@@ -503,6 +509,20 @@ pub fn run_event(app: &AppHandle, event: RunEvent) {
         }
     }
     if let RunEvent::Exit = event {
+        // The exit ends the watch of the main thread before its own work on the main thread, and the stop waits for
+        // the running sample, so its `host.stall.sampled` reaches the flush below and no sample process outlives the
+        // host (docs/spec/logging.md, stalls).
+        if let Some(stop) = app
+            .state::<StallWatchStop>()
+            .0
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the stop of the watch, which the exit
+            // takes; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+        {
+            stop();
+        }
         // An application update or a relaunch keeps the persistent services running for the application that starts
         // next.
         let update = app

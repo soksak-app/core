@@ -11,6 +11,7 @@ import { dirname } from 'node:path';
 import { loadavg } from 'node:os';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
 
 /** The limit of one test when `--timeout` is not given. */
@@ -34,9 +35,9 @@ export function testExecutables(messages) {
   return [...found].map(([path, target]) => ({ path, target }));
 }
 
-function cargo(args, { cwd } = {}) {
+async function cargo(args, { cwd } = {}) {
   try {
-    return execFileSync('cargo', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+    return await runBuild('cargo', args, { cwd });
   } catch (error) {
     if (typeof error.stdout === 'string' && error.stdout.length > 0) {
       process.stderr.write(error.stdout);
@@ -59,8 +60,8 @@ export function cargoTargetArgs(target) {
 }
 
 /** The package of the manifest, as `cargo metadata` describes it: its folder and whether its library has documentation tests. */
-function packageOf(manifest, pkg) {
-  const metadata = JSON.parse(cargo(['metadata', '--locked', '--no-deps', '--format-version', '1', '--manifest-path', manifest]));
+async function packageOf(manifest, pkg) {
+  const metadata = JSON.parse(await cargo(['metadata', '--locked', '--no-deps', '--format-version', '1', '--manifest-path', manifest]));
   const found = metadata.packages.find((item) => item.name === pkg);
   if (found === undefined) throw new Error(`${pkg} is not a package of ${manifest}`);
   return {
@@ -78,8 +79,8 @@ export async function runRustTests({ manifest, package: pkg, features, testTarge
   const targetArgs = cargoTargetArgs(testTarget);
   const cargoArgs = ['test', '--locked', '-q', '--manifest-path', manifest, '-p', pkg,
     ...(features ? ['--features', features] : []), ...targetArgs];
-  const executables = testExecutables(cargo([...cargoArgs, '--no-run', '--message-format=json']));
-  const { folder: cwd, doctests } = packageOf(manifest, pkg);
+  const executables = testExecutables(await cargo([...cargoArgs, '--no-run', '--message-format=json']));
+  const { folder: cwd, doctests } = await packageOf(manifest, pkg);
   if (executables.length === 0 && (!doctests || testTarget !== undefined)) throw new Error(`${pkg} has no test executables`);
   const listed = executables.flatMap(({ path, target }) => testNames(execFileSync(path, ['--list'], {
     cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'],
@@ -87,7 +88,7 @@ export async function runRustTests({ manifest, package: pkg, features, testTarge
   // A named test that an executable holds needs no listing of the documentation tests.
   if (doctests && testTarget === undefined && !(test !== undefined && listed.some((item) => item.name === test))) {
     // Cargo builds the documentation tests while it lists them; a library with none lists nothing.
-    for (const name of testNames(cargo([...cargoArgs, '--doc', '--', '--list'], { cwd }))) {
+    for (const name of testNames(await cargo([...cargoArgs, '--doc', '--', '--list'], { cwd }))) {
       listed.push({ doc: true, name });
     }
   }

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -54,7 +55,9 @@ func StallHeartbeat(system platform.Platform) func() (now, answered time.Duratio
 	}
 }
 
-// StartStallWatch starts the watch and returns the function that stops it. The watch ends after the beat that is running.
+// StartStallWatch starts the watch and returns the function that stops it. The watch ends after the beat that is running. The stop
+// starts no sample after it and returns when the running sample ended and stored its `host.stall.sampled`, so the process of the
+// sample does not outlive the host and the stall keeps its dump.
 func StartStallWatch(options StallWatchOptions) func() {
 	clock := options.Clock
 	if clock == nil {
@@ -66,6 +69,10 @@ func StartStallWatch(options StallWatchOptions) func() {
 		wait = time.Sleep
 	}
 	var stopped, sampling atomic.Bool
+	// samples holds the running sample; ending guards stopped against the start of a sample, so the stop waits for every sample that
+	// started.
+	var samples sync.WaitGroup
+	var ending sync.Mutex
 	routine.Go("stall-watch", func() {
 		options.AwaitAwake()
 		// The first heartbeat is the reference of the answers until the watched thread answers one.
@@ -84,16 +91,27 @@ func StartStallWatch(options StallWatchOptions) func() {
 			now, last := sent.Milliseconds(), answered.Milliseconds()
 			switch {
 			case stalledFrom < 0 && now-last >= stallLate.Milliseconds():
+				// A stall that the watch finds after its stop is not recorded: the host ends, and the stop waits only for a sample
+				// that started before it.
+				ending.Lock()
+				if stopped.Load() {
+					ending.Unlock()
+					return
+				}
 				stalledFrom = last
 				options.EmitHost(LevelWarn, "host.stall", map[string]any{"late_ms": now - last, "watch_late_ms": watchLate.Milliseconds()})
 				path := filepath.Join(options.Folder, fmt.Sprintf("stall-host-%d-%d.txt", os.Getpid(), time.Now().UnixMilli()))
 				if !sampling.CompareAndSwap(false, true) {
+					ending.Unlock()
 					options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": stallSampleRunning})
 					break
 				}
+				samples.Add(1)
+				ending.Unlock()
 				// A sample lasts for seconds on a loaded system. The watch keeps sending heartbeats meanwhile, so that time is not
 				// read as lateness of the main thread.
 				routine.Go("stall-sample", func() {
+					defer samples.Done()
 					defer sampling.Store(false)
 					if err := options.Sample(path); err != nil {
 						options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": err.Error()})
@@ -113,5 +131,10 @@ func StartStallWatch(options StallWatchOptions) func() {
 			}
 		}
 	})
-	return func() { stopped.Store(true) }
+	return func() {
+		ending.Lock()
+		stopped.Store(true)
+		ending.Unlock()
+		samples.Wait()
+	}
 }

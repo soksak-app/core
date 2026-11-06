@@ -487,3 +487,62 @@ fn a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends() {
     stop();
     run_loop.wake(false);
 }
+
+// contract: host.stall.stop-waits-for-the-sample
+#[test]
+fn stopping_the_watch_waits_for_the_running_sample() {
+    // The main thread never answers, so the beats after 1 s of the controlled clock are a stall that starts a sample. The
+    // sample lasts for its own time, as the sample of the system lasts for a second, and the stop of the watch comes while
+    // it runs.
+    const SAMPLE_TIME: Duration = Duration::from_millis(300);
+    let (clock, wait) = controlled_time(Duration::ZERO);
+    let events: Recorded = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&events);
+    let folder = folder::Folder::new();
+    let (started, starts) = mpsc::channel::<()>();
+    let started = Mutex::new(started);
+    let samples = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let counted = Arc::clone(&samples);
+    let finished = Arc::clone(&ended);
+    let stop = start_stall_watch(StallWatchOptions {
+        heartbeat: {
+            let clock = Arc::clone(&clock);
+            Box::new(move || Ok((clock(), Duration::ZERO)))
+        },
+        await_awake: never_waits(),
+        sample: Arc::new(move |_path| {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            started
+                .lock()
+                .unwrap()
+                .send(())
+                .map_err(|e| e.to_string())?;
+            std::thread::sleep(SAMPLE_TIME);
+            finished.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }),
+        folder: folder.path().to_path_buf(),
+        emit_host: Arc::new(move |_level, event, fields| {
+            recorded.lock().unwrap().push((event.to_string(), fields))
+        }),
+        clock: Some(clock),
+        wait: Some(wait),
+    });
+    starts
+        .recv_timeout(Duration::from_secs(10))
+        .expect("no sample started");
+    stop();
+    assert!(
+        ended.load(std::sync::atomic::Ordering::SeqCst),
+        "the stop of the watch returned while the sample of the threads still ran"
+    );
+    let names: Vec<String> = events
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(name, _)| name.clone())
+        .collect();
+    assert_eq!(names, ["host.stall", "host.stall.sampled"]);
+    assert_eq!(samples.load(std::sync::atomic::Ordering::SeqCst), 1);
+}

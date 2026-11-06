@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { linkerWarnings } from './macos-minimum.mjs';
 import { runCommand } from './test-command.mjs';
 import { runWithEvidence, persistEvidence } from './test-evidence.mjs';
 import { readNodeTestEvidence, testExecutionErrors, withNodeTestReporters } from './node-test-evidence.mjs';
@@ -128,6 +129,8 @@ function caseResult(caseSpec, commandResult) {
   const errors = nodeEvidence?.errors ?? testExecutionErrors(actual);
   if (commandResult.status !== 'pass') errors.push(`command status ${commandResult.status}`);
   if (commandResult.signal) errors.push(`process crashed with ${commandResult.signal}`);
+  // A build of the case whose link reports an object newer than the link compiled or linked for another macOS version (macos-minimum.mjs).
+  errors.push(...linkerWarnings(`${commandResult.stdout}\n${commandResult.stderr}`).failures);
   if (caseSpec.expectedTests !== undefined && actual.tests !== caseSpec.expectedTests) {
     errors.push(`expected ${caseSpec.expectedTests} tests, observed ${actual.tests}`);
   }

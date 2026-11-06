@@ -37,7 +37,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/make-cargo.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("Window check capture recognizer target", "js-ts", ["e2e/platform/darwin/darwin.js"], ["scripts/test/platform/darwin/capture-text-target.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
@@ -53,7 +53,7 @@ const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/test-hosts.mjs"], ["scripts/test/test-hosts.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
-lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs"], { sharedTests: true }),
+lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs", "scripts/macos-minimum.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs", "scripts/test/macos-minimum.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("Node execution evidence", "js-ts", ["scripts/node-test-evidence.mjs"], ["scripts/test/node-test-evidence.test.mjs"]),
@@ -247,6 +247,29 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F669",
+    implementation: [
+      { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
+      { file: "scripts/test-command.mjs", symbol: "export function killGroup(pgid, send = sendToGroup) {" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a command group whose last member has ended but is not reaped ends without an error" },
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a mutant deadline is distinguished from cancellation of the experiment" },
+    ],
+    expected: "A bounded command whose process group holds only members that ended but are not reaped ends without an execution error, because its group is ended through killGroup, which fails only while a member runs; a mutant deadline is therefore classified as mutant-timeout whenever its test processes are reaped.",
+    levels: ["unit"],
+  },
+  {
+    id: "F668",
+    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds(session, surface, cells) {" }],
+    tests: [
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds preserve a capture when the view read fails" },
+    ],
+    expected: "The terminal cell sampling tests answer the element.rect request that Session.rect sends, and cell sampling reads the view after it stops the recording.",
+    levels: ["unit"],
+  },
+  {
     id: "F584-5-2",
     implementation: [
       { file: "packages/workbench-mygo/src/dividers.go", symbol: "func outside(area layout.Rect, holes []layout.Rect) []layout.Rect {" },
@@ -271,6 +294,35 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F670",
+    implementation: [
+      { file: "docs/spec/host-contract.md", symbol: "| `application.window.show-reaches-the-registered-platform-before-the-host-starts` |" },
+      { file: "docs/spec/host-contract.md", symbol: "| `application.window.show-without-a-registered-platform-ends-through-the-fatal-error` |" },
+      { file: "docs/spec/hosts.md", symbol: "| H58 | `src/windows_show_test.go` | none |" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/windows_show_test.go", id: "TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts" },
+      { file: "packages/host/go/src/windows_show_test.go", id: "TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError" },
+    ],
+    expected: "The two show tests of the Go language host library declare host contract cases of the Wails and the mygo host, and their file is a Go-only row of the allowed differences of the language host libraries.",
+    levels: ["unit"],
+  },
+  {
+    id: "F671",
+    implementation: [
+      { file: "packages/host/go/src/stall_watch.go", symbol: "samples.Wait()" },
+      { file: "packages/host/go/src/host.go", symbol: "func (s *Session) stopStallWatch() {" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "sample.join().is_err()" },
+      { file: "packages/host/rust/src/host.rs", symbol: "struct StallWatchStop(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestStoppingTheWatchWaitsForTheRunningSample" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "stopping_the_watch_waits_for_the_running_sample" },
+    ],
+    expected: "The stop of the stall watch returns after the running sample ended and stored its host.stall.sampled, the watch records no stall and starts no sample after the stop, and each host stops the watch before the flush of its event log, so no sample process outlives the host.",
+    levels: ["unit"],
+  },
+  {
     id: "F651",
     implementation: [
       { file: "packages/sok/go/src/install.go", symbol: "func ParseRange" },
@@ -292,6 +344,46 @@ const FEATURE_LINKS = [
       { file: "scripts/test/markdown-table.test.mjs", id: "an escaped pipe is a pipe of its cell and the cells after it keep their places" },
     ],
     expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, a union of forms joined by exactly ` || ` contains what one part contains, the registry build and the installation read a union in plugin dependencies, the workbench reads ranges only through @soksak/plugin-api, and the checks read the escaped pipes of a union in a table row as pipes of its cell.",
+    levels: ["unit"],
+  },
+  {
+    id: "F672",
+    implementation: [
+      { file: "Makefile", symbol: "CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" },
+      { file: "Makefile", symbol: "check-cargo:" },
+    ],
+    tests: [
+      { file: "scripts/test/make-cargo.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" },
+      { file: "scripts/test/make-cargo.test.mjs", id: "no recipe or variable of the Makefile runs cargo other than through CARGO" },
+      { file: "scripts/test/make-cargo.test.mjs", id: "each target whose recipe runs CARGO requires check-cargo" },
+      { file: "scripts/test/make-cargo.test.mjs", id: "check-cargo stops with a message when neither the PATH of make nor the cargo folder of HOME holds cargo" },
+    ],
+    expected: "Every recipe of the Makefile runs cargo through CARGO, which the exported PATH resolves, so GNU Make 3.81 finds cargo when it starts without the cargo folder of rustup, and check-cargo stops a target that runs cargo when none is found.",
+    levels: ["unit"],
+  },
+  {
+    id: "F667",
+    implementation: [
+      { file: "Makefile", symbol: "go-env       = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)" },
+      { file: "Makefile", symbol: "GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)" },
+      { file: "native/darwin/Makefile", symbol: "MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p'" },
+      { file: "scripts/macos-minimum.mjs", symbol: "export function macosMinimum(" },
+      { file: "scripts/macos-minimum.mjs", symbol: "export function linkerWarnings(" },
+      { file: "scripts/macos-minimum.mjs", symbol: "export function runBuild(" },
+      { file: "scripts/test-runner.mjs", symbol: "const linkerFailures = linkerWarnings(output).failures;" },
+    ],
+    tests: [
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "every Go and Rust command of a make target compiles and links for the declared macOS minimum" },
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "the native library compiles, configures and declares in its pkg-config file the macOS minimum of the Makefile" },
+      { file: "scripts/test/macos-minimum.test.mjs", id: "a linker warning of an object built for a newer macOS version than the link is a failure that names the object and both versions" },
+      { file: "scripts/test/macos-minimum.test.mjs", id: "the duplicate library warning of the link of two Objective-C packages is recognized and held, not a failure" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a process whose output holds a linker warning of an object newer than the link fails with the object and both versions" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go fails a test build whose link reports an object newer than the link, and names the object and both versions" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "Rust owner CLI fails a test build whose link reports an object newer than the link, and names the object and both versions" },
+      { file: "scripts/test/benchmarks.test.mjs", id: "make benchmark-go fails a benchmark build whose link reports an object newer than the link, and names the object and both versions" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case whose build reports an object newer than the link fails with the object and both versions" },
+    ],
+    expected: "Every Go and Cargo command of a make target and the native library build take the macOS minimum that MACOS_MINIMUM of the Makefile declares, and a build or test whose linker reports an object built for a newer macOS version than the link fails with the object and both versions.",
     levels: ["unit"],
   },
   {
@@ -4987,7 +5079,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F257-3",
-    implementation: [{ file: "scripts/test-runner.mjs", symbol: "function signalGroup" }],
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "function signalRunningGroup" }],
     tests: [
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with no running member ends without error" },
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with a running member names it" },
@@ -12872,7 +12964,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-264",
-    implementation: [{ file: "Makefile", symbol: "sok-tauriv2 = $(CARGO_ENV) cargo build --locked" }],
+    implementation: [{ file: "Makefile", symbol: "sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked" }],
     tests: [{ file: "scripts/test/native-pkgconfig.test.mjs", id: "Tauri app and bundled CLI Cargo commands use the declared deployment target" }],
     expected: "Application and bundled CLI Cargo commands use the same declared macOS deployment target in debug and release builds.",
     levels: ["unit"],

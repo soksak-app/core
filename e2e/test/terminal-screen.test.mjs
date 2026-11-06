@@ -47,7 +47,7 @@ function captureSession(t, { bytes, presentationError, stopError, viewError,
         if (presentationError) throw presentationError;
         return { displayed: 42 };
       }
-      if (method === "dom.rect") {
+      if (method === "element.rect") {
         assert.equal(params.name, "terminal.view");
         if (viewError) throw viewError;
         return view;

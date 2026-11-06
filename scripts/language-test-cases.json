@@ -23,7 +23,7 @@
       "implementationFiles": ["packages/sok/rust/src/registry.rs"],
       "testFiles": ["packages/sok/rust/tests/registry_test.rs"],
       "dependencyFiles": ["Cargo.toml", "Cargo.lock"],
-      "buildFlags": ["MACOSX_DEPLOYMENT_TARGET=14.4", "cargo test"]
+      "buildFlags": ["MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)", "cargo test"]
     },
     {
       "id": "go-sok-registry",
@@ -47,7 +47,7 @@
       "implementationFiles": ["native/darwin/src/appearance.m"],
       "testFiles": ["native/darwin/tests/appearance_test.m"],
       "dependencyFiles": ["native/darwin/Makefile"],
-      "buildFlags": ["clang -fblocks -fmodules -mmacosx-version-min=14.4", "Cocoa WebKit"]
+      "buildFlags": ["clang -fblocks -fmodules -mmacosx-version-min=$(MACOS_MINIMUM)", "Cocoa WebKit"]
     },
     {
       "id": "shell-build-environment",

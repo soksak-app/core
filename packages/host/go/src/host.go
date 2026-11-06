@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -51,8 +51,13 @@ type Session struct {
 	quit        *Quit
 	started     chan struct{}
 	unpublished chan error
-	stopStall   atomic.Pointer[func()]
-	main        *Surfaces
+	// stall guards the stop of the watch of the main thread and whether the shutdown began, after which no watch starts.
+	stall struct {
+		sync.Mutex
+		stop     func()
+		shutDown bool
+	}
+	main *Surfaces
 	// cleanups run in reverse order at End.
 	cleanups []func()
 }
@@ -230,6 +235,10 @@ func (s *Session) OpenDeepLink(value string) {
 // Shutdown ends the services of the host when the framework shuts down.
 func (s *Session) Shutdown() {
 	host := s.host
+	// The shutdown ends the watch of the main thread before its own work on the main thread, and the stop waits for the running
+	// sample, so its host.stall.sampled reaches the flush below and no sample process outlives the host (docs/spec/logging.md,
+	// stalls).
+	s.stopStallWatch()
 	RecordAppEvent("exit")
 	EmitClosed("exit", nil)
 	// An application update or a relaunch keeps the persistent services running for the application that starts next.
@@ -324,9 +333,13 @@ func (s *Session) Started() []func() {
 		// A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The heartbeat starts when the
 		// main loop runs, because before it the main thread runs the start and takes no heartbeat.
 		func() {
-			stop := StartStallWatch(StallWatchOptions{Heartbeat: StallHeartbeat(system), AwaitAwake: system.StallAwaitAwake,
+			s.stall.Lock()
+			defer s.stall.Unlock()
+			if s.stall.shutDown {
+				return
+			}
+			s.stall.stop = StartStallWatch(StallWatchOptions{Heartbeat: StallHeartbeat(system), AwaitAwake: system.StallAwaitAwake,
 				Sample: system.SampleThreads, Folder: filepath.Dir(host.events.Path()), EmitHost: EmitHost})
-			s.stopStall.Store(&stop)
 		},
 	}
 }
@@ -335,12 +348,21 @@ func (s *Session) Started() []func() {
 // locks it there in its init), so the mask is the mask of the main thread (docs/spec/hosts.md, main thread of the Wails host).
 func (s *Session) BlockAsyncSignals() error { return system.BlockAsyncSignals() }
 
-// Finish ends the stall watch after the framework ended with err and returns err with the failure that kept the application from
-// publishing its endpoint.
-func (s *Session) Finish(err error) error {
-	if stop := s.stopStall.Load(); stop != nil {
-		(*stop)()
+// stopStallWatch stops the watch of the main thread and waits for its running sample. A shutdown that comes before the start of
+// the watch keeps the watch from starting.
+func (s *Session) stopStallWatch() {
+	s.stall.Lock()
+	s.stall.shutDown = true
+	stop := s.stall.stop
+	s.stall.stop = nil
+	s.stall.Unlock()
+	if stop != nil {
+		stop()
 	}
+}
+
+// Finish returns err, with which the framework ended, with the failure that kept the application from publishing its endpoint.
+func (s *Session) Finish(err error) error {
 	select {
 	case failure := <-s.unpublished:
 		return errors.Join(err, failure)

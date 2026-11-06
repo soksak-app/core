@@ -7,9 +7,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { macosMinimum } from "../macos-minimum.mjs";
 
 const makefile = fileURLToPath(new URL("../../native/darwin/Makefile", import.meta.url));
 const workspace = fileURLToPath(new URL("../../", import.meta.url));
+// The declared macOS minimum as a regular expression.
+const minimum = macosMinimum(workspace).replaceAll(".", "\\.");
 
 test("generated pkg-config file follows a relocated workspace", { timeout: 10000 }, (t) => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "soksak-pkgconfig-")));
@@ -17,6 +20,8 @@ test("generated pkg-config file follows a relocated workspace", { timeout: 10000
   const before = join(dir, "before/native/darwin");
   mkdirSync(join(before, "src"), { recursive: true });
   copyFileSync(makefile, join(before, "Makefile"));
+  // The native Makefile reads the macOS minimum from the Makefile of the repository.
+  copyFileSync(join(workspace, "Makefile"), join(dir, "before/Makefile"));
   const generate = (dir) => execFileSync("make", ["-C", dir, join(dir, "build/soksak-darwin.pc")], { encoding: "utf8" });
   generate(before);
 
@@ -47,8 +52,8 @@ test("Tauri app and bundled CLI Cargo commands use the declared deployment targe
     });
     const cargo = output.split(/\r?\n/).filter((line) => /\bcargo build\b.*-p (?:sok-tauriv2|soksak-sok)(?:\s|$)/.test(line));
     assert.equal(cargo.length, 2, `${target} must expand to one app build and one bundled CLI build:\n${output}`);
-    assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p sok-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
-    assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 cargo build\b.*-p soksak-sok(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
+    assert.match(cargo[0], /^MACOSX_DEPLOYMENT_TARGET=14\.4 (?:\S*\/)?cargo build\b.*-p sok-tauriv2(?:\s|$)/, `${target} app build: ${cargo[0]}`);
+    assert.match(cargo[1], /^MACOSX_DEPLOYMENT_TARGET=14\.4 (?:\S*\/)?cargo build\b.*-p soksak-sok(?:\s|$)/, `${target} bundled CLI build: ${cargo[1]}`);
     for (const command of cargo) assert.match(command, /--locked/, `${target} does not preserve the Cargo.lock: ${command}`);
   }
 });
@@ -85,10 +90,10 @@ test("the mygo application stages its view root, not a main page", { timeout: 10
   }
   const build = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "build-mygo"], { cwd: workspace, encoding: "utf8" });
   assert.match(build, /go build -C apps\/mygo -tags "diagnostics dev"/, build);
-  assert.match(build, /go build -C packages\/sok\/go\s+-tags "diagnostics dev mygo"/, build);
+  assert.match(build, new RegExp(`go build -C packages/sok/go\\s+-ldflags "-extldflags=-mmacosx-version-min=${minimum}" -tags "diagnostics dev mygo"`), build);
   const release = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "build-mygo-release"], { cwd: workspace, encoding: "utf8" });
   assert.match(release, /go build -C apps\/mygo -trimpath/, release);
-  assert.match(release, /go build -C packages\/sok\/go -trimpath -ldflags "-s -w" -tags "(?:diagnostics )?mygo"/, release);
+  assert.match(release, new RegExp(`go build -C packages/sok/go -trimpath -ldflags "-s -w -extldflags=-mmacosx-version-min=${minimum}" -tags "(?:diagnostics )?mygo"`), release);
 });
 
 test("Rust clippy stages only the core frontend and avoids the workspace registry", { timeout: 10000 }, () => {

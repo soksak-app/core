@@ -5,17 +5,17 @@
 // load that library.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { macosMinimum } from "../macos-minimum.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const minimum = readFileSync(join(root, "Makefile"), "utf8").match(/^MACOS_MINIMUM\s*=\s*(\S+)/m)?.[1];
+const minimum = macosMinimum(root);
 
 test("a release build loads the proc-macro libraries that it builds for the host", { timeout: 600000 }, (t) => {
-  assert.ok(minimum, "the Makefile declares no MACOS_MINIMUM");
   const target = mkdtempSync(join(tmpdir(), "soksak-rust-release-profile-"));
   t.after(() => rmSync(target, { recursive: true, force: true }));
   const build = spawnSync("cargo", ["build", "--locked", "--release", "-p", "serde", "--message-format=json"], {
