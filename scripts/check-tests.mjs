@@ -6780,7 +6780,7 @@ const FEATURE_LINKS = [
     id: "F221",
     implementation: [{ file: "scripts/generate-event-classes.mjs", symbol: "run" }],
     tests: [{ file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" }],
-    expected: "The generated event class tables of sok and of the workbench equal the catalog, and the push gate runs the test.",
+    expected: "The generated event class tables of sok and of the workbench equal the catalog, and `pnpm test` and the equivalence job of CI run the test.",
     levels: ["unit"],
   },
   {
