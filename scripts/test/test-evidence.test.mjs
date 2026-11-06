@@ -5,6 +5,112 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { appendEvidenceAttempt, collectEvidence, evidenceDrift, persistEvidence, validateEvidence } from '../test-evidence.mjs';
+import * as evidence from '../test-evidence.mjs';
+
+async function inputFixture(t) {
+  const root = await mkdtemp(join(tmpdir(), 'soksak-evidence-inputs-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  git('init', '-q');
+  git('config', 'user.email', 'evidence@example.invalid');
+  git('config', 'user.name', 'evidence');
+  for (const file of ['source.mjs', 'source.test.mjs', 'dependency.json']) await writeFile(join(root, file), 'original\n');
+  git('add', '.');
+  git('commit', '-q', '-m', 'initial');
+  return { root, caseId: 'input-binding', language: 'js-ts', implementationFiles: ['source.mjs'],
+    testFiles: ['source.test.mjs'], dependencyFiles: ['dependency.json'], buildFlags: ['--test'] };
+}
+
+test('process evidence rejects an unavailable or exited process identity', { timeout: 10000 }, async () => {
+  const entry = { pid: process.pid, executable: process.execPath };
+  await assert.rejects(() => evidence.runningProcess(process.cwd(), entry, {
+    readExecutable: async () => { throw new Error('identity unavailable'); },
+  }), /identity unavailable/);
+  await assert.rejects(() => evidence.runningProcess(process.cwd(), { ...entry, pid: 99999999 }), /not running/);
+  await assert.rejects(() => evidence.runningProcess(process.cwd(), entry, { readExecutable: async () => '' }), /identity.*unavailable/);
+});
+
+for (const [file, name] of [
+  [null, 'executed evidence binds unchanged inputs before the command'],
+  ['source.mjs', 'executed evidence binds source.mjs before the command'],
+  ['source.test.mjs', 'executed evidence binds source.test.mjs before the command'],
+  ['dependency.json', 'executed evidence binds dependency.json before the command'],
+]) {
+  test(name, { timeout: 10000 }, async (t) => {
+    const options = await inputFixture(t);
+    const original = await collectEvidence({ ...options, result: { status: 'pass', expected: 1, actual: 1, elapsedMs: 1 } });
+    const result = await evidence.runWithEvidence(options, async () => {
+      if (file) await writeFile(join(options.root, file), 'changed after the assertion\n');
+      return { status: 'pass', expected: 1, actual: 1, elapsedMs: 2, errors: [], stdout: 'passed', stderr: '' };
+    });
+    assert.equal(result.status, file ? 'fail' : 'pass');
+    assert.deepEqual(result.evidence.implementation, original.implementation, 'the result must retain the implementation present before execution');
+    assert.deepEqual(result.evidence.tests, original.tests);
+    assert.deepEqual(result.evidence.dependencies, original.dependencies);
+    assert.equal(result.evidence.commandResult.status, 'pass', 'input drift must not replace the actual command outcome');
+    assert.equal(validateEvidence(result.evidence).length, 0);
+    if (file) assert.match(result.errors.join('\n'), /inputs changed during execution/);
+  });
+}
+
+test('executed evidence preserves a failed command and reports an input that disappears', { timeout: 10000 }, async (t) => {
+  const options = await inputFixture(t);
+  const result = await evidence.runWithEvidence(options, async () => {
+    await rm(join(options.root, 'source.mjs'));
+    return { status: 'fail', expected: 1, actual: 0, elapsedMs: 2, errors: ['assertion failed'], stdout: '', stderr: 'failure detail' };
+  });
+  assert.equal(result.status, 'fail');
+  assert.equal(result.stderr, 'failure detail');
+  assert.equal(result.evidence.commandResult.actual, 0);
+  assert.ok(result.errors.includes('assertion failed'));
+  assert.match(result.errors.join('\n'), /cannot verify inputs after execution/);
+  assert.equal(result.evidence.implementation.files.length, 1);
+});
+
+test('executed evidence retains failure output when the inputs are unchanged', { timeout: 10000 }, async (t) => {
+  const options = await inputFixture(t);
+  const failure = { status: 'fail', expected: 1, actual: 0, elapsedMs: 2, errors: ['assertion failed'], stdout: '', stderr: 'failure detail' };
+  const result = await evidence.runWithEvidence(options, async () => failure);
+  assert.equal(result.status, 'fail');
+  assert.deepEqual(result.errors, ['assertion failed']);
+  assert.deepEqual(result.evidence.inputErrors, []);
+  assert.equal(result.evidence.commandResult.status, 'fail');
+  assert.equal(result.stderr, failure.stderr);
+});
+
+test('executed evidence refuses changed build options', { timeout: 10000 }, async (t) => {
+  const options = await inputFixture(t);
+  const result = await evidence.runWithEvidence(options, async () => {
+    options.buildFlags.push('--changed');
+    return { status: 'pass', expected: 1, actual: 1, elapsedMs: 2 };
+  });
+  assert.equal(result.status, 'fail');
+  assert.deepEqual(result.evidence.buildFlags, ['--test']);
+  assert.match(result.errors.join('\n'), /inputs changed during execution/);
+});
+
+test('persisted execution attempts retain each command outcome and input error', { timeout: 10000 }, async (t) => {
+  const options = await inputFixture(t);
+  const first = await evidence.runWithEvidence(options, async () => ({ status: 'fail', expected: 1, actual: 0, elapsedMs: 1 }));
+  const second = await evidence.runWithEvidence(options, async () => ({ status: 'pass', expected: 1, actual: 1, elapsedMs: 2 }));
+  const output = await mkdtemp(join(tmpdir(), 'soksak-evidence-attempts-'));
+  t.after(() => rm(output, { recursive: true, force: true }));
+  const path = join(output, 'evidence.json');
+  await persistEvidence(path, [first.evidence]);
+  await persistEvidence(path, [second.evidence]);
+  const record = JSON.parse(await readFile(path, 'utf8')).cases[options.caseId];
+  assert.deepEqual(record.attempts.map((attempt) => attempt.commandResult?.status), ['fail', 'pass']);
+  assert.deepEqual(record.attempts.map((attempt) => attempt.inputErrors), [[], []]);
+  assert.deepEqual(validateEvidence(record), []);
+  assert.throws(() => appendEvidenceAttempt(first.evidence, second.evidence.result), /execution-bound/);
+  const stale = structuredClone(record);
+  stale.commandResult = first.evidence.commandResult;
+  assert.match(validateEvidence(stale).join('\n'), /command outcome|latest execution/);
+  const omitted = structuredClone(record);
+  delete omitted.commandResult;
+  delete omitted.inputErrors;
+  assert.match(validateEvidence(omitted).join('\n'), /latest execution/);
+});
 
 test('evidence records content hashes, dirty state, expected/actual result, and retry history', async (t) => {
   // A repository of the test: the dirty state of the checkout that runs the test, such as untracked logs, is not an input.
@@ -25,7 +131,7 @@ test('evidence records content hashes, dirty state, expected/actual result, and 
     caseId: 'evidence-self-test', language: 'js-ts',
     implementationFiles: ['source.mjs'],
     testFiles: ['source.test.mjs'],
-    dependencyFiles: ['package.json'], buildFlags: ['node>=20'], processes: [{ pid: process.pid, executable: process.execPath }],
+    dependencyFiles: ['package.json'], buildFlags: ['node>=20'], processes: [],
     result: { status: 'fail', expected: { status: 'pass', tests: 1 }, actual: { status: 'fail', tests: 0 }, elapsedMs: 4 },
   });
   assert.equal(validateEvidence(record).length, 0);
@@ -36,10 +142,9 @@ test('evidence records content hashes, dirty state, expected/actual result, and 
   assert.match(retried.implementation.sha256, /^[0-9a-f]{64}$/);
   assert.ok(retried.git.sha256);
   assert.deepEqual(retried.git.files.map(({ state, path }) => [state, path]), [[' M', 'source.mjs']]);
-  assert.equal(retried.processes.length, 1);
-  assert.match(retried.processes[0].sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(retried.processes, []);
   assert.deepEqual(evidenceDrift(retried, { ...retried, buildFlags: ['different'] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
-  assert.deepEqual(evidenceDrift(retried, { ...retried, processes: [{ ...retried.processes[0], sha256: '0'.repeat(64) }] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
+  assert.deepEqual(evidenceDrift(retried, { ...retried, processes: [{ pid: 1, executable: 'fixture', sha256: '0'.repeat(64) }] }), ['evidence snapshot is stale: source, test, dependency, build, process, or dirty-worktree content changed']);
   const evidenceDirectory = await mkdtemp(join(tmpdir(), 'soksak-evidence-file-'));
   t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
   const evidenceFile = join(evidenceDirectory, 'evidence.json');

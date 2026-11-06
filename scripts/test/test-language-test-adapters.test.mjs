@@ -1,8 +1,134 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { SUPPORTED_LANGUAGES, discoverLanguageCases, parseLanguageResult, runLanguageCases } from '../language-test-adapters.mjs';
 
 const command = (source) => ({ command: process.execPath, args: ['-e', source], timeoutMs: 30_000 });
+
+test('the language adapter refuses to attribute a pass to inputs changed by its command', { timeout: 30000 }, async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'soksak-language-inputs-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  git('init', '-q');
+  git('config', 'user.email', 'evidence@example.invalid');
+  git('config', 'user.name', 'evidence');
+  await writeFile(join(root, 'source.txt'), 'tested content');
+  await writeFile(join(root, 'case.cjs'), "require('node:assert/strict').equal(require('node:fs').readFileSync('source.txt', 'utf8'), 'tested content'); require('node:fs').writeFileSync('source.txt', 'untested content'); console.log('PASS: input assertion');\n");
+  await writeFile(join(root, 'package.json'), '{}');
+  git('add', '.');
+  git('commit', '-q', '-m', 'initial');
+  const cases = discoverLanguageCases({ cases: [{ id: 'input-change', language: 'shell', command: process.execPath,
+    args: ['case.cjs'], cwd: root, timeoutMs: 10000, implementationFiles: [join(root, 'source.txt')],
+    testFiles: [join(root, 'case.cjs')], dependencyFiles: [join(root, 'package.json')], buildFlags: [] }] });
+  const result = await runLanguageCases(cases, { evidence: true, root });
+  assert.equal(result.status, 'fail', 'a successful assertion against old content cannot validate new content');
+  assert.equal(result.cases[0].evidence.commandResult.status, 'pass');
+  assert.equal(result.cases[0].evidence.implementation.files[0].sha256, createHash('sha256').update('tested content').digest('hex'));
+  assert.match(result.cases[0].errors.join('\n'), /inputs changed during execution/);
+});
+
+async function nodeCase(t, source, flags = []) {
+  const directory = await mkdtemp(join(tmpdir(), 'soksak-language-node-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const file = join(directory, 'probe.test.mjs');
+  await writeFile(file, `import { test, describe, it } from 'node:test';\n${source}\n`);
+  return { id: 'node-evidence', language: 'js-ts', command: '/usr/bin/env', args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', '--test-reporter=tap', ...flags, file], timeoutMs: 30_000, testFiles: [file] };
+}
+
+for (const [label, source] of [
+  ['empty file', ''],
+  ['exit before registration', 'process.exit(0);'],
+  ['skipped suite beside a passing case', 'test("required", () => {}); describe.skip("omitted suite", () => { it("case", () => {}); });'],
+  ['todo case', 'test.todo("required");'],
+  ['failed case', 'test("required", () => { throw new Error("required failure"); });'],
+  ['cancelled case', 'test("required", { signal: AbortSignal.abort(new Error("cancelled fixture")) }, () => {});'],
+]) {
+  test(`the Node adapter rejects ${label}`, { timeout: 30_000 }, async (t) => {
+    const result = await runLanguageCases(discoverLanguageCases({ cases: [await nodeCase(t, source)] }));
+    assert.equal(result.status, 'fail', JSON.stringify(result));
+  });
+}
+
+test('the Node adapter accepts nested selected cases and rejects an empty selection', { timeout: 30_000 }, async (t) => {
+  const source = 'describe("selected suite", () => { it("selected case", () => {}); }); test("other", () => { throw new Error("unselected"); });';
+  const passing = await nodeCase(t, source, ['--test-name-pattern=selected']);
+  const result = await runLanguageCases(discoverLanguageCases({ cases: [passing] }));
+  assert.equal(result.status, 'pass', JSON.stringify(result));
+  assert.equal(result.cases[0].actual.tests, 1);
+  const empty = await nodeCase(t, source, ['--test-name-pattern=missing']);
+  const missing = await runLanguageCases(discoverLanguageCases({ cases: [empty] }));
+  assert.equal(missing.status, 'fail', JSON.stringify(missing));
+  assert.match(missing.cases[0].errors.join('; '), /zero tests/);
+});
+
+test('the Node adapter refuses an empty selected file beside a passing file', { timeout: 30_000 }, async (t) => {
+  const passing = await nodeCase(t, 'test("required", () => {});');
+  const empty = await nodeCase(t, '');
+  passing.args.push(empty.testFiles[0]);
+  passing.testFiles.push(empty.testFiles[0]);
+  const result = await runLanguageCases(discoverLanguageCases({ cases: [passing] }));
+  assert.equal(result.status, 'fail', JSON.stringify(result));
+  assert.match(result.cases[0].errors.join('; '), /missing or incomplete test evidence/);
+});
+
+test('the Rust adapter aggregates every target including ignored or failed earlier targets', () => {
+  const output = 'test result: FAILED. 2 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out;\n'
+    + 'test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n'
+    + 'test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;';
+  assert.deepEqual(parseLanguageResult('rust', output, ''), { tests: 6, failed: 1, skipped: 1, cancelled: 0, todo: 0 });
+});
+
+const goSupportEvents = [
+  { Action: 'start', Package: 'fixture/support' },
+  { Action: 'output', Package: 'fixture/support', Output: '?   \tfixture/support\t[no test files]\n' },
+  { Action: 'skip', Package: 'fixture/support', Elapsed: 0 },
+];
+const goPassingEvents = [
+  { Action: 'run', Package: 'fixture', Test: 'TestSelected' },
+  { Action: 'pass', Package: 'fixture', Test: 'TestSelected', Elapsed: 0 },
+  { Action: 'output', Package: 'fixture', Output: 'PASS\n' },
+  { Action: 'pass', Package: 'fixture', Elapsed: 0.1 },
+];
+
+test('the Go adapter counts a failed named test as executed', { timeout: 10_000 }, () => {
+  const output = [
+    { Action: 'run', Package: 'fixture', Test: 'TestRequired' },
+    { Action: 'output', Package: 'fixture', Test: 'TestRequired', Output: '    required_test.go:5: actual differs from expected\n' },
+    { Action: 'fail', Package: 'fixture', Test: 'TestRequired', Elapsed: 0 },
+    { Action: 'fail', Package: 'fixture', Elapsed: 0.1 },
+  ].map((event) => JSON.stringify(event)).join('\n');
+  assert.deepEqual(parseLanguageResult('go', output, ''), { tests: 1, failed: 1, skipped: 0, cancelled: 0, todo: 0 });
+});
+
+for (const [name, events, expected, status] of [
+  ['the Go adapter accepts a passing test beside a support package without tests', [...goSupportEvents, ...goPassingEvents], { tests: 1, skipped: 0 }, 'pass'],
+  ['the Go adapter rejects a named skipped test beside a passing test', [...goPassingEvents,
+    { Action: 'run', Package: 'fixture', Test: 'TestRequired' },
+    { Action: 'output', Package: 'fixture', Test: 'TestRequired', Output: '    required_test.go:5: unavailable\n' },
+    { Action: 'skip', Package: 'fixture', Test: 'TestRequired', Elapsed: 0 }], { tests: 1, skipped: 1 }, 'fail'],
+  ['the Go adapter rejects a selection containing only support packages without tests', goSupportEvents, { tests: 0, skipped: 0 }, 'fail'],
+  ['the Go adapter rejects a successful package with no selected test', [
+    { Action: 'output', Package: 'fixture', Output: 'testing: warning: no tests to run\n' },
+    { Action: 'pass', Package: 'fixture', Elapsed: 0.1 }], { tests: 0, skipped: 0 }, 'fail'],
+]) {
+  test(name, { timeout: 10_000 }, async () => {
+    // Go emits package output and package skip as separate events. Only an event with Test names a test outcome.
+    const output = events.map((event) => JSON.stringify(event)).join('\n') + '\n';
+    const parsed = parseLanguageResult('go', output, '');
+    assert.equal(parsed.tests, expected.tests);
+    assert.equal(parsed.skipped, expected.skipped);
+    const cases = discoverLanguageCases({ cases: [{ id: 'go-selection', language: 'go',
+      ...command(`process.stdout.write(${JSON.stringify(output)})`) }] });
+    const result = await runLanguageCases(cases);
+    assert.equal(result.status, status, JSON.stringify(result));
+    if (expected.tests === 0) assert.match(result.cases[0].errors.join('; '), /zero tests reported/);
+    if (expected.skipped > 0) assert.match(result.cases[0].errors.join('; '), /1 test\(s\) skipped/);
+  });
+}
 
 test('discovers all supported language cases, each with its own explicit limit', () => {
   const cases = discoverLanguageCases({ cases: SUPPORTED_LANGUAGES.filter((language) => language !== 'application').map((language) => ({ id: language, language, ...command('process.exit(0)') })) });
@@ -23,10 +149,9 @@ test('rejects empty, duplicate, unsupported, skipped, and invalid cases', () => 
 });
 
 test('parses each language result and rejects zero, skipped, and crashed outcomes', async () => {
-  assert.equal(parseLanguageResult('js-ts', 'ℹ tests 2\nℹ pass 2\nℹ fail 0\nℹ skipped 0\nℹ todo 0\nℹ cancelled 0', '').tests, 2);
+  assert.equal(parseLanguageResult('js-ts', 'ℹ tests 2\nℹ pass 2\nℹ fail 0\nℹ skipped 0\nℹ todo 0\nℹ cancelled 0', '').tests, 0, 'wrapper totals do not prove file-owned execution');
   assert.deepEqual(parseLanguageResult('rust', 'test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;', ''), { tests: 2, failed: 0, skipped: 0, cancelled: 0, todo: 0 });
   assert.equal(parseLanguageResult('go', '{"Action":"pass","Test":"TestOne"}\n{"Action":"pass","Test":"TestTwo"}', '').tests, 2);
-  assert.equal(parseLanguageResult('go', '{"Action":"skip","Package":"example/no-tests","Output":"[no test files]\\n"}', '').skipped, 1);
   assert.equal(parseLanguageResult('objective-c', 'PASS: first\nPASS: second', '').tests, 2);
   assert.deepEqual(parseLanguageResult('shell', 'PASS: first\nFAIL: second\nSKIP: third\nCANCEL: fourth\nTODO: fifth', ''), {
     tests: 2, failed: 1, skipped: 1, cancelled: 1, todo: 1,
@@ -36,7 +161,7 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
   });
 
   const cases = discoverLanguageCases({ cases: [
-    { id: 'pass', language: 'js-ts', ...command("console.log('ℹ tests 1\\nℹ pass 1\\nℹ fail 0\\nℹ skipped 0\\nℹ todo 0\\nℹ cancelled 0')") },
+    { id: 'pass', language: 'shell', ...command("console.log('PASS: required')") },
     { id: 'zero', language: 'rust', ...command('process.exit(0)') },
     // A signal ends the case, whichever it is. SIGKILL leaves no crash report on the machine, as SIGABRT does at each run.
     { id: 'crash', language: 'go', ...command('process.kill(process.pid, \'SIGKILL\')') },
@@ -55,7 +180,7 @@ test('parses each language result and rejects zero, skipped, and crashed outcome
 });
 
 test('reports expected and actual test counts without hiding mismatch', async () => {
-  const cases = discoverLanguageCases({ cases: [{ id: 'count', language: 'js-ts', expectedTests: 2, ...command("console.log('ℹ tests 1\\nℹ pass 1\\nℹ fail 0\\nℹ skipped 0\\nℹ todo 0\\nℹ cancelled 0')") }] });
+  const cases = discoverLanguageCases({ cases: [{ id: 'count', language: 'shell', expectedTests: 2, ...command("console.log('PASS: required')") }] });
   const result = await runLanguageCases(cases);
   assert.equal(result.status, 'fail');
   assert.deepEqual(result.cases[0].expected, { status: 'pass', tests: 2 });

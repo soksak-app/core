@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { assertInvariants } from "../scripts/layout-sequences.mjs";
 import { outline } from "../dist/index.js";
 import { assertTiling, fuzz, three } from "./helpers.mjs";
 
-test("splitting always leaves a slicing arrangement", () => {
+test("splitting always leaves a slicing arrangement", { timeout: 30000 }, () => {
   // Replacing one card with two can only build a slicing floorplan, and a
   // pinwheel — the shape that strands a card — is the canonical non-slicing one.
   for (let seed = 0; seed < 40; seed++) {
@@ -13,6 +14,7 @@ test("splitting always leaves a slicing arrangement", () => {
       const open = grid.cards.filter((p) => !p.fixed);
       const card = open[Math.floor((i * 7 + seed) % open.length)];
       grid.split(card.id, (i + seed) % 2 ? "x" : "y");
+      assertInvariants(grid, "ordinary");
     }
     assert.ok(grid.isSlicing(), `seed ${seed}`);
     const open = grid.cards.filter((p) => !p.fixed);
@@ -22,7 +24,7 @@ test("splitting always leaves a slicing arrangement", () => {
   }
 });
 
-test("every invariant holds after split, close, drag and merge", () => {
+test("every invariant holds after split, close, drag and merge", { timeout: 30000 }, () => {
   for (let seed = 0; seed < 60; seed++) {
     const grid = three();
     fuzz(grid, seed, 150);
@@ -36,7 +38,7 @@ test("every invariant holds after split, close, drag and merge", () => {
   }
 });
 
-test("every invariant holds at any gap, including zero", () => {
+test("every invariant holds at any gap, including zero", { timeout: 30000 }, () => {
   for (const gap of [0, 2, 12, 24, 48]) {
     const grid = three({ gap });
     fuzz(grid, 3, 120);
@@ -44,7 +46,7 @@ test("every invariant holds at any gap, including zero", () => {
   }
 });
 
-test("the outline joins two cards at half the corridor", () => {
+test("the outline joins two cards at half the corridor", { timeout: 30000 }, () => {
   for (let seed = 0; seed < 20; seed++) {
     const grid = three();
     fuzz(grid, seed, 60);

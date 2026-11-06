@@ -1,12 +1,16 @@
 name: release
 # build-machine: skip smoke reason=the end-to-end checks need a display and run only locally through make (docs/operations/examples.md#test-kinds)
 
-# A push to main runs the checks, and the repository releases itself when they succeed and `sok-check release` finds no tag
-# of the declared version; open checklist items are carried into the next version (docs/operations/examples.md#release). The
-# tag is created with the release.
+# A push builds immutable candidate files. Publication reuses those files after authenticated local acceptance of that attempt.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      acceptance:
+        description: Compact candidate acceptance report JSON
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -18,11 +22,13 @@ concurrency:
 
 jobs:
   checks:
+    if: github.event_name == 'push'
     uses: ./.github/workflows/ci.yml
 
-  # The gate and the bundle builds run beside the checks, so a release run takes the time of its longest job; publish requires
-  # the success of the checks and of every build.
+  # The gate and the bundle builds run beside the checks, so a release run takes the time of its longest job; publication requires
+  # the accepted candidate of a run in which the checks and every build succeeded.
   gate:
+    if: github.event_name == 'push'
     runs-on: ubuntu-26.04-arm
     outputs:
       release: ${{ steps.gate.outputs.release }}
@@ -98,7 +104,7 @@ jobs:
           name: release-wailsv3
           path: core/dist/*
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 14
       - name: Verify lockfiles remain unchanged
         if: always()
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
@@ -148,7 +154,7 @@ jobs:
           name: release-tauriv2
           path: core/dist/*.zip
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 14
       - name: Verify lockfiles remain unchanged
         if: always()
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
@@ -205,63 +211,65 @@ jobs:
           name: release-mygo
           path: core/dist/*.zip
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 14
       - name: Verify lockfiles remain unchanged
         if: always()
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
   publish:
     runs-on: ubuntu-26.04-arm
-    needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]
-    if: always() && needs.gate.outputs.release == 'true'
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
+      actions: read
     steps:
-      - name: Require every release gate to succeed
-        env:
-          CHECKS_RESULT: ${{ needs.checks.result }}
-          GATE_RESULT: ${{ needs.gate.result }}
-          WAILS_RESULT: ${{ needs.release-wailsv3.result }}
-          TAURI_RESULT: ${{ needs.release-tauriv2.result }}
-          MYGO_RESULT: ${{ needs.release-mygo.result }}
-        run: |
-          test "$CHECKS_RESULT" = success
-          test "$GATE_RESULT" = success
-          test "$WAILS_RESULT" = success
-          test "$TAURI_RESULT" = success
-          test "$MYGO_RESULT" = success
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      # A later push or a tag of the version that appeared while the run built makes this run stale, so it publishes nothing.
-      - name: Require the commit to be the head of main and the tag to be absent
-        env:
-          VERSION: ${{ needs.gate.outputs.version }}
-        run: |
-          head="$(git ls-remote origin refs/heads/main | cut -f1)"
-          test "$head" = "$GITHUB_SHA" || { echo "main is at $head, not at $GITHUB_SHA" >&2; exit 1; }
-          test -z "$(git ls-remote --tags origin "refs/tags/v$VERSION")" || { echo "the tag v$VERSION exists" >&2; exit 1; }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: release-wailsv3
-          path: dist
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: release-tauriv2
-          path: dist
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: release-mygo
-          path: dist
       - uses: ./.github/actions/setup-node
         with:
           root: .
-      # The release page resolves a relative link against the root of the tag, so the body names each linked file at the tag.
+      - name: Install locked acceptance dependencies
+        run: pnpm install --frozen-lockfile --filter soksak-workspace
+      - name: Install release inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes unzip
+      - name: Read the submitted acceptance report
+        env:
+          ACCEPTANCE_REPORT: ${{ inputs.acceptance }}
+        run: node -e 'require("node:fs").writeFileSync(process.env.RUNNER_TEMP + "/acceptance.json", process.env.ACCEPTANCE_REPORT)'
+      - name: Require the exact successful candidate attempt
+        id: candidate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/candidate-acceptance.mjs prepare "$RUNNER_TEMP/acceptance.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ steps.candidate.outputs.artifact_ids }}
+          run-id: ${{ steps.candidate.outputs.run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/release-files
+      - name: Require acceptance of the exact publication files
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/candidate-acceptance.mjs verify "$RUNNER_TEMP/acceptance.json" "$RUNNER_TEMP/release-files"
+      # The release page resolves relative links against the tag; notes are outside the published release files.
       - name: Write the release notes
         env:
-          VERSION: ${{ needs.gate.outputs.version }}
+          VERSION: ${{ steps.candidate.outputs.version }}
         run: node scripts/release-notes.mjs docs/operations/install.md "$GITHUB_REPOSITORY" "v$VERSION" > "$RUNNER_TEMP/release-notes.md"
+      - name: Require the commit to be the head of main and the tag to be absent
+        env:
+          VERSION: ${{ steps.candidate.outputs.version }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main || { echo "publication requires main" >&2; exit 1; }
+          head="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$head" = "$GITHUB_SHA" || { echo "main is at $head, not at $GITHUB_SHA" >&2; exit 1; }
+          tags="$(git ls-remote --tags origin "refs/tags/v$VERSION")"
+          test -z "$tags" || { echo "the tag v$VERSION exists" >&2; exit 1; }
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
-          tag_name: v${{ needs.gate.outputs.version }}
-          target_commitish: ${{ github.sha }}
-          files: dist/*
+          tag_name: v${{ steps.candidate.outputs.version }}
+          target_commitish: ${{ steps.candidate.outputs.sha }}
+          files: ${{ runner.temp }}/release-files/*
           body_path: ${{ runner.temp }}/release-notes.md

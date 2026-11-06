@@ -21,6 +21,10 @@
 사이드바, 레일, 페인이 하나의 타입, 하나의 사각형 규칙, 하나의 통로, 하나의 반경,
 하나의 외곽선을 쓴다.
 
+Identifier는 card를 식별하며 role을 결정하지 않는다. Identifier를 바꾸고 input
+card array 순서를 바꾸어도 geometry, query 판단과 대응하는 operation 결과는
+같아야 한다. 이름을 바꿀 때 opaque card data는 변경하지 않는다.
+
 카드는 `width` 나 `height` 를 px 로 가질 수 있다. 그것은 속성이지 두 번째 타입이
 아니다. 카드가 그것을 가졌다는 이유로 거절되는 연산은 없다.
 
@@ -521,3 +525,33 @@ DOM 바인딩은 화면 해상도 변경을 관찰하고 호스트 CSS 크기가
 ## 라이선스
 
 MIT
+
+## Random sequence 검증
+
+Unit test와 fuzz command는 하나의 seed 기반 operation generator와 transition
+invariant checker를 공유한다. Ordinary layout은 minimum-size를 검사하고,
+fixed layout은 fixed-size 비율과 close 예측도 검사한다. Constrained layout은
+크기가 0인 card와 축소된 corridor를 허용한다. 거부된 호출을 포함하여 각 public
+호출을 다음 호출 전에 검사한다. Report는 successful/refused 호출 수와
+changed/unchanged state 수를 전체 및 operation별로 기록한다. Profile별 weight는
+기존 생성·제거 빈도를 유지하고, ordinary drag 후 merge 호출도 별도로 검사한다.
+Coincident-line 고정 fixture는 merge 성공을 증명한다. 거부된 호출은 state를 변경하면
+안 된다. 실패 report는 seed, initial state와 전체 operation trace를 보존한다.
+독립적인 slicing oracle과 명시적인 geometry 기대값은 별도 test로 유지한다.
+
+실패는 기록된 initial state와 snapping distance를 포함한 모든 layout option으로
+재실행할 수 있다. Reduction은 먼저 같은 실패를 재현한 뒤 일정한 순서로
+operation 묶음을 제거한다. 같은 이름의 invariant 실패만 후보로 수용하고,
+성공한 sequence, 다른 invariant와 이름 없는 assertion은 수용하지 않는다.
+원래 seed와 전체 trace는 reduced trace와 별도로 변경 없이 보존한다. 결과는
+operation 하나를 제거하는 범위에서 최소이며, 가능한 가장 짧은 trace를
+보장하지 않고 argument 값은 줄이지 않는다. Fuzz command는 reduction을
+시도하기 전에 전체 원본을 출력한다.
+
+Role-independence test는 별도의 고정 operation trace를 사용한다. Fixture의
+card array 전체 순열과 변경된 identifier를 public constructor에 전달하고,
+payer reference도 함께 변경한다. 비교 단계에서만 identifier와 card 순서를
+정규화한다. 각 operation마다 geometry, card 속성, close/split 예측과 결과를
+비교하며, identifier 또는 array 위치에 의존하는 결함을 주입하면 비교가
+실패해야 한다. Source ownership 검사는 구조 검사로 유지하며, 독립적인
+slicing oracle은 sequence generator 및 role 비교와 별도로 유지한다.

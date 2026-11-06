@@ -315,7 +315,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native fetch-native build-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native fetch-native build-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo here and adds the path to the shell profile. The shell of make
 # does not read the profile.
@@ -584,6 +584,11 @@ test-app-host-go: build-native
 
 test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app --native test-app $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
+
+# Acceptance consumes the downloaded candidate bundles and frozen component context without rebuilding them.
+test-app-candidate:
+	@test -n "$(CONTEXT)" && test -n "$(SCRIPT)" || { echo "make test-app-candidate CONTEXT=<context.json> SCRIPT=<declared script>" >&2; exit 2; }
+	@node scripts/test-app.mjs --candidate "$(CONTEXT)" --script "$(SCRIPT)" $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
 
 test-app-activation: $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:activation --native test-app-activation

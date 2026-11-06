@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { corePackageNames } from "./check-boundaries.mjs";
+import { checklistCounts } from "./checklist.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -55,6 +56,7 @@ lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/tes
 lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
+lane("Node execution evidence", "js-ts", ["scripts/node-test-evidence.mjs"], ["scripts/test/node-test-evidence.test.mjs"]),
 lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
 lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs", "scripts/test/native-repeat.test.mjs"]),
 lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
@@ -74,7 +76,10 @@ lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/te
 lane("private API inventory", "js-ts", ["scripts/check-private-apis.mjs"], ["scripts/test/check-private-apis.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
-lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/test-evidence.test.mjs"]),
+lane("test evidence", "js-ts", ["scripts/test-evidence.mjs", "scripts/platform/platform.js", "scripts/platform/darwin/process-executable.mjs"], ["scripts/test/test-evidence.test.mjs", "scripts/test/platform.test.mjs", "scripts/test/platform/darwin/process-evidence.test.mjs"]),
+lane("candidate identity", "js-ts", ["scripts/candidate-identity.mjs"], ["scripts/test/candidate-identity.test.mjs"]),
+lane("candidate acceptance gate", "js-ts", ["scripts/candidate-policy.mjs", "scripts/candidate-report.mjs", "scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
+lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"], ["scripts/test/acceptance-run.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
@@ -85,7 +90,8 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("markdown table cells", "js-ts", ["scripts/markdown-table.mjs"], ["scripts/test/markdown-table.test.mjs"]),
-  lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
+  lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts", "packages/soksak/scripts/layout-sequences.mjs", "packages/soksak/scripts/layout-equivalence.mjs"], ["packages/soksak/test/**/*.mjs"], { sharedTests: true }),
+  lane("mutation execution", "js-ts", ["packages/soksak/scripts/mutation-runner.mjs", "packages/soksak/scripts/required-breaks.mjs"], ["packages/soksak/test/mutation-runner.test.mjs", "packages/soksak/test/required-breaks.test.mjs"], { sharedTests: true }),
   lane("soksak utility scripts", "js-ts", [
     "packages/soksak/scripts/bounded.mjs",
     "packages/soksak/scripts/breaks.mjs",
@@ -259,13 +265,236 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F498-3",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "export function parseLanguageResult" }],
+    tests: [
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "the Go adapter counts a failed named test as executed" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "the Go adapter accepts a passing test beside a support package without tests" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "the Go adapter rejects a named skipped test beside a passing test" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "the Go adapter rejects a selection containing only support packages without tests" },
+    ],
+    expected: "The Go adapter counts passing and failing named tests as executed, distinguishes support packages from skipped tests, and rejects named skips and empty selections using real event ordering.",
+    levels: ["unit"],
+  },
+  {
+    id: "F657",
+    implementation: [
+      { file: "scripts/candidate-identity.mjs", symbol: "export async function hashTree" },
+      { file: "scripts/candidate-policy.mjs", symbol: "export function candidateScripts" },
+      { file: "scripts/candidate-report.mjs", symbol: "export function encodeAcceptanceReport" },
+      { file: "scripts/acceptance-run.mjs", symbol: "export async function finishAcceptanceRun" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateReport" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
+      { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs prepare" },
+      { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs verify" },
+    ],
+    tests: [
+      { file: "scripts/test/candidate-identity.test.mjs", id: "candidate tree identity binds every file, executable mode and symlink target without extraction timestamps" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance requires complete matching evidence from two independent initial states" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses missing evidence" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses stale source evidence" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses changed installed dependency evidence" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses mismatched candidate evidence" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses skipped evidence" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses failed evidence" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication validates the completed attempt and immutable artifact ownership" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate policy reuses declared application scripts and native mode arguments" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "the complete current candidate policy fits the authenticated report input" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate report transport rejects unsupported, corrupted and oversized input" },
+      { file: "scripts/test/acceptance-run.test.mjs", id: "candidate reference installation binds the frozen registry payload to the exact enabled installed cohort" },
+      { file: "scripts/test/acceptance-run.test.mjs", id: "candidate acceptance keeps real manifest results and rejects failed audits, stale identities and failed cleanup" },
+      { file: "scripts/test/acceptance-run.test.mjs", id: "candidate report exports only complete matching acceptance without local paths" },
+      { file: "scripts/test/workflows.test.mjs", id: "a push creates candidate files and authenticated dispatch publishes only their accepted bytes" },
+    ],
+    expected: "Publication binds recorded local acceptance, complete application and performance policy, source, bundle and component identities to the exact successful candidate attempt and files; missing, stale, mismatched, skipped or failed required evidence is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F655-3",
+    implementation: [{ file: "packages/soksak/scripts/layout-equivalence.mjs", symbol: "export function assertRoleIndependence" }],
+    tests: [
+      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison sends renamed and permuted inputs to the public layout API" },
+      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison rejects an injected identifier-dependent operation choice" },
+      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison rejects geometry chosen from the first input card" },
+      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison renames payer references before following a restored close" },
+      { file: "packages/soksak/test/rules.test.mjs", id: "R2 — identifiers and card order do not determine layout behavior" },
+    ],
+    expected: "Public layout operations preserve geometry and outcomes under identifier renaming and input-card permutations; comparison normalizes identifiers and catches injected identifier or array-position dependence.",
+    levels: ["unit"],
+  },
+  {
+    id: "F652-2",
+    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
+    tests: [
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content scale" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content origin" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include combined capture scales and origin" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include document offsets before capture conversion" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds read each requested row and column in order" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds reject a cell outside the capture and keep its evidence" },
+    ],
+    expected: "Each terminal cell sample uses document offsets and the shared capture origin and scale conversion, preserves requested row and column order, and retains evidence when geometry lies outside the capture.",
+    levels: ["unit"],
+  },
+  {
+    id: "F653-3",
+    implementation: [
+      { file: "scripts/platform/platform.js", symbol: "export async function processExecutable" },
+      { file: "scripts/platform/platform.js", symbol: "export function releasePlatform" },
+      { file: "scripts/acceptance-run.mjs", symbol: "releasePlatform()" },
+    ],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
+      { file: "scripts/test/platform.test.mjs", id: "evidence dispatch refuses unsupported and unknown process platforms explicitly" },
+      { file: "scripts/test/platform.test.mjs", id: "metadata-only evidence remains importable on a platform without process lookup" },
+      { file: "scripts/test/platform.test.mjs", id: "release platform keys match declared operating systems and architectures" },
+      { file: "scripts/test/platform/darwin/process-evidence.test.mjs", id: "process evidence binds a matching kernel process to its executable hash" },
+    ],
+    expected: "Evidence platform selection stays inside its declared dispatcher; metadata imports do not require native process lookup, unsupported calls fail explicitly, and sidecar release keys use their declared operating-system names.",
+    levels: ["unit"],
+  },
+  {
+    id: "F653-2",
+    implementation: [{ file: "scripts/test-evidence.mjs", symbol: "export async function runningProcess" }, { file: "scripts/platform/darwin/process-executable.mjs", symbol: "export async function processExecutable" }],
+    tests: [
+      { file: "scripts/test/platform/darwin/process-evidence.test.mjs", id: "process evidence rejects a live PID paired with an unrelated file" },
+      { file: "scripts/test/test-evidence.test.mjs", id: "process evidence rejects an unavailable or exited process identity" },
+      { file: "scripts/test/platform/darwin/process-evidence.test.mjs", id: "process evidence binds a matching kernel process to its executable hash" },
+    ],
+    expected: "Running-process evidence verifies that the live PID belongs to the hashed executable and rejects unrelated files, unavailable process identity and exited processes.",
+    levels: ["unit"],
+  },
+  {
+    id: "F656-2",
+    implementation: [{ file: "packages/soksak/scripts/required-breaks.mjs", symbol: "export function selectRequiredBreaks" }, { file: "packages/soksak/scripts/check-breaks.mjs", symbol: "selectRequiredBreaks" }],
+    tests: [
+      { file: "packages/soksak/test/required-breaks.test.mjs", id: "changed implementation owners select only their required defects" },
+      { file: "packages/soksak/test/required-breaks.test.mjs", id: "changed owning tests and shared inputs select a bounded declared set" },
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "required mutation command rejects invalid evidence and handles required survivor" },
+      { file: "scripts/test/workflows.test.mjs", id: "the core Node gate runs changed-owner required mutations and retains their evidence" },
+    ],
+    expected: "The core Node CI gate selects bounded required mutations for changed owners, rejects invalid baseline evidence and surviving required defects, and retains classified execution evidence.",
+    levels: ["unit"],
+  },
+  {
+    id: "F654-2",
+    implementation: [{ file: "packages/soksak/scripts/layout-sequences.mjs", symbol: "export function replaySequence" }, { file: "packages/soksak/scripts/layout-sequences.mjs", symbol: "export function reduceSequence" }],
+    tests: [
+      { file: "packages/soksak/test/layout-sequences.test.mjs", id: "shrinking retains the original trace and deterministically preserves the same invariant" },
+      { file: "packages/soksak/test/layout-sequences.test.mjs", id: "shrinking rejects passing sequences and failure identities that do not replay" },
+      { file: "packages/soksak/test/layout-sequences.test.mjs", id: "shrinking refuses untagged assertions instead of conflating distinct failures" },
+      { file: "packages/soksak/test/layout-sequences.test.mjs", id: "replay preserves nondefault snapping and every recorded layout option" },
+    ],
+    expected: "Sequence reduction retains the original seed and trace, replays all layout options and deterministically preserves the same named invariant failure while refusing passing or unrelated failures.",
+    levels: ["unit"],
+  },
+  {
+    id: "F498-2",
+    implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" }, { file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "discovered Node evidence: empty module" },
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a remounted view sends a higher composition revision in the same document" },
+    ],
+    expected: "Empty entrypoints are removed without weakening nonempty executed-test evidence, and retained surface behavior is exercised by actual owning cases, including remount revision monotonicity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F653-1",
+    implementation: [{ file: "scripts/test-evidence.mjs", symbol: "export async function runWithEvidence" }, { file: "scripts/language-test-adapters.mjs", symbol: "export async function runLanguageCases" }],
+    tests: [
+      { file: "scripts/test/test-evidence.test.mjs", id: "executed evidence binds source.mjs before the command" },
+      { file: "scripts/test/test-evidence.test.mjs", id: "executed evidence preserves a failed command and reports an input that disappears" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "the language adapter refuses to attribute a pass to inputs changed by its command" },
+    ],
+    expected: "Evidence binds inputs before execution, retains the actual command outcome and original identity, and refuses acceptance when an input changes or disappears during execution.",
+    levels: ["unit"],
+  },
+  {
+    id: "F656-1",
+    implementation: [{ file: "packages/soksak/scripts/mutation-runner.mjs", symbol: "export async function runMutationTest" }, { file: "packages/soksak/scripts/mutation-runner.mjs", symbol: "export function mutationVerdict" }],
+    tests: [
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "bounded command preserves both output streams" },
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a failed command start is an environment error, not a timeout" },
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a mutant deadline is distinguished from cancellation of the experiment" },
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "only mutant-caused failure classes establish detection" },
+    ],
+    expected: "Mutation evidence preserves both output streams and distinguishes assertions, runtime failures and mutant timeouts from environment or experiment failures.",
+    levels: ["unit"],
+  },
+  {
+    id: "F658",
+    implementation: [{ file: "packages/workbench/plane.js", symbol: "export async function closeTabById" }, { file: "packages/workbench/plane.js", symbol: "export const settleModifiedTabsToClose" }],
+    tests: [
+      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "modified tabs require a clean save before tab or window closure" },
+      { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "close boundary owner assertions detect each removed modified-state guard" },
+    ],
+    expected: "Tab and window closure wait for save completion and refuse closure while modifications or a save failure remain; removing each guard fails its owning assertion.",
+    levels: ["unit"],
+  },
+  {
+    id: "F655-2",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "export function inventorySummary" },
+      { file: "scripts/checklist.mjs", symbol: "export function checklistCounts" },
+      { file: "scripts/check-docs.mjs", symbol: "auditHistoricalScopeWording(source, file)" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "inventory totals follow declared test additions without copied documentation" },
+      { file: "scripts/test/checklist.test.mjs", id: "checklist totals count every current state including nested rows" },
+      { file: "scripts/test/checklist.test.mjs", id: "documentation audit requires dated modal evidence in both translations" },
+    ],
+    expected: "Inventory and checklist totals come from canonical inputs without copied document counts; historical wording is checked by the documentation gate in both translations while structural coverage checks retain their scope.",
+    levels: ["unit"],
+  },
+  {
+    id: "F498-1",
+    implementation: [{ file: "scripts/node-test-evidence.mjs", symbol: "export function testExecutionErrors" }, { file: "scripts/language-test-adapters.mjs", symbol: "export function parseLanguageResult" }],
+    tests: [
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "the shared acceptance rule rejects unexecuted and incomplete cases" },
+      { file: "scripts/test/node-test-evidence.test.mjs", id: "file-owned evidence aggregates every declared file and rejects a missing file despite a passing wrapper" },
+    ],
+    expected: "Discovery, repeats and language adapters share executed-test acceptance and reject absent, skipped, todo, cancelled or failed required cases.",
+    levels: ["unit"],
+  },
+  {
+    id: "F652-1",
+    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }, { file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
+    tests: [
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background presentation failure stops during cleanup and preserves its original error" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background keeps the presentation error and reports a cleanup stop error" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background preserves a successful sample when the final error audit fails" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell stop failure remains failed after being caught and is not retried" },
+    ],
+    expected: "Terminal samples use Session recording cleanup, preserve failed capture evidence and original errors, attempt stop once, and remove successful captures only after successful session finalization.",
+    levels: ["unit"],
+  },
+  {
+    id: "F654-1",
+    implementation: [{ file: "packages/soksak/scripts/layout-sequences.mjs", symbol: "export function runSequence" }],
+    tests: [
+      { file: "packages/soksak/test/layout-sequences.test.mjs", id: "random sequences detect an invalid intermediate state before a later operation repairs it" },
+      { file: "packages/soksak/test/layout-sequences.test.mjs", id: "sequence reports retain deterministic calls and successful and refused outcomes" },
+      { file: "packages/soksak/test/layout-sequences.test.mjs", id: "shared profiles exercise every operation and both transition outcomes" },
+    ],
+    expected: "Ordinary, fixed and constrained profiles share operation generation and check each successful or refused transition without replacing the independent slicing oracle.",
+    levels: ["unit"],
+  },
+  {
+    id: "F655-1",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "feature-link audit self-check detects an omitted error and response" }],
+    expected: "The self-check invokes the actual feature-link audit, passes its unchanged module, and catches separately omitted error reporting and return values by assertion failures.",
+    levels: ["unit"],
+  },
+  {
     id: "F652",
     implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }],
     tests: [
       { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background samples the captured view at combined scale and origin" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background rejects an empty capture and removes its folder" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background rejects an empty capture and preserves its folder" },
     ],
-    expected: "Terminal background sampling reads a pixel inside the transformed capture view and removes the stopped recording on success or failure.",
+    expected: "Terminal background sampling reads a pixel inside the transformed capture view, retains failed recordings and removes successful recordings after successful session finalization.",
     levels: ["unit"],
   },
   {
@@ -631,7 +860,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/check-release-paths.test.mjs", id: "the view root of a host without a main page is every staged file, and the audit asks for no page module" },
-      { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds audited candidate packages and publication consumes their immutable identities" },
       { file: "scripts/test/test-app.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
       { file: "scripts/test/host-debug-check.test.mjs", id: "the debug check compiles the features and tags of the debug apps" },
@@ -4056,9 +4285,9 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI rejects an unselected ${other} bundle in ${host} mode" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of every host bundle" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
-      { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds audited candidate packages and publication consumes their immutable identities" },
     ],
-    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both host jobs, reusable CI and registry validation; the CLI without a host selection continues to audit both bundles.",
+    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both candidate host jobs, all required CI jobs and recorded candidate acceptance; the CLI without a host selection continues to audit both bundles.",
     levels: ["unit"],
   },
   {
@@ -4075,9 +4304,9 @@ const FEATURE_LINKS = [
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI rejects an unselected ${other} bundle in ${host} mode" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI preserves the default audit of every host bundle" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
-      { file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" },
+      { file: "scripts/test/workflows.test.mjs", id: "release builds audited candidate packages and publication consumes their immutable identities" },
     ],
-    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both host jobs, reusable CI and registry validation; the CLI without a host selection continues to audit both bundles.",
+    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both candidate host jobs, all required CI jobs and recorded candidate acceptance; the CLI without a host selection continues to audit both bundles.",
     levels: ["unit"],
   },
   {
@@ -4398,9 +4627,9 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" },
-      { file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" },
+      { file: "scripts/test/check-tests.test.mjs", id: "inventory totals follow declared test additions without copied documentation" },
     ],
-    expected: "Completed capabilities retain links to their actual implementation and owning tests, and documentation records the discovered inventory counts.",
+    expected: "Completed capabilities retain links to their actual implementation and owning tests, and the command reports the discovered inventory counts.",
     levels: ["unit"],
   },
   {
@@ -4803,9 +5032,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "G2-2",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCompletedFeatureLinks" }, { file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
-    expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and the current inventory count cannot drift from the current-state record in the operations document.",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCompletedFeatureLinks" }, { file: "scripts/check-tests.mjs", symbol: "inventorySummary" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }, { file: "scripts/test/check-tests.test.mjs", id: "inventory totals follow declared test additions without copied documentation" }],
+    expected: "Completed host-structure and parity-correction entries remain linked to named evidence, and current inventory and checklist totals are derived from their canonical inputs.",
     levels: ["unit"],
   },
   {
@@ -4826,11 +5055,11 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/check-tests.test.mjs", id: "boundary audit rejects a duplicate implementation and test owner" },
       { file: "scripts/test/check-tests.test.mjs", id: "evidence audit rejects attribution to the wrong behavior-test file" },
-      { file: "scripts/test/check-tests.test.mjs", id: "behavior mutation audit rejects a no-op implementation and an omitted response" },
+      { file: "scripts/test/check-tests.test.mjs", id: "feature-link audit self-check detects an omitted error and response" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "parses each language result and rejects zero, skipped, and crashed outcomes" },
       { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
     ],
-    expected: "The audit rejects injected structural and behavioral defects, mandatory skips, wrong evidence attribution, and stale executable evidence while reporting structural and behavior evidence separately.",
+    expected: "The audit rejects structural defects, mandatory skips, wrong evidence attribution and stale executable evidence. Its feature-link self-check catches omitted error reporting and an omitted response in the actual audit module; this does not establish product behavior.",
     levels: ["unit"],
   },
   {
@@ -4847,13 +5076,13 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-evidence.test.mjs", id: "evidence records content hashes, dirty state, expected/actual result, and retry history" },
       { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit rejects a missing host and a missing counterpart" },
     ],
-    expected: "Structural and behavioral audits reject missing implementation or test files, excluded or skipped execution, invalid evidence links, stale evidence, and missing host counterparts; no-op effects and responses fail their behavior assertions.",
+    expected: "Structural and execution audits reject missing implementation or test files, excluded or skipped execution, invalid evidence links, stale evidence and missing host counterparts. Product behavior remains the responsibility of the owning behavior tests.",
     levels: ["unit"],
   },
   {
     id: "G1.3-5",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditCommittedEvidenceWording" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "F0.1 evidence identifies its build by its checklist ID" }],
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "auditCommittedEvidenceWording" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "documentation audit identifies the measured build in each translation" }],
     expected: "F0.1 evidence identifies the build used for its host result by its checklist ID and does not claim that the current worktree is dirty.",
     levels: ["unit"],
   },
@@ -4873,23 +5102,23 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1.3-4",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditModalParitySnapshotWording" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "modal parity Red is dated and followed by current F10.2 evidence" }],
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "auditModalParitySnapshotWording" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "documentation audit requires dated modal evidence in both translations" }],
     expected: "The original Wails modal Red remains as a dated observation and the current F10.2 correction is stated without conflating the two states.",
     levels: ["unit"],
   },
   {
     id: "G1.3-3",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditHistoricalScopeWording" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed F3 scope is not reported as currently open" }],
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "auditHistoricalScopeWording" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "documentation audit rejects a stale current claim about completed scope" }],
     expected: "Completed F3 records preserve their historical sequence without reporting already-closed controlled-site and restored/new-document checks as currently open.",
     levels: ["unit"],
   },
   {
     id: "G1.3-2",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
-    expected: "The current lane, implementation, and test counts recorded in both operations-document translations match current inventory output, a count drift fails explicitly, and completed checklist evidence is not compared.",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "inventorySummary" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory totals follow declared test additions without copied documentation" }],
+    expected: "The current lane, implementation and test totals are generated from the inventory without manually copied counts; historical checklist evidence is not used as a current total.",
     levels: ["unit"],
   },
   {
@@ -5427,9 +5656,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "G2.7",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
-    expected: "The parity inventory records the current 56 lanes, 251 implementation files, and 171 test files after adding the mechanical E2E host audit.",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "inventorySummary" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory totals follow declared test additions without copied documentation" }],
+    expected: "The generated inventory totals include the mechanical E2E host audit without a manually repeated total.",
     levels: ["unit"],
   },
   {
@@ -7233,8 +7462,8 @@ const FEATURE_LINKS = [
   {
     id: "F183",
     implementation: [{ file: "Makefile", symbol: "check-release: build-wailsv3-release build-tauriv2-release build-mygo-release" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds and packages each host after the reusable CI checks succeed" }],
-    expected: "A release publishes every bundle from a tag whose CI passed.",
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "release builds audited candidate packages and publication consumes their immutable identities" }],
+    expected: "A release publishes every audited candidate bundle only after their required CI jobs and recorded acceptance pass.",
     levels: ["unit"],
   },
   {
@@ -8909,16 +9138,16 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1.3-6",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
-    expected: "The inventory record remains synchronized after adding language adapter implementation and test files, while the earlier count remains historical evidence.",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "inventorySummary" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory totals follow declared test additions without copied documentation" }],
+    expected: "The generated inventory totals include language adapter implementation and test files, while earlier checklist counts remain historical evidence.",
     levels: ["unit"],
   },
   {
     id: "G1.3-7",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: "auditRecordedInventoryCounts" }],
-    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "recorded parity counts cannot drift from the current inventory" }],
-    expected: "The inventory record remains synchronized after adding the evidence recorder and its test.",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "inventorySummary" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "inventory totals follow declared test additions without copied documentation" }],
+    expected: "The generated inventory totals include the evidence recorder and its test.",
     levels: ["unit"],
   },
   {
@@ -10053,16 +10282,27 @@ const FEATURE_LINKS = [
   },
   {
     id: "F276",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
+    implementation: [
+      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "for (const name of requiredJobs)" },
+      { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs prepare" },
+    ],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push creates candidate files and authenticated dispatch publishes only their accepted bytes" }],
     expected: "The release of core has no condition on the registry state; the registry checks the plugin versions of each core version that it lists.",
     levels: ["unit"],
   },
   {
     id: "F298-2",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
-    tests: [{ file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" }],
-    expected: "No workflow runs an end-to-end check, and the release publishes after the checks, the gate and the two host builds succeed.",
+    implementation: [
+      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "for (const name of requiredJobs)" },
+      { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs prepare" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication validates the completed attempt and immutable artifact ownership" },
+    ],
+    expected: "No workflow runs an end-to-end check. Publication requires a successful candidate attempt with the checks, gate and every host build, and consumes its separately recorded local acceptance.",
     levels: ["unit"],
   },
   {
@@ -10179,9 +10419,9 @@ const FEATURE_LINKS = [
       { file: ".github/workflows/release.yml", symbol: "The gate and the bundle builds run beside the checks" },
     ],
     tests: [
-      { file: "scripts/test/workflows.test.mjs", id: "the release bundles build beside the checks and publication waits for them" },
+      { file: "scripts/test/workflows.test.mjs", id: "candidate bundles build beside checks and publication requires their recorded acceptance" },
     ],
-    expected: "The gate and both release bundle builds run beside the checks, and publish requires the success of the checks, the gate and both builds.",
+    expected: "The gate and every candidate bundle build run beside the checks; publication requires their successful attempt and recorded acceptance of the immutable candidate files.",
     levels: ["unit"],
   },
   {
@@ -11065,8 +11305,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F298",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]" }],
-    tests: [{ file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" }],
+    implementation: [
+      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "for (const name of requiredJobs)" },
+      { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs prepare" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication validates the completed attempt and immutable artifact ownership" },
+    ],
     expected: "CI and release jobs run only unit tests and structure checks of their repository.",
     levels: ["unit"],
   },
@@ -11410,15 +11657,15 @@ const FEATURE_LINKS = [
   {
     id: "F272",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "needs.gate.outputs.release == 'true'" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
-    expected: "A push to main runs the checks once and releases the declared version only when the gate finds no tag and every job succeeds.",
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push creates candidate files and authenticated dispatch publishes only their accepted bytes" }],
+    expected: "A push to main runs the checks once and prepares candidate files when the gate finds no tag; authenticated dispatch publishes only a successful candidate with matching recorded acceptance.",
     levels: ["unit"],
   },
   {
     id: "F272-3",
     implementation: [{ file: ".github/workflows/release.yml", symbol: "sok-check release packages/plugin-api/package.json docs/features.md" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push to main releases the declared version after the checks and the gate succeed" }],
-    expected: "A push to main runs the checks once, and the release jobs and the tag follow only a gate that releases.",
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push creates candidate files and authenticated dispatch publishes only their accepted bytes" }],
+    expected: "A push to main runs the checks once and its candidate builds follow the release gate; the tag is created only by publication of accepted candidate files.",
     levels: ["unit"],
   },
   {
@@ -11583,7 +11830,7 @@ const FEATURE_LINKS = [
     id: "F239-110",
     implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],
     tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
-    expected: "Completed capabilities have exact implementation and owner-test links, and their recorded inventory counts match the discovered workspace files.",
+    expected: "Completed capabilities have exact implementation and owner-test links, and inventory totals are derived from the discovered workspace files.",
     levels: ["unit"],
   },
   {
@@ -13180,7 +13427,6 @@ export function auditCompletedFeatureLinks(features, checklistSource = readFileS
     .map((id) => `${id}: completed capability has no feature link`);
 }
 
-// The current inventory counts are recorded in the sentence of the operations document that states the current state. The evidence of a completed checklist item is not changed.
 // The tests of the workbench cases of the two workbenches, which the declaration line of each test names (docs/spec/host-contract.md#workbench-cases).
 const WORKBENCH_CASE_SIDES = [
   { side: "page", directory: "packages/workbench/test/", file: /\.test\.mjs$/, test: /^\s*(?:await\s+)?test\(/ },
@@ -13227,55 +13473,13 @@ export function auditWorkbenchCases(specification, files) {
   return errors;
 }
 
-export function auditRecordedInventoryCounts(
-  inventory,
-  english = readFileSync(`${ROOT}docs/operations/examples.md`, "utf8"),
-  korean = readFileSync(`${ROOT}docs/operations/examples.ko.md`, "utf8"),
-) {
-  const expected = [inventory.trackCount, inventory.implementationCount, inventory.testCount].map(String);
-  const records = [
-    ["docs/operations/examples.md", english, /The current inventory has (\d+) lanes, (\d+) implementation files, and (\d+) test files\./],
-    ["docs/operations/examples.ko.md", korean, /현재 목록은 lane (\d+)개, 구현 파일 (\d+)개, 테스트 파일 (\d+)개다\./],
-  ];
-  const errors = [];
-  for (const [path, source, pattern] of records) {
-    const match = source.match(pattern);
-    if (!match) {
-      errors.push(`${path}: the current inventory count is not recorded in the expected form`);
-      continue;
-    }
-    const actual = match.slice(1);
-    if (!actual.every((value, index) => value === expected[index])) {
-      errors.push(`${path}: recorded parity counts ${actual.join(", ")} do not match current output ${expected.join(", ")}`);
-    }
-  }
-  return errors;
-}
-
-export function auditHistoricalScopeWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
-  const forbidden = [
-    "Controlled-site pixel and restored/new-document application checks remain open under F3.",
-    "Controlled-site pixels and restored/new-document validation remain open under F3.",
-  ];
-  return forbidden.filter((phrase) => checklistSource.includes(phrase)).map((phrase) => `F3 scope is reported as currently open: ${phrase}`);
-}
-
-export function auditModalParitySnapshotWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
-  const line = checklistSource.split("\n").find((entry) => entry.includes("At the 2026-09-21 audit snapshot"));
-  if (!line) return ["modal parity observation is not explicitly dated as a historical snapshot"];
-  if (!line.includes("The later F10.2 correction creates the Wails child-WebView contract")) {
-    return ["modal parity observation does not state the current F10.2 correction"];
-  }
-  return [];
-}
-
-export function auditCommittedEvidenceWording(checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
-  const line = checklistSource.split("\n").find((entry) => entry.includes("F0.1 — Unblock native input measurement"));
-  if (!line) return ["F0.1 evidence line is missing"];
-  if (line.includes("current dirty implementation")) return ["F0.1 evidence still claims a current dirty implementation"];
-  // A record does not state a commit id (AGENTS.md Documentation). Evidence points to its build by checklist ID.
-  if (!line.includes("this F0.1 change")) return ["F0.1 evidence does not identify its build by its checklist ID"];
-  return [];
+/** Current counts come from the discovered inventory and canonical checklist, never copied document totals. */
+export function inventorySummary({ trackCount, implementationCount, testCount }, checklistSource) {
+  const counts = checklistCounts(checklistSource);
+  return `${trackCount} tracks, ${implementationCount} implementation files, ${testCount} test files. ` +
+    `Checklist rows: ${counts.waiting} waiting, ${counts.active} active, ${counts.held} held, ` +
+    `${counts.complete} complete, ${counts.closed} closed (${counts.total} total; parent and child rows count separately). ` +
+    "Structural evidence only; behavior was not executed.";
 }
 
 export { MATRIX, repositoryFiles };
@@ -13294,10 +13498,12 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   errors.push(...auditWorkbenchCases(readFileSync(`${ROOT}docs/spec/host-contract.md`, "utf8"),
     repositoryFiles().filter((path) => WORKBENCH_CASE_SIDES.some(({ directory, file }) => path.startsWith(directory) && file.test(path)))
       .map((path) => ({ path, text: readFileSync(`${ROOT}${path}`, "utf8") }))));
-  errors.push(...auditRecordedInventoryCounts({ trackCount, implementationCount, testCount }));
-  errors.push(...auditHistoricalScopeWording());
-  errors.push(...auditModalParitySnapshotWording());
-  errors.push(...auditCommittedEvidenceWording());
+  let summary;
+  try {
+    summary = inventorySummary({ trackCount, implementationCount, testCount }, readFileSync(`${ROOT}docs/features.md`, "utf8"));
+  } catch (error) {
+    errors.push(`cannot summarize the canonical checklist: ${error.message}`);
+  }
   if (errors.length) {
     console.error(`Test inventory checks failed: ${errors.length} issue(s); ` +
       `${uncoveredImplementations.length} uncovered implementation(s), ${uncoveredTests.length} uncovered test(s), ` +
@@ -13321,6 +13527,6 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     console.error('All audit errors:');
     for (const error of [...new Set(errors)].sort()) console.error(`- ${error}`);
     process.exitCode = 1;
-  } else console.log(`Test inventory checks passed: ${trackCount} tracks, ${implementationCount} implementation files, ${testCount} test files. Structural evidence only; behavior was not executed.`);
+  } else console.log(`Test inventory checks passed: ${summary}`);
   for (const warning of warnings) console.warn(`Warning: ${warning}`);
 }

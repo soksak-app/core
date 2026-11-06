@@ -47,9 +47,9 @@ test('CI and release workflows pin each external action to an immutable revision
   }
 });
 
-test('release builds and packages each host after the reusable CI checks succeed', () => {
+test('release builds audited candidate packages and publication consumes their immutable identities', () => {
   const text = read('.github/workflows/release.yml');
-  assert.match(text, /checks:\n\s+uses: \.\/\.github\/workflows\/ci\.yml/, 'release checks reuse the independent CI jobs');
+  assert.match(text, /checks:\n\s+if: github.event_name == 'push'\n\s+uses: \.\/\.github\/workflows\/ci\.yml/, 'release checks reuse the independent CI jobs');
   const job = (name) => {
     const start = text.indexOf(`  ${name}:`);
     assert.notEqual(start, -1, `release.yml has no job ${name}`);
@@ -70,16 +70,10 @@ test('release builds and packages each host after the reusable CI checks succeed
     assert.match(list[build].text, /OFFLINE: '1'/);
   }
   const publish = job('publish');
-  assert.match(publish, /needs: \[checks, gate, release-wailsv3, release-tauriv2, release-mygo\]/);
-  assert.match(publish, /if: always\(\) && needs\.gate\.outputs\.release == 'true'/);
-  for (const [name, env] of [['checks', 'CHECKS_RESULT'], ['gate', 'GATE_RESULT'], ['release-wailsv3', 'WAILS_RESULT'],
-    ['release-tauriv2', 'TAURI_RESULT'], ['release-mygo', 'MYGO_RESULT']]) {
-    assert.match(publish, new RegExp(`${env}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`));
-    assert.match(publish, new RegExp(`test \\"\\$${env}\\" = success`), `${name}: publication is not gated on success`);
-  }
-  assert.match(publish, /name: release-wailsv3/);
-  assert.match(publish, /name: release-tauriv2/);
-  assert.match(publish, /name: release-mygo/);
+  assert.match(publish, /if: github.event_name == 'workflow_dispatch'/);
+  assert.match(publish, /candidate-acceptance.mjs prepare/);
+  assert.match(publish, /candidate-acceptance.mjs verify/);
+  assert.match(publish, /artifact-ids: \$\{\{ steps.candidate.outputs.artifact_ids \}\}/);
 });
 
 test('the release workflow runs no stored data migration step and no release step script', () => {
@@ -265,20 +259,24 @@ test('the hosted native job runs the native unit tests', () => {
   assert.match(hosted.text, /run: make -C core\/native\/darwin test$/m);
 });
 
-test('the release bundles build beside the checks and publication waits for them', () => {
+test('candidate bundles build beside checks and publication requires their recorded acceptance', () => {
   const release = read('.github/workflows/release.yml');
-  // The gate and the bundle builds do not wait for the checks; publish requires the success of the checks and of every build.
-  assert.match(release, /^ {2}gate:\n {4}runs-on: /m, 'gate waits for the checks, so the bundle builds start after every check');
+  // The gate and the bundle builds do not wait for the checks; publication requires the recorded acceptance of every build.
+  assert.match(release, /^ {2}gate:\n {4}if: github.event_name == 'push'\n {4}runs-on: /m, 'gate runs only for candidate pushes');
   for (const job of ['release-wailsv3', 'release-tauriv2', 'release-mygo']) {
     assert.match(release, new RegExp(`^ {2}${job}:\\n {4}needs: gate\\n`, 'm'), `${job} waits for a job other than gate`);
   }
-  assert.match(release, /^ {2}publish:\n(?: {4}.+\n)*? {4}needs: \[checks, gate, release-wailsv3, release-tauriv2, release-mygo\]$/m,
-    'publish does not require the checks and every build');
+  const publish = release.slice(release.indexOf('  publish:'));
+  assert.match(publish, /if: github.event_name == 'workflow_dispatch'/);
+  assert.match(publish, /candidate-acceptance\.mjs prepare/);
+  assert.match(publish, /candidate-acceptance\.mjs verify/);
+  assert.doesNotMatch(publish, /make .*build|check-release-(wailsv3|tauriv2|mygo)/, 'publication must reuse the accepted files');
 });
 
-test('a push to main releases the declared version after the checks and the gate succeed', () => {
+test('a push creates candidate files and authenticated dispatch publishes only their accepted bytes', () => {
   const release = read('.github/workflows/release.yml');
   assert.match(release, /^on:\n {2}push:\n {4}branches: \[main\]\n/m, 'release.yml starts on a push to main');
+  assert.match(release, /workflow_dispatch:\n {4}inputs:\n {6}acceptance:/);
   assert.doesNotMatch(release, /tags: \['v\*'\]/, 'release.yml does not start on a tag push');
   assert.match(release, /^concurrency:\n {2}group: release\n {2}cancel-in-progress: false$/m);
   assert.match(release, /run: pnpm exec sok-check release packages\/plugin-api\/package\.json docs\/features\.md/);
@@ -286,11 +284,16 @@ test('a push to main releases the declared version after the checks and the gate
     assert.match(release, new RegExp(`  ${job}:\\n {4}needs: gate\\n {4}if: needs\\.gate\\.outputs\\.release == 'true'\\n`), `${job} runs only on a release`);
   }
   assert.match(release, /git ls-remote origin refs\/heads\/main/, 'publication requires the commit to be the head of main');
+  assert.match(release, /tags="\$\(git ls-remote --tags origin "refs\/tags\/v\$VERSION"\)"/, 'a failed tag query must not be read as an absent tag');
   // The registry lists a core release in its core.json; the release of core has no condition on the registry state.
   assert.doesNotMatch(release, /registry/i, 'release.yml reads no registry');
   assert.doesNotMatch(read('Makefile').match(/^check-release:.*$/m)[0], /registry/, 'check-release reads no registry');
-  assert.match(release, /tag_name: v\$\{\{ needs\.gate\.outputs\.version \}\}/);
-  assert.match(release, /target_commitish: \$\{\{ github\.sha \}\}/);
+  assert.match(release, /tag_name: v\$\{\{ steps\.candidate\.outputs\.version \}\}/);
+  assert.match(release, /target_commitish: \$\{\{ steps\.candidate\.outputs\.sha \}\}/);
+  assert.match(release, /artifact-ids: \$\{\{ steps\.candidate\.outputs\.artifact_ids \}\}/);
+  assert.match(release, /run-id: \$\{\{ steps\.candidate\.outputs\.run_id \}\}/);
+  assert.match(release, /ACCEPTANCE_REPORT: \$\{\{ inputs\.acceptance \}\}/);
+  assert.doesNotMatch(release, /run:.*\$\{\{ inputs\.acceptance \}\}/);
   const ci = read('.github/workflows/ci.yml');
   assert.match(ci, /^on:\n {2}workflow_call:\n {2}pull_request:\n/m, 'ci.yml runs for a pull request and for release.yml only');
 });
@@ -373,4 +376,22 @@ test('check-events and the event scripts run the event source check of the kit r
 test('the structure step of CI checks the names of the commands', () => {
   assert.match(read('.github/workflows/ci.yml'), /make -C core [^\n]*\bcheck-commands\b/);
   assert.match(read('Makefile'), /^check-commands:\n\t@pnpm exec sok-check commands$/m);
+});
+
+test('the core Node gate runs changed-owner required mutations and retains their evidence', { timeout: 1000 }, () => {
+  const ci = read('.github/workflows/ci.yml');
+  const core = /  core-node:\n([\s\S]*?)(?=\n  [a-z][a-z0-9-]+:\s*$)/m.exec(ci)?.[1] ?? '';
+  assert.match(core, /fetch-depth: 0/, 'changed-owner selection needs both revisions');
+  const list = steps(core);
+  const baseline = list.findIndex(({ name }) => name === 'Core package tests');
+  const mutation = list.findIndex(({ name }) => name === 'Required mutations for changed owners');
+  assert.ok(mutation > baseline, 'required mutations must follow the owning package build and tests');
+  assert.match(list[mutation].text, /check-breaks\.mjs --changed/);
+  assert.match(list[mutation].text, /github\.event\.pull_request\.base\.sha/);
+  assert.match(list[mutation].text, /github\.event\.before/);
+  assert.doesNotMatch(list[mutation].text, /continue-on-error|\|\| true|mutate\.mjs/);
+  const evidence = list.find(({ name }) => name === 'Keep required mutation evidence');
+  assert.ok(evidence, 'required mutation logs are not retained');
+  assert.match(evidence.text, /if: always\(\)/);
+  assert.match(evidence.text, /soksak-break-evidence-\*/);
 });

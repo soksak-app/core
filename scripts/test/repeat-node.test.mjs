@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { runNodeRepeat } from '../repeat-node.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 
@@ -61,7 +62,7 @@ test('make repeat-node rejects a name pattern that runs no passed test, with the
       cwd: root, encoding: 'utf8', timeout: 60000, env: { ...process.env, FORCE_COLOR: color },
     });
     assert.notEqual(result.status, 0, result.stdout + result.stderr);
-    assert.match(result.stderr, /no test .* matched/, `FORCE_COLOR=${color}: ${result.stdout}${result.stderr}`);
+    assert.match(result.stdout, /missing or incomplete test evidence/, `FORCE_COLOR=${color}: ${result.stdout}${result.stderr}`);
   }
 });
 
@@ -72,4 +73,25 @@ test('make repeat-node counts passing runs when the reporter writes colors', (t)
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /2 of 2 runs pass/);
+});
+
+for (const [label, source] of [
+  ['empty registration', ''],
+  ['todo case', 'test.todo("required");'],
+  ['skipped case', 'test.skip("required", () => {});'],
+  ['skipped suite beside a passing case', 'test("required", () => {}); test.skip("omitted suite", () => {});'],
+  ['exit before registration', 'process.exit(0);'],
+]) {
+  test(`repeat refuses ${label} as executed passing evidence`, { timeout: 30_000 }, async (t) => {
+    const file = fixture(t, source);
+    const output = [];
+    const code = await runNodeRepeat({ file, name: '.*', count: 1, timeoutMs: 10_000, cwd: root, write: (line) => output.push(line) });
+    assert.equal(code, 1, output.join('\n'));
+  });
+}
+
+test('repeat accepts nested selected tests without running an unselected failure', { timeout: 30_000 }, async (t) => {
+  const file = fixture(t, 'test("selected parent", async (t) => { await t.test("selected child", () => {}); }); test("other", () => { throw new Error("not selected"); });');
+  const output = [];
+  assert.equal(await runNodeRepeat({ file, name: 'selected', count: 1, timeoutMs: 10_000, cwd: root, write: (line) => output.push(line) }), 0, output.join('\n'));
 });

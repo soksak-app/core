@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { auditWorkbenchCases, auditCommittedEvidenceWording, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditHistoricalScopeWording, auditInventory, auditJsFailurePropagation, auditModalParitySnapshotWording, auditNativeFailurePropagation, auditOwnership, auditRecordedInventoryCounts, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-tests.mjs";
+import { auditWorkbenchCases, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles } from "../check-tests.mjs";
 
 const files = repositoryFiles();
 
@@ -155,15 +156,44 @@ test("evidence audit rejects attribution to the wrong behavior-test file", { tim
   assert.ok(errors.some((error) => error.includes("behavior test id is not present in other.test.mjs")));
 });
 
-test("behavior mutation audit rejects a no-op implementation and an omitted response", { timeout: 1000 }, () => {
-  const behavior = (implementationSource) => spawnSync(process.execPath, ["-e", [
-    `const implementation = ${implementationSource};`,
-    "const result = implementation('input');",
-    "if (result !== 'INPUT') process.exit(1);",
-  ].join("\n")], { encoding: "utf8" });
-  assert.equal(behavior("(value) => value.toUpperCase()").status, 0);
-  assert.notEqual(behavior("() => undefined").status, 0);
-  assert.notEqual(behavior("(value) => value").status, 0);
+test("feature-link audit self-check detects an omitted error and response", { timeout: 10000 }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "soksak-audit-mutations-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const directory = join(root, "scripts");
+  mkdirSync(directory);
+  // Import the real audit module from an isolated copy. Its unchanged dependency
+  // remains at its owning path; no implementation is extracted or re-created.
+  for (const dependency of ["check-boundaries.mjs", "checklist.mjs"]) {
+    symlinkSync(fileURLToPath(new URL(`../${dependency}`, import.meta.url)), join(directory, dependency));
+  }
+  const original = readFileSync(new URL("../check-tests.mjs", import.meta.url), "utf8");
+  const candidate = join(directory, "check-tests.mjs");
+  const check = join(root, "check.mjs");
+  writeFileSync(check, [
+    'import assert from "node:assert/strict";',
+    `import { auditFeatureLinks } from ${JSON.stringify(pathToFileURL(candidate).href)};`,
+    'const feature = { id: "required", expected: "", levels: ["unit"], implementation: [{ file: "unit.js", symbol: "run" }], tests: [{ file: "unit.test.mjs", id: "observes run" }] };',
+    `const source = (file) => file === "unit.js" ? ${JSON.stringify("export function run() {}")} : ${JSON.stringify('test("observes run", () => {});')};`,
+    'assert.deepEqual(auditFeatureLinks([feature], ["unit.js", "unit.test.mjs"], source), ["required: feature link has no expected result"]);',
+  ].join("\n"));
+  const run = (source) => {
+    writeFileSync(candidate, source);
+    return spawnSync(process.execPath, [check], { encoding: "utf8", timeout: 3000 });
+  };
+  const baseline = run(original);
+  assert.equal(baseline.error, undefined);
+  assert.equal(baseline.status, 0, baseline.stderr);
+  for (const [name, before, after] of [
+    ["error effect", 'if (!feature.expected?.trim()) errors.push(`${feature.id}: feature link has no expected result`);', 'if (!feature.expected?.trim()) {}'],
+    ["error response", "  return errors;\n}\n\n// Aggregate review records", "  return undefined;\n}\n\n// Aggregate review records"],
+  ]) {
+    assert.equal(original.split(before).length - 1, 1, `${name}: mutation must match exactly once`);
+    const result = run(original.replace(before, after));
+    assert.equal(result.error, undefined, `${name}: command could not run`);
+    assert.equal(result.signal, null, `${name}: command was interrupted`);
+    assert.equal(result.status, 1, `${name}: audit defect escaped its assertion\n${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, /ERR_ASSERTION/, `${name}: an execution error is not an audit assertion`);
+  }
 });
 
 test("completed capability entries all have feature evidence links", { timeout: 1000 }, () => {
@@ -180,45 +210,17 @@ test("completed audit aggregates and fixture corrections are exempt while unlink
   );
 });
 
-test("recorded parity counts cannot drift from the current inventory", { timeout: 1000 }, () => {
-  const inventory = auditInventory(files);
-  assert.deepEqual(auditRecordedInventoryCounts(inventory), []);
-  const drifted = auditRecordedInventoryCounts({ ...inventory, testCount: inventory.testCount + 1 });
-  assert.equal(drifted.length, 2, "both translations must report the drift");
-  assert.ok(drifted.every((error) => /do not match current output/.test(error)));
-  assert.match(auditRecordedInventoryCounts(inventory, "no count", "no count")[0], /not recorded in the expected form/);
-  // The numbers of the completed G1.4 item are not compared.
-  const english = "The current inventory has 1 lanes, 2 implementation files, and 3 test files.";
-  const korean = "현재 목록은 lane 1개, 구현 파일 2개, 테스트 파일 3개다.";
-  assert.deepEqual(auditRecordedInventoryCounts({ trackCount: 1, implementationCount: 2, testCount: 3 }, english, korean), []);
-});
-
-test("completed F3 scope is not reported as currently open", { timeout: 1000 }, () => {
-  assert.deepEqual(auditHistoricalScopeWording(), []);
-  assert.match(
-    auditHistoricalScopeWording("Controlled-site pixels and restored/new-document validation remain open under F3." )[0],
-    /currently open/,
-  );
-});
-
-test("modal parity Red is dated and followed by current F10.2 evidence", { timeout: 1000 }, () => {
-  assert.deepEqual(auditModalParitySnapshotWording(), []);
-  assert.match(
-    auditModalParitySnapshotWording("The modal implementation has a larger confirmed gap." )[0],
-    /historical snapshot/,
-  );
-});
-
-test("F0.1 evidence identifies its build by its checklist ID", { timeout: 1000 }, () => {
-  assert.deepEqual(auditCommittedEvidenceWording(), []);
-  assert.match(
-    auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks passed for the build.")[0],
-    /by its checklist ID/,
-  );
-  assert.match(
-    auditCommittedEvidenceWording("- [o] F0.1 — Unblock native input measurement. Package and structural checks pass on the current dirty implementation.")[0],
-    /current dirty implementation/,
-  );
+test("inventory totals follow declared test additions without copied documentation", { timeout: 1000 }, () => {
+  const matrix = [{ capability: "unit", language: "js-ts", implementation: ["unit.js"], tests: ["*.test.mjs"], testLanguage: "js-ts" }];
+  const original = auditInventory(["unit.js", "first.test.mjs"], matrix, () => "");
+  const added = auditInventory(["unit.js", "first.test.mjs", "second.test.mjs"], matrix, () => "");
+  const checklist = "- [ ] F1 — pending\n  - [~] F1-1 — executing\n- [o] F2 — complete\n";
+  assert.match(inventorySummary(original, checklist), /^1 tracks, 1 implementation files, 1 test files\./);
+  assert.match(inventorySummary(added, checklist), /^1 tracks, 1 implementation files, 2 test files\./);
+  assert.match(inventorySummary(added, checklist), /1 waiting, 1 active, 0 held, 1 complete, 0 closed \(3 total/);
+  assert.deepEqual(added.uncoveredImplementations, []);
+  assert.deepEqual(added.uncoveredTests, []);
+  assert.match(inventorySummary(added, checklist), /Structural evidence only; behavior was not executed/);
 });
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
