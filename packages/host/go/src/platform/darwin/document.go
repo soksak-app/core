@@ -240,19 +240,19 @@ func (implementation) SetViewImportMap(text string) error {
 	return nil
 }
 
-func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(state string)) (unsafe.Pointer, error) {
-	name := C.CString(directory)
+func (implementation) CreateDocument(surface unsafe.Pointer, options platform.DocumentOptions, changed func(state string)) (unsafe.Pointer, error) {
+	name := C.CString(options.Directory)
 	defer C.free(unsafe.Pointer(name))
-	folderText := C.CString(folder)
+	folderText := C.CString(options.Folder)
 	defer C.free(unsafe.Pointer(folderText))
-	id := C.CString(plugin)
+	id := C.CString(options.Plugin)
 	defer C.free(unsafe.Pointer(id))
-	labelText := C.CString(label)
+	labelText := C.CString(options.Label)
 	defer C.free(unsafe.Pointer(labelText))
 	// A region has no channel script, so its channel is NULL; a view configuration has the script text.
 	var channelText *C.char
-	if channel != "" {
-		channelText = C.CString(channel)
+	if options.Channel != "" {
+		channelText = C.CString(options.Channel)
 		defer C.free(unsafe.Pointer(channelText))
 	}
 	receiver := cgo.NewHandle(changed)

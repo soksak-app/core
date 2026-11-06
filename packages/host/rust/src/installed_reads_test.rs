@@ -81,8 +81,7 @@ fn files_read(requests: impl FnOnce()) -> Vec<PathBuf> {
     })));
     requests();
     set_after_plugin_file_read(None);
-    let files = read.lock().unwrap().clone();
-    files
+    read.lock().unwrap().clone()
 }
 
 /// Returns the plugin.json files that `requests` reads, in order.

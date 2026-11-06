@@ -4,7 +4,7 @@ use std::ffi::{CStr, CString, c_char, c_void};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use super::super::{CoreRootResolver, Handle, Insets};
+use super::super::{CoreRootResolver, DocumentOptions, Handle, Insets};
 use crate::application_log::log_error;
 
 #[cfg(feature = "diagnostics")]
@@ -193,18 +193,15 @@ extern "C" fn event(context: *mut c_void, value: *const c_char) {
 /// Creates a hidden document webview inside the surface webview. Call it on the main thread.
 pub fn create(
     surface: Handle,
-    store: &str,
-    folder: &str,
-    plugin: &str,
-    label: &str,
-    channel: Option<&str>,
+    options: DocumentOptions<'_>,
     receive: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
-    let store = CString::new(store).map_err(|e| e.to_string())?;
-    let folder = CString::new(folder).map_err(|e| e.to_string())?;
-    let plugin = CString::new(plugin).map_err(|e| e.to_string())?;
-    let label = CString::new(label).map_err(|e| e.to_string())?;
-    let channel = channel
+    let store = CString::new(options.directory).map_err(|e| e.to_string())?;
+    let folder = CString::new(options.folder).map_err(|e| e.to_string())?;
+    let plugin = CString::new(options.plugin).map_err(|e| e.to_string())?;
+    let label = CString::new(options.label).map_err(|e| e.to_string())?;
+    let channel = options
+        .channel
         .map(CString::new)
         .transpose()
         .map_err(|e| e.to_string())?;

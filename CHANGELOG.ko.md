@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F636: Rust workspace가 다시 `make check-rust-clippy`를 통과한다. document web view를 만드는 platform method는 두 host 모두 따로 받던 인자 5개 대신 `DocumentOptions`로 값을 받고, test는 clippy가 보고한 붙잡힌 실행과 callback 타입에 이름을 붙인다.
 - F638: `@soksak/window-check`의 `drag`는 한 번만 끈다. 요청한 속도로 돌지 않은 drag는 그 자리에서 check를 실패시키고, `took`과 `asked`, 들어가야 했던 범위, `pressWaits`, 기계의 1분 load average를 담는다. 이전에는 한 번 더 끌어 그 drag가 속도를 지키면 통과했고, 첫 drag는 test diagnostic으로만 남았다. `drag`는 `(s, plan, options)`를 받는다. 더 쓰지 않는 test context는 parameter가 아니다.
 - F502-13: 설정의 프로젝트 범위 폴더 caption 은 page 에서도 mygo workbench 처럼 경로 전체를 pane 안에 보인다. 줄은 공백에서, 하이픈 뒤에서, 경로 구분자 뒤에서 바뀌고, 줄보다 긴 이름은 줄 끝에서 바뀐다. caption 은 두 workbench 에서 element `core.settings-modal.folder` 다. Red: page 는 긴 경로를 card 밖으로 한 줄에 두었고, `settings-folder-caption.test.mjs` 가 element 도 구분자 뒤 줄바꿈도 찾지 못했다.
 - F502-34: page workbench는 키보드의 각 결정을 `workbench.keyboard.follow`로 기록한다. 무엇이 요청했는지, 고른 surface, `surfaceFocus`를 보냈는지, placement를 기다렸는지, modal에 키보드를 두었는지를 담는다. Wails와 Tauri 호스트에서 탭 press의 호출이 release 뒤 45~86 ms에 나갔는데 그 이유를 알려 주는 기록이 없었다. Red: 기록된 결정의 test가 하나도 찾지 못했다.

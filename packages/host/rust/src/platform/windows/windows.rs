@@ -15,9 +15,9 @@ use std::time::Duration;
 #[cfg(feature = "diagnostics")]
 use super::DocumentViewportMarker;
 use super::{
-    ClipboardValue, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream,
-    Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
+    ClipboardValue, CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame,
+    Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait,
+    PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
@@ -205,14 +205,10 @@ impl Platform for Windows {
     fn create_document(
         &self,
         surface: Handle,
-        store: &str,
-        folder: &str,
-        plugin: &str,
-        label: &str,
-        channel: Option<&str>,
+        options: DocumentOptions<'_>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String> {
-        unsupported::create_document(surface, store, folder, plugin, label, channel, changed)
+        unsupported::create_document(surface, options, changed)
     }
     fn set_view_message(
         &self,

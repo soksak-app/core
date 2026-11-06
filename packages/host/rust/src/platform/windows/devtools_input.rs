@@ -261,17 +261,17 @@ pub(crate) fn pointer_delivery(result: &Result<(), InputFailure>) -> Delivery {
 }
 
 pub(crate) type Answer = Box<dyn FnOnce(Result<(), InputFailure>)>;
+/// Receives the end of a call: nothing, or the error text of the web view.
+pub(crate) type Complete = Box<dyn FnOnce(Result<(), String>)>;
 pub(crate) type Cancel = Box<dyn FnOnce()>;
-pub(crate) type After = Rc<dyn Fn(Duration, Box<dyn FnOnce()>) -> Cancel>;
+/// The work that a wait runs at its end.
+pub(crate) type Task = Box<dyn FnOnce()>;
+pub(crate) type After = Rc<dyn Fn(Duration, Task) -> Cancel>;
 
 /// What an [`InputQueue`] needs of its web view.
 pub(crate) trait Transport {
     /// Starts a call, and complete runs when it ends. An error means that complete does not run.
-    fn send(
-        &self,
-        call: &Call,
-        complete: Box<dyn FnOnce(Result<(), String>)>,
-    ) -> Result<(), String>;
+    fn send(&self, call: &Call, complete: Complete) -> Result<(), String>;
 }
 
 struct Entry {
@@ -439,11 +439,7 @@ pub(crate) fn capture_refusal(minimized: bool, shown: bool, visible: bool) -> Re
 /// Limits the wait for CapturePreview, whose behavior in a covered window no document states. It returns the function that receives the
 /// completion. done runs once: with the completion, or with the failure of the wait, and a later completion answers nothing.
 #[cfg(any(test, feature = "diagnostics"))]
-pub(crate) fn capture_wait(
-    after: &After,
-    wait: Duration,
-    done: Box<dyn FnOnce(Result<(), String>)>,
-) -> Box<dyn FnOnce(Result<(), String>)> {
+pub(crate) fn capture_wait(after: &After, wait: Duration, done: Complete) -> Complete {
     let done = Rc::new(RefCell::new(Some(done)));
     let timed = done.clone();
     let cancel = after(

@@ -274,6 +274,22 @@ pub struct ProcessFootprint {
     pub neural: u64,
 }
 
+/// The creation values of a document web view: a document region or a view (docs/spec/native-surfaces.md#document-regions).
+#[derive(Clone, Copy, Debug)]
+pub struct DocumentOptions<'a> {
+    /// The absolute path at which the persistent data store keeps the site data.
+    pub directory: &'a str,
+    /// The installed folder of the plugin whose surface owns the region; the region serves soksak://<plugin>/<path> from it.
+    pub folder: &'a str,
+    /// The id of that plugin.
+    pub plugin: &'a str,
+    /// The display label of the WebContent process (docs/spec/plugin-processes.md#operating-system-display-labels).
+    pub label: &'a str,
+    /// None for a document region. A view surface passes the text of the view channel script, and its configuration is the
+    /// only one that serves the core root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
+    pub channel: Option<&'a str>,
+}
+
 /// The CSS pixel insets of the surface viewport (left, top, right, bottom).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Insets {
@@ -491,21 +507,13 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     // Document region
 
-    /// Creates a hidden external document webview inside the surface webview surface. store is the absolute path in
-    /// which the persistent data store keeps the site data. changed receives the state JSON ({url, title, loading,
-    /// progress, canGoBack, canGoForward, error, scroll, navigations}) on the main thread. Call it on the main thread.
-    /// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region
-    /// serves soksak://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). view is true for the
-    /// web view configuration of a view surface, which is the only configuration that serves the core root
-    /// (docs/spec/native-surfaces.md#view-surfaces).
+    /// Creates a hidden external document webview inside the surface webview surface, with the values of options.
+    /// changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward, error, scroll,
+    /// navigations}) on the main thread. Call it on the main thread.
     fn create_document(
         &self,
         surface: Handle,
-        store: &str,
-        folder: &str,
-        plugin: &str,
-        label: &str,
-        channel: Option<&str>,
+        options: DocumentOptions<'_>,
         changed: Box<dyn Fn(String)>,
     ) -> Result<Handle, String>;
     /// Receives {"message": value} for each message of the sok-view handler of a view and {"error": reason} for a message from

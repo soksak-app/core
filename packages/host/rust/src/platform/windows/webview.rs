@@ -13,7 +13,7 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2, ICoreWebView2
 use super::ui_thread::{after_on_ui_thread, error};
 use crate::framework::PlatformWebview;
 use crate::platform::Handle;
-use crate::platform::devtools_input::{After, Call, InputQueue, PressState, Transport};
+use crate::platform::devtools_input::{After, Call, Complete, InputQueue, PressState, Transport};
 
 /// The WebView2 of a window that takes the input of the window.
 pub(super) struct View {
@@ -32,11 +32,7 @@ thread_local! {
 struct ProtocolTransport(ICoreWebView2);
 
 impl Transport for ProtocolTransport {
-    fn send(
-        &self,
-        call: &Call,
-        complete: Box<dyn FnOnce(Result<(), String>)>,
-    ) -> Result<(), String> {
+    fn send(&self, call: &Call, complete: Complete) -> Result<(), String> {
         let method = call.method;
         let handler =
             CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, _value| {

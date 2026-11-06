@@ -8,9 +8,9 @@ use crate::framework::Window;
 use serde_json::Value;
 
 use super::super::{
-    ClipboardValue, CoreRootResolver, DOMOverlay, Frame, Handle, Hit, ImagePresentation,
-    ImageReleased, Insets, Listener, NativeEventWait, PersistentStream, ProcessFootprint, Raster,
-    WindowOverlay,
+    ClipboardValue, CoreRootResolver, DOMOverlay, DocumentOptions, Frame, Handle, Hit,
+    ImagePresentation, ImageReleased, Insets, Listener, NativeEventWait, PersistentStream,
+    ProcessFootprint, Raster, WindowOverlay,
 };
 
 /// Returns an error that contains operation in its name.
@@ -174,11 +174,7 @@ pub fn set_view_import_map(_map: &str) -> Result<(), String> {
 
 pub fn create_document(
     _surface: Handle,
-    _store: &str,
-    _folder: &str,
-    _plugin: &str,
-    _label: &str,
-    _channel: Option<&str>,
+    _options: DocumentOptions<'_>,
     _changed: Box<dyn Fn(String)>,
 ) -> Result<Handle, String> {
     missing("document view")

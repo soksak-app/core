@@ -142,7 +142,7 @@ type documentAttachPlatform struct {
 	created []unsafe.Pointer
 }
 
-func (p *documentAttachPlatform) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, label, channel string, changed func(string)) (unsafe.Pointer, error) {
+func (p *documentAttachPlatform) CreateDocument(surface unsafe.Pointer, options platform.DocumentOptions, changed func(string)) (unsafe.Pointer, error) {
 	handle := unsafe.Pointer(new(int))
 	p.created = append(p.created, handle)
 	return handle, nil

@@ -281,13 +281,16 @@ fn a_request_after_the_reload_is_refused_until_the_new_page_starts() {
     );
 }
 
-/// A run held open, with a recording of each value and of the thread it ran on.
-fn held_latest_work() -> (
-    LatestWork<u32>,
-    Arc<Mutex<Vec<(u32, std::thread::ThreadId)>>>,
-    std::sync::mpsc::Sender<()>,
-    std::sync::mpsc::Receiver<()>,
-) {
+/// A run held open. runs records each value with the thread it ran on, each run sends on begins when it begins and waits for a
+/// message on release.
+struct HeldWork {
+    work: LatestWork<u32>,
+    runs: Arc<Mutex<Vec<(u32, std::thread::ThreadId)>>>,
+    release: std::sync::mpsc::Sender<()>,
+    begins: std::sync::mpsc::Receiver<()>,
+}
+
+fn held_latest_work() -> HeldWork {
     let runs = Arc::new(Mutex::new(Vec::new()));
     let recording = Arc::clone(&runs);
     let (release, released) = std::sync::mpsc::channel::<()>();
@@ -301,7 +304,12 @@ fn held_latest_work() -> (
         began.send(()).unwrap();
         released.lock().unwrap().recv().unwrap();
     });
-    (work, runs, release, begins)
+    HeldWork {
+        work,
+        runs,
+        release,
+        begins,
+    }
 }
 
 /// The requests that arrive during a run join into one further run on the same thread, so a burst of changes holds one thread
@@ -309,7 +317,12 @@ fn held_latest_work() -> (
 // contract: status.window.latest-value-last
 #[test]
 fn a_burst_of_window_changes_is_one_more_read_on_one_thread() {
-    let (work, runs, release, begins) = held_latest_work();
+    let HeldWork {
+        work,
+        runs,
+        release,
+        begins,
+    } = held_latest_work();
     work.ask("main", 0);
     begins.recv_timeout(Duration::from_secs(5)).unwrap();
     for value in 1..=100 {
@@ -336,7 +349,12 @@ fn a_burst_of_window_changes_is_one_more_read_on_one_thread() {
 /// Two keys both run, and a later request after the burst ended runs on the thread that the first request started.
 #[test]
 fn each_window_keeps_its_own_latest_read_on_the_same_thread() {
-    let (work, runs, release, begins) = held_latest_work();
+    let HeldWork {
+        work,
+        runs,
+        release,
+        begins,
+    } = held_latest_work();
     work.ask("main", 1);
     begins.recv_timeout(Duration::from_secs(5)).unwrap();
     work.ask("second", 2);
