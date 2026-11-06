@@ -592,3 +592,47 @@ close/split predictions and its result; controlled identifier-dependent and
 array-position-dependent defects must fail that comparison. Source ownership
 checks remain structural checks, and the independent slicing oracle remains
 separate from both the sequence generator and the role comparison.
+
+
+## Varied role-independence cases
+
+A bounded selection supplements the fixed five-card test and its 120 input
+orders. Seeds 0 through 20 build valid topology through public split operations
+before applying the declared options. Each case checks its actual card count,
+topology, dimensions and options; generation that collapses into one class fails.
+The input classes are:
+
+| Input | Selection |
+| --- | --- |
+| Topology | columns, rows and mixed cuts |
+| Initial cards | 2 through 8; mixed cuts require at least 3 |
+| Width / height | 320, 640, 1730 / 180, 900, 1440 px |
+| Gap / minimum size | 0, 17, 64 / 24, 96, 160 px |
+| Snap / fill order | merge and off / h and v |
+| Snap distance / grab size | 3 and 29 / 7 and 23 px |
+| Card attributes | fixed and sharing cards, declared px sizes and zero-size constrained cards |
+| Trace | 14 refusal/recovery calls followed by 20 seeded calls |
+
+Each initial array is rotated, reversed and shuffled twice with the case seed;
+duplicate orders are removed, and at most the card count plus three orders are
+compared with original and renamed identifiers. This selection does not claim
+all combinations or all possible layouts. The five-card test still enumerates
+all 120 orders separately.
+
+A fixed-card split must refuse, then succeed after clearing the fixed flag and
+providing room. A split in a one-pixel plane must refuse, then succeed after
+restoring room. Closing the new card proves that work can continue after each
+recovery. Every transition reports its successful or refused result, and a
+refusal preserves the serialized state and public observations. The report
+asserts and lists input classes and per-method outcome counts. Separate controls
+prove that gap, minimum size, snapping, grab size and fill order change the
+corresponding geometry or decisions.
+
+The slicing oracle is a pure test module that imports no layout implementation;
+the existing negative pinwheel cases and the varied transition checks use it.
+Mutation checks generate and validate inputs with the unchanged implementation,
+then replay those same inputs against isolated implementation copies. The
+identifier-, array-order- and size-dependent defects leave the existing R2 test
+passing and must fail a named assertion on the added narrow-plane case. Loader,
+runtime and environment errors do not count as detection. Failures retain the
+seed, initial state, options, full call list and selected input orders.

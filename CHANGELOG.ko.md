@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F508: Layout role 검사는 고정 순열 120개를 유지하고 topology, card 수, dimension과 layout option을 다루는 결정적 case 21개를 추가한다. 각 case는 생성한 trace 전에 거부와 회복을 관측하며 report는 method별 결과와 전체 실패 입력을 보존한다. 격리한 ID·array-order·size mutant는 기존 R2 case를 통과하지만 확장한 소유 assertion에서 실패한다. macOS에서 집중 case 63개가 모두 통과한다. Baseline 전이 714개는 성공 489개와 거부 225개이며, 다양한 입력군은 별도 merge 성공 case를 대체하거나 모든 layout의 전수 검증을 주장하지 않는다.
+
 - F506-1: Close 경계 소유 test는 save 실패 뒤 같은 modified tab에서 재시도하고, 대기 중 dirty 상태와 error를 유지하며, clean save 응답을 기다린 뒤 다른 tab을 바꾸지 않고 정확히 한 번 닫히는지 검증한다. Retry를 막는 통제한 mutation은 해당 소유 assertion에서 실패하며 macOS에서 close 경계, report, view surface case 25개가 모두 통과한다. Production 동작은 변경하지 않았으며 native application acceptance는 별도다.
 
 - F509-1: Verification build는 해당 checkout의 output을 소유한다. Shared target과 다른 checkout의 정리를 권한 guide는 application recipe의 checkout-relative 실행 파일 복사와 모순되며 source 확인과 build dry-run으로 해당 경로를 확인했다. 양쪽 guide는 target 공유와 다른 checkout host crate 정리를 금지한다. 문서 검사는 통과하며 application acceptance를 주장하지 않는다.
