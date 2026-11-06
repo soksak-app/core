@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F509-1: Verification build는 해당 checkout의 output을 소유한다. Shared target과 다른 checkout의 정리를 권한 guide는 application recipe의 checkout-relative 실행 파일 복사와 모순되며 source 확인과 build dry-run으로 해당 경로를 확인했다. 양쪽 guide는 target 공유와 다른 checkout host crate 정리를 금지한다. 문서 검사는 통과하며 application acceptance를 주장하지 않는다.
+
 - F501-3: 플랫폼 audit를 바꾸지 않고 증거의 플랫폼 선택을 선언된 dispatcher로 옮긴다. Native process 조회는 요청할 때 실행하고 알 수 없는 플랫폼은 명시적으로 실패하며 sidecar release key는 선언된 운영체제 이름을 사용한다. 공통 fixture는 플랫폼 데이터를 명시하고 macOS owner는 kernel 일치·불일치, 경로 공백, process SHA만 바꾸는 drift 검사를 보존한다. 소유 case 121개가 모두 통과하고 child 제한을 둔 selector case 세 개도 통과한다. Linux metadata import는 macOS child에서 모의 검증했으며 native application acceptance와 전체 suite는 다시 실행하지 않았다.
 
 - F503-2: Inventory와 checklist 합계를 복사한 숫자 assertion 대신 정본 입력에서 산출한다. 과거 문구 검사 세 개는 문서 gate로 옮겨 두 언어를 검증하고 소유권, coverage 누락, 실행 언어 검사는 유지한다. 추적 Red로 누락된 문서 거부를 확인했고 audit/checklist case 73개와 Go 이름 case 다섯 개가 모두 통과한다. 최종 inventory는 track 116개, 구현 file 739개, test file 1164개를 보고하며 소유자 누락과 잘못된 feature link는 없다.

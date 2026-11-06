@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F509-1: Verification builds keep their own checkout output. The shared-target and cross-checkout cleanup guidance contradicted the application recipes' checkout-relative executable copies; source inspection and the build dry-run confirm those paths. Both guides now prohibit shared targets and cleaning another checkout's host crate. Documentation checks pass; no application acceptance is claimed.
+
 - F501-3: Evidence platform selection moves into the declared dispatcher without changing the platform audit. Native process lookup is deferred until requested; unknown platforms fail explicitly and sidecar release keys use their declared OS names. Shared fixtures use explicit platform data, while the macOS owner retains matching/mismatching kernel probes, path whitespace and SHA-only process drift checks. All 121 focused cases pass, followed by three bounded selector cases. Linux metadata import is simulated in a macOS child; native application acceptance and the complete suite were not rerun.
 
 - F503-2: Inventory and checklist totals now derive from canonical inputs instead of copied numeric assertions. Three historical wording checks moved to the documentation gate and validate both languages; ownership, omitted coverage and executable-language checks remain. Tracked Red demonstrates the missing documentation refusals, and all 73 audit/checklist cases plus five Go-name cases pass. Final inventory reports 116 tracks, 739 implementation files and 1164 test files with no missing owner or invalid feature link.

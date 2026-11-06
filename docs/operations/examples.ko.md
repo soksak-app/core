@@ -32,7 +32,7 @@ Bundle을 build하기 전에 현재 작업 디렉터리가 의도한 검증 chec
 
 `make check-host-files`는 Wails host source를 Windows용으로도 vet한다(`check-windows-build`).
 
-Rust 빌드는 `target/`을 빠르게 키운다(시험이 포함된 debug 빌드는 수십 기가바이트다). Cargo는 `CARGO_INCREMENTAL=0`으로 돌린다. 다른 checkout이나 worktree에서 하는 작업은 자기 폴더가 아니라 주 checkout의 `target/`에 Rust를 빌드한다. 자기 폴더는 모든 의존성을 다시 빌드하기 때문이다. 다른 checkout이 바꾼 host crate는 마지막 시험 뒤, 주 checkout이 다시 빌드하기 전에 `cargo clean -p soksak-host-tauriv2`로 지운다. 지우지 않으면 주 checkout이 다른 checkout이 빌드한 crate를 링크한다(`cargo clean -p`는 다른 `cargo` 프로세스가 돌지 않을 때만 한다). 다시 쓰지 않는 빌드 산출물(하루 동안 쓰이지 않은 `target/debug/deps` 파일, worktree의 `native/darwin/build`)은 검증 뒤에 지우고, 디스크 여유를 debug 전체 빌드 하나의 크기 위로 유지한다. `target/test-runs/`는 시험 실행기의 실행(Test runner 참조)을 `node scripts/test-runs.mjs prune`이 실패 없는 실행을 지울 때까지 보관한다.
+Rust build는 `target/`을 빠르게 늘린다. Cargo는 `CARGO_INCREMENTAL=0`으로 실행한다. 각 verification checkout은 자기 `target/`, native build output과 application bundle을 보유한다. Application recipe는 checkout-relative `target/{debug,release}` 경로에서 실행 파일을 복사하므로 공유 Cargo target은 다른 checkout의 bytes를 제공하거나 복사할 입력을 해당 경로에 남기지 않을 수 있다. 이 recipe에서는 `CARGO_TARGET_DIR`를 설정하지 않고 target 폴더를 공유하거나 다른 checkout의 host crate를 정리하지 않는다. 시작 전에 계획한 build에 필요한 disk 공간을 확인한다. 현재 task가 소유하고 실행 중인 process가 사용하지 않는 verification output만 제거한다. `target/test-runs/`는 test runner의 실행을 보관하며(Test runner 참고), `node scripts/test-runs.mjs prune`이 실패 없는 실행을 제거한다.
 
 ## 테스트 동등성
 
