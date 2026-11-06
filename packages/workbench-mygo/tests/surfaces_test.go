@@ -66,8 +66,10 @@ type surfaceHost struct {
 	// theme is the argument of setTheme, and themeFirst tells that no placement preceded it.
 	theme      string
 	themeFirst bool
-	// elements tells that the host holds the views of the surfaces.
+	// elements tells that the host holds the views of the surfaces, and views the view of each surface, one for each, as the host
+	// makes them.
 	elements bool
+	views    map[string]uintptr
 	// calls replaces the calls of the table.
 	calls map[string]workbench.HostCall
 	// held is the surfaces of the last syncSurfaces, which the host holds whichever table answered it.
@@ -234,12 +236,21 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	return table
 }
 
-// element returns the views of a surface once the host holds them.
+// element returns the views of a surface once the host holds them: the view of the surface and the view inside it that takes the
+// keyboard.
 func (h *surfaceHost) element(id string) (uintptr, uintptr, bool) {
 	if !h.elements {
 		return 0, 0, false
 	}
-	return 1, 2, true
+	if h.views == nil {
+		h.views = map[string]uintptr{}
+	}
+	view, ok := h.views[id]
+	if !ok {
+		view = uintptr(2*len(h.views) + 1)
+		h.views[id] = view
+	}
+	return view, view + 1, true
 }
 
 // surfaceShell opens a project in a shell with the plugins of installedDocument.
@@ -695,6 +706,66 @@ func TestAViewTouchesTheHeadAndTheFootOfItsCard(t *testing.T) {
 	}
 	if touched == 0 {
 		t.Fatalf("no view stands in a tabbed card: %+v", views)
+	}
+}
+
+// A view takes the pointer wherever it shows, up to its edges, as the native view of a page host stands over the page: the grab area of
+// a boundary, which reaches over the edges of the cards beside it, stays out of the view. A press near the left edge of the first cell
+// of a terminal reaches the terminal, not the boundary.
+func TestAViewTakesThePointerUpToItsEdges(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.elements = true
+	// The frame has the backing scale of the window, at whose device pixels the framework stands each view.
+	f.tester.SetScale(float32(stored.window.Scale))
+	f.settle()
+	var views, dividers []ui.Rect
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if _, ok := node.Key.(workbench.SurfaceSlot); ok {
+				views = append(views, node.Bounds)
+			}
+			if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == "core.divider" {
+				dividers = append(dividers, node.Bounds)
+			}
+			walk(node.Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	overlap := func(a, b ui.Rect) bool { return a.X < b.X+b.W && b.X < a.X+a.W && a.Y < b.Y+b.H && b.Y < a.Y+a.H }
+	reached := 0
+	for _, view := range views {
+		for _, divider := range dividers {
+			if overlap(view, divider) {
+				reached++
+			}
+		}
+	}
+	if reached == 0 {
+		t.Fatalf("no grab area of a boundary reaches over a view, so the test shows nothing: views %+v, dividers %+v", views, dividers)
+	}
+	for _, view := range views {
+		var covered []ui.Point
+		for _, in := range []float32{0.5, 1, 1.5} {
+			for along := float32(in); along < view.H-in; along++ {
+				for _, x := range []float32{view.X + in, view.X + view.W - in} {
+					if f.tester.WebViewAt(x, view.Y+along) == nil {
+						covered = append(covered, ui.Point{X: x, Y: view.Y + along})
+					}
+				}
+			}
+			for along := float32(in); along < view.W-in; along++ {
+				for _, y := range []float32{view.Y + in, view.Y + view.H - in} {
+					if f.tester.WebViewAt(view.X+along, y) == nil {
+						covered = append(covered, ui.Point{X: view.X + along, Y: y})
+					}
+				}
+			}
+		}
+		if len(covered) > 0 {
+			t.Errorf("the view %+v does not take the pointer at %d points inside its edges, the first %+v; the dividers are %+v", view,
+				len(covered), covered[0], dividers)
+		}
 	}
 }
 

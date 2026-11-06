@@ -81,8 +81,20 @@ type dividerGrip struct {
 }
 
 // drawDividers draws the grab area of each boundary over the cards and returns the grips to paint over the rail. inset is the origin
-// of the plane in its parent.
+// of the plane in its parent. A native view takes the pointer wherever it shows, as the native view of a page host stands over the
+// page, so the grab area takes the pointer only in its parts outside the views that the frame draws, each edge of a view at the
+// device pixel where the framework stands it. A window whose scale cannot be read draws no grab area.
 func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
+	window, err := s.options.Window()
+	if err != nil {
+		s.failWindowRead(err)
+		return nil
+	}
+	views := make([]layout.Rect, len(s.surfaces.shown))
+	for i, box := range s.surfaces.shown {
+		views[i] = DevicePixels(box, window.Scale)
+	}
+	origin := s.planeOrigin()
 	dividers := s.plane.Dividers()
 	items := s.items(dividers)
 	grips := make([]dividerGrip, 0, len(dividers))
@@ -93,10 +105,17 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		if divider.Axis == "y" {
 			cursor, across, along = ui.CursorResizeNS, m.gripLength, m.gripThickness
 		}
-		// The focus stays where it is under a press, as a press on the element of a boundary is a drag and not a move of the keys.
+		// The focus stays where it is under a press, as a press on the element of a boundary is a drag and not a move of the keys. The
+		// element itself lets the pointer through, and its parts take it for the element.
 		box := ui.Box(c).Role(ui.RoleSplitter).Absolute().Left(float32(divider.X)+inset).Top(float32(divider.Y)+inset).
-			Size(float32(divider.W), float32(divider.H)).Cursor(cursor).Focusable().KeepFocus().FocusRing(false).
+			Size(float32(divider.W), float32(divider.H)).Cursor(cursor).Focusable().KeepFocus().FocusRing(false).PassThrough().
 			HandleInput(s.dividerInput(divider, items[i]))
+		area := layout.Rect{X: divider.X + origin.X, Y: divider.Y + origin.Y, W: divider.W, H: divider.H}
+		box.Children(func() {
+			for _, part := range outside(area, views) {
+				ui.Box(c).Absolute().Left(float32(part.X-area.X)).Top(float32(part.Y-area.Y)).Size(float32(part.W), float32(part.H))
+			}
+		})
 		color := faded(s.palette.Muted, m.gripMix)
 		if box.Hovered() || box.FocusVisible() || (s.held != nil && s.held.item == items[i]) {
 			color = s.palette.Focus
@@ -107,6 +126,42 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		})
 	}
 	return grips
+}
+
+// outside returns the parts of area that none of holes covers, as rectangles that do not overlap one another.
+func outside(area layout.Rect, holes []layout.Rect) []layout.Rect {
+	parts := []layout.Rect{area}
+	for _, hole := range holes {
+		var next []layout.Rect
+		for _, part := range parts {
+			next = append(next, cut(part, hole)...)
+		}
+		parts = next
+	}
+	return parts
+}
+
+// cut returns the parts of r outside hole: the bands of r above and below the hole, and the parts of r beside the hole between them.
+func cut(r, hole layout.Rect) []layout.Rect {
+	left, top := max(r.X, hole.X), max(r.Y, hole.Y)
+	right, bottom := min(r.X+r.W, hole.X+hole.W), min(r.Y+r.H, hole.Y+hole.H)
+	if left >= right || top >= bottom {
+		return []layout.Rect{r}
+	}
+	var parts []layout.Rect
+	if top > r.Y {
+		parts = append(parts, layout.Rect{X: r.X, Y: r.Y, W: r.W, H: top - r.Y})
+	}
+	if bottom < r.Y+r.H {
+		parts = append(parts, layout.Rect{X: r.X, Y: bottom, W: r.W, H: r.Y + r.H - bottom})
+	}
+	if left > r.X {
+		parts = append(parts, layout.Rect{X: r.X, Y: top, W: left - r.X, H: bottom - top})
+	}
+	if right < r.X+r.W {
+		parts = append(parts, layout.Rect{X: right, Y: top, W: r.X + r.W - right, H: bottom - top})
+	}
+	return parts
 }
 
 // paintGrips paints the grips of the dividers. The grips lie over the rail, whose outline runs along the boundaries.
