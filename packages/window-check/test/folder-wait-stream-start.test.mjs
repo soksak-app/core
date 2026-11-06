@@ -6,12 +6,13 @@
 // ends the process that runs it. The library writes LOADED to the standard error of the child when dyld loads it, and the
 // test fails when the line is missing, because a child without the delay passes without testing the start.
 import assert from "node:assert/strict";
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { CHURN_TEST_LIMIT_MS, runChurn } from "./churn-child.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const LOADED = "fsevents-start-delay: loaded\n";
@@ -22,21 +23,17 @@ function folder(t, prefix) {
   return dir;
 }
 
-test("waits whose watches start while the folder changes end with the changed state and the process continues", { timeout: 60000 }, async (t) => {
+test("waits whose watches start while the folder changes end with the changed state and the process continues", { timeout: CHURN_TEST_LIMIT_MS }, async (t) => {
   const build = folder(t, "folder-wait-stream-start-build-");
   const library = join(build, "fsevents-start-delay.dylib");
   execFileSync("cc", ["-dynamiclib", "-framework", "CoreServices", "-o", library,
     join(here, "platform", "darwin", "fsevents-start-delay.c")]);
   const watched = folder(t, "folder-wait-stream-start-");
   const cycles = 20;
-  const result = await new Promise((resolve) => {
-    execFile(process.execPath, [join(here, "folder-wait-churn.mjs"), watched, String(cycles)],
-      { env: { ...process.env, DYLD_INSERT_LIBRARIES: library }, timeout: 45000, killSignal: "SIGKILL" },
-      (error, stdout, stderr) => resolve({ code: error ? error.code ?? null : 0, signal: error?.signal ?? null, stdout, stderr }));
-  });
+  const result = await runChurn(watched, cycles, { ...process.env, DYLD_INSERT_LIBRARIES: library },
+    folder(t, "folder-wait-stream-start-progress-"));
   assert.ok(result.stderr.startsWith(LOADED), "the stream start delay was not loaded: the child did not write "
     + `${JSON.stringify(LOADED)} first to its standard error with DYLD_INSERT_LIBRARIES=${library} `
     + `(code ${result.code}, signal ${result.signal}); stderr: ${JSON.stringify(result.stderr)}`);
-  assert.deepEqual({ code: result.code, signal: result.signal, stdout: result.stdout, stderr: result.stderr },
-    { code: 0, signal: null, stdout: `cycles ${cycles}\n`, stderr: LOADED });
+  assert.deepEqual(result, { code: 0, signal: null, stdout: `cycles ${cycles}\n`, stderr: LOADED });
 });

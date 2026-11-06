@@ -26,6 +26,7 @@ mock.module("@parcel/watcher", {
 });
 
 const { untilFolderState } = await import("../folder-wait.mjs");
+const { CHURN_TEST_LIMIT_MS, runChurn } = await import("./churn-child.mjs");
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const INJECTED = "fsevents-drop: loaded\nfsevents-drop: reported\n";
@@ -37,12 +38,17 @@ function folder(t, prefix) {
   return dir;
 }
 
-async function underReports(t, report, events, script, args) {
+// Builds the fault injection library and makes the watched folder of a test.
+function injected(t) {
   const build = folder(t, "folder-wait-drop-build-");
   const library = join(build, "fsevents-drop.dylib");
   execFileSync("cc", ["-dynamiclib", "-framework", "CoreServices", "-o", library,
     join(here, "platform", "darwin", "fsevents-drop.c")]);
-  const watched = folder(t, "folder-wait-drop-");
+  return { library, watched: folder(t, "folder-wait-drop-") };
+}
+
+async function underReports(t, report, events, script, args) {
+  const { library, watched } = injected(t);
   return new Promise((resolve) => {
     execFile(process.execPath, [join(here, script), watched, ...args],
       { env: { ...process.env, DYLD_INSERT_LIBRARIES: library, FSEVENTS_DROP_REPORT: report, FSEVENTS_DROP_EVENTS: events }, timeout: CHILD_LIMIT_MS, killSignal: "SIGKILL" },
@@ -51,9 +57,11 @@ async function underReports(t, report, events, script, args) {
 }
 
 for (const report of ["client", "kernel", "overflow"]) {
-  test(`waits go on through the ${report} report of lost events while the folder changes`, { timeout: 60000 }, async (t) => {
+  test(`waits go on through the ${report} report of lost events while the folder changes`, { timeout: CHURN_TEST_LIMIT_MS }, async (t) => {
     const cycles = 20;
-    assert.deepEqual(await underReports(t, report, "kept", "folder-wait-churn.mjs", [String(cycles)]),
+    const { library, watched } = injected(t);
+    const env = { ...process.env, DYLD_INSERT_LIBRARIES: library, FSEVENTS_DROP_REPORT: report, FSEVENTS_DROP_EVENTS: "kept" };
+    assert.deepEqual(await runChurn(watched, cycles, env, folder(t, "folder-wait-drop-progress-")),
       { code: 0, signal: null, stdout: `cycles ${cycles}\n`, stderr: INJECTED });
   });
 

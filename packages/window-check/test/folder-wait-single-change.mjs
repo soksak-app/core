@@ -5,7 +5,7 @@
 //   node test/folder-wait-single-change.mjs FOLDER
 import * as fs from "node:fs";
 import { join } from "node:path";
-import { untilFolderState } from "../folder-wait.mjs";
+import { endWatches, untilFolderState } from "../folder-wait.mjs";
 
 const [folder] = process.argv.slice(2);
 if (!folder) throw new Error(`usage: folder-wait-single-change.mjs FOLDER, got ${process.argv.slice(2).join(" ")}`);
@@ -19,5 +19,9 @@ await untilFolderState(folder, () => {
   fs.writeFileSync(state, "changed");
   return undefined;
 }, HOUR_MS, () => new Error(`no change of ${folder} within ${HOUR_MS} ms`));
+// A watch ends after its wait, on the thread of the file system events backend; a process that exits while one ends destroys
+// the mutex that thread still locks, and libc++ ends it with SIGABRT. The process exits after every watch ended.
+const failures = await endWatches(10000);
+for (const failure of failures) process.stderr.write(`${failure.message}\n`);
 process.stdout.write("changed\n");
-process.exit(0);
+process.exit(failures.length ? 1 : 0);
