@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F502-34: page workbench는 키보드의 각 결정을 `workbench.keyboard.follow`로 기록한다. 무엇이 요청했는지, 고른 surface, `surfaceFocus`를 보냈는지, placement를 기다렸는지, modal에 키보드를 두었는지를 담는다. Wails와 Tauri 호스트에서 탭 press의 호출이 release 뒤 45~86 ms에 나갔는데 그 이유를 알려 주는 기록이 없었다. Red: 기록된 결정의 test가 하나도 찾지 못했다.
 - F502-34: 탭 press의 release 뒤에 오는 키는 그 탭의 surface에 닿는다. mygo workbench와 page는 호스트가 이미 가진 surface의 `surfaceFocus`를 그것을 보여 주는 placement보다 먼저 보내, 호스트가 release에서 키보드를 준다. 전에는 placement 뒤, release 뒤 최대 43 ms에 보냈다. Red: 이전 순서에서 `TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement`와 숨겨진 held 탭 press의 page test가 실패했다.
 - F632: mygo workbench는 활성 tab의 작업 오류가 나타날 때 그 글을 `tab error <tab>`으로 기록하며, 다른 두 host의 workbench와 같다. Red: card status 줄은 오류를 보였지만 `workbench.record.error`를 저장하지 않았다.
 - F502-13: mygo workbench의 고정 sidebar section은 page처럼 library가 보이는 동안 placement에서 빠지고, 돌아오면 다시 자리를 잡는다. Red: `TestTheLibraryLeavesTheSectionsOfTheSidebars`가 library 아래에 놓인 왼쪽 sidebar의 두 section을 찾았다.

@@ -30,6 +30,7 @@ async function page() {
   document.head.appendChild(style);
 
   const calls = [];
+  const decisions = [];
   const modal = { open: null, listeners: new Set() };
   const actualHost = await import("../host.js");
   mock.module("../host.js", { exports: {
@@ -38,6 +39,11 @@ async function page() {
     surfaces: { ...actualHost.surfaces, focus: (surface) => { calls.push(surface); return Promise.resolve(); } },
     modalState: () => modal.open,
     onModalState: (fn) => { modal.listeners.add(fn); return () => modal.listeners.delete(fn); },
+  } });
+  const actualLog = await import("../page-log.js");
+  mock.module("../page-log.js", { exports: {
+    ...actualLog,
+    emitEvent: (level, event, fields) => { if (event === "workbench.keyboard.follow") decisions.push({ level, ...fields }); },
   } });
   mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
@@ -94,7 +100,7 @@ async function page() {
     await placed();
     calls.length = 0;
   };
-  return { calls, flush, keyboard, modal, openProject, placed, plane, reset, ringSurface, shownSurfaces };
+  return { calls, decisions, flush, keyboard, modal, openProject, placed, plane, reset, ringSurface, shownSurfaces };
 }
 
 const b = await page();
@@ -212,6 +218,22 @@ test("a press on a tab whose surface the host holds sends the call before the pl
   assert.deepEqual(b.calls, [hidden], "the keyboard call of the press waited for the placement");
   press(tab, "pointerup");
   await b.placed();
+});
+
+test("each decision of the keyboard is recorded with its cause", { timeout: 5000 }, async () => {
+  await b.reset();
+  const before = b.ringSurface();
+  b.plane.addTabTo(b.plane.focused(), pluginId, null);
+  await b.flush();
+  const added = b.ringSurface();
+  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "ring", target: added, sent: before, owed: true, decision: "wait" },
+    "the new tab waits for the placement that holds it");
+  await b.placed();
+  assert.equal(b.decisions.at(-1).cause, "placed");
+  assert.equal(b.decisions.at(-1).decision, "send");
+  b.keyboard.keyboardResponder({ owner: "workbench" });
+  await b.flush();
+  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "responder", target: added, sent: added, owed: true, decision: "send" });
 });
 
 test("a modal keeps the keyboard until it closes", { timeout: 5000 }, async () => {

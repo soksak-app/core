@@ -690,6 +690,24 @@
       },
       "description": "The close of the native picker layer, while the trace is on: reason is the reason of the close, one of `replaced` (another layer opened), `settled` (the layout settled), `fullscreen` (a card entered or left fullscreen), `toggle` (its button closed it), `pick` (an item was picked), `dismiss` (core.modal.dismiss), and `command` (core.picker.close, which the workbench runs for Escape and for a press outside the layer)."
     },
+    "workbench.keyboard.follow": {
+      "layer": "workbench",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cause": { "enum": ["ring", "placed", "responder", "modal", "focusin", "focusout"] },
+          "target": { "type": ["string", "null"] },
+          "sent": { "type": ["string", "null"] },
+          "owed": { "type": "boolean" },
+          "decision": { "enum": ["send", "same", "wait", "modal"] }
+        },
+        "required": ["cause", "target", "sent", "owed", "decision"]
+      },
+      "description": "One decision of the keyboard of the page workbench: `cause` is what asked for it (`ring` a move of the focus ring, `placed` the answer of a drawn placement, `responder` a first responder that reached the workbench, `modal` a change of the modal state, `focusin` and `focusout` the element focus), `target` the surface it chose or null for the workbench, `sent` and `owed` the state before it, and `decision` whether it sent the call `surfaceFocus` (`send`), sent it for the same target (`same`), waited for a placement that holds the target (`wait`), or kept the keyboard in an open modal (`modal`)."
+    },
     "host.call.timeout": {
       "layer": "host",
       "class": "call",

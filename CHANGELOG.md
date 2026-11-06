@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F502-34: The page workbench records each decision of the keyboard as `workbench.keyboard.follow`, with what asked for it, the surface it chose, and whether it sent `surfaceFocus`, waited for a placement or kept the keyboard in a modal. A press on a tab sent its call 45 to 86 ms after the release on the Wails and Tauri hosts, and no record told why. Red: the test of the recorded decisions found none.
 - F502-34: A key that follows the release of a press on a tab reaches the surface of the tab. The mygo workbench and the page send `surfaceFocus` for a surface that the host already holds before the placement that shows it, so the host gives the keyboard at the release; they sent it after the placement, up to 43 ms after the release. Red: `TestAPressOnAHeldTabSendsTheKeyboardBeforeItsPlacement` and the page test of a press on a held tab failed on the previous order.
 - F632: The mygo workbench records the operation error of the active tab when it appears, as `tab error <tab>` with its text, like the workbench of the other two hosts. Red: the card status row showed the error and stored no `workbench.record.error`.
 - F502-13: The sections of the fixed sidebars of the mygo workbench leave the placement while the library is shown, as on the page, and the return seats them again. Red: `TestTheLibraryLeavesTheSectionsOfTheSidebars` found the two sections of the left sidebar placed under the library.
