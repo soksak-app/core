@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { killGroup } from "../../../scripts/test-command.mjs";
 
 export function runBounded(command, args, { timeout, cwd, stdout = "inherit", stderr = "inherit", signal, onSpawn } = {}) {
   if (!Number.isFinite(timeout) || timeout <= 0) throw new Error("The command deadline must be positive");
@@ -13,10 +14,13 @@ export function runBounded(command, args, { timeout, cwd, stdout = "inherit", st
     delete env.NODE_TEST_CONTEXT;
     const child = spawn(command, args, { cwd, env, stdio: ["ignore", stdout, stderr], detached: true });
     let reason = "exit", error = null;
+    // The group is ended again when the command exits, for the processes it left. A member that ended but is not yet reaped
+    // stays in the group, and macOS refuses the signal to a group that holds only such members; killGroup judges that group
+    // from the process table as ended, so the end of the command does not depend on when its members are reaped.
     const kill = () => {
       if (!child.pid) return;
-      try { process.kill(-child.pid, "SIGKILL"); }
-      catch (failure) { if (failure.code !== "ESRCH") error = `${failure.code}: ${failure.message}`; }
+      try { killGroup(child.pid); }
+      catch (failure) { error = `${failure.code}: ${failure.message}`; }
     };
     const stop = (cause) => {
       if (reason !== "exit") return;

@@ -247,6 +247,29 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F669",
+    implementation: [
+      { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
+      { file: "scripts/test-command.mjs", symbol: "export function killGroup(pgid, send = sendToGroup) {" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a command group whose last member has ended but is not reaped ends without an error" },
+      { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a mutant deadline is distinguished from cancellation of the experiment" },
+    ],
+    expected: "A bounded command whose process group holds only members that ended but are not reaped ends without an execution error, because its group is ended through killGroup, which fails only while a member runs; a mutant deadline is therefore classified as mutant-timeout whenever its test processes are reaped.",
+    levels: ["unit"],
+  },
+  {
+    id: "F668",
+    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds(session, surface, cells) {" }],
+    tests: [
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization" },
+      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds preserve a capture when the view read fails" },
+    ],
+    expected: "The terminal cell sampling tests answer the element.rect request that Session.rect sends, and cell sampling reads the view after it stops the recording.",
+    levels: ["unit"],
+  },
+  {
     id: "F584-5-2",
     implementation: [
       { file: "packages/workbench-mygo/src/dividers.go", symbol: "func outside(area layout.Rect, holes []layout.Rect) []layout.Rect {" },
@@ -5012,7 +5035,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F257-3",
-    implementation: [{ file: "scripts/test-runner.mjs", symbol: "function signalGroup" }],
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "function signalRunningGroup" }],
     tests: [
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with no running member ends without error" },
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with a running member names it" },
