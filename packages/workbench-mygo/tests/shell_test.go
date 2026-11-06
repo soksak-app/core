@@ -470,8 +470,8 @@ type shellFixture struct {
 	pending steps
 	lines   []string
 	reloads int
-	// frames counts the frames that the shell asked for.
-	frames int
+	// frames counts the frames that the shell asked for, and drawn the requests that until answered with a frame.
+	frames, drawn int
 	// treeReads counts the reads of the element tree.
 	treeReads int
 	// treeEdit changes the element tree that the shell reads, as a window that drew elsewhere.
@@ -899,6 +899,19 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 	if text, ok := shown.(*string); !ok || text == nil || *text != "project directory is gone" {
 		t.Fatalf("the status core.workbench.error is %v", shown)
 	}
+}
+
+// until runs the steps until done reports true, and draws a frame when the shell asked for one, as the window does: a command
+// whose run asked for a frame answers after it (docs/spec/exposure.md#registration).
+func (f *shellFixture) until(done func() bool) {
+	f.t.Helper()
+	f.pending.until(f.t, func() bool {
+		if f.frames > f.drawn {
+			f.drawn = f.frames
+			f.tester.Frame()
+		}
+		return done()
+	})
 }
 
 // until runs the steps until done reports true.

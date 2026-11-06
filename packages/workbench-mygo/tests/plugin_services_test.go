@@ -281,7 +281,7 @@ func TestAFileDroppedOnAViewRunsTheDropCommandOfItsPlugin(t *testing.T) {
 	}
 	f.shell.Event("view-reply", []any{map[string]any{"surface": surface, "id": request["id"], "result": nil}})
 	var status map[string]any
-	f.pending.until(t, func() bool {
+	f.until(func() bool {
 		status = dropStatus(t, f)
 		return status["command"] != nil
 	})

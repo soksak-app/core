@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -349,9 +350,12 @@ type Shell struct {
 	// exposedFocus is the keyboard focus of the window, which the first responder and the views report.
 	exposedFocus *Focus
 	// keyboard is what the workbench asked of the host about the keyboard.
-	keyboard     keyboardState
-	pointer      *PointerSequence
-	verification *Verification
+	keyboard keyboardState
+	// frameRequests counts the frames that the shell asked for, so a command reads whether its run asked for one. A part of the
+	// shell may ask from another goroutine.
+	frameRequests atomic.Int64
+	pointer       *PointerSequence
+	verification  *Verification
 	// verifying tells that the step that gives a watcher the verification waits to run, and building that a frame builds.
 	verifying, building bool
 	// diagnostics holds the policy and the trace switch that the host received last.
@@ -387,6 +391,12 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	}
 	s := &Shell{windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
+	// Every frame that the shell asks for passes this count: a command answers after the frame that its run asked for.
+	invalidate := options.Invalidate
+	s.options.Invalidate = func() {
+		s.frameRequests.Add(1)
+		invalidate()
+	}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.exposedFocus = NewFocus(options.Declared, func() { s.options.Invalidate() })
 	s.verification = NewVerification()
@@ -401,8 +411,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.pointer.released = s.keyboardPressed
 	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
-	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, options.Invalidate)
-	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, options.Invalidate)
+	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, s.options.Invalidate)
+	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, s.options.Invalidate)
 	s.registry.Elements(options.Elements)
 	// An installation that cannot be read has no installed plugin, and the window shows why (docs/spec/installation.md#serving-installed-plugins).
 	installed, refused, err := acceptInstalled(options.Installed)
