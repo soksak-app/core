@@ -5,7 +5,7 @@
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { runTests } from './test-runner.mjs';
+import { MAX_TEST_TIMEOUT_MS, NODE_TEST_REPORTERS, runTests } from './test-runner.mjs';
 
 /** The limit of one test file when `--timeout` is not given. */
 export const TEST_TIMEOUT_MS = 120_000;
@@ -13,17 +13,19 @@ export const TEST_TIMEOUT_MS = 120_000;
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 /**
- * Runs the test files (paths relative to `root`) with `timeoutMs` as the limit of each. Resolves with the exit status: 0 when every
- * file passed.
+ * Runs the test files (paths relative to `root`) with `timeoutMs` as the limit of each. Each file reports its test events, so the runner
+ * counts the tests that it ran: the PASS line of a file that ran no test says `no test ran`, the total counts the tests, and a gate in
+ * which no file ran a test fails. Resolves with the exit status: 0 when every file passed and a file ran a test.
  */
 export async function runGateTests({ files, timeoutMs, write }) {
   if (files.length === 0) throw new Error('no test file is given');
   // The gate runs from the push hook, outside a test; NODE_TEST_CONTEXT of a test run would make node --test skip its files, so env removes it.
   const tests = files.map((file) => ({
-    name: file, command: '/usr/bin/env', args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', file], cwd: root, timeoutMs,
+    name: file, command: '/usr/bin/env', args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', ...NODE_TEST_REPORTERS, file], cwd: root,
+    timeoutMs, eventLimitMs: MAX_TEST_TIMEOUT_MS,
   }));
-  const { results } = await runTests({ tests, concurrency: 1, write });
-  return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
+  const { passed } = await runTests({ tests, concurrency: 1, write });
+  return passed ? 0 : 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

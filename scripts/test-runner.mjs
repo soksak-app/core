@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { fileURLToPath } from 'node:url';
 import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
@@ -15,6 +16,16 @@ import { EVENT_PREFIX } from './test-event-reporter.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
+
+/**
+ * The reporters of a node --test file that this runner runs with `eventLimitMs`: the spec form on the standard output, the TAP form on
+ * the standard error, and the events of scripts/test-event-reporter.mjs on the standard error, which the runner reads for the event
+ * watchdog of the file and for the tests that the file ran. The spec form writes the errors of the failed tests at the end of the file,
+ * so a file that is killed keeps none; the TAP form writes the error of each test when the test ends.
+ */
+export const NODE_TEST_REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=tap',
+  '--test-reporter-destination=stderr', `--test-reporter=${fileURLToPath(new URL('./test-event-reporter.mjs', import.meta.url))}`,
+  '--test-reporter-destination=stderr'];
 
 const seconds = (ms) => (ms / 1000).toFixed(3);
 /**
