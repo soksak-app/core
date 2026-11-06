@@ -837,7 +837,8 @@ func (s *Shell) applySettings() error {
 	if err != nil {
 		return err
 	}
-	return s.sidebars.Adopt(sets, links)
+	s.sidebars.Adopt(sets, links)
+	return nil
 }
 
 // applyPalette takes the colors and the shape of the settings.

@@ -465,7 +465,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, err
 	}
 	for _, plugin := range s.plugins {
-		s.settings.Loaded(plugin.ID)
+		s.settings.Loaded(plugin)
 	}
 	s.register()
 	s.registerStatuses()

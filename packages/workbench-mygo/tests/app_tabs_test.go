@@ -247,7 +247,10 @@ const sectionsDocument = `{"plugins": [
 	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
 		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
 	{"id": "browser", "package": "b", "version": "1.0.0", "manifest": {"id": "browser", "name": "브라우저", "description": "browser", "sections": [
-		{"id": "browser.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}}]}},
+		{"id": "browser.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}},
+		{"id": "browser.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+		{"id": "browser.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+		{"id": "browser.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}},
 	{"id": "files", "package": "f", "version": "1.0.0", "manifest": {"id": "files", "name": "파일", "description": "files", "sections": [
 		{"id": "files.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
 		{"id": "files.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}]}`

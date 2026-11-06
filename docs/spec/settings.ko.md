@@ -155,7 +155,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 - `sections`: 반복 없는 섹션 id.
 - `layout`: `list` 또는 `tabs`([플러그인](plugins.ko.md#섹션)).
 
-연결은 `{place, plugin, set}`이고 `environment.json`의 `sidebars.links` 규칙을 따른다. 유효한 `sets`와 `links`는 `environment.json`의 `sidebars`도 검사하는 plugin-api 함수 `validateSidebars`와 `checkSidebarReferences`로 검사한다. 검사는 설정을 불러올 때와 변경을 저장하기 전에 실행한다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, 표면이 없는 불러온 플러그인의 카드 변 연결, 불러온 플러그인의 없는 세트 연결은 실패한다. 불러오지 않은 플러그인을 가리키는 것은 유지하며, 제거된 플러그인만 선언한 세트의 연결도 그 플러그인을 다시 설치하면 다시 쓰이도록 유지한다([플러그인](plugins.ko.md#불러오지-않은-플러그인)). 실패는 다음과 같이 보고한다. 불러오기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다.
+연결은 `{place, plugin, set}`이고 `environment.json`의 `sidebars.links` 규칙을 따른다. 유효한 `sets`와 `links`는 `environment.json`의 `sidebars`도 검사하는 plugin-api 함수 `validateSidebars`와 `checkSidebarReferences`로 검사한다. native workbench는 같은 규칙을 같은 메시지로 검사하고, window는 검사가 받아들인 목록을 두 번째 검사 없이 받는다. 검사는 설정을 불러올 때와 변경을 저장하기 전에 실행한다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, 표면이 없는 불러온 플러그인의 카드 변 연결, 불러온 플러그인의 없는 세트 연결은 실패한다. 불러오지 않은 플러그인을 가리키는 것은 유지하며, 제거된 플러그인만 선언한 세트의 연결도 그 플러그인을 다시 설치하면 다시 쓰이도록 유지한다([플러그인](plugins.ko.md#불러오지-않은-플러그인)). 실패는 다음과 같이 보고한다. 불러오기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다.
 
 세트를 삭제하면 남은 세트와 그 세트를 가리키는 연결을 뺀 연결을 같은 범위에 한 번의 변경으로 쓴다.
 

@@ -3,7 +3,10 @@ package workbench
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
+	"strings"
+	"unicode/utf16"
 )
 
 // The sidebar sets and links of the settings (docs/spec/settings.md#stored-sets-and-links). Each function takes a list and
@@ -174,4 +177,136 @@ func DeleteSet(sets []StoredSet, links []StoredLink, id string) ([]StoredSet, []
 	}
 	remaining := slices.Delete(clonedSets(sets), index, index+1)
 	return remaining, slices.DeleteFunc(slices.Clone(links), func(link StoredLink) bool { return link.Set == id }), nil
+}
+
+// reservedSetIDs are the values that are no set id: off of a choice of a setting and inherit of a choice of a card.
+var reservedSetIDs = []string{"off", "inherit"}
+
+// validateSidebars checks the sets and the links in their stored form with the rules and the messages of validateSidebars of
+// @soksak/plugin-api, which the page runs over the same values. A message starts with where. When loaded holds the ids of the
+// loaded plugins, a link of a plugin that is not loaded keeps a set that is not known, which the plugin uses again when it is
+// installed again (docs/spec/settings.md#stored-sets-and-links).
+func validateSidebars(sets, links any, where string, loaded map[string]bool) error {
+	setList, setsOK := sets.([]any)
+	linkList, linksOK := links.([]any)
+	if !setsOK || !linksOK {
+		return fmt.Errorf("%s: sidebars requires sets and links", where)
+	}
+	known := map[string]bool{}
+	for _, item := range setList {
+		set, ok := item.(map[string]any)
+		id, idOK := set["id"].(string)
+		title, titleOK := set["title"].(string)
+		sections, sectionsOK := set["sections"].([]any)
+		if !ok || !idOK || id == "" || !titleOK || !sectionsOK {
+			return fmt.Errorf("%s: every set requires id, title, and sections", where)
+		}
+		if err := onlyFields(fmt.Sprintf("%s set %s", where, id), set, "id", "title", "sections", "layout"); err != nil {
+			return err
+		}
+		// The page counts the UTF-16 units of the title.
+		if length := len(utf16.Encode([]rune(title))); length < 1 || length > setTitleMax {
+			return fmt.Errorf("%s: set %s title must be 1 to %d characters", where, id, setTitleMax)
+		}
+		names := make([]string, 0, len(sections))
+		for _, section := range sections {
+			name, ok := section.(string)
+			if !ok || name == "" {
+				return fmt.Errorf("%s: set %s sections must be section ids", where, id)
+			}
+			names = append(names, name)
+		}
+		listed := map[string]bool{}
+		for _, name := range names {
+			if listed[name] {
+				return fmt.Errorf("%s: set %s lists section %s twice", where, id, name)
+			}
+			listed[name] = true
+		}
+		if layout, _ := set["layout"].(string); layout != "list" && layout != "tabs" { // silent: a layout that is no string is no layout.
+			return fmt.Errorf("%s: set %s layout must be list or tabs", where, id)
+		}
+		if slices.Contains(reservedSetIDs, id) {
+			return fmt.Errorf("%s: set id %s is reserved", where, id)
+		}
+		if known[id] {
+			return fmt.Errorf("%s: duplicate set %s", where, id)
+		}
+		known[id] = true
+	}
+	seen := map[string]bool{}
+	for _, item := range linkList {
+		link, ok := item.(map[string]any)
+		place, _ := link["place"].(string) // silent: a place that is no string is no place of linkPlaces.
+		if !ok || !slices.Contains(linkPlaces, place) {
+			return fmt.Errorf("%s: every link requires a place (%s) and a known set", where, strings.Join(linkPlaces, ", "))
+		}
+		if err := onlyFields(where+" link", link, "place", "plugin", "set"); err != nil {
+			return err
+		}
+		plugin, named := link["plugin"].(string)
+		if link["plugin"] != nil && (!named || plugin == "") {
+			return fmt.Errorf("%s: a link plugin is null or a plugin id", where)
+		}
+		general := place == "left" || place == "right"
+		if general && named {
+			return fmt.Errorf("%s: a general window link requires plugin null", where)
+		}
+		if !general && !named {
+			return fmt.Errorf("%s: a %s link names a plugin", where, place)
+		}
+		set, _ := link["set"].(string) // silent: a set that is no string is no known set.
+		kept := loaded != nil && named && !loaded[plugin]
+		if !kept && !known[set] {
+			return fmt.Errorf("%s: a %s link requires a known set", where, place)
+		}
+		key := place + " general"
+		if named {
+			key = place + " " + plugin
+		}
+		if seen[key] {
+			return fmt.Errorf("%s: link %s appears twice", where, key)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+// onlyFields refuses the first field of value in sorted order that keys does not name.
+func onlyFields(where string, value map[string]any, keys ...string) error {
+	for _, key := range slices.Sorted(maps.Keys(value)) {
+		if !slices.Contains(keys, key) {
+			return fmt.Errorf("%s: unknown field %s", where, key)
+		}
+	}
+	return nil
+}
+
+// checkSidebarReferences checks the sections of the sets and the plugins of the links against the loaded plugins, as
+// checkSidebarReferences of @soksak/plugin-api does: a section that a loaded plugin does not declare, and a card link of a loaded
+// plugin without a surface, are refused, and a reference to a plugin that is not loaded is kept.
+func checkSidebarReferences(sets []StoredSet, links []StoredLink, plugins []LoadedPlugin, where string) error {
+	byID := map[string]LoadedPlugin{}
+	for _, plugin := range plugins {
+		byID[plugin.ID] = plugin
+	}
+	for _, set := range sets {
+		for _, section := range set.Sections {
+			plugin, _, _ := strings.Cut(section, ".") // silent: a section id is `<plugin id>.<name>`.
+			owner, loaded := byID[plugin]
+			if loaded && !slices.ContainsFunc(owner.Sections, func(declared LoadedSection) bool { return declared.ID == section }) {
+				return fmt.Errorf("%s: set %s names unknown section %s", where, set.ID, section)
+			}
+		}
+	}
+	for _, link := range links {
+		owner, loaded := byID[link.pluginID()]
+		if link.Plugin == nil || !loaded {
+			continue
+		}
+		if !strings.HasPrefix(link.Place, "window-") && !owner.Surface {
+			return fmt.Errorf("%s: link names plugin %s without a surface", where, owner.ID)
+		}
+	}
+	return nil
 }
