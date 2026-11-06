@@ -4,9 +4,11 @@
 
 ## 미배포
 
+- F619: framework의 window show는 등록된 platform에 묻는다. 그래서 framework test처럼 host 시작 전에 window를 보이는 process가 더는 nil dereference로 끝나지 않는다. 등록이 없으면 host의 fatal error로 process를 끝낸다.
 - F502-24-1: `go.work.sum`은 pin된 fork로 workspace module의 `go mod download`가 쓰는 내용을 담으므로, 그 download 뒤 checksum file의 변경을 거부하는 CI job의 guard가 변경을 보지 않는다.
 - F502-24-1: mygo module은 형제 folder 대신 push된 framework fork commit을 그 pseudo-version으로 가리키므로, worktree나 runner처럼 그 folder가 없는 checkout에서도 workspace의 모든 Go module이 import를 해석한다.
 - F592: Wails module은 window와 web view에 요청한 크기를 주는 push된 fork commit을 한 checkout에만 있는 형제 folder 대신 그 pseudo-version으로 가리키고, 그 sum을 담는다.
+- F659: release candidate는 0.0.40입니다.
 - F502-3: mygo host는 아무것도 배치하지 않는 frame을 framework의 native call 때문에 할당하지 않고 그린다. pin된 fork는 receiver로 call을 판정하고 할당 없이 실행한다. 전에는 calling thread에서 실행되는 `CFRelease`나 `release` 하나가 4번 할당했다. diff scene의 sidebar를 scroll하는 frame은 이제 166번 대신 102번 할당한다.
 - F651: `@soksak/plugin-api`는 test가 읽는 version 범위 사례 표를 `specFiles`에 선언하므로, 표가 바뀌면 이 package가 선택된다.
 - F651: host contract의 합집합 행은 pipe를 escape하고, markdown 표를 읽는 모든 check는 `scripts/markdown-table.mjs`의 `tableCells`로 cell을 읽는다. 이 함수는 escape되지 않은 `|`에서만 cell을 끝내고 `\|`를 `|`로 읽는다. 이전에는 계약 reader가 합집합을 나눠 scope를 `\`로 읽었다.

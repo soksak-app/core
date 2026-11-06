@@ -1,6 +1,6 @@
 {
   "name": "@soksak-check/floor-page",
-  "version": "0.0.39",
+  "version": "0.0.40",
   "private": true,
   "type": "module",
   "description": "Benchmark fixture: a view whose page draws one colour and runs no code but the declaration of its composition.",

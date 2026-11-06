@@ -38,7 +38,7 @@ type Options struct {
 }
 
 // applicationVersion is the version that the endpoint announces.
-const applicationVersion = "0.0.39"
+const applicationVersion = "0.0.40"
 
 // system is the operating system implementation that Run selected.
 var system platform.Platform

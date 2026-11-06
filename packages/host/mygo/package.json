@@ -1,6 +1,6 @@
 {
   "name": "@soksak/host-mygo",
-  "version": "0.0.39",
+  "version": "0.0.40",
   "private": true,
   "description": "mygo framework adapter: the run of the mygo application and the framework port of the Go language host library."
 }
