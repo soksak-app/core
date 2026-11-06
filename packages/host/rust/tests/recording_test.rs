@@ -7,12 +7,17 @@ mod folder;
 
 use std::cell::{Cell, RefCell};
 use std::path::Path;
+use std::sync::Mutex;
 
 #[path = "support/records.rs"]
 mod records;
 
 use soksak_host::event_record::use_host_event_log;
 use soksak_host::recording::{Capture, Recording, Target, stop_payload};
+
+/// The records of the host are process-wide, so the tests of this file that attach a writer run one at a time: a test reads
+/// only the errors that its own recording wrote.
+static SERIAL: Mutex<()> = Mutex::new(());
 
 /// A recording device that records calls and fails at the specified stage.
 #[derive(Default)]
@@ -785,6 +790,7 @@ impl Capture for Panicking {
 // contract: recording.start.panicking-capture-is-cleaned-up
 #[test]
 fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
@@ -822,6 +828,7 @@ fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
 // contract: recording.start.panicking-capture-retired-stop-error-releases-owner
 #[test]
 fn a_panicking_start_releases_retired_capture_after_stop_error() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
@@ -860,6 +867,7 @@ fn a_panicking_start_releases_retired_capture_after_stop_error() {
 // contract: recording.start.panic-cleanup-failure-blocks-next-start
 #[test]
 fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
