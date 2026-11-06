@@ -309,7 +309,7 @@ static BOOL otherPressIn(SPPointer *pointer, NSWindow *window, int button) {
 // +[NSEvent pressedMouseButtons] outside the delivery of the pointer. A context that the input method does not serve answers inside
 // the delivery (tests/input_pointers_test.m).
 static BOOL passesInputMethod(NSView *page) {
-    if (![page isKindOfClass:WKWebView.class] || !page.window) return NO;
+    if (![page isKindOfClass:WKWebView.class] || !page.window) return NO; // silent: the predicate answers NO for a view that is not a web page in a window, which no input method serves
     NSTextInputContext *context = page.inputContext;
     return context && context == NSTextInputContext.currentInputContext && sp_input_virtual_real_active()
         && sp_input_virtual_real_key((__bridge void *)page.window);
@@ -325,7 +325,7 @@ static SPPress *heldBy(SPPointer *pointer, NSWindow *window, NSView *page, int p
             why = "the input method of a page answers after the delivery";
             return YES;
         }
-        if (press->window != window) return NO;
+        if (press->window != window) return NO; // silent: the match answers NO for a press of another window, which this input shares nothing with
         if (phase == 0) {
             why = "the window has one hover position";
             return YES;
@@ -338,7 +338,7 @@ static SPPress *heldBy(SPPointer *pointer, NSWindow *window, NSView *page, int p
             why = "the page at the point holds its press";
             return YES;
         }
-        return NO;
+        return NO; // silent: the match answers NO for a press that shares no state with this input, which may go on
     });
     *reason = why;
     return found;
