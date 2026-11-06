@@ -10,9 +10,10 @@ import { StringDecoder } from 'node:string_decoder';
 import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
-import { hasEnded, processTable, runningMembers } from './test-command.mjs';
+import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from './test-command.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
+import { linkerWarnings } from './macos-minimum.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -92,38 +93,6 @@ function leftoverNames(pgid, leader, escaped, table) {
     if (match) commands.set(Number(match[1]), match[2]);
   }
   return members.map((member) => `pid ${member.pid} ${commands.get(member.pid) ?? '(ended while it was named)'}`);
-}
-
-/** Sends a signal to the process group pgid. The default is the group signal of the system; a test passes its own sender. */
-const sendToGroup = (pgid, signal) => process.kill(-pgid, signal);
-
-/**
- * Sends a signal to the group pgid. macOS refuses a group signal with EPERM when no member of the group can receive it, which is the case
- * when only zombies remain; such a group has nothing to end, so the refusal is not an error. A refusal while a member runs is an error,
- * and the error names the running members.
- */
-function signalGroup(pgid, signal, send) {
-  try { send(pgid, signal); } catch (error) {
-    if (error.code === 'ESRCH') return;
-    if (error.code !== 'EPERM') throw error;
-    const running = runningMembers(pgid);
-    if (running.length === 0) return;
-    error.message = `${signal} to process group ${pgid}: ${error.message}; running: ${running.map((member) => `pid ${member.pid} ${member.state}`).join('; ')}`;
-    throw error;
-  }
-}
-
-/**
- * Stops every process of the group of a test with SIGSTOP, so none of them runs while the leftovers are read. The stop comes before the
- * read, because the read takes seconds under load. A group that no longer exists has nothing to stop.
- */
-export function stopGroup(pgid, send = sendToGroup) {
-  signalGroup(pgid, 'SIGSTOP', send);
-}
-
-/** Ends every process of the group of a test. A group that no longer exists has nothing to end. */
-export function killGroup(pgid, send = sendToGroup) {
-  signalGroup(pgid, 'SIGKILL', send);
 }
 
 /**
@@ -352,6 +321,7 @@ function runOne(item, limitMs, env, outputPath) {
       // The event lines are the reporter's record for the runner, so they are not part of the output of the test.
       const output = Buffer.concat(chunks).toString('utf8').split('\n').filter((line) => !line.startsWith(EVENT_PREFIX)).join('\n');
       const evidenceErrors = testEvidence?.result().errors ?? [];
+      const linkerFailures = linkerWarnings(output).failures;
       if (groupError) {
         finish({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
       } else if (limit !== null) {
@@ -369,6 +339,9 @@ function runOne(item, limitMs, env, outputPath) {
       // A node test file passes only on its own successful summary with at least one passed test and no skipped, todo, failed or
       // cancelled test (node-test-evidence.mjs): a skipped or todo test is a test that did not run.
       else if (code === 0 && evidenceErrors.length > 0) finish({ status: 'fail', elapsedMs, output, detail: evidenceErrors.join('; ') });
+      // A build or test whose output holds a linker warning of an object built for a newer macOS version than the link compiled or linked
+      // for another version than the declared minimum (macos-minimum.mjs).
+      else if (code === 0 && linkerFailures.length > 0) finish({ status: 'fail', elapsedMs, output, detail: linkerFailures.join('; ') });
       // A process that reports its test events and ran no test passes, and its detail says so.
       else if (code === 0) finish({ status: 'pass', elapsedMs, output, detail: reporting && ran === 0 ? 'no test ran' : '' });
       else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });

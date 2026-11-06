@@ -102,10 +102,14 @@ ZXING_BUILD := $(BUILD)/zxing-cpp-build
 ZXING_INSTALL := $(BUILD)/zxing-cpp-install
 ZXING_LIBRARY := $(ZXING_INSTALL)/lib/libZXing.a
 # The newest API the sources use is from macOS 14.4 (getCurrentProcessShareableContentWithCompletionHandler in
-# capture.m).
+# capture.m). MACOS_MINIMUM of the Makefile of the repository declares that version once, and this Makefile reads it.
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
 # with it.
-MINIMUM    := -mmacosx-version-min=14.4
+MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p' $(CURDIR)/../../Makefile)
+ifeq ($(MACOS_MINIMUM),)
+$(error $(CURDIR)/../../Makefile declares no MACOS_MINIMUM = <macOS version>)
+endif
+MINIMUM    := -mmacosx-version-min=$(MACOS_MINIMUM)
 # The architecture of the release platform darwin-arm64. Every clang call and the ZXing configure name it, so a make that
 # runs as a translated process builds no part for another architecture.
 ARCH       := arm64
@@ -166,7 +170,7 @@ $(ZXING_SOURCE)/LICENSE: $(ZXING_RELEASE_FILE) | $(BUILD)
 $(ZXING_LIBRARY): $(ZXING_SOURCE)/LICENSE Makefile
 	@rm -rf $(ZXING_BUILD) $(ZXING_INSTALL)
 	@cmake -S $(ZXING_SOURCE)/core -B $(ZXING_BUILD) \
-	  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=$(ARCH) -DCMAKE_OSX_DEPLOYMENT_TARGET=14.4 \
+	  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=$(ARCH) -DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) \
 	  -DCMAKE_INSTALL_PREFIX=$(ZXING_INSTALL) -DBUILD_SHARED_LIBS=OFF \
 	  -DZXING_READERS=ON -DZXING_WRITERS=OFF -DZXING_C_API=ON \
 	  -DZXING_ENABLE_1D=OFF -DZXING_ENABLE_AZTEC=OFF -DZXING_ENABLE_DATAMATRIX=OFF \

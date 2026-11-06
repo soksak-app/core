@@ -4,7 +4,8 @@
 // `t.Deadline` reports the limit. A test that does not end panics at its limit with the stacks of its goroutines and is reported
 // with its name and elapsed time, and the next test still runs. A package of the pattern with no test files does
 // not decide the run; the run fails when no package has test files or no test matches. The build reads the environment of the
-// caller (CGO_CFLAGS).
+// caller (MACOSX_DEPLOYMENT_TARGET, CGO_CFLAGS), and a build whose link reports an object newer than the link fails the run
+// (macos-minimum.mjs).
 // Usage: node scripts/go-tests.mjs --package <pattern> [--tags <tags>] [--test <regexp>] [--count <n>] [--timeout <seconds>]
 //   [--ldflags <flags>]
 import { execFileSync } from 'node:child_process';
@@ -13,6 +14,7 @@ import { loadavg, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
 
 /** The limit of one test when `--timeout` is not given. */
@@ -49,14 +51,14 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
   const folder = mkdtempSync(join(tmpdir(), 'soksak-go-tests-'));
   try {
     const listed = [];
-    testable.forEach((item, index) => {
+    for (const [index, item] of testable.entries()) {
       const binary = join(folder, `test-${index}.binary`);
-      go(['test', '-c', '-o', binary, ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), item.importPath], { stdio: ['ignore', 'pipe', 'inherit'] });
+      await runBuild('go', ['test', '-c', '-o', binary, ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), item.importPath]);
       const names = testNames(execFileSync(binary, ['-test.list', '.*'], { cwd: item.dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }));
       for (const name of test === undefined ? names : names.filter((candidate) => new RegExp(test).test(candidate))) {
         listed.push({ importPath: item.importPath, name, binary, cwd: item.dir });
       }
-    });
+    }
     if (listed.length === 0) throw new Error(test === undefined ? `${pattern} has no tests` : `${pattern} has no test matching ${test}`);
     // A name that two packages hold is shown with its package, so each test has a name of its own in the runner.
     const occurrences = new Map();

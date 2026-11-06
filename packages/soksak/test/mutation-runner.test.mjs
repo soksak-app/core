@@ -29,6 +29,35 @@ test("a failed command start is an environment error, not a timeout", { timeout:
   assert.match(result.stderr, /spawn-error.*ENOENT/);
 });
 
+test("a command group whose last member has ended but is not reaped ends without an error", { timeout: 10000 }, async (t) => {
+  const { runBounded } = await import("../scripts/bounded.mjs");
+  // The leader starts a holder in another group. The holder starts a member that joins the leader's group and exits; the holder never
+  // reaps it, so the member stays a zombie in that group. The leader exits once the process table shows the zombie, and prints the holder.
+  const leftover = `
+    my $leader = $$;
+    pipe(my $read, my $write) or die "pipe: $!";
+    my $holder = fork() // die "fork: $!";
+    if ($holder == 0) {
+      close $read;
+      open(STDOUT, ">", "/dev/null"); open(STDERR, ">", "/dev/null");
+      setpgrp(0, 0) or die "setpgrp: $!";
+      my $member = fork() // die "fork: $!";
+      if ($member == 0) { setpgrp(0, $leader) or die "setpgrp: $!"; exit 0; }
+      print $write "$member\\n"; close $write;
+      sleep;
+    }
+    close $write;
+    my $member = <$read>; chomp $member;
+    until (\`ps -o stat= -p $member\` =~ /^Z/) { select(undef, undef, undef, 0.01); }
+    print "$holder\\n";`;
+  let holder = "";
+  t.after(() => { if (/^\d+\n$/.test(holder)) process.kill(Number(holder), "SIGKILL"); });
+  const result = await runBounded("perl", ["-e", leftover], { timeout: 5000, stdout: "pipe",
+    onSpawn: (child) => child.stdout.on("data", (chunk) => { holder += chunk; }) });
+  assert.match(holder, /^\d+\n$/, "the leader did not report its holder");
+  assert.deepEqual({ reason: result.reason, code: result.code, error: result.error }, { reason: "exit", code: 0, error: null });
+});
+
 async function fixture(t, source) {
   const directory = await mkdtemp(join(tmpdir(), "soksak-mutation-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -122,7 +151,7 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
     for (const file of ["package.json", "Makefile", ".node-version"]) await writeFile(join(root, file), file === "package.json" ? '{"type":"module"}' : "");
     for (const file of ["package.json", "tsconfig.json"]) await writeFile(join(packageRoot, file), '{"type":"module"}');
     for (const file of ["check-breaks.mjs", "bounded.mjs", "mutation-runner.mjs", "required-breaks.mjs", "workspace-copy.mjs"]) await cp(new URL(`../scripts/${file}`, import.meta.url), join(packageRoot, "scripts", file));
-    for (const file of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
+    for (const file of ["node-test-evidence.mjs", "test-command.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
     const original = mutation.source ?? "export const value = 1;";
     const entry = { id: selected ? "state" : "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
     await writeFile(join(packageRoot, "scripts/breaks.mjs"), `export const BREAKS = ${JSON.stringify([entry])};`);

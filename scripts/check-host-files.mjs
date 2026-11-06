@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { macosMinimum } from "./macos-minimum.mjs";
 import { tableCells } from "./markdown-table.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
@@ -427,7 +428,7 @@ const mainThreadFree = (name) => Object.keys(MAIN_THREAD_FREE)
 
 // The flags of the cgo preambles and Objective-C files of the darwin layer, which cgo passes with the #cgo CFLAGS lines; the
 // preamble file starts with the prolog of cgo, which includes stddef.h.
-const CLANG_FLAGS = ["-x", "objective-c", "-fmodules", "-fblocks", "-mmacosx-version-min=14.4", "-w", "-fsyntax-only", "-Xclang", "-ast-dump=json"];
+const CLANG_FLAGS = ["-x", "objective-c", "-fmodules", "-fblocks", `-mmacosx-version-min=${macosMinimum()}`, "-w", "-fsyntax-only", "-Xclang", "-ast-dump=json"];
 const PREAMBLE_PROLOG = "#include <stddef.h>\n";
 
 /**

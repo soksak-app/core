@@ -19,7 +19,7 @@ function toolchain(t) {
   writeFileSync(join(directory, 'go'), `#!/bin/sh
 case "$1" in
   list) echo ${JSON.stringify(directory)}; exit 0 ;;
-  test) out=""; while [ $# -gt 0 ]; do if [ "$1" = "-o" ]; then out="$2"; fi; shift; done
+  test) if [ -n "\${FAKE_GO_LINKER-}" ]; then printf '%s\\n' "$FAKE_GO_LINKER" >&2; fi; out=""; while [ $# -gt 0 ]; do if [ "$1" = "-o" ]; then out="$2"; fi; shift; done
     if [ -z "$out" ]; then printf 'BenchmarkEventLogEmit-10  1  120 ns/op\nPASS\n'; exit 0; fi
     cat > "$out" <<'BINARY'
 #!/bin/sh
@@ -60,6 +60,18 @@ test('make benchmark-go names each benchmark when it starts, keeps its output, a
   assert.match(result.stdout, /^RUN  BenchmarkNativePull \(1 running, limit 6\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^TIME BenchmarkNativePull \d+\.\d{3}s exceeded 6\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
+});
+
+test('make benchmark-go fails a benchmark build whose link reports an object newer than the link, and names the object and both versions', (t) => {
+  const directory = toolchain(t);
+  const result = spawnSync('make', ['benchmark-go'], {
+    cwd: root, encoding: 'utf8', timeout: 90000,
+    env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, BENCH_TIMEOUT: '6',
+      FAKE_GO_LINKER: "ld: warning: object file (/tmp/go-link-2/000031.o) was built for newer 'macOS' version (27.0) than being linked (14.4)" },
+  });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /ld built \/tmp\/go-link-2\/000031\.o for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /^RUN  Benchmark/m, 'a benchmark of a build with a linker failure ran');
 });
 
 test('make benchmark-rust names each bench target when it starts, and kills a target at its limit', (t) => {

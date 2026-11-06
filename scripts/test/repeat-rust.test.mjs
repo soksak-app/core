@@ -42,6 +42,31 @@ if (args.includes('--message-format=json')) process.stdout.write(${JSON.stringif
   });
 }
 
+test('Rust owner CLI fails a test build whose link reports an object newer than the link, and names the object and both versions', (t) => {
+  const { directory, targetLog } = targetCargo(t);
+  const text = "linker stderr: ld: warning: object file (/target/ring/libring_core.a(curve25519.o)) was built for newer 'macOS' version (27.0) than being linked (11.0)";
+  const messages = [
+    JSON.stringify({ reason: 'compiler-message', message: { message: text, rendered: `warning: ${text}\n` } }),
+    JSON.stringify({ reason: 'compiler-artifact', profile: { test: true }, target: { name: 'fixture' }, executable: join(directory, 'library-test') }),
+  ].join('\n') + '\n';
+  const metadata = JSON.stringify({ packages: [{ name: 'fixture', manifest_path: join(directory, 'Cargo.toml'), targets: [{ kind: ['lib'] }] }] });
+  const script = [
+    '#!/usr/bin/env node',
+    'const args = process.argv.slice(2);',
+    `if (args[0] === 'metadata') process.stdout.write(${JSON.stringify(metadata)});`,
+    `else if (args.includes('--message-format=json')) process.stdout.write(${JSON.stringify(messages)});`,
+  ].join('\n');
+  writeFileSync(join(directory, 'cargo'), `${script}\n`);
+  const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs',
+    '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture', '--test-target', 'lib'], {
+    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+    encoding: 'utf8', timeout: 10000,
+  });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /ld built \/target\/ring\/libring_core\.a\(curve25519\.o\) for macOS 27\.0, newer than the macOS 11\.0 of the link/, result.stdout + result.stderr);
+  assert.equal(existsSync(targetLog), false, 'a test of a build with a linker failure ran');
+});
+
 // The fake cargo builds nothing and reports one test executable of the package `fixture` in the JSON form of `--no-run`, and its
 // manifest in `cargo metadata`. The executable lists two tests (`--list`) and runs the test named by `--exact`. The test named
 // beta hangs for 8 seconds, so only a kill at its limit ends it sooner. The library of the package has one documentation test,
