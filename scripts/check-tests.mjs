@@ -220,7 +220,7 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
-    id: "F509",
+    id: "F664",
     implementation: [{ file: "Makefile", symbol: "test-app-capture-input-close:" }],
     tests: [
       { file: "e2e/capture-lifecycle.test.mjs", id: "consecutive captures preserve finalized recordings" },
@@ -231,13 +231,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F510-1",
-    implementation: [{ file: "scripts/check-tests.mjs", symbol: 'id: "F509"' }],
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: 'id: "F664"' }],
     tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
     expected: "Final completion records retain their actual owning test links and distinguish verification-only work from product capabilities.",
     levels: ["unit"],
   },
   {
-    id: "F509-4",
+    id: "F664-4",
     implementation: [{ file: "Makefile", symbol: "install-plugins:" }],
     tests: [
       { file: "scripts/test/test-app.test.mjs", id: "plugin installation consumes the built registry without rebuilding sibling sources" },
@@ -248,7 +248,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F509-2",
+    id: "F664-2",
     implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function validateManifest" },
       { file: "e2e/fixtures/save-close/probe/plugin.json", symbol: '"name": "probeclose.prepare"' }],
     tests: [{ file: "e2e/test/view-fixture-pages.test.mjs", id: "each fixture plugin manifest satisfies the public installation contract" }],
@@ -256,7 +256,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F509-3",
+    id: "F664-3",
     requirement: { key: "execution-selection", platforms: PORTABLE_REQUIREMENT_PLATFORMS,
       inapplicable: {
         race: "Parsing and file selection finish synchronously before command execution; process lifecycle is outside this requirement.",
@@ -276,7 +276,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F506-1",
+    id: "F658-1",
     implementation: [{ file: "packages/workbench/plane.js", symbol: 'await registry.run(save, {}, t.id);' }],
     tests: [{ file: "packages/workbench/test/plane-close-modified.test.mjs", id: "a failed save can retry and close the same modified tab" },
       { file: "packages/workbench/test/plane-close-modified.test.mjs", id: "close boundary owner assertions detect missing guards and blocked save recovery" }],
@@ -284,7 +284,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F507",
+    id: "F662",
     implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditRequirementCoverage" }, { file: "scripts/check-tests.mjs", symbol: "export function readRequirementScope" }],
     tests: [
       { file: "scripts/test/check-tests.test.mjs", id: "requirement audit rejects a removed requirement and every omitted scenario dimension" },
@@ -296,7 +296,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F508",
+    id: "F663",
     requirement: { key: "layout-transitions", platforms: PORTABLE_REQUIREMENT_PLATFORMS,
       inapplicable: { race: "Public layout operations are synchronous and share no asynchronous or native state." } },
     implementation: [{ file: "packages/soksak/scripts/layout-cases.mjs", symbol: "export function makeLayoutCase" }, { file: "packages/soksak/scripts/layout-equivalence.mjs", symbol: "export function assertRoleIndependence" }],
@@ -323,7 +323,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F505",
+    id: "F657",
     requirement: { key: "candidate-publication", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The gate synchronously validates the completed report; input drift between its recorded snapshots is a failure case.", recovery: "Report validation retains no mutable candidate state; a new report is independently validated without repairing a failed report." } },
     implementation: [
       { file: "scripts/candidate-identity.mjs", symbol: "export async function hashTree" },
@@ -357,7 +357,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F503-3",
+    id: "F655-3",
     implementation: [{ file: "packages/soksak/scripts/layout-equivalence.mjs", symbol: "export function assertRoleIndependence" }],
     tests: [
       { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison sends renamed and permuted inputs to the public layout API" },
@@ -370,7 +370,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F500-2",
+    id: "F652-2",
     requirement: { key: "capture-coordinates", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The coordinate conversion reads one finalized frame and has no concurrent state transition.", recovery: "Coordinate conversion retains no mutable state after refusing invalid geometry; failed recording cleanup belongs to capture-lifecycle." } },
     implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
     tests: [
@@ -385,7 +385,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F501-3",
+    id: "F653-3",
     implementation: [
       { file: "scripts/platform/platform.js", symbol: "export async function processExecutable" },
       { file: "scripts/platform/platform.js", symbol: "export function releasePlatform" },
@@ -402,7 +402,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F501-2",
+    id: "F653-2",
     implementation: [{ file: "scripts/test-evidence.mjs", symbol: "export async function runningProcess" }, { file: "scripts/platform/darwin/process-executable.mjs", symbol: "export async function processExecutable" }],
     tests: [
       { file: "scripts/test/platform/darwin/process-evidence.test.mjs", id: "process evidence rejects a live PID paired with an unrelated file" },
@@ -413,7 +413,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F504-2",
+    id: "F656-2",
     implementation: [{ file: "packages/soksak/scripts/required-breaks.mjs", symbol: "export function selectRequiredBreaks" }, { file: "packages/soksak/scripts/check-breaks.mjs", symbol: "selectRequiredBreaks" }],
     tests: [
       { file: "packages/soksak/test/required-breaks.test.mjs", id: "changed implementation owners select only their required defects" },
@@ -425,7 +425,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F502-2",
+    id: "F654-2",
     implementation: [{ file: "packages/soksak/scripts/layout-sequences.mjs", symbol: "export function replaySequence" }, { file: "packages/soksak/scripts/layout-sequences.mjs", symbol: "export function reduceSequence" }],
     tests: [
       { file: "packages/soksak/test/layout-sequences.test.mjs", id: "shrinking retains the original trace and deterministically preserves the same invariant" },
@@ -447,7 +447,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F501-1",
+    id: "F653-1",
     requirement: { key: "execution-inputs", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: {} },
     implementation: [{ file: "scripts/test-evidence.mjs", symbol: "export async function runWithEvidence" }, { file: "scripts/language-test-adapters.mjs", symbol: "export async function runLanguageCases" }],
     tests: [
@@ -461,7 +461,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F504-1",
+    id: "F656-1",
     implementation: [{ file: "packages/soksak/scripts/mutation-runner.mjs", symbol: "export async function runMutationTest" }, { file: "packages/soksak/scripts/mutation-runner.mjs", symbol: "export function mutationVerdict" }],
     tests: [
       { file: "packages/soksak/test/mutation-runner.test.mjs", id: "bounded command preserves both output streams" },
@@ -473,7 +473,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F506",
+    id: "F658",
     requirement: { key: "modified-close", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: {} },
     implementation: [{ file: "packages/workbench/plane.js", symbol: "export async function closeTabById" }, { file: "packages/workbench/plane.js", symbol: "export const settleModifiedTabsToClose" }],
     tests: [
@@ -485,7 +485,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F503-2",
+    id: "F655-2",
     implementation: [
       { file: "scripts/check-tests.mjs", symbol: "export function inventorySummary" },
       { file: "scripts/checklist.mjs", symbol: "export function checklistCounts" },
@@ -511,7 +511,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F500-1",
+    id: "F652-1",
     requirement: { key: "capture-lifecycle", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: {} },
     implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }, { file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
     tests: [
@@ -525,7 +525,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F502-1",
+    id: "F654-1",
     implementation: [{ file: "packages/soksak/scripts/layout-sequences.mjs", symbol: "export function runSequence" }],
     tests: [
       { file: "packages/soksak/test/layout-sequences.test.mjs", id: "random sequences detect an invalid intermediate state before a later operation repairs it" },
@@ -536,14 +536,14 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F503-1",
+    id: "F655-1",
     implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureLinks" }],
     tests: [{ file: "scripts/test/check-tests.test.mjs", id: "feature-link audit self-check detects an omitted error and response" }],
     expected: "The self-check invokes the actual feature-link audit, passes its unchanged module, and catches separately omitted error reporting and return values by assertion failures.",
     levels: ["unit"],
   },
   {
-    id: "F500",
+    id: "F652",
     implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }],
     tests: [
       { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background samples the captured view at combined scale and origin" },
@@ -11330,9 +11330,9 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F433 removes a check; it adds no capability.
 // F431 names the release candidate 0.0.34; it changes no runtime capability.
 // F432 records the plugin releases and the registry entry for core 0.0.34; it changes no runtime capability of core.
-// F509-1 corrects the documented build command without changing runtime behavior.
+// F664-1 corrects the documented build command without changing runtime behavior.
 // F510 records execution of existing suites and introduces no product capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F510", "F509-1", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F510", "F664-1", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

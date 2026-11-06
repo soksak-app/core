@@ -6,58 +6,58 @@
 
 - F510-1: 최종 acceptance 완료에 소유 native test 연결을 유지하고 검증 실행 기록은 별도로 분류한다. 실제 inventory와 소유 case 45개가 모두 통과한다.
 
-- F509: 고정한 로컬 candidate와 설치 component 집합을 사용한 두 host의 focused case 12개가 독립 초기 상태 두 번에서 모두 통과한다. 전체 audit와 cleanup을 완료하고 준비 후 동결한 입력의 raw identity가 실행 후에도 동일함을 확인했다. 최초 fixture·selection 실패는 보존하고 수정했다. 이전 F506 guard-mutation 근거, 실제 Editor baseline, 별도 native close fixture와 Editor E58 파일 write-race 검증은 각각의 범위를 유지하며 최신 Editor source의 native 승인을 주장하지 않는다.
+- F664: 고정한 로컬 candidate와 설치 component 집합을 사용한 두 host의 focused case 12개가 독립 초기 상태 두 번에서 모두 통과한다. 전체 audit와 cleanup을 완료하고 준비 후 동결한 입력의 raw identity가 실행 후에도 동일함을 확인했다. 최초 fixture·selection 실패는 보존하고 수정했다. 이전 F658 guard-mutation 근거, 실제 Editor baseline, 별도 native close fixture와 Editor E58 파일 write-race 검증은 각각의 범위를 유지하며 최신 Editor source의 native 승인을 주장하지 않는다.
 
-- F510: Core Node file 465개, 이후 설치 단계 소유 case 23개와 통합한 최신 Editor case 215개가 모두 통과한다. 격리 checkout의 native 전체 검증은 format·clippy, native 항목 96개, host·CLI 실행 4201개 및 적용 대상 contract 전체(합집합 1009개)를 통과한다. 검사한 bundle·registry·release payload는 바뀌지 않았다. F511과 F512의 일반 application·benchmark·activation acceptance는 미완료로 남는다.
+- F510: Core Node file 465개, 이후 설치 단계 소유 case 23개와 통합한 최신 Editor case 215개가 모두 통과한다. 격리 checkout의 native 전체 검증은 format·clippy, native 항목 96개, host·CLI 실행 4201개 및 적용 대상 contract 전체(합집합 1009개)를 통과한다. 검사한 bundle·registry·release payload는 바뀌지 않았다. F665과 F666의 일반 application·benchmark·activation acceptance는 미완료로 남는다.
 
-- F509-4: Plugin 설치는 host마다 registry를 다시 build하지 않고 이미 build한 workspace registry를 소비한다. 실행 파일이나 index가 없으면 CLI 변경 호출 전에 필요한 build 명령을 안내하고 실패한다. 실제 Makefile dry run은 먼저 암묵적 rebuild를 거절했으며 기존 파일 보존과 command fixture 설치를 포함한 runner 소유 case 23개가 macOS에서 모두 통과한다. 일반 application target의 명시적 registry build는 유지한다. 실제 설치 payload identity와 native acceptance는 별도다.
+- F664-4: Plugin 설치는 host마다 registry를 다시 build하지 않고 이미 build한 workspace registry를 소비한다. 실행 파일이나 index가 없으면 CLI 변경 호출 전에 필요한 build 명령을 안내하고 실패한다. 실제 Makefile dry run은 먼저 암묵적 rebuild를 거절했으며 기존 파일 보존과 command fixture 설치를 포함한 runner 소유 case 23개가 macOS에서 모두 통과한다. 일반 application target의 명시적 registry build는 유지한다. 실제 설치 payload identity와 native acceptance는 별도다.
 
-- F509-3: 선언한 Node script가 유지보수되는 parser를 통해 quoted 및 escaped argument, 분리한 pattern value와 literal command separator를 보존한다. 준비 command는 argument 경계를 유지하며 미지원 문법이나 하나라도 해석되지 않은 path는 실행 전에 실패한다. 추적 Red case 일곱 개에는 제외한 test를 실행한 실제 child가 포함되며 이제 argument 형태 네 가지 모두 선택한 case만 실행한다. macOS에서 discovery case 38개와 runner case 28개가 모두 통과한다. 양쪽 contract와 requirement mapping은 이 harness 수정과 F509에 기록한 두 초기 상태의 native acceptance를 구분한다.
+- F664-3: 선언한 Node script가 유지보수되는 parser를 통해 quoted 및 escaped argument, 분리한 pattern value와 literal command separator를 보존한다. 준비 command는 argument 경계를 유지하며 미지원 문법이나 하나라도 해석되지 않은 path는 실행 전에 실패한다. 추적 Red case 일곱 개에는 제외한 test를 실행한 실제 child가 포함되며 이제 argument 형태 네 가지 모두 선택한 case만 실행한다. macOS에서 discovery case 38개와 runner case 28개가 모두 통과한다. 양쪽 contract와 requirement mapping은 이 harness 수정과 F664에 기록한 두 초기 상태의 native acceptance를 구분한다.
 
-- F509-2: Close fixture는 선언된 exposure schema 부분집합을 사용하며 소유 test가 모든 실제 fixture manifest를 공개 production validator로 검사한다. 최초 native 설치 실패를 보존했고 같은 미지원 필드 선언이 수정 전 추적 소유 assertion에서 실패하며 수정 후 소유 case 두 개와 문서·exposure 검사가 통과한다. Validator는 변경하지 않았다. Focused native acceptance는 F509에 기록한다.
+- F664-2: Close fixture는 선언된 exposure schema 부분집합을 사용하며 소유 test가 모든 실제 fixture manifest를 공개 production validator로 검사한다. 최초 native 설치 실패를 보존했고 같은 미지원 필드 선언이 수정 전 추적 소유 assertion에서 실패하며 수정 후 소유 case 두 개와 문서·exposure 검사가 통과한다. Validator는 변경하지 않았다. Focused native acceptance는 F664에 기록한다.
 
-- F507: 정본 feature-link inventory가 선언한 요구사항 시나리오와 플랫폼 적용 상태를 검사하고 누락되거나 잘못된 소유 test 참조를 거부하며 연결을 미실행으로 보고한다. 추적한 Red case 5개로 승인 공백을 확인했고 소유 case 45개와 문서·inventory gate가 모두 통과한다. 제품 동작과 플랫폼 acceptance는 별도로 판정한다.
-- F508: Layout role 검사는 고정 순열 120개를 유지하고 topology, card 수, dimension과 layout option을 다루는 결정적 case 21개를 추가한다. 각 case는 생성한 trace 전에 거부와 회복을 관측하며 report는 method별 결과와 전체 실패 입력을 보존한다. 격리한 ID·array-order·size mutant는 기존 R2 case를 통과하지만 확장한 소유 assertion에서 실패한다. macOS에서 집중 case 63개가 모두 통과한다. Baseline 전이 714개는 성공 489개와 거부 225개이며, 다양한 입력군은 별도 merge 성공 case를 대체하거나 모든 layout의 전수 검증을 주장하지 않는다.
+- F662: 정본 feature-link inventory가 선언한 요구사항 시나리오와 플랫폼 적용 상태를 검사하고 누락되거나 잘못된 소유 test 참조를 거부하며 연결을 미실행으로 보고한다. 추적한 Red case 5개로 승인 공백을 확인했고 소유 case 45개와 문서·inventory gate가 모두 통과한다. 제품 동작과 플랫폼 acceptance는 별도로 판정한다.
+- F663: Layout role 검사는 고정 순열 120개를 유지하고 topology, card 수, dimension과 layout option을 다루는 결정적 case 21개를 추가한다. 각 case는 생성한 trace 전에 거부와 회복을 관측하며 report는 method별 결과와 전체 실패 입력을 보존한다. 격리한 ID·array-order·size mutant는 기존 R2 case를 통과하지만 확장한 소유 assertion에서 실패한다. macOS에서 집중 case 63개가 모두 통과한다. Baseline 전이 714개는 성공 489개와 거부 225개이며, 다양한 입력군은 별도 merge 성공 case를 대체하거나 모든 layout의 전수 검증을 주장하지 않는다.
 
-- F506-1: Close 경계 소유 test는 save 실패 뒤 같은 modified tab에서 재시도하고, 대기 중 dirty 상태와 error를 유지하며, clean save 응답을 기다린 뒤 다른 tab을 바꾸지 않고 정확히 한 번 닫히는지 검증한다. Retry를 막는 통제한 mutation은 해당 소유 assertion에서 실패하며 macOS에서 close 경계, report, view surface case 25개가 모두 통과한다. Production 동작은 변경하지 않았으며 native application acceptance는 별도다.
+- F658-1: Close 경계 소유 test는 save 실패 뒤 같은 modified tab에서 재시도하고, 대기 중 dirty 상태와 error를 유지하며, clean save 응답을 기다린 뒤 다른 tab을 바꾸지 않고 정확히 한 번 닫히는지 검증한다. Retry를 막는 통제한 mutation은 해당 소유 assertion에서 실패하며 macOS에서 close 경계, report, view surface case 25개가 모두 통과한다. Production 동작은 변경하지 않았으며 native application acceptance는 별도다.
 
-- F509-1: Verification build는 해당 checkout의 output을 소유한다. Shared target과 다른 checkout의 정리를 권한 guide는 application recipe의 checkout-relative 실행 파일 복사와 모순되며 source 확인과 build dry-run으로 해당 경로를 확인했다. 양쪽 guide는 target 공유와 다른 checkout host crate 정리를 금지한다. 문서 검사는 통과하며 application acceptance를 주장하지 않는다.
+- F664-1: Verification build는 해당 checkout의 output을 소유한다. Shared target과 다른 checkout의 정리를 권한 guide는 application recipe의 checkout-relative 실행 파일 복사와 모순되며 source 확인과 build dry-run으로 해당 경로를 확인했다. 양쪽 guide는 target 공유와 다른 checkout host crate 정리를 금지한다. 문서 검사는 통과하며 application acceptance를 주장하지 않는다.
 
-- F501-3: 플랫폼 audit를 바꾸지 않고 증거의 플랫폼 선택을 선언된 dispatcher로 옮긴다. Native process 조회는 요청할 때 실행하고 알 수 없는 플랫폼은 명시적으로 실패하며 sidecar release key는 선언된 운영체제 이름을 사용한다. 공통 fixture는 플랫폼 데이터를 명시하고 macOS owner는 kernel 일치·불일치, 경로 공백, process SHA만 바꾸는 drift 검사를 보존한다. 소유 case 121개가 모두 통과하고 child 제한을 둔 selector case 세 개도 통과한다. Linux metadata import는 macOS child에서 모의 검증했으며 native application acceptance와 전체 suite는 다시 실행하지 않았다.
+- F653-3: 플랫폼 audit를 바꾸지 않고 증거의 플랫폼 선택을 선언된 dispatcher로 옮긴다. Native process 조회는 요청할 때 실행하고 알 수 없는 플랫폼은 명시적으로 실패하며 sidecar release key는 선언된 운영체제 이름을 사용한다. 공통 fixture는 플랫폼 데이터를 명시하고 macOS owner는 kernel 일치·불일치, 경로 공백, process SHA만 바꾸는 drift 검사를 보존한다. 소유 case 121개가 모두 통과하고 child 제한을 둔 selector case 세 개도 통과한다. Linux metadata import는 macOS child에서 모의 검증했으며 native application acceptance와 전체 suite는 다시 실행하지 않았다.
 
-- F503-2: Inventory와 checklist 합계를 복사한 숫자 assertion 대신 정본 입력에서 산출한다. 과거 문구 검사 세 개는 문서 gate로 옮겨 두 언어를 검증하고 소유권, coverage 누락, 실행 언어 검사는 유지한다. 추적 Red로 누락된 문서 거부를 확인했고 audit/checklist case 73개와 Go 이름 case 다섯 개가 모두 통과한다. 최종 inventory는 track 116개, 구현 file 739개, test file 1164개를 보고하며 소유자 누락과 잘못된 feature link는 없다.
+- F655-2: Inventory와 checklist 합계를 복사한 숫자 assertion 대신 정본 입력에서 산출한다. 과거 문구 검사 세 개는 문서 gate로 옮겨 두 언어를 검증하고 소유권, coverage 누락, 실행 언어 검사는 유지한다. 추적 Red로 누락된 문서 거부를 확인했고 audit/checklist case 73개와 Go 이름 case 다섯 개가 모두 통과한다. 최종 inventory는 track 116개, 구현 file 739개, test file 1164개를 보고하며 소유자 누락과 잘못된 feature link는 없다.
 
-- F505: Publication은 두 독립 초기 상태에서 전체 로컬 application, activation, benchmark report가 두 bundle, 고정한 설치 component 조합, source 및 dependency 입력, 필수 native case, 전체 log audit와 cleanup에 일치한 뒤에만 정확한 성공 candidate attempt와 불변 artifact를 사용한다. 근거의 누락, 오래된 근거, 불일치, skip, fail을 거부한다. Collector에서 gate까지의 전송과 정확한 file fixture가 통과하며 집중 소유 case 121개와 이후 make 진입점 및 test 종류의 영향 범위 case 24개가 통과한다. Candidate make 진입점은 candidate를 다시 build하지 않는다. 실제 candidate application 승인과 publication은 수행하지 않았다.
+- F657: Publication은 두 독립 초기 상태에서 전체 로컬 application, activation, benchmark report가 두 bundle, 고정한 설치 component 조합, source 및 dependency 입력, 필수 native case, 전체 log audit와 cleanup에 일치한 뒤에만 정확한 성공 candidate attempt와 불변 artifact를 사용한다. 근거의 누락, 오래된 근거, 불일치, skip, fail을 거부한다. Collector에서 gate까지의 전송과 정확한 file fixture가 통과하며 집중 소유 case 121개와 이후 make 진입점 및 test 종류의 영향 범위 case 24개가 통과한다. Candidate make 진입점은 candidate를 다시 build하지 않는다. 실제 candidate application 승인과 publication은 수행하지 않았다.
 
-- F504-2: 변경한 layout 소유 module은 CI에서 한정된 필수 mutation 집합을 선택하며 복사본은 통과한 baseline을 재사용한다. 구조화된 failure code는 실제 assertion/runtime error를 출력한 진단 문자열 및 출처 불명 child signal과 구분한다. Runner, reporter, selector 검사와 추가 module error case 두 개가 통과한다. 최종 필수 실행은 baseline file 여섯 개를 통과하고 mutation 여덟 개를 모두 assertion으로 검출하며 생존, 오래된 위치, 모호한 위치, 무효한 결과는 없다. macOS에서 workflow 및 경계 검사도 통과한다.
+- F656-2: 변경한 layout 소유 module은 CI에서 한정된 필수 mutation 집합을 선택하며 복사본은 통과한 baseline을 재사용한다. 구조화된 failure code는 실제 assertion/runtime error를 출력한 진단 문자열 및 출처 불명 child signal과 구분한다. Runner, reporter, selector 검사와 추가 module error case 두 개가 통과한다. 최종 필수 실행은 baseline file 여섯 개를 통과하고 mutation 여덟 개를 모두 assertion으로 검출하며 생존, 오래된 위치, 모호한 위치, 무효한 결과는 없다. macOS에서 workflow 및 경계 검사도 통과한다.
 
-- F503-3: 동작 비교는 원래 ID와 변경한 ID 각각에 대해 입력 card의 순열 120개 모두와 sequence별 공개 operation 18개를 다룬다. ID 의존 선택 및 첫 card geometry mutation은 추적 comparator에서 실패한다. macOS에서 equivalence와 rule case 24개가 모두 통과하며 독립 slicing 및 구조 소유권 검사는 유지한다.
+- F655-3: 동작 비교는 원래 ID와 변경한 ID 각각에 대해 입력 card의 순열 120개 모두와 sequence별 공개 operation 18개를 다룬다. ID 의존 선택 및 첫 card geometry mutation은 추적 comparator에서 실패한다. macOS에서 equivalence와 rule case 24개가 모두 통과하며 독립 slicing 및 구조 소유권 검사는 유지한다.
 
-- F506: close 요청, tab save, window save의 modified guard를 격리한 복사본에서 각각 제거하면 해당 추적 소유 assertion이 실패한다. macOS에서 close 경계, tab report, view surface case 23개가 모두 통과한다. production guard는 변경하지 않았고 native application 승인은 실행하지 않았다.
+- F658: close 요청, tab save, window save의 modified guard를 격리한 복사본에서 각각 제거하면 해당 추적 소유 assertion이 실패한다. macOS에서 close 경계, tab report, view surface case 23개가 모두 통과한다. production guard는 변경하지 않았고 native application 승인은 실행하지 않았다.
 
-- F500-2: Cell sampling은 공통 crop 변환을 사용하고 한 pixel cell 안으로 sample을 제한하며 capture 밖의 cell을 거부한다. Red는 잘못된 pixel 결과 다섯 개와 누락된 거부 한 개를 재현한다. recording 수명주기를 유지한 macOS의 terminal-screen 및 view-content case 34개가 모두 통과한다. Native application 승인은 실행하지 않았다.
+- F652-2: Cell sampling은 공통 crop 변환을 사용하고 한 pixel cell 안으로 sample을 제한하며 capture 밖의 cell을 거부한다. Red는 잘못된 pixel 결과 다섯 개와 누락된 거부 한 개를 재현한다. recording 수명주기를 유지한 macOS의 terminal-screen 및 view-content case 34개가 모두 통과한다. Native application 승인은 실행하지 않았다.
 
 - F498-3: 실제처럼 분리한 output과 package-skip event는 정당한 support package를 허용하면서 이름 있는 skip과 빈 선택을 실패시킨다. 부정확한 합성 fixture를 제거한다. Red는 실행한 실패 test를 0개로 센 오류도 확인하며 이제 이름 있는 통과 및 실패 case를 모두 실행 수에 포함한다. macOS에서 adapter case 21개가 모두 통과한다.
 
-- F501-2: 살아 있는 process의 kernel executable 경로가 hash 전후에 일치해야 한다. 추적 Red로 무관한 file과 살아 있는 PID의 조합을 거부하고 executable 경로의 공백 보존을 검증한다. macOS에서 evidence case 16개가 모두 통과한다. 다른 platform은 identity 확인 불가를 명시하며, 이는 메모리에 mapping한 executable byte의 원자적 증명은 아니다.
+- F653-2: 살아 있는 process의 kernel executable 경로가 hash 전후에 일치해야 한다. 추적 Red로 무관한 file과 살아 있는 PID의 조합을 거부하고 executable 경로의 공백 보존을 검증한다. macOS에서 evidence case 16개가 모두 통과한다. 다른 platform은 identity 확인 불가를 명시하며, 이는 메모리에 mapping한 executable byte의 원자적 증명은 아니다.
 
-- F502-2: 실패한 layout sequence는 원래 seed, option과 trace를 보존하며 결정적인 replay는 같은 이름의 invariant가 계속 실패할 때만 호출을 축소한다. 통과, 다른 invariant 또는 분류하지 않은 실패로 축소를 승인할 수 없다. macOS에서 sequence 소유 case 열 개가 모두 통과한다.
+- F654-2: 실패한 layout sequence는 원래 seed, option과 trace를 보존하며 결정적인 replay는 같은 이름의 invariant가 계속 실패할 때만 호출을 축소한다. 통과, 다른 invariant 또는 분류하지 않은 실패로 축소를 승인할 수 없다. macOS에서 sequence 소유 case 열 개가 모두 통과한다.
 
-- F500-1: Terminal 및 cell 배경 sample은 session recording 소유권을 사용한다. Stop은 한 번 수행하고 실패 capture와 원래 실패를 보존하며 성공 capture는 finalization 뒤에만 제거한다. macOS에서 집중 수명주기 및 geometry case 43개가 모두 통과했고 native application 승인은 실행하지 않았다.
+- F652-1: Terminal 및 cell 배경 sample은 session recording 소유권을 사용한다. Stop은 한 번 수행하고 실패 capture와 원래 실패를 보존하며 성공 capture는 finalization 뒤에만 제거한다. macOS에서 집중 수명주기 및 geometry case 43개가 모두 통과했고 native application 승인은 실행하지 않았다.
 
-- F501-1: 언어 evidence는 실행 전에 수집한 입력에 command 결과를 연결하고 입력 변경을 거부한다. 승인 실패는 원래 snapshot, command 결과와 attempt 이력을 보존하며 metadata-only와 실행에 연결된 attempt를 혼용할 수 없다. macOS에서 evidence 및 adapter case 29개가 모두 통과한다.
+- F653-1: 언어 evidence는 실행 전에 수집한 입력에 command 결과를 연결하고 입력 변경을 거부한다. 승인 실패는 원래 snapshot, command 결과와 attempt 이력을 보존하며 metadata-only와 실행에 연결된 attempt를 혼용할 수 없다. macOS에서 evidence 및 adapter case 29개가 모두 통과한다.
 
 - F498-2: test를 등록하지 않는 미사용 진입점 13개를 제거하고 엄격한 discovery를 유지하며, 소유 view test에 누락된 remount revision assertion을 추가한다. macOS에서 동작 case 215개와 discovery/inventory case 67개가 통과하고 revision 고정 mutation은 해당 assertion에서 실패한다.
 
-- F502-1: Random layout 검사는 profile 가중치와 독립 slicing oracle을 유지하며 operation 생성과 전이 invariant를 공유한다. Report는 각 method의 결과를 세고 중간 결함은 복구 전에 실패한다. macOS에서 집중 소유 및 consumer test와 세 profile의 seed 12개가 모두 통과한다.
+- F654-1: Random layout 검사는 profile 가중치와 독립 slicing oracle을 유지하며 operation 생성과 전이 invariant를 공유한다. Report는 각 method의 결과를 세고 중간 결함은 복구 전에 실패한다. macOS에서 집중 소유 및 consumer test와 세 profile의 seed 12개가 모두 통과한다.
 
-- F504-1: 필수 및 탐색 mutation command는 stdout, stderr와 실행 기록을 보존한다. Assertion, runtime error와 mutant deadline은 유효한 검출로 유지하며, dependency 누락, cancel과 출처 불명 signal은 실험을 실패시킨다. macOS에서 소유 case 19개와 command smoke case 세 개가 모두 통과한다.
+- F656-1: 필수 및 탐색 mutation command는 stdout, stderr와 실행 기록을 보존한다. Assertion, runtime error와 mutant deadline은 유효한 검출로 유지하며, dependency 누락, cancel과 출처 불명 signal은 실험을 실패시킨다. macOS에서 소유 case 19개와 command smoke case 세 개가 모두 통과한다.
 
 - F498-1: Discovery, Node 선택 반복과 언어 adapter가 실행 test 승인 판정을 공유한다. 빈 wrapper, skip suite, todo, cancel, 실패 case를 거부하고 Rust 결과는 모든 target을 포함한다. macOS에서 discovery/runner 58개와 evidence/repeat/adapter 31개 case가 통과한다.
 
-- F503-1: Audit 자체 검사는 실제 feature-link audit를 실행하고 격리한 mutation의 error 기록 및 response 누락을 검출한다. macOS에서 baseline과 집중 audit case 세 개가 통과하며 이 근거는 audit 자체를 검증한다.
+- F655-1: Audit 자체 검사는 실제 feature-link audit를 실행하고 격리한 mutation의 error 기록 및 response 누락을 검출한다. macOS에서 baseline과 집중 audit case 세 개가 통과하며 이 근거는 audit 자체를 검증한다.
 
-- F500: Terminal theme check는 capture origin, display scale과 content scale을 적용한 view crop을 읽고 sampling 실패 시에도 멈춘 recording을 제거한다. Owner Red는 wrong-pixel result 네 개와 empty-capture cleanup 실패를 재현하며 Green은 macOS에서 terminal-screen과 view-content case 16개 모두 통과한다. Native application acceptance는 다시 실행하지 않았다.
+- F652: Terminal theme check는 capture origin, display scale과 content scale을 적용한 view crop을 읽고 sampling 실패 시에도 멈춘 recording을 제거한다. Owner Red는 wrong-pixel result 네 개와 empty-capture cleanup 실패를 재현하며 Green은 macOS에서 terminal-screen과 view-content case 16개 모두 통과한다. Native application acceptance는 다시 실행하지 않았다.
 
 - F499: Layout preparation test는 completion reaction을 기다리고 pending presentation이 다음 layout을 막는지 검증한다. 격리한 mutation에서 presentation await를 제거하면 tracked assertion이 실패하며, 변경하지 않은 구현은 macOS에서 preparation, queue와 frame-text case 23개 모두 통과한다.
 
