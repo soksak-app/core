@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { fresh, reading } from "./fixture.mjs";
 import { ensureTerminals } from "./terminal-screen.mjs";
@@ -127,8 +127,12 @@ function assertDeliveredKey(events, key, label, { downResponder } = {}) {
   }
 }
 
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: focused view closes its page picker once on Escape`, { timeout: 60000 }, async (t) => {
+// A key pressed while the picker loads waits for the picker and never reaches the view behind it
+// (docs/spec/native-modals.md#keyboard). The diagnostic hold of the modal document keeps the picker loading, so the check runs on
+// the applications that create modal web views (MAIN_PAGE_APPS); e2e/modal-escape-terminal.test.mjs presses a key as the picker
+// opens on every application.
+for (const app of MAIN_PAGE_APPS) {
+  test(`${app.name}: an Escape pressed while the page picker loads dismisses the picker once`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     const { surface } = await focusedTerminal(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
@@ -141,21 +145,27 @@ for (const app of Object.values(APPS)) {
       await s.run("core.card.menu", { card: card.id, menu: "add" });
       await s.until("core.picker", (picker) => picker.open, "the held page picker did not open");
       await s.request("diagnostics.modal.held");
-      const heldWindow = await s.get("host.window");
-      assert.equal(heldWindow.responder?.surface, surface,
-        `the held transient picker did not leave the terminal view focused: ${JSON.stringify(heldWindow.responder)}`);
       const offsets = currentEventOffsets(s.app.configDir);
       await s.press("Escape");
-      await s.until("core.picker", (picker) => !picker.open, "view Escape did not close the held page picker");
+      // A key that waits is recorded at its turn, so no record of the Escape exists while the picker loads.
+      const waiting = await traceEvents(s, offsets);
+      assert.deepEqual(injectedKeyEvents(waiting, "Escape").map((event) => JSON.parse(event.fields.text)), [],
+        "the Escape reached the window before the loading picker took the keyboard");
+      assert.equal((await s.get("core.picker")).open, true, "the Escape closed the picker before it took the keyboard");
+      await s.request("diagnostics.modal.hold", { on: false });
+      held = false;
+      await s.until("core.picker", (picker) => !picker.open, "the Escape that waited did not dismiss the picker");
       const events = await traceEvents(s, offsets);
-      assertDeliveredKey(events, "Escape", "focused terminal page-picker Escape", { downResponder: "SPImageRegion" });
-      const closeCommands = traceCommands(events, "core.picker.close");
-      assert.equal(closeCommands.length, 1,
-        "view Escape must run core.picker.close exactly once");
-      assert.equal(closeCommands[0].fields.ok, true, "the page picker close command did not succeed");
+      assertDeliveredKey(events, "Escape", "loading page-picker Escape");
+      const reached = injectedKeyEvents(events, "Escape").map((event) => JSON.parse(event.fields.text).responder);
+      assert.ok(!reached.includes("SPImageRegion"), `the Escape that waited reached the terminal: ${JSON.stringify(reached)}`);
+      assert.equal(traceCommands(events, "core.picker.close").length, 0,
+        "the Escape that waited must not run the view's core.picker.close command");
+      assert.equal(traceCommands(events, "core.modal.dismiss").length, 1,
+        "the Escape that waited must answer core.modal.dismiss once");
       assert.equal(events.filter((event) => event.event === PICKER_CLOSE
-        && event.fields?.reason === "command").length, 1,
-      "the held page picker must close once with reason command");
+        && event.fields?.reason === "dismiss").length, 1,
+      "the page picker must close once with reason dismiss");
     } finally {
       try {
         if (held) await s.request("diagnostics.modal.hold", { on: false });
@@ -164,45 +174,66 @@ for (const app of Object.values(APPS)) {
       }
     }
   });
+}
 
+// A host with a main page (`pageProcess` of `host.window`) shows a modal in a modal web view, which takes the keyboard and answers
+// the main page through the modal answer channel; the mygo host draws the modal in the window, whose workbench keeps the keyboard
+// (docs/spec/native-modals.md).
+for (const app of Object.values(APPS)) {
   test(`${app.name}: native picker Escape dismisses its modal once`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     const { surface } = await focusedTerminal(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
     assert.ok(card, "the terminal has no owning card");
     await s.run("core.card.menu", { card: card.id, menu: "add" });
-    await s.until("host.window", (window) => window.modal?.id === "picker" && window.modal.shown,
-      "the native picker did not become visible");
-    await s.until("core.modal", (modal) => modal?.id === "picker" && modal.document !== null,
-      "the native picker document did not render");
+    await s.until("core.picker", (picker) => picker.open, "the native picker did not open");
+    const webView = (await s.get("host.window")).pageProcess !== null;
+    if (webView) {
+      await s.until("host.window", (window) => window.modal?.id === "picker" && window.modal.shown,
+        "the native picker did not become visible");
+      await s.until("core.modal", (modal) => modal?.id === "picker" && modal.document !== null,
+        "the native picker document did not render");
+    } else {
+      await s.until("core.modal", (modal) => modal?.id === "picker", "the native picker is not the open modal");
+    }
     const nativePicker = await s.get("host.window");
-    assert.equal(nativePicker.responder?.owner, "modal",
+    assert.equal(nativePicker.responder?.owner, webView ? "modal" : "workbench",
       `the ordinary picker does not own keyboard focus: ${JSON.stringify(nativePicker.responder)}`);
     const offsets = currentEventOffsets(s.app.configDir);
     await s.press("Escape");
     await s.until("core.picker", (picker) => !picker.open, "native picker Escape did not close the picker");
     const events = await traceEvents(s, offsets);
     assertDeliveredKey(events, "Escape", "native picker Escape");
+    const reached = injectedKeyEvents(events, "Escape").map((event) => JSON.parse(event.fields.text).responder);
+    assert.ok(!reached.includes("SPImageRegion"), `native picker Escape reached the terminal: ${JSON.stringify(reached)}`);
     assert.equal(traceCommands(events, "core.picker.close").length, 0,
       "native picker Escape must not run the view's core.picker.close command");
-    assert.equal(traceCommands(events, "core.modal.dismiss").length, 1,
-      "native picker Escape must answer core.modal.dismiss once");
-    assert.equal(events.filter((event) => event.event === MODAL_ANSWER
-      && event.fields?.key === "core.modal.dismiss").length, 1,
-    "the native picker must answer Escape once");
-    assert.equal(events.filter((event) => event.event === PICKER_CLOSE
-      && event.fields?.reason === "dismiss").length, 1,
-    "the native picker must close once with reason dismiss");
+    if (webView) {
+      assert.equal(traceCommands(events, "core.modal.dismiss").length, 1,
+        "native picker Escape must answer core.modal.dismiss once");
+      assert.equal(events.filter((event) => event.event === MODAL_ANSWER
+        && event.fields?.key === "core.modal.dismiss").length, 1,
+      "the native picker must answer Escape once");
+      assert.equal(events.filter((event) => event.event === PICKER_CLOSE
+        && event.fields?.reason === "dismiss").length, 1,
+      "the native picker must close once with reason dismiss");
+    }
   });
 
   test(`${app.name}: settings dialog Escape stays with the native modal responder`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     await focusedTerminal(s);
     await s.run("core.settings.open");
-    await s.until("host.window", (window) => window.modal?.id === "settings" && window.modal.shown,
-      "the settings dialog did not become visible");
+    const webView = (await s.get("host.window")).pageProcess !== null;
+    if (webView) {
+      await s.until("host.window", (window) => window.modal?.id === "settings" && window.modal.shown,
+        "the settings dialog did not become visible");
+    } else {
+      await s.until("core.modal", (modal) => modal?.id === "settings", "the settings dialog is not the open modal");
+    }
+    const owner = webView ? "modal" : "workbench";
     const modalWindow = await s.get("host.window");
-    assert.equal(modalWindow.responder?.owner, "modal",
+    assert.equal(modalWindow.responder?.owner, owner,
       `the settings dialog does not own keyboard focus: ${JSON.stringify(modalWindow.responder)}`);
     const offsets = currentEventOffsets(s.app.configDir);
     await s.press("Escape");
@@ -219,9 +250,8 @@ for (const app of Object.values(APPS)) {
       return { down: input.down, result: input.result };
     }), [{ down: true, result: "delivered" }, { down: false, result: "delivered" }],
     "AppKit did not complete delivery of both Escape phases");
-    const after = await s.get("host.window");
-    assert.equal(after.modal?.id, "settings", "Escape closed the native settings dialog");
-    assert.equal(after.responder?.owner, "modal", "Escape moved focus away from the settings dialog");
+    assert.equal((await s.get("core.modal"))?.id, "settings", "Escape closed the native settings dialog");
+    assert.equal((await s.get("host.window")).responder?.owner, owner, "Escape moved focus away from the settings dialog");
     assertDeliveredKey(events, "Escape", "settings dialog Escape");
     assert.equal(traceCommands(events, "core.picker.close").length, 0,
       "settings dialog Escape must not run a page picker command");
