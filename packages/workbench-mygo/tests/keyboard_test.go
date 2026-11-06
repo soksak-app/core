@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -324,5 +325,61 @@ func TestAModalThatACommandOpensTakesTheKeyboardFromTheView(t *testing.T) {
 				t.Fatalf("the modal closed and the keyboard went to %s (%v), want %s", describeTarget(got), ok, *before)
 			}
 		})
+	}
+}
+
+// keyboardAnswer runs the command name as the endpoint runs it and returns the calls that the host had and the target of its
+// last keyboard call when the command answered.
+func keyboardAnswer(t *testing.T, f *shellFixture, stored *surfaceHost, name string, params any) (answer any, calls string, target *string) {
+	t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.orderMu.Lock()
+	stored.order = nil
+	stored.orderMu.Unlock()
+	answered := false
+	f.shell.Registry().RunLater(name, raw, func(value any, err error) {
+		if err != nil {
+			t.Errorf("%s failed: %v", name, err)
+		}
+		answered, answer = true, value
+		calls, target = stored.calledNow()
+	})
+	f.settle()
+	f.settle()
+	if !answered {
+		t.Fatalf("%s did not answer", name)
+	}
+	return answer, calls, target
+}
+
+// A command that moves the ring answers after the placement of the new tab and after the host answered the keyboard call to
+// it, so a key that the caller sends after the answer reaches the new surface (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+func TestAnAddedTabHoldsTheKeyboardBeforeTheCommandAnswers(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, _ := keyboardCards(t, f)
+	f.run("core.card.focus", map[string]string{"card": cards[0]})
+	f.settle()
+	answer, calls, target := keyboardAnswer(t, f, stored, "core.card.add-tab", map[string]string{"card": cards[0], "plugin": "terminal"})
+	tab := answer.(map[string]string)["tab"]
+	if !strings.HasSuffix(calls, "syncSurfaces presentSurfaces surfaceFocus") || target == nil || *target != tab {
+		t.Fatalf("core.card.add-tab answered %s when the host had the calls %q and the keyboard in %s", tab, calls, describeTarget(target))
+	}
+}
+
+// A command that moves the ring to a surface that the host holds answers after the host answered the keyboard call to it.
+func TestACommandThatMovesTheRingAnswersAfterTheKeyboardCall(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, tabs := keyboardCards(t, f)
+	focused, _ := keyboardRing(t, f)
+	other := cards[0]
+	if other == focused {
+		other = cards[1]
+	}
+	_, calls, target := keyboardAnswer(t, f, stored, "core.card.focus", map[string]string{"card": other})
+	if target == nil || *target != tabs[other][0] {
+		t.Fatalf("core.card.focus answered when the host had the calls %q and the keyboard in %s, not in %s", calls, describeTarget(target), tabs[other][0])
 	}
 }

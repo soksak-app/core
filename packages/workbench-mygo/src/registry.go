@@ -83,6 +83,8 @@ type Registry struct {
 	surfaces surfaceTable
 	// recorder receives every command request that ended.
 	recorder func(name string, elapsed time.Duration, failure error)
+	// follow returns the answer of one command that starts now, which waits until the window shows what the command changed.
+	follow func(answer func(value any, err error)) func(value any, err error)
 }
 
 // NewRegistry returns an empty registry of the names of declared.
@@ -157,6 +159,7 @@ func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
 // RunLater runs the command name with params and gives answer its result: at once for a command that returns, and in a later
 // step for a command that answers later.
 func (r *Registry) RunLater(name string, params json.RawMessage, answer func(value any, err error)) {
+	answer = r.followed(answer)
 	r.mu.Lock()
 	later := r.later[name]
 	r.mu.Unlock()
@@ -215,6 +218,9 @@ func (r *Registry) Reply(method string, params json.RawMessage, changed Changed,
 			answered(result, err)
 		}
 	}
+	if _, command := commandOf(method, params); command {
+		answer = r.followed(answer)
+	}
 	if r.replySurface(method, params, answer) {
 		return
 	}
@@ -260,6 +266,20 @@ func (r *Registry) Answer(method string, params json.RawMessage, changed Changed
 // (docs/spec/logging.md#automatic-entrances).
 func (r *Registry) Record(recorder func(name string, elapsed time.Duration, failure error)) {
 	r.recorder = recorder
+}
+
+// Follow installs what holds the answer of each command that runs through RunLater or Reply until the window shows what the
+// command changed (docs/spec/exposure.md#registration).
+func (r *Registry) Follow(follow func(answer func(value any, err error)) func(value any, err error)) {
+	r.follow = follow
+}
+
+// followed is answer of a command that starts now.
+func (r *Registry) followed(answer func(value any, err error)) func(value any, err error) {
+	if r.follow == nil {
+		return answer
+	}
+	return r.follow(answer)
 }
 
 // commandOf returns the name of the command of a request command.run.

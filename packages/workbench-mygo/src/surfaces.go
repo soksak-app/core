@@ -615,7 +615,7 @@ func (s *Shell) placeSurfaces() {
 	// The host ends a run on a settled placement, so the end of a run places also when its last move placed these lines.
 	runEnds := s.surfaces.going && s.held == nil
 	if slices.Equal(lines, s.surfaces.placed) && !runEnds {
-		s.answerCommits(s.surfaces.commits, nil)
+		s.afterKeyboard(s.surfaces.commits)
 		s.surfaces.commits = nil
 		return
 	}
@@ -725,10 +725,13 @@ func (s *Shell) placed(err error) {
 	s.verifyLater()
 	placing := s.surfaces.placing
 	s.surfaces.placing = nil
-	s.answerCommits(placing, err)
-	if err == nil {
-		s.endRestores()
+	if err != nil {
+		s.answerCommits(placing, err)
+		return
 	}
+	s.afterKeyboard(placing)
+	s.followKeyboard(false)
+	s.endRestores()
 }
 
 // endRestores ends the restore of each restoring tab whose surface the host placed.
@@ -770,7 +773,8 @@ func (s *Shell) commitSurfaces(answer func(err error)) {
 	s.afterPlacement(answer)
 }
 
-// afterPlacement answers after the host replied to the next placement. A frame runs the placement.
+// afterPlacement answers after the host replied to the next placement and to the keyboard call that follows it. A frame runs
+// the placement.
 func (s *Shell) afterPlacement(answer func(err error)) {
 	s.surfaces.commits = append(s.surfaces.commits, answer)
 	s.options.Invalidate()

@@ -3,6 +3,8 @@
 // in one function, which owes the keyboard here. The one host call surfaceFocus goes out at once for a surface that a placement
 // gave the host, so the host gives it the keyboard at the release of the press that moved the ring, before a key that follows the
 // release; a surface that the host does not hold yet receives the keyboard after the placement that shows it, when it stands.
+// A placement ends when the host answered the keyboard call that follows it, so a command, which answers after the placement,
+// answers after the keyboard reached its target (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
 import { modalState, onModalState, report, surfaces } from "./host.js";
 import { emitEvent } from "./page-log.js";
 
@@ -14,6 +16,8 @@ let held = new Set();
 /* owed: the keyboard has to move even when the target is the same. sent: the target of the last call, null for the workbench. */
 let owed = false;
 let sent = null;
+/* The last keyboard call, fulfilled when the host answered it. */
+let flight = Promise.resolve();
 
 const editable = (element) => element !== null && element.matches("input, textarea, select, [contenteditable]");
 
@@ -29,7 +33,7 @@ function send(surface) {
   sent = surface;
   // An element that kept the focus would still show as focused beside the surface that holds the keyboard.
   if (surface !== null) document.activeElement?.blur();
-  Promise.resolve(surfaces.focus(surface)).catch((why) => report(`surface focus: ${why}`));
+  flight = Promise.resolve(surfaces.focus(surface)).catch((why) => report(`surface focus: ${why}`));
 }
 
 /** Records one decision of the keyboard, the call it sent or why it sent none (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring). */
@@ -70,7 +74,8 @@ export function keyboardOwed() {
 
 /**
  * A drawn placement answered with the surfaces it shows and the surfaces it placed. The ring on a surface that it does not show
- * leaves the keyboard with the workbench.
+ * leaves the keyboard with the workbench. Returns a promise that is fulfilled when the host answered the last keyboard call,
+ * which the placement ends with.
  */
 export function keyboardPlaced(ids, placedIds) {
   shown = new Set(ids);
@@ -78,12 +83,13 @@ export function keyboardPlaced(ids, placedIds) {
   if (modalState() !== null) {
     owed = true;
     decided("placed", null, "modal");
-    return;
+    return flight;
   }
   const surface = target();
   const chosen = surface !== null && shown.has(surface) ? surface : null;
   decided("placed", chosen, chosen === sent && !owed ? "same" : "send");
   send(chosen);
+  return flight;
 }
 
 /**

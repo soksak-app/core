@@ -69,6 +69,26 @@ type surfaceHost struct {
 	// keyboard holds the argument of each surfaceFocus, and order the host calls of a placement in their order.
 	keyboard []*string
 	order    []string
+	// orderMu guards keyboard and order, which a call writes in its routine and a test reads in an answer.
+	orderMu sync.Mutex
+}
+
+// called records the call name in the order of the calls.
+func (h *surfaceHost) called(name string) {
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	h.order = append(h.order, name)
+}
+
+// calledNow returns the calls so far and the target of the last keyboard call, nil for the workbench or without one.
+func (h *surfaceHost) calledNow() (string, *string) {
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	var target *string
+	if len(h.keyboard) > 0 {
+		target = h.keyboard[len(h.keyboard)-1]
+	}
+	return strings.Join(h.order, " "), target
 }
 
 // keyboardTarget returns the surface of the last surfaceFocus, nil for the workbench, and whether there was one.
@@ -87,7 +107,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 			return nil, err
 		}
 		h.requests = append(h.requests, request)
-		h.order = append(h.order, "syncSurfaces")
+		h.called("syncSurfaces")
 		return map[string]any{"ticket": len(h.requests), "placements": []any{}, "chrome": map[string]any{}}, nil
 	}
 	table["waitPresented"] = func(context.Context, json.RawMessage) (any, error) {
@@ -98,7 +118,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 			return nil, h.presentFailure
 		}
 		h.placed++
-		h.order = append(h.order, "presentSurfaces")
+		h.called("presentSurfaces")
 		return []any{}, nil
 	}
 	table["surfaceFocus"] = func(_ context.Context, argument json.RawMessage) (any, error) {
@@ -108,8 +128,10 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
 		}
+		h.orderMu.Lock()
 		h.keyboard = append(h.keyboard, request.Surface)
-		h.order = append(h.order, "surfaceFocus")
+		h.orderMu.Unlock()
+		h.called("surfaceFocus")
 		return nil, nil
 	}
 	table["compositionDeclare"] = func(_ context.Context, argument json.RawMessage) (any, error) {

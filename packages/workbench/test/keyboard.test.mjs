@@ -31,12 +31,14 @@ async function page() {
 
   const calls = [];
   const decisions = [];
+  /* held: a promise that the next keyboard calls answer with, null to answer at once. */
+  const focusAnswer = { held: null };
   const modal = { open: null, listeners: new Set() };
   const actualHost = await import("../host.js");
   mock.module("../host.js", { exports: {
     ...actualHost,
     report: (line) => assert.fail(`the page reported: ${line}`),
-    surfaces: { ...actualHost.surfaces, focus: (surface) => { calls.push(surface); return Promise.resolve(); } },
+    surfaces: { ...actualHost.surfaces, focus: (surface) => { calls.push(surface); return focusAnswer.held ?? Promise.resolve(); } },
     modalState: () => modal.open,
     onModalState: (fn) => { modal.listeners.add(fn); return () => modal.listeners.delete(fn); },
   } });
@@ -100,7 +102,8 @@ async function page() {
     await placed();
     calls.length = 0;
   };
-  return { calls, decisions, flush, keyboard, modal, openProject, placed, plane, reset, ringSurface, shownSurfaces };
+  return { calls, decisions, flush, focusAnswer, heldSurfaces, held: () => held, keyboard, modal, openProject, placed, plane, reset,
+    ringSurface, shownSurfaces };
 }
 
 const b = await page();
@@ -314,11 +317,53 @@ test("the ring moves in one function of the plane", () => {
 
 test("the page answers each placement and each responder move to the keyboard", () => {
   const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  assert.match(page, /if \(record\.drawn\) keyboardPlaced\(/);
+  assert.match(page, /if \(record\.drawn\) await keyboardPlaced\(/);
   // The field of a rename leaves the document in this draw, and a removal does not always report the lost focus.
   assert.match(page, /createBarTabs\(\{[^}]*keyboardOwed/);
   const barTabs = readFileSync(new URL("../bar-tabs.js", import.meta.url), "utf8");
   assert.equal(barTabs.match(/redraw\(\);\n\s+keyboardOwed\(\);/g)?.length, 2);
   const exposure = readFileSync(new URL("../core-exposure.js", import.meta.url), "utf8");
   assert.match(exposure, /keyboardResponder\(event\);/);
+});
+
+/** Holds the answer of the keyboard calls until the returned function runs. */
+function holdFocus() {
+  let release;
+  b.focusAnswer.held = new Promise((done) => { release = done; });
+  return () => { b.focusAnswer.held = null; release(); };
+}
+
+/** Answers a drawn placement and tells whether the placement ended before the host answered the keyboard call. */
+async function placementEnd() {
+  await b.flush();
+  b.plane.settle();
+  b.held()?.();
+  await b.flush();
+  let ended = false;
+  const end = Promise.resolve(b.keyboard.keyboardPlaced(b.shownSurfaces(), b.heldSurfaces())).then(() => { ended = true; });
+  await b.flush();
+  return { end, ended: () => ended };
+}
+
+test("a placement ends when the host answered the keyboard call to the new tab", { timeout: 5000 }, async () => {
+  await b.reset();
+  const release = holdFocus();
+  b.plane.addTabTo(b.plane.focused(), pluginId, null);
+  const { end, ended } = await placementEnd();
+  assert.equal(b.calls.at(-1), b.ringSurface(), "the placement sent no keyboard call to the new tab");
+  assert.equal(ended(), false, "the placement ended before the host answered the keyboard call");
+  release();
+  await end;
+});
+
+test("a placement ends when the host answered the keyboard call that went before it", { timeout: 5000 }, async () => {
+  await b.reset();
+  const release = holdFocus();
+  b.plane.focusCard(otherCard(b));
+  await b.flush();
+  assert.equal(b.calls.at(-1), b.ringSurface(), "the move of the ring sent no keyboard call ahead of the placement");
+  const { end, ended } = await placementEnd();
+  assert.equal(ended(), false, "the placement ended before the host answered the keyboard call");
+  release();
+  await end;
 });
