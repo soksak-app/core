@@ -26,7 +26,7 @@
     "@soksak/window-check": "workspace:*"
   },
   "devDependencies": {
-    "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.13/soksak-kit-0.0.13.tgz",
+    "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz",
     "acorn": "8.18.0",
     "yaml": "2.9.1"
   }

@@ -33,8 +33,8 @@ importers:
         version: link:packages/window-check
     devDependencies:
       '@soksak/kit':
-        specifier: https://github.com/soksak-app/kit/releases/download/v0.0.13/soksak-kit-0.0.13.tgz
-        version: https://github.com/soksak-app/kit/releases/download/v0.0.13/soksak-kit-0.0.13.tgz
+        specifier: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz
+        version: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz
       acorn:
         specifier: 8.18.0
         version: 8.18.0
@@ -103,9 +103,9 @@ importers:
 
   packages/host/go: {}
 
-  packages/host/rust: {}
-
   packages/host/mygo: {}
+
+  packages/host/rust: {}
 
   packages/host/tauriv2: {}
 
@@ -240,9 +240,9 @@ packages:
     resolution: {integrity: sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w==}
     engines: {node: '>= 10.0.0'}
 
-  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.13/soksak-kit-0.0.13.tgz':
-    resolution: {integrity: sha512-nBzwE16HUz3Ft7zz1RNaaQgsXbV+HjHrcJMu5s0cwVlPQrqOh891AHKREytzl7/BZhI0xqWZ41oA/wJyEfdEfw==, tarball: https://github.com/soksak-app/kit/releases/download/v0.0.13/soksak-kit-0.0.13.tgz}
-    version: 0.0.13
+  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz':
+    resolution: {integrity: sha512-xeTLFb6TopYTwfs7U9iZjlbxYN4sa9lhfBVGaXgtNGyhhNNJ7y0wvLegOnhTXZeHTbpW8m02g4RZo0OLoqKSZA==, tarball: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz}
+    version: 0.0.14
     hasBin: true
 
   '@typescript/typescript-aix-ppc64@7.0.2':
@@ -585,7 +585,7 @@ snapshots:
       node-addon-api: 7.1.1
       picomatch: 4.0.7
 
-  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.13/soksak-kit-0.0.13.tgz':
+  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz':
     dependencies:
       ajv: 8.20.0
       smol-toml: 1.9.1
