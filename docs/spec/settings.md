@@ -14,6 +14,8 @@ Plugins are installed from separate repositories, so their number and the number
 
 The left navigation lists three sections in this order. Every section shows the scope tabs (전역, 프로젝트) above its controls; the project tab exists only while a project is selected.
 
+In the project scope a caption below the scope tabs, `core.settings-modal.folder`, shows the folder of the project. The folder is the only mark of the project that the scope stores into, and two projects can end in the same name, so the caption shows the whole path inside the width of the pane. A line breaks at a space, after a hyphen and after a path separator (`/` or `\`), and a name wider than the line breaks at the end of the line. The caption is never shortened with an ellipsis, never runs past the pane and is never cut off. The other text of the window keeps its own line breaking.
+
 | Id | Label | Content |
 |---|---|---|
 | `general` | 일반 | Settings that apply to the whole workbench, including the sidebar appearance |

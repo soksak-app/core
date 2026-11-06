@@ -478,6 +478,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .set-group:last-child{margin-bottom:0}
 .set-group__name{margin:0 0 var(--space-1);font-size:var(--text-caption);letter-spacing:var(--section-tracking);color:var(--rail)}
 .set-caption{margin:0 0 var(--set-caption-gap);font-size:var(--text-small);line-height:var(--line-height);color:var(--muted)}
+.set-folder{overflow-wrap:anywhere}
 .set-actions{display:flex;flex-wrap:wrap;gap:var(--set-actions-gap);margin:0 0 var(--set-actions-margin)}
 .set-row{display:grid;grid-template-columns:var(--set-row-name-w) 1fr;align-items:center;gap:var(--set-row-gap);
   min-height:var(--set-row-h)}
