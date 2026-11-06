@@ -80,6 +80,13 @@ test('the scope all covers every host, and a list of hosts names each host with 
   assert.throws(() => parseContractCases(section('| `a.b` | x | wailsv3, other only: a reason |')), /unknown host other/);
 });
 
+test('an escaped pipe of a contract row is a pipe of its behavior, and the scope is the cell after it', { timeout: 1000 }, () => {
+  const section = (rows) => `\n## Contract cases\n\n| Case | Behavior | Scope |\n| --- | --- | --- |\n${rows}\n`;
+  const cases = parseContractCases(section('| `a.union` | A union `<range> \\|\\| <range>` contains what one part contains. | wailsv3 only: a reason |'));
+  assert.equal(cases.get('a.union').behavior, 'A union `<range> || <range>` contains what one part contains.');
+  assert.deepEqual(cases.get('a.union').hosts, ['wailsv3']);
+});
+
 test('host contract passes when each host runs a passing test for every case in its scope', () => {
   const { errors, covered } = auditHostContract(parseContractCases(SPEC), hosts());
   assert.deepEqual(errors, []);

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { absolute, markdownLinks } from "./markdown-links.mjs";
+import { tableCells } from "./markdown-table.mjs";
 import { conflictMarkerErrors, checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, checkSpecificationIds, retiredChecklistItems } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -63,10 +64,9 @@ for (const file of statusFiles) {
 const counts = statusFiles.map((file, language) => {
   const rows = readFileSync(file, "utf8").split("\n").filter((line) => line.startsWith("|"));
   const expected = language === 0 ? ["Feature", "Implementation", "Validation", "Release"] : ["기능", "구현", "검증", "배포"];
-  const cells = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
-  if (JSON.stringify(cells(rows[0] ?? "")) !== JSON.stringify(expected)) errors.push(`${file}: status columns must be ${expected.join(", ")}`);
+  if (JSON.stringify(rows.length === 0 ? [] : tableCells(rows[0])) !== JSON.stringify(expected)) errors.push(`${file}: status columns must be ${expected.join(", ")}`);
   for (const row of rows.slice(2)) {
-    const values = cells(row);
+    const values = tableCells(row);
     if (values.length !== 4 || values.some((value) => !value)) errors.push(`${file}: incomplete status row ${row}`);
     if (!(language === 0 ? ["Unreleased", "Released"] : ["미배포", "배포됨"]).includes(values[3])) errors.push(`${file}: invalid release status ${values[3]}`);
   }

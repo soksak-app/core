@@ -26,6 +26,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { markdownLinks } from './markdown-links.mjs';
+import { tableCells } from './markdown-table.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const DOCUMENTS = ['docs/operations/private-native-apis.md', 'docs/operations/private-native-apis.ko.md'];
@@ -280,31 +281,6 @@ export function apiUses(apis, sources) {
   return uses;
 }
 
-/** The cells of a table row, split at `|` outside code spans. */
-function cells(line) {
-  const parts = [];
-  let current = '';
-  let ticks = 0;
-  for (let i = 1; i < line.length; i++) {
-    const c = line[i];
-    if (c === '`') {
-      let run = 1;
-      while (line[i + run] === '`') run++;
-      ticks = ticks === 0 ? run : ticks === run ? 0 : ticks;
-      current += line.slice(i, i + run);
-      i += run - 1;
-    } else if (c === '\\' && line[i + 1] === '|') {
-      current += '|';
-      i++;
-    } else if (c === '|' && ticks === 0) {
-      parts.push(current.trim());
-      current = '';
-    } else current += c;
-  }
-  if (current.trim() !== '') throw new Error(`the table row does not end with |: ${line.slice(0, 80)}`);
-  return parts;
-}
-
 const codeSpans = (text) => [...text.matchAll(/(`+)([^`][\s\S]*?)\1/g)].map((match) => match[2].trim());
 
 /** The rows of the inventory table of `markdown`: `{line, names, links, callers}`; `links` are paths from the repository root. */
@@ -317,7 +293,7 @@ export function inventoryRows(markdown, document) {
   const rows = [];
   for (let index = separator + 1; index < lines.length && lines[index].startsWith('|'); index++) {
     const line = lines[index];
-    const parts = cells(line);
+    const parts = tableCells(line);
     if (parts.length !== 3) throw new Error(`${document}:${index + 1}: the row has ${parts.length} cells, not 3`);
     const links = markdownLinks(line)
       .map(({ target }) => target)

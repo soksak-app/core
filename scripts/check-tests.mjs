@@ -84,6 +84,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs"], ["scripts/test/tes
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
+  lane("markdown table cells", "js-ts", ["scripts/markdown-table.mjs"], ["scripts/test/markdown-table.test.mjs"]),
   lane("soksak layout", "js-ts", ["packages/soksak/src/**/*.ts"], ["packages/soksak/test/**/*.mjs"]),
   lane("soksak utility scripts", "js-ts", [
     "packages/soksak/scripts/bounded.mjs",
@@ -240,6 +241,7 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/src/install.rs", symbol: "pub fn parse_range" },
       { file: "packages/plugin-api/index.js", symbol: "export function rangeContains" },
       { file: "packages/plugin-api/index.js", symbol: "export function compareVersions" },
+      { file: "scripts/markdown-table.mjs", symbol: "export function tableCells(" },
     ],
     tests: [
       { file: "packages/sok/go/tests/version_range_cases_test.go", id: "TestARangeReadsTheVersionRangeCaseTable" },
@@ -250,8 +252,10 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_reads_a_union_in_the_plugin_dependencies" },
       { file: "packages/sok/go/tests/registry_test.go", id: "TestRegistryBuildReadsAUnionInThePluginDependencies" },
       { file: "packages/sok/rust/tests/registry_test.rs", id: "registry_build_reads_a_union_in_the_plugin_dependencies" },
+      { file: "scripts/test/test-hosts.test.mjs", id: "an escaped pipe of a contract row is a pipe of its behavior, and the scope is the cell after it" },
+      { file: "scripts/test/markdown-table.test.mjs", id: "an escaped pipe is a pipe of its cell and the cells after it keep their places" },
     ],
-    expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, a union of forms joined by exactly ` || ` contains what one part contains, the registry build and the installation read a union in plugin dependencies, and the workbench reads ranges only through @soksak/plugin-api.",
+    expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, a union of forms joined by exactly ` || ` contains what one part contains, the registry build and the installation read a union in plugin dependencies, the workbench reads ranges only through @soksak/plugin-api, and the checks read the escaped pipes of a union in a table row as pipes of its cell.",
     levels: ["unit"],
   },
   {

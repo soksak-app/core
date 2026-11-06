@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { specMenuTables } from "../check-hosts-same.mjs";
+import { tableCells } from "../markdown-table.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
@@ -27,7 +28,7 @@ function specRows(markdown, heading) {
   return section.split("\n")
     .filter((line) => line.startsWith("|"))
     .slice(2)
-    .map((line) => line.split("|").slice(1, -1).map((cell) => cell.trim().replace(/^`(.*)`$/, "$1")));
+    .map((line) => tableCells(line).map((cell) => cell.replace(/^`(.*)`$/, "$1")));
 }
 
 /**

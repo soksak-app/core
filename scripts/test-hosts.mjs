@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, posix, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cpus } from 'node:os';
+import { tableCells } from './markdown-table.mjs';
 import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
 import { runTests } from './test-runner.mjs';
 
@@ -33,9 +34,10 @@ export function parseContractCases(markdown) {
   const section = markdown.slice(start, next < 0 ? undefined : next);
   const cases = new Map();
   for (const line of section.split('\n')) {
-    const row = line.match(/^\|\s*`([^`]+)`\s*\|(.*)\|\s*$/);
-    if (!row) continue;
-    const [id, cells] = [row[1], row[2].split('|').map((cell) => cell.trim())];
+    if (!line.startsWith('|')) continue;
+    const [first, ...cells] = tableCells(line);
+    const id = /^`([^`]+)`$/.exec(first)?.[1];
+    if (id === undefined) continue;
     if (!CASE_ID.test(id)) throw new Error(`contract case id ${id} is not a lowercase dotted identifier`);
     if (cases.has(id)) throw new Error(`contract case ${id} is defined twice`);
     const [behavior, scope] = cells;
