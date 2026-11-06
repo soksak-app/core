@@ -1226,6 +1226,26 @@ func observeSurfaceCallback(window string, ticket *uint64, operation, stage stri
 	}
 }
 
+// waitSurfaceRasters runs the raster stage of a presentation, the refresh of the rasters of its image regions and the wait until
+// they present, and records it as the stage present-raster-wait: queued_ns before the refresh, entered_ns when the wait starts and
+// returned_ns when it ends, also when the wait fails. A refresh that fails starts no wait and records nothing.
+func waitSurfaceRasters(window string, ticket *uint64, refresh, wait func() error) error {
+	queued, mode := surfaceDispatchClock()
+	if err := refresh(); err != nil {
+		return err
+	}
+	if mode == surfaceDispatchOff {
+		return wait()
+	}
+	entered, enteredAvailable := readSurfaceDispatchClock()
+	err := wait()
+	returned, returnedAvailable := readSurfaceDispatchClock()
+	if enteredAvailable && returnedAvailable {
+		recordSurfaceDispatch(mode, window, ticket, "present", "present-raster-wait", queued, entered, returned)
+	}
+	return err
+}
+
 func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
@@ -1275,17 +1295,16 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			// A continuous frame also waits for each visible image region to display a raster of the prepared size.
 			// Without waiting, a surface resize would show the previous raster while the region is enlarged
 			// (docs/spec/surface-composition.md).
-			if err := s.refreshImageRasters(); err != nil {
-				return err
-			}
-			if err := s.images.WaitLayoutRasters(pageTimeout, req.Settled); err != nil {
-				if err.Error() == "presentationTimeout" {
-					return fmt.Errorf("the current image raster did not present within %s; pending %s",
-						pageTimeout, s.images.PendingRasters())
+			return waitSurfaceRasters(win.Name(), &req.Ticket, s.refreshImageRasters, func() error {
+				if err := s.images.WaitLayoutRasters(pageTimeout, req.Settled); err != nil {
+					if err.Error() == "presentationTimeout" {
+						return fmt.Errorf("the current image raster did not present within %s; pending %s",
+							pageTimeout, s.images.PendingRasters())
+					}
+					return fmt.Errorf("the current image raster failed to present: %w", err)
 				}
-				return fmt.Errorf("the current image raster failed to present: %w", err)
-			}
-			return nil
+				return nil
+			})
 		}, func(waiting error) {
 			// The commit and the cancel run outside the framework event lock.
 			queued, mode := surfaceDispatchClock()
