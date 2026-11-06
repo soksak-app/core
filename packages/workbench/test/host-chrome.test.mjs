@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
-import { clockAnswer } from "./support/records.mjs";
+import { clockAnswer, recordsOf, settled } from "./support/records.mjs";
 const emptySurfaceDeclarations = { status: [], commands: [], element: [] };
 
 test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
@@ -453,6 +453,94 @@ test("a handed-over preparation sends no cancel and only a failed or cancelled n
     assert.deepEqual(names(), ["syncSurfaces", "cancelSurfaces"], "a cancel without a handover left the handed-over preparation open");
     assert.deepEqual(calls[1].request, { ticket: 4 });
   } finally {
+    dom.window.close();
+  }
+});
+
+// A preparation authorizes its surfaces through the prepared listeners only after it completes, and a listener added later receives the
+// current preparation. The drawn commit presents each prepared ticket once with the visibility of its preparation. A rejected
+// preparation or presentation is the failure of the placing caller, which reports it, and is not reused for the next request at the
+// same geometry.
+test("a view preparation notifies its prepared listeners, presents each ticket once, and a rejected stage is not reused", async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  const tickets = [];
+  let fail = null;
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: (surfaceId) => ({ surfaceId }),
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      calls.push({ name, request });
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "setTheme") return null;
+      if (name === fail) { fail = null; throw new Error(`injected ${name} failure`); }
+      if (name === "syncSurfaces") {
+        tickets.push(tickets.length + 1);
+        return {
+          ticket: tickets.at(-1),
+          placements: [
+            { id: "shown", x: 1, y: 2, w: 3, h: 4, visible: true },
+            { id: "hidden", x: 0, y: 0, w: 1, h: 1, visible: false },
+          ],
+          chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar },
+        };
+      }
+      if (name === "presentSurfaces") return request.placements;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { onSurfacePrepared, surfaces } = await import("../host.js?presentation");
+  const view = (id, visible) => ({ id, dim: false, visible,
+    surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
+    applied: { x: 0, y: 0, w: 3, h: 4 } });
+  const record = { surfaces: [view("shown", true), view("hidden", false)], settled: false, drawn: false, titlebar: 40 };
+  const placing = () => calls.filter(({ name }) => name === "syncSurfaces" || name === "presentSurfaces");
+  const prepared = [];
+  const removePrepared = onSurfacePrepared((placements) => prepared.push(placements.map(({ id }) => id)));
+  try {
+    await surfaces.theme({ scheme: "dark", tokens: {} });
+    const preparation = await surfaces.place(record);
+    assert.deepEqual(preparation.placements.map(({ id, visible }) => [id, visible]), [["shown", true], ["hidden", false]],
+      "the preparation did not keep the visibility that the host placed");
+    assert.deepEqual(placing().map(({ name }) => name), ["syncSurfaces"]);
+    assert.deepEqual(prepared, [["shown", "hidden"]], "the prepared listeners were not told after the preparation completed");
+    const latePrepared = [];
+    const removeLatePrepared = onSurfacePrepared((placements) => latePrepared.push(placements.map(({ id }) => id)));
+    assert.deepEqual(latePrepared, [["shown", "hidden"]], "a listener added after the preparation did not receive it");
+    removeLatePrepared();
+    await surfaces.place({ ...record, drawn: true });
+    await surfaces.place({ ...record, drawn: true });
+    assert.deepEqual(placing().map(({ name }) => name), ["syncSurfaces", "presentSurfaces"], "a prepared ticket was presented twice");
+    const presented = placing()[1].request;
+    assert.equal(presented.ticket, tickets[0]);
+    assert.deepEqual(presented.placements.map(({ id, visible }) => [id, visible]), [["shown", true], ["hidden", false]],
+      "the presentation did not keep the visibility of its preparation");
+    for (const stage of ["syncSurfaces", "presentSurfaces"]) {
+      calls.length = 0;
+      fail = stage;
+      const changed = { ...record, settled: stage === "syncSurfaces" };
+      if (stage === "syncSurfaces") {
+        await assert.rejects(surfaces.place(changed), /injected syncSurfaces failure/);
+      } else {
+        await surfaces.place(changed);
+        await assert.rejects(surfaces.place({ ...changed, drawn: true }), /injected presentSurfaces failure/);
+      }
+      await settled();
+      assert.deepEqual(calls.flatMap((call) => recordsOf(call.name, call.request)), [],
+        `the ${stage} rejection that the placing caller received was written again`);
+      calls.length = 0;
+      await surfaces.place(changed);
+      await surfaces.place({ ...changed, drawn: true });
+      assert.deepEqual(placing().map(({ name }) => name), ["syncSurfaces", "presentSurfaces"],
+        `the ${stage} rejection was reused for the next request at the same geometry`);
+    }
+  } finally {
+    removePrepared();
     dom.window.close();
   }
 });

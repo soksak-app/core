@@ -393,12 +393,14 @@ test("disposing a mount releases resolved listeners before pending registration 
     const mount = mountSurface(slot, surface);
     await started;
     await disposeSurface(id);
+    assert.equal(slot.querySelector(".surface-module-host"), null, "the surface was not removed before its mount ended");
     assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-responsiveness", "view-stopped"].sort(),
       "dispose must release resolved listeners without waiting for pending registrations");
     resolveReply(() => { throw new Error("late listener cleanup failed"); });
     rejectProcessEnded(registrationError);
     const [mountResult] = await Promise.allSettled([mount]);
     assert.equal(mountResult.status, "fulfilled", "disposing the mount must retain its cancellation result");
+    assert.equal(mountResult.value, null, "a mount that the dispose cancelled resolved with a value");
     await new Promise((resolve) => setImmediate(resolve));
     assert.ok(reports.some((message) => message === "native listener cleanup: late listener cleanup failed"),
       "a late cleanup error must be reported");

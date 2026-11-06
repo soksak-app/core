@@ -1,6 +1,7 @@
 // The view path of a surface with a fake native host: the tab state and the tab reports that a view calls, the composition place
-// of a view that a place leaves out, and the authorization that gates the composition declaration of a view. The fake host records
-// each host call and delivers each view call to the view-call listener of the surface (docs/spec/native-surfaces.md#view-surfaces).
+// and the sidecar sends of a view that a place leaves out, the release of a view and the authorization that gates the composition
+// declaration of a view. The fake host records each host call and each sidecar send and delivers each view call to the view-call
+// listener of the surface (docs/spec/native-surfaces.md#view-surfaces).
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
@@ -31,8 +32,11 @@ const documents = {
 };
 
 let instance = 0;
-/** Mounts the view of a surface on a fake native host and returns the view call and host call records of that host. */
-async function harness(t) {
+/**
+ * Mounts the view of a surface on a fake native host and returns the view call, host call and sidecar send records of that host.
+ * refuse names the host calls that the fake host refuses.
+ */
+async function harness(t, { refuse = new Set() } = {}) {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
@@ -40,6 +44,7 @@ async function harness(t) {
   dom.window.cancelAnimationFrame = () => {};
   const listeners = new Map();
   const calls = [];
+  const sent = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -54,15 +59,26 @@ async function harness(t) {
           listeners.get(event).add(listener);
           return () => listeners.get(event).delete(listener);
         },
-        call: async (name, payload) => { calls.push({ name, payload }); return null; } } };
+        call: async (name, payload) => {
+          calls.push({ name, payload });
+          if (refuse.has(name)) throw new Error(`the host refused ${name}`);
+          return null;
+        } },
+        // The sidecar port of the surface records each send that reaches a sidecar.
+        sidecar: () => ({ send: async (id, body) => { sent.push(body); return null; }, on: async () => () => {}, onFailure: async () => () => {} }) };
     },
   } });
   const modules = await import(`../surface-modules.js?view-path-${++instance}`);
   let nextId = 1;
-  // Sends one view call and resolves with the reply that the view receives.
-  const viewCall = async (command, params, generation = 1) => {
+  // Delivers one view call and returns its id without waiting for its reply.
+  const deliver = (command, params, generation = 1) => {
     const id = nextId++;
     for (const listener of listeners.get("view-call") ?? []) listener({ id, command, params, generation });
+    return id;
+  };
+  // Sends one view call and resolves with the reply that the view receives.
+  const viewCall = async (command, params, generation = 1) => {
+    const id = deliver(command, params, generation);
     for (let turn = 0; turn < 100; turn += 1) {
       const reply = calls.find((call) => call.name === "viewReply" && call.payload.id === id);
       if (reply) return reply.payload;
@@ -70,7 +86,7 @@ async function harness(t) {
     }
     throw new Error(`view call ${command} got no reply`);
   };
-  return { modules, calls, viewCall, page: pageIdentity, slot: document.querySelector("#slot"), close: () => dom.window.close() };
+  return { modules, calls, sent, deliver, viewCall, page: pageIdentity, slot: document.querySelector("#slot"), close: () => dom.window.close() };
 }
 
 const expectedReply = (host, id, result) => ({ id, result, page: host.page, generation: 1 });
@@ -139,6 +155,89 @@ test("the tab reports of a view set its title, its modified mark and its error",
   assert.deepEqual(await h.viewCall("tab.error", "disk full"), expectedReply(h, 3, null));
   assert.equal(reports.tabError(id), "disk full");
   await disposeSurface(id);
+  h.close();
+});
+
+/** Mounts the view id of pluginId on the harness h and waits for its composition declaration. */
+async function mountView(h, id, pluginId = "fixture-plain", unload = false) {
+  const { recordOrigin } = await import("../tab-reports.js");
+  recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
+  h.modules.authorizeSurface(id);
+  await h.modules.mountSurface(h.slot, viewOf(id, pluginId, unload));
+  await h.modules.waitSurfaceCompositionDeclared(id);
+}
+
+test("keep busy of a view protects its tab until an unload dispose, and keep modified follows the modified report", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const reports = await import("../tab-reports.js");
+  const id = "view-keep";
+  await mountView(h, id);
+  await h.viewCall("tab.keep", { reason: "busy", on: true });
+  await h.viewCall("tab.modified", true);
+  assert.deepEqual(reports.tabKeeps(id), ["keep:modified", "keep:busy"]);
+  await h.viewCall("tab.keep", { reason: "busy", on: false });
+  assert.deepEqual(reports.tabKeeps(id), ["keep:modified"]);
+  await h.viewCall("tab.keep", { reason: "busy", on: true });
+  assert.deepEqual((await h.viewCall("tab.keep", { reason: "other", on: true })).error,
+    { code: -32000, message: "unknown keep reason: other" });
+  assert.deepEqual((await h.viewCall("tab.keep", { reason: "busy", on: 1 })).error,
+    { code: -32000, message: "keep busy must be true or false" });
+  await h.modules.disposeSurface(id, { mode: "unload" });
+  assert.deepEqual(reports.tabKeeps(id), ["keep:modified"], "an unload dispose kept the busy protection or dropped the modified one");
+  reports.reportModified(id, false);
+  h.close();
+});
+
+test("an unload dispose keeps the tab reports of a view except its error, and a close forgets them", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const reports = await import("../tab-reports.js");
+  for (const [id, mode] of [["view-unload-reports", "unload"], ["view-close-reports", undefined]]) {
+    await mountView(h, id);
+    await h.viewCall("tab.title", "Doc");
+    await h.viewCall("tab.footer", "foot");
+    await h.viewCall("tab.notify", { text: "done" });
+    await h.viewCall("tab.error", "failed");
+    await h.modules.disposeSurface(id, mode === undefined ? undefined : { mode });
+  }
+  assert.deepEqual([reports.tabLabel("view-unload-reports"), reports.tabFooter("view-unload-reports"),
+    reports.tabNotice("view-unload-reports"), reports.tabError("view-unload-reports")], ["Doc", "foot", "done", null]);
+  assert.deepEqual(reports.tabOrigin("view-unload-reports"), { directory: null });
+  assert.deepEqual([reports.tabLabel("view-close-reports"), reports.tabFooter("view-close-reports"),
+    reports.tabNotice("view-close-reports"), reports.tabError("view-close-reports")], [null, null, null, null]);
+  await assert.rejects(h.modules.disposeSurface("view-unload-reports", { mode: "other" }), /unknown dispose mode: other/);
+  h.close();
+});
+
+test("a title report of a declaring view writes the label cache, and a removed title removes it", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const id = "view-label-cache";
+  await mountView(h, id, "fixture-unload", UNLOAD);
+  await h.viewCall("tab.title", "Cached");
+  assert.equal(store.label(id), "Cached");
+  await h.viewCall("tab.title", null);
+  assert.equal(store.label(id), null);
+  await h.modules.disposeSurface(id);
+  h.close();
+});
+
+test("a tab state write that a view sent before its dispose and that runs after it is not answered and stores nothing", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const id = "view-state-disposed";
+  const reported = [];
+  const originalDispatchEvent = globalThis.dispatchEvent;
+  globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+  t.after(() => { globalThis.dispatchEvent = originalDispatchEvent; });
+  await mountView(h, id, "fixture-unload", UNLOAD);
+  await h.viewCall("tab.state.write", { page: 1 });
+  // The write of a declaring view waits for the tab state store, so it runs after the dispose that starts at once.
+  const late = h.deliver("tab.state.write", { page: 9 });
+  await h.modules.disposeSurface(id, { mode: "unload" });
+  for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(h.calls.filter(({ name, payload }) => name === "viewReply" && payload.id === late), [],
+    "a write that runs after the dispose was answered");
+  assert.deepEqual(store.entry(id).state, { format: 2, value: { page: 1 } });
+  assert.deepEqual(reported, [], "the write reached the tab state of the disposed view");
   h.close();
 });
 
@@ -221,6 +320,56 @@ test("a region query of a view waits for a failed place that left the view out a
   h.close();
 });
 
+test("a sidecar send of a view waits for a failed place that leaves the view out, and a place that releases the view sends none", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { recordOrigin } = await import("../tab-reports.js");
+  const id = "view-place-sidecar";
+  recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
+  h.modules.authorizeSurface(id);
+  await h.modules.mountSurface(h.slot, { ...viewOf(id, "fixture-plain", false), sidecars: ["fixture-sidecar"] });
+  await h.modules.waitSurfaceCompositionDeclared(id);
+  const send = (op) => ({ id: "probe", sidecar: "fixture-sidecar", body: { op }, cids: [] });
+  let during;
+  await assert.rejects(h.modules.placeSurfaces(async () => {
+    during = h.viewCall("runtime.sidecar.send", send("input"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(h.sent, [], "a sidecar send left while the place ran");
+    throw new Error("host.place refused the layout");
+  }, { retain: new Set() }), /host.place refused the layout/);
+  assert.equal((await during).error, undefined, "the held send was refused after the failed place");
+  assert.deepEqual(h.sent.map(({ op }) => op), ["input"]);
+  // The place ends the sidecar sessions of the view that it leaves out, so a send held by that place is not sent after it.
+  assert.equal(await h.modules.placeSurfaces(async () => {
+    h.deliver("runtime.sidecar.send", send("end"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return "placed";
+  }, { retain: new Set() }), "placed");
+  for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(h.modules.mountedSurface(id), null);
+  assert.deepEqual(h.sent.map(({ op }) => op), ["input"], "a send reached the sidecar after the place ended its sessions");
+  h.close();
+});
+
+test("a view mount that a dispose ends before its authorization resolves null and declares no composition", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { recordOrigin } = await import("../tab-reports.js");
+  const id = "view-dispose-before-authorization";
+  recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
+  const mounting = h.modules.mountSurface(h.slot, viewOf(id, "fixture-plain", false));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await h.modules.disposeSurface(id);
+  assert.equal(h.slot.querySelector(`[data-surface="${id}"]`), null, "the surface was not removed before its authorization");
+  const outcome = await Promise.race([mounting.then((value) => ({ value }), (error) => ({ error: error.message })),
+    new Promise((resolve) => setTimeout(() => resolve("pending"), 200))]);
+  assert.deepEqual(outcome, { value: null }, "the mount that the dispose ended did not resolve");
+  h.modules.authorizeSurface(id);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(h.calls.filter(({ name }) => name === "compositionDeclare").length, 0, "a disposed mount declared its composition");
+  h.close();
+});
+
 test("a view declares its composition only after the host authorizes its surface", { timeout: 5000 }, async (t) => {
   const h = await harness(t);
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = h.modules;
@@ -266,6 +415,46 @@ test("a remounted view sends a higher composition revision in the same document"
   }
 });
 
+
+test("a mount of a view waits for a pending dispose of the same tab and creates a new surface", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const id = "view-remount-pending-dispose";
+  await mountView(h, id);
+  const first = h.modules.mountedSurface(id);
+  const disposing = h.modules.disposeSurface(id, { mode: "unload" });
+  const remounting = h.modules.mountSurface(h.slot, viewOf(id, "fixture-plain", false));
+  await disposing;
+  h.modules.authorizeSurface(id);
+  await remounting;
+  const second = h.modules.mountedSurface(id);
+  assert.notEqual(second, null, "the mount after the pending dispose left no mounted surface");
+  assert.notEqual(second, first, "the mount reused the surface that the dispose released");
+  assert.equal(second.disposed, false);
+  assert.equal(second.closing.signal.aborted, false);
+  assert.equal(h.slot.querySelectorAll(`[data-surface="${id}"]`).length, 1);
+  await h.modules.disposeSurface(id);
+  h.close();
+});
+
+test("each view mount reports its end to the mount listeners, with the error of a failed mount", { timeout: 5000 }, async (t) => {
+  const refuse = new Set();
+  const h = await harness(t, { refuse });
+  const ended = [];
+  const off = h.modules.onSurfaceMounted((id, error) => ended.push([id, error?.message ?? null]));
+  await mountView(h, "view-mount-ok");
+  const { recordOrigin } = await import("../tab-reports.js");
+  const failed = "view-mount-refused";
+  recordOrigin(failed, null, "test fixture");
+  seedSourceOrigins({ floor: 1, views: { [failed]: 1 } });
+  refuse.add("compositionDeclare");
+  h.modules.authorizeSurface(failed);
+  await assert.rejects(h.modules.mountSurface(h.slot, viewOf(failed, "fixture-plain", false)), /the host refused compositionDeclare/);
+  off();
+  assert.deepEqual(ended, [["view-mount-ok", null], [failed, "the host refused compositionDeclare"]]);
+  await h.modules.disposeSurface("view-mount-ok");
+  await h.modules.disposeSurface(failed);
+  h.close();
+});
 
 test("a later retained mount waits for the preceding placement release", { timeout: 5000 }, async (t) => {
   const h = await harness(t);

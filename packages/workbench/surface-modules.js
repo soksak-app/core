@@ -160,8 +160,8 @@ let compositionRevision = 0;
 function pageRuntime(surface, scoped, compositionReady, lifetime) {
   const invoke = (name, payload) => scoped.native.call(name, payload);
   const hostClose = (name, payload) => (lifetime.released ? Promise.resolve(null) : invoke(name, payload));
-  // While a place that leaves the surface out runs, the host removes its composition, so a placement is not sent; a failed
-  // place resumes the composition, which places its current geometry again (placeSurfaces).
+  // While a place that leaves the surface out runs, the host removes its composition, so a placement that the view sends
+  // meanwhile is not sent (placeSurfaces).
   const composed = (name, payload) => (lifetime.suspended ? Promise.resolve(null) : invoke(name, payload));
   return {
     surfaces: { report: (message) => invoke("report", message) },
@@ -780,8 +780,6 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
   if (retainedTextSize !== undefined && typeof retainedTextSize !== "function") {
     throw new TypeError(`surface ${surface.surfaceId} retained text size requires a resolver`);
   }
-  // The start of the mount for the trace event surface.mount, which covers the wait for the earlier dispose too.
-  const started = performance.now();
   // A tab that is restored while its unload still disposes it mounts a new surface after that dispose ends.
   const leaving = mounted.get(surface.surfaceId)?.disposing;
   if (leaving) await leaving;
@@ -1002,7 +1000,8 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
         }), () => {});
         forgetView(surface.surfaceId);
       }, { once: true });
-      const mountReadiness = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
+      // A dispose before the authorization ends the wait, because the dispose drops the authorization gate of the surface.
+      const mountReadiness = (native ? Promise.race([authorizationFor(surface.surfaceId), entry.compositionDisposed]) : Promise.resolve())
         .then(async () => {
           // begin() may draw a project preview before initialise publishes its root to the native host.
           // Keep that preview from starting a native view until the owning project context is committed.
