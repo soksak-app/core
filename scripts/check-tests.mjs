@@ -220,6 +220,17 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F509-4",
+    implementation: [{ file: "Makefile", symbol: "install-plugins:" }],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "plugin installation consumes the built registry without rebuilding sibling sources" },
+      { file: "scripts/test/test-app.test.mjs", id: "plugin installation rejects missing build inputs before removing installed plugins" },
+      { file: "scripts/test/test-app.test.mjs", id: "plugin installation uses the existing registry and replaces the installed set" },
+    ],
+    expected: "Installation consumes the existing registry without rebuilding it, rejects missing executable or index before any CLI mutation, and preserves the declared installation command order. Native payload installation and identity acceptance are separate.",
+    levels: ["unit"],
+  },
+  {
     id: "F509-2",
     implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function validateManifest" },
       { file: "e2e/fixtures/save-close/probe/plugin.json", symbol: '"name": "probeclose.prepare"' }],

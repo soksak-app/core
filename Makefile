@@ -346,9 +346,11 @@ install-registry:
 # Installs every plugin of the workspace registry into the CONFIG configuration folder. Applications do not hold plugins in the bundle, so
 # window checks and development runs install with this target before they start the application. Workspace plugins are changed without changing
 # the version, so when the same version is already installed the installation changes nothing. Therefore the installed plugins are
-# removed first and installed again.
-install-plugins: build-registry
+# removed first and installed again. Build the registry explicitly before installation; each host consumes the same built inputs.
+install-plugins:
 	@test -n "$(CONFIG)" || { echo "make install-plugins CONFIG=<configuration directory>" >&2; exit 2; }
+	@test -x target/debug/sok || { echo "target/debug/sok is missing or not executable; run make build-registry before installation" >&2; exit 2; }
+	@test -f "$(REGISTRY)/index.json" || { echo "$(REGISTRY)/index.json is missing; run make build-registry before installation" >&2; exit 2; }
 	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir "$(CONFIG)"
 	@for id in $$(node -e 'const f = "$(CONFIG)/plugins/installed.json"; const fs = require("fs"); console.log(fs.existsSync(f) ? Object.keys(JSON.parse(fs.readFileSync(f, "utf8")).plugins).join(" ") : "")'); do \
 		target/debug/sok plugin remove $$id --config-dir "$(CONFIG)" || exit 1; done

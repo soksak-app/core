@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F509-4: Plugin 설치는 host마다 registry를 다시 build하지 않고 이미 build한 workspace registry를 소비한다. 실행 파일이나 index가 없으면 CLI 변경 호출 전에 필요한 build 명령을 안내하고 실패한다. 실제 Makefile dry run은 먼저 암묵적 rebuild를 거절했으며 기존 파일 보존과 command fixture 설치를 포함한 runner 소유 case 23개가 macOS에서 모두 통과한다. 일반 application target의 명시적 registry build는 유지한다. 실제 설치 payload identity와 native acceptance는 별도다.
+
 - F509-3: 선언한 Node script가 유지보수되는 parser를 통해 quoted 및 escaped argument, 분리한 pattern value와 literal command separator를 보존한다. 준비 command는 argument 경계를 유지하며 미지원 문법이나 하나라도 해석되지 않은 path는 실행 전에 실패한다. 추적 Red case 일곱 개에는 제외한 test를 실행한 실제 child가 포함되며 이제 argument 형태 네 가지 모두 선택한 case만 실행한다. macOS에서 discovery case 38개와 runner case 28개가 모두 통과한다. 양쪽 contract와 requirement mapping은 이 harness 수정과 아직 남은 두 초기 상태의 native acceptance를 구분한다.
 
 - F509-2: Close fixture는 선언된 exposure schema 부분집합을 사용하며 소유 test가 모든 실제 fixture manifest를 공개 production validator로 검사한다. 최초 native 설치 실패를 보존했고 같은 미지원 필드 선언이 수정 전 추적 소유 assertion에서 실패하며 수정 후 소유 case 두 개와 문서·exposure 검사가 통과한다. Validator는 변경하지 않았다. Focused native acceptance는 F509에 미완료로 남아 있다.

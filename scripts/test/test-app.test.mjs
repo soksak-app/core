@@ -31,6 +31,81 @@ function workspace(t) {
   return root;
 }
 
+test("plugin installation consumes the built registry without rebuilding sibling sources", { timeout: 10000 }, () => {
+  const cwd = fileURLToPath(new URL("../../", import.meta.url));
+  const planned = spawnSync("make", ["--no-print-directory", "-n", "install-plugins", "CONFIG=/disposable/config"],
+    { cwd, encoding: "utf8", timeout: 5000 });
+  assert.equal(planned.error, undefined);
+  assert.equal(planned.status, 0, planned.stderr);
+  assert.match(planned.stdout, /sok registry use target\/registry\/index.json/);
+  assert.doesNotMatch(planned.stdout, /cargo build|workspace-registry\.mjs/, "installation must not rebuild the recorded registry");
+});
+
+function installationFixture(t) {
+  const root = workspace(t);
+  mkdirSync(join(root, "scripts"));
+  fs.copyFileSync(new URL("../check-versions.mjs", import.meta.url), join(root, "scripts", "check-versions.mjs"));
+  const config = join(root, "configuration with spaces");
+  const installed = JSON.stringify({ plugins: { previous: { version: "1.0.0" } } });
+  const index = JSON.stringify({ plugins: [{ id: "current" }] });
+  mkdirSync(join(config, "plugins", "previous"), { recursive: true });
+  writeFileSync(join(config, "plugins", "installed.json"), installed);
+  writeFileSync(join(config, "plugins", "previous", "retained.txt"), "previous installation");
+  mkdirSync(join(root, "target", "registry"), { recursive: true });
+  writeFileSync(join(root, "target", "registry", "index.json"), index);
+  mkdirSync(join(root, "target", "debug"), { recursive: true });
+  // The CLI is the recipe's command boundary: it validates the index and makes any remove observable on disk.
+  writeFileSync(join(root, "target", "debug", "sok"), `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const args = process.argv.slice(2);
+fs.appendFileSync("calls.jsonl", JSON.stringify(args) + "\\n");
+if (args[0] === "registry" && args[1] === "use") JSON.parse(fs.readFileSync(args[2], "utf8"));
+if (args[0] === "plugin" && args[1] === "remove") {
+  const config = args[args.indexOf("--config-dir") + 1];
+  fs.rmSync(path.join(config, "plugins", args[2]), { recursive: true, force: true });
+}
+`, { mode: 0o755 });
+  const makefile = fileURLToPath(new URL("../../Makefile", import.meta.url));
+  // Hold the build target while testing installation preconditions; the separate dry run owns the prerequisite graph.
+  const run = () => spawnSync("make", ["--no-print-directory", "-f", makefile, "-o", "build-registry", "install-plugins",
+    `CONFIG=${config}`], { cwd: root, encoding: "utf8", timeout: 5000 });
+  const calls = () => existsSync(join(root, "calls.jsonl"))
+    ? readFileSync(join(root, "calls.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line)) : [];
+  return { root, config, installed, index, run, calls };
+}
+
+test("plugin installation rejects missing build inputs before removing installed plugins", { timeout: 10000 }, async (t) => {
+  for (const [missing, condition] of [["target/debug/sok", "missing or not executable"], ["target/registry/index.json", "missing"]]) {
+    await t.test(missing, { timeout: 5000 }, (t) => {
+      const fixture = installationFixture(t);
+      rmSync(join(fixture.root, missing));
+      const result = fixture.run();
+      assert.equal(result.error, undefined);
+      assert.equal(result.status, 2, "missing installation inputs must fail");
+      assert.equal(readFileSync(join(fixture.config, "plugins", "previous", "retained.txt"), "utf8"), "previous installation");
+      assert.equal(readFileSync(join(fixture.config, "plugins", "installed.json"), "utf8"), fixture.installed);
+      assert.equal(result.stderr.split("\n")[0], `${missing} is ${condition}; run make build-registry before installation`,
+        "the actual precondition must identify the missing input and preparation command");
+      assert.deepEqual(fixture.calls(), [], "required inputs must be checked before any CLI mutation");
+    });
+  }
+});
+
+test("plugin installation uses the existing registry and replaces the installed set", { timeout: 10000 }, (t) => {
+  const fixture = installationFixture(t);
+  const result = fixture.run();
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(fixture.calls(), [
+    ["registry", "use", "target/registry/index.json", "--config-dir", fixture.config],
+    ["plugin", "remove", "previous", "--config-dir", fixture.config],
+    ["plugin", "install", "current", "--config-dir", fixture.config],
+  ]);
+  assert.equal(existsSync(join(fixture.config, "plugins", "previous")), false);
+  assert.equal(readFileSync(join(fixture.root, "target", "registry", "index.json"), "utf8"), fixture.index);
+});
+
 function recorder() {
   const lines = [];
   return { lines, write: (line) => lines.push(line) };
@@ -311,6 +386,7 @@ test("each end-to-end target of the Makefile names prerequisites, a window-check
   const native = declared("native/darwin/Makefile");
   const build = /^E2E_BUILD = (.*)$/m.exec(makefile);
   assert.ok(build !== null, "the Makefile declares E2E_BUILD");
+  assert.ok(build[1].split(/\s+/).includes("build-registry"), "ordinary application targets must explicitly build their registry");
   for (const prerequisite of build[1].split(/\s+/)) assert.ok(root.has(prerequisite), `E2E_BUILD: the Makefile declares no target ${prerequisite}`);
   const runs = [...makefile.matchAll(/^\t@node scripts\/test-app\.mjs --script (\S+)(?: --native (\S+))?/gm)];
   assert.ok(runs.length > 0, "the Makefile runs scripts/test-app.mjs");
