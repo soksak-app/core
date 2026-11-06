@@ -1,7 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import { runCommand } from './test-command.mjs';
-import { collectEvidence, persistEvidence } from './test-evidence.mjs';
+import { runWithEvidence, persistEvidence } from './test-evidence.mjs';
+import { readNodeTestEvidence, testExecutionErrors, withNodeTestReporters } from './node-test-evidence.mjs';
 
 // The languages that a case may name. Each case declares its own timeoutMs in the manifest.
 export const SUPPORTED_LANGUAGES = Object.freeze(['js-ts', 'rust', 'go', 'objective-c', 'shell', 'application']);
@@ -58,25 +60,14 @@ export function discoverLanguageCases(manifest) {
   });
 }
 
-function numberFrom(output, expression, fallback = 0) {
-  const match = output.match(expression);
-  return match ? Number(match[1]) : fallback;
-}
-
-function parseNode(output) {
-  return {
-    tests: numberFrom(output, /^(?:#|ℹ) tests (\d+)$/m),
-    failed: numberFrom(output, /^(?:#|ℹ) fail (\d+)$/m),
-    skipped: numberFrom(output, /^(?:#|ℹ) skipped (\d+)$/m),
-    cancelled: numberFrom(output, /^(?:#|ℹ) cancelled (\d+)$/m),
-    todo: numberFrom(output, /^(?:#|ℹ) todo (\d+)$/m),
-  };
-}
-
 function parseRust(output) {
-  const result = [...output.matchAll(/test result: .*? (\d+) passed; (\d+) failed; (\d+) ignored;/g)].at(-1);
-  if (!result) return { tests: 0, failed: 0, skipped: 0, cancelled: 0, todo: 0 };
-  return { tests: Number(result[1]), failed: Number(result[2]), skipped: Number(result[3]), cancelled: 0, todo: 0 };
+  const actual = { tests: 0, failed: 0, skipped: 0, cancelled: 0, todo: 0 };
+  for (const result of output.matchAll(/test result: .*? (\d+) passed; (\d+) failed; (\d+) ignored;/g)) {
+    actual.tests += Number(result[1]) + Number(result[2]);
+    actual.failed += Number(result[2]);
+    actual.skipped += Number(result[3]);
+  }
+  return actual;
 }
 
 function parseGo(output) {
@@ -86,11 +77,9 @@ function parseGo(output) {
   for (const line of output.split('\n')) {
     try {
       const event = JSON.parse(line);
-      if (!event.Test) {
-        if (event.Action === 'skip' && String(event.Output ?? '').includes('[no test files]')) skipped++;
-        continue;
-      }
-      if (event.Action === 'pass') tests++;
+      // A package without test files emits output followed by package skip; it is not a skipped named test.
+      if (!event.Test) continue;
+      if (event.Action === 'pass' || event.Action === 'fail') tests++;
       if (event.Action === 'fail') failed++;
       if (event.Action === 'skip') skipped++;
     } catch {
@@ -124,7 +113,7 @@ function parseShell(output) {
 
 export function parseLanguageResult(language, stdout, stderr) {
   const output = `${stdout}\n${stderr}`;
-  if (language === 'js-ts') return parseNode(output);
+  if (language === 'js-ts') return readNodeTestEvidence(output).actual;
   if (language === 'rust') return parseRust(output);
   if (language === 'go') return parseGo(output);
   if (language === 'objective-c') return parseObjectiveC(output);
@@ -133,15 +122,12 @@ export function parseLanguageResult(language, stdout, stderr) {
 }
 
 function caseResult(caseSpec, commandResult) {
-  const actual = parseLanguageResult(caseSpec.language, commandResult.stdout, commandResult.stderr);
-  const errors = [];
+  const nodeEvidence = caseSpec.language === 'js-ts' ? readNodeTestEvidence(`${commandResult.stdout}\n${commandResult.stderr}`,
+    (caseSpec.testFiles ?? []).map((file) => resolve(caseSpec.cwd ?? process.cwd(), file))) : null;
+  const actual = nodeEvidence?.actual ?? parseLanguageResult(caseSpec.language, commandResult.stdout, commandResult.stderr);
+  const errors = nodeEvidence?.errors ?? testExecutionErrors(actual);
   if (commandResult.status !== 'pass') errors.push(`command status ${commandResult.status}`);
   if (commandResult.signal) errors.push(`process crashed with ${commandResult.signal}`);
-  if (actual.tests === 0) errors.push('zero tests reported');
-  if (actual.failed > 0) errors.push(`${actual.failed} test(s) failed`);
-  if (actual.skipped > 0) errors.push(`${actual.skipped} test(s) skipped`);
-  if (actual.cancelled > 0) errors.push(`${actual.cancelled} test(s) cancelled`);
-  if (actual.todo > 0) errors.push(`${actual.todo} test(s) marked todo`);
   if (caseSpec.expectedTests !== undefined && actual.tests !== caseSpec.expectedTests) {
     errors.push(`expected ${caseSpec.expectedTests} tests, observed ${actual.tests}`);
   }
@@ -158,21 +144,20 @@ function caseResult(caseSpec, commandResult) {
   };
 }
 
-export async function runLanguageCases(cases, { onEvent, evidence = false } = {}) {
+export async function runLanguageCases(cases, { onEvent, evidence = false, root } = {}) {
   if (!Array.isArray(cases) || cases.length === 0) throw invalid('at least one discovered case is required');
   const results = [];
   for (const caseSpec of cases) {
-    const commandResult = await runCommand({
+    const execute = async () => caseResult(caseSpec, await runCommand({
       id: caseSpec.id,
-      command: caseSpec.command,
-      args: caseSpec.args,
+      command: caseSpec.language === 'js-ts' ? '/usr/bin/env' : caseSpec.command,
+      args: caseSpec.language === 'js-ts' ? ['-u', 'NODE_TEST_CONTEXT', caseSpec.command, ...withNodeTestReporters(caseSpec.args)] : caseSpec.args,
       cwd: caseSpec.cwd,
       timeoutMs: caseSpec.timeoutMs,
       onEvent: (event) => onEvent?.({ ...event, language: caseSpec.language, caseId: caseSpec.id }),
-    });
-    const result = caseResult(caseSpec, commandResult);
-    if (evidence) {
-      result.evidence = await collectEvidence({
+    }));
+    const result = evidence ? await runWithEvidence({
+        root,
         caseId: caseSpec.id,
         language: caseSpec.language,
         implementationFiles: caseSpec.implementationFiles,
@@ -180,9 +165,7 @@ export async function runLanguageCases(cases, { onEvent, evidence = false } = {}
         dependencyFiles: caseSpec.dependencyFiles,
         buildFlags: caseSpec.buildFlags,
         processes: [],
-        result,
-      });
-    }
+      }, execute) : await execute();
     results.push(result);
   }
   return {

@@ -58,6 +58,17 @@ function fixture(t, { files, marks, manifest }) {
 
 const judgment = (folder) => JSON.parse(readFileSync(join(folder, 'judgment.json'), 'utf8'));
 
+test('mixed run marks cannot produce a current passing judgment', { timeout: 5000 }, (t) => {
+  const { folder } = fixture(t, {
+    files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), end(3, 't1')] },
+    marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }),
+      mark({ kind: 'end', boot: BOOT, seq: 3, run: 'another-run' })],
+  });
+  writeFileSync(join(folder, 'judgment.json'), JSON.stringify({ schema: 1, run: 'old', audit: { status: 'pass', findings: [] } }));
+  assert.throws(() => auditRun(catalog, folder), /marks belong to different runs/);
+  assert.equal(judgment(folder).audit.status, 'fail');
+});
+
 test('a test whose range holds its expected events and only declared errors passes, and its row names the lines', (t) => {
   const { folder, host } = fixture(t, {
     files: { [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), focus(3), failure(4, 'cannot open: /x'), end(5, 't1')] },
@@ -69,7 +80,8 @@ test('a test whose range holds its expected events and only declared errors pass
     ],
   });
   assert.deepEqual(auditRun(catalog, folder), []);
-  const { tests } = judgment(folder);
+  const { tests, audit } = judgment(folder);
+  assert.deepEqual(audit, { status: 'pass', findings: [] });
   assert.equal(tests.length, 1);
   assert.deepEqual(tests[0], {
     name: 't1', app: 'fixture', result: 'pass', boot: BOOT,
@@ -186,6 +198,8 @@ test('a class that stores more events or bytes per minute than its budget over a
   const findings = auditRun(tight, folder);
   assert.equal(findings.length, 1);
   assert.match(findings[0], /marks\.jsonl:1: the class lifecycle of .+ stored 2 events per minute, above its budget of 1/);
+  assert.deepEqual(judgment(folder).audit, { status: 'fail', findings },
+    'a global volume failure must remain failed even when every test row passes');
   const volume = judgment(folder).volume;
   assert.deepEqual(volume.map(({ config: folderOf, classes }) => [folderOf, Object.keys(classes)]), [[config, ['lifecycle']]]);
   assert.equal(volume[0].classes.lifecycle.events, 3);
@@ -210,6 +224,8 @@ test('a catalog without a budget, or a class of a run that the budget does not n
   });
   const { budget, ...none } = catalog;
   assert.throws(() => auditRun(none, folder), /the catalog declares no budget/);
+  assert.equal(judgment(folder).audit.status, 'fail');
+  assert.match(judgment(folder).audit.findings.join('\n'), /the catalog declares no budget/);
   const partial = { ...catalog, budget: { io: budget.io } };
   assert.match(auditRun(partial, folder)[0], /the class lifecycle of .+ has no budget/);
 });

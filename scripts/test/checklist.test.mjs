@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checkChangelogTranslations, checkSpecificationIds, retiredChecklistItems } from "../checklist.mjs";
+import { checklistCounts, checkChangelogTranslations, checkSpecificationIds, retiredChecklistItems } from "../checklist.mjs";
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";
@@ -37,6 +37,64 @@ function check(t, english, korean, previous = "", retirement, files = {}) {
 test("checklist permits translated text and linked follow-up identifiers", { timeout: 3000 }, (t) => {
   const result = check(t, "- [o] G1 — done\n- [~] G1-1 — follow up\n", "- [o] G1 — 완료\n- [~] G1-1 — 후속\n");
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("documentation audit rejects a stale current claim about completed scope", { timeout: 3000 }, (t) => {
+  const result = check(t,
+    "- [o] G1 — done\n\nControlled-site pixels and restored/new-document validation remain open under F3.\n",
+    "- [o] G1 — 완료\n");
+  assert.notEqual(result.status, 0, "documentation audit accepted a stale current claim");
+  assert.match(result.stderr, /F3 scope is reported as currently open/);
+});
+
+test("documentation audit requires dated modal evidence in both translations", { timeout: 3000 }, (t) => {
+  const result = check(t,
+    "- [o] F10.2 — done\n\nAt the 2026-09-21 audit snapshot. The later F10.2 correction creates the Wails child-WebView contract.\n",
+    "- [o] F10.2 — 완료\n\n모달 구현에 더 큰 차이가 있다.\n");
+  assert.notEqual(result.status, 0, "documentation audit accepted undated Korean history");
+  assert.match(result.stderr, /docs\/features\.ko\.md: modal parity observation is not explicitly dated/);
+});
+
+test("documentation audit identifies the measured build in each translation", { timeout: 3000 }, (t) => {
+  const result = check(t,
+    "- [o] F0.1 — Unblock native input measurement. Package and structural checks passed for this F0.1 change.\n",
+    "- [o] F0.1 — 네이티브 입력 측정. 패키지·구조 검사가 통과했다.\n");
+  assert.notEqual(result.status, 0, "documentation audit accepted unidentified Korean build evidence");
+  assert.match(result.stderr, /docs\/features\.ko\.md: F0\.1 evidence does not identify its build/);
+});
+
+test("historical documentation guards reject the counterpart language errors", { timeout: 10000 }, (t) => {
+  for (const [english, korean, expected] of [
+    ["- [o] G1 — done\n", "- [o] G1 — 완료\n통제 사이트 픽셀과 복원/신규 문서 검증은 F3에서 미완료로 남아 있다.\n", /docs\/features\.ko\.md: F3 scope is reported as currently open/],
+    ["- [o] F10.2 — done\nThe modal implementation has a larger confirmed gap.\n", "- [o] F10.2 — 완료\n2026-09-21 parity 감사 스냅샷 시점. 이후 F10.2 수정이 Wails 자식 WebView 계약을 만든다.\n", /docs\/features\.md: modal parity observation is not explicitly dated/],
+    ["- [o] F0.1 — Unblock native input measurement. Package and structural checks passed for the build.\n", "- [o] F0.1 — 이 F0.1 변경의 근거.\n", /docs\/features\.md: F0\.1 evidence does not identify its build/],
+  ]) {
+    const result = check(t, english, korean);
+    assert.notEqual(result.status, 0, `documentation audit accepted ${expected}`);
+    assert.match(result.stderr, expected);
+  }
+});
+
+test("documentation audit accepts dated history and identified builds in both translations", { timeout: 3000 }, (t) => {
+  const result = check(t,
+    "- [o] F0.1 — Evidence for this F0.1 change.\n- [o] F10.2 — done\n\nAt the 2026-09-21 audit snapshot. The later F10.2 correction creates the Wails child-WebView contract.\n",
+    "- [o] F0.1 — 이 F0.1 변경의 근거.\n- [o] F10.2 — 완료\n\n2026-09-21 parity 감사 스냅샷 시점. 이후 F10.2 수정이 Wails 자식 WebView 계약을 만든다.\n");
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("checklist totals count every current state including nested rows", { timeout: 1000 }, () => {
+  const source = [
+    "- [ ] F1 — pending",
+    "  - [~] F1-1 — implementing; tests remain",
+    "  - [o] F1-2 — complete",
+    "- [!] F2 — held. Cause: missing package. Retry when: the package is available.",
+    "- [-] F3 — Closed: superseded by the current contract.",
+    "- [ ] F4 — pending",
+  ].join("\n");
+  assert.deepEqual(checklistCounts(source), { waiting: 2, active: 1, complete: 1, held: 1, closed: 1, total: 6 });
+  assert.deepEqual(checklistCounts(source.replace("[~] F1-1", "[o] F1-1")), { waiting: 2, active: 0, complete: 2, held: 1, closed: 1, total: 6 });
+  assert.throws(() => checklistCounts(source + "\n- [ ] F1 — duplicate"), /duplicate/);
+  assert.throws(() => checklistCounts("- [x] F1 — invalid"), /invalid checklist state/);
 });
 
 test("the audit reads a committed checklist larger than one mebibyte", { timeout: 3000 }, (t) => {

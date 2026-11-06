@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { discoverNodeTests, parseTestScript, planNodeRun, selectNodeTests } from "../node-tests.mjs";
+import { candidateSelection, discoverNodeTests, parseTestScript, planNodeRun, selectNodeTests } from "../node-tests.mjs";
 import { MAX_TEST_TIMEOUT_MS, runTests } from "../test-runner.mjs";
 
 // The reporter that a test file writes its events with (scripts/test-event-reporter.mjs).
@@ -18,6 +18,22 @@ const put = (root, path, text) => {
   mkdirSync(join(root, path, ".."), { recursive: true });
   writeFileSync(join(root, path), text);
 };
+
+test("candidate selection requires every declared case and every candidate host", { timeout: 5000 }, () => {
+  const values = { only: "", exclude: [] };
+  const tests = [{ args: ["--test", "required.test.mjs"] }];
+  assert.deepEqual(candidateSelection(values, tests, {}),
+    { only: null, exclude: [], changed: false, namePattern: null, apps: ["mygo", "tauriv2", "wailsv3"] });
+  for (const changed of [{ only: "one" }, { exclude: ["required"] }, { changed: "HEAD~1" }]) {
+    assert.throws(() => candidateSelection({ ...values, ...changed }, tests, {}), /complete declared script/);
+  }
+  for (const env of [{ SOKSAK_APP: "wailsv3" }, { NATIVE_TEST_ONLY: "one" }, { NODE_OPTIONS: "--test-name-pattern=one" }]) {
+    assert.throws(() => candidateSelection(values, tests, env), /complete declared script/);
+  }
+  for (const arg of ["--test-name-pattern=one", "--test-skip-pattern=one", "--test-only", "--test-shard=1/2"]) {
+    assert.throws(() => candidateSelection(values, [{ args: [arg] }], {}), /complete declared script/);
+  }
+});
 
 for (const [name, source, flags, expected] of [
   ["discovered Node evidence: skipped case", 'test.skip("required", () => {});', "", "fail"],
@@ -256,7 +272,7 @@ test("a run is named by its start time and process id and keeps its folder under
   assert.equal(run.folder, `/repo/target/test-runs/${run.id}`);
 });
 
-test("the audit of the logs runs after a run of window checks and of the activation tier, and after no other script", async () => {
+test("the audit of the logs runs after window checks and benchmarks, and not after unit tests", async () => {
   const { auditAfterRun } = await import("../node-tests.mjs");
   const run = { id: "r1", folder: "/repo/target/test-runs/r1" };
   const ran = [];
@@ -264,10 +280,10 @@ test("the audit of the logs runs after a run of window checks and of the activat
   const audit = (folder) => { ran.push(folder); return ["/c/logs/host-1-2.jsonl:3: undeclared error place: boom"]; };
   assert.equal(auditAfterRun("test", run, (line) => lines.push(line), audit), 0);
   assert.deepEqual(ran, []);
-  for (const script of ["test-app", "test-app:activation"]) {
+  for (const script of ["test-app", "test-app:activation", "benchmark:view-drag"]) {
     assert.equal(auditAfterRun(script, run, (line) => lines.push(line), audit), 1);
   }
-  assert.deepEqual(ran, [run.folder, run.folder]);
+  assert.deepEqual(ran, [run.folder, run.folder, run.folder]);
   assert.deepEqual(lines.slice(0, 2), [
     "AUDIT /c/logs/host-1-2.jsonl:3: undeclared error place: boom",
     "AUDIT FAIL 1 findings in the logs of run r1; the judgment of each test is /repo/target/test-runs/r1/judgment.json",

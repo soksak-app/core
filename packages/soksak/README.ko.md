@@ -25,3 +25,5 @@ view.render();
 - [배치 규칙과 API](docs/layout.ko.md)
 
 이 디렉터리에서 `pnpm test`, `pnpm check-breaks`, `pnpm fuzz`, `pnpm mutate`를 실행한다. MIT 라이선스: [LICENSE](LICENSE).
+
+[Mutation 검사](docs/mutations.ko.md)는 필수 결함, 탐색 실행, 실행 근거를 설명한다.

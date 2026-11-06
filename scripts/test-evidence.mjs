@@ -3,6 +3,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { open, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { processExecutable } from './platform/platform.js';
 
 export const EVIDENCE_SCHEMA = 1;
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -111,7 +112,8 @@ async function dirtyState(root) {
   };
 }
 
-async function runningProcess(root, entry) {
+/** Binds the supplied path to the kernel identity before and after hashing the live executable. */
+export async function runningProcess(root, entry, { readExecutable = processExecutable } = {}) {
   if (!entry || typeof entry !== 'object' || !Number.isInteger(entry.pid) || entry.pid <= 0) throw invalid('process.pid must be a positive integer');
   requiredText(entry.executable, `process ${entry.pid}.executable`);
   try {
@@ -120,8 +122,18 @@ async function runningProcess(root, entry) {
     throw new Error(`process ${entry.pid} is not running: ${error.code ?? error.message}`);
   }
   const executable = await realpath(resolve(root, entry.executable));
+  const verify = async () => {
+    const observed = await readExecutable(entry.pid);
+    if (typeof observed !== 'string' || observed.length === 0) throw new Error(`process ${entry.pid}: executable identity unavailable`);
+    const canonical = await realpath(observed);
+    if (canonical !== executable) throw new Error(`process ${entry.pid}: executable mismatch: expected ${executable}, observed ${canonical}`);
+    try { process.kill(entry.pid, 0); }
+    catch (error) { throw new Error(`process ${entry.pid} is not running: ${error.code ?? error.message}`); }
+  };
+  await verify();
   const relative = executable.startsWith(`${resolve(root)}/`) ? executable.slice(resolve(root).length + 1) : executable;
   const file = await hashFile(root, relative);
+  await verify();
   return { pid: entry.pid, executable: relative, sha256: file.sha256 };
 }
 
@@ -148,12 +160,12 @@ function immutablePart(record) {
   };
 }
 
-export async function collectEvidence({ root = ROOT, caseId, language, implementationFiles, testFiles, dependencyFiles, buildFlags, processes = [], result }) {
+async function inputSnapshot({ root = ROOT, caseId, language, implementationFiles, testFiles, dependencyFiles, buildFlags, processes = [] }) {
   requiredText(caseId, 'caseId');
   requiredText(language, 'language');
   requiredArray(buildFlags, 'buildFlags');
   if (!Array.isArray(processes)) throw invalid('processes must be an array');
-  const immutable = {
+  return {
     schema: EVIDENCE_SCHEMA,
     caseId,
     language,
@@ -164,15 +176,45 @@ export async function collectEvidence({ root = ROOT, caseId, language, implement
     buildFlags: [...buildFlags],
     processes: await Promise.all(processes.map((entry) => runningProcess(root, entry))),
   };
-  const shaped = resultShape(result);
-  return { ...immutable, result: shaped, attempts: [{ number: 1, ...shaped }] };
 }
 
-export function appendEvidenceAttempt(record, result) {
+/** Collects metadata at one instant. Use runWithEvidence to bind a command result to its inputs. */
+export async function collectEvidence(options) {
+  const snapshot = await inputSnapshot(options);
+  const shaped = resultShape(options.result);
+  return { ...snapshot, result: shaped, attempts: [{ number: 1, ...shaped }] };
+}
+
+/** Executes against a recorded input snapshot and refuses acceptance when an input changes before completion. */
+export async function runWithEvidence(options, execute) {
+  if (typeof execute !== 'function') throw invalid('execute must be a function');
+  const before = await inputSnapshot(options);
+  const command = await execute();
+  const commandResult = resultShape(command);
+  const inputErrors = [];
+  try {
+    const after = await inputSnapshot(options);
+    if (evidenceDrift(before, after).length) inputErrors.push('test inputs changed during execution; the result belongs to the original input snapshot');
+  } catch (error) {
+    inputErrors.push(`cannot verify inputs after execution: ${error.message}`);
+  }
+  const result = { ...command, status: inputErrors.length ? 'fail' : command.status,
+    errors: [...(command.errors ?? []), ...inputErrors] };
+  const shaped = resultShape(result);
+  result.evidence = { ...before, result: shaped, commandResult, inputErrors,
+    attempts: [{ number: 1, ...shaped, commandResult, inputErrors }] };
+  return result;
+}
+
+export function appendEvidenceAttempt(record, result, execution = {}) {
   if (!record || typeof record !== 'object' || record.schema !== EVIDENCE_SCHEMA || !Array.isArray(record.attempts) || record.attempts.length === 0) throw invalid('record has no initial evidence attempt');
   const shaped = resultShape(result);
   const number = record.attempts.length + 1;
-  return { ...record, result: shaped, attempts: [...record.attempts, { number, ...shaped }] };
+  if ((record.commandResult === undefined) !== (execution.commandResult === undefined)) throw invalid('execution-bound and metadata-only evidence attempts cannot be mixed');
+  const detail = execution.commandResult === undefined ? {} : {
+    commandResult: resultShape(execution.commandResult), inputErrors: execution.inputErrors,
+  };
+  return { ...record, ...detail, result: shaped, attempts: [...record.attempts, { number, ...shaped, ...detail }] };
 }
 
 export function evidenceDrift(record, current) {
@@ -206,6 +248,12 @@ export function validateEvidence(record) {
       requiredDigest(value.sha256, `${name}.sha256`);
     }
     requiredArray(record.buildFlags, 'buildFlags');
+    if (record.commandResult !== undefined) {
+      resultShape(record.commandResult);
+      requiredArray(record.inputErrors, 'inputErrors');
+      if (record.inputErrors.length && record.result?.status === 'pass') throw invalid('changed or unverified inputs cannot have a passing acceptance result');
+      if (record.commandResult.status !== 'pass' && record.result?.status === 'pass') throw invalid('a failed command outcome cannot have a passing acceptance result');
+    }
     if (!Array.isArray(record.processes)) throw invalid('processes must be an array');
     for (const entry of record.processes) {
       if (!Number.isInteger(entry?.pid) || entry.pid <= 0) throw invalid('process.pid must be a positive integer');
@@ -216,7 +264,15 @@ export function validateEvidence(record) {
     record.attempts.forEach((attempt, index) => {
       if (attempt.number !== index + 1) throw invalid(`attempt numbering is not contiguous at ${index + 1}`);
       resultShape(attempt);
+      if (attempt.commandResult !== undefined) {
+        resultShape(attempt.commandResult);
+        requiredArray(attempt.inputErrors, `attempt ${index + 1}.inputErrors`);
+        if (attempt.inputErrors.length && attempt.status === 'pass') throw invalid(`attempt ${index + 1} passed with changed or unverified inputs`);
+        if (attempt.commandResult.status !== 'pass' && attempt.status === 'pass') throw invalid(`attempt ${index + 1} passed with a failed command outcome`);
+      }
     });
+    const last = record.attempts.at(-1);
+    if (JSON.stringify([record.commandResult, record.inputErrors]) !== JSON.stringify([last.commandResult, last.inputErrors])) throw invalid('latest execution metadata does not match the attempt history');
     if (JSON.stringify(record.result) !== JSON.stringify(record.attempts.at(-1))) {
       // The result is the latest result without the attempt number. Those fields are compared explicitly.
       const latest = record.attempts.at(-1);
@@ -244,7 +300,8 @@ export async function persistEvidence(path, records) {
     else {
       const drift = evidenceDrift(prior, record);
       if (drift.length) throw invalid(`${record.caseId}: ${drift.join('; ')}`);
-      next.cases[record.caseId] = appendEvidenceAttempt(prior, record.result);
+      const execution = record.commandResult === undefined ? {} : { commandResult: record.commandResult, inputErrors: record.inputErrors };
+      next.cases[record.caseId] = appendEvidenceAttempt(prior, record.result, execution);
     }
   }
   const temporary = `${path}.tmp-${process.pid}`;

@@ -16,6 +16,13 @@
  */
 export const BREAKS = [
   {
+    id: "balance-share",
+    what: "balancing counts the largest side instead of the sum along a cut axis",
+    file: "dist/balance.js",
+    find: "return slice.axis === axis ? counts.reduce((a, b) => a + b, 0) : Math.max(...counts);",
+    to: "return Math.max(...counts);",
+  },
+  {
     id: "state",
     what: "toJSON leaves the payload behind",
     file: "dist/soksak.js",

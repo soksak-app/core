@@ -7,25 +7,15 @@ import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
-import { fileURLToPath } from 'node:url';
 import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
 import { hasEnded, processTable, runningMembers } from './test-command.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
+import { createNodeTestEvidence } from './node-test-evidence.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
-
-/**
- * The reporters of a node --test file that this runner runs with `eventLimitMs`: the spec form on the standard output, the TAP form on
- * the standard error, and the events of scripts/test-event-reporter.mjs on the standard error, which the runner reads for the event
- * watchdog of the file and for the tests that the file ran. The spec form writes the errors of the failed tests at the end of the file,
- * so a file that is killed keeps none; the TAP form writes the error of each test when the test ends.
- */
-export const NODE_TEST_REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=tap',
-  '--test-reporter-destination=stderr', `--test-reporter=${fileURLToPath(new URL('./test-event-reporter.mjs', import.meta.url))}`,
-  '--test-reporter-destination=stderr'];
 
 const seconds = (ms) => (ms / 1000).toFixed(3);
 /**
@@ -284,20 +274,14 @@ function runOne(item, limitMs, env, outputPath) {
     // The tests that the process ran: the summary of each file counts its started tests, of which the skipped ones did not run.
     let ran = 0;
     // The evidence of a node test file (`nodeTestFile`): its own summary and the skipped or todo tests that the process completed.
-    let testSummary = null;
-    const omittedTests = [];
+    const testEvidence = item.nodeTestFile === undefined ? null : createNodeTestEvidence([item.nodeTestFile]);
     const count = (tests, key, step) => {
       const left = (tests.get(key) ?? 0) + step;
       if (left === 0) tests.delete(key);
       else tests.set(key, left);
     };
     const track = (event) => {
-      if (item.nodeTestFile !== undefined) {
-        if (event.type === 'test:summary' && event.file === item.nodeTestFile) testSummary = event;
-        if (event.type === 'test:complete' && (event.skip || event.todo)) {
-          omittedTests.push(`${event.skip ? 'skipped' : 'todo'}: ${event.name}`);
-        }
-      }
+      testEvidence?.track(event);
       const key = `${event.nesting}\0${event.name}`;
       if (event.type === 'test:enqueue') count(queued, key, 1);
       else if (event.type === 'test:dequeue') {
@@ -367,6 +351,7 @@ function runOne(item, limitMs, env, outputPath) {
       const elapsedMs = performance.now() - started;
       // The event lines are the reporter's record for the runner, so they are not part of the output of the test.
       const output = Buffer.concat(chunks).toString('utf8').split('\n').filter((line) => !line.startsWith(EVENT_PREFIX)).join('\n');
+      const evidenceErrors = testEvidence?.result().errors ?? [];
       if (groupError) {
         finish({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
       } else if (limit !== null) {
@@ -382,15 +367,8 @@ function runOne(item, limitMs, env, outputPath) {
         finish({ status: 'fail', elapsedMs, output, detail: `the test process ended by ${end} while a test ran; started without a result: ${names(running)}${waiting}${left}` });
       } else if (exitLeftovers.length > 0) finish({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
       // A node test file passes only on its own successful summary with at least one passed test and no skipped, todo, failed or
-      // cancelled test: a skipped or todo test is a test that did not run.
-      else if (code === 0 && item.nodeTestFile !== undefined && omittedTests.length > 0) {
-        finish({ status: 'fail', elapsedMs, output, detail: `incomplete test evidence: ${omittedTests.join('; ')}` });
-      } else if (code === 0 && item.nodeTestFile !== undefined && (testSummary === null
-        || testSummary.success !== true || !Number.isInteger(testSummary.counts?.tests) || testSummary.counts.tests < 1
-        || !Number.isInteger(testSummary.counts?.passed) || testSummary.counts.passed < 1
-        || ['failed', 'cancelled', 'skipped', 'todo'].some((key) => testSummary.counts[key] !== 0))) {
-        finish({ status: 'fail', elapsedMs, output, detail: `missing or incomplete test evidence for ${item.nodeTestFile}: ${JSON.stringify(testSummary?.counts ?? null)}` });
-      }
+      // cancelled test (node-test-evidence.mjs): a skipped or todo test is a test that did not run.
+      else if (code === 0 && evidenceErrors.length > 0) finish({ status: 'fail', elapsedMs, output, detail: evidenceErrors.join('; ') });
       // A process that reports its test events and ran no test passes, and its detail says so.
       else if (code === 0) finish({ status: 'pass', elapsedMs, output, detail: reporting && ran === 0 ? 'no test ran' : '' });
       else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });

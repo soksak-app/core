@@ -9,8 +9,10 @@
  * Prints the score and, for every mutant that survived, the file, line and
  * edit — which is either a test worth writing or a branch worth deleting.
  */
-import { spawn } from "node:child_process";
-import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mutationVerdict, runMutationTest } from "./mutation-runner.mjs";
 import { copyWorkspace } from "./workspace-copy.mjs";
 
 // The mutants are written into a copy. Writing them into the repository leaves
@@ -85,21 +87,18 @@ if (listOnly) {
   process.exit(0);
 }
 
-// Awaited rather than run synchronously. A signal is delivered to the handlers
-// above only when the loop turns, and a run that never turns it cannot be
-// interrupted at all: those handlers replace Node's own, so Ctrl-C would leave
-// the run going with a mutant in `dist`.
-const passes = () =>
-  new Promise((done) => {
-    const child = spawn(
-      "node",
-      [`${HERE}scripts/bounded.mjs`, "300000", "node", "--test", ...TESTS],
-      { cwd: HERE, stdio: "ignore" },
-    );
-    child.on("exit", (code) => done(code === 0));
-  });
-
-if (!(await passes())) {
+const EVIDENCE = mkdtempSync(join(process.env.SOKSAK_MUTATION_RUN_FOLDER ?? tmpdir(), "soksak-mutation-evidence-"));
+console.log(`Evidence: ${EVIDENCE}`);
+const runTests = async (label) => {
+  for (const file of TESTS) {
+    console.log(`START mutation=${label} test=${file}`);
+    const result = await runMutationTest({ root: HERE, file, timeout: 120000, evidence: join(EVIDENCE, label, file) });
+    console.log(`${result.classification === "passed" ? "PASS" : "FAIL"} mutation=${label} test=${file} result=${result.classification} elapsed_ms=${result.elapsed}`);
+    if (result.classification !== "passed") return result;
+  }
+  return { classification: "passed" };
+};
+if ((await runTests("baseline")).classification !== "passed") {
   console.error("The suite does not pass before a single mutant is applied. Nothing to measure.");
   process.exit(2);
 }
@@ -109,9 +108,14 @@ const alive = [];
 for (const [i, s] of picked.entries()) {
   const src = originals[s.f];
   writeFileSync(`${HERE}dist/${s.f}`, src.slice(0, s.at) + s.to + src.slice(s.at + s.from.length));
-  const survived = await passes();
+  const result = await runTests(`mutant-${i + 1}`);
+  const verdict = mutationVerdict(result);
   writeFileSync(`${HERE}dist/${s.f}`, src);
-  if (survived) alive.push(s);
+  if (verdict === "invalid") {
+    console.error(`The mutation experiment failed: ${result.record}`);
+    process.exit(2);
+  }
+  if (verdict === "survived") alive.push(s);
   else killed++;
   if ((i + 1) % 10 === 0) process.stderr.write(`  ${i + 1}/${picked.length} (survived ${alive.length})\n`);
 }
@@ -132,4 +136,5 @@ if (alive.length) {
       "cannot tell apart — say which before leaving it.",
   );
 }
+writeFileSync(join(EVIDENCE, "summary.json"), `${JSON.stringify({ candidates: sites.length, measured: picked.length, killed, survived: alive }, null, 2)}\n`);
 process.exit(0);

@@ -16,6 +16,11 @@ export default async function* testEvents(source) {
     const line = { type: event.type, name, nesting: event.data?.nesting };
     if (event.type === "test:complete") Object.assign(line, { skip: event.data.skip, todo: event.data.todo });
     const error = event.type === "test:complete" ? event.data?.details?.error : undefined;
+    if (error !== undefined && error !== null) {
+      const code = error.cause?.code ?? error.code;
+      if (typeof code === "string") line.errorCode = code;
+      if (typeof error.failureType === "string") line.failureType = error.failureType;
+    }
     if (error !== undefined && error !== null && Object.hasOwn(error, "exitCode")) Object.assign(line, { exitCode: error.exitCode, signal: error.signal });
     if (event.type === "test:summary" && typeof event.data?.file === "string") Object.assign(line, { file: event.data.file, success: event.data.success, counts: event.data.counts });
     yield `${EVENT_PREFIX}${JSON.stringify(line)}\n`;

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
+import { assertRoleIndependence } from "../scripts/layout-equivalence.mjs";
 import { H, W, fuzz, three } from "./helpers.mjs";
 
 /**
@@ -41,32 +42,44 @@ test("R1 — two cards that meet report the same coordinate, exactly", () => {
   }
 });
 
-test("R2 — a role is two predicates, and the code reads no other card field", () => {
-  // No branch anywhere may turn on a card's id or its position in the list.
-  for (const file of ["src/card.ts", "src/geometry.ts", "src/slicing.ts", "src/soksak.ts"]) {
-    const code = read(file)
-      .replace(/\/\*[\s\S]*?\*\//g, " ")
-      .replace(/(^|[^:])\/\/.*$/gm, "$1");
-    assert.doesNotMatch(code, /\.id\s*===\s*['"]/, `${file} branches on a particular id`);
-    assert.doesNotMatch(code, /id\s*===\s*['"](left|right|rail|sidebar)['"]/, `${file} compares a card id to a place name`);
-  }
-  // And a fixed-size card returns the same values as a sharing one.
-  const grid = new Soksak(
-    {
-      xs: [0, 0.3, 1],
-      ys: [0, 1],
+test("R2 — identifiers and card order do not determine layout behavior", { timeout: 10000 }, () => {
+  const result = assertRoleIndependence({
+    state: {
+      xs: [0, 0.18, 0.36, 0.8, 1], ys: [0, 0.5, 1],
       cards: [
-        { id: "side", c0: 0, c1: 1, r0: 0, r1: 1, width: 180, fixed: true },
-        { id: "main", c0: 1, c1: 2, r0: 0, r1: 1 },
+        { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
+        { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
+        { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
+        { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
+        { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 200, fixed: true },
       ],
     },
-    { width: W, height: H },
-  );
-  for (const id of ["side", "main"]) {
-    const r = grid.rect(id);
-    for (const v of [r.x, r.y, r.w, r.h]) assert.ok(Number.isFinite(v), `${id} has no rect`);
-    assert.equal(typeof grid.crossings(grid.card(id)), "number");
-  }
+    options: { width: W, height: H },
+    operations: [
+      { method: "split", args: ["left", "x", { id: "blocked" }] },
+      { method: "close", args: ["left"] },
+      { method: "move", args: ["left", "upper", "right"] },
+      { method: "splitToward", args: ["upper", "bottom", { id: "branch", data: { role: "upper" } }] },
+      { method: "move", args: ["branch", "lower", "right"] },
+      { method: "setSize", args: ["rail", "x", 210] },
+      { method: "moveTo", args: ["rail", "x", 4] },
+      { method: "insertAt", args: ["x", 0, { id: "strip", size: 80 }] },
+      { method: "close", args: ["strip"] },
+      { method: "moveBoundary", args: ["x", 1, 300] },
+      { method: "mergeCoincident", args: ["x", 1] },
+      { method: "close", args: ["branch"] },
+      { method: "tidy", args: [] },
+      { method: "setFixed", args: ["upper", true] },
+      { method: "close", args: ["upper"] },
+      { method: "setFixed", args: ["upper", false] },
+      { method: "resize", args: [240, 150] },
+      { method: "resize", args: [W, H] },
+    ],
+  });
+  assert.equal(result.variants, 239, "all 120 card orders, with original and renamed identifiers, against one baseline");
+  assert.deepEqual(result.outcomes.slice(0, 4), [null, false, false, "branch"]);
+  assert.equal(result.outcomes[7], "strip");
+  assert.equal(result.outcomes[8], true);
 });
 
 test("R3 — no card ever spans over a card, and the check is integers", () => {

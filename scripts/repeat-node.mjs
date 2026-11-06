@@ -1,26 +1,28 @@
 // Runs the tests of one Node test file whose names match a pattern COUNT times in a row, each repeat as one process of `node --test`
 // through the test runner (docs/operations/examples.md#test-runner). A repeat has the limit TEST_TIMEOUT: the runner kills its process
 // group at the limit, and `--test-timeout` gives each test of the repeat the same limit, so a test that hangs is reported with its name
-// and elapsed time. A repeat fails when it fails or when no passed test matches the pattern.
+// and elapsed time. A repeat uses the same file-owned execution evidence as discovery; empty selections and incomplete tests fail.
 // Usage: node scripts/repeat-node.mjs --file <file> --name <pattern> --count <n> [--timeout <seconds>]
 import { loadavg } from 'node:os';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { runTests } from './test-runner.mjs';
+import { resolve } from 'node:path';
+import { NODE_TEST_REPORTERS } from './node-test-evidence.mjs';
 
 /** The limit of one repeat when `--timeout` is not given. */
 export const TEST_TIMEOUT_MS = 120_000;
 
 const ANSI = /\x1b\[[0-9;]*m/g;
 
-/** The passed test lines (`ok <n> - <title>`) of the TAP output of a repeat; a skipped test is not passed. */
+/** The passed test lines (`ok <n> - <title>`) displayed after acceptance; skip and todo results are not passing lines. */
 export function passedLines(tap) {
-  return tap.replace(ANSI, '').split('\n').filter((line) => /^\s*ok \d+ - /.test(line) && !line.includes('# SKIP'));
+  return tap.replace(ANSI, '').split('\n').filter((line) => /^\s*ok \d+ - /.test(line) && !/# (?:SKIP|TODO)\b/.test(line));
 }
 
 /**
  * Runs the file `count` times (`{file, name, count, timeoutMs, cwd, write}`). Resolves with the exit status: 0 when every repeat passed.
- * Rejects when no passed test of the file matches the pattern, because the file then proves nothing.
+ * Requires a nonempty executed selection with no skipped, todo, failed or cancelled case.
  */
 export async function runNodeRepeat({ file, name, count, timeoutMs, cwd, write }) {
   for (let run = 1; run <= count; run += 1) {
@@ -28,8 +30,8 @@ export async function runNodeRepeat({ file, name, count, timeoutMs, cwd, write }
       name: `${file} ${name} (run ${run} of ${count})`,
       // A repeat started from a test sees NODE_TEST_CONTEXT, and node --test then skips the file; env removes the variable for the repeat.
       command: '/usr/bin/env',
-      args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', '--experimental-test-module-mocks', '--test-reporter=tap', `--test-name-pattern=${name}`, `--test-timeout=${timeoutMs}`, file],
-      cwd, timeoutMs,
+      args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', '--experimental-test-module-mocks', ...NODE_TEST_REPORTERS, `--test-name-pattern=${name}`, `--test-timeout=${timeoutMs}`, file],
+      cwd, timeoutMs, nodeTestFile: resolve(cwd, file),
     };
     const { results } = await runTests({ tests: [item], concurrency: 1, write });
     const result = results.get(item.name);
@@ -39,9 +41,6 @@ export async function runNodeRepeat({ file, name, count, timeoutMs, cwd, write }
     }
     const lines = passedLines(result.output);
     for (const line of lines) write(`  ${line.trim()}`);
-    if (!lines.some((line) => new RegExp(name).test(line.replace(/^\s*ok \d+ - /, '')))) {
-      throw new Error(`FAIL: no test in ${file} matched ${name}`);
-    }
   }
   write(`${file} ${name}: ${count} of ${count} runs pass`);
   return 0;

@@ -12,6 +12,10 @@ Terminal background sample은 같은 view crop 변환을 사용하며 buffer coo
 
 작업 상태 정본은 [기능 상태](../features.ko.md)다. 소스 파일 목록은 구조적 증거일 뿐 기능 동등성이나 애플리케이션의 정상 동작을 판정하지 않는다.
 
+Feature-link audit 자체 검사는 실제 audit module을 실행한다. 변경 전 module이 같은 assertion을 통과한 뒤, 격리한 복사본에서 error를 기록하는 effect 또는 response 하나를 제거한다. 이 두 error 누락 case는 해당 assertion의 실패를 요구한다. Load error, 중단 또는 baseline 실패는 이 두 case의 검출 근거가 아니다. 이는 audit 자체의 error 계약을 검증하며 목록에 든 제품 file의 동작을 검증하지 않는다.
+
+현재 inventory와 checklist 합계는 정본 입력에서 산출하고 문서에 수동 관리하는 개수로 반복하지 않는다. 부모와 자식 checklist row는 각각 센다. 필요한 과거 근거 문구 검사는 문서 gate에 속하며 해당 기록이 있을 때 양쪽 번역에 적용한다. 제품 동작 검증으로 세지 않는다.
+
 Core test 소유권은 독립적으로 선언된 core package를 따른다. Root `e2e` package가 window check와 `e2e/fixtures/` 아래 설치 가능한 payload를 소유한다. Fixture의 `package.json`은 설치 payload를 설명하며 별도의 core test 소유자를 만들지 않는다. E2E test는 자기 fixture manifest와 source를 읽을 수 있다. Core package test는 계속 E2E fixture 파일을 읽을 수 없고, E2E test도 다른 core package의 구현 경로를 읽을 수 없다.
 
 문서 검사는 작업 ID 중복 금지와 대기(`[ ]`), 진행(`[~]`), 완료(`[o]`), 임시 우회(`[!]`) 상태만 사용하도록 요구한다. `[!]` 항목은 두 번역 모두에 비어 있지 않은 원인과 재시도 조건을 기록한다. 양쪽 번역의 체크리스트 ID·순서·들여쓰기·상태는 같아야 한다. 문장은 번역하되 작업 상태가 달라서는 안 된다. 변경 기록과 번역은 같은 구역, 구역마다 같은 항목 수, 위치마다 같은 작업 ID와 코드 조각을 가져야 한다.
@@ -22,14 +26,16 @@ Core test 소유권은 독립적으로 선언된 core package를 따른다. Root
 
 구현·테스트 누락, 미등록 빌드 대상, 해석 불가 참조, 필수 테스트 실행 제외, 테스트 0개, 필수 검사 생략, 오래된 증거, 충돌, 시간 초과는 해당 게이트를 실패시킨다. 감사 자체 테스트로 이 실패들을 입증한다. 동작 변이 검사는 구현을 무동작으로 바꾸거나 필수 효과·응답을 제거하고 대응 테스트의 실패를 요구한다. 파일 이름과 소스 패턴으로 동작을 입증하지 않는다.
 
-발견한 Node test file은 자체 test 실행의 result를 요구한다. 성공한 file wrapper나 command exit만으로는 부족하며 empty file, 등록 전 exit, 선택한 test 없음, skipped case와 todo case는 실패한다. Support module이 있는 package script는 명시한 glob으로 test entrypoint를 선택한다. Directory argument는 모든 JavaScript file을 선택하는 Node 동작을 유지하며 선택한 모든 file은 test evidence를 제공해야 한다. Node test contract가 없는 command는 command-result 의미를 유지한다.
+발견한 Node test file, 반복 선택, JS/TS 언어 case는 동일한 file 소유 실행 근거와 승인 규칙을 사용한다. 성공한 file wrapper나 command exit만으로는 부족하며 empty file, 등록 전 exit, 선택한 test 없음, skipped case, todo case, cancel, fail은 실패한다. Node가 test 합계에서 제외하는 skipped 또는 todo suite도 실패한다. 중첩한 선택 case는 실제 실행에 성공하면 통과하며 이름 선택 밖의 case는 요구하지 않는다. JS/TS 언어 case는 실행할 test entrypoint를 `testFiles`에 선언하고 모든 선언 file은 자체 summary를 제공해야 한다. Rust 언어 결과는 모든 target summary를 합산하므로 나중에 통과하거나 빈 target이 앞선 fail이나 ignored case를 숨길 수 없다. Support module이 있는 package script는 명시한 glob으로 test entrypoint를 선택한다. Directory argument는 모든 JavaScript file을 선택하는 Node 동작을 유지하며 선택한 모든 file은 test evidence를 제공해야 한다. Node test contract가 없는 command는 command-result 의미를 유지한다.
+
+Go 언어 결과는 이름이 있는 통과 및 실패 test를 실행한 case로 센다. Test file이 없는 package는 output과 package skip을 별도 event로 내보내며, 선택한 다른 package의 test를 실행하는 run의 판정을 바꾸지 않는다. 이름이 있는 test의 skip은 실패한다. 이름 filter가 아무 test도 선택하지 않은 성공 package를 포함하여, 실행한 test가 없는 선택도 실패한다.
 
 Presentation wait의 unit check는 queue completion reaction이 실행될 task를 가질 때까지 presentation을 미완료 상태로 둔다. 현재 layout의 미완료 result와 다음 queued layout의 미실행을 함께 검사하고 presentation을 완료시킨 뒤 둘 다 끝나야 한다. Await 누락은 이 check를 실패시켜야 하며 promise completion이 전파될 수 있기 전의 관찰은 wait를 입증하지 않는다.
 
 
 증거에는 기능·테스트, 검증 수준, 언어·호스트·플랫폼, 미커밋 내용까지 포함한 소스·테스트 해시, 빌드 옵션, 실행 파일·사이드카 해시, 기대·실제 결과, 경과 시간을 기록한다. 의존 내용이 바뀌면 이전 증거는 무효다. 구조 범위·동작 검증·배포 승인은 별도 결과다.
 
-언어 증거 recorder(`scripts/test-evidence.mjs`)는 이 필드를 schema 1로 저장한다. `make test-language`는 선언된 실행 언어 케이스마다 레코드를 출력한다. `--evidence-file PATH`를 전달하면 레코드를 보존하고, 이후 실행은 불변 소스·테스트·의존성·dirty 작업 트리·빌드 옵션·프로세스 snapshot이 같을 때만 번호가 붙은 시도를 추가한다. 최초 실패를 보존하고 오래되거나 잘못된 레코드는 거부한다. 실행 중인 호스트·사이드카가 필요한 경우 PID와 실행 파일 경로를 받아 살아 있는 동안 해시해야 하며, 빈 프로세스 목록은 해당 케이스가 소유한 실행 중 프로세스가 없다는 명시적 증거다.
+언어 증거 recorder(`scripts/test-evidence.mjs`)는 이 필드를 schema 1로 저장한다. `runWithEvidence`는 command 시작 전에 소스·테스트·의존성·dirty 작업 트리·빌드 옵션·프로세스 input을 기록하고 완료 후 비교한다. Input이 바뀌거나 읽을 수 없으면 acceptance가 실패하며 record는 원래 input snapshot, 실제 command 결과와 input 오류를 보존한다. 나중에 읽은 hash를 앞선 command가 검증한 구현으로 기록하지 않는다. `collectEvidence`는 한 시점의 metadata만 수집하며 command가 그 input으로 실행되었음을 입증하지 않는다. `make test-language`는 선언된 실행 언어 case마다 실행에 연결된 record를 출력한다. `--evidence-file PATH`를 전달하면 record를 보존하고, 이후 실행은 불변 input snapshot이 같을 때만 번호가 붙은 시도를 추가한다. 최초 실패를 보존하고 오래되거나 잘못된 record는 거부한다. 실행 중인 host·sidecar가 필요한 경우 PID와 실행 파일 경로를 받는다. 플랫폼 process API가 파일 내용 hash 전후에 같은 canonical 실행 파일을 반환해야 한다. 무관한 파일, 종료한 process, 사용할 수 없는 식별 정보는 명시적으로 실패한다. macOS에서는 공개 `proc_pidpath` API가 kernel 경로를 제공한다. `scripts/platform/platform.js`의 dispatcher는 조회를 요청할 때만 native 구현을 선택한다. Metadata만 사용하는 코드는 다른 플랫폼에서도 import할 수 있으며 미지원 조회는 operation 경계에서 명시적으로 실패한다. 이 모듈은 선언된 운영체제 이름(Node `win32`는 `windows`)으로 sidecar release key를 제공하고 알 수 없는 운영체제나 architecture를 거부한다. 공통 acceptance fixture는 플랫폼을 명시하며 실제 kernel 조회와 adapter 검사는 `scripts/test/platform/darwin/`에 둔다. 빈 process 목록은 해당 case가 소유한 실행 중 process가 없다는 명시적 증거다.
 
 ## CI와 release 소유권
 
@@ -39,7 +45,9 @@ Host-equivalence job은 비교에 필요한 모든 언어와 toolchain을 설치
 
 의존성을 받은 뒤 build와 check stage는 offline으로 실행한다. CI는 저장소가 선언한 Node와 pnpm 버전을 설치하고, local build의 build environment 검사는 major version만 비교한다. 또한 Go는 module/workspace 선언, Rust는 정확하게 선언된 toolchain을 따른다. Frozen pnpm lock, Cargo.lock과 Go module sum을 계속 검사한다. Offline 검사는 누락된 의존성을 받거나 lock을 갱신하지 않으며 빠진 input을 밝히고 실패한다.
 
-Release host별 job은 자체 bundle을 build하고 audit하며 release file를 만든다. Release는 registry를 읽지 않는다. [registry 검사](registry.ko.md#검사)가 `core.json`이 나열하는 core version마다 설치가 그것에 고르는 plugin version을 검사하므로, release의 어떤 job도 registry를 검사하지 않는다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. Publish는 그 판정 후 audit한 host release file만 받는다. 필수 job의 실패, 취소나 skip은 publication을 막는다.
+Release host별 job은 자체 bundle을 build하고 audit하며 release file를 만든다. Release는 registry를 읽지 않는다. [registry 검사](registry.ko.md#검사)가 `core.json`이 나열하는 core version마다 설치가 그것에 고르는 plugin version을 검사하므로, release의 어떤 job도 registry를 검사하지 않는다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. 게시는 인증된 후보 acceptance gate를 통해 audit한 정확한 host release 파일을 받는다. 보고서는 후보 run·attempt·불변 artifact ID·게시할 모든 파일의 hash(후보 host마다의 bundle과 package 두 개)·전체 bundle 및 실행 파일 식별값·clean 소스와 test 및 의존성 식별값·고정 registry와 검증된 설치 component 내용을 필수 로컬 결과에 연결한다. Canonical application·activation script와 선언된 모든 전용 benchmark는 각각 독립 초기 상태 두 개, 모든 후보 host(mygo, Tauri, Wails), 선언된 전체 native case, 전체 application audit, 준비와 정리가 필요하다. Input은 검사 전후와 정리 후 비교한다. 관찰한 host 재실행은 독립 검증한 PID를 바꿀 수 있지만 파일 내용을 바꾸면 안 된다. 필수 증거의 실패·취소·건너뜀·누락·오래되거나 맞지 않는 식별값은 게시를 막는다. Gate unit test는 후보 application acceptance를 입증하지 않는다.
+
+명시적으로 선택한 registry index에는 고정한 SHA-256을 지정할 수 있다. Digest를 지정하면 정확히 소문자 hexadecimal 64자리여야 하고 비어 있지 않은 명시적 index URL이 필요하며 JSON parsing 전에 받은 bytes와 비교한다. 불일치는 acceptance 실패다. 기본 public-index 검사와 digest 없는 명시적 index는 기존 동작을 유지한다.
 
 
 ## 제한된 실행
@@ -62,7 +70,7 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 
 OS 입력기는 활성 애플리케이션의 키 창만 처리하므로 입력기 동작은 사용자 승인 아래 실행하는 활성화 등급 검사로만 검증한다. 각 실행은 같은 창의 AppKit 텍스트 뷰에도 같은 키를 보내며, 그 대조군이 기대한 문서를 만들 때만 결과를 증거로 인정한다.
 
-네이티브 좌표·픽셀 검사는 요청한 캡처 속도로 전체 제스처를 포함한다. 녹화 상한 도달은 실제 프레임 수와 `limited: true`를 갖는 정상 결과지만 끝을 기록하지 못한 제스처를 검증할 수 없다. 검사 후 녹화를 제거한다. 독립된 초기 상태 두 번과 같은 인스턴스의 생성·사용·종료·재생성을 반복한다. 전체 구현을 마친 뒤 필수 스위트를 실행하며 단언을 완화하거나 이전 빌드 결과를 대입하지 않는다.
+네이티브 좌표·픽셀 검사는 요청한 캡처 속도로 전체 제스처를 포함한다. 녹화 상한 도달은 실제 프레임 수와 `limited: true`를 갖는 정상 결과지만 끝을 기록하지 못한 제스처를 검증할 수 없다. cleanup과 application error audit를 포함한 session finalization이 성공한 뒤에만 녹화를 제거하고, 검사나 finalization이 실패하면 녹화를 보존한다. 독립된 초기 상태 두 번과 같은 인스턴스의 생성·사용·종료·재생성을 반복한다. 전체 구현을 마친 뒤 필수 스위트를 실행하며 단언을 완화하거나 이전 빌드 결과를 대입하지 않는다.
 
 IME 기능 acceptance는 승인된 전체 입력 gesture, 동일 window의 일치하는 AppKit reference document, 일관된 terminal 상태 및 각 입력 단계의 녹화된 glyph와 underline 증거를 요구한다. Capture cadence는 별도 성능 측정으로 기록한다. ScreenCaptureKit API가 요청한 update 간격을 보장하지 않으므로 고정 sample-gap 목표는 기능 acceptance 기준이 아니다. 잘린 recording, frame 누락, decode하지 못한 identity, 필요한 단계 증거 누락 및 잘못된 입력은 계속 실패한다.
 

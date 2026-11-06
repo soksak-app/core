@@ -10,6 +10,7 @@
 // run starts from the same state as the first. Each step prints `running`, then `passed` or `failed` with its elapsed time, or `skipped`
 // with the failed step that skipped it.
 import { execFileSync, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -19,6 +20,8 @@ import { parseArgs } from 'node:util';
 import { connect } from '@soksak/client';
 import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
 import { crashFault } from './crash-fault.mjs';
+import { collectAcceptanceInputs, finishAcceptanceRun, prepareCandidate } from './acceptance-run.mjs';
+import { CANDIDATE_HOSTS, candidateScripts } from './candidate-policy.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const APPS = ['wailsv3', 'tauriv2', 'mygo'];
@@ -28,8 +31,8 @@ const START_LIMIT_MS = 60_000;
 const QUIT_LIMIT_MS = 60_000;
 
 const bundle = (root, app) => join(root, 'target', 'debug', `sok-${app}.app`);
-const binary = (root, app) => join(bundle(root, app), 'Contents', 'MacOS', `sok-${app}`);
 const configDir = (configRoot, app) => join(configRoot, `soksak-check-${app}`);
+const nativeTarget = (script) => script === 'test-app' ? 'test-app' : script === 'test-app:activation' ? 'test-app-activation' : undefined;
 
 /** A new empty configuration root of one run, `<root>/target/e2e/<time>-<random>`. */
 export function newConfigRoot(root) {
@@ -43,35 +46,59 @@ export function newConfigRoot(root) {
  * skips nothing. `run` runs a command to its end, `start` starts an application and ends when it writes endpoint.json, `quit` quits a
  * started application through the Quit item of its menu (`by` `menu`) or Command+Q (`by` `key`), and `remaining` fails on a process whose command names the configuration root or a bundle.
  */
-export function e2ePlan({ root, configRoot, script, native, whenIdle }) {
+export function e2ePlan({ root, configRoot, script, native, whenIdle, candidate, runFolder }) {
   const env = { SOKSAK_CONFIG_ROOT: configRoot };
   const ca = join(configRoot, 'soksak-check-registry-tls', 'ca.pem');
+  const appBundle = (app) => candidate ? candidate.hosts.find((host) => host.app === app).bundle : bundle(root, app);
+  const appBinary = (app) => join(appBundle(app), 'Contents', 'MacOS', `sok-${app}`);
+  const registry = candidate ? candidate.registry.path : join(root, 'target', 'registry', 'index.json');
   return [
     { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'create-test-certificates'], env },
-    ...APPS.map((app) => ({
+    ...(candidate ? APPS.flatMap((app) => {
+      const sok = join(appBundle(app), 'Contents', 'MacOS', 'sok');
+      const config = ['--config-dir', configDir(configRoot, app)];
+      return [
+        { name: `registry ${app}`, phase: 'prepare', kind: 'run', argv: [sok, 'registry', 'use', registry, ...config], env },
+        ...candidate.registry.components.filter((item) => item.kind === 'plugin').map(({ id }) => ({
+          name: `install ${id} ${app}`, phase: 'prepare', kind: 'run', argv: [sok, 'plugin', 'install', id, ...config], env,
+        })),
+      ];
+    }) : APPS.map((app) => ({
       name: `install plugins ${app}`, phase: 'prepare', kind: 'run', argv: ['make', 'install-plugins', `CONFIG=${configDir(configRoot, app)}`], env,
-    })),
+    }))),
     ...APPS.map((app) => ({
       name: `start ${app}`, phase: 'prepare', kind: 'start', app, configDir: configDir(configRoot, app), output: join(configRoot, `${app}.out`),
-      argv: [binary(root, app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca],
+      argv: [appBinary(app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca],
     })),
+    ...(candidate ? [{ name: 'acceptance before', phase: 'prepare', kind: 'capture', capture: 'before' }] : []),
     {
       name: 'window checks', phase: 'check', kind: 'run',
       argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...(whenIdle === undefined ? [] : ['--when-idle', whenIdle])],
       env: {
         ...env,
-        ...Object.fromEntries(APPS.map((app) => [`SOKSAK_BINARY_${app.toUpperCase()}`, binary(root, app)])),
-        SOKSAK_CANDIDATE_REGISTRY: pathToFileURL(join(root, 'target', 'registry', 'index.json')).href,
+        ...Object.fromEntries(APPS.map((app) => [`SOKSAK_BINARY_${app.toUpperCase()}`, appBinary(app)])),
+        SOKSAK_CANDIDATE_REGISTRY: pathToFileURL(registry).href,
+        ...(candidate ? { SOKSAK_CANDIDATE_RUN_FOLDER: runFolder } : {}),
       },
     },
-    ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'run', argv: ['make', '-C', 'native/darwin', native], env }]),
+    ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'run', argv: ['make', '-C', 'native/darwin', native],
+      env: { ...env, ...(candidate ? { SOKSAK_NATIVE_TEST_RUN_FOLDER: join(runFolder, 'native') } : {}) } }]),
+    ...(candidate ? [{ name: 'acceptance after', phase: 'cleanup', kind: 'capture', capture: 'after' }] : []),
     // A person quits through the Quit item of the application menu or its key equivalent: each application ends by the item and the
     // last one by Command+Q, and the run, the parent of each process, checks that it exits with status 0.
     ...APPS.map((app, index) => ({
       name: `quit ${app}`, phase: 'cleanup', kind: 'quit', by: index === APPS.length - 1 ? 'key' : 'menu', app, configDir: configDir(configRoot, app),
     })),
-    { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map((app) => bundle(root, app))] },
+    { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map(appBundle)] },
   ];
+}
+
+/** The required terminal steps use placeholder locations so the publication gate needs no workstation path. */
+export function candidatePlanNames(context, script) {
+  const candidate = { registry: { ...context.registry, path: '/candidate/index.json' },
+    hosts: CANDIDATE_HOSTS.map((app) => ({ app, bundle: `/candidate/${app}.app` })) };
+  return [...e2ePlan({ root: '/source', configRoot: '/configuration', runFolder: '/run', script,
+    native: nativeTarget(script), candidate }).map(({ name }) => name), 'acceptance after cleanup', 'reference cleanup', 'configuration cleanup'];
 }
 
 /** The lines `<pid> <command>` of `ps -axo pid=,command=` whose command names one of the paths, except the process `self`. */
@@ -241,21 +268,24 @@ function checkRemaining(item) {
  * step reaches the application of an earlier start step. An abort of `interrupted`, whose reason is the name of the signal, ends the
  * running command, skips the later steps that are not cleanup steps and runs the cleanup steps, so the applications and their services end.
  */
-export async function runPlan(steps, { write, children = new Map(), interrupted }) {
+export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {} }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
   for (const item of steps) {
     if (stopped !== null && item.phase !== 'cleanup') {
       write(`skipped ${item.name}: ${stopped} failed`);
+      outcome({ name: item.name, status: 'skip' });
       continue;
     }
     if (item.kind === 'quit' && !children.has(item.app)) {
       write(`skipped ${item.name}: ${item.app} was not started`);
+      outcome({ name: item.name, status: 'skip' });
       continue;
     }
     if (interrupted?.aborted && item.phase !== 'cleanup') {
       write(`skipped ${item.name}: interrupted by ${interrupted.reason}`);
+      outcome({ name: item.name, status: 'skip' });
       continue;
     }
     write(`running ${item.name}`);
@@ -266,12 +296,15 @@ export async function runPlan(steps, { write, children = new Map(), interrupted 
       else if (item.kind === 'start') await startApplication(item, children);
       else if (item.kind === 'quit') await quitApplication(item, children, since, write);
       else if (item.kind === 'remaining') checkRemaining(item);
+      else if (item.kind === 'capture') await capture(item.capture);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);
       if (interrupted?.aborted && item.phase !== 'cleanup') throw interruptedBy(interrupted);
       write(`passed ${item.name} ${((performance.now() - from) / 1000).toFixed(1)}s`);
+      outcome({ name: item.name, status: 'pass' });
     } catch (error) {
       write(`failed ${item.name} ${((performance.now() - from) / 1000).toFixed(1)}s: ${error.message}`);
       failures.push(`${item.name}: ${error.message}`);
+      outcome({ name: item.name, status: 'fail' });
       if (item.phase === 'prepare') stopped = item.name;
     }
   }
@@ -297,15 +330,49 @@ export function finishRoot(configRoot, failures, write) {
   write(`kept ${configRoot}: ${failures.length} step${failures.length === 1 ? '' : 's'} failed`);
 }
 
+/** Completes the recorded candidate plan and attaches its actual outcomes to the retained window manifest. */
+export async function finishCandidate({ root, context, configRoot, runFolder, script, initializationId, inputs, steps, failures, dispose, write },
+  { capture = collectAcceptanceInputs, cleanup = finishRoot } = {}) {
+  try {
+    inputs.afterCleanup = await capture(root, context, configRoot, { live: false });
+    steps.push({ name: 'acceptance after cleanup', status: 'pass' });
+  } catch (error) {
+    failures.push(`acceptance after cleanup: ${error.message}`);
+    steps.push({ name: 'acceptance after cleanup', status: 'fail' });
+  }
+  try {
+    await dispose();
+    steps.push({ name: 'reference cleanup', status: 'pass' });
+  } catch (error) {
+    failures.push(`reference cleanup: ${error.message}`);
+    steps.push({ name: 'reference cleanup', status: 'fail' });
+  }
+  const plan = { status: failures.length ? 'fail' : 'pass', steps };
+  const acceptance = await finishAcceptanceRun({ runFolder, context, script, initializationId,
+    ...inputs, plan, errors: failures, finalize: async (findings) => {
+      for (const error of findings) if (!failures.includes(error)) failures.push(error);
+      try {
+        cleanup(configRoot, failures, write);
+        steps.push({ name: 'configuration cleanup', status: 'pass' });
+      } catch (error) {
+        const message = `configuration cleanup: ${error.message}`;
+        failures.push(message);
+        findings.push(message);
+        steps.push({ name: 'configuration cleanup', status: 'fail' });
+      }
+      plan.status = failures.length ? 'fail' : 'pass';
+    } });
+  for (const error of acceptance.errors) if (!failures.includes(error)) failures.push(error);
+  write(`acceptance ${runFolder}/manifest.json`);
+}
+
 async function main(argv) {
   const { values } = parseArgs({
-    args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, 'when-idle': { type: 'string' } },
+    args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, 'when-idle': { type: 'string' }, candidate: { type: 'string' } },
   });
   if (values.script === undefined) throw new Error('--script names the window-check script of the run');
   const write = (line) => process.stdout.write(`${line}\n`);
-  const configRoot = newConfigRoot(ROOT);
-  write(`run ${configRoot}`);
-  // An interrupting signal ends the running step and runs the cleanup steps and finishRoot, so no application or service of the run remains.
+  // Reference installation and later check commands share cancellation and clean up their own children.
   const interrupt = new AbortController();
   for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
     process.once(signal, () => {
@@ -313,9 +380,34 @@ async function main(argv) {
       interrupt.abort(signal);
     });
   }
-  const failures = await runPlan(e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, whenIdle: values['when-idle'] }),
-    { write, interrupted: interrupt.signal });
-  finishRoot(configRoot, failures, write);
+  let prepared;
+  if (values.candidate) {
+    if (!candidateScripts(ROOT).includes(values.script)) throw new Error(`candidate acceptance does not declare script ${values.script}`);
+    if (process.env.SOKSAK_APP || process.env.NATIVE_TEST_ONLY) throw new Error('candidate acceptance requires every candidate host and every native test');
+    if (values.native !== undefined && values.native !== nativeTarget(values.script)) throw new Error('candidate acceptance native target differs from the declared tier');
+    values.native = nativeTarget(values.script);
+    prepared = await prepareCandidate(JSON.parse(readFileSync(values.candidate, 'utf8')), { signal: interrupt.signal });
+  }
+  let configRoot;
+  try { configRoot = newConfigRoot(ROOT); }
+  catch (error) {
+    if (prepared) {
+      try { await prepared.dispose(); }
+      catch (cleanup) { throw new AggregateError([error, cleanup], 'candidate configuration creation and reference cleanup failed'); }
+    }
+    throw error;
+  }
+  const initializationId = randomUUID();
+  const runFolder = prepared ? join(ROOT, 'target', 'test-runs', `candidate-${initializationId}`) : undefined;
+  write(`run ${configRoot}`);
+  const inputs = {}, steps = [];
+  const failures = await runPlan(e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native,
+    whenIdle: values['when-idle'], candidate: prepared?.context, runFolder }),
+  { write, interrupted: interrupt.signal, outcome: (value) => steps.push(value),
+    capture: async (phase) => { inputs[phase] = await collectAcceptanceInputs(ROOT, prepared.context, configRoot); } });
+  if (prepared) await finishCandidate({ root: ROOT, context: prepared.context, configRoot, runFolder, script: values.script,
+    initializationId, inputs, steps, failures, dispose: prepared.dispose, write });
+  else finishRoot(configRoot, failures, write);
   for (const failure of failures) write(`failure ${failure}`);
   return failures.length === 0 ? 0 : 1;
 }
