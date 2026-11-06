@@ -821,6 +821,21 @@ func Current() (Platform, error) {
 	return current, nil
 }
 
+// Substitute makes p the registered implementation and returns the function that registers the previous one again. A test of a
+// package that imports the operating system packages observes through it the calls that reach the registered implementation;
+// nil leaves no implementation registered.
+func Substitute(p Platform) (restore func()) {
+	mu.Lock()
+	defer mu.Unlock()
+	previous := current
+	current = p
+	return func() {
+		mu.Lock()
+		defer mu.Unlock()
+		current = previous
+	}
+}
+
 // Dispatcher passes the document commits and the messages that a web view announced on the UI thread to a handler outside the UI thread. A receiver can wait for the main
 // thread, so the dispatcher returns to WebKit before it calls the handler.
 //
