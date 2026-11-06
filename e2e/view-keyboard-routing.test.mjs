@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, readEvents, untilEventLine, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { fresh, reading } from "./fixture.mjs";
@@ -41,6 +41,15 @@ async function traceEvents(s, offsets) {
 
 function traceCommands(events, name) {
   return events.filter((event) => event.event === REGISTRY_COMMAND && event.fields?.name === name);
+}
+
+// The runs of the command written after offsets. A command writes its record when it answers, after the frame and the host calls
+// of its change (docs/spec/logging.md#automatic-entrances), so the status that the change set comes before the record; the count
+// waits for the first record of the command.
+async function commandRuns(s, offsets, name) {
+  await untilEventLine(s.app.configDir, offsets, (line) => line.includes(` ${REGISTRY_COMMAND}: `)
+    && JSON.parse(line.slice(line.indexOf("{"))).name === name, 15000, reading(s.app, [REGISTRY_COMMAND]));
+  return traceCommands(await traceEvents(s, offsets), name).length;
 }
 
 function assertNoViewKeydown(events, after, label) {
@@ -161,7 +170,7 @@ for (const app of MAIN_PAGE_APPS) {
       assert.ok(!reached.includes("SPImageRegion"), `the Escape that waited reached the terminal: ${JSON.stringify(reached)}`);
       assert.equal(traceCommands(events, "core.picker.close").length, 0,
         "the Escape that waited must not run the view's core.picker.close command");
-      assert.equal(traceCommands(events, "core.modal.dismiss").length, 1,
+      assert.equal(await commandRuns(s, offsets, "core.modal.dismiss"), 1,
         "the Escape that waited must answer core.modal.dismiss once");
       assert.equal(events.filter((event) => event.event === PICKER_CLOSE
         && event.fields?.reason === "dismiss").length, 1,
@@ -209,7 +218,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(traceCommands(events, "core.picker.close").length, 0,
       "native picker Escape must not run the view's core.picker.close command");
     if (webView) {
-      assert.equal(traceCommands(events, "core.modal.dismiss").length, 1,
+      assert.equal(await commandRuns(s, offsets, "core.modal.dismiss"), 1,
         "native picker Escape must answer core.modal.dismiss once");
       assert.equal(events.filter((event) => event.event === MODAL_ANSWER
         && event.fields?.key === "core.modal.dismiss").length, 1,
@@ -297,7 +306,7 @@ for (const app of Object.values(APPS)) {
       "native cmd+= did not run the text-larger menu command");
     assertNoViewKeydown(await s.get("core.surface.input", browser.surface), before.at(-1)?.sequence ?? 0,
       "native cmd+=");
-    assert.equal(traceCommands(await traceEvents(s, offsets), "core.text.larger").length, 1,
+    assert.equal(await commandRuns(s, offsets, "core.text.larger"), 1,
       "native cmd+= must run core.text.larger exactly once");
   });
 
