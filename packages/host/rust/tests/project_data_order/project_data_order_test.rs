@@ -7,13 +7,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Decodes the argument request of a call with payload as a host call does, and commits the shown project of data.
+use crate::test_framework::DISPLAY_NAME;
+
 fn project_shown_decoder_fixture(data: &WindowData, payload: &Value) -> Result<(), String> {
     let request = crate::arguments::Argument::<ProjectShown>::from_body(
         "project_shown_decoder_fixture",
         "request",
         &InvokeBody::Json(payload),
     )?;
-    commit_project_shown(data, request.0.project.as_ref(), |_| Ok(()))
+    commit_project_shown(data, request.0.project.as_ref(), DISPLAY_NAME, |_| Ok(()))
 }
 
 /// Reads the committed project of the window: the shown id and its root, or none when the window shows no project.
@@ -151,6 +153,7 @@ fn a_pending_owner_stays_staged_across_open_until_project_shown_commits_it() {
             root: "/projects/next".into(),
             title: "Next".into(),
         }),
+        DISPLAY_NAME,
         |value| {
             *title.lock().unwrap() = value.into();
             Ok(())
@@ -167,10 +170,7 @@ fn a_pending_owner_stays_staged_across_open_until_project_shown_commits_it() {
             .unwrap()
             .contains("project-next")
     );
-    assert_eq!(
-        *title.lock().unwrap(),
-        format!("Next / {}", crate::test_framework::DISPLAY_NAME)
-    );
+    assert_eq!(*title.lock().unwrap(), format!("Next / {DISPLAY_NAME}"));
     assert!(!register_project_open(
         &data,
         "project-next",
@@ -212,6 +212,7 @@ fn an_unready_host_catches_up_old_project_until_the_page_commits_the_new_project
             root: "/projects/next".into(),
             title: "Next".into(),
         }),
+        DISPLAY_NAME,
         |_| Ok(()),
     )
     .unwrap();
@@ -254,6 +255,7 @@ fn reopening_the_shown_id_keeps_its_committed_root_for_ready_catch_up() {
             root: "/projects/new".into(),
             title: "Current".into(),
         }),
+        DISPLAY_NAME,
         |_| Ok(()),
     )
     .unwrap();
@@ -289,6 +291,7 @@ fn a_root_mismatch_does_not_mutate_committed_or_staged_project_state() {
             root: "/projects/other".into(),
             title: "Next".into(),
         }),
+        DISPLAY_NAME,
         |_| {
             titled.store(true, Ordering::SeqCst);
             Ok(())
@@ -322,7 +325,7 @@ fn showing_no_project_clears_committed_state_and_preserves_other_staged_owners()
         .insert("project-next".into());
     let title = Mutex::new(String::new());
 
-    commit_project_shown(&data, None, |value| {
+    commit_project_shown(&data, None, DISPLAY_NAME, |value| {
         *title.lock().unwrap() = value.into();
         Ok(())
     })
@@ -330,7 +333,7 @@ fn showing_no_project_clears_committed_state_and_preserves_other_staged_owners()
 
     assert!(data.shown.lock().unwrap().is_empty());
     assert!(data.root.lock().unwrap().is_empty());
-    assert_eq!(*title.lock().unwrap(), window_title());
+    assert_eq!(*title.lock().unwrap(), window_title(DISPLAY_NAME));
     assert!(
         data.staged_projects
             .lock()

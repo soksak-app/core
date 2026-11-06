@@ -662,10 +662,10 @@ pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// The title of a window that has no project open. The configuration of the framework declares the title of the first
-/// window with the same value.
-fn window_title() -> String {
-    format!("soksak / {}", crate::framework::display_name())
+/// The title of a window that has no project open, with the display name of the framework (framework::display_name). The
+/// configuration of the framework declares the title of the first window with the same value.
+fn window_title(display_name: &str) -> String {
+    format!("soksak / {display_name}")
 }
 
 fn new_window(app: &AppHandle, label: &str, url: &str, title: &str) -> Result<Window, String> {
@@ -698,7 +698,7 @@ pub(crate) fn window_new_on_main(app: AppHandle) -> Result<(), String> {
         &app,
         &format!("project-window-{id}"),
         "index.html",
-        &window_title(),
+        &window_title(crate::framework::display_name()),
     )?;
     Ok(())
 }
@@ -1153,7 +1153,7 @@ fn project_open_on_main(
             window.app_handle(),
             &label,
             &format!("index.html?project={}", request.id),
-            &window_title(),
+            &window_title(crate::framework::display_name()),
         )?
     } else {
         window.clone()
@@ -1271,6 +1271,7 @@ fn release_project_reservation(data: &WindowData, id: &str) {
 fn commit_project_shown(
     data: &WindowData,
     project: Option<&ShownProject>,
+    display_name: &str,
     set_title: impl FnOnce(&str) -> Result<(), String>,
 ) -> Result<(), String> {
     let title = if let Some(project) = project {
@@ -1289,9 +1290,9 @@ fn commit_project_shown(
                 project.id
             ));
         }
-        format!("{} / {}", project.title, crate::framework::display_name())
+        format!("{} / {display_name}", project.title)
     } else {
-        window_title()
+        window_title(display_name)
     };
     set_title(&title)?;
     if let Some(project) = project {
@@ -1352,9 +1353,12 @@ fn project_shown_on_main(window: &Window, request: ProjectShown) -> Result<(), S
         }
     }
     let data = window_data(window)?;
-    commit_project_shown(&data, request.project.as_ref(), |title| {
-        window.set_title(title).map_err(|error| error.to_string())
-    })?;
+    commit_project_shown(
+        &data,
+        request.project.as_ref(),
+        crate::framework::display_name(),
+        |title| window.set_title(title).map_err(|error| error.to_string()),
+    )?;
     crate::exposure::windows_changed(window.app_handle());
     Ok(())
 }
@@ -1395,7 +1399,7 @@ pub fn project_release(window: &Window, id: String) -> Result<(), String> {
                     .unwrap_or_else(PoisonError::into_inner)
                     .clear();
                 owner
-                    .set_title(&window_title())
+                    .set_title(&window_title(crate::framework::display_name()))
                     .map_err(|e| e.to_string())?;
                 crate::exposure::windows_changed(window.app_handle());
             }
