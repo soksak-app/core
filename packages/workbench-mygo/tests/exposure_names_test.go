@@ -97,11 +97,11 @@ func noteElementNames(nodes []ui.ElementNode) {
 	}
 }
 
-// TestMain judges the element names after a whole run of the package. A run of chosen tests shows only what they show, so it is not
-// judged. The judgment needs every test, which no test of its own can have.
+// TestMain judges the element names after a whole run of the package. A run of chosen tests shows only what they show, and a listing
+// of the tests runs none, so neither is judged. The judgment needs every test, which no test of its own can have.
 func TestMain(m *testing.M) {
 	code := m.Run()
-	if flag.Lookup("test.run").Value.String() == "" {
+	if flag.Lookup("test.run").Value.String() == "" && flag.Lookup("test.list").Value.String() == "" {
 		declared, err := workbench.ReadDeclarations()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
