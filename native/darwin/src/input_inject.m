@@ -873,10 +873,12 @@ static CGEventFlags cgFlags(unsigned modifiers) {
     return result;
 }
 
+// equivalent is set when a key down of the virtual key window is taken as a key equivalent.
 static sp_input_result keyInput(void *handle, const char *key, const char *text, unsigned modifiers, bool down,
-    const char **why) {
+    const char **why, bool *equivalent) {
     NSWindow *window = (__bridge NSWindow *)handle;
     *why = "";
+    *equivalent = false;
     if (!window || !key || !NSThread.isMainThread) { *why = "no window, no key or not the main thread"; return SP_INPUT_REJECTED; }
     NSString *name = [NSString stringWithUTF8String:key];
     unsigned short code = USHRT_MAX;
@@ -920,9 +922,14 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     }
     if (!event) { *why = "the key event cannot be created"; return SP_INPUT_REJECTED; }
     // An inactive application has no key window for a key, and -[NSApplication sendEvent:] drops it while it answers delivered.
-    // The key enters the virtual key window and is sent to the window, which gives it to the first responder.
+    // The key enters the virtual key window. A key down with Command or Control is offered as a key equivalent to the window
+    // and then to the main menu, as -[NSApplication sendEvent:] does for its key window, so Command+C and Command+V run the
+    // items of the menu; a key that neither takes is sent to the window, which gives it to the first responder.
     if (enterVirtual(window)) {
-        [window sendEvent:event];
+        if (down && (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl))) {
+            *equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];
+        }
+        if (!*equivalent) [window sendEvent:event];
         return SP_INPUT_DELIVERED;
     }
     // A human key goes only to the key window. When another window is the key window, the key is not delivered to the target window and the
@@ -961,16 +968,17 @@ sp_input_result sp_input_key(void *handle, const char *key, const char *text, un
 
 static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     const char *why = "";
+    bool equivalent = false;
     // The view that holds the keyboard when the key is sent receives it; the record names it with the key window.
     NSWindow *window = (__bridge NSWindow *)handle;
     NSResponder *responder = window.firstResponder;
     NSString *responderName = responder ? NSStringFromClass(responder.class) : @"none";
-    sp_input_result result = keyInput(handle, key, text, modifiers, down, &why);
+    sp_input_result result = keyInput(handle, key, text, modifiers, down, &why, &equivalent);
     NSString *record = [NSString stringWithFormat:
         @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\","
-        "\"responder\":\"%@\",\"keyWindow\":%s}",
+        "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s}",
         jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why, responderName,
-        window.isKeyWindow ? "true" : "false"];
+        window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false"];
     sp_log_info("input inject", record.UTF8String);
     return result;
 }

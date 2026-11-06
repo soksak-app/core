@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F584-2: virtual key window로 보낸 Command나 Control이 있는 key down은 first responder가 받기 전에 창, 그다음 main menu에 key equivalent로 제시된다. 애플리케이션 dispatch가 key window에 하는 것과 같으므로, 비활성 애플리케이션에 보낸 Command+C와 Command+V가 menu의 Copy와 Paste 항목을 실행한다. 전에는 `sp_input_key`가 키를 `-[NSWindow sendEvent:]`로만 보내서 native first responder가 Command+C를 평범한 key down으로 받았다. 키의 `input inject` 기록은 `equivalent`를 밝힌다. Red: `input_virtual_key_equivalent_test`가 `copy:Copy` 대신 `keyDown:c`를 받았고, 창의 view가 가진 key equivalent가 실행되지 않았다. Green: 10회 중 10회.
 - F491: mygo workbench가 page처럼 `core.settings`의 `common`에 모든 설정의 common 값을 보고하므로, window check의 `keepCommonSettings`가 mygo host에서도 common 값을 되돌린다. 그곳의 check는 cleanup에서 `Cannot convert undefined or null to object`로 끝났다. Red: `TestTheStatusReportsTheCommonValueOfEverySetting`가 필드 없이 compile되지 않았다.
 - F584-5: `e2e/new-tab-keys.test.mjs`가 `e2e/activation/`을 떠나 기본 tier에서 돈다. activation 없이 pointer를 창 위로 옮기고 virtual key window를 기다린 뒤 key마다 text를 함께 보낸다. 새 `e2e/tab-press-keys.test.mjs`는 같은 tier에서 두 번째 terminal의 tab을 누르고 놓은 직후 key를 친다.
 - F502-34: mygo workbench는 surface를 담은 placement가 끝난 뒤에만 그 surface에 `surfaceFocus`를 보낸다. 앞선 placement가 도는 동안 frame이 그린 tab은 그 placement가 끝날 때 대상이 되었는데, 그 placement는 tab의 surface를 담지 않았고 host는 `surface … is not attached`로 호출을 거부했다. 이제 workbench는 page처럼 tab의 placement가 끝날 때까지 키보드를 workbench에 둔다. test의 fake host는 마지막 `syncSurfaces`가 담지 않은 surface를 거부한다. Red: `TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement`가 그 오류를 기록했다.

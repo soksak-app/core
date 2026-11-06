@@ -1,0 +1,150 @@
+// Checks key equivalents of the virtual key window (docs/spec/exposure.md#virtual-key-window): the test process is never
+// active, so its window takes keys as the virtual key window. A key down with Command is offered as a key equivalent to the
+// window and then to the main menu before the first responder receives it, as the application dispatch does for its key
+// window: Command+C and Command+V run copy: and paste: of the first responder through the items of the Edit menu, a key
+// equivalent of a view of the window runs there and not in the menu, and a key that no one takes as an equivalent, and a key
+// without Command, reach the first responder as a key down.
+#import <Cocoa/Cocoa.h>
+#import "event_ring.h"
+#import "input_inject.h"
+#import "input_virtual.h"
+#import "support/records.h"
+
+static int failures;
+static void check(BOOL ok, NSString *message) {
+    fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message.UTF8String);
+    if (!ok) failures++;
+}
+
+// The name of the physical key of an event. The characters of a key follow the input source of the system, which a person may
+// change while the test runs, so the view names a key by its key code.
+static NSString *keyName(NSEvent *event) {
+    switch (event.keyCode) {
+        case 8: return @"c";
+        case 9: return @"v";
+        case 38: return @"j";
+        case 40: return @"k";
+        default: return [NSString stringWithFormat:@"code %u", event.keyCode];
+    }
+}
+
+// The first responder of the window. It records each copy: and paste: with its sender, each key down and key up with its
+// key, and takes Command+K as its own key equivalent.
+@interface Clipboard : NSView
+@property(retain) NSMutableArray<NSString *> *calls;
+@end
+@implementation Clipboard
+- (BOOL)acceptsFirstResponder { return YES; }
+- (void)copy:(id)sender { [self.calls addObject:[NSString stringWithFormat:@"copy:%@", [sender isKindOfClass:NSMenuItem.class] ? [sender title] : @"other"]]; }
+- (void)paste:(id)sender { [self.calls addObject:[NSString stringWithFormat:@"paste:%@", [sender isKindOfClass:NSMenuItem.class] ? [sender title] : @"other"]]; }
+- (void)keyDown:(NSEvent *)event { [self.calls addObject:[@"keyDown:" stringByAppendingString:keyName(event)]]; }
+- (void)keyUp:(NSEvent *)event { [self.calls addObject:[@"keyUp:" stringByAppendingString:keyName(event)]]; }
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    if (event.type != NSEventTypeKeyDown || (event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask) != NSEventModifierFlagCommand
+        || ![keyName(event) isEqual:@"k"]) {
+        return [super performKeyEquivalent:event];
+    }
+    [self.calls addObject:@"equivalent:k"];
+    return YES;
+}
+- (void)dealloc { [_calls release]; [super dealloc]; }
+@end
+
+static NSMenuItem *item(NSString *title, SEL action, NSString *key) {
+    NSMenuItem *made = [[[NSMenuItem alloc] initWithTitle:title action:action keyEquivalent:key] autorelease];
+    made.keyEquivalentModifierMask = NSEventModifierFlagCommand;
+    // The target is nil, so the action goes to the first responder of the key window.
+    made.target = nil;
+    return made;
+}
+
+// Presses and releases key with modifiers on window and lets the event queue of the application take its turn. Returns the
+// records of the native library that the key writes.
+static NSString *press(NSWindow *window, const char *key, unsigned modifiers) {
+    __block BOOL down = NO, up = NO;
+    NSString *records = capturedRecords(^{
+        down = sp_input_key(window, key, NULL, modifiers, true) == SP_INPUT_DELIVERED;
+        up = sp_input_key(window, key, NULL, modifiers, false) == SP_INPUT_DELIVERED;
+    });
+    check(down && up, [NSString stringWithFormat:@"the key %s with modifiers %u is delivered", key, modifiers]);
+    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.2];
+    while (until.timeIntervalSinceNow > 0) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+            inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
+    return records;
+}
+
+// The key down records of the key with whether it was taken as an equivalent.
+static BOOL recordsEquivalent(NSString *records, BOOL equivalent) {
+    for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
+        if (![line containsString:@"input inject"] || ![line containsString:@"\"down\":true"]) continue;
+        return [line containsString:equivalent ? @"\"equivalent\":true" : @"\"equivalent\":false"];
+    }
+    return NO;
+}
+
+int main(void) { @autoreleasepool {
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"the policy stores every level of every class");
+    [NSApplication sharedApplication];
+
+    // The main menu has an Edit menu with Copy (Command+C) and Paste (Command+V).
+    NSMenu *main = [[[NSMenu alloc] initWithTitle:@"Main"] autorelease];
+    NSMenuItem *editItem = [[[NSMenuItem alloc] initWithTitle:@"Edit" action:NULL keyEquivalent:@""] autorelease];
+    NSMenu *edit = [[[NSMenu alloc] initWithTitle:@"Edit"] autorelease];
+    [edit addItem:item(@"Copy", @selector(copy:), @"c")];
+    [edit addItem:item(@"Paste", @selector(paste:), @"v")];
+    editItem.submenu = edit;
+    [main addItem:editItem];
+    NSApp.mainMenu = main;
+
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 400, 300)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    Clipboard *clipboard = [[[Clipboard alloc] initWithFrame:window.contentView.bounds] autorelease];
+    clipboard.calls = [NSMutableArray array];
+    [window.contentView addSubview:clipboard];
+    check([window makeFirstResponder:clipboard], @"the clipboard view holds the keyboard of the window");
+
+    // Command+C runs copy: through the Copy item, and the key does not also reach the view as a key down.
+    NSString *records = press(window, "c", 8);
+    check(sp_input_virtual_is(window), @"the window of the key is the virtual key window");
+    check([clipboard.calls isEqual:@[@"copy:Copy", @"keyUp:c"]],
+        [NSString stringWithFormat:@"Command+C runs copy: once through the Copy item (calls %@)", clipboard.calls]);
+    check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
+
+    // Command+V runs paste: through the Paste item.
+    [clipboard.calls removeAllObjects];
+    records = press(window, "v", 8);
+    check([clipboard.calls isEqual:@[@"paste:Paste", @"keyUp:v"]],
+        [NSString stringWithFormat:@"Command+V runs paste: once through the Paste item (calls %@)", clipboard.calls]);
+    check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
+
+    // A key equivalent of a view of the window runs in the window before the menu.
+    [clipboard.calls removeAllObjects];
+    records = press(window, "k", 8);
+    check([clipboard.calls isEqual:@[@"equivalent:k", @"keyUp:k"]],
+        [NSString stringWithFormat:@"Command+K runs the equivalent of the view (calls %@)", clipboard.calls]);
+    check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
+
+    // A Command key that no one takes as an equivalent reaches the first responder as a key down.
+    [clipboard.calls removeAllObjects];
+    records = press(window, "j", 8);
+    check([clipboard.calls isEqual:@[@"keyDown:j", @"keyUp:j"]],
+        [NSString stringWithFormat:@"Command+J reaches the first responder as a key down (calls %@)", clipboard.calls]);
+    check(recordsEquivalent(records, NO), [NSString stringWithFormat:@"the key down record states no equivalent (records %@)", records]);
+
+    // A key without Command reaches the first responder as before, and the menu does not run.
+    [clipboard.calls removeAllObjects];
+    records = press(window, "c", 0);
+    check([clipboard.calls isEqual:@[@"keyDown:c", @"keyUp:c"]],
+        [NSString stringWithFormat:@"C without Command reaches the first responder as a key down (calls %@)", clipboard.calls]);
+    check(recordsEquivalent(records, NO), [NSString stringWithFormat:@"the key down record states no equivalent (records %@)", records]);
+
+    [window close];
+    [window release];
+    return failures == 0 ? 0 : 1;
+}}
