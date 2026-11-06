@@ -47,10 +47,11 @@
     "contract/"
   ],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test 'test/**/*.test.mjs'"
   },
   "specFiles": [
-    "docs/spec/cases/manifest-validation.json"
+    "docs/spec/cases/manifest-validation.json",
+    "docs/spec/cases/version-ranges.json"
   ],
   "devDependencies": {
     "jsdom": "^30.0.1"

@@ -11,6 +11,7 @@
 // extension.
 import { FRAMEWORK_TABLE, LANGUAGE_TABLE, MYGO_TABLE, allowedDifferenceTables } from './check-host-files.mjs';
 import { readFileSync, readdirSync } from 'node:fs';
+import { tableCells } from './markdown-table.mjs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -127,8 +128,7 @@ export function specMenuTables(specMarkdown) {
     if (start < 0) throw new Error(`Application menu section has no ${header.replace(/\|/g, '')} table`);
     const lines = section.slice(start, section.indexOf('\n\n', start)).split('\n');
     // A placeholder in parentheses (for example "(application name)") equals an empty value of the host table.
-    const cells = (line) => line.split('|').slice(1, -1)
-      .map((cell) => cell.trim()).map((cell) => (/^\(.*\)$/.test(cell) ? "" : cell));
+    const cells = (line) => tableCells(line).map((cell) => (/^\(.*\)$/.test(cell) ? "" : cell));
     return { header: cells(lines[0]), rows: lines.slice(2).map(cells) };
   };
   const menus = readTable('| id | ko | en |');
@@ -237,7 +237,8 @@ export function specDiagnosticMethods(endpointMarkdown) {
   const section = endpointMarkdown.slice(start, end < 0 ? undefined : end);
   const methods = new Set();
   for (const line of section.split('\n')) {
-    const name = /^`([a-z][a-z0-9_.-]*)`$/.exec(line.split('|').slice(1, -1).map((cell) => cell.trim())[0] ?? '');
+    if (!line.startsWith('|')) continue;
+    const name = /^`([a-z][a-z0-9_.-]*)`$/.exec(tableCells(line)[0] ?? '');
     if (name) methods.add(name[1]);
   }
   if (methods.size === 0) throw new Error('the Diagnostic builds section of the endpoint spec has no method row');

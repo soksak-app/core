@@ -12,6 +12,7 @@ import { B3_MEASUREMENTS as APP_USAGE_MEASUREMENTS } from "../measure-app-usage.
 import { B3_MEASUREMENTS as HOST_ALLOCATION_MEASUREMENTS } from "../measure-host-allocations.mjs";
 import { B3_MEASUREMENTS as OBJECT_COUNT_MEASUREMENTS } from "../measure-object-counts.mjs";
 import { B3_MEASUREMENTS as TERMINAL_REDRAW_MEASUREMENTS } from "../measure-terminal-redraw.mjs";
+import { tableCells } from "../markdown-table.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const FILE = "docs/spec/performance-goals.json";
@@ -104,7 +105,7 @@ function documentTables(text, path) {
       continue;
     }
     if (/^\|(?:\s*-+\s*\|)+$/.test(line)) continue;
-    rows.push(line.slice(1, -1).split(/(?<!\\)\|/).map((cell) => cell.trim()));
+    rows.push(tableCells(line));
   }
   return tables;
 }

@@ -28,7 +28,7 @@
   ],
   "scripts": {
     "build": "tsc && node scripts/emit-dom-reference.mjs",
-    "test": "pnpm build && node --test test/",
+    "test": "pnpm build && node --test 'test/**/*.test.mjs'",
     "fuzz": "pnpm build && node scripts/fuzz.mjs",
     "mutate": "pnpm build && node scripts/mutate.mjs",
     "check-breaks": "pnpm build && node scripts/check-breaks.mjs"

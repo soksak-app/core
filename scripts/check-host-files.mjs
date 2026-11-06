@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { tableCells } from "./markdown-table.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -51,11 +52,10 @@ export function allowedDifferenceTables(hostsMarkdown, tables = [LANGUAGE_TABLE,
     if (heading < 0) throw new Error(`hosts spec has no ${table.title} in the Allowed differences section`);
     const next = section.indexOf("\n### ", heading + 1);
     const lines = section.slice(heading, next < 0 ? undefined : next).split("\n").filter((line) => line.startsWith("|"));
-    const cellsOf = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
-    const header = cellsOf(lines[0] ?? "");
+    const header = lines.length === 0 ? [] : tableCells(lines[0]);
     const rows = new Map();
     for (const line of lines.slice(2)) {
-      const cells = cellsOf(line);
+      const cells = tableCells(line);
       const id = cells[0];
       if (seen.has(id)) throw new Error(`hosts spec row ${id} appears in the ${seen.get(id)} and in the ${table.title}`);
       seen.set(id, table.title);

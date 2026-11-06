@@ -1,7 +1,7 @@
 // The Node test files of the workspace run as processes of their own (docs/operations/examples.md#test-runner): the test script of
 // each package names its flags and files, and each file becomes one test with its folder and flags.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,35 @@ const put = (root, path, text) => {
   mkdirSync(join(root, path, ".."), { recursive: true });
   writeFileSync(join(root, path), text);
 };
+
+for (const [name, source, flags, expected] of [
+  ["discovered Node evidence: skipped case", 'test.skip("required", () => {});', "", "fail"],
+  ["discovered Node evidence: todo case", 'test.todo("required");', "", "fail"],
+  ["discovered Node evidence: skip beside a passing case", 'test("passes", () => {}); test.skip("required", () => {});', "", "fail"],
+  ["discovered Node evidence: todo beside a passing case", 'test("passes", () => {}); test.todo("required");', "", "fail"],
+  ["discovered Node evidence: empty module", "", "", "fail"],
+  ["discovered Node evidence: exit before registration", "process.exit(0);", "", "fail"],
+  ["discovered Node evidence: empty suite", 'describe("empty", () => {});', "", "fail"],
+  ["discovered Node evidence: skipped suite beside a passing case", 'test("passes", () => {}); describe.skip("required suite", () => {});', "", "fail"],
+  ["discovered Node evidence: no selected case", 'test("other", () => {});', "--test-name-pattern=required", "fail"],
+  ["discovered Node evidence: passing subtests", 'describe("suite", () => { test("inner", async t => { await t.test("child", () => {}); }); });', "", "pass"],
+  ["discovered Node evidence: selected passing case", 'test("required", () => {}); test("other", () => { throw Error("excluded"); });', "--test-name-pattern=required", "pass"],
+  ["discovered Node evidence: case named after its file", 'test(import.meta.filename, () => {});', "", "pass"],
+]) {
+  test(name, { timeout: 30000 }, async (t) => {
+    const root = workspace();
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    put(root, "a/package.json", JSON.stringify({ scripts: { test: `node --test ${flags} test/*.test.mjs` } }));
+    put(root, "a/test/evidence.test.mjs", `import { describe, test } from "node:test";\n${source}\n`);
+    const { tests } = discoverNodeTests({ root, packages: ["a"] });
+    // Nested node --test runs must not inherit the parent test context.
+    const commands = tests.map((item) => ({ ...item, command: "/usr/bin/env", args: ["-u", "NODE_TEST_CONTEXT", item.command, ...item.args] }));
+    const { results } = await runTests({ tests: commands, concurrency: 1, write: () => {}, run: { id: "evidence", folder: join(root, "run") } });
+    const result = results.get("a/test/evidence.test.mjs");
+    assert.equal(result.status, expected, `${name}: ${result.detail}\n${result.output}`);
+    if (expected === "fail") assert.match(result.detail, /test evidence/, "the failure must name the missing or incomplete test evidence");
+  });
+}
 
 test("a test script is a list of steps: a command before the tests, and the flags and paths of node --test", () => {
   assert.deepEqual(parseTestScript("node --test test/", "p"), { before: [], flags: [], paths: ["test/"] });

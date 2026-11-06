@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Wails v3 application hosting the workbench with native webview surfaces.",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test 'test/**/*.test.mjs'"
   },
   "dependencies": {
     "@soksak/workbench": "workspace:*"

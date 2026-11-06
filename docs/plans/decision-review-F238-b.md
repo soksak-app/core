@@ -334,7 +334,7 @@ Two fresh auditors on the D6 text (Haiku; read-only). Each objection was checked
 
 | Objection | Answer |
 | --- | --- |
-| D6 A: `viewShortcuts` filters `when === "Any focus" || owner === "view"` (`view-calls.js:86-88`), so the native menu rows (`shortcuts.json:3-16`, `when` "Any focus") pass to the view | Accepted and verified. The filter changes to the owners `workbench` and `view` (step 5, D6-a); test (j). |
+| D6 A: `viewShortcuts` filters `when === "Any focus" \|\| owner === "view"` (`view-calls.js:86-88`), so the native menu rows (`shortcuts.json:3-16`, `when` "Any focus") pass to the view | Accepted and verified. The filter changes to the owners `workbench` and `view` (step 5, D6-a); test (j). |
 | D6 A: the claim that `runtime.command` reaches `core.picker.close` | Confirmed: `view-calls.js:244` routes `core.` names to `runCore`; the plugin views call `calls.request(name, params)`; `core.picker.close` is declared. Step 4 stands. |
 | D6 B: the Escape sub-bullet cites a passage that does not exist and gives Escape a default that no other key has | Accepted. The sub-bullet is removed; Escape is an ordinary key, and D6-g states the contract. |
 | D6 B: the native menu rule generalises beyond the probe (`shift+cmd+n` only) | Accepted. The rule no longer rests on the menu mechanism: the view never forwards a native menu row because it does not read one (step 3). D6-c observes `cmd+c`, `cmd+=` and `shift+cmd+n`. |

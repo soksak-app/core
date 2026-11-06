@@ -334,7 +334,7 @@ D6 본문에 대해 새 감사자 둘(Haiku; 읽기 전용). 각 반론은 파�
 
 | 반론 | 응답 |
 | --- | --- |
-| D6 A: `viewShortcuts`가 `when === "Any focus" || owner === "view"`로 거른다(`view-calls.js:86-88`). 그래서 네이티브 메뉴 행(`shortcuts.json:3-16`, `when` "Any focus")이 view까지 간다 | 수용하고 확인했다. 필터를 소유자 `workbench`와 `view`로 바꾼다(5단계, D6-a); 시험 (j). |
+| D6 A: `viewShortcuts`가 `when === "Any focus" \|\| owner === "view"`로 거른다(`view-calls.js:86-88`). 그래서 네이티브 메뉴 행(`shortcuts.json:3-16`, `when` "Any focus")이 view까지 간다 | 수용하고 확인했다. 필터를 소유자 `workbench`와 `view`로 바꾼다(5단계, D6-a); 시험 (j). |
 | D6 A: `runtime.command`가 `core.picker.close`에 닿는다는 주장 | 확인: `view-calls.js:244`가 `core.` 이름을 `runCore`로 보낸다; plugin view는 `calls.request(name, params)`를 부른다; `core.picker.close`는 선언되어 있다. 4단계는 유지된다. |
 | D6 B: Escape 하위 항목이 없는 문단을 인용하고, 다른 어떤 키에도 없는 Escape 기본값을 준다 | 수용. 하위 항목을 지운다. Escape는 일반 키이며, D6-g가 계약을 적는다. |
 | D6 B: 네이티브 메뉴 규칙이 probe(`shift+cmd+n`만)를 넘어 일반화되었다 | 수용. 이 규칙은 더 이상 메뉴 방식에 기대지 않는다: view는 네이티브 메뉴 행을 읽지 않으므로 넘기지 않는다(3단계). D6-c가 `cmd+c`, `cmd+=`, `shift+cmd+n`을 관찰한다. |

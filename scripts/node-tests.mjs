@@ -224,7 +224,7 @@ export function discoverNodeTests({ root, packages, script: scriptName = 'test',
       // The exit limit ends a file process that does not exit after the summary of its tests, when no test runs, and names its samples.
       tests.push({ name: relative(root, file).split('\\').join('/'), command: process.execPath,
         args: ['--test', ...NODE_TEST_REPORTERS, `--test-timeout=${testTimeoutMs}`, ...script.flags, file], cwd: directory,
-        eventLimitMs: MAX_TEST_TIMEOUT_MS, exitLimitMs: EXIT_LIMIT_MS });
+        eventLimitMs: MAX_TEST_TIMEOUT_MS, exitLimitMs: EXIT_LIMIT_MS, nodeTestFile: file });
     }
   }
   return { tests, before };
