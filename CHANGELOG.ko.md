@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F684-1: `capture_text_test --warm <language>...`는 각 언어의 text recognition model을 별도 process에서 compile한다. window-check setup과 `scripts/test-app.mjs`는 검사 전에 600초 한도로 `en-US`와 `ko-KR`에 대해 이를 실행하고, native runner는 `build:` 항목으로 `capture_text_test` 전에 실행하므로 10초와 120초 한도는 인식과 test만 잰다.
 - F684: `capture_text_test`는 system이 load하지 못한 text recognition model의 `e5rtError`처럼 Vision이 request에 대해 보고한 실패를 status 1의 인식 결과 대신 `error: the system text recognizer failed: <error>`와 exit status 3으로 보고하고, 기본 실행은 주입한 실패로 이 보고를 검사한다.
 - F683-2: `pnpm test`의 test runner는 출력에 node의 process warning이 있는 process를, language 어댑터도 쓰는 `scripts/node-warnings.mjs`의 `processWarnings` 규칙으로 실패시킨다.
 - F683-1: test runner는 각 node --test 파일에 reporter 두 개, 표준 출력의 TAP 형식과 표준 오류의 이벤트를 준다. node --test는 reporter마다 root test stream에 end listener를 더하며, 세 번째 reporter 때문에 Node가 MaxListenersExceededWarning을 출력했기 때문이다. 출력에 node의 process warning이 있는 language case는 그 warning으로 실패한다.

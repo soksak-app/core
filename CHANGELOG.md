@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F684-1: `capture_text_test --warm <language>...` compiles the text recognition model of each language in a process of its own; the window-check setup and `scripts/test-app.mjs` run it for `en-US` and `ko-KR` under a limit of 600 s before the checks, and the native runner runs it before `capture_text_test` through a `build:` entry, so the limits of 10 s and 120 s measure only recognition and the test.
 - F684: `capture_text_test` reports a failure that Vision reports for a request, such as the `e5rtError` of a text recognition model that the system cannot load, as `error: the system text recognizer failed: <error>` with exit status 3 instead of a recognition result with status 1, and its default invocation checks that report with an injected failure.
 - F683-2: The test runner of `pnpm test` fails a process whose output holds a process warning of node, through `processWarnings` of `scripts/node-warnings.mjs`, the rule that the language adapter also uses.
 - F683-1: The test runners give each node --test file two reporters, the TAP form on the standard output and the events on the standard error, because node --test adds end listeners to its root test stream for each reporter and a third one made Node print a MaxListenersExceededWarning; a language case whose output holds a process warning of node fails with the warning.

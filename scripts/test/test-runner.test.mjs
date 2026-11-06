@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -622,4 +622,48 @@ test("a process whose output holds a linker warning of an object newer than the 
   assert.equal(results.get("links::newer").status, "fail", results.get("links::newer").detail);
   assert.equal(results.get("links::newer").detail, "ld built /tmp/go-link-1/000029.o for macOS 27.0, newer than the macOS 14.4 of the link");
   assert.equal(results.get("links::duplicate").status, "pass", results.get("links::duplicate").detail);
+});
+
+// A command whose first run prepares its cache for 1.5 s, as the first use of a compiled model does, and whose later runs find it.
+const preparing = (marker) => `const fs = require("node:fs"); if (!fs.existsSync(${JSON.stringify(marker)})) setTimeout(() => fs.writeFileSync(${JSON.stringify(marker)}, ""), 1500);`;
+
+test("a build runs before its test in a process of its own under its own limit, so the limit of the test measures only the test", async (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "runner-build-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const marker = join(folder, "prepared");
+  const { results, lines } = await run([node("cold", preparing(marker),
+    { timeoutMs: 1000, build: { command: process.execPath, args: ["-e", `${preparing(marker)} console.log("built")`], timeoutMs: 5000 } })],
+    { concurrency: 1, run: { id: "build-run", folder: join(folder, "run") } });
+  assert.equal(results.get("cold").status, "pass", `${results.get("cold").detail} ${JSON.stringify(lines)}`);
+  const marks = lines.filter((line) => /^(BUILD|BUILT|RUN|PASS|FAIL|TIME) /.test(line)).map((line) => line.split(" (")[0].replace(/ \d+\.\d{3}s.*$/, ""));
+  assert.deepEqual(marks, ["BUILD cold", "BUILT cold", "RUN  cold", "PASS cold"]);
+  assert.match(lines.find((line) => line.startsWith("BUILD cold")), /^BUILD cold \(limit 5\.000s\)$/);
+  const manifest = JSON.parse(readFileSync(join(folder, "run", "manifest.json"), "utf8"));
+  assert.equal(manifest.tests[0].build.status, "pass");
+  assert.match(readFileSync(join(folder, "run", manifest.tests[0].output), "utf8"), /^built\n$/);
+});
+
+test("a build that fails or exceeds its limit is the result of its test, which does not run", async (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "runner-build-failure-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const ran = join(folder, "ran");
+  const writes = `require("node:fs").writeFileSync(${JSON.stringify(ran)}, "")`;
+  const { results, lines } = await run([
+    node("broken", writes, { build: { command: process.execPath, args: ["-e", "console.error('compile failed'); process.exit(3)"], timeoutMs: 5000 } }),
+    node("slow", writes, { build: { command: process.execPath, args: ["-e", sleeping(60000)], timeoutMs: 300 } }),
+  ], { concurrency: 1 });
+  assert.equal(results.get("broken").status, "fail");
+  assert.match(results.get("broken").detail, /^the build ended \d+\.\d{3}s exit 3; the test did not run$/);
+  assert.ok(lines.includes("  compile failed"), JSON.stringify(lines));
+  assert.equal(results.get("slow").status, "timeout");
+  assert.match(results.get("slow").detail, /^the build ended \d+\.\d{3}s exceeded 0\.300s and was killed; the test did not run$/);
+  assert.equal(lines.some((line) => line.startsWith("RUN ")), false, JSON.stringify(lines));
+  assert.equal(existsSync(ran), false, "a test whose build did not pass ran");
+});
+
+test("a build needs a command, its arguments and a limit of at most ten minutes", async () => {
+  const build = (value) => run([node("x", "process.exit(0)", { build: value })], { concurrency: 1 });
+  await assert.rejects(build({ command: process.execPath, args: [] }), /x: build\.timeoutMs must be an integer from 1 through 600000/);
+  await assert.rejects(build({ command: process.execPath, args: [], timeoutMs: 600_001 }), /x: build\.timeoutMs must be an integer from 1 through 600000/);
+  await assert.rejects(build({ args: [], timeoutMs: 1000 }), /x: build needs a command and args/);
 });

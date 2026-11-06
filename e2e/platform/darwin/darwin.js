@@ -24,3 +24,20 @@ export function captureTextCommand(run = (command, args) => spawnSync(command, a
   if (!isAbsolute(command) || command.includes("\n")) throw new Error("capture text build reported no single absolute executable path");
   return command;
 }
+
+/** The limit of the warm-up of the capture recognizer: the first recognition of a language compiles its model, which takes minutes. */
+export const CAPTURE_TEXT_WARM_LIMIT_MS = 600_000;
+
+/**
+ * Prepares the text recognition model of each language in a process of its own before a check recognizes, so the limit of a recognition
+ * measures only the recognition. The first recognition of a language compiles the model of the system into the cache of the executable,
+ * which takes minutes and can fail in the process that compiled it. Returns the report of the warm-up.
+ */
+export function warmCaptureText(command, languages, run = (name, args) => spawnSync(name, args, { encoding: "utf8", timeout: CAPTURE_TEXT_WARM_LIMIT_MS })) {
+  if (!Array.isArray(languages) || languages.length === 0) throw new Error("the capture text warm-up needs at least one language");
+  const result = run(command, ["--warm", ...languages]);
+  if (result.error?.code === "ETIMEDOUT") throw new Error(`capture text warm-up of ${languages.join(", ")} exceeded ${CAPTURE_TEXT_WARM_LIMIT_MS} ms`);
+  if (result.error) throw new Error(`capture text warm-up: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`capture text warm-up exited with ${result.status}: ${String(result.stderr).trim()}`);
+  return String(result.stderr).trim();
+}

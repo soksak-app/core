@@ -123,28 +123,69 @@ static BOOL statesRecognizerFailure(CGImageRef image) {
     return stated;
 }
 
+// A white 1000 by 120 image context.
+static CGContextRef whiteContext(void) {
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = CGBitmapContextCreate(NULL, 1000, 120, 8, 4000, space,
+        kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    CGColorSpaceRelease(space);
+    CGContextSetRGBFillColor(context, 1, 1, 1, 1);
+    CGContextFillRect(context, CGRectMake(0, 0, 1000, 120));
+    return context;
+}
+
+// The image of the context after the text is drawn into it.
+static CGImageRef drawnText(CGContextRef context, NSString *string) {
+    CTFontRef font = CTFontCreateWithName(CFSTR("Helvetica"), 48, NULL);
+    NSDictionary *attributes = @{(__bridge NSString *)kCTFontAttributeName: (__bridge id)font};
+    NSAttributedString *text = [[NSAttributedString alloc] initWithString:string attributes:attributes];
+    CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)text);
+    CGContextSetTextPosition(context, 20, 40);
+    CTLineDraw(line, context);
+    CFRelease(line);
+    CFRelease(font);
+    [text release];
+    return CGBitmapContextCreateImage(context);
+}
+
+// Prepares the text recognition model of each language before a check measures recognition. The first recognition of a language in
+// the cache of the executable compiles the model of the system, which takes minutes and can fail in the process that compiled it, so a
+// check runs this in a process of its own under a limit of its own and then recognizes in a new process.
+static int warm(int argc, const char **argv) {
+    if (argc < 3) {
+        fprintf(stderr, "error: expected --warm LANGUAGE...\n");
+        return 2;
+    }
+    CGContextRef context = whiteContext();
+    CGImageRef image = drawnText(context, @"SOKSAK CONTENT CHECK");
+    CGContextRelease(context);
+    int status = 0;
+    for (int index = 2; index < argc && status == 0; index++) {
+        NSDate *started = [NSDate date];
+        NSError *error = nil;
+        if (recognize(image, @(argv[index]), performWithVision, &error)) {
+            fprintf(stderr, "warmed %s in %.3fs\n", argv[index], -started.timeIntervalSinceNow);
+        } else {
+            fprintf(stderr, "error: %s\n", error.localizedDescription.UTF8String);
+            status = isRecognizerFailure(error) ? RecognizerFailed : 2;
+        }
+    }
+    CGImageRelease(image);
+    return status;
+}
+
 int main(int argc, const char **argv) {
     @autoreleasepool {
+        if (argc >= 2 && strcmp(argv[1], "--warm") == 0) return warm(argc, argv);
         if (argc != 1) return readCapture(argc, argv);
-        CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-        CGContextRef context = CGBitmapContextCreate(NULL, 1000, 120, 8, 4000, space,
-            kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
-        CGColorSpaceRelease(space);
-        CGContextSetRGBFillColor(context, 1, 1, 1, 1);
-        CGContextFillRect(context, CGRectMake(0, 0, 1000, 120));
+        CGContextRef context = whiteContext();
         CGImageRef blankImage = CGBitmapContextCreateImage(context);
         BOOL stated = statesRecognizerFailure(blankImage);
         NSError *blankError = nil;
         NSArray *blankLines = recognize(blankImage, @"en-US", performWithVision, &blankError);
         BOOL blankPassed = blankLines && blankLines.count == 0 && !blankError;
         CGImageRelease(blankImage);
-        CTFontRef font = CTFontCreateWithName(CFSTR("Helvetica"), 48, NULL);
-        NSDictionary *attributes = @{(__bridge NSString *)kCTFontAttributeName: (__bridge id)font};
-        NSAttributedString *text = [[NSAttributedString alloc] initWithString:@"SOKSAK CONTENT CHECK" attributes:attributes];
-        CTLineRef line = CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)text);
-        CGContextSetTextPosition(context, 20, 40);
-        CTLineDraw(line, context);
-        CGImageRef image = CGBitmapContextCreateImage(context);
+        CGImageRef image = drawnText(context, @"SOKSAK CONTENT CHECK");
         NSError *error = nil;
         NSArray *lines = recognize(image, @"en-US", performWithVision, &error);
         NSError *unsupported = nil;
@@ -152,8 +193,6 @@ int main(int argc, const char **argv) {
         size_t size = 0;
         BOOL parsed = !dimension("0", &size) && !dimension("invalid", &size) && !dimension("99999999999999999999999999", &size);
         CGImageRelease(image);
-        CFRelease(line);
-        CFRelease(font);
         CGContextRelease(context);
         // A request that Vision did not perform states that failure; it is not a recognition result of this check.
         NSError *systemFailure = isRecognizerFailure(blankError) ? blankError

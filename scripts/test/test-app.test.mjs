@@ -152,6 +152,7 @@ test("the plan prepares, starts the three applications, checks and quits them in
   const configRoot = "/work/target/e2e/run";
   const plan = e2ePlan({ root, configRoot, script: "verify", native: "e2e" });
   assert.deepEqual(plan.map((item) => [item.phase, item.name]), [
+    ["prepare", "capture text warm-up"],
     ["prepare", "registry certificates"],
     ["prepare", "install plugins wailsv3"],
     ["prepare", "install plugins tauriv2"],
@@ -189,6 +190,7 @@ test("the plan prepares, starts the three applications, checks and quits them in
   assert.deepEqual(checks.argv.slice(2, 4), ["--script", "verify"]);
   assert.ok(!checks.argv.includes("--when-idle"));
   assert.deepEqual(plan.find((item) => item.name === "native end-to-end tests").argv, ["make", "-C", "native/darwin", "e2e"]);
+  assert.deepEqual(plan.find((item) => item.name === "capture text warm-up").argv, ["node", "e2e/setup.mjs"]);
   const person = e2ePlan({ root, configRoot, script: "test-app:person", whenIdle: "60" });
   assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(2, 4), ["--script", "test-app:person"]);
   assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(-2), ["--when-idle", "60"]);

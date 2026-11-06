@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { cropViewPixels, recognizeViewFrame } from "../view-content.mjs";
+import { CAPTURE_TEXT_LANGUAGES, cropViewPixels, recognizeViewFrame } from "../view-content.mjs";
 
 function frame() {
   const data = Buffer.alloc(8 * 8 * 4);
@@ -127,4 +127,11 @@ test("terminal content readiness preserves omitted blank cell characters", { tim
   };
   const cases = await viewContentCases(s, () => {});
   assert.equal(typeof await cases.get("terminal").ready(s, { tab: "probe" }), "function");
+});
+
+test("view OCR refuses a language whose model the setup did not prepare", { timeout: 5000 }, async () => {
+  assert.ok(!CAPTURE_TEXT_LANGUAGES.includes("ja-JP"));
+  await assert.rejects(recognizeViewFrame({ frame: frame(), rect: { x: 1, y: 1, w: 2, h: 1 }, language: "ja-JP",
+    directory: tmpdir(), command: "capture_text_test", runRecognition: async () => assert.fail("an unprepared language must not run") }),
+  /view content recognition of ja-JP has no prepared model; the window-check setup prepares en-US, ko-KR/);
 });
