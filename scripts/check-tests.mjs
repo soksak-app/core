@@ -241,6 +241,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F584-5-2",
+    implementation: [
+      { file: "packages/workbench-mygo/src/dividers.go", symbol: "func outside(area layout.Rect, holes []layout.Rect) []layout.Rect {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAViewTakesThePointerUpToItsEdges" },
+    ],
+    expected: "Each native view of the mygo workbench takes the pointer up to its edges, and the grab area of a boundary takes the pointer only beside the views.",
+    levels: ["unit"],
+  },
+  {
     id: "F619",
     implementation: [
       { file: "packages/host/go/src/windows.go", symbol: "current, err := platform.Current()" },

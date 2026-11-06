@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F584-5-2: `TestAViewTakesThePointerUpToItsEdges` 는 view 안으로 닿던 grab area 에서 실패하고 변경 위에서 통과하므로, mygo workbench 의 native view 가 가장자리까지 pointer 를 받는 것이 run 으로 보인다.
 - F619: `platform.Substitute`는 Go host의 test를 위해 operating system의 구현 대신 다른 구현을 등록한다. `TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts`와 `TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError`는 host 시작 전에 window를 보인다: 등록된 fake로 보이고, 등록이 없으면 nil dereference 대신 status 1로 process를 끝낸다.
 - F619: framework의 window show는 등록된 platform에 묻는다. 그래서 framework test처럼 host 시작 전에 window를 보이는 process가 더는 nil dereference로 끝나지 않는다. 등록이 없으면 host의 fatal error로 process를 끝낸다.
 - F502-24-1: `go.work.sum`은 pin된 fork로 workspace module의 `go mod download`가 쓰는 내용을 담으므로, 그 download 뒤 checksum file의 변경을 거부하는 CI job의 guard가 변경을 보지 않는다.
