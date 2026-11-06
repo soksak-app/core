@@ -1191,6 +1191,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F634",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_drag_presses_only_after_the_window_presented_its_layout" },
+      { file: "e2e/native-drag.test.mjs", id: "each round trip of a native drag presses once, moves at each step and releases once" },
+    ],
+    expected: "Each press of a native drag follows the presentation of the current layout, so each round trip reaches the window as one press, a drag at each step and one release.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F627",
     implementation: [
       { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func (s *TabSessions) Capture" },
