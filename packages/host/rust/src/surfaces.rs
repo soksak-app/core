@@ -918,6 +918,17 @@ fn surface_dispatch_result_with<T>(
     result
 }
 
+/// The answer of a presentation whose layout the native commit refused, because a page start, the close of the window or
+/// `cancelSurfaces` cancelled its ticket while it waited: abandon ends the presentation waits of the ticket, and the presentation
+/// fails with `surface preparation <ticket> is no longer current`, followed by the failure of abandon when it fails.
+fn uncommitted_presentation(ticket: u64, abandon: impl FnOnce() -> Result<(), String>) -> String {
+    let error = format!("surface preparation {ticket} is no longer current");
+    match abandon() {
+        Ok(()) => error,
+        Err(abandon) => format!("{error}; {abandon}"),
+    }
+}
+
 /// The raster stage of a presentation: the refresh of the rasters of its image regions and the wait until they present, recorded
 /// as the stage `present-raster-wait` with `queued_ns` before the refresh (the dispatch context), `entered_ns` when the wait starts
 /// and `returned_ns` when it ends, also when the wait fails. A refresh that fails starts no wait and records nothing.
@@ -2163,14 +2174,9 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                     }
                 };
                 if !committed {
-                    let error = format!("surface preparation {ticket} is no longer current");
-                    return match documents::abandon_layout_presentation_waits(
-                        &presentation_window,
-                        ticket,
-                    ) {
-                        Ok(()) => Err(error),
-                        Err(abandon) => Err(format!("{error}; {abandon}")),
-                    };
+                    return Err(uncommitted_presentation(ticket, || {
+                        documents::abandon_layout_presentation_waits(&presentation_window, ticket)
+                    }));
                 }
                 let committed_views =
                     committed_view_updates(&placed, &joined_generations, |surface| {

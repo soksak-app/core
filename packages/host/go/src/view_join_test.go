@@ -332,6 +332,7 @@ func TestLayoutCancellationClearsItsJoinWithoutPresentationAbandonment(t *testin
 	}
 }
 
+// contract: surface-layout.cancelled-ticket-is-no-longer-current
 // A reload cancels every open layout ticket while a presentation of one waits for the documents, and that presentation then answers
 // that its preparation is no longer current, as the native commit of a cancelled ticket answers on every host.
 func TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent(t *testing.T) {
