@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F493: The Tauri host uses a tao fork commit that makes no activation call at launch when the application does not ignore other applications, so a background relaunch stays in the background.
 - F495: The hosts check numbers project, space and card ids per kind, so a card name does not count the ids of another kind.
 - F494: The release candidate is 0.0.38.
 - F491: `core.settings` reports the common value of every setting in `common`, and the preparation of a window check restores the common settings by those values, so a value that a project overrides no longer moves into the common settings; the browser home check writes the common scope.

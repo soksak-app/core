@@ -226,7 +226,7 @@ host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routin
 
 ## Launch activation
 
-Launch Services는 실행 요청이 activation을 요청하지 않은 경우(`open -g`, `kLSLaunchDontSwitch`, `NSWorkspaceOpenConfiguration.activates` false)를 빼고 자신이 실행한 애플리케이션을 activate하므로, host는 실행 시점의 activation을 시스템에 맡긴다. host는 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않는다. Wails는 기본으로 regular activation policy의 모든 애플리케이션을 실행 시점에 activate하므로 Wails host는 `MacOptions.DisableActivationOnLaunch`를 설정하고, Tauri는 기본으로 다른 애플리케이션과 상관없이 activate하므로 Tauri host는 `activate_ignoring_other_apps(false)`를 설정한다. 애플리케이션을 연 사람은 애플리케이션이 앞으로 오는 것을 보고, `sok app relaunch`의 relaunch 같은 background 실행은 frontmost 애플리케이션을 바꾸지 않는다.
+Launch Services는 실행 요청이 activation을 요청하지 않은 경우(`open -g`, `kLSLaunchDontSwitch`, `NSWorkspaceOpenConfiguration.activates` false)를 빼고 자신이 실행한 애플리케이션을 activate하므로, host는 실행 시점의 activation을 시스템에 맡긴다. host는 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않는다. Wails는 기본으로 regular activation policy의 모든 애플리케이션을 실행 시점에 activate하므로 Wails host는 `MacOptions.DisableActivationOnLaunch`를 설정하고, Tauri는 기본으로 다른 애플리케이션과 상관없이 activate하므로 Tauri host는 `activate_ignoring_other_apps(false)`를 설정한다. tao 0.37.2는 그 설정에서도 `activateIgnoringOtherApps(false)`를 부르고, 그 호출은 다른 애플리케이션이 활성이 아닐 때 애플리케이션을 활성화한다. 그래서 workspace는 그 설정에서 activation 호출을 하지 않는 tao fork commit을 쓴다(`Cargo.toml`의 `[patch.crates-io]`). 애플리케이션을 연 사람은 애플리케이션이 앞으로 오는 것을 보고, `sok app relaunch`의 relaunch 같은 background 실행은 frontmost 애플리케이션을 바꾸지 않는다.
 
 ## 애플리케이션 로그
 
