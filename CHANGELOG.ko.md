@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F669: bounded command는 `killGroup`으로 process group을 끝내고, `killGroup`은 reap되지 않은 member만 남은 group의 `EPERM` 거부를 끝난 group으로 다룬다. mutant deadline은 test process의 reap 시점에 따라 environment error로 분류되지 않는다. `killGroup`은 실행 중 member 판정과 함께 `scripts/test-command.mjs`로 옮겼다. Red: `a command group whose last member has ended but is not reaped ends without an error`가 `EPERM: kill EPERM`으로 실패했다. Green: 그 test가 통과하고, mutation runner case가 10회 run에서 통과한다.
 - F668: terminal cell sampling test의 fake session은 `dom.rect` 제거 뒤 `Session.rect`가 보내는 `element.rect`에 답한다. `actual 'element.rect'`로 실패하던 10개 case가 통과하고 sampling 순서는 바뀌지 않는다.
 - F510-1: 최종 acceptance 완료에 소유 native test 연결을 유지하고 검증 실행 기록은 별도로 분류한다. 실제 inventory와 소유 case 45개가 모두 통과한다.
 - F664: 고정한 로컬 candidate와 설치 component 집합을 사용한 두 host의 focused case 12개가 독립 초기 상태 두 번에서 모두 통과한다. 전체 audit와 cleanup을 완료하고 준비 후 동결한 입력의 raw identity가 실행 후에도 동일함을 확인했다. 최초 fixture·selection 실패는 보존하고 수정했다. 이전 F658 guard-mutation 근거, 실제 Editor baseline, 별도 native close fixture와 Editor E58 파일 write-race 검증은 각각의 범위를 유지하며 최신 Editor source의 native 승인을 주장하지 않는다.

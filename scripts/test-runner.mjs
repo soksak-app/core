@@ -10,7 +10,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
-import { hasEnded, processTable, runningMembers } from './test-command.mjs';
+import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from './test-command.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
 
@@ -92,38 +92,6 @@ function leftoverNames(pgid, leader, escaped, table) {
     if (match) commands.set(Number(match[1]), match[2]);
   }
   return members.map((member) => `pid ${member.pid} ${commands.get(member.pid) ?? '(ended while it was named)'}`);
-}
-
-/** Sends a signal to the process group pgid. The default is the group signal of the system; a test passes its own sender. */
-const sendToGroup = (pgid, signal) => process.kill(-pgid, signal);
-
-/**
- * Sends a signal to the group pgid. macOS refuses a group signal with EPERM when no member of the group can receive it, which is the case
- * when only zombies remain; such a group has nothing to end, so the refusal is not an error. A refusal while a member runs is an error,
- * and the error names the running members.
- */
-function signalGroup(pgid, signal, send) {
-  try { send(pgid, signal); } catch (error) {
-    if (error.code === 'ESRCH') return;
-    if (error.code !== 'EPERM') throw error;
-    const running = runningMembers(pgid);
-    if (running.length === 0) return;
-    error.message = `${signal} to process group ${pgid}: ${error.message}; running: ${running.map((member) => `pid ${member.pid} ${member.state}`).join('; ')}`;
-    throw error;
-  }
-}
-
-/**
- * Stops every process of the group of a test with SIGSTOP, so none of them runs while the leftovers are read. The stop comes before the
- * read, because the read takes seconds under load. A group that no longer exists has nothing to stop.
- */
-export function stopGroup(pgid, send = sendToGroup) {
-  signalGroup(pgid, 'SIGSTOP', send);
-}
-
-/** Ends every process of the group of a test. A group that no longer exists has nothing to end. */
-export function killGroup(pgid, send = sendToGroup) {
-  signalGroup(pgid, 'SIGKILL', send);
 }
 
 /**
