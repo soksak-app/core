@@ -105,8 +105,12 @@ func StartStallWatch(options StallWatchOptions) func() {
 				options.EmitHost(LevelInfo, "host.stall.resumed", map[string]any{"stalled_ms": last - stalledFrom})
 				stalledFrom = -1
 			}
-			// After the check, so a stall that ended in this wait has its end first.
-			options.AwaitAwake()
+			// An open stall keeps the beat: the heartbeat of this check was sent before the run loop could start to wait, so a
+			// stall that ended in that wait has its end only from the next heartbeat, which the wait answers with its start. The
+			// watch blocks only while no stall is open, which is also the only time the run loop of the watched thread waits.
+			if stalledFrom < 0 {
+				options.AwaitAwake()
+			}
 		}
 	})
 	return func() { stopped.Store(true) }
