@@ -52,6 +52,17 @@ function validate(options) {
     if (item.timeoutMs !== undefined && (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS)) {
       throw new TypeError(`${item.name}: timeoutMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
     }
+    // The build of a test (runTests): the command that prepares what the test runs, with a limit of its own.
+    if (item.build !== undefined) {
+      const { build } = item;
+      if (!build || typeof build !== 'object' || typeof build.command !== 'string' || build.command === ''
+        || !Array.isArray(build.args) || build.args.some((arg) => typeof arg !== 'string')) {
+        throw new TypeError(`${item.name}: build needs a command and args`);
+      }
+      if (!Number.isInteger(build.timeoutMs) || build.timeoutMs < 1 || build.timeoutMs > MAX_TEST_TIMEOUT_MS) {
+        throw new TypeError(`${item.name}: build.timeoutMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
+      }
+    }
     // A process that writes its stacks and exits at its own limit (runOne), such as a Go test binary with -test.timeout of the limit.
     if (item.stacksAtLimit !== undefined && (item.stacksAtLimit !== true || item.timeoutMs === undefined)) {
       throw new TypeError(`${item.name}: stacksAtLimit must be true and needs timeoutMs`);
@@ -354,8 +365,10 @@ function runOne(item, limitMs, env, outputPath) {
 }
 
 /**
- * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, stacksAtLimit?, eventLimitMs?, exitLimitMs?}`) with at most `concurrency`
- * processes at once. `stacksAtLimit` declares a process that writes its stacks and exits at its own limit of `timeoutMs`; its exit
+ * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, build?, stacksAtLimit?, eventLimitMs?, exitLimitMs?}`) with at most
+ * `concurrency` processes at once. `build` (`{command, args, timeoutMs}`) runs before the test in the same folder and environment, in a
+ * process of its own under its own limit, between the lines `BUILD <name>` and `BUILT <name>`; a build that fails or exceeds its limit
+ * is the result of the test, whose detail says that the test did not run. `stacksAtLimit` declares a process that writes its stacks and exits at its own limit of `timeoutMs`; its exit
  * after that limit is its timeout, and its group is ended at that exit or STACK_LIMIT_MS after the limit.
  * `eventLimitMs` is the event watchdog of a process that reports its test events (scripts/test-event-reporter.mjs), and `exitLimitMs`
  * the limit of its exit after its `test:summary` event, which needs `run`. `nodeTestFile`, when given, requires that file's own
@@ -401,7 +414,6 @@ export async function runTests(options) {
       }
       running.set(item.name, performance.now());
       const limit = item.timeoutMs;
-      write(`RUN  ${item.name} (${running.size} running, ${limit === undefined ? 'no runner limit' : `limit ${seconds(limit)}s`})`);
       let entry = null;
       if (run) {
         const output = `${String(manifest.tests.length + 1).padStart(3, '0')}-${item.name.replace(/[^A-Za-z0-9._-]/g, '_')}.log`;
@@ -410,7 +422,31 @@ export async function runTests(options) {
         writeFileSync(join(run.folder, output), '');
         saveManifest();
       }
-      const result = await runOne(item, limit, run ? { SOKSAK_RUN_ID: run.id, SOKSAK_RUN_FOLDER: run.folder } : {}, entry && join(run.folder, entry.output));
+      const env = run ? { SOKSAK_RUN_ID: run.id, SOKSAK_RUN_FOLDER: run.folder } : {};
+      const outputPath = entry && join(run.folder, entry.output);
+      // The build of a test runs first, in a process of its own under its own limit, so the limit of the test measures only the test
+      // and a cold cache of what the test runs does not fail it. A build that does not pass is the result of the test, which does not run.
+      let result = null;
+      if (item.build) {
+        write(`BUILD ${item.name} (limit ${seconds(item.build.timeoutMs)}s)`);
+        const built = await runOne({ name: item.name, command: item.build.command, args: item.build.args, cwd: item.cwd, env: item.env },
+          item.build.timeoutMs, env, outputPath);
+        const ended = `${seconds(built.elapsedMs)}s${built.detail ? ` ${built.detail}` : ''}`;
+        if (entry) {
+          entry.build = { status: built.status, elapsed_ms: Math.round(built.elapsedMs), detail: built.detail };
+          saveManifest();
+        }
+        if (built.status === 'pass') write(`BUILT ${item.name} ${ended}`);
+        else {
+          result = { status: built.status, elapsedMs: built.elapsedMs, output: built.output, detail: `the build ended ${ended}; the test did not run`,
+            ...(item.eventLimitMs === undefined ? {} : { tests: 0 }) };
+        }
+        running.set(item.name, performance.now());
+      }
+      if (result === null) {
+        write(`RUN  ${item.name} (${running.size} running, ${limit === undefined ? 'no runner limit' : `limit ${seconds(limit)}s`})`);
+        result = await runOne(item, limit, env, outputPath);
+      }
       running.delete(item.name);
       if (entry) {
         Object.assign(entry, { status: result.status, ended_us: nowUs(), elapsed_ms: Math.round(result.elapsedMs), detail: result.detail });

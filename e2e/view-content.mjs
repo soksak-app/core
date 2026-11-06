@@ -11,6 +11,12 @@ import { FIXTURE } from "./hwp-support.mjs";
 
 const run = promisify(execFile);
 
+/**
+ * The recognition languages of the window checks. The window-check setup prepares the text recognition model of each before the first
+ * check (warmCaptureText), so a recognition, whose limit is 10 s, never compiles a model; a language outside this list is refused.
+ */
+export const CAPTURE_TEXT_LANGUAGES = Object.freeze(["en-US", "ko-KR"]);
+
 /** Copies one applied view's exact opaque BGRA crop without resizing or changing channels. */
 export function cropViewPixels(frame, rect) {
   assert.ok(frame.data instanceof Uint8Array && frame.data.length === frame.stride * frame.height,
@@ -37,6 +43,8 @@ export function cropViewPixels(frame, rect) {
 export async function recognizeViewFrame({ frame, rect, language, directory, artifactName = "view-content",
   command = process.env.SOKSAK_CAPTURE_TEXT, runRecognition = run, removeScratch = rm }) {
   assert.ok(typeof language === "string" && language.length > 0, "view content recognition requires a language");
+  assert.ok(CAPTURE_TEXT_LANGUAGES.includes(language),
+    `view content recognition of ${language} has no prepared model; the window-check setup prepares ${CAPTURE_TEXT_LANGUAGES.join(", ")}`);
   assert.ok(typeof directory === "string" && directory.length > 0, "view content recognition requires a recording directory");
   assert.ok(typeof artifactName === "string" && /^[a-zA-Z0-9_-]+$/u.test(artifactName),
     "view content recognition requires a safe artifact name");

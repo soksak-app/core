@@ -6,4 +6,4 @@ const modules = {
 const selected = modules[process.platform];
 if (!selected) throw new Error(`E2E setup is not implemented on ${process.platform}`);
 
-export const { captureTextCommand, debugBinaries } = await import(selected);
+export const { captureTextCommand, debugBinaries, warmCaptureText } = await import(selected);

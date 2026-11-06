@@ -2,12 +2,17 @@
 //
 // The application executable to check is a build output of this repository. cargo decides that folder (it follows CARGO_TARGET_DIR), so
 // it is found in target_directory of `cargo metadata` and declared as SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2 and SOKSAK_BINARY_MYGO. A path that the run has already
-// declared is kept.
+// declared is kept. The setup then prepares the text recognition model of each recognition language in a process of its own
+// (warmCaptureText), so the limit of a recognition in a check measures only the recognition. `node e2e/setup.mjs` runs the same setup
+// as a step of its own before the window checks (scripts/test-app.mjs), so a model that the system removed is compiled under the limit
+// of the warm-up and not inside the first check file.
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { cargoCommand } from "@soksak/window-check/cargo.mjs";
-import { captureTextCommand, debugBinaries } from "./platform/platform.js";
+import { captureTextCommand, debugBinaries, warmCaptureText } from "./platform/platform.js";
+import { CAPTURE_TEXT_LANGUAGES } from "./view-content.mjs";
 
-export { captureTextCommand, debugBinaries };
+export { captureTextCommand, debugBinaries, warmCaptureText };
 
 /** Build output folder that cargo decides. If it is not found, the run fails with that reason. `cargo` gives the cargo to run. */
 export function targetDirectory(run = (command, args) => spawnSync(command, args, { encoding: "utf8" }), cargo = cargoCommand) {
@@ -31,4 +36,9 @@ export async function globalSetup() {
     }
     for (const [variable, path] of Object.entries(declared)) process.env[variable] ??= path;
   });
+  // The warm-up of the capture recognizer runs after the declaration, under a limit of its own (CAPTURE_TEXT_WARM_LIMIT_MS), so the
+  // recognition of a check, which has a limit of 10 s, never compiles the model of a language.
+  warmCaptureText(process.env.SOKSAK_CAPTURE_TEXT, CAPTURE_TEXT_LANGUAGES);
 }
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) await globalSetup();

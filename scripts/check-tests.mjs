@@ -359,6 +359,38 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F684-1",
+    implementation: [
+      { file: "native/darwin/tests/capture_text_test.m", symbol: "static int warm(int argc, const char **argv) {" },
+      { file: "scripts/native-tests.mjs", symbol: "export const BUILD_TIMEOUT_MS = MAX_TEST_TIMEOUT_MS;" },
+      { file: "e2e/platform/darwin/darwin.js", symbol: "export function warmCaptureText(command, languages," },
+      { file: "e2e/view-content.mjs", symbol: "export const CAPTURE_TEXT_LANGUAGES = Object.freeze([" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a build runs before its test in a process of its own under its own limit, so the limit of the test measures only the test" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a build that fails or exceeds its limit is the result of its test, which does not run" },
+      { file: "scripts/test/native-tests.test.mjs", id: "the native test targets warm the text recognition model of capture_text_test before the test" },
+      { file: "scripts/test/native-tests.test.mjs", id: "the native test runner runs the build of a test before the test and fails the test whose build failed" },
+      { file: "e2e/test/setup.test.mjs", id: "the warm-up recognizes each recognition language once in a process of its own before the checks" },
+      { file: "e2e/test/setup.test.mjs", id: "a warm-up that fails or exceeds its limit fails the setup with its cause" },
+      { file: "e2e/test/view-content.test.mjs", id: "view OCR refuses a language whose model the setup did not prepare" },
+      { file: "scripts/test/test-app.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
+    ],
+    expected: "The text recognition model of each recognition language is compiled by capture_text_test --warm in a process of its own under a limit of 600 s before the window checks and before the native capture_text_test, so the limits of 10 s and 120 s measure only recognition and the test.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F684",
+    implementation: [
+      { file: "native/darwin/tests/capture_text_test.m", symbol: "static NSError *recognizerFailure(NSError *cause) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_text_test.m", id: "the system text recognizer failed is stated" },
+    ],
+    expected: "A failure that Vision reports for a request is stated as the system text recognizer failed with exit status 3, apart from a recognition result.",
+    levels: ["native"],
+  },
+  {
     id: "F683-2",
     implementation: [
       { file: "scripts/node-warnings.mjs", symbol: "export function processWarnings(output) {" },

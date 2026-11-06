@@ -5,7 +5,8 @@ import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { captureTextCommand, debugBinaries, targetDirectory } from "../setup.mjs";
+import { CAPTURE_TEXT_LANGUAGES } from "../view-content.mjs";
+import { captureTextCommand, debugBinaries, targetDirectory, warmCaptureText } from "../setup.mjs";
 
 // The cargo that the functions run when a test gives it.
 const CARGO = "/toolchain/bin/cargo";
@@ -59,4 +60,28 @@ test("capture recognition preserves a native build failure", { timeout: 5000 }, 
   assert.throws(() => captureTextCommand(name => name === CARGO
     ? { status: 0, stdout: JSON.stringify({ workspace_root: "/work/project" }), stderr: "" }
     : { status: 2, stdout: "", stderr: "compiler failed" }, cargo), /capture text build exited with 2: compiler failed/);
+});
+
+test("the warm-up recognizes each recognition language once in a process of its own before the checks", { timeout: 5000 }, () => {
+  const calls = [];
+  const report = warmCaptureText("/work/native-output/capture_text_test", CAPTURE_TEXT_LANGUAGES, (name, args) => {
+    calls.push([name, ...args]);
+    return { status: 0, stdout: "", stderr: "warmed en-US in 1.000s\nwarmed ko-KR in 2.000s\n" };
+  });
+  assert.deepEqual(CAPTURE_TEXT_LANGUAGES, ["en-US", "ko-KR"]);
+  assert.deepEqual(calls, [["/work/native-output/capture_text_test", "--warm", "en-US", "ko-KR"]]);
+  assert.equal(report, "warmed en-US in 1.000s\nwarmed ko-KR in 2.000s");
+});
+
+test("a warm-up that fails or exceeds its limit fails the setup with its cause", { timeout: 5000 }, () => {
+  const command = "/work/native-output/capture_text_test";
+  assert.throws(() => warmCaptureText(command, ["en-US"], () => ({ status: 3, stdout: "",
+    stderr: "error: the system text recognizer failed: e5rt 13\n" })),
+  /^Error: capture text warm-up exited with 3: error: the system text recognizer failed: e5rt 13$/);
+  assert.throws(() => warmCaptureText(command, ["en-US", "ko-KR"], () => ({ status: null,
+    error: Object.assign(new Error("spawnSync ETIMEDOUT"), { code: "ETIMEDOUT" }) })),
+  /^Error: capture text warm-up of en-US, ko-KR exceeded 600000 ms$/);
+  assert.throws(() => warmCaptureText(command, ["en-US"], () => ({ status: null, error: new Error("spawnSync ENOENT") })),
+    /^Error: capture text warm-up: spawnSync ENOENT$/);
+  assert.throws(() => warmCaptureText(command, [], () => assert.fail("no language runs no warm-up")), /needs at least one language/);
 });
