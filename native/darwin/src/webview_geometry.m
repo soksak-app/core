@@ -993,14 +993,20 @@ void sp_webview_count_objects(void *handle, bool document, sp_page_objects_done 
     }];
 }
 
-bool sp_webview_render_occluded(void *webview) {
+bool sp_webview_render_occluded(void *webview, bool render) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     WKWebView *view = (WKWebView *)webview;
     if (![view respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) {
         sp_log_error("webview rendering", "_setWindowOcclusionDetectionEnabled: is unavailable");
         return false;
     }
-    view._windowOcclusionDetectionEnabled = NO;
+    if (view._windowOcclusionDetectionEnabled == !render) return true;
+    view._windowOcclusionDetectionEnabled = !render;
+    // WebKit reads the setting only when it computes the visibility of the view again, at a change of the occlusion of the
+    // window or of the hidden state of the view, so a change of a shown view in a window that is already occluded would wait
+    // for the next such change (native/darwin/tests/document_draw_covered_test.m). viewDidUnhide makes the web view compute
+    // its visibility now. A hidden view computes it when it is shown.
+    if (view.window && !view.isHiddenOrHasHiddenAncestor) [view viewDidUnhide];
     return true;
 }
 
@@ -1014,7 +1020,7 @@ bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {
     WKWebView *view = (WKWebView *)viewHandle;
     // Surface captures and paint acknowledgements wait for the rendering of the view, so they must finish in an occluded
     // window too.
-    if (!sp_webview_render_occluded(view)) {
+    if (!sp_webview_render_occluded(view, true)) {
         sp_log_error("surface", "the view cannot render while its window is occluded");
         return false;
     }

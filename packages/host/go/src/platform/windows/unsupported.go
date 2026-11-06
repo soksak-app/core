@@ -362,6 +362,10 @@ func (implementation) SetDocumentViewportMarker(unsafe.Pointer, bool) ([3]uint8,
 	return [3]uint8{}, 0, unsupported("native document viewport marker")
 }
 
+func (implementation) DrawDocumentsCovered(unsafe.Pointer, bool) error {
+	return unsupported("covered drawing of document regions")
+}
+
 func (implementation) CloseDocument(unsafe.Pointer) {
 	unreachable("document removal")
 }

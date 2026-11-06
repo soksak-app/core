@@ -283,7 +283,7 @@ pub fn show(window: &Window, request: OverlayRequest) -> Result<Rect, String> {
     // The modal renders while the window is occluded: it is raised only after it renders, and a still capture of a covered
     // window shows it.
     let platform = platform::current()?;
-    exposure::with_view(&view, move |native| platform.render_occluded(native))?;
+    exposure::with_view(&view, move |native| platform.render_occluded(native, true))?;
     view.hide().map_err(|e| e.to_string())?;
     place_overlay(&view, at)?;
     view.set_auto_resize(request.mode == "dialog")

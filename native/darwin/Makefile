@@ -361,6 +361,7 @@ NATIVE_TESTS = observe_test \
   document_viewport_marker_test \
   document_menu_key_equivalent_test \
   document_throttle_test \
+  document_draw_covered_test \
   document_caches_test \
   document_backforward_test \
   document_page_cache_test \

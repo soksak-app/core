@@ -24,7 +24,7 @@ unsafe extern "C" {
     ) -> bool;
     fn sp_webview_set_appearance(view: *mut c_void, dark: bool) -> bool;
     fn sp_webview_collect_garbage(view: *mut c_void) -> bool;
-    fn sp_webview_render_occluded(view: *mut c_void) -> bool;
+    fn sp_webview_render_occluded(view: *mut c_void, render: bool) -> bool;
     fn sp_window_composition(window: *mut c_void) -> *mut c_void;
     fn sp_surface_create(view: *mut c_void) -> *mut c_void;
     fn sp_surface_close(surface: *mut c_void);
@@ -120,9 +120,10 @@ pub fn set_main_appearance(view: &PlatformWebview, dark: bool) -> Result<(), Str
     Ok(())
 }
 
-/// Keeps the document of the webview shown and its rendering running while its window is occluded.
-pub fn render_occluded(view: &PlatformWebview) -> Result<(), String> {
-    if unsafe { sp_webview_render_occluded(view.inner()) } {
+/// With render, keeps the document of the webview shown and its rendering running while its window is occluded; without,
+/// gives the webview back the occlusion detection of WebKit.
+pub fn render_occluded(view: &PlatformWebview, render: bool) -> Result<(), String> {
+    if unsafe { sp_webview_render_occluded(view.inner(), render) } {
         Ok(())
     } else {
         Err("this WebKit cannot render a webview while its window is occluded".into())
