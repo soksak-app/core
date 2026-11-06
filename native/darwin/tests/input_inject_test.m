@@ -369,10 +369,16 @@ static void checkMoveReachesEveryOwner(void) {
     [window release];
 }
 
-// A press, drag and release of a key window pass the application as a person's gesture does: the local monitors see them before
-// the view, and the driver does not move the first responder ahead of the press. A window that is not the key window keeps direct
-// delivery.
+// The real activation, which this test gives in place of AppKit. It is replaced before the first virtual key window, so the
+// virtual state reads it as the answer of AppKit.
+static BOOL reallyActive;
+static BOOL testIsActive(id self, SEL selector) { return reallyActive; }
+
+// A press, drag and release of the key window of the application that is really active pass the application as a person's
+// gesture does: the local monitors see them before the view, and the driver does not move the first responder ahead of the
+// press. A window that is not the key window keeps direct delivery.
 static void checkKeyWindowPressPassesApplication(void) {
+    reallyActive = YES;
     NSWindow *window = [[SPKeyAnswerWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
@@ -405,6 +411,7 @@ static void checkKeyWindowPressPassesApplication(void) {
     check(pressed.ups == 1, [NSString stringWithFormat:@"AppKit delivers the release of a key window to the pressed view once (%lu)", (unsigned long)pressed.ups]);
     [window close];
     [window release];
+    reallyActive = NO;
 
     NSWindow *other = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -673,6 +680,7 @@ static void checkKeyOfInactiveApplicationArrives(void) {
 }
 
 int main(void) { @autoreleasepool {
+    method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(isActive)), (IMP)testIsActive);
     appKitKeyWindow = (NSWindow *(*)(id, SEL))method_setImplementation(
         class_getInstanceMethod(NSApplication.class, @selector(keyWindow)), (IMP)keyWindowWithNamed);
     IMP appKitButtons = pressedButtonsImplementation();

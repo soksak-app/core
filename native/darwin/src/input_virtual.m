@@ -40,6 +40,10 @@ bool sp_input_virtual_real_key(void *handle) {
     return window.isKeyWindow;
 }
 
+bool sp_input_virtual_through_application(void *window) {
+    return window && sp_input_virtual_real_active() && sp_input_virtual_real_key(window);
+}
+
 bool sp_input_virtual_is(void *window) {
     return window && (__bridge void *)answering() == window;
 }

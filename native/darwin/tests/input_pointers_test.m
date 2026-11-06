@@ -4,9 +4,11 @@
 // naming that pointer. The rejection for a page that the input method of the system serves needs the key window of the active
 // application and is checked only in the activation tier.
 //
-// The test process is never active, and its windows are not key windows unless a window answers as one.
+// The test process is never active, and its windows are not key windows unless a window answers as one. A press passes the
+// application only in the key window of the application that is really active, so the case of that window answers both.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #import "input_inject.h"
 #import "input_press_context.h"
 #import "webview_input.h"
@@ -97,6 +99,10 @@ static NSRect awayFromPointer(NSSize size, CGFloat shift) {
 - (void)mouseMoved:(NSEvent *)event { [self record:@"moved" event:event]; }
 @end
 
+// The real activation, which this test gives in place of AppKit.
+static BOOL reallyActive;
+static BOOL testIsActive(id self, SEL selector) { return reallyActive; }
+
 @interface SPKeyAnswerWindow : NSWindow
 @end
 @implementation SPKeyAnswerWindow
@@ -184,7 +190,9 @@ static void checkOneWindow(void) {
     check(!sp_input_press_open(window, 0) && !sp_input_press_open(window, 1), @"no press stays open in the window");
     [window close]; [window release];
 
-    // AppKit keeps one target of each button of a window that passes presses through -[NSApplication sendEvent:].
+    // AppKit keeps one target of each button of a window that passes presses through -[NSApplication sendEvent:]: the key
+    // window of the application that is really active.
+    reallyActive = YES;
     SPRecordingView *keyLeft = nil, *keyRight = nil;
     NSWindow *key = makeWindow(SPKeyAnswerWindow.class, 0, &keyLeft, &keyRight);
     check(input(key, "a", 20, 20, 1, 0) == SP_INPUT_DELIVERED, @"pointer a presses in a key window");
@@ -194,6 +202,7 @@ static void checkOneWindow(void) {
     check(input(key, "b", 170, 20, 1, 1) == SP_INPUT_DELIVERED && input(key, "b", 170, 20, 3, 1) == SP_INPUT_DELIVERED,
         @"pointer b presses the key window after that release");
     [key close]; [key release];
+    reallyActive = NO;
 }
 
 // A window that goes away ends the press of its pointer, and only that one.
@@ -297,6 +306,7 @@ static void checkNames(void) {
 }
 
 int main(void) { @autoreleasepool {
+    method_setImplementation(class_getInstanceMethod(NSApplication.class, @selector(isActive)), (IMP)testIsActive);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
