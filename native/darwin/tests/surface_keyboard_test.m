@@ -37,7 +37,17 @@ static void typeKeys(NSWindow *window, const char *text) {
     }
 }
 
-// Runs the event queue of the application, where the input that a hold gives back takes its turns, for the interval.
+// Runs the event queue of the application until it holds no event. The input that a hold gives back takes its turns there: the
+// end of a hold posts every piece of it to the queue at once, so the given input has run when the queue is empty, however long
+// each turn takes.
+static void runQueuedEvents(void) {
+    NSEvent *event;
+    while ((event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:NSDate.distantPast inMode:NSDefaultRunLoopMode dequeue:YES])) {
+        [NSApp sendEvent:event];
+    }
+}
+
+// Runs the event queue of the application for the interval, for a hold that must outlast it.
 static void runEvents(NSTimeInterval interval) {
     NSDate *until = [NSDate dateWithTimeIntervalSinceNow:interval];
     while (until.timeIntervalSinceNow > 0) {
@@ -447,13 +457,13 @@ int main(void) { @autoreleasepool {
         check(sp_input_pointer(holding, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the workbench is delivered");
         check(sp_input_pointer(holding, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "its release is delivered");
         typeKeys(holding, "abcdefghijklm");
-        runEvents(0.05);
+        runQueuedEvents();
     });
     check([waiting isEqual:@""], [NSString stringWithFormat:@"no key reaches the region before the decision, got \"%@\"", waiting].UTF8String);
     NSString *decided = regionKeys(^{
         sp_surface_focus(heldHost);
         sp_window_keyboard_decided(holding);
-        runEvents(0.1);
+        runQueuedEvents();
     });
     check([decided isEqual:@"abcdefghijklm"],
         [NSString stringWithFormat:@"the 13 keys reach the region of the decided surface in order, got \"%@\"", decided].UTF8String);
@@ -470,7 +480,7 @@ int main(void) { @autoreleasepool {
             sp_input_pointer(holding, 200, 250, 3, 0, 0, 0);
             typeKeys(holding, "abc");
             sp_surface_focus(heldHost);
-            runEvents(0.05);
+            runQueuedEvents();
         }) retain];
         check(holding.firstResponder == (NSResponder *)heldRegion, "a call without the decision moves the keyboard");
         runEvents(1.5);
@@ -486,7 +496,7 @@ int main(void) { @autoreleasepool {
     check([early isEqual:@""], [NSString stringWithFormat:@"no key reaches the region 1.5 s into a hold, got \"%@\"", early].UTF8String);
     NSString *late = regionKeys(^{
         sp_window_keyboard_decided(holding);
-        runEvents(0.1);
+        runQueuedEvents();
     });
     check([late isEqual:@"abc"], [NSString stringWithFormat:@"the decided call gives the waiting keys in order, got \"%@\"", late].UTF8String);
 
@@ -501,7 +511,7 @@ int main(void) { @autoreleasepool {
         }
         sp_surface_focus(heldHost);
         sp_window_keyboard_decided(holding);
-        runEvents(0.1);
+        runQueuedEvents();
     });
     for (NSDictionary *event in overflow) delivered += [event[@"name"] isEqual:@"native.input.key_down"];
     NSDictionary *droppedFields = eventFields(overflow, @"native.keyboard.hold_dropped");
@@ -516,14 +526,14 @@ int main(void) { @autoreleasepool {
         sp_window_modal_hold(holding);
         typeKeys(holding, "pq");
         sp_window_keyboard_decided(holding);
-        runEvents(0.05);
+        runQueuedEvents();
     });
     check([beforeModal isEqual:@""],
         [NSString stringWithFormat:@"no key passes before the modal takes the keyboard, also after a decided call, got \"%@\"", beforeModal].UTF8String);
     NSString *modalTook = regionKeys(^{
         [holding makeFirstResponder:(NSResponder *)heldRegion];
         sp_window_modal_hold_end(holding);
-        runEvents(0.1);
+        runQueuedEvents();
     });
     check([modalTook isEqual:@"pq"],
         [NSString stringWithFormat:@"the end of the modal hold gives the keys to the view that took the keyboard, got \"%@\"", modalTook].UTF8String);
@@ -535,14 +545,14 @@ int main(void) { @autoreleasepool {
         sp_window_modal_hold(holding);
         typeKeys(holding, "rs");
         sp_window_modal_hold_end(holding);
-        runEvents(0.05);
+        runQueuedEvents();
     });
     check([stillDeciding isEqual:@""],
         [NSString stringWithFormat:@"the keys wait for the decision after the modal hold ended, got \"%@\"", stillDeciding].UTF8String);
     NSString *bothEnded = regionKeys(^{
         sp_surface_focus(heldHost);
         sp_window_keyboard_decided(holding);
-        runEvents(0.1);
+        runQueuedEvents();
     });
     check([bothEnded isEqual:@"rs"],
         [NSString stringWithFormat:@"the decided call gives the keys in order once the modal hold ended, got \"%@\"", bothEnded].UTF8String);
@@ -557,7 +567,7 @@ int main(void) { @autoreleasepool {
         sp_window_keyboard_hold(holding);
         typeKeys(holding, "z");
         [holding close];
-        runEvents(0.05);
+        runQueuedEvents();
     });
     NSDictionary *closedFields = eventFields(closedHold, @"native.keyboard.hold_dropped");
     check([closedFields[@"count"] intValue] == 2 && [closedFields[@"reason"] isEqual:@"closed"],

@@ -247,6 +247,18 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F675",
+    implementation: [
+      { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_send_key_to_web_view(void *handle, void *event) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_virtual_typing_test.m", id: "Backspace deletes the last character" },
+      { file: "native/darwin/tests/webview_virtual_typing_test.m", id: "no key down reaches the input method" },
+    ],
+    expected: "A named key and a key with a stated text of the virtual key window reach a web view without its input context, so Backspace runs deleteBackward: and no key down reaches the input method.",
+    levels: ["native"],
+  },
+  {
     id: "F669",
     implementation: [
       { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
@@ -291,6 +303,35 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/windows_show_test.go", id: "TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError" },
     ],
     expected: "A framework window shown before the host starts reaches the registered platform, and a show with no registration ends the process with status 1 through the fatal error of the host instead of a nil dereference.",
+    levels: ["unit"],
+  },
+  {
+    id: "F670",
+    implementation: [
+      { file: "docs/spec/host-contract.md", symbol: "| `application.window.show-reaches-the-registered-platform-before-the-host-starts` |" },
+      { file: "docs/spec/host-contract.md", symbol: "| `application.window.show-without-a-registered-platform-ends-through-the-fatal-error` |" },
+      { file: "docs/spec/hosts.md", symbol: "| H58 | `src/windows_show_test.go` | none |" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/windows_show_test.go", id: "TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts" },
+      { file: "packages/host/go/src/windows_show_test.go", id: "TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError" },
+    ],
+    expected: "The two show tests of the Go language host library declare host contract cases of the Wails and the mygo host, and their file is a Go-only row of the allowed differences of the language host libraries.",
+    levels: ["unit"],
+  },
+  {
+    id: "F671",
+    implementation: [
+      { file: "packages/host/go/src/stall_watch.go", symbol: "samples.Wait()" },
+      { file: "packages/host/go/src/host.go", symbol: "func (s *Session) stopStallWatch() {" },
+      { file: "packages/host/rust/src/stall_watch.rs", symbol: "sample.join().is_err()" },
+      { file: "packages/host/rust/src/host.rs", symbol: "struct StallWatchStop(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/stall_watch_test.go", id: "TestStoppingTheWatchWaitsForTheRunningSample" },
+      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "stopping_the_watch_waits_for_the_running_sample" },
+    ],
+    expected: "The stop of the stall watch returns after the running sample ended and stored its host.stall.sampled, the watch records no stall and starts no sample after the stop, and each host stops the watch before the flush of its event log, so no sample process outlives the host.",
     levels: ["unit"],
   },
   {
@@ -13787,7 +13828,9 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F497 records the release of 0.0.39; it changes no runtime capability.
 // F664-1 corrects the documented build command without changing runtime behavior.
 // F510 records execution of existing suites and introduces no product capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+// F673 makes stall_watch_test wait for the states of the run loop instead of fixed run times; it changes no runtime capability.
+// F676 makes surface_keyboard_test judge the given keys when the event queue is empty instead of after a fixed interval; it changes no runtime capability.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

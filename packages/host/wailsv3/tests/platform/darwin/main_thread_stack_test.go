@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -150,13 +149,29 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 				defer emittedLock.Unlock()
 				return strings.Join(emitted, ",")
 			}
-			var beats atomic.Int64
+			// Each heartbeat of the watch, in its order: the time of the call, its lateness, which is 0 for a heartbeat that read a
+			// wait of the run loop, and the clock time at which it returned. A failure lists the heartbeats that it judged.
+			type beat struct {
+				now, late time.Duration
+				at        time.Time
+			}
+			var beatsLock sync.Mutex
+			var beats []beat
+			// waited receives the index of the first heartbeat that reads a wait of the run loop once the test armed it with
+			// waitArmed; both are held by beatsLock.
+			waited := make(chan int, 1)
+			waitArmed := false
 			heartbeat := host.StallHeartbeat(system)
+			resumed := make(chan struct{}, 1)
 			stop := host.StartStallWatch(host.StallWatchOptions{
 				Heartbeat: func() (time.Duration, time.Duration) {
 					now, answered := heartbeat()
-					if now != answered {
-						beats.Add(1)
+					beatsLock.Lock()
+					defer beatsLock.Unlock()
+					beats = append(beats, beat{now, now - answered, time.Now()})
+					if now == answered && waitArmed {
+						waitArmed = false
+						waited <- len(beats) - 1
 					}
 					return now, answered
 				},
@@ -167,36 +182,72 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 					emittedLock.Lock()
 					defer emittedLock.Unlock()
 					emitted = append(emitted, name)
+					if name == "host.stall.resumed" {
+						select {
+						case resumed <- struct{}{}:
+						default:
+						}
+					}
 				},
 			})
 			defer stop()
+			// beatsFrom returns the heartbeats from the index on.
+			beatsFrom := func(index int) []beat {
+				beatsLock.Lock()
+				defer beatsLock.Unlock()
+				return append([]beat(nil), beats[index:]...)
+			}
 			// A step that does not end in time for the next beat wakes the watch, and the heartbeats go on while it runs. A short
 			// step does not stall.
 			if err := onMain(system, func() error { spin(600 * time.Millisecond); return nil }); err != nil {
 				return err
 			}
-			if got := beats.Load(); got == 0 {
+			stepEnd := time.Now()
+			if len(beatsFrom(0)) == 0 {
 				return fmt.Errorf("no heartbeat in a step of 600 ms on the main thread")
 			}
 			if got := names(); got != "" {
 				return fmt.Errorf("the stall watch stored %s for a step of 600 ms", got)
 			}
-			// The run loop then waits: after the beat that was running, the watch sends nothing for a second.
-			time.Sleep(600 * time.Millisecond)
-			settled := beats.Load()
+			// The run loop then waits. The watch reads the wait with its next heartbeat and from then on sends nothing: no heartbeat
+			// follows the one that read the wait for a second. The last heartbeat may already have read it.
+			beatsLock.Lock()
+			if last := beats[len(beats)-1]; last.late == 0 {
+				waited <- len(beats) - 1
+			} else {
+				waitArmed = true
+			}
+			beatsLock.Unlock()
+			var settled int
+			select {
+			case settled = <-waited:
+			case <-time.After(10 * time.Second):
+				return fmt.Errorf("no heartbeat read a wait of the run loop within 10 s of the step; heartbeats %v", beatsFrom(0))
+			}
+			// The heartbeats from the end of the step to the one that read the wait, each with its clock time after the end and its
+			// lateness, show how long the run loop took to wait after the step.
+			var settling []string
+			for _, b := range beatsFrom(0)[:settled+1] {
+				if b.at.After(stepEnd) {
+					settling = append(settling, fmt.Sprintf("+%v late %v", b.at.Sub(stepEnd).Round(time.Millisecond), b.late))
+				}
+			}
+			t.Logf("stall heartbeat: after the step, %s", strings.Join(settling, ", "))
 			time.Sleep(time.Second)
-			if got := beats.Load() - settled; got != 0 {
-				return fmt.Errorf("%d heartbeats in a second of a run loop that waits", got)
+			if later := beatsFrom(settled + 1); len(later) != 0 {
+				return fmt.Errorf("%d heartbeats in a second of a run loop that waits, after the heartbeat %v that read the wait: %v",
+					len(later), beatsFrom(settled)[0], later)
 			}
 			// A step that holds the main thread is a stall, and its end is recorded.
 			if err := onMain(system, func() error { spin(1600 * time.Millisecond); return nil }); err != nil {
 				return err
 			}
-			for deadline := time.Now().Add(5 * time.Second); names() != "host.stall,host.stall.sampled,host.stall.resumed"; {
-				if time.Now().After(deadline) {
-					return fmt.Errorf("the stall watch stored %q for a step of 1.6 s", names())
-				}
-				time.Sleep(10 * time.Millisecond)
+			select {
+			case <-resumed:
+			case <-time.After(5 * time.Second):
+			}
+			if got := names(); got != "host.stall,host.stall.sampled,host.stall.resumed" {
+				return fmt.Errorf("the stall watch stored %q for a step of 1.6 s", got)
 			}
 			return nil
 		}},

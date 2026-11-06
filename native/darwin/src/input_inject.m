@@ -1145,14 +1145,16 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     // An inactive application has no key window for a key, and -[NSApplication sendEvent:] drops it while it answers delivered.
     // The key enters the virtual key window. A key down with Command or Control is offered as a key equivalent to the window
     // and then to the main menu, as -[NSApplication sendEvent:] does for its key window, so Command+C and Command+V run the
-    // items of the menu; a key that neither takes is sent to the window, which gives it to the first responder. A character key
-    // down with a stated text to a web view types that text through the text input of the web view.
+    // items of the menu; a key that neither takes is sent to the window, which gives it to the first responder. A key down of a
+    // named key or with a stated text goes to a web view without its input context: a stated text is typed through the text
+    // input of the web view, and a named key runs the command of its key binding.
     if (enterVirtual(window)) {
         if (down && (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl))) {
             *equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];
         }
-        if (!*equivalent) *typed = down && text && !named && sp_input_virtual_type_stated_text(window, event);
-        if (!*equivalent && !*typed) [window sendEvent:event];
+        bool toWebView = !*equivalent && down && (named || text) && sp_input_virtual_send_key_to_web_view(window, event);
+        *typed = toWebView && text && !named;
+        if (!*equivalent && !toWebView) [window sendEvent:event];
         return SP_INPUT_DELIVERED;
     }
     // A human key goes only to the key window. When another window is the key window, the key is not delivered to the target window and the

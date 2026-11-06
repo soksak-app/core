@@ -8,8 +8,8 @@
 //! `host.stall.sampled`, and the next heartbeat is `host.stall.resumed` with the length of the stall.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
@@ -51,7 +51,17 @@ pub struct StallWatchOptions {
     pub wait: Option<Wait>,
 }
 
-/// Starts the watch and returns the function that stops it.
+/// The end of the watch: whether it stopped, and the thread of the sample that started last. The watch starts a sample only
+/// while it holds this state and the stop has not come, so the stop joins every sample that started.
+#[derive(Default)]
+struct Ending {
+    stopped: bool,
+    sample: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Starts the watch and returns the function that stops it. The stop starts no sample after it and returns when the
+/// running sample ended and stored its `host.stall.sampled`, so the process of the sample does not outlive the host and the
+/// stall keeps its dump.
 pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
     // default: the host gives no clock, so the watch measures time with the monotonic clock from its start.
     let clock: Clock = options.clock.clone().unwrap_or_else(|| {
@@ -66,6 +76,8 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
     let stopped = Arc::new(AtomicBool::new(false));
     let stop = Arc::clone(&stopped);
     let sampling = Arc::new(AtomicBool::new(false));
+    let ending = Arc::new(Mutex::new(Ending::default()));
+    let stop_ending = Arc::clone(&ending);
     crate::routine::spawn_named("stall watch", move || {
         let emit_host = &options.emit_host;
         // A watched thread that takes no heartbeat any more ends the watch, and the error says so.
@@ -94,6 +106,16 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
             let last = answered.as_millis() as u64;
             match stalled_from {
                 None if now.saturating_sub(last) >= STALL_LATE.as_millis() as u64 => {
+                    // A stall that the watch finds after its stop is not recorded: the host ends, and the stop joins only a
+                    // sample that started before it.
+                    let mut end = ending
+                        .lock()
+                        // default: a lock that a panicking thread poisoned still holds the state of the end; the panic hook
+                        // records the panic.
+                        .unwrap_or_else(PoisonError::into_inner);
+                    if end.stopped {
+                        return;
+                    }
                     stalled_from = Some(last);
                     emit_host(
                         Level::Warn,
@@ -113,14 +135,14 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
                         let sample = Arc::clone(&options.sample);
                         let emit = Arc::clone(&options.emit_host);
                         let running = Arc::clone(&sampling);
-                        crate::routine::spawn_named("stall sample", move || {
+                        end.sample = Some(crate::routine::spawn_named("stall sample", move || {
                             let fields = match sample(&path) {
                                 Ok(()) => json!({"path": path}),
                                 Err(error) => json!({"path": path, "error": error}),
                             };
                             emit(Level::Warn, "host.stall.sampled", fields);
                             running.store(false, Ordering::Release);
-                        });
+                        }));
                     }
                 }
                 Some(from) if last > from => {
@@ -144,7 +166,23 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
             }
         }
     });
-    move || stop.store(true, Ordering::Release)
+    move || {
+        let sample = {
+            let mut end = stop_ending
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the state of the end; the panic hook records
+                // the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            end.stopped = true;
+            stop.store(true, Ordering::Release);
+            end.sample.take()
+        };
+        if let Some(sample) = sample
+            && sample.join().is_err()
+        {
+            crate::application_log::log_error("stall watch", "the sample of the threads panicked");
+        }
+    }
 }
 
 /// The file of a dump: `stall-host-<pid>-<ms>.txt` in the logs folder.
