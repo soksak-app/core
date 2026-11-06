@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- F674: The stall heartbeat entry of the Wails v3 main thread stack test judges the second of a waiting run loop from the heartbeat that read the wait instead of 600 ms after the step, and logs the time that the run loop took to wait; its run on the framework build is pending.
+- F674: The stall heartbeat entry of the Wails v3 main thread stack test judges each heartbeat after the heartbeat that read a wait by the wait that it read, so a wake of the run loop by another source no longer fails it and a heartbeat sent through a wait does, and it logs every turn of the main run loop in that second; its runs on the framework build are pending.
 - F675: A named key of the virtual key window, such as Backspace, runs the command of its key binding in a web view, because the bypass of the input method now replaces `-[NSView inputContext]`, through which WebKit reads the input context, instead of `-[WKWebView inputContext]`. Before, Backspace after Korean and `é` deleted nothing.
 - F676: `surface_keyboard_test` runs the event queue until it is empty after a call that ends a keyboard hold, instead of a fixed interval, because the end of a hold posts all the given input to the queue at once. The unchanged test failed under a background clamp as in CI; the test passes 10 of 10 runs and every run under the background clamp.
 - F673: `stall_watch_test` starts each step at the wait of the main run loop or the hold of the main thread and ends each run when its worker is done, instead of running the run loop for fixed times. The unchanged test failed under a utility clamp as in CI (`6 of 16 heartbeats read no lateness in a wait`); the test passes 10 of 10 runs and every run under the utility and the background clamp.

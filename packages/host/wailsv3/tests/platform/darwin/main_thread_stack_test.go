@@ -74,6 +74,78 @@ func onMain(system platform.Platform, work func() error) error {
 	return <-result
 }
 
+// stallBeat is one heartbeat of the stall watch: the time of the call and its lateness on the clock of the heartbeat, where a
+// heartbeat that read a wait of the run loop has the start of that wait as its time and no lateness, and the clock time at which it
+// returned.
+type stallBeat struct {
+	now, late time.Duration
+	at        time.Time
+}
+
+// stallBeats states the heartbeats, each time after from: a heartbeat that read a wait with the start of that wait, and any other
+// with the time of its call and its lateness.
+func stallBeats(beats []stallBeat, from time.Duration) string {
+	if len(beats) == 0 {
+		return "none"
+	}
+	var stated []string
+	for _, beat := range beats {
+		if beat.late == 0 {
+			stated = append(stated, fmt.Sprintf("read the wait from %v", (beat.now-from).Round(time.Microsecond)))
+		} else {
+			stated = append(stated, fmt.Sprintf("sent at %v, %v late", (beat.now-from).Round(time.Microsecond), beat.late))
+		}
+	}
+	return strings.Join(stated, ", ")
+}
+
+// runLoopTurns states the turns of the main run loop from the time on, each time after it: each wake with its mode, the start of
+// the wait that it ended and the next timer of that wait, then the activities of the turn up to its next wait.
+func runLoopTurns(activities []sampler.RunLoopActivity, from time.Duration) string {
+	var turns, turn []string
+	var wait *sampler.RunLoopActivity
+	end := func() {
+		if len(turn) > 0 {
+			turns = append(turns, strings.Join(turn, " "))
+			turn = nil
+		}
+	}
+	after := func(at time.Duration) time.Duration { return (at - from).Round(time.Microsecond) }
+	for index := range activities {
+		activity := &activities[index]
+		switch {
+		case activity.Activity == "wait":
+			if activity.At >= from {
+				turn = append(turn, "wait")
+				end()
+			}
+			wait = activity
+		case activity.At < from:
+		case activity.Activity == "wake":
+			end()
+			mode := "the default mode"
+			if !activity.DefaultMode {
+				mode = "another mode"
+			}
+			ended, timer := "a wait before the recorder", "no timer"
+			if wait != nil {
+				ended = fmt.Sprintf("the wait from %v", after(wait.At))
+				if wait.HasTimer {
+					timer = fmt.Sprintf("a timer due at %v", after(wait.At+wait.TimerIn))
+				}
+			}
+			turn = append(turn, fmt.Sprintf("wake at %v in %s, ending %s with %s:", after(activity.At), mode, ended, timer))
+		default:
+			turn = append(turn, activity.Activity)
+		}
+	}
+	end()
+	if len(turns) == 0 {
+		return "no turn"
+	}
+	return strings.Join(turns, "; ")
+}
+
 // The main thread runs no code on a stack other than its own while the host runs its main-thread steps
 // (docs/spec/hosts.md, main thread of the Wails host): the collector of a JavaScriptCore VM copies the stack of the main thread from
 // its stack pointer to the origin of its stack, and a stack pointer outside that stack ends the process.
@@ -149,14 +221,9 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 				defer emittedLock.Unlock()
 				return strings.Join(emitted, ",")
 			}
-			// Each heartbeat of the watch, in its order: the time of the call, its lateness, which is 0 for a heartbeat that read a
-			// wait of the run loop, and the clock time at which it returned. A failure lists the heartbeats that it judged.
-			type beat struct {
-				now, late time.Duration
-				at        time.Time
-			}
+			// Each heartbeat of the watch, in its order. A failure lists the heartbeats that it judged.
 			var beatsLock sync.Mutex
-			var beats []beat
+			var beats []stallBeat
 			// waited receives the index of the first heartbeat that reads a wait of the run loop once the test armed it with
 			// waitArmed; both are held by beatsLock.
 			waited := make(chan int, 1)
@@ -168,7 +235,7 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 					now, answered := heartbeat()
 					beatsLock.Lock()
 					defer beatsLock.Unlock()
-					beats = append(beats, beat{now, now - answered, time.Now()})
+					beats = append(beats, stallBeat{now, now - answered, time.Now()})
 					if now == answered && waitArmed {
 						waitArmed = false
 						waited <- len(beats) - 1
@@ -192,25 +259,31 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 			})
 			defer stop()
 			// beatsFrom returns the heartbeats from the index on.
-			beatsFrom := func(index int) []beat {
+			beatsFrom := func(index int) []stallBeat {
 				beatsLock.Lock()
 				defer beatsLock.Unlock()
-				return append([]beat(nil), beats[index:]...)
+				return append([]stallBeat(nil), beats[index:]...)
 			}
+			// The recorder keeps each activity of the main run loop from the step to the end of the second below, so a run states
+			// what woke the run loop.
+			sampler.StartRunLoopRecorder()
 			// A step that does not end in time for the next beat wakes the watch, and the heartbeats go on while it runs. A short
 			// step does not stall.
 			if err := onMain(system, func() error { spin(600 * time.Millisecond); return nil }); err != nil {
+				sampler.StopRunLoopRecorder()
 				return err
 			}
 			stepEnd := time.Now()
 			if len(beatsFrom(0)) == 0 {
+				sampler.StopRunLoopRecorder()
 				return fmt.Errorf("no heartbeat in a step of 600 ms on the main thread")
 			}
 			if got := names(); got != "" {
+				sampler.StopRunLoopRecorder()
 				return fmt.Errorf("the stall watch stored %s for a step of 600 ms", got)
 			}
-			// The run loop then waits. The watch reads the wait with its next heartbeat and from then on sends nothing: no heartbeat
-			// follows the one that read the wait for a second. The last heartbeat may already have read it.
+			// The run loop then waits, and the watch reads the wait with its next heartbeat. The last heartbeat may already have
+			// read it.
 			beatsLock.Lock()
 			if last := beats[len(beats)-1]; last.late == 0 {
 				waited <- len(beats) - 1
@@ -222,7 +295,8 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 			select {
 			case settled = <-waited:
 			case <-time.After(10 * time.Second):
-				return fmt.Errorf("no heartbeat read a wait of the run loop within 10 s of the step; heartbeats %v", beatsFrom(0))
+				sampler.StopRunLoopRecorder()
+				return fmt.Errorf("no heartbeat read a wait of the run loop within 10 s of the step; heartbeats %s", stallBeats(beatsFrom(0), 0))
 			}
 			// The heartbeats from the end of the step to the one that read the wait, each with its clock time after the end and its
 			// lateness, show how long the run loop took to wait after the step.
@@ -233,10 +307,30 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 				}
 			}
 			t.Logf("stall heartbeat: after the step, %s", strings.Join(settling, ", "))
+			// Through a wait the watch blocks and sends nothing (docs/spec/logging.md, stalls): a heartbeat that reads a wait
+			// returns the start of that wait, and the watch sends its next heartbeat only after the run loop woke from it. For a
+			// second the heartbeat after one that read a wait therefore reads a later wait or a run loop that handles an event; a
+			// heartbeat that reads the same wait again was sent through that wait. Whatever wakes the run loop is outside the
+			// watch, and the recorder states each wake.
 			time.Sleep(time.Second)
-			if later := beatsFrom(settled + 1); len(later) != 0 {
-				return fmt.Errorf("%d heartbeats in a second of a run loop that waits, after the heartbeat %v that read the wait: %v",
-					len(later), beatsFrom(settled)[0], later)
+			activities, recorded := sampler.StopRunLoopRecorder()
+			if recorded != nil {
+				return recorded
+			}
+			judged := beatsFrom(settled)
+			turns := runLoopTurns(activities, judged[0].now)
+			heartbeats := stallBeats(judged[1:], judged[0].now)
+			t.Logf("stall heartbeat: from the wait that a heartbeat read, %d heartbeats in a second: %s; the run loop: %s",
+				len(judged)-1, heartbeats, turns)
+			for index := 1; index < len(judged); index++ {
+				before, after := judged[index-1], judged[index]
+				if before.late == 0 && after.late == 0 && after.now == before.now {
+					return fmt.Errorf("heartbeat %d of the second read the wait that the heartbeat before it read, so the watch sent it through that wait; from that wait, heartbeats %s; the run loop: %s",
+						index, heartbeats, turns)
+				}
+			}
+			if got := names(); got != "" {
+				return fmt.Errorf("the stall watch stored %s in the second after the heartbeat that read the wait; the run loop: %s", got, turns)
 			}
 			// A step that holds the main thread is a stall, and its end is recorded.
 			if err := onMain(system, func() error { spin(1600 * time.Millisecond); return nil }); err != nil {
