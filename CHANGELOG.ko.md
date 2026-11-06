@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F675: 입력기 우회가 `-[WKWebView inputContext]` 대신 WebKit이 입력 컨텍스트를 읽는 `-[NSView inputContext]`를 교체하므로, Backspace 같은 virtual key window의 이름 있는 키가 web view에서 key binding의 명령을 실행한다. 전에는 한글과 `é` 뒤의 Backspace가 아무것도 지우지 않았다.
 - F676: hold의 끝은 돌려주는 입력을 모두 한 번에 queue에 넣으므로, `surface_keyboard_test`가 keyboard hold를 끝내는 호출 뒤에 정해진 시간 대신 event queue가 빌 때까지 실행한다. 바꾸기 전 test는 background clamp 아래에서 CI처럼 실패했고, test는 10번 중 10번과 background clamp 아래 모든 실행에서 통과한다.
 - F673: `stall_watch_test`가 run loop를 정해진 시간 동안 돌리는 대신 각 단계를 main run loop의 wait나 main thread의 hold에서 시작하고 worker가 끝나면 실행을 끝낸다. 바꾸기 전 test는 utility clamp 아래에서 CI처럼 실패했고(`6 of 16 heartbeats read no lateness in a wait`), test는 10번 중 10번과 utility·background clamp 아래 모든 실행에서 통과한다.
 - F672: Makefile의 모든 recipe는 export한 `PATH`로 찾은 `CARGO`로 cargo를 실행하므로, GNU Make 3.81이 rustup의 cargo folder 없는 `PATH`로 시작해도 cargo를 찾는다. cargo가 없으면 `check-cargo`가 cargo를 실행하는 target을 멈춘다.

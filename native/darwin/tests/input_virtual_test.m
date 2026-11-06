@@ -127,9 +127,9 @@ static const SEL *applicationSelectors(void) {
     selectors[2] = @selector(mainWindow);
     return selectors;
 }
-static IMP windowMethods[5], applicationMethods[3], webViewInputContext;
+static IMP windowMethods[5], applicationMethods[3], viewInputContext;
 static BOOL unchanged(void) {
-    if (webViewInputContext != method_getImplementation(class_getInstanceMethod(WKWebView.class, @selector(inputContext)))) return NO;
+    if (viewInputContext != method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)))) return NO;
     for (int i = 0; i < 5; i++) if (windowMethods[i] != method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]))) return NO;
     for (int i = 0; i < 3; i++) if (applicationMethods[i] != method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]))) return NO;
     return YES;
@@ -148,7 +148,7 @@ int main(void) { @autoreleasepool {
 
     for (int i = 0; i < 5; i++) windowMethods[i] = method_getImplementation(class_getInstanceMethod(NSWindow.class, windowSelectors()[i]));
     for (int i = 0; i < 3; i++) applicationMethods[i] = method_getImplementation(class_getInstanceMethod(NSApplication.class, applicationSelectors()[i]));
-    webViewInputContext = method_getImplementation(class_getInstanceMethod(WKWebView.class, @selector(inputContext)));
+    viewInputContext = method_getImplementation(class_getInstanceMethod(NSView.class, @selector(inputContext)));
 
     // A window that registered no page has no facts, and reading them fails the check instead of the process.
     NSWindow *bare = makeWindow(0);

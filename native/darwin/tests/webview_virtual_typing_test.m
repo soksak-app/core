@@ -2,17 +2,29 @@
 // active, so its window takes keys as the virtual key window and the input method of the system does not serve it. A key down
 // whose text the caller stated reaches the page as a person's key does, keydown, keypress, beforeinput and input, and inserts
 // that text through the text input of the web view whatever the input source of the system is: a Korean text and an accented
-// Latin letter reach the focused field, a key down that the page cancels inserts nothing, and a named key keeps its path.
+// Latin letter reach the focused field, a key down that the page cancels inserts nothing, and a named key runs the command of its
+// key binding. The input context of the test answers each key as an input method that does not serve the window does: it takes
+// the key and answers nothing, which the input context of a person's system does once the application has been active, so no
+// result depends on the state of the input method of the system.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #import "event_ring.h"
 #import "input_inject.h"
 #import "input_virtual.h"
+#import "private/appkit.h"
 #import "support/records.h"
 #import "webview_input.h"
 #import "window_facts.h"
 
 static int failures;
+// The key downs that reached the input method of an input context.
+static int inputMethodKeyDowns;
+// The input method of a window that it does not serve takes the key and answers nothing.
+static void inputMethodTakesAndAnswersNothing(NSTextInputContext *self, SEL selector, NSEvent *event, void (^handled)(BOOL)) {
+    if (event.type == NSEventTypeKeyDown) inputMethodKeyDowns++;
+    handled(YES);
+}
 static void check(BOOL ok, NSString *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message.UTF8String);
     if (!ok) failures++;
@@ -81,6 +93,8 @@ int main(void) { @autoreleasepool {
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(everything), @"the policy stores every level of every class");
     [NSApplication sharedApplication];
+    method_setImplementation(class_getInstanceMethod(NSTextInputContext.class, @selector(handleEventByInputMethod:completionHandler:)),
+        (IMP)inputMethodTakesAndAnswersNothing);
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 420, 300)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -128,11 +142,12 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a cancelled key down inserts nothing (events %@, value %@)", [events componentsJoinedByString:@", "], value(view)]);
     evaluate(view, @"cancel=false");
 
-    // A named key keeps its path: Backspace deletes the last character.
+    // A named key runs the command of its key binding: Backspace deletes the last character.
     events = type(window, view, "Backspace", nil, &records);
     check([value(view) isEqual:@"한글"], [NSString stringWithFormat:@"Backspace deletes the last character (events %@, value %@)",
         [events componentsJoinedByString:@", "], value(view)]);
     check(recordsTextInput(records, NO), [NSString stringWithFormat:@"the key down record of a named key states no text input (records %@)", records]);
+    check(inputMethodKeyDowns == 0, [NSString stringWithFormat:@"no key down reaches the input method, got %d", inputMethodKeyDowns]);
 
     [window close];
     [window release];

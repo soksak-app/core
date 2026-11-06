@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F675: A named key of the virtual key window, such as Backspace, runs the command of its key binding in a web view, because the bypass of the input method now replaces `-[NSView inputContext]`, through which WebKit reads the input context, instead of `-[WKWebView inputContext]`. Before, Backspace after Korean and `é` deleted nothing.
 - F676: `surface_keyboard_test` runs the event queue until it is empty after a call that ends a keyboard hold, instead of a fixed interval, because the end of a hold posts all the given input to the queue at once. The unchanged test failed under a background clamp as in CI; the test passes 10 of 10 runs and every run under the background clamp.
 - F673: `stall_watch_test` starts each step at the wait of the main run loop or the hold of the main thread and ends each run when its worker is done, instead of running the run loop for fixed times. The unchanged test failed under a utility clamp as in CI (`6 of 16 heartbeats read no lateness in a wait`); the test passes 10 of 10 runs and every run under the utility and the background clamp.
 - F672: Every recipe of the Makefile runs cargo through `CARGO`, which the exported `PATH` resolves, so GNU Make 3.81 finds cargo when it starts without the cargo folder of rustup in its `PATH`; `check-cargo` stops a target that runs cargo when none is found.

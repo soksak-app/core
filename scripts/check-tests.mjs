@@ -247,6 +247,18 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F675",
+    implementation: [
+      { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_send_key_to_web_view(void *handle, void *event) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_virtual_typing_test.m", id: "Backspace deletes the last character" },
+      { file: "native/darwin/tests/webview_virtual_typing_test.m", id: "no key down reaches the input method" },
+    ],
+    expected: "A named key and a key with a stated text of the virtual key window reach a web view without its input context, so Backspace runs deleteBackward: and no key down reaches the input method.",
+    levels: ["native"],
+  },
+  {
     id: "F669",
     implementation: [
       { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
