@@ -869,3 +869,34 @@ func TestTheCloseOfTheWindowWaitsForTheQueuedEvents(t *testing.T) {
 		t.Fatal("the window closed before its events left")
 	}
 }
+
+// A command that the menu, a control, a view or a shortcut runs is recorded as a request command.run is, once: the page answers
+// every run of a command through command.run (docs/spec/logging.md#automatic-entrances).
+func TestEveryRunOfACommandIsRecordedOnce(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := workbench.NewRegistry(declared)
+	var recorded []string
+	registry.Record(func(name string, _ time.Duration, failure error) {
+		recorded = append(recorded, fmt.Sprintf("%s %v", name, failure))
+	})
+	registry.Command("core.library.window", func(json.RawMessage) (any, error) { return 1, nil })
+	registry.CommandLater("core.projects.browse", func(_ json.RawMessage, answer func(any, error)) {
+		answer(nil, errors.New("stored failure"))
+	})
+	answered := 0
+	registry.RunLater("core.library.window", nil, func(any, error) { answered++ })
+	registry.RunLater("core.projects.browse", nil, func(any, error) { answered++ })
+	if _, err := registry.Run("core.library.window", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := registry.Answer("command.run", json.RawMessage(`{"name":"core.library.window","params":{}}`), nil); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"core.library.window <nil>", "core.projects.browse stored failure", "core.library.window <nil>", "core.library.window <nil>"}
+	if answered != 2 || !reflect.DeepEqual(recorded, want) {
+		t.Fatalf("the runs answered %d times and recorded %q, want 2 answers and %q", answered, recorded, want)
+	}
+}
