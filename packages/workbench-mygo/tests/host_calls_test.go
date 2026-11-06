@@ -243,3 +243,39 @@ func TestDrainFollowsTheCallsOfAnAnswer(t *testing.T) {
 		t.Fatalf("drain ended after %d answers", answers)
 	}
 }
+
+// The calls of a workbench that ended give no answer of a call that ran across the end, and a later call, also one that waits for
+// its order, reaches no handler.
+func TestEndedCallsAnswerNothingAndCallNothing(t *testing.T) {
+	queue := make(steps, 8)
+	release := make(chan struct{})
+	entered := make(chan string, 4)
+	calls := workbench.NewCalls(map[string]workbench.HostCall{
+		"presentSurfaces": func(context.Context, json.RawMessage) (any, error) {
+			entered <- "presentSurfaces"
+			<-release
+			return nil, errors.New("surface preparation 9 is no longer current")
+		},
+		"exposureChanged": func(context.Context, json.RawMessage) (any, error) {
+			entered <- "exposureChanged"
+			return nil, nil
+		},
+	}, queue.post)
+	var answers []string
+	calls.CallInOrder("surfaces", "presentSurfaces", nil, func(any, error) { answers = append(answers, "presentSurfaces") })
+	calls.CallInOrder("surfaces", "exposureChanged", nil, func(any, error) { answers = append(answers, "exposureChanged") })
+	queue.drain(t)
+	calls.End()
+	close(release)
+	queue.drain(t)
+	calls.Call("exposureChanged", nil, func(any, error) { answers = append(answers, "exposureChanged") })
+	queue.drain(t)
+	close(entered)
+	var reached []string
+	for name := range entered {
+		reached = append(reached, name)
+	}
+	if strings.Join(reached, " ") != "presentSurfaces" || len(answers) != 0 {
+		t.Fatalf("the ended calls reached %v and answered %v", reached, answers)
+	}
+}
