@@ -61,6 +61,8 @@ type SidebarMetrics struct {
 	// the system whatever font the settings choose.
 	SectionHeadWeight float32
 	SectionHeadFont   string
+	// SectionHeadLine is the line height of the name of a section, the ratio of the chrome metrics that every text of the workbench has.
+	SectionHeadLine float32
 	// SectionTabMark is the height of the mark of the selected tab of a `tabs` set.
 	SectionTabMark float32
 	// SectionHeadMix and SectionHeadHoverMix are the shares of the text color over the card in a section band, and in a band under
@@ -297,7 +299,7 @@ func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, sectio
 			icon = chevronRight
 		}
 		ui.Icon(c, icon).Size(metrics.SectionHeadText, metrics.SectionHeadText)
-		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).SingleLine().Ellipsis("…").FontSize(metrics.SectionHeadText).Font(metrics.SectionHeadFont).FontWeight(int(metrics.SectionHeadWeight)).TextColor(theme.Text)
+		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).SingleLine().Ellipsis("…").FontSize(metrics.SectionHeadText).LineHeight(metrics.SectionHeadLine).Font(metrics.SectionHeadFont).FontWeight(int(metrics.SectionHeadWeight)).TextColor(theme.Text)
 	})
 }
 
@@ -433,7 +435,7 @@ func drawSectionTab(c *ui.Context, binder *Binder, frame SidebarFrame, section S
 		tab.Background(faded(theme.Text, metrics.SectionHeadHoverMix-metrics.SectionHeadMix))
 	}
 	tab.Children(func() {
-		ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).Font(metrics.SectionHeadFont).FontWeight(int(metrics.SectionHeadWeight)).TextColor(color).Padding(0, metrics.SectionHeadPad)
+		ui.Text(c, section.Name).NoWrap().FontSize(metrics.SectionHeadText).LineHeight(metrics.SectionHeadLine).Font(metrics.SectionHeadFont).FontWeight(int(metrics.SectionHeadWeight)).TextColor(color).Padding(0, metrics.SectionHeadPad)
 		if selected {
 			ui.Box(c).Absolute().Left(0).Right(0).Bottom(0).Height(metrics.SectionTabMark).Background(frame.Rail)
 		}
