@@ -2,8 +2,7 @@
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import fs, { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { syncBuiltinESMExports } from "node:module";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -11,6 +10,9 @@ import { startFakeEndpoint } from "@soksak/client/testing";
 import { e2ePlan, finishRoot, newConfigRoot, remainingProcesses, runPlan } from "../test-app.mjs";
 
 const node = (code) => [process.execPath, "-e", code];
+// The limit of a test of a start step is the limit of the step (START_LIMIT_MS, 60 s) and some more: at a high load of the file system
+// events service the watch of the folder can become active after that limit, and the read at the limit then ends the step.
+const START_TEST_LIMIT_MS = 70000;
 const step = (name, phase, code) => ({ name, phase, kind: "run", argv: node(code), env: {} });
 
 function workspace(t) {
@@ -102,7 +104,7 @@ test("a failed check does not skip the next check", { timeout: 10000 }, async ()
   assert.ok(lines.some((line) => /^passed two /.test(line)), lines.join("\n"));
 });
 
-test("a start step ends when the application writes endpoint.json and fails when the application exits first", { timeout: 10000 }, async (t) => {
+test("a start step ends when the application writes endpoint.json and fails when the application exits first", { timeout: START_TEST_LIMIT_MS }, async (t) => {
   const configDir = workspace(t);
   const writes = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(join(configDir, "endpoint.json"))}, "{}"), 200); setInterval(() => {}, 1000)`;
   const { lines, write } = recorder();
@@ -116,25 +118,14 @@ test("a start step ends when the application writes endpoint.json and fails when
   assert.ok(lines.some((line) => line.startsWith("failed start app ")), lines.join("\n"));
 });
 
-test("a start step ends when endpoint.json is written before the watch of the folder is active", { timeout: 10000 }, async (t) => {
-  // A node:fs watch of a folder returns before the FSEvents stream of macOS is active and reports nothing that changed before; at a high
-  // load that time exceeds the 200 ms after which the application writes the file. The fault injection gives every node:fs watch that
-  // time (no notification in the first 400 ms), so a start step that relies on a notification of the write never ends.
-  const real = fs.watch;
-  t.mock.method(fs, "watch", (path, ...rest) => {
-    const watcher = real(path, ...rest);
-    const activeAt = Date.now() + 400;
-    const emit = watcher.emit.bind(watcher);
-    watcher.emit = (name, ...event) => (name === "change" && Date.now() < activeAt ? false : emit(name, ...event));
-    return watcher;
-  });
-  syncBuiltinESMExports();
-  t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+test("a start step ends when endpoint.json is written before the watch of the folder is active", { timeout: START_TEST_LIMIT_MS }, async (t) => {
+  // The file is in the folder before the step starts its watch, so no notification of the watch reports it: only the read of the
+  // folder once the watch is active, or at the limit, finds it.
   const configDir = workspace(t);
-  const writes = `setTimeout(() => require("fs").writeFileSync(${JSON.stringify(join(configDir, "endpoint.json"))}, "{}"), 200); setInterval(() => {}, 1000)`;
+  writeFileSync(join(configDir, "endpoint.json"), "{}");
   const children = new Map();
   t.after(() => children.get("app")?.kill());
-  const started = { name: "start app", phase: "prepare", kind: "start", app: "app", argv: node(writes), configDir, output: join(configDir, "app.out") };
+  const started = { name: "start app", phase: "prepare", kind: "start", app: "app", argv: node("setInterval(() => {}, 1000)"), configDir, output: join(configDir, "app.out") };
   assert.deepEqual(await runPlan([started], { write: () => {}, children }), []);
 });
 
