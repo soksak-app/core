@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F676: `surface_keyboard_test` runs the event queue until it is empty after a call that ends a keyboard hold, instead of a fixed interval, because the end of a hold posts all the given input to the queue at once. The unchanged test failed under a background clamp as in CI; the test passes 10 of 10 runs and every run under the background clamp.
 - F673: `stall_watch_test` starts each step at the wait of the main run loop or the hold of the main thread and ends each run when its worker is done, instead of running the run loop for fixed times. The unchanged test failed under a utility clamp as in CI (`6 of 16 heartbeats read no lateness in a wait`); the test passes 10 of 10 runs and every run under the utility and the background clamp.
 - F510-1: Final acceptance completion retains its owning native test links, and verification-only execution is classified separately. The actual inventory and all 45 owner cases pass.
 - F664: All 12 focused cases across both hosts pass from two independent initial states using the frozen local candidate and installed component cohort. Complete audits and cleanup pass, and raw input identities frozen after preparation remain unchanged after each run. Initial fixture and selection failures are retained and corrected. Earlier F658 guard-mutation evidence, the actual Editor baseline, the separate native close fixture and Editor E58 file-write race verification keep their distinct scopes; this does not establish native acceptance of the latest Editor source.
