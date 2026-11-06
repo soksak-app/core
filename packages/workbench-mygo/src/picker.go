@@ -649,7 +649,8 @@ func (s *Shell) pickerIcon(elements string) *ui.SVG {
 	return icon
 }
 
-// drawPicker draws the open layer over a window of width and height. A press outside it and Escape close it.
+// drawPicker draws the open layer over a window of width and height. A press outside it and Escape close it through
+// core.picker.close.
 func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 	layer := &s.picker
 	if !layer.open {
@@ -692,7 +693,7 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 		})
 	})
 	if !open {
-		s.closePicker()
+		s.binder.run("core.picker.close", nil)
 	}
 }
 

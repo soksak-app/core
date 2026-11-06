@@ -97,6 +97,8 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view가 키를 직접 처리하며 기본 동작을 유지한다 |
 
+네이티브 modal 메뉴는 mode가 `menu`인 modal web view이며([네이티브 modal](native-modals.ko.md)), Wails host와 Tauri host만 만든다. mygo workbench는 picker를 직접 그리고 키보드를 유지하므로, 그 host에서는 열린 picker의 Escape와 바깥 press가 registry를 거쳐 `core.picker.close`를 실행하고, `core.modal.dismiss`는 키의 답이 아니다.
+
 `core.library.search.focus`는 인자 없이 현재 표시된 library page의 검색 필드에 focus한다. Projects page에서는 `core.library.search`, plugins page에서는 `core.library.plugins.search`를 선택한다. Library가 표시되지 않으면 명시적으로 거부하며 library를 열거나 page를 바꾸지 않는다. Main-page keyboard handler와 전달된 shortcut command는 같은 동작을 사용한다. `core.focus.set`은 이름으로 노출 DOM을 선택하는 일반 명령으로 유지한다.
 
 ## 키보드 포커스

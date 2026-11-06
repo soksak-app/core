@@ -336,6 +336,44 @@ fn registry_build_checks_plugin_dependencies() {
     }
 }
 
+// contract: cli.registry.checks-plugin-dependencies
+#[test]
+fn registry_build_reads_a_union_in_the_plugin_dependencies() {
+    // A union is satisfied when a listed version is inside one of its parts, and the index keeps its text.
+    let (dir, _releases) = dependency_tree(&[
+        ("base", &[("@scope/sidecar-worker", "^0.1.0")]),
+        (
+            "ext",
+            &[
+                ("@scope/plugin-base", "^2.0.0 || ^1.0.0"),
+                ("@scope/sidecar-worker", "^0.3.0 || ^0.1.0"),
+            ],
+        ),
+    ]);
+    let (code, _, stderr) = run(&["registry", "build", dir.text()]);
+    assert_eq!(code, 0, "{stderr}");
+    let built: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("index.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        built["plugins"][1]["versions"][0]["sidecars"].to_string(),
+        r#"{"@scope/sidecar-worker":"^0.3.0 || ^0.1.0"}"#
+    );
+    // A union of which no part holds a listed version is refused with its text.
+    let (dir, _releases) = dependency_tree(&[
+        ("base", &[("@scope/sidecar-worker", "^0.1.0")]),
+        ("ext", &[("@scope/plugin-base", "^2.0.0 || ^3.0.0")]),
+    ]);
+    let (code, _, stderr) = run(&["registry", "build", dir.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: ext 1.0.0: plugin dependency @scope/plugin-base ^2.0.0 || ^3.0.0 is satisfied by no listed version\n"
+        )
+    );
+}
+
 // contract: cli.registry.rejects-without-writing
 #[test]
 fn registry_build_rejects_a_mismatch_without_writing_the_index() {

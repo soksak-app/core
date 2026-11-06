@@ -1,6 +1,6 @@
 // The application update state and operation of the window (docs/spec/installation.md#application-update).
 import { beginOperation } from "./operations.js";
-import { compareVersions, satisfies } from "./version-range.js";
+import { compareVersions, rangeContains } from "@soksak/plugin-api";
 
 /**
  * The page of a published release for the URL of its file, `<repository>/releases/download/<tag>/<file>`; null for any
@@ -24,9 +24,9 @@ function incompatiblePlugins(pluginsState, candidate) {
   for (const [id, record] of Object.entries(pluginsState.installed.plugins)) {
     const entry = pluginsState.index.plugins.find((plugin) => plugin.id === id);
     const installed = entry?.versions.find((item) => item.version === record.version);
-    if (!installed || satisfies(installed.engines.soksak, candidate)) continue;
+    if (!installed || rangeContains(installed.engines.soksak, candidate)) continue;
     const fits = entry.versions
-      .filter((item) => satisfies(item.engines.soksak, candidate) && !revoked.some((r) => r.id === id && r.version === item.version))
+      .filter((item) => rangeContains(item.engines.soksak, candidate) && !revoked.some((r) => r.id === id && r.version === item.version))
       .map((item) => item.version)
       .sort(compareVersions);
     found.push({ id, installed: record.version, range: installed.engines.soksak, compatible: fits.length ? fits.at(-1) : null });

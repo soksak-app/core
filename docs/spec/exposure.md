@@ -97,6 +97,8 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `Escape` | view | none | — | A plugin view has keyboard focus; the view handles the key itself, and runs the Escape command of an open picker only when it forwards the key |
 | `text input keys` | view | none | — | A plugin view has a text input focused; the view handles the key itself and it keeps its default action |
 
+A native modal menu is a modal web view of the mode `menu` ([native modals](native-modals.md)), which only the Wails and the Tauri host create. The mygo workbench draws its picker itself and keeps the keyboard, so on that host Escape and a press outside an open picker run `core.picker.close` through the registry, and `core.modal.dismiss` is not the answer of a key.
+
 `core.library.search.focus` takes no parameters and focuses the search field of the currently shown library page: `core.library.search` for projects or `core.library.plugins.search` for plugins. It rejects a hidden library explicitly without opening it or changing its page. The main-page keyboard handler and a forwarded shortcut command use this same operation. `core.focus.set` remains the generic command for focusing a named exposed DOM element.
 
 ## Keyboard focus

@@ -4,7 +4,7 @@
 
 import { beginOperation } from "./operations.js";
 import { errorText } from "./error-text.js";
-import { compareVersions, satisfies } from "./version-range.js";
+import { compareVersions, rangeContains } from "@soksak/plugin-api";
 
 export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable"];
 
@@ -70,7 +70,7 @@ export function pluginRows(loaded, state, refused) {
     else status = "reload";
     // The latest version is the one that installation selects: the newest whose range contains the running core
     // (docs/spec/installation.md#version-selection).
-    const selected = entry?.versions.filter((item) => satisfies(item.engines.soksak, state.core))
+    const selected = entry?.versions.filter((item) => rangeContains(item.engines.soksak, state.core))
       .toSorted((a, b) => compareVersions(a.version, b.version)).at(-1);
     const latest = selected ? selected.version : null;
     // default: name and description are decided in the order of the loaded manifest, the registry entry, and the plugin id (docs/spec/installation.md).

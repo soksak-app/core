@@ -970,6 +970,30 @@
       ]
     },
     {
+      "id": "deps.range-accepted-6",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0 || >=0.3.0 <0.4.0"
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "deps.range-refused-0",
       "manifest": {
         "id": "probe",
@@ -1114,6 +1138,106 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range 1.0.0-beta",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-6",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0 ||"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range ^0.1.0 ||",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-7",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0  || ^0.2.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range ^0.1.0  || ^0.2.0",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-8",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0||^0.2.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range ^0.1.0||^0.2.0",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-9",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0 || latest"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range ^0.1.0 || latest",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"

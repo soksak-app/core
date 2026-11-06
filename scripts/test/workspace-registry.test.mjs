@@ -267,14 +267,14 @@ const diagnosticSidecars = (url = "file:///registry/releases/scope-sidecar-engin
   repository: "https://github.com/scope/engine", versions: [{ version: "0.0.2", protocol: 1, releases: { "linux-x64": { url, sha256: SHA } } }] }];
 
 test("PLUGINS=public lists the plugin versions of the public registry whose sidecar ranges the diagnostic sidecar releases satisfy", { timeout: 1000 }, () => {
-  const index = publicIndex([publicVersion("0.0.1", { [ENGINE]: "^0.0.1" }), publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })],
+  const index = publicIndex([publicVersion("0.0.1", { [ENGINE]: "0.0.1" }), publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })],
     [{ id: "probe", version: "0.0.1", reason: "Probe." }]);
   assert.deepEqual(publicRegistryEntries(index, diagnosticSidecars()), {
     plugins: [publicPlugin("probe", [publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]), publicPlugin("plain", [publicVersion("0.0.4", {})])],
     packs: index.packs,
     // The public sidecars and the core releases are not listed, so the index withdraws none of them.
     revoked: { plugins: [{ id: "plain", version: "0.0.4", reason: "Probe." }], sidecars: [] },
-    dropped: [{ id: "probe", version: "0.0.1", sidecar: ENGINE, range: "^0.0.1" }],
+    dropped: [{ id: "probe", version: "0.0.1", sidecar: ENGINE, range: "0.0.1" }],
   });
   // A revoked version is not selected, so a newer revoked version that the diagnostic sidecars do not satisfy is left out.
   const revoked = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" }), publicVersion("0.0.3", { [ENGINE]: "^0.0.3" })],
@@ -286,7 +286,7 @@ test("PLUGINS=public fails when leaving out a version would make an installation
   const newer = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" }), publicVersion("0.0.3", { [ENGINE]: "^0.0.3" })]);
   assert.throws(() => publicRegistryEntries(newer, diagnosticSidecars()),
     /^Error: public registry: plugin probe 0\.0\.3 needs @scope\/sidecar-engine \^0\.0\.3, which no sidecar release of make build-registry SIDECARS=diagnostic satisfies, and its older version 0\.0\.2 is listed, so an installation would select 0\.0\.2 where the public registry selects 0\.0\.3$/);
-  const none = publicIndex([publicVersion("0.0.1", { [ENGINE]: "^0.0.1" })]);
+  const none = publicIndex([publicVersion("0.0.1", { [ENGINE]: "0.0.1" })]);
   assert.throws(() => publicRegistryEntries(none, diagnosticSidecars()),
     /^Error: public registry: plugin probe has no version whose sidecar ranges the sidecar releases of make build-registry SIDECARS=diagnostic satisfy$/);
   const unknown = publicIndex([publicVersion("0.0.2", { "@scope/sidecar-other": "^0.0.1" })]);
@@ -311,10 +311,10 @@ test("PLUGINS=public writes the public plugin entries beside the sidecar entries
   const fixture = diagnosticRegistry(t);
   mkdirSync(join(fixture.out, "plugins"), { recursive: true });
   writeFileSync(join(fixture.out, "plugins", "earlier.json"), "{}");
-  const index = publicIndex([publicVersion("0.0.1", { [ENGINE]: "^0.0.1" }), publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
+  const index = publicIndex([publicVersion("0.0.1", { [ENGINE]: "0.0.1" }), publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
   const result = buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index);
   assert.deepEqual(result, { index: join(fixture.out, "index.json"), plugins: 2, sidecars: 1, packs: 1,
-    dropped: [{ id: "probe", version: "0.0.1", sidecar: ENGINE, range: "^0.0.1" }] });
+    dropped: [{ id: "probe", version: "0.0.1", sidecar: ENGINE, range: "0.0.1" }] });
   const file = (...path) => JSON.parse(readFileSync(join(fixture.out, ...path), "utf8"));
   assert.deepEqual(file("plugins", "probe.json"), publicPlugin("probe", [publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]));
   assert.deepEqual(file("plugins", "plain.json"), index.plugins[1]);

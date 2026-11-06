@@ -59,7 +59,6 @@
     "environment.js",
     "app-update.js",
     "report-record.js",
-    "version-range.js",
     "installed-plugins.js",
     "host.js",
     "host-store.js",

@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F584-5-1: mygo workbench 에서 열린 picker 의 Escape 와 바깥 press 는 shortcut table 과 page 처럼 binder 를 거쳐 `core.picker.close` 를 실행한다. 이전에는 popover 가 command 없이 layer 를 닫아 `workbench.command` 기록이 남지 않았다. `docs/spec/exposure.md` 는 네이티브 modal 메뉴가 Wails host 와 Tauri host 의 modal web view 라고 밝히고, `e2e/view-keyboard-routing.test.mjs` 는 mygo 에서 그 Escape 에 `core.picker.close` 한 번과 `core.modal.dismiss` 없음을 요구한다.
+- F651: patch release는 호환 release이므로 `^0.0.z`는 `0.0.z`부터 `0.1.0` 미만의 모든 version을 포함한다. 전에는 `^0.0.39`가 `0.0.40` 미만에서 끝나서 core 0.0.40이 `^0.0.39`를 선언한 plugin을 설치하지 않았다. Go와 Rust의 `sok`, `@soksak/plugin-api`는 공유 표 `docs/spec/cases/version-ranges.json`을 재생하고, workbench는 자기 `version-range.js` 대신 `@soksak/plugin-api`로 범위를 읽으며, registry의 later-core 검사는 범위 `^0.0.z`가 포함하는 뒤의 `0.0` core를 보고하지 않는다.
+- F651: version 범위는 앞의 형식들을 정확히 ` || `로 이은 합집합 `<range> || <range>`이기도 하며, Go와 Rust의 `sok`, `@soksak/plugin-api`의 manifest reader와 `rangeContains`에서 한 부분이 포함하는 version을 포함한다. 빈 부분이 있거나 `||` 둘레의 공백이 다른 합집합은 거부한다.
 - F652: Terminal theme check는 capture origin, display scale과 content scale을 적용한 view crop을 읽고 sampling 실패 시에도 멈춘 recording을 제거한다. Owner Red는 wrong-pixel result 네 개와 empty-capture cleanup 실패를 재현하며 Green은 macOS에서 terminal-screen과 view-content case 16개 모두 통과한다. Native application acceptance는 다시 실행하지 않았다.
 - F499: Layout preparation test는 completion reaction을 기다리고 pending presentation이 다음 layout을 막는지 검증한다. 격리한 mutation에서 presentation await를 제거하면 tracked assertion이 실패하며, 변경하지 않은 구현은 macOS에서 preparation, queue와 frame-text case 23개 모두 통과한다.
 - F498: Node test discovery는 각 file 자체의 비어 있지 않은 passing result를 요구하며 skipped 또는 todo case를 거부한다. 네 package script가 support module 없이 test entrypoint를 선택한다. Owner Red에서 false pass 아홉 개를 관찰했고 Green은 macOS에서 discovery와 runner case 58개 모두 통과한다.

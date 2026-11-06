@@ -59,44 +59,74 @@ func ParseVersion(text string) (*semver.Version, error) {
 	return v, nil
 }
 
-// Range is the inclusive lower bound Min and the exclusive upper bound Below. When Below is nil, there is no upper
-// bound. The bounds are the forms of docs/spec/installation.md, and the versions are compared with the library.
-type Range struct {
+// Bounds is the inclusive lower bound Min and the exclusive upper bound Below of one form of a range. When Below is nil,
+// there is no upper bound. The bounds are the forms of docs/spec/installation.md, and the versions are compared with the
+// library.
+type Bounds struct {
 	Min   *semver.Version
 	Below *semver.Version
 }
 
-// Contains reports whether v is inside the range.
-func (r Range) Contains(v *semver.Version) bool {
-	return v.Compare(r.Min) >= 0 && (r.Below == nil || v.Compare(r.Below) < 0)
+// Contains reports whether v is inside the bounds.
+func (b Bounds) Contains(v *semver.Version) bool {
+	return v.Compare(b.Min) >= 0 && (b.Below == nil || v.Compare(b.Below) < 0)
 }
 
-// ParseRange reads the ranges `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`. `*` is `>=0.0.0`, that
-// is, every version. The forms are matched here before the versions of a form are read by ParseVersion.
+// Range is the union of the bounds of its parts, in the order of the text; a range of one form has one part.
+type Range []Bounds
+
+// Contains reports whether v is inside the bounds of a part of the range.
+func (r Range) Contains(v *semver.Version) bool {
+	return slices.ContainsFunc(r, func(b Bounds) bool { return b.Contains(v) })
+}
+
+// rangeSeparator joins the parts of a union of ranges; no other spacing around `||` separates parts.
+const rangeSeparator = " || "
+
+// ParseRange reads a range: one of the forms `*`, `x.y.z`, `^x.y.z`, `~x.y.z`, `>=x.y.z` and `>=x.y.z <a.b.c`, or a union
+// of such forms joined by rangeSeparator. A part that is not one of the forms refuses the whole range and names it.
 func ParseRange(text string) (Range, error) {
+	parts := strings.Split(text, rangeSeparator)
+	r := make(Range, 0, len(parts))
+	for _, part := range parts {
+		b, err := parseBounds(part)
+		if err != nil && len(parts) > 1 {
+			return nil, fmt.Errorf("invalid version range %s: %w", quote(text), err)
+		}
+		if err != nil {
+			return nil, err
+		}
+		r = append(r, b)
+	}
+	return r, nil
+}
+
+// parseBounds reads one form of a range. `*` is `>=0.0.0`, that is, every version. The forms are matched here before the
+// versions of a form are read by ParseVersion.
+func parseBounds(text string) (Bounds, error) {
 	if text == "*" {
-		return Range{Min: semver.New(0, 0, 0, "", "")}, nil
+		return Bounds{Min: semver.New(0, 0, 0, "", "")}, nil
 	}
 	if rest, ok := strings.CutPrefix(text, ">="); ok {
 		low, high, found := strings.Cut(rest, " <")
 		if found && !strings.ContainsAny(low, " ") && !strings.ContainsAny(high, " ") && low != "" && high != "" {
 			min, err := ParseVersion(low)
 			if err != nil {
-				return Range{}, err
+				return Bounds{}, err
 			}
 			below, err := ParseVersion(high)
 			if err != nil {
-				return Range{}, err
+				return Bounds{}, err
 			}
 			if min.Compare(below) >= 0 {
-				return Range{}, fmt.Errorf("invalid version range %s: empty", text)
+				return Bounds{}, fmt.Errorf("invalid version range %s: empty", text)
 			}
-			return Range{min, below}, nil
+			return Bounds{min, below}, nil
 		}
 		// >=x.y.z has only a lower bound and no upper bound.
 		if !found && rest != "" && !strings.ContainsAny(rest, " ") {
 			if min, err := ParseVersion(rest); err == nil {
-				return Range{Min: min}, nil
+				return Bounds{Min: min}, nil
 			}
 		}
 	}
@@ -106,7 +136,7 @@ func ParseRange(text string) (Range, error) {
 	}
 	v, err := ParseVersion(text[len(operator):])
 	if err != nil {
-		return Range{}, fmt.Errorf("invalid version range %s: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z or >=x.y.z <a.b.c", quote(text))
+		return Bounds{}, fmt.Errorf("invalid version range %s: expected *, x.y.z, ^x.y.z, ~x.y.z, >=x.y.z, >=x.y.z <a.b.c or such ranges joined by \" || \"", quote(text))
 	}
 	major, minor, patch := v.Major(), v.Minor(), v.Patch()
 	var below *semver.Version
@@ -117,12 +147,11 @@ func ParseRange(text string) (Range, error) {
 		below = semver.New(major, minor+1, 0, "", "")
 	case major > 0:
 		below = semver.New(major+1, 0, 0, "", "")
-	case minor > 0:
-		below = semver.New(0, minor+1, 0, "", "")
 	default:
-		below = semver.New(0, 0, patch+1, "", "")
+		// Below 1.0.0 the minor part changes for an incompatible release, and a patch release is compatible, also in 0.0.
+		below = semver.New(0, minor+1, 0, "", "")
 	}
-	return Range{v, below}, nil
+	return Bounds{v, below}, nil
 }
 
 // Satisfies reports whether the version is inside the range. Both must be values that were already checked.
