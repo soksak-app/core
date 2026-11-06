@@ -36,14 +36,12 @@ void *sp_window_set_main_webview(void *handle, void *mainHandle) {
         sp_log_error("window facts", "the main web view cannot render at the display rate");
         return NULL;
     }
-    // For the same reason the document is not hidden when the window is occluded. WebKit hides the document
-    // of an occluded window and stops animation frames, so the layout indicator of an occluded window and
-    // the commands that wait for it would not finish.
-    if (![main respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) {
-        sp_log_error("window facts", "_setWindowOcclusionDetectionEnabled: is unavailable");
+    // For the same reason this web view renders while the window is occluded, so that the layout indicator of an
+    // occluded window and the commands that wait for it finish.
+    if (!sp_webview_render_occluded(main)) {
+        sp_log_error("window facts", "the main web view cannot render while its window is occluded");
         return NULL;
     }
-    main._windowOcclusionDetectionEnabled = NO;
     // Open the new document of the main frame in a new process so that a reload and a page change do
     // not keep the previous document.
     if (!sp_webview_replace_documents_in_new_process(main)) {

@@ -332,6 +332,7 @@ NATIVE_TESTS = observe_test \
   webview_input_records_test \
   window_facts_test \
   window_occlusion_test \
+  webview_render_occluded_test \
   window_responder_test \
   window_reveal_test \
   window_show_test \

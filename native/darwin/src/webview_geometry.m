@@ -993,6 +993,17 @@ void sp_webview_count_objects(void *handle, bool document, sp_page_objects_done 
     }];
 }
 
+bool sp_webview_render_occluded(void *webview) {
+    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
+    WKWebView *view = (WKWebView *)webview;
+    if (![view respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) {
+        sp_log_error("webview rendering", "_setWindowOcclusionDetectionEnabled: is unavailable");
+        return false;
+    }
+    view._windowOcclusionDetectionEnabled = NO;
+    return true;
+}
+
 bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     SPSurfaceHost *host = surfaceHost((NSView *)surfaceHandle);
@@ -1001,15 +1012,12 @@ bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {
         return false;
     }
     WKWebView *view = (WKWebView *)viewHandle;
-    // The document of the view stays visible and runs animation frames while the window is occluded, as the document of
-    // the main web view does (sp_window_set_main_webview): surface captures and paint acknowledgements wait for the
-    // rendering of the view, so they must finish in an occluded window too. WebKit hides the document of an occluded
-    // window and stops its animation frames otherwise.
-    if (![view respondsToSelector:@selector(_setWindowOcclusionDetectionEnabled:)]) {
-        sp_log_error("surface", "_setWindowOcclusionDetectionEnabled: is unavailable");
+    // Surface captures and paint acknowledgements wait for the rendering of the view, so they must finish in an occluded
+    // window too.
+    if (!sp_webview_render_occluded(view)) {
+        sp_log_error("surface", "the view cannot render while its window is occluded");
         return false;
     }
-    view._windowOcclusionDetectionEnabled = NO;
     view.frame = host.bounds;
     view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     // The view draws no opaque backing from its first frame, also in a surface that is already shown.
