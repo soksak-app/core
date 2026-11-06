@@ -464,7 +464,7 @@ int main(void) { @autoreleasepool {
     // wait more than a second later, nothing is recorded for the wait, and the decided call gives them to its target in order.
     sp_window_focus_workbench(holding);
     __block NSString *undecided = nil;
-    NSArray<NSDictionary *> *waited = capturedEvents(^{
+    NSArray<NSDictionary *> *heldEvents = capturedEvents(^{
         undecided = [regionKeys(^{
             sp_input_pointer(holding, 200, 250, 1, 0, 0, 0);
             sp_input_pointer(holding, 200, 250, 3, 0, 0, 0);
@@ -478,7 +478,7 @@ int main(void) { @autoreleasepool {
     [undecided autorelease];
     check([undecided isEqual:@""], [NSString stringWithFormat:@"the keys wait after a call without the decision, got \"%@\"", undecided].UTF8String);
     NSMutableString *early = [NSMutableString string];
-    for (NSDictionary *event in waited) {
+    for (NSDictionary *event in heldEvents) {
         if ([event[@"name"] isEqual:@"native.input.key_down"]) [early appendString:event[@"fields"][@"characters"]];
         check(![event[@"name"] hasPrefix:@"native.keyboard.hold_"],
             [NSString stringWithFormat:@"a hold that waits records nothing, got %@", event[@"name"]].UTF8String);

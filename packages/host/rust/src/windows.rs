@@ -184,7 +184,7 @@ pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(
 /// keyboard hold that its workbench owed, because that workbench ended with the page
 /// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Every step runs also when an earlier one fails, because each
 /// leaves its own state open.
-fn end_page_layout(
+pub(crate) fn end_page_layout(
     abandon: impl FnOnce() -> Result<(), String>,
     cancel: impl FnOnce() -> Result<(), String>,
     decided: impl FnOnce() -> Result<(), String>,
@@ -1780,10 +1780,6 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
 #[cfg(test)]
 #[path = "windows_records_test.rs"]
 mod records_test;
-
-#[cfg(test)]
-#[path = "windows_page_test.rs"]
-mod page_test;
 
 #[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]
