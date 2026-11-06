@@ -37,7 +37,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("Window check capture recognizer target", "js-ts", ["e2e/platform/darwin/darwin.js"], ["scripts/test/platform/darwin/capture-text-target.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
@@ -53,7 +53,7 @@ const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/test-hosts.mjs"], ["scripts/test/test-hosts.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
-lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs"], { sharedTests: true }),
+lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/test-event-reporter.mjs", "scripts/rust-tests.mjs", "scripts/macos-minimum.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/repeat-rust.test.mjs", "scripts/test/macos-minimum.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("Node execution evidence", "js-ts", ["scripts/node-test-evidence.mjs"], ["scripts/test/node-test-evidence.test.mjs"]),
@@ -292,6 +292,31 @@ const FEATURE_LINKS = [
       { file: "scripts/test/markdown-table.test.mjs", id: "an escaped pipe is a pipe of its cell and the cells after it keep their places" },
     ],
     expected: "The range readers of sok in Go and Rust and of @soksak/plugin-api give every case of docs/spec/cases/version-ranges.json the same result: ^0.0.z contains every version from 0.0.z below 0.1.0, a union of forms joined by exactly ` || ` contains what one part contains, the registry build and the installation read a union in plugin dependencies, the workbench reads ranges only through @soksak/plugin-api, and the checks read the escaped pipes of a union in a table row as pipes of its cell.",
+    levels: ["unit"],
+  },
+  {
+    id: "F667",
+    implementation: [
+      { file: "Makefile", symbol: "go-env       = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)" },
+      { file: "Makefile", symbol: "GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)" },
+      { file: "native/darwin/Makefile", symbol: "MACOS_MINIMUM := $(shell sed -n 's/^MACOS_MINIMUM = //p'" },
+      { file: "scripts/macos-minimum.mjs", symbol: "export function macosMinimum(" },
+      { file: "scripts/macos-minimum.mjs", symbol: "export function linkerWarnings(" },
+      { file: "scripts/macos-minimum.mjs", symbol: "export function runBuild(" },
+      { file: "scripts/test-runner.mjs", symbol: "const linkerFailures = linkerWarnings(output).failures;" },
+    ],
+    tests: [
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "every Go and Rust command of a make target compiles and links for the declared macOS minimum" },
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "the native library compiles, configures and declares in its pkg-config file the macOS minimum of the Makefile" },
+      { file: "scripts/test/macos-minimum.test.mjs", id: "a linker warning of an object built for a newer macOS version than the link is a failure that names the object and both versions" },
+      { file: "scripts/test/macos-minimum.test.mjs", id: "the duplicate library warning of the link of two Objective-C packages is recognized and held, not a failure" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a process whose output holds a linker warning of an object newer than the link fails with the object and both versions" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "make repeat-go fails a test build whose link reports an object newer than the link, and names the object and both versions" },
+      { file: "scripts/test/repeat-rust.test.mjs", id: "Rust owner CLI fails a test build whose link reports an object newer than the link, and names the object and both versions" },
+      { file: "scripts/test/benchmarks.test.mjs", id: "make benchmark-go fails a benchmark build whose link reports an object newer than the link, and names the object and both versions" },
+      { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case whose build reports an object newer than the link fails with the object and both versions" },
+    ],
+    expected: "Every Go and Cargo command of a make target and the native library build take the macOS minimum that MACOS_MINIMUM of the Makefile declares, and a build or test whose linker reports an object built for a newer macOS version than the link fails with the object and both versions.",
     levels: ["unit"],
   },
   {

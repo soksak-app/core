@@ -13,6 +13,7 @@ import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 import { hasEnded, processTable, runningMembers } from './test-command.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
+import { linkerWarnings } from './macos-minimum.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -352,6 +353,7 @@ function runOne(item, limitMs, env, outputPath) {
       // The event lines are the reporter's record for the runner, so they are not part of the output of the test.
       const output = Buffer.concat(chunks).toString('utf8').split('\n').filter((line) => !line.startsWith(EVENT_PREFIX)).join('\n');
       const evidenceErrors = testEvidence?.result().errors ?? [];
+      const linkerFailures = linkerWarnings(output).failures;
       if (groupError) {
         finish({ status: 'fail', elapsedMs: limit ? limit.elapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
       } else if (limit !== null) {
@@ -369,6 +371,9 @@ function runOne(item, limitMs, env, outputPath) {
       // A node test file passes only on its own successful summary with at least one passed test and no skipped, todo, failed or
       // cancelled test (node-test-evidence.mjs): a skipped or todo test is a test that did not run.
       else if (code === 0 && evidenceErrors.length > 0) finish({ status: 'fail', elapsedMs, output, detail: evidenceErrors.join('; ') });
+      // A build or test whose output holds a linker warning of an object built for a newer macOS version than the link compiled or linked
+      // for another version than the declared minimum (macos-minimum.mjs).
+      else if (code === 0 && linkerFailures.length > 0) finish({ status: 'fail', elapsedMs, output, detail: linkerFailures.join('; ') });
       // A process that reports its test events and ran no test passes, and its detail says so.
       else if (code === 0) finish({ status: 'pass', elapsedMs, output, detail: reporting && ran === 0 ? 'no test ran' : '' });
       else finish({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });

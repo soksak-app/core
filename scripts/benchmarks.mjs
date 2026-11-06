@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
 
 /** The limit of one benchmark when `--timeout` is not given. */
@@ -37,7 +38,7 @@ export async function runGoBenchmarks({ pkg, pattern, tags = '', ldflags = '', t
   try {
     const binary = join(folder, 'benchmark.binary');
     const tagArgs = tags ? ['-tags', tags] : [];
-    execFileSync('go', ['test', '-c', '-o', binary, ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), pkg], { stdio: ['ignore', 'pipe', 'inherit'] });
+    await runBuild('go', ['test', '-c', '-o', binary, ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), pkg]);
     const listed = benchmarkNames(execFileSync(binary, ['-test.list', '.*'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }));
     const chosen = listed.filter((name) => new RegExp(pattern).test(name));
     if (chosen.length === 0) throw new Error(`${pkg} has no benchmark matching ${pattern}`);

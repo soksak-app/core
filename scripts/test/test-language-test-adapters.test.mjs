@@ -94,6 +94,15 @@ const goPassingEvents = [
   { Action: 'pass', Package: 'fixture', Elapsed: 0.1 },
 ];
 
+test('a case whose build reports an object newer than the link fails with the object and both versions', { timeout: 30_000 }, async () => {
+  const warning = "ld: warning: object file (/target/ring/libring_core.a(curve25519.o)) was built for newer 'macOS' version (27.0) than being linked (11.0)";
+  const cases = discoverLanguageCases({ cases: [{ id: 'linked', language: 'shell', timeoutMs: 30_000,
+    ...command(`console.error(${JSON.stringify(warning)}); console.log('PASS: linked case')`) }] });
+  const result = await runLanguageCases(cases);
+  assert.equal(result.status, 'fail', JSON.stringify(result));
+  assert.ok(result.cases[0].errors.includes('ld built /target/ring/libring_core.a(curve25519.o) for macOS 27.0, newer than the macOS 11.0 of the link'), JSON.stringify(result.cases[0].errors));
+});
+
 test('the Go adapter counts a failed named test as executed', { timeout: 10_000 }, () => {
   const output = [
     { Action: 'run', Package: 'fixture', Test: 'TestRequired' },

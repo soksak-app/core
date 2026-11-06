@@ -601,3 +601,15 @@ test("a run in which some processes report their test events and others do not i
   await assert.rejects(runTests({ tests: [node("plain", "0"), node("events", "0", { eventLimitMs: 1000 })], concurrency: 1, write() {} }),
     /^TypeError: events: every test of a run reports its test events \(eventLimitMs\) or none does$/);
 });
+
+test("a process whose output holds a linker warning of an object newer than the link fails with the object and both versions", async () => {
+  const newer = "ld: warning: object file (/tmp/go-link-1/000029.o) was built for newer 'macOS' version (27.0) than being linked (14.4)";
+  const duplicate = "ld: warning: ignoring duplicate libraries: '-lobjc'";
+  const { results } = await run([
+    node("links::newer", `console.error(${JSON.stringify(newer)})`),
+    node("links::duplicate", `console.error(${JSON.stringify(duplicate)})`),
+  ], { concurrency: 1 });
+  assert.equal(results.get("links::newer").status, "fail", results.get("links::newer").detail);
+  assert.equal(results.get("links::newer").detail, "ld built /tmp/go-link-1/000029.o for macOS 27.0, newer than the macOS 14.4 of the link");
+  assert.equal(results.get("links::duplicate").status, "pass", results.get("links::duplicate").detail);
+});
