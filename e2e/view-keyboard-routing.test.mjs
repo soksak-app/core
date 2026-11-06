@@ -265,12 +265,19 @@ for (const app of Object.values(APPS)) {
       "the address field does not contain the declared local navigation fixture");
     const before = await s.get("core.surface.input", browser.surface);
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("ROUTING-SENTINEL").toString("base64") }]);
+    const keys = currentEventOffsets(s.app.configDir);
     await s.press("a", { modifiers: ["command"] });
     const offsets = currentEventOffsets(s.app.configDir);
     await s.press("c", { modifiers: ["command"] });
-    assert.equal(pasteboardText(), address.value, "native cmd+c did not copy the selected address text");
-    assertNoViewKeydown(await s.get("core.surface.input", browser.surface), before.at(-1)?.sequence ?? 0,
-      "native cmd+a/c");
+    const copied = pasteboardText();
+    const input = await s.get("core.surface.input", browser.surface);
+    // A failure states the injection record of each phase of cmd+a and cmd+c: the first responder, whether the key waited
+    // behind the held input of the window, whether it was taken as a key equivalent and whether it typed a stated text.
+    const keyEvents = await traceEvents(s, keys);
+    const records = JSON.stringify(["a", "c"].flatMap((key) => injectedKeyEvents(keyEvents, key)
+      .map((event) => JSON.parse(event.fields.text))));
+    assert.equal(copied, address.value, `native cmd+c did not copy the selected address text; key records ${records}`);
+    assertNoViewKeydown(input, before.at(-1)?.sequence ?? 0, `native cmd+a/c (key records ${records})`);
     assert.equal((await traceEvents(s, offsets)).filter((event) => event.event === REGISTRY_COMMAND).length, 0,
       "native cmd+c must not run a page command");
   });

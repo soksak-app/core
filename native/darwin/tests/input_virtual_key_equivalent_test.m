@@ -2,12 +2,14 @@
 // active, so its window takes keys as the virtual key window. A key down with Command is offered as a key equivalent to the
 // window and then to the main menu before the first responder receives it, as the application dispatch does for its key
 // window: Command+C and Command+V run copy: and paste: of the first responder through the items of the Edit menu, a key
-// equivalent of a view of the window runs there and not in the menu, and a key that no one takes as an equivalent, and a key
-// without Command, reach the first responder as a key down.
+// equivalent of a view of the window runs there and not in the menu, a key that waits behind the held input of the window takes
+// its key equivalent in its turn, and a key that no one takes as an equivalent, and a key without Command, reach the first
+// responder as a key down. The record of each key down states whether the key waited.
 #import <Cocoa/Cocoa.h>
 #import "event_ring.h"
 #import "input_inject.h"
 #import "input_virtual.h"
+#import "webview_geometry.h"
 #import "support/records.h"
 
 static int failures;
@@ -20,6 +22,7 @@ static void check(BOOL ok, NSString *message) {
 // change while the test runs, so the view names a key by its key code.
 static NSString *keyName(NSEvent *event) {
     switch (event.keyCode) {
+        case 0: return @"a";
         case 8: return @"c";
         case 9: return @"v";
         case 38: return @"j";
@@ -37,6 +40,7 @@ static NSString *keyName(NSEvent *event) {
 - (BOOL)acceptsFirstResponder { return YES; }
 - (void)copy:(id)sender { [self.calls addObject:[NSString stringWithFormat:@"copy:%@", [sender isKindOfClass:NSMenuItem.class] ? [sender title] : @"other"]]; }
 - (void)paste:(id)sender { [self.calls addObject:[NSString stringWithFormat:@"paste:%@", [sender isKindOfClass:NSMenuItem.class] ? [sender title] : @"other"]]; }
+- (void)selectAll:(id)sender { [self.calls addObject:[NSString stringWithFormat:@"selectAll:%@", [sender isKindOfClass:NSMenuItem.class] ? [sender title] : @"other"]]; }
 - (void)keyDown:(NSEvent *)event { [self.calls addObject:[@"keyDown:" stringByAppendingString:keyName(event)]]; }
 - (void)keyUp:(NSEvent *)event { [self.calls addObject:[@"keyUp:" stringByAppendingString:keyName(event)]]; }
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
@@ -85,6 +89,15 @@ static BOOL recordsEquivalent(NSString *records, BOOL equivalent) {
     return NO;
 }
 
+// The key down record of the key with whether the key waited behind the held input of its window.
+static BOOL recordsHeld(NSString *records, BOOL held) {
+    for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
+        if (![line containsString:@"input inject"] || ![line containsString:@"\"down\":true"]) continue;
+        return [line containsString:held ? @"\"held\":true" : @"\"held\":false"];
+    }
+    return NO;
+}
+
 int main(void) { @autoreleasepool {
     setvbuf(stdout, NULL, _IOLBF, 0);
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
@@ -97,6 +110,7 @@ int main(void) { @autoreleasepool {
     NSMenu *edit = [[[NSMenu alloc] initWithTitle:@"Edit"] autorelease];
     [edit addItem:item(@"Copy", @selector(copy:), @"c")];
     [edit addItem:item(@"Paste", @selector(paste:), @"v")];
+    [edit addItem:item(@"Select All", @selector(selectAll:), @"a")];
     editItem.submenu = edit;
     [main addItem:editItem];
     NSApp.mainMenu = main;
@@ -114,7 +128,8 @@ int main(void) { @autoreleasepool {
     check(sp_input_virtual_is(window), @"the window of the key is the virtual key window");
     check([clipboard.calls isEqual:@[@"copy:Copy", @"keyUp:c"]],
         [NSString stringWithFormat:@"Command+C runs copy: once through the Copy item (calls %@)", clipboard.calls]);
-    check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
+    check(recordsEquivalent(records, YES) && recordsHeld(records, NO),
+        [NSString stringWithFormat:@"the key down record states the equivalent and that the key did not wait (records %@)", records]);
 
     // Command+V runs paste: through the Paste item.
     [clipboard.calls removeAllObjects];
@@ -129,6 +144,27 @@ int main(void) { @autoreleasepool {
     check([clipboard.calls isEqual:@[@"equivalent:k", @"keyUp:k"]],
         [NSString stringWithFormat:@"Command+K runs the equivalent of the view (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
+
+    // A key that waits behind the held input of the window takes its key equivalent in its turn: Command+A runs selectAll:
+    // through the Select All item and does not reach the view as a key down, and the record of the key down states that it waited.
+    [clipboard.calls removeAllObjects];
+    sp_window_keyboard_hold(window);
+    records = capturedRecords(^{
+        check(sp_input_key(window, "a", NULL, 8, true) == SP_INPUT_DELIVERED && sp_input_key(window, "a", NULL, 8, false) == SP_INPUT_DELIVERED,
+            @"the held key Command+A is kept");
+        check(clipboard.calls.count == 0, [NSString stringWithFormat:@"a held key waits for its turn (calls %@)", clipboard.calls]);
+        sp_window_keyboard_decided(window);
+        NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.2];
+        while (until.timeIntervalSinceNow > 0) {
+            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (event) [NSApp sendEvent:event];
+        }
+    });
+    check([clipboard.calls isEqual:@[@"selectAll:Select All", @"keyUp:a"]],
+        [NSString stringWithFormat:@"a held Command+A runs selectAll: once through the Select All item (calls %@)", clipboard.calls]);
+    check(recordsEquivalent(records, YES) && recordsHeld(records, YES),
+        [NSString stringWithFormat:@"the key down record states the equivalent and that the key waited (records %@)", records]);
 
     // A Command key that no one takes as an equivalent reaches the first responder as a key down.
     [clipboard.calls removeAllObjects];
