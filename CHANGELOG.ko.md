@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F647: mygo 창의 reload는 자기가 끝내는 workbench의 host call을 끝낸다. page의 call이 그 document와 함께 끝나듯, 끝난 workbench는 host call을 하지 않고 그 전에 한 call의 응답도 실행하지 않는다. reload가 취소한 배치의 응답이 reload 뒤의 창에 실패한 행 `Surface presentation`을 담은 `core.verify`를 보내, mygo에서 `e2e/terminal-edit.test.mjs`의 준비가 실패했었다. Go host는 기다리는 동안 ticket이 취소된 presentation에 `surface presentation <ticket> has no pending root-view state` 대신 Rust host처럼 `surface preparation <ticket> is no longer current`로 답한다.
 - F502-17-1, F502-22-1: `e2e/files.test.mjs`가 mygo, Wails, Tauri host에서 앱의 pointer double click으로 files 트리의 파일을 editor tab에 열고, 두 트리가 같은 순간에 더한 bookmark 둘을 지키며, project를 여는 창에서 그 전 창이 쓴 bookmark를 읽는다. 트리의 행은 files plugin의 status `files.tree`와 element `files.tree.row`로 읽는다.
 - F627: browser tab이 document region을 가진 동안의 quit은 mygo, Wails, Tauri host에서 그 tab의 session을 cause `flush`로 한 번 읽고, 창이 사라진 뒤에는 page를 부르지 않는다. `e2e/browser.test.mjs`는 `host.quit`과 같은 경로로 quit하는 `diagnostics.host.relaunch`로 각 host를 quit하고, quit한 process의 log를 읽는다.
 - F584-2: virtual key window로 보낸 Command나 Control이 있는 key down은 first responder가 받기 전에 창, 그다음 main menu에 key equivalent로 제시된다. 애플리케이션 dispatch가 key window에 하는 것과 같으므로, 비활성 애플리케이션에 보낸 Command+C와 Command+V가 menu의 Copy와 Paste 항목을 실행한다. 전에는 `sp_input_key`가 키를 `-[NSWindow sendEvent:]`로만 보내서 native first responder가 Command+C를 평범한 key down으로 받았다. 키의 `input inject` 기록은 `equivalent`를 밝힌다. Red: `input_virtual_key_equivalent_test`가 `copy:Copy` 대신 `keyDown:c`를 받았고, 창의 view가 가진 key equivalent가 실행되지 않았다. Green: 10회 중 10회.
