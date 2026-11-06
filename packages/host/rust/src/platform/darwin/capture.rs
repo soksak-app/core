@@ -34,8 +34,12 @@ unsafe extern "C" {
     fn sp_capture_limited() -> bool;
     fn sp_capture_longest_gap() -> f64;
     fn sp_capture_clock() -> f64;
-    fn sp_capture_still(window_number: isize, path: *const c_char, error: *mut *mut c_char)
-    -> bool;
+    fn sp_capture_still(
+        window_numbers: *const isize,
+        count: c_int,
+        path: *const c_char,
+        error: *mut *mut c_char,
+    ) -> bool;
     fn sp_notifications_delivered(
         done: extern "C" fn(context: *mut std::ffi::c_void, json: *const c_char),
         context: *mut std::ffi::c_void,
@@ -247,11 +251,18 @@ pub fn wait() -> Result<bool, String> {
     }
 }
 
-/// Takes one still image of the window with the window number without giving it focus and writes it as PNG to path.
-pub fn still(window_number: isize, path: &str) -> Result<(), String> {
+/// Takes one still image of a window without giving it focus and writes it as PNG to path: the window is the first of
+/// `window_numbers`, and its child windows, the rest, stand in their places over it.
+pub fn still(window_numbers: &[isize], path: &str) -> Result<(), String> {
     let target =
         CString::new(path).map_err(|_| "still capture failed: path contains NUL".to_owned())?;
+    if window_numbers.is_empty() {
+        return Err("still capture needs the number of a window".to_owned());
+    }
+    let count = c_int::try_from(window_numbers.len())
+        .map_err(|_| "still capture failed: too many windows".to_owned())?;
     let mut error = std::ptr::null_mut();
-    let written = unsafe { sp_capture_still(window_number, target.as_ptr(), &mut error) };
+    let written =
+        unsafe { sp_capture_still(window_numbers.as_ptr(), count, target.as_ptr(), &mut error) };
     call_result("still capture failed", written, error)
 }

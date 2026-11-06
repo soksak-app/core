@@ -2,16 +2,23 @@
 
 package windows
 
-import "unsafe"
+import (
+	"errors"
+	"unsafe"
+)
 
 // WindowNumbers returns the handle of the window. It is the number that CaptureStill takes, and a web view is no window of its own here.
 func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
 	return []int{int(uintptr(window))}, nil
 }
 
-// CaptureStill writes one picture of the web view of the window to path as PNG. Call it outside the UI thread.
-func (implementation) CaptureStill(windowNumber int, path string) error {
-	return captureStill(uintptr(windowNumber), path)
+// CaptureStill writes one picture of the web view of the window to path as PNG. Call it outside the UI thread. WindowNumbers
+// returns the window alone here, so the first number is the whole list.
+func (implementation) CaptureStill(windowNumbers []int, path string) error {
+	if len(windowNumbers) == 0 {
+		return errors.New("still capture needs the number of a window")
+	}
+	return captureStill(uintptr(windowNumbers[0]), path)
 }
 
 func (implementation) CaptureOpen(int, bool) error { return unsupported("window recording") }

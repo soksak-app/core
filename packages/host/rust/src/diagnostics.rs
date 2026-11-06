@@ -856,9 +856,9 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
     let numbers = on_main(window, move || platform.window_numbers(&held)).map_err(internal)?;
-    let number = *numbers
-        .first()
-        .ok_or_else(|| internal("the window has no window number"))?;
+    if numbers.is_empty() {
+        return Err(internal("the window has no window number"));
+    }
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(internal)?
@@ -876,7 +876,8 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
     platform.private_directory(&directory).map_err(internal)?;
     let path = directory.join("window.png");
     platform
-        .capture_still(number, &path.to_string_lossy())
+        // The child windows of an open modal or settings window stand over the window, so the image holds them too.
+        .capture_still(&numbers, &path.to_string_lossy())
         .map_err(internal)?;
     Ok(json!({"path": path.to_string_lossy()}))
 }

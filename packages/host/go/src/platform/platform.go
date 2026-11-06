@@ -273,9 +273,10 @@ type Capturer interface {
 	// LayoutTraceRequested records the time at which the presentation of the open layout transaction was requested, and returns
 	// the function that records the time at which it was confirmed. Call both on the UI thread.
 	LayoutTraceRequested() (presented func())
-	// CaptureStill takes one picture of the window with the window server number windowNumber without giving it focus and writes it to path as PNG.
+	// CaptureStill takes one picture of a window without giving it focus and writes it to path as PNG. windowNumbers are those
+	// that WindowNumbers returns: the window first, then its child windows, which the picture shows in their places over it.
 	// It is observation material.
-	CaptureStill(windowNumber int, path string) error
+	CaptureStill(windowNumbers []int, path string) error
 }
 
 // CoreRootResolver returns the file at urlPath of the core root of a view of plugin (docs/spec/plugin-processes.md, rule 4)

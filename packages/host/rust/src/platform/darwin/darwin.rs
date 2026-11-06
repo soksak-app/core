@@ -686,8 +686,8 @@ impl Platform for Darwin {
         Ok(capture::clock())
     }
     #[cfg(feature = "diagnostics")]
-    fn capture_still(&self, window_number: isize, path: &str) -> Result<(), String> {
-        capture::still(window_number, path)
+    fn capture_still(&self, window_numbers: &[isize], path: &str) -> Result<(), String> {
+        capture::still(window_numbers, path)
     }
     #[cfg(feature = "diagnostics")]
     fn delivered_notifications(&self, done: Box<dyn FnOnce(String) + Send>) -> Result<(), String> {
