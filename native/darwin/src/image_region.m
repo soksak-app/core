@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #import "application_log.h"
 #import "input_virtual.h"
+#import "input_inject.h"
 #import "capture_frame_identity.h"
 #import "declared_color_space.h"
 #import "event_ring.h"
@@ -110,6 +111,7 @@ static NSTimeInterval spareDelay = 1;
 @property(retain) NSDictionary *inputPreedit;
 @property(copy) NSString *inputFailureReason;
 @property(copy) NSString *lastValidPreeditJSON;
+@property UInt32 virtualDeadKeyState;   // The dead key state of the keyboard layout that types in a virtual key window.
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -133,6 +135,8 @@ static NSTimeInterval spareDelay = 1;
 - (void)handleReportPreedit;
 - (BOOL)rejectCallbackAfterInputFailure:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
 - (void)passToInputMethod:(NSEvent *)event;
+- (void)typeInVirtualKeyWindow:(NSEvent *)event;
+- (TISInputSourceRef)copyVirtualInputSource;
 - (void)failInput:(NSString *)reason where:(const char *)where text:(NSString *)text;
 - (void)handleCommand:(SEL)selector;
 - (void)handleInsertText:(id)string replacementRange:(NSRange)range;
@@ -1047,7 +1051,12 @@ static void spEnsurePressOriginMonitor(void) {
 
 // The input method answers only the key window of the active application. After the application has been activated once,
 // the input context receives a key sent to another window but inserts no character, so no answer is reported as an error.
+// A virtual key window passes no key to it (docs/spec/exposure.md#virtual-key-window).
 - (void)passToInputMethod:(NSEvent *)event {
+    if (sp_input_virtual_is(self.window)) {
+        [self typeInVirtualKeyWindow:event];
+        return;
+    }
     NSUInteger before = self.reports;
     [self interpretKeyEvents:@[event]];
     if (self.reports == before && !(sp_input_virtual_real_active() && sp_input_virtual_real_key((__bridge void *)self.window))) {
@@ -1056,6 +1065,65 @@ static void spEnsurePressOriginMonitor(void) {
             event.keyCode];
         [self failInput:reason where:"input method" text:[NSString stringWithFormat:@"%@: state %@", reason, [self inputState]]];
     }
+}
+
+// The input source that types a key of the virtual key window: the current keyboard input source of the system, which the
+// region does not change. The caller releases it.
+- (TISInputSourceRef)copyVirtualInputSource {
+    return TISCopyCurrentKeyboardInputSource();
+}
+
+// Types a character key of the virtual key window, whose application the system does not hold as active, so that the input
+// method does not answer it (docs/spec/exposure.md#virtual-key-window). A key whose text the caller stated types that text. Any
+// other key types what the keyboard layout of the current input source makes of it, with the dead key state of that layout; an
+// input method composes only in the key window of the active application, so its key is refused with the source named.
+- (void)typeInVirtualKeyWindow:(NSEvent *)event {
+    NSString *before = [self inputState];
+    if (CGEventGetIntegerValueField(event.CGEvent, kCGEventSourceUserData) == SP_INPUT_STATED_TEXT) {
+        self.virtualDeadKeyState = 0;
+        [self logInput:@"virtualKeyText" fields:[NSString stringWithFormat:@"\"source\":\"stated\",\"text\":\"%@\"",
+            [self jsonEscapedString:event.characters ?: @""]] before:before];
+        [self handleInsertText:event.characters ?: @"" replacementRange:NSMakeRange(NSNotFound, 0)];
+        return;
+    }
+    TISInputSourceRef source = [self copyVirtualInputSource];
+    NSString *identifier = source ? (NSString *)TISGetInputSourceProperty(source, kTISPropertyInputSourceID) : nil;
+    NSString *type = source ? (NSString *)TISGetInputSourceProperty(source, kTISPropertyInputSourceType) : nil;
+    CFDataRef layout = source && [type isEqual:(NSString *)kTISTypeKeyboardLayout]
+        ? (CFDataRef)TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) : NULL;
+    NSString *name = [[identifier copy] autorelease] ?: @"none";
+    NSString *refusal = nil;
+    UniChar typed[8];
+    UniCharCount length = 0;
+    if (!layout) {
+        refusal = [NSString stringWithFormat:@"the input source %@ is not a keyboard layout: an input method composes only in "
+            @"the key window of the active application, and a virtual key window types with a keyboard layout or stated text", name];
+    } else {
+        UInt32 modifiers = 0;
+        NSEventModifierFlags flags = event.modifierFlags;
+        if (flags & NSEventModifierFlagShift) modifiers |= shiftKey;
+        if (flags & NSEventModifierFlagCapsLock) modifiers |= alphaLock;
+        UInt32 deadKeyState = self.virtualDeadKeyState;
+        OSStatus status = UCKeyTranslate((const UCKeyboardLayout *)CFDataGetBytePtr(layout), event.keyCode, kUCKeyActionDown,
+            (modifiers >> 8) & 0xFF, LMGetKbdType(), 0, &deadKeyState, sizeof typed / sizeof typed[0], &length, typed);
+        if (status != noErr) {
+            refusal = [NSString stringWithFormat:@"the keyboard layout %@ did not translate native keyCode=%hu (status %d)",
+                name, event.keyCode, (int)status];
+        } else {
+            self.virtualDeadKeyState = deadKeyState;
+        }
+    }
+    if (source) CFRelease(source);
+    if (refusal) {
+        [self failInput:refusal where:"input method" text:[NSString stringWithFormat:@"%@: state %@", refusal, before]];
+        return;
+    }
+    NSString *text = [NSString stringWithCharacters:typed length:length];
+    [self logInput:@"virtualKeyText" fields:[NSString stringWithFormat:
+        @"\"source\":\"%@\",\"text\":\"%@\",\"deadKey\":%s", [self jsonEscapedString:name],
+        [self jsonEscapedString:text], length == 0 && self.virtualDeadKeyState != 0 ? "true" : "false"] before:before];
+    // A dead key types nothing until the key that completes it.
+    if (length > 0) [self handleInsertText:text replacementRange:NSMakeRange(NSNotFound, 0)];
 }
 
 - (void)doCommandBySelector:(SEL)selector {

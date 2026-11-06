@@ -4926,7 +4926,7 @@
           "after"
         ]
       },
-      "description": "A callback of the input method or a step of the region that it causes (`setMarkedText`, `insertText`, `unmarkText`, `doCommandBySelector`, `commitThrough`, `reportPreedit`, `commitPending`, `clearDocument`, `becomeFirstResponder`, `resignFirstResponder`), with its arguments next to `call` and the state of the input document before and after. It takes the identifier of the input that caused it."
+      "description": "A callback of the input method or a step of the region that it causes (`setMarkedText`, `insertText`, `unmarkText`, `doCommandBySelector`, `commitThrough`, `reportPreedit`, `commitPending`, `clearDocument`, `becomeFirstResponder`, `resignFirstResponder`, `virtualKeyText`), with its arguments next to `call` and the state of the input document before and after. It takes the identifier of the input that caused it."
     },
     "native.input.report": {
       "layer": "native",

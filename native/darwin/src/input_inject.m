@@ -848,8 +848,13 @@ static const SPKey keys[] = {
 // character specified by the endpoint to a macOS ANSI keyboard position, and rejects an unknown character instead of
 // replacing it with a guessed code.
 static unsigned short characterKeyCode(unichar character) {
-    if (character == '=') return kVK_ANSI_Equal;
-    if (character == '-') return kVK_ANSI_Minus;
+    static const char punctuation[] = "=-'`[];,./\\";
+    static const unsigned short punctuationCodes[] = {kVK_ANSI_Equal, kVK_ANSI_Minus, kVK_ANSI_Quote, kVK_ANSI_Grave,
+        kVK_ANSI_LeftBracket, kVK_ANSI_RightBracket, kVK_ANSI_Semicolon, kVK_ANSI_Comma, kVK_ANSI_Period, kVK_ANSI_Slash,
+        kVK_ANSI_Backslash};
+    for (NSUInteger i = 0; i < sizeof punctuationCodes / sizeof punctuationCodes[0]; i++) {
+        if (character == (unichar)punctuation[i]) return punctuationCodes[i];
+    }
     static const char *letters = "abcdefghijklmnopqrstuvwxyz";
     static const unsigned short letterCodes[] = {0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6};
     for (NSUInteger i = 0; i < 26; i++) if (character == letters[i]) return letterCodes[i];
@@ -904,6 +909,14 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
             timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil characters:characters charactersIgnoringModifiers:characters
             isARepeat:NO keyCode:code];
+        // The event carries the mark of a stated text, so a region that types it without the input method types that text,
+        // also when it receives the key later than its delivery.
+        CGEventRef marked = event ? CGEventCreateCopy(event.CGEvent) : NULL;
+        if (marked) {
+            CGEventSetIntegerValueField(marked, kCGEventSourceUserData, SP_INPUT_STATED_TEXT);
+            event = [NSEvent eventWithCGEvent:marked];
+            CFRelease(marked);
+        }
     }
     if (!event) { *why = "the key event cannot be created"; return SP_INPUT_REJECTED; }
     // An inactive application has no key window for a key, and -[NSApplication sendEvent:] drops it while it answers delivered.

@@ -1,5 +1,9 @@
 #include <stdbool.h>
 
+// The value of kCGEventSourceUserData of a key event whose text the caller of sp_input_key stated: that text is what the key
+// types, and no input source decides it (docs/spec/exposure.md#virtual-key-window).
+#define SP_INPUT_STATED_TEXT 0x736f6b74
+
 // Result of sp_input_pointer.
 typedef enum {
     SP_INPUT_DELIVERED = 0,
