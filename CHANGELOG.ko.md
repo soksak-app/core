@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F488: event 1,000,000개 로그 query의 contract case(이제 `log.query.reads-what-each-query-of-a-million-events-needs`)가 경과 시간 대신 각 query의 행과 그 query가 읽은 색인의 segment와 line을 판정하며, 두 host에서 같다. 경과 시간은 공유 runner의 부하가 정했다. 245 segment 중 1개, 4096 line을 읽은 첫 page가 737 ms로 실패했다. test는 여전히 각 시간을 출력하고, 그 시간은 benchmark target이 잰다.
 - F536: 두 host의 정지 감시가 run loop의 대기로 끝나는 정지의 끝을 그 대기가 시작할 때 기록한다. 검사의 heartbeat가 대기의 시작보다 먼저일 수 있으므로, 감시는 열린 정지가 없을 때만 대기 동안 막힌다. 이전에는 그 heartbeat 뒤에 막혀 다음 깨어남에서야 `host.stall.resumed`를 썼다. Red: `TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds`가 18회 중 1회, 그 Rust 짝이 60회 중 9회 실패했다. Green: 60회 중 60회, 100회 중 100회.
 - F636: Rust workspace가 다시 `make check-rust-clippy`를 통과한다. document web view를 만드는 platform method는 두 host 모두 따로 받던 인자 5개 대신 `DocumentOptions`로 값을 받고, test는 clippy가 보고한 붙잡힌 실행과 callback 타입에 이름을 붙인다.
 - F635: 한도를 넘은 Go 시험이 다시 goroutine의 stack을 쓴다. test binary는 한도와 같은 `-test.timeout`에서 모든 goroutine의 stack과 함께 스스로 끝나고, runner는 같은 한도에 SIGQUIT을 더 보내지 않는다. darwin의 Go 1.27에서 그 신호는 5회 중 2회 timeout panic 도중에 도착해 stack 없이 `fatal error: semasleep on Darwin signal stack`으로 runtime을 끝냈다. runner는 한도 뒤 Go 시험의 exit를 timeout으로 보고, 한도 10 s 뒤까지 스스로 끝나지 않은 시험을 끝낸다.
