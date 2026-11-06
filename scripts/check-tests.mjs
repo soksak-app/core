@@ -37,7 +37,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/make-cargo.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("Window check capture recognizer target", "js-ts", ["e2e/platform/darwin/darwin.js"], ["scripts/test/platform/darwin/capture-text-target.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
@@ -318,16 +318,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F678",
+    implementation: [
+      { file: "Makefile", symbol: "out=$$($(MAKE) --no-print-directory measure-object-counts APP=$(APP)" },
+    ],
+    tests: [
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "each run of $(MAKE) in a recipe of a Makefile names targets of the Makefile that it runs" },
+    ],
+    expected: "measure-trace-share runs measure-object-counts, and each run of $(MAKE) in a recipe of a tracked Makefile names an explicit or pattern-rule target of the Makefile that it runs.",
+    levels: ["unit"],
+  },
+  {
     id: "F672",
     implementation: [
       { file: "Makefile", symbol: "CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" },
       { file: "Makefile", symbol: "check-cargo:" },
     ],
     tests: [
-      { file: "scripts/test/make-cargo.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" },
-      { file: "scripts/test/make-cargo.test.mjs", id: "no recipe or variable of the Makefile runs cargo other than through CARGO" },
-      { file: "scripts/test/make-cargo.test.mjs", id: "each target whose recipe runs CARGO requires check-cargo" },
-      { file: "scripts/test/make-cargo.test.mjs", id: "check-cargo stops with a message when neither the PATH of make nor the cargo folder of HOME holds cargo" },
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" },
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "no recipe or variable of the Makefile runs cargo other than through CARGO" },
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "each target whose recipe runs CARGO requires check-cargo" },
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "check-cargo stops with a message when neither the PATH of make nor the cargo folder of HOME holds cargo" },
     ],
     expected: "Every recipe of the Makefile runs cargo through CARGO, which the exported PATH resolves, so GNU Make 3.81 finds cargo when it starts without the cargo folder of rustup, and check-cargo stops a target that runs cargo when none is found.",
     levels: ["unit"],

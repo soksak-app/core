@@ -78,7 +78,7 @@ measure-host-calls:
 # TRACE=0|1 writes the keys of the first move without pointerMoveP90Ms and TRACE=frame-records writes pointerMoveP90Ms alone. SOK defaults to the sok binary of target/debug.
 measure-app-usage:
 	@case "$(CONFIG_DIR)" in '') echo "measure-app-usage requires CONFIG_DIR=DIR TRACE=0|1|frame-records [STATE=S0|S0b|S1|S9|S11|S12|S14|S15] [IDLE=1] [STEP=pointer] [B3_OUT=FILE] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
-	@case "$(IDLE)" in ''|1) ;; *) echo "app-usage takes IDLE=1, not IDLE=$(IDLE)" >&2; exit 2;; esac
+	@case "$(IDLE)" in ''|1) ;; *) echo "measure-app-usage takes IDLE=1, not IDLE=$(IDLE)" >&2; exit 2;; esac
 	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --interval $(or $(INTERVAL),10) $(if $(STATE),--state "$(STATE)") $(if $(IDLE),--idle) $(if $(STEP),--step "$(STEP)") $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
 # Reports the CPU time of each process of the running application of CONFIG_DIR for each frame that the image region of a terminal tab
@@ -91,15 +91,15 @@ measure-terminal-redraw:
 	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" --rows "$(ROWS)" --trace "$(TRACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10) $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
 # Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of
-# object-counts and prints the entry of the last repetition, which holds the footprint of the host process (docs/operations/examples.md).
+# measure-object-counts and prints the entry of the last repetition, which holds the footprint of the host process (docs/operations/examples.md).
 measure-trace-share:
 	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "measure-trace-share requires APP=wailsv3|tauriv2|mygo CONFIG=DIR PLUGINS='ID...'" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "measure-trace-share requires CONFIG=DIR" >&2; exit 2;; esac
 	@for trace in 1 0; do \
 	  echo "start TRACE=$$trace"; \
-	  out=$$($(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" PLUGINS="$(PLUGINS)" TRACE=$$trace BUILD=debug REPETITIONS=5) || exit 1; \
+	  out=$$($(MAKE) --no-print-directory measure-object-counts APP=$(APP) CONFIG="$(CONFIG)" PLUGINS="$(PLUGINS)" TRACE=$$trace BUILD=debug REPETITIONS=5) || exit 1; \
 	  last=$$(printf '%s\n' "$$out" | grep '^{"repetition":' | tail -1); \
-	  test -n "$$last" || { echo "trace-share: object-counts printed no repetition for TRACE=$$trace" >&2; exit 1; }; \
+	  test -n "$$last" || { echo "measure-trace-share: measure-object-counts printed no repetition for TRACE=$$trace" >&2; exit 1; }; \
 	  echo "end TRACE=$$trace $$last"; \
 	done
 
