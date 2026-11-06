@@ -137,6 +137,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.input.query" => Some(Class::Input),
         "native.input.report" => Some(Class::Input),
         "native.input.source_changed" => Some(Class::Input),
+        "native.input.virtual" => Some(Class::Lifecycle),
         "native.keyboard.hold_dropped" => Some(Class::Input),
         "native.keyboard.hold_expired" => Some(Class::Input),
         "native.log.gated" => Some(Class::Lifecycle),
