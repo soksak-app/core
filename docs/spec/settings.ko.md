@@ -155,7 +155,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 - `sections`: 반복 없는 섹션 id.
 - `layout`: `list` 또는 `tabs`([플러그인](plugins.ko.md#섹션)).
 
-연결은 `{place, plugin, set}`이고 `environment.json`의 `sidebars.links` 규칙을 따른다. 유효한 `sets`와 `links`는 `environment.json`의 `sidebars`도 검사하는 plugin-api 함수 `validateSidebars`와 `checkSidebarReferences`로 검사한다. 검사는 설정을 불러올 때와 변경을 저장하기 전에 실행한다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, 표면이 없는 불러온 플러그인의 카드 변 연결, 불러온 플러그인의 없는 세트 연결은 실패한다. 불러오지 않은 플러그인을 가리키는 것은 유지하며, 제거된 플러그인만 선언한 세트의 연결도 그 플러그인을 다시 설치하면 다시 쓰이도록 유지한다([플러그인](plugins.ko.md#불러오지-않은-플러그인)). 실패는 다음과 같이 보고한다. 불러오기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다.
+연결은 `{place, plugin, set}`이고 `environment.json`의 `sidebars.links` 규칙을 따른다. 유효한 `sets`와 `links`는 `environment.json`의 `sidebars`도 검사하는 plugin-api 함수 `validateSidebars`와 `checkSidebarReferences`로 검사한다. native workbench는 같은 규칙을 같은 메시지로 검사하고, window는 검사가 받아들인 목록을 두 번째 검사 없이 받는다. 검사는 설정을 불러올 때와 변경을 저장하기 전에 실행한다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, 표면이 없는 불러온 플러그인의 카드 변 연결, 불러온 플러그인의 없는 세트 연결은 실패한다. 불러오지 않은 플러그인을 가리키는 것은 유지하며, 제거된 플러그인만 선언한 세트의 연결도 그 플러그인을 다시 설치하면 다시 쓰이도록 유지한다([플러그인](plugins.ko.md#불러오지-않은-플러그인)). 실패는 다음과 같이 보고한다. 불러오기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다.
 
 세트를 삭제하면 남은 세트와 그 세트를 가리키는 연결을 뺀 연결을 같은 범위에 한 번의 변경으로 쓴다.
 
@@ -190,6 +190,8 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 두 workbench가 읽는 배치 값의 원천은 하나, `workbench.json`의 chrome metric이다. 카드 머리 `head-h`와 바닥 `foot-h`는 drop zone의 경계이기도 하고, 탭 줄의 기준 폭은 `tab-peek-w`와 `tab-min-w`다. 각 workbench의 code에 적은 값은 처음 값에서 벗어나는 두 번째 사본이 된다. 새 스페이스의 왼쪽과 오른쪽 사이드바 폭은 `environment.json`의 `workspace.grid` 카드에서 온다.
 
 워크벤치 stylesheet(`app.css`, `library.css`, `overlay.html`)의 길이, 비율, 지속 시간은 `packages/workbench/workbench.json`의 chrome metric이다. 워크벤치는 page가 그리기 전에 그 각각을 document root의 custom property로 정하고, stylesheet는 그 custom property를 읽는다. stylesheet는 literal 길이, 비율, 지속 시간을 담지 않는다. media condition은 custom property를 읽지 못하므로, 워크벤치는 window 폭이 `library-narrow-w` 이하인 동안 document root에 `data-library-narrow`를 표시하고, `library.css`는 그 표시로 library를 좁힌다. focus mark는 focus된 카드의 body 밖으로 사방 `focus-mark-t`만큼, 곧 stroke 두께만큼 나와 있어서 stroke가 surface를 덮지 않는다.
+
+워크벤치의 모든 text는 body가 주고 text가 상속하는 chrome metric의 line height `line-height`를 가진다. rule이 `line-height-tight`를 지정한 text만 예외다. `font` shorthand는 line height를 font가 정하고 어떤 chrome metric도 담지 않는 `normal`로 되돌리므로, shorthand로 font를 정하는 rule은 그 안에 line height를 지정한다. section head의 이름과 `tabs` 세트 탭의 이름은 크기 `section-head-text`에서 `line-height`를 가지고 head의 가운데에 선다. native 워크벤치는 이 text를 같은 line height로 그리므로, section 이름의 element는 모든 host에서 높이와 자리가 같다.
 
 규칙이 없는 page의 input과 select는 page의 color scheme으로 browser에서 모양을 받으므로 어느 stylesheet에도 선언이 없다. native workbench는 page 창에서 잰 값인 `workbench.json`의 `plainControls`로 그것을 그리고, 그 표를 읽는 stylesheet는 없다. browser가 그것으로 하는 동작도 같다. Escape는 search를 비우고, Tab은 도착한 field의 text를 선택하며, focus 명령은 focus를 가진 적 없는 field의 text를 선택하고 가진 적 있는 field의 선택은 그대로 둔다. search의 magnifier와 cancel은 browser가 그리는 system symbol이고, 그 symbol이 없는 system은 오류다.
 

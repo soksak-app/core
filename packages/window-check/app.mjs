@@ -569,9 +569,11 @@ export class Session {
     // then waits for the active state of the key window and the web view.
     if (options.activate) activateApp(this.client.endpoint.pid);
     const button = options.button ?? "left";
-    const key = JSON.stringify([this.window, button]);
+    // Each named pointer holds its own press of each button (docs/spec/exposure.md#named-pointers).
+    const named = options.pointer === undefined ? {} : { pointer: options.pointer };
+    const key = JSON.stringify([this.window, options.pointer ?? "main", button]);
     const delivered = () => {
-      if (phase === "down") this.presses.set(key, { window: this.window, x, y, button });
+      if (phase === "down") this.presses.set(key, { window: this.window, ...named, x, y, button });
       if (phase === "up") this.presses.delete(key);
     };
     try {
@@ -599,16 +601,18 @@ export class Session {
   async releasePresses() {
     const failures = [];
     const released = [];
-    for (const { window, x, y, button } of [...this.presses.values()]) {
+    for (const { window, pointer, x, y, button } of [...this.presses.values()]) {
       const session = this.on(window);
       try {
         const began = performance.now();
         await session.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");
         const waited = Math.round(performance.now() - began);
-        await session.pointer(x, y, "up", { button });
-        released.push(`released open press: ${button} at ${x},${y} in ${window} after host.buttons reported mask 0 (waited ${waited}ms)`);
+        await session.pointer(x, y, "up", pointer === undefined ? { button } : { button, pointer });
+        const of = pointer === undefined ? "" : ` of pointer ${pointer}`;
+        released.push(`released open press: ${button}${of} at ${x},${y} in ${window} after host.buttons reported mask 0 (waited ${waited}ms)`);
       } catch (error) {
-        failures.push(new Error(`the synthetic ${button} press at ${x},${y} in ${window} stayed open: ${error.message}`));
+        const of = pointer === undefined ? "" : ` of pointer ${pointer}`;
+        failures.push(new Error(`the synthetic ${button} press${of} at ${x},${y} in ${window} stayed open: ${error.message}`));
       }
     }
     if (failures.length === 1) throw failures[0];

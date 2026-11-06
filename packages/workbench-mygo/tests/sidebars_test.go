@@ -22,7 +22,9 @@ const sidebarsEnvironment = `{"sidebars":{"sets":[
 const sidebarsInstalled = `{"plugins":[
 	{"id":"browser","package":"b","version":"1.0.0","manifest":{"id":"browser","name":"브라우저","description":"browser","sections":[
 		{"id":"browser.tabs","name":"탭","composition":{"kind":"view","page":"ui/section.html"},"height":160},
-		{"id":"browser.history","name":"기록","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"}]}},
+		{"id":"browser.history","name":"기록","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
+		{"id":"browser.dom","name":"DOM","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
+		{"id":"browser.network","name":"네트워크","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"}]}},
 	{"id":"files","package":"f","version":"1.0.0","manifest":{"id":"files","name":"파일","description":"files","sections":[
 		{"id":"files.tree","name":"파일 트리","composition":{"kind":"view","page":"ui/tree.html"},"height":"fill"},
 		{"id":"files.bookmarks","name":"북마크","composition":{"kind":"view","page":"ui/bookmarks.html"},"height":160}]}}]}`
@@ -142,7 +144,7 @@ func TestALinkToASetThatIsGoneIsRefused(t *testing.T) {
 	environment := `{"sidebars":{"sets":[],"links":[{"place":"left","plugin":null,"set":"set-gone"}]}}`
 	_, err = workbench.NewSidebars(workbench.SidebarsOptions{Look: func() (float32, float32) { return 1, 10 }, Declared: declared, Registry: registry, Binder: workbench.NewBinder(registry, nil),
 		Environment: []byte(environment), Installed: []byte(`{"plugins":[]}`)})
-	if err == nil || !strings.Contains(err.Error(), "link points at a set that is gone: set-gone") {
+	if err == nil || !strings.Contains(err.Error(), "environment.json: a left link requires a known set") {
 		t.Fatalf("the error is %v", err)
 	}
 }

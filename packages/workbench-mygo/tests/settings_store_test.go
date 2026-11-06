@@ -313,7 +313,7 @@ func TestAStoredSettingOfALoadedPluginMustBeDeclared(t *testing.T) {
 	if err := store.Begin(map[string]any{"acme.gone": 1.0}, nil, ""); err != nil {
 		t.Fatalf("the setting of a plugin that is not loaded stays in the file: %v", err)
 	}
-	store.Loaded("acme")
+	store.Loaded(workbench.LoadedPlugin{ID: "acme"})
 	err := store.Begin(map[string]any{"acme.gone": 1.0}, nil, "")
 	if err == nil || !strings.Contains(err.Error(), "unknown setting acme.gone") {
 		t.Fatalf("the error is %v", err)
@@ -355,5 +355,77 @@ func TestTheStatusReportsTheCommonValueOfEverySetting(t *testing.T) {
 	}
 	if !slices.Equal(slices.Sorted(maps.Keys(status.Common)), slices.Sorted(maps.Keys(status.Values))) {
 		t.Fatalf("common holds %v and values %v", slices.Sorted(maps.Keys(status.Common)), slices.Sorted(maps.Keys(status.Values)))
+	}
+}
+
+// The sets and links of the settings are checked as validateSidebars and checkSidebarReferences of @soksak/plugin-api check them, with
+// the same messages: a change that breaks a rule writes nothing, and a reference to a plugin that is not loaded is kept
+// (docs/spec/settings.md#stored-sets-and-links).
+func TestTheSetsAndLinksAreCheckedAsThePageChecksThem(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	store.Loaded(workbench.LoadedPlugin{ID: "acme", Surface: true, Sections: []workbench.LoadedSection{{ID: "acme.tree"}}})
+	store.Loaded(workbench.LoadedPlugin{ID: "solo"})
+	if err := store.Begin(nil, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	const good = `{"id":"a","title":"a","sections":["acme.tree"],"layout":"list"}`
+	places := "settings: every link requires a place (left, right, window-left, window-right, card-left, card-right, card-top, card-bottom) and a known set"
+	cases := []struct{ sets, links, want string }{
+		{`{}`, `[]`, "settings: sidebars requires sets and links"},
+		{`[{"id":"a","sections":[],"layout":"list"}]`, `[]`, "settings: every set requires id, title, and sections"},
+		{`[{"id":"","title":"a","sections":[],"layout":"list"}]`, `[]`, "settings: every set requires id, title, and sections"},
+		{`[{"id":"a","title":"a","sections":[],"layout":"list","color":"red"}]`, `[]`, "settings set a: unknown field color"},
+		{`[{"id":"a","title":"","sections":[],"layout":"list"}]`, `[]`, "settings: set a title must be 1 to 40 characters"},
+		{`[{"id":"a","title":"` + strings.Repeat("가", 41) + `","sections":[],"layout":"list"}]`, `[]`, "settings: set a title must be 1 to 40 characters"},
+		{`[{"id":"a","title":"a","sections":[""],"layout":"list"}]`, `[]`, "settings: set a sections must be section ids"},
+		{`[{"id":"a","title":"a","sections":["acme.tree","acme.tree"],"layout":"list"}]`, `[]`, "settings: set a lists section acme.tree twice"},
+		{`[{"id":"a","title":"a","sections":[],"layout":"grid"}]`, `[]`, "settings: set a layout must be list or tabs"},
+		{`[{"id":"off","title":"a","sections":[],"layout":"list"}]`, `[]`, "settings: set id off is reserved"},
+		{`[` + good + `,` + good + `]`, `[]`, "settings: duplicate set a"},
+		{`[` + good + `]`, `[{"place":"middle","plugin":null,"set":"a"}]`, places},
+		{`[` + good + `]`, `[{"place":"left","plugin":null,"set":"a","x":1}]`, "settings link: unknown field x"},
+		{`[` + good + `]`, `[{"place":"card-left","plugin":"","set":"a"}]`, "settings: a link plugin is null or a plugin id"},
+		{`[` + good + `]`, `[{"place":"left","plugin":"acme","set":"a"}]`, "settings: a general window link requires plugin null"},
+		{`[` + good + `]`, `[{"place":"card-left","plugin":null,"set":"a"}]`, "settings: a card-left link names a plugin"},
+		{`[` + good + `]`, `[{"place":"card-left","plugin":"acme","set":"b"}]`, "settings: a card-left link requires a known set"},
+		{`[` + good + `]`, `[{"place":"left","plugin":null,"set":"a"},{"place":"left","plugin":null,"set":"a"}]`, "settings: link left general appears twice"},
+		{`[{"id":"a","title":"a","sections":["acme.gone"],"layout":"list"}]`, `[]`, "settings: set a names unknown section acme.gone"},
+		{`[` + good + `]`, `[{"place":"card-left","plugin":"solo","set":"a"}]`, "settings: link names plugin solo without a surface"},
+	}
+	parse := func(text string) any {
+		var value any
+		if err := json.Unmarshal([]byte(text), &value); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	for _, c := range cases {
+		err := store.Set(map[string]any{"sets": parse(c.sets), "links": parse(c.links)}, "common")
+		if err == nil || err.Error() != c.want {
+			t.Errorf("sets %s links %s: %v, want %s", c.sets, c.links, err, c.want)
+		}
+	}
+	if len(writes) != 0 {
+		t.Fatalf("a refused change was written: %+v", writes)
+	}
+	// A link of a plugin that is not loaded keeps a set that only that plugin declared, and a set keeps a section of such a plugin.
+	kept := map[string]any{"sets": parse(`[{"id":"a","title":"a","sections":["acme.tree","other.view"],"layout":"tabs"}]`),
+		"links": parse(`[{"place":"card-left","plugin":"other","set":"other.side"},{"place":"left","plugin":null,"set":"a"}]`)}
+	if err := store.Set(kept, "common"); err != nil {
+		t.Fatalf("the references to a plugin that is not loaded are refused: %v", err)
+	}
+}
+
+// A window takes the sets and links that the settings accepted, also a link of a plugin that is not loaded to a set that only that
+// plugin declared, and its sidebars keep showing.
+func TestAWindowTakesALinkThatTheSettingsKeep(t *testing.T) {
+	f := sidebarShell(t)
+	links := []any{map[string]any{"place": "left", "plugin": nil, "set": "set-install"},
+		map[string]any{"place": "window-right", "plugin": "browser", "set": "set-browser"},
+		map[string]any{"place": "card-left", "plugin": "other", "set": "other.side"}}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"links": links}})
+	if name := element(t, f.tester, "core.sidebar.section.name", "left/files.tree"); name.Label != "파일 트리" {
+		t.Fatalf("the left sidebar shows %q", name.Label)
 	}
 }

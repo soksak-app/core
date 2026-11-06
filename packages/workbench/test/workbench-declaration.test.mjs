@@ -99,6 +99,24 @@ test("no stylesheet of the workbench holds a literal length, ratio or duration",
   assert.deepEqual(found, [], `literal metrics:\n${found.join("\n")}`);
 });
 
+// A font shorthand sets the line height to `normal`, which the font decides and no chrome metric holds, so each one names the line height
+// of the chrome metrics (docs/spec/settings.md#layout-values).
+test("every font shorthand of a stylesheet names a line height of the chrome metrics", () => {
+  const found = [];
+  for (const { name, text } of stylesheets()) {
+    for (const match of plain(text).matchAll(/([^{};]*)\{([^{}]*)\}/g)) {
+      for (const declaration of match[2].split(";")) {
+        const at = declaration.indexOf(":");
+        if (at < 0 || declaration.slice(0, at).trim() !== "font") continue;
+        const value = declaration.slice(at + 1).trim();
+        if (value === "inherit" || /\/\s*var\(--line-height(?:-tight)?\)/.test(value)) continue;
+        found.push(`${name}: ${match[1].trim()} { font: ${value} }`);
+      }
+    }
+  }
+  assert.deepEqual(found, [], `font shorthands without a line height:\n${found.join("\n")}`);
+});
+
 test("every chrome metric is a CSS value that a stylesheet or a module of the workbench reads, and every metric that a stylesheet reads is declared", () => {
   const declaration = declared();
   const sheets = stylesheets().map(({ text }) => plain(text)).join("\n");
