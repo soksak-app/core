@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F435-8-2: diagnostic build의 ResizeObserver loop recorder가 다음 task에서 slot을 비우므로, observation round가 animation frame을 더하지 않습니다.
 - F483-1: `core.surface.clock`이 document의 page identity를 돌려주고, content trace가 time origin 대신 그것으로 document를 밝힙니다.
 - F435-8-1: run 동안 다음 drawn commit이 확인된 presentation의 paint 구멍을 쓰므로, 다음 draw 전에 animation frame이 layer commit을 더하지 않습니다.
 - F435-7: 두 host에서 composition 배치가 surface를 밝히는 frame dispatch를 기록합니다.
