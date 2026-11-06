@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F673: `stall_watch_test`가 run loop를 정해진 시간 동안 돌리는 대신 각 단계를 main run loop의 wait나 main thread의 hold에서 시작하고 worker가 끝나면 실행을 끝낸다. 바꾸기 전 test는 utility clamp 아래에서 CI처럼 실패했고(`6 of 16 heartbeats read no lateness in a wait`), test는 10번 중 10번과 utility·background clamp 아래 모든 실행에서 통과한다.
 - F510-1: 최종 acceptance 완료에 소유 native test 연결을 유지하고 검증 실행 기록은 별도로 분류한다. 실제 inventory와 소유 case 45개가 모두 통과한다.
 - F664: 고정한 로컬 candidate와 설치 component 집합을 사용한 두 host의 focused case 12개가 독립 초기 상태 두 번에서 모두 통과한다. 전체 audit와 cleanup을 완료하고 준비 후 동결한 입력의 raw identity가 실행 후에도 동일함을 확인했다. 최초 fixture·selection 실패는 보존하고 수정했다. 이전 F658 guard-mutation 근거, 실제 Editor baseline, 별도 native close fixture와 Editor E58 파일 write-race 검증은 각각의 범위를 유지하며 최신 Editor source의 native 승인을 주장하지 않는다.
 - F510: Core Node file 465개, 이후 설치 단계 소유 case 23개와 통합한 최신 Editor case 215개가 모두 통과한다. 격리 checkout의 native 전체 검증은 format·clippy, native 항목 96개, host·CLI 실행 4201개 및 적용 대상 contract 전체(합집합 1009개)를 통과한다. 검사한 bundle·registry·release payload는 바뀌지 않았다. F665과 F666의 일반 application·benchmark·activation acceptance는 미완료로 남는다.
