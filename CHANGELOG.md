@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F500-1: Terminal and cell background samples use session recording ownership. Stop runs once, failed captures and original failures remain available, and successful captures are removed only after finalization. All 43 focused lifecycle and geometry cases pass on macOS; native application acceptance was not run.
+
 - F501-1: Language evidence binds command outcomes to inputs captured before execution and rejects input drift. Failed acceptance retains the original snapshot, command result and attempt history; metadata-only and execution-bound attempts cannot mix. All 29 evidence and adapter cases pass on macOS.
 
 - F498-2: Remove 13 unused test entrypoints that register no tests, preserve strict discovery, and add the missing remount revision assertion to the owning view test. The 215 behavior and 67 discovery/inventory cases pass on macOS; a fixed revision mutation fails its assertion.

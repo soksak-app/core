@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F500-1: Terminal 및 cell 배경 sample은 session recording 소유권을 사용한다. Stop은 한 번 수행하고 실패 capture와 원래 실패를 보존하며 성공 capture는 finalization 뒤에만 제거한다. macOS에서 집중 수명주기 및 geometry case 43개가 모두 통과했고 native application 승인은 실행하지 않았다.
+
 - F501-1: 언어 evidence는 실행 전에 수집한 입력에 command 결과를 연결하고 입력 변경을 거부한다. 승인 실패는 원래 snapshot, command 결과와 attempt 이력을 보존하며 metadata-only와 실행에 연결된 attempt를 혼용할 수 없다. macOS에서 evidence 및 adapter case 29개가 모두 통과한다.
 
 - F498-2: test를 등록하지 않는 미사용 진입점 13개를 제거하고 엄격한 discovery를 유지하며, 소유 view test에 누락된 remount revision assertion을 추가한다. macOS에서 동작 case 215개와 discovery/inventory case 67개가 통과하고 revision 고정 mutation은 해당 assertion에서 실패한다.

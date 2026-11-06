@@ -1,22 +1,16 @@
 // Helper with which a window check prepares the terminal surface and reads the screen glyphs.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
-
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { cropViewPixels } from "./view-content.mjs";
 
 export async function terminalBackgroundSample(session, rect) {
-  await session.request("diagnostics.capture.start", {});
+  const recording = await session.record();
   const displayed = await session.presented();
-  const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
-  try {
-    const files = frames(frameDir);
-    assert.ok(files.length > 0, "terminal theme capture produced no frames");
-    const crop = cropViewPixels(readFrame(files.at(-1)), { x: rect.x, y: rect.y, w: rect.width, h: rect.height });
-    return pixel({ ...crop, stride: crop.width * 4 }, Math.floor(crop.width * 0.75), Math.floor(crop.height * 0.75));
-  } finally {
-    rmSync(frameDir, { recursive: true, force: true });
-  }
+  await recording.stop({ after: displayed.displayed });
+  const files = frames(recording.frames);
+  assert.ok(files.length > 0, "terminal theme capture produced no frames");
+  const crop = cropViewPixels(readFrame(files.at(-1)), { x: rect.x, y: rect.y, w: rect.width, h: rect.height });
+  return pixel({ ...crop, stride: crop.width * 4 }, Math.floor(crop.width * 0.75), Math.floor(crop.height * 0.75));
 }
 
 export function textLines(screen) {
@@ -127,21 +121,17 @@ export async function presentedScreen(session, surface) {
  */
 export async function cellBackgrounds(session, surface, cells) {
   await presentedScreen(session, surface);
-  await session.request("diagnostics.capture.start", {});
+  const recording = await session.record();
   const { displayed } = await session.presented();
-  const { frames: dir } = await session.request("diagnostics.capture.stop", { after: displayed });
-  try {
-    const files = frames(dir);
-    assert.ok(files.length > 0, "the cell capture produced no frames");
-    const frame = readFrame(files.at(-1));
-    const view = await session.rect("terminal.view", undefined, surface);
-    const { cellWidth, cellHeight } = await session.get("terminal.session", surface);
-    return cells.map(({ col, row }) => pixel(frame,
-      Math.round((view.document.x + view.x + (col + 0.1) * cellWidth) * frame.scale),
-      Math.round((view.document.y + view.y + (row + 0.08) * cellHeight) * frame.scale)));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  await recording.stop({ after: displayed });
+  const files = frames(recording.frames);
+  assert.ok(files.length > 0, "the cell capture produced no frames");
+  const frame = readFrame(files.at(-1));
+  const view = await session.rect("terminal.view", undefined, surface);
+  const { cellWidth, cellHeight } = await session.get("terminal.session", surface);
+  return cells.map(({ col, row }) => pixel(frame,
+    Math.round((view.document.x + view.x + (col + 0.1) * cellWidth) * frame.scale),
+    Math.round((view.document.y + view.y + (row + 0.08) * cellHeight) * frame.scale)));
 }
 
 /** Background of a selected cell when there is no highlight color. It is --rail of the current theme (docs/spec/persistent-services.md). */

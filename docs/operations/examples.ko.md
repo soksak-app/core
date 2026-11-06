@@ -138,6 +138,8 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 
 통과한 검사의 녹화는 모든 cleanup과 application error audit가 성공한 뒤에만 제거하는 임시 파일이다. `s.record(params)`는 녹화를 시작하고 그 `frames` 폴더와 `diagnostics.capture.stop`을 한 번 보내는 `stop(options)`을 돌려준다. host가 실패 전에 녹화를 끝냈을 수 있으므로 실패한 stop은 다시 보내지 않는다. 세션 정리는 보낸 stop이 없을 때만 stop을 보낸다. Capture stop 또는 artifact 검증이 실패하면 caller가 오류를 잡더라도 검사를 실패시키고 폴더를 보존한다. 하네스는 세션을 열 때 `<config-dir>/logs/captures` 아래의 폴더를 기록한다. 정리 뒤 추적한 frame path, 실패한 recording, 남은 폴더의 canonical filesystem identity를 비교하고 존재하는 폴더만 resolve한다. 추적되지 않은 새 폴더가 있으면 경로를 보고하고 검사를 실패시키며 해당 폴더를 증거로 보존한다. 실패 녹화는 환경 변수 없이 자동 보존한다. 실패 메시지는 측정값과 프레임 번호만 보고하며 하네스는 이미지를 쓰지 않는다.
 
+Terminal theme과 cell 배경 sampling은 `s.record()`를 사용하고 종료한 recording을 삭제하지 않은 채 읽는다. Presentation 실패 시 stop은 session cleanup이 수행한다. Decode, geometry 및 이후 검사 실패는 finalization에서도 recording을 보존하며, sampling 성공만으로 error audit 전에 근거를 제거하지 않는다.
+
 카드 전체화면 창 검사는 카드 아이콘·전체화면/복귀 기하·유지된 표면과 두 상태의 설정 반영을 검사한다. 자동 접힘·사이드바 공간 조건은 card-sidebar-space.test.mjs와 [카드 사이드바 계약](../spec/example-model.ko.md)에 속한다. 큰 사이드바 지정은 부족한 축을 접으며 빈 슬롯을 만들지 않는다. 컴포지터 소유 검사는 독립적으로 제어한 0폭·0높이 슬롯을 제거 없이 숨기고 영역이 돌아오면 표시를 복원하는 것을 검사한다.
 
 공간 조건 검사는 구성된 모든 외부 창 열을 유지한다. 수동 접기만으로 반대쪽을 펼칠 충분한 폭이 생기지는 않을 수 있으며 기대 상태는 경계를 포함한 측정 카드 공간을 따른다. 부족한 일반 공간, 펼칠 수 있도록 명시적으로 넓힌 일반 창, 전체화면, 낮은 복귀를 검사하면서 저장 수동 선택을 유지한다.
