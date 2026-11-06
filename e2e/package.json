@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test-app": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'",
+    "test-app:capture-input-close": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs '--test-name-pattern=consecutive captures preserve finalized recordings|the terminal background equals the card color of every theme and mode|a terminal draws its screen after the window is resized from outside|a click gives native focus to the clicked terminal and its card|a file opens from the tree in the editor, saves, shows a save error and asks before it closes|save replies that retain modified state keep the native tab open' capture-lifecycle.test.mjs terminal.test.mjs editor.test.mjs save-close.test.mjs",
     "test-app:activation": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'",
     "test-app:person": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'person/*.test.mjs'",
     "test-app:real": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",

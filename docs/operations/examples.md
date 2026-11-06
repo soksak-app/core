@@ -113,6 +113,8 @@ The fixed-sidebar window checks restore temporary explicit card-sidebar selectio
 
 ### End-to-end run
 
+`make test-app-capture-input-close` selects twelve checks across both hosts: consecutive recording artifact preservation, terminal theme backgrounds, cell pixels after an external resize, native click focus, the actual Editor save/error and keep/discard baseline, and a separate native core save-close protocol fixture. It uses the ordinary fresh-configuration runner, full log audit and process cleanup without the activation or native full suite. The fixture's successful save deliberately retains its modified report; core must keep that tab, then close the same tab after a later save reports it clean. This checks the native core boundary, not an actual Editor filesystem write race. Run the selection from two independent fresh configurations. Reuse already-built, unchanged bundles with make's `-o build-wailsv3 -o build-tauriv2 -o build-registry` options only after their identities and installed component inputs have been recorded.
+
 Keep the display on and run `make test-app`. `make test-app-section-design` leaves stills of the files and browser sections of both applications in light and dark modes in `target/section-design` for inspection at original resolution. Each e2e target (`e2e`, `test-app-activation`, `test-app-real`, `test-app-person`) builds both debug applications and the workspace registry and runs `scripts/test-app.mjs` with the window-check script of its tier and the native end-to-end target of that tier:
 
 1. It makes a new configuration root `target/e2e/<time>-<random>` for the run.
