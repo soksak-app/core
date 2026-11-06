@@ -153,7 +153,7 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
   // On failure, it writes the order of the x of the first surface of the settled layouts of each host and the boundary of the drag result.
   const boundary = (result) => result.boundary && [result.boundary[0], result.boundary.at(-1)];
   const dragState = Object.fromEntries(Object.entries(results).map(([name, result]) => [name, {
-    from: result.from, steps: result.steps, took: result.took, asked: result.asked,
+    from: result.from, steps: result.steps, took: result.took, asked: result.asked, pressWaits: result.pressWaits,
     late: result.late, deepest: result.deepest, boundary: boundary(result),
   }]));
   const stateReport = `window, document, and layout settings by host: ${JSON.stringify(states)}`;

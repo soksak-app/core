@@ -864,7 +864,7 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 		}
 		delivered = append(delivered, fmt.Sprintf("%s %g,%g after %d", input.Phase, input.X, input.Y, ticks))
 		return nil
-	}, func() { ticks++ })
+	}, func() { ticks++ }, func() error { return nil })
 	if err != nil {
 		t.Fatalf("native drag: %v", err)
 	}
@@ -894,12 +894,71 @@ func TestNativeDragDeliversThePressTheStepsAndTheReleaseOfEachRoundTrip(t *testi
 			return errors.New("the window did not accept the input")
 		}
 		return nil
-	}, func() {})
+	}, func() {}, func() error { return nil })
 	if err == nil || err.Error() != "native drag step 1: the window did not accept the input" {
 		t.Fatalf("native drag with a failing step: error %v", err)
 	}
 	if !reflect.DeepEqual(delivered, []string{"down", "drag", "up"}) {
 		t.Fatalf("native drag with a failing step delivered %v, want down, drag and the release up", delivered)
+	}
+}
+
+// contract: diagnostics.drag.native-delivers-pointer-gesture
+func TestANativeDragPressesOnlyAfterTheWindowPresentedItsLayout(t *testing.T) {
+	// The window answers late: each press must follow the answer, and took leaves the waits out.
+	const late = 40 * time.Millisecond
+	var events []string
+	answers := 0
+	result, err := nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 3}, point{X: 100, Y: 50},
+		func(input PointerInput) error {
+			events = append(events, input.Phase)
+			return nil
+		}, func() {}, func() error {
+			time.Sleep(late)
+			answers++
+			events = append(events, fmt.Sprintf("presented %d", answers))
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("native drag: %v", err)
+	}
+	trip := func(answer int) []string {
+		return []string{fmt.Sprintf("presented %d", answer), "down", "drag", "drag", "drag", "drag", "up"}
+	}
+	want := append(append(trip(1), trip(2)...), trip(3)...)
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("native drag with a late window delivered\n%s\nwant\n%s", strings.Join(events, "\n"), strings.Join(want, "\n"))
+	}
+	waits, ok := result["pressWaits"].([]int64)
+	if !ok || len(waits) != 3 {
+		t.Fatalf("native drag pressWaits %#v, want the wait before each of the 3 presses", result["pressWaits"])
+	}
+	for i, wait := range waits {
+		if wait < late.Milliseconds() {
+			t.Fatalf("native drag pressWaits[%d] = %d ms, want at least the %d ms the window took to answer", i, wait, late.Milliseconds())
+		}
+	}
+	if took, ok := result["took"].(int64); !ok || took >= late.Milliseconds() {
+		t.Fatalf("native drag took %#v ms with steps that do not wait, want less than one wait of %d ms", result["took"], late.Milliseconds())
+	}
+
+	// A wait that fails delivers no press.
+	events = nil
+	_, err = nativeDrag(dragPlan{Axis: "x", Line: 3, DX: 20, MS: 32, Times: 2}, point{X: 100, Y: 50},
+		func(input PointerInput) error {
+			events = append(events, input.Phase)
+			return nil
+		}, func() {}, func() error {
+			if len(events) > 0 {
+				return errors.New("the window did not present within 10s")
+			}
+			return nil
+		})
+	if err == nil || err.Error() != "native drag wait before the press of round trip 2: the window did not present within 10s" {
+		t.Fatalf("native drag with a failing wait: error %v", err)
+	}
+	if len(events) != 6 || events[5] != "up" {
+		t.Fatalf("native drag with a failing wait delivered %v, want only the first round trip", events)
 	}
 }
 
