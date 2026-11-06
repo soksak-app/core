@@ -614,6 +614,7 @@ Items:
 | `recording.finish.retired-stop-failure-releases-owner` | When capture stop fails after the native stream and writer have retired, finishing reports the stop error, leaves the started folder in place, and releases recording ownership so another recording can start. | all |
 | `recording.finish.stop-query-failure-preserves-owner` | When capture stop and the native ownership query both fail, finishing reports both errors and retains the folder and cleanup ownership. | all |
 | `recording.finish.layout-trace-failure-preserves-folder` | When layout trace finalization fails after capture stop, finishing returns that error and preserves the frame folder already returned by start. | all |
+| `recording.drag.layout-trace-after-settle` | A recorded drag ends its layout trace after the last layout is committed and presented, so the trace holds the presentation and the commit of the last layout; the trace also ends when the drag or the wait fails. | all |
 | `recording.start.failed-open-removes-folder` | A recording whose capture fails to open removes its folder and leaves nothing running. | all |
 | `recording.start.failed-start-removes-folder` | A recording whose capture fails to start removes its folder and leaves nothing running. | all |
 | `recording.start.cleanup-failure-retains-folder-owner` | When a failed start cannot remove its owned folder, it reports both errors, retains cleanup ownership, and blocks another start until abort removes the folder. | all |

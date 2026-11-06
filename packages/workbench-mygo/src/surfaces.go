@@ -22,7 +22,7 @@ import (
 const surfaceOrder = "surfaces"
 
 // surfaceNames are the core names that a view holds in its document (packages/plugin-api/surface-document.js).
-var surfaceNames = map[string]bool{"core.surface.document": true, "core.surface.input": true, "core.surface.hit": true}
+var surfaceNames = map[string]bool{"core.surface.document": true, "core.surface.input": true, "core.surface.hit": true, "core.surface.clock": true}
 
 // surfaceDeclaration is the composition of a view that the page of the view reads.
 type surfaceDeclaration struct {

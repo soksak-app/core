@@ -542,6 +542,7 @@ export function createViewBridge({ handler, report }) {
       expose.status("core.surface.document", state.document.read, state.document.subscribe),
       expose.status("core.surface.input", state.input.read, state.input.subscribe),
       expose.command("core.surface.hit", state.hit),
+      expose.command("core.surface.clock", state.clock),
     ]).catch(recordError("core surface entries"));
     // The focused exposed element of the view document goes to the page with the view call tab.focus at each change; the page
     // combines it with the first responder of the window in core.focus (docs/spec/exposure.md#keyboard-focus). A move between
