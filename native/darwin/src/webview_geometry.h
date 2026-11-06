@@ -31,12 +31,13 @@ void sp_surface_set_window_overlays(void *mainWebview, const double *rects, size
 
 // Native plane of the surface. Regions can be placed only below this view.
 void *webviewSurfaceNativePlane(void *surface);
-// Keeps the document of webview shown and its rendering and animation frames running while its window is occluded: WebKit
-// hides the document of a web view in an occluded window and stops its rendering otherwise. The registered main web view, a
-// view placed in a surface and a modal web view call it, because a placement, a surface capture, a paint acknowledgement and
-// the raise of a modal wait for their rendering, and a still capture of a covered window shows what they draw. Document
-// regions do not, so a covered region throttles. Returns false when WebKit lacks the setting.
-bool sp_webview_render_occluded(void *webview);
+// With render, keeps the document of webview shown and its rendering and animation frames running while its window is
+// occluded; without, gives the web view back the occlusion detection of WebKit, which hides the document of a web view in an
+// occluded window and stops its rendering. The registered main web view, a view placed in a surface and a modal web view
+// render, because a placement, a surface capture, a paint acknowledgement and the raise of a modal wait for their rendering,
+// and a still capture of a covered window shows what they draw. A document region renders only while its window draws
+// covered (sp_document_draw_covered), so a covered region throttles otherwise. Returns false when WebKit lacks the setting.
+bool sp_webview_render_occluded(void *webview, bool render);
 // Places the web view of a view in the surface below the native plane, so the overlay mask of the plane does not cut it
 // and the regions of the view are drawn above it. The view renders while its window is occluded (sp_webview_render_occluded).
 // Returns false when the surface has no host or the view cannot render while occluded.

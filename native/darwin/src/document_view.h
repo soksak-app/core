@@ -142,6 +142,12 @@ bool sp_document_go(void *document, int action, int offset);
 // when the surface size changes.
 void sp_document_place(void *document, double left, double top, double right, double bottom, bool visible);
 #ifdef SOKSAK_DIAGNOSTIC
+// With draw, makes the document regions of window show their documents and render while the window is occluded
+// (sp_webview_render_occluded), so a still capture of the covered window holds them; without, ends that, and a covered region
+// hides its document again. The window keeps the state for a region created later in it until draw is false or the window
+// closes; the regions of other windows and the views keep theirs. Returns false when a region cannot take the state. Call it
+// on the main thread.
+bool sp_document_draw_covered(void *window, bool draw);
 // Adds or removes a diagnostic viewport marker on the document view. The marker is a cyan 2-point layer border.
 // All three output pointers are required. On failure, error receives an allocated UTF-8 message for the caller to free.
 bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, double *borderWidthPt, char **error);

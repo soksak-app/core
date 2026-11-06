@@ -25,6 +25,8 @@ type CoreRoot = extern "C" fn(
 
 unsafe extern "C" {
     #[cfg(feature = "diagnostics")]
+    fn sp_document_draw_covered(window: *mut c_void, draw: bool) -> bool;
+    #[cfg(feature = "diagnostics")]
     fn sp_document_viewport_marker(
         document: *mut c_void,
         enabled: bool,
@@ -92,6 +94,17 @@ unsafe extern "C" {
     fn sp_document_interaction_state(document: *mut c_void) -> *mut c_char;
     fn sp_document_restore(document: *mut c_void, state: *const c_char) -> *const c_char;
     fn free(pointer: *mut c_void);
+}
+
+/// Makes the document regions of the window show their documents while the window is occluded, or ends that
+/// (docs/spec/native-surfaces.md#document-regions). Call it on the main thread.
+#[cfg(feature = "diagnostics")]
+pub fn draw_covered(window: Handle, draw: bool) -> Result<(), String> {
+    if unsafe { sp_document_draw_covered(window as *mut c_void, draw) } {
+        Ok(())
+    } else {
+        Err("a document region of the window cannot change its drawing while the window is occluded".into())
+    }
 }
 
 /// Sets or removes the viewport marker on the native document view. Call it on the main thread.

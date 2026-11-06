@@ -234,8 +234,8 @@ impl Platform for Darwin {
         webview::place(view, x, y, w, h);
         Ok(())
     }
-    fn render_occluded(&self, view: &PlatformWebview) -> Result<(), String> {
-        webview::render_occluded(view)
+    fn render_occluded(&self, view: &PlatformWebview, render: bool) -> Result<(), String> {
+        webview::render_occluded(view, render)
     }
     fn create_surface(&self, window: Handle) -> Result<Handle, String> {
         webview::create_surface(window)
@@ -424,6 +424,10 @@ impl Platform for Darwin {
     ) -> Result<(), String> {
         document::place(document, insets, visible);
         Ok(())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn draw_documents_covered(&self, window: Handle, draw: bool) -> Result<(), String> {
+        document::draw_covered(window, draw)
     }
     #[cfg(feature = "diagnostics")]
     fn document_viewport_marker(

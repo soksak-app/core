@@ -36,10 +36,14 @@ int main(void) { @autoreleasepool {
     check(main._windowOcclusionDetectionEnabled && modal._windowOcclusionDetectionEnabled && page._windowOcclusionDetectionEnabled,
         @"a web view that nothing configured detects the occlusion of its window");
 
-    check(sp_webview_render_occluded(modal), @"the modal web view is configured to render while its window is occluded");
+    check(sp_webview_render_occluded(modal, true), @"the modal web view is configured to render while its window is occluded");
     check(!modal._windowOcclusionDetectionEnabled, @"the modal web view does not detect the occlusion of its window");
-    check(sp_webview_render_occluded(modal), @"a second call on the same web view succeeds");
+    check(sp_webview_render_occluded(modal, true), @"a second call on the same web view succeeds");
     check(!modal._windowOcclusionDetectionEnabled, @"the modal web view still does not detect the occlusion after a second call");
+    check(sp_webview_render_occluded(modal, false) && modal._windowOcclusionDetectionEnabled,
+        @"a web view that no longer renders while occluded detects the occlusion again");
+    check(sp_webview_render_occluded(modal, true) && !modal._windowOcclusionDetectionEnabled,
+        @"the web view renders while occluded again");
 
     void *composition = sp_window_set_main_webview(window, main);
     check(composition != NULL, @"the main web view is registered");

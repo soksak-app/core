@@ -11,6 +11,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <Security/Security.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -1542,6 +1543,57 @@ static void *documentCreationFails(NSString *cause) {
     return NULL;
 }
 
+#ifdef SOKSAK_DIAGNOSTIC
+static char kDrawCoveredKey;
+
+// The record that a window draws its document regions while covered (sp_document_draw_covered). The window holds it as an
+// associated object; the close of the window removes it, so the state ends with the window.
+@interface SPDocumentDrawCovered : NSObject
+@property(assign) NSWindow *window;
+@end
+
+@implementation SPDocumentDrawCovered
+- (void)windowWillClose:(NSNotification *)notification {
+    sp_observe_delivered("document_view.draw_covered.close");
+    [[self retain] autorelease];
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+    objc_setAssociatedObject(self.window, &kDrawCoveredKey, nil, OBJC_ASSOCIATION_RETAIN);
+}
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+    [super dealloc];
+}
+@end
+
+static BOOL windowDrawsCovered(NSWindow *window) {
+    return window && objc_getAssociatedObject(window, &kDrawCoveredKey) != nil;
+}
+
+bool sp_document_draw_covered(void *handle, bool draw) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (!window) return false;
+    if (draw && !windowDrawsCovered(window)) {
+        SPDocumentDrawCovered *record = [[SPDocumentDrawCovered new] autorelease];
+        record.window = window;
+        if (!sp_observe_notification_selector("document_view.draw_covered.close", SP_OBSERVE_COUNT, record, @selector(windowWillClose:),
+                NSWindowWillCloseNotification, window)) return false;
+        objc_setAssociatedObject(window, &kDrawCoveredKey, record, OBJC_ASSOCIATION_RETAIN);
+    } else if (!draw && windowDrawsCovered(window)) {
+        SPDocumentDrawCovered *record = objc_getAssociatedObject(window, &kDrawCoveredKey);
+        [NSNotificationCenter.defaultCenter removeObserver:record];
+        objc_setAssociatedObject(window, &kDrawCoveredKey, nil, OBJC_ASSOCIATION_RETAIN);
+    }
+    bool applied = true;
+    // A view renders while occluded in every state (sp_surface_place_view), so only the document regions change.
+    for (SPDocumentView *view in openDocuments().allObjects) {
+        if (view.closed || view.pluginRootView || view.webSurface.window != window) continue;
+        applied = sp_webview_render_occluded(view, draw) && applied;
+    }
+    return applied;
+}
+#endif
+
 void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *label, const char *channel,
     sp_document_changed changed, void *context) {
     setDocumentFailure(nil);
@@ -1596,6 +1648,15 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
         }
     } else {
         [nativePlane addSubview:view];
+#ifdef SOKSAK_DIAGNOSTIC
+        // A region created in a window that draws covered draws covered too.
+        if (windowDrawsCovered(surface.window) && !sp_webview_render_occluded(view, true)) {
+            [view removeFromSuperview];
+            webviewInputUnregister(view);
+            [view release];
+            return documentCreationFails(@"the document webview cannot render while its window is occluded");
+        }
+#endif
     }
     [view installEventMonitor];
     sp_observe_key_path("document_view.appearance", SP_OBSERVE_RECORD, surface, view, @"effectiveAppearance", 0, &kAppearanceContext);
