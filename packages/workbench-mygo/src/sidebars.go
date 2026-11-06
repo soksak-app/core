@@ -172,6 +172,7 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	read("section-head-pad", &m.SectionHeadPad)
 	read("section-head-text", &m.SectionHeadText)
 	read("section-head-weight", &m.SectionHeadWeight)
+	read("line-height", &m.SectionHeadLine)
 	m.SectionHeadFont = declared.ChromeValue("ui-font")
 	read("section-tab-mark", &m.SectionTabMark)
 	read("sidebar-status-gap", &m.StatusGap)
@@ -264,30 +265,32 @@ func effectiveSidebars(environment []byte, installed []InstalledPlugin) ([]Sideb
 // settings until a person changes them.
 func (s *Sidebars) Declared() ([]SidebarSet, []SidebarLink) { return s.sets, s.links }
 
-// Adopt takes the sets and the links of the settings, which the next frame shows.
-func (s *Sidebars) Adopt(sets []SidebarSet, links []SidebarLink) error {
-	previousSets, previousLinks := s.sets, s.links
+// Adopt takes the sets and the links of the settings, which the next frame shows. The settings checked them before they took them,
+// and they keep a link of a plugin that is not loaded to a set that only that plugin declared.
+func (s *Sidebars) Adopt(sets []SidebarSet, links []SidebarLink) {
 	s.sets, s.links = sets, links
-	if err := s.check(); err != nil {
-		s.sets, s.links = previousSets, previousLinks
-		return err
-	}
-	return nil
 }
 
-// check refuses a set that has no known layout and a link to a set that is gone.
+// check refuses declared sets and links that break the rules of validateSidebars of @soksak/plugin-api, as the page refuses the
+// sidebars of environment.json.
 func (s *Sidebars) check() error {
-	for _, set := range s.sets {
-		if set.Layout != "list" && set.Layout != "tabs" {
-			return fmt.Errorf("set %s layout must be list or tabs", set.ID)
-		}
+	sets, err := decode[any](s.sets)
+	if err != nil {
+		return fmt.Errorf("environment.json: %w", err)
 	}
-	for _, link := range s.links {
-		if s.set(link.Set) == nil {
-			return fmt.Errorf("link points at a set that is gone: %s", link.Set)
-		}
+	links, err := decode[any](s.links)
+	if err != nil {
+		return fmt.Errorf("environment.json: %w", err)
 	}
-	return nil
+	return validateSidebars(orEmptyList(sets), orEmptyList(links), "environment.json", nil)
+}
+
+// orEmptyList is value, or an empty list when value is the nil of a list that holds nothing.
+func orEmptyList(value any) any {
+	if value == nil {
+		return []any{}
+	}
+	return value
 }
 
 func (s *Sidebars) set(id string) *SidebarSet {

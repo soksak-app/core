@@ -164,6 +164,20 @@ func TestASectionNameHasTheWeightOfThePage(t *testing.T) {
 	}
 }
 
+// A section name has the line height of the chrome metrics, which every text of the workbench has (docs/spec/settings.md#layout-values),
+// and stands in the middle of its head: 11.5 points × 1.45.
+func TestASectionNameHasTheLineHeightOfTheChromeMetrics(t *testing.T) {
+	f := sidebarShell(t)
+	head := f.box("core.sidebar.section.header", "left/files.tree")
+	name := f.box("core.sidebar.section.name", "left/files.tree")
+	if want := float32(11.5 * 1.45); !designNear(name.H, want) {
+		t.Fatalf("the name is %v tall at y %v, want %v", name.H, name.Y, want)
+	}
+	if !designNear(designMiddle(name), designMiddle(head)) {
+		t.Fatalf("the middle of the name is at %v and the middle of its head at %v", designMiddle(name), designMiddle(head))
+	}
+}
+
 // A view of a project that the library covers has no place: the rectangle of its element would lead an audit and an input to what the
 // window does not show. The page answers so, because the surface is not in the seated placement.
 func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {

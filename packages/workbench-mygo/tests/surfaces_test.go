@@ -31,7 +31,11 @@ const installedDocument = `{"plugins": [
 	{"id": "browser", "package": "@scope/plugin-browser", "version": "1.0.0",
 		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "browser.probe"}]}},
 		"manifest": {"id": "browser", "name": "브라우저", "description": "browser", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
-			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}
+			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}, "sections": [
+				{"id": "browser.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160},
+				{"id": "browser.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+				{"id": "browser.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+				{"id": "browser.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}}
 ]}`
 
 // surfaceHost records the surface calls of the workbench.

@@ -192,6 +192,7 @@ type SettingsStore struct {
 	save                        SaveSettings
 	begun                       bool
 	loaded                      map[string]bool
+	plugins                     []LoadedPlugin
 }
 
 // NewSettingsStore returns the store of the catalog and the plugin settings definitions.
@@ -241,8 +242,12 @@ func (s *SettingsStore) SidebarDefaults(sets []SidebarSet, links []SidebarLink) 
 	return nil
 }
 
-// Loaded records a plugin that the window loaded, whose stored settings the store checks.
-func (s *SettingsStore) Loaded(plugin string) { s.loaded[plugin] = true }
+// Loaded records a plugin that the window loaded, whose stored settings the store checks and whose sections and surface the sets
+// and links of the settings reference.
+func (s *SettingsStore) Loaded(plugin LoadedPlugin) {
+	s.loaded[plugin.ID] = true
+	s.plugins = append(s.plugins, plugin)
+}
 
 // kept tells that key is a stored setting of a plugin that is not loaded, which stays in the file unapplied
 // (docs/spec/plugins.md).
@@ -472,8 +477,32 @@ func validateDeclared(definition SettingDefinition, value any) error {
 	return nil
 }
 
-// check holds what no single value tells: the widths in order, and each link to a set that exists.
+// check holds what no single value tells: the widths in order, and the sets and links with the functions of the page that also
+// check the sidebars of environment.json (docs/spec/settings.md#stored-sets-and-links).
 func (s *SettingsStore) check(values map[string]any) error {
+	// A command passes the lists in their typed form, so the check reads each one in its stored form.
+	storedSets, err := decode[any](values["sets"])
+	if err != nil {
+		return fmt.Errorf("settings: %w", err)
+	}
+	storedLinks, err := decode[any](values["links"])
+	if err != nil {
+		return fmt.Errorf("settings: %w", err)
+	}
+	if err := validateSidebars(storedSets, storedLinks, "settings", s.loaded); err != nil {
+		return err
+	}
+	sets, err := decode[[]StoredSet](values["sets"])
+	if err != nil {
+		return fmt.Errorf("settings: %w", err)
+	}
+	links, err := decode[[]StoredLink](values["links"])
+	if err != nil {
+		return fmt.Errorf("settings: %w", err)
+	}
+	if err := checkSidebarReferences(sets, links, s.plugins, "settings"); err != nil {
+		return err
+	}
 	// silent: validate checked the type of each value before this check runs.
 	least, _ := values["sidebarMinWidth"].(float64)
 	// silent: validate checked the type of each value before this check runs.
@@ -482,26 +511,6 @@ func (s *SettingsStore) check(values map[string]any) error {
 	most, _ := values["sidebarMaxWidth"].(float64)
 	if !(least <= width && width <= most) {
 		return errors.New("Invalid setting: sidebarMinWidth <= sidebarWidth <= sidebarMaxWidth does not hold")
-	}
-	sets, err := decode[[]StoredSet](values["sets"])
-	if err != nil {
-		return fmt.Errorf("Invalid setting sets: %w", err)
-	}
-	links, err := decode[[]StoredLink](values["links"])
-	if err != nil {
-		return fmt.Errorf("Invalid setting links: %w", err)
-	}
-	known := map[string]bool{}
-	for _, set := range sets {
-		if known[set.ID] {
-			return fmt.Errorf("Invalid setting sets: the id %s repeats", set.ID)
-		}
-		known[set.ID] = true
-	}
-	for _, link := range links {
-		if !known[link.Set] {
-			return fmt.Errorf("Invalid setting links: link points at a set that is gone: %s", link.Set)
-		}
 	}
 	return nil
 }
