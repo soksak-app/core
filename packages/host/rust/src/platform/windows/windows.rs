@@ -142,6 +142,9 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::place_webview(view, x, y, w, h)
     }
+    fn render_occluded(&self, view: &PlatformWebview) -> Result<(), String> {
+        unsupported::render_occluded(view)
+    }
     fn create_surface(&self, window: Handle) -> Result<Handle, String> {
         unsupported::create_surface(window)
     }
