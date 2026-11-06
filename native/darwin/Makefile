@@ -129,7 +129,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence repeat repeat-suite clean pkgconfig-current
+.PHONY: build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -537,6 +537,10 @@ $(BUILD)/ime_source_restore_test: tests/ime_source_restore_test.m tests/support/
 
 test-ime-wire-document: $(BUILD)/ime_wire_document_test
 	@$(BUILD)/ime_wire_document_test
+
+# Builds the one test executable TEST=<name>_test for a caller that runs it under a limit of its own (scripts/language-test-cases.json).
+build-test: $(BUILD)/$(TEST)
+	@case "$(TEST)" in *_test) ;; *) echo "build-test requires TEST=<name>_test" >&2; exit 2;; esac
 
 repeat: $(BUILD)/$(TEST)
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat requires TEST=<name>_test and a positive COUNT" >&2; exit 2;; esac

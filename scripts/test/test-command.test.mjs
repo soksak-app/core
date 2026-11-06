@@ -36,7 +36,7 @@ test('emits ordered start and terminal events with visible output', { timeout: t
   const result = await runCommand({ id: 'ordered', command, args, timeoutMs: hangMs, onEvent: (event) => events.push(event) });
   assert.equal(result.status, 'pass');
   assert.deepEqual(events.map((event) => event.type), ['start', 'pass']);
-  assert.deepEqual(events.at(-1), { type: 'pass', id: 'ordered', elapsedMs: events.at(-1).elapsedMs, exitCode: 0, signal: null, error: null, cleanupObservations: [] });
+  assert.deepEqual(events.at(-1), { type: 'pass', id: 'ordered', elapsedMs: events.at(-1).elapsedMs, exitCode: 0, signal: null, error: null });
   assert.match(result.stdout, /visible-out/);
   assert.match(result.stderr, /visible-err/);
   assert.ok(events.every((event) => event.id === 'ordered' && Number.isFinite(event.elapsedMs)));
@@ -102,23 +102,62 @@ test('a forced kill after the child already ended on SIGTERM still reports timeo
 });
 
 test('a refused forced kill of a group that ended on SIGTERM still reports timeout', { timeout: 10000 }, async (t) => {
-  // Injects the case in which macOS rejects with EPERM the SIGKILL sent after 100 ms to a group that ended with SIGTERM. The cleanup step checks whether the group is gone,
-  // so a rejected forced termination alone does not fail.
+  // Injects the case in which macOS rejects with EPERM the SIGKILL sent after 100 ms to a group that ended with SIGTERM: the process table
+  // then shows only zombies in the group. A refusal of a group without a running member is no error.
   const originalKill = process.kill;
-  t.after(() => { process.kill = originalKill; });
+  const originalExecFileSync = childProcess.execFileSync;
+  t.after(() => {
+    process.kill = originalKill;
+    childProcess.execFileSync = originalExecFileSync;
+  });
+  let group;
   process.kill = (pid, signal) => {
     if (pid < 0 && signal === 'SIGKILL') {
+      group = -pid;
       const error = new Error('kill EPERM');
       error.code = 'EPERM';
       throw error;
     }
     return originalKill(pid, signal);
   };
+  childProcess.execFileSync = (file, args, options) => {
+    if (file !== 'ps') return originalExecFileSync(file, args, options);
+    return `${group} ${group} Z\n`;
+  };
   // The child receives SIGTERM and ends 120 ms later. So the forced termination after 100 ms runs first and receives the injected rejection. The 300 ms
   // limit makes SIGTERM arrive after the child has installed its handler.
   const [command, args] = task("process.on('SIGTERM', () => setTimeout(() => process.exit(0), 120)); setInterval(() => {}, 1000)");
   const result = await runCommand({ id: 'refused-kill', command, args, timeoutMs: 300, onEvent: () => {} });
   assert.equal(result.status, 'timeout', JSON.stringify({ error: result.error }));
+});
+
+test('a refused SIGTERM at the limit to a group that holds only zombies still reports timeout', { timeout: 10000 }, async (t) => {
+  // Injects the refusal of macOS for a group without a running member at the limit: SIGTERM is refused with EPERM while the process table
+  // shows only a zombie. The group has nothing to end, so the refusal is no signal failure; the forced kill after it ends the leader.
+  const originalKill = process.kill;
+  const originalExecFileSync = childProcess.execFileSync;
+  t.after(() => {
+    process.kill = originalKill;
+    childProcess.execFileSync = originalExecFileSync;
+  });
+  let group;
+  process.kill = (pid, signal) => {
+    if (pid < 0 && signal === 'SIGTERM') {
+      group = -pid;
+      const error = new Error('kill EPERM');
+      error.code = 'EPERM';
+      throw error;
+    }
+    return originalKill(pid, signal);
+  };
+  childProcess.execFileSync = (file, args, options) => {
+    if (file !== 'ps') return originalExecFileSync(file, args, options);
+    return `${group} ${group} Z\n`;
+  };
+  const [command, args] = task(forever);
+  const result = await runCommand({ id: 'refused-term', command, args, timeoutMs: 50, onEvent: () => {} });
+  assert.equal(result.status, 'timeout', JSON.stringify({ error: result.error }));
+  assert.equal(result.error, null);
 });
 
 test('times out and reports timeout', { timeout: 2000 }, async () => {
@@ -233,7 +272,7 @@ test('reports process-group signal failure without an unhandled timer error', { 
   assert.equal(result.status, 'fail');
   assert.equal(result.error.code, 'EPERM');
   // Keeps the failed signal and the process group. The next occurrence shows which step's signal it was.
-  assert.match(result.error.message, /^SIGTERM to process group \d+: blocked process-group signal$/);
+  assert.match(result.error.message, /^SIGTERM to process group \d+: blocked process-group signal; running: pid \d+ /);
 });
 
 test('ends its own leader when every process-group signal is refused', { timeout: testHangMs }, async () => {
@@ -349,8 +388,8 @@ test('does not convert denied cleanup verification after SIGKILL into success', 
   };
   const result = await runCommand({ id: 'denied-verification', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'fail', JSON.stringify(result));
-  assert.equal(result.error.code, 'EPERM');
-  assert.ok(result.cleanupObservations.some((item) => item.operation === 'verify' && item.error.code === 'EPERM' && item.members.some((member) => member.pid === group && member.state === 'S')), JSON.stringify(result.cleanupObservations));
+  assert.equal(result.error.code, 'PROCESS_GROUP_CLEANUP_FAILED');
+  assert.match(result.error.message, new RegExp(`running: pid ${group} S$`));
 });
 
 test('counts a process group that holds only zombies as gone after a denied probe', { timeout: testHangMs }, async (t) => {
@@ -378,7 +417,8 @@ test('counts a process group that holds only zombies as gone after a denied prob
   };
   const result = await runCommand({ id: 'zombie-group', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
-  assert.deepEqual(result.cleanupObservations, [{ operation: 'verify', error: { name: 'Error', message: 'kill EPERM', code: 'EPERM' }, members: [{ pid: group + 1, state: 'Z' }] }]);
+  assert.equal(result.error, null);
+  assert.equal(result.cleanupObservations, undefined, 'a refusal of a group without a running member is no error and leaves no error record');
 });
 
 test('does not count a member that is exiting as running', () => {
@@ -413,8 +453,7 @@ test('reads the members of a group from the real process table after a denied pr
   const result = await runCommand({ id: 'process-table', command: node, args: ['-e', source], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
   descendantPid = Number(await readFile(pidFile, 'utf8'));
-  const verify = result.cleanupObservations.find((item) => item.operation === 'verify');
-  assert.ok(verify?.members.some((member) => member.pid === descendantPid && !member.state.startsWith('Z')), JSON.stringify(result.cleanupObservations));
+  // The cleanup ends the descendant only when the table read after the denied probe shows it running.
   assertEnded(descendantPid);
 });
 

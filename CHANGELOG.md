@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F683: Each language case of a compiled language declares its build, which runs before its tests under a limit of its own, so a cold build cache no longer times out `make test-language`; a failed build reports its status and runs no test. The command supervisor judges every group signal and probe by the rule of `killGroup`, so a refusal of a group of zombies is no error.
 - F682: `make check-tests` fails a language case whose `expectedTests` differs from the tests that its test files declare, and the Go and Rust registry cases expect the seven tests that F651 left at six.
 - F677: `make check-docs` requires the document and the anchor of every section reference `docs/<path>.md#<anchor>` of a text file, and every such reference of the repository names an existing section; a backtick that no run closes no longer hides the links after it.
 - F680: The scripts and checks that start cargo resolve it through `cargoCommand` of `@soksak/window-check`, in the order of the Makefile, which exports `CARGO`, so they run in a shell whose `PATH` holds no cargo folder.

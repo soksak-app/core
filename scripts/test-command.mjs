@@ -33,16 +33,6 @@ export function combineFailures(processError, cleanupError) {
   return processError ?? cleanupError ?? null;
 }
 
-function groupExists(pid) {
-  try {
-    process.kill(-pid, 0);
-    return true;
-  } catch (error) {
-    if (error.code === 'ESRCH') return false;
-    throw error;
-  }
-}
-
 // kill(-pgid, sig) of macOS returns EPERM when the group has no member that can receive the signal. A member that has ended but whose parent has not yet reaped it
 // (a zombie) stays in the group until it is reaped, and a group that holds only zombies also receives this answer. So a rejected check
 // reads the members of the group and their states from the process table and judges from them.
@@ -87,19 +77,37 @@ export function runningMembers(pgid, members = groupMembers(pgid)) {
 /** Sends a signal to the process group pgid. The default is the group signal of the system; a test passes its own sender. */
 const sendToGroup = (pgid, signal) => process.kill(-pgid, signal);
 
+const named = (members) => members.map((member) => `pid ${member.pid} ${member.state}`).join('; ');
+
 /**
  * Sends a signal to the group pgid. macOS refuses a group signal with EPERM when no member of the group can receive it, which is the case
  * when only zombies remain; such a group has nothing to end, so the refusal is not an error. A refusal while a member runs is an error,
- * and the error names the running members.
+ * and the error names the running members. Every other refusal is an error that names the signal and the group.
  */
 function signalRunningGroup(pgid, signal, send) {
   try { send(pgid, signal); } catch (error) {
     if (error.code === 'ESRCH') return;
+    error.message = `${signal} to process group ${pgid}: ${error.message}`;
     if (error.code !== 'EPERM') throw error;
     const running = runningMembers(pgid);
     if (running.length === 0) return;
-    error.message = `${signal} to process group ${pgid}: ${error.message}; running: ${running.map((member) => `pid ${member.pid} ${member.state}`).join('; ')}`;
+    error.message += `; running: ${named(running)}`;
     throw error;
+  }
+}
+
+/**
+ * Whether a member of the group pgid still runs. The probe is signal 0, and its refusal is judged by the rule of signalRunningGroup: a group
+ * that no longer exists or that holds only ended members runs nothing.
+ */
+function groupRuns(pgid, send = sendToGroup) {
+  try {
+    send(pgid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    if (error.code !== 'EPERM') throw error;
+    return runningMembers(pgid).length > 0;
   }
 }
 
@@ -116,60 +124,26 @@ export function killGroup(pgid, send = sendToGroup) {
   signalRunningGroup(pgid, 'SIGKILL', send);
 }
 
-function signalGroup(pid, signal) {
-  try {
-    process.kill(-pid, signal);
-  } catch (error) {
-    if (error.code === 'ESRCH') return;
-    // The rejected signal and the group must be kept to tell which step's signal failed. The code is left as it is.
-    error.message = `${signal} to process group ${pid}: ${error.message}`;
-    throw error;
-  }
-}
-
+/**
+ * Ends the group pid of a supervised command after its leader ended or its limit passed: SIGTERM unless it was sent, then SIGKILL, each
+ * followed by a wait of 150 ms for the group to run nothing. A group that still runs a member after both is an error that names the members.
+ */
 async function cleanupGroup(pid, termAlreadySent = false) {
-  const observations = [];
-  let lastError;
-  const observedErrors = new Set();
-  const record = (operation, error, members) => {
-    lastError = error;
-    const key = operation + ":" + error.code;
-    if (!observedErrors.has(key)) observations.push({ operation, error: errorData(error), ...(members ? { members } : {}) });
-    observedErrors.add(key);
-  };
-  const gone = () => {
-    try { return !groupExists(pid); }
-    catch (error) {
-      if (error.code !== 'EPERM') throw error;
-      // The rejection alone does not show absence. When the process table has no running member (none, or only zombies), the group has no process to end.
-      const members = groupMembers(pid);
-      record('verify', error, members);
-      return runningMembers(pid, members).length === 0;
-    }
-  };
-  const signal = (name) => {
-    try { signalGroup(pid, name); }
-    catch (error) {
-      if (error.code !== 'EPERM') throw error;
-      record(name, error);
-    }
-  };
-  const waitGone = async () => {
+  const ended = async () => {
     const deadline = performance.now() + 150;
     do {
-      if (gone()) return true;
+      if (!groupRuns(pid)) return true;
       await new Promise((resolve) => setTimeout(resolve, 10));
     } while (performance.now() < deadline);
-    return gone();
+    return !groupRuns(pid);
   };
-  if (gone()) return observations;
-  if (!termAlreadySent) signal('SIGTERM');
-  if (await waitGone()) return observations;
-  signal('SIGKILL');
-  if (await waitGone()) return observations;
-  const error = lastError ?? new Error(`process group ${pid} survived cleanup`);
-  if (!error.code) error.code = 'PROCESS_GROUP_CLEANUP_FAILED';
-  error.cleanupObservations = observations;
+  if (!groupRuns(pid)) return;
+  if (!termAlreadySent) signalRunningGroup(pid, 'SIGTERM', sendToGroup);
+  if (await ended()) return;
+  killGroup(pid);
+  if (await ended()) return;
+  const error = new Error(`process group ${pid} survived cleanup; running: ${named(runningMembers(pid))}`);
+  error.code = 'PROCESS_GROUP_CLEANUP_FAILED';
   throw error;
 }
 
@@ -217,7 +191,7 @@ export function runCommand(options) {
 
     const beginCleanup = () => {
       if (child?.pid && !cleanupPromise) cleanupPromise = cleanupGroup(child.pid, termSent);
-      return cleanupPromise ?? Promise.resolve([]);
+      return cleanupPromise ?? Promise.resolve();
     };
     const finish = async (finishedExitCode, finishedSignal, processError, skipCleanup = false) => {
       if (finishing) return;
@@ -229,19 +203,17 @@ export function runCommand(options) {
       clearTimeout(closeTimer);
       if (signal) signal.removeEventListener('abort', cancel);
       let cleanupError = null;
-      let cleanupObservations = [];
       if (!skipCleanup) {
         try {
-          cleanupObservations = await beginCleanup();
+          await beginCleanup();
         } catch (error) {
           cleanupError = error;
-          cleanupObservations = error.cleanupObservations ?? [];
         }
       }
       const error = combineFailures(processError, cleanupError) ?? callbackError;
       const status = error ? 'fail' : (requestedStatus ?? (finishedExitCode !== 0 ? 'fail' : 'pass'));
-      const result = { id, status, exitCode: finishedExitCode ?? null, signal: finishedSignal ?? null, elapsedMs: elapsed(), stdout: Buffer.concat(stdoutChunks).toString('utf8'), stderr: Buffer.concat(stderrChunks).toString('utf8'), error: error ? errorData(error) : null, cleanupObservations };
-      const observerError = send(status, { exitCode: result.exitCode, signal: result.signal, error: result.error, cleanupObservations }, true);
+      const result = { id, status, exitCode: finishedExitCode ?? null, signal: finishedSignal ?? null, elapsedMs: elapsed(), stdout: Buffer.concat(stdoutChunks).toString('utf8'), stderr: Buffer.concat(stderrChunks).toString('utf8'), error: error ? errorData(error) : null };
+      const observerError = send(status, { exitCode: result.exitCode, signal: result.signal, error: result.error }, true);
       if (observerError) {
         result.status = 'fail';
         result.error = errorData(observerError);
@@ -272,7 +244,7 @@ export function runCommand(options) {
       requestedStatus = status;
       if (child?.pid) {
         try {
-          signalGroup(child.pid, 'SIGTERM');
+          signalRunningGroup(child.pid, 'SIGTERM', sendToGroup);
           termSent = true;
         } catch (error) {
           reportSignalError(error);
@@ -280,12 +252,9 @@ export function runCommand(options) {
         forceKillTimer = setTimeout(() => {
           if (!finishing && child?.pid) {
             try {
-              signalGroup(child.pid, 'SIGKILL');
+              killGroup(child.pid);
             } catch (error) {
-              // macOS rejects with EPERM a forced termination sent to a group in which SIGTERM ended every member and only zombies remain. The cleanup
-              // step checks whether a running member remains in the group and fails then if one remains. Another rejection is a signal failure.
-              if (error.code !== 'EPERM') reportSignalError(error);
-              else process.stderr.write(`command process-group signal refused: ${error.message}; cleanup verifies the group\n`);
+              reportSignalError(error);
             }
           }
         }, 100);

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F683: 컴파일 언어의 각 language case는 테스트 전에 자기 한도로 실행되는 build를 선언하므로, cold build cache가 더 이상 `make test-language`를 timeout시키지 않는다. 실패한 build는 그 상태를 보고하고 테스트를 실행하지 않는다. 명령 감독기는 모든 group signal과 확인을 `killGroup`의 규칙으로 판정하므로 zombie group의 거부는 오류가 아니다.
 - F682: `make check-tests`는 `expectedTests`가 test file이 선언한 테스트 수와 다른 language case를 실패시키고, Go와 Rust registry case는 F651이 6개로 남긴 일곱 테스트를 기대한다.
 - F677: `make check-docs`는 text file의 모든 절 참조 `docs/<path>.md#<anchor>`에 그 문서와 anchor를 요구하고, 저장소의 그런 참조는 모두 있는 절을 가리킨다. 닫는 run이 없는 backtick이 그 뒤의 link를 더는 숨기지 않는다.
 - F680: cargo를 시작하는 script와 check는 Makefile의 순서대로 `@soksak/window-check`의 `cargoCommand`로 cargo를 찾고 Makefile은 `CARGO`를 export하므로, `PATH`에 cargo folder가 없는 shell에서도 실행된다.

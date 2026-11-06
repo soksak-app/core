@@ -176,10 +176,10 @@ check-tests:
 check-hosts-same:
 	@node scripts/check-hosts-same.mjs
 
-# JS/TS, Rust, Go, Objective-C, and shell test cases use the same observable case contract. The cases build with the declared
-# macOS minimum: go-env holds MACOSX_DEPLOYMENT_TARGET, which cargo also reads.
-test-language: check-cargo build-native
-	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) $(CURDIR)/native/darwin/build/appearance_test
+# JS/TS, Rust, Go, Objective-C, and shell test cases use the same observable case contract. Each case of a compiled language
+# declares its build in scripts/language-test-cases.json, and the adapter runs it before the tests under a limit of its own.
+# The cases build with the declared macOS minimum: go-env holds MACOSX_DEPLOYMENT_TARGET, which cargo also reads.
+test-language: check-cargo
 	@$(call go-env) node scripts/language-test-adapters.mjs scripts/language-test-cases.json
 
 # Runs each test of a Rust package alone in a new process. Finds tests that depend on state another test created or on test order.

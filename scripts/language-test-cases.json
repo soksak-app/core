@@ -7,7 +7,7 @@
       "timeoutMs": 30000,
       "command": "node",
       "args": ["--test", "--test-reporter=tap", "scripts/test/test-command.test.mjs"],
-      "expectedTests": 23,
+      "expectedTests": 24,
       "implementationFiles": ["scripts/test-command.mjs"],
       "testFiles": ["scripts/test/test-command.test.mjs"],
       "dependencyFiles": ["package.json", "pnpm-lock.yaml"],
@@ -19,23 +19,26 @@
       "timeoutMs": 30000,
       "command": "cargo",
       "args": ["test", "-p", "soksak-sok", "--test", "registry_test"],
+      "build": { "command": "cargo", "args": ["test", "-p", "soksak-sok", "--test", "registry_test", "--no-run"], "timeoutMs": 600000 },
       "expectedTests": 7,
       "implementationFiles": ["packages/sok/rust/src/registry.rs"],
       "testFiles": ["packages/sok/rust/tests/registry_test.rs"],
       "dependencyFiles": ["Cargo.toml", "Cargo.lock"],
-      "buildFlags": ["MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)", "cargo test"]
+      "buildFlags": ["MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)", "cargo test --no-run", "cargo test"]
     },
     {
       "id": "go-sok-registry",
       "language": "go",
       "timeoutMs": 30000,
+      "cwd": "packages/sok/go/tests",
       "command": "go",
-      "args": ["test", "-json", "-run", "^TestRegistryBuild", "./packages/sok/go/tests"],
+      "args": ["tool", "test2json", "../../../../build/language-tests/go-sok-registry.test", "-test.v=test2json", "-test.run", "^TestRegistryBuild"],
+      "build": { "command": "go", "args": ["test", "-c", "-o", "../../../../build/language-tests/go-sok-registry.test", "."], "timeoutMs": 300000 },
       "expectedTests": 7,
       "implementationFiles": ["packages/sok/go/src/registry.go"],
       "testFiles": ["packages/sok/go/tests/registry_test.go"],
       "dependencyFiles": ["packages/sok/go/go.mod", "go.work"],
-      "buildFlags": ["go test -json"]
+      "buildFlags": ["go test -c", "go tool test2json"]
     },
     {
       "id": "objc-appearance",
@@ -43,6 +46,7 @@
       "timeoutMs": 30000,
       "command": "./native/darwin/build/appearance_test",
       "args": [],
+      "build": { "command": "make", "args": ["-C", "native/darwin", "build-test", "TEST=appearance_test"], "timeoutMs": 600000 },
       "expectedTests": 6,
       "implementationFiles": ["native/darwin/src/appearance.m"],
       "testFiles": ["native/darwin/tests/appearance_test.m"],

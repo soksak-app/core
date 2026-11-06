@@ -25,6 +25,12 @@ test('the expected tests of each committed language case are the tests that its 
   assert.deepEqual(auditLanguageCaseCounts(discoverLanguageCases(manifest), (file) => readFileSync(new URL(file, root), 'utf8')), []);
 });
 
+test('each committed case of a compiled language declares its build, so the limit of the case measures only the test', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../language-test-cases.json', import.meta.url), 'utf8'));
+  const compiled = discoverLanguageCases(manifest).filter(({ language }) => ['rust', 'go', 'objective-c'].includes(language));
+  assert.deepEqual(compiled.filter(({ build }) => build === undefined).map(({ id }) => id), []);
+});
+
 /** The declared tests of a case of `language` with `args` whose one test file is `text`. */
 const declared = (language, text, args = []) => declaredLanguageCaseTests({ language, args, testFiles: ['case-file'] }, () => text);
 
@@ -52,6 +58,8 @@ test('a Go test file declares the test functions that the -run pattern selects, 
   assert.match(declared('go', 'func TestBuildA(t *testing.T) {\n\tt.Run("x", func(t *testing.T) {})\n}\n', ['-run', '^TestBuild']).reason,
     /^case-file:1 TestBuildA runs subtests/);
   assert.match(declared('go', text, ['-run', '^TestBuild/x']).reason, /selects subtests/);
+  assert.deepEqual(declared('go', text, ['tool', 'test2json', 'case.test', '-test.v=test2json', '-test.run', '^TestBuild']), { tests: 2 },
+    'a case that runs its test binary selects its tests with -test.run');
 });
 
 test('an Objective-C or shell test declares a PASS line for each call of its writer and each line that writes one, and a loop leaves the count open', () => {
