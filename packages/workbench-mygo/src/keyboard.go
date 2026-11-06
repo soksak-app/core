@@ -96,12 +96,17 @@ func (s *Shell) keyboardTarget() *string {
 // After the placement a placement that runs holds the call, because its end draws a frame.
 func (s *Shell) followKeyboard(ahead bool) {
 	target := s.keyboardTarget()
+	hosted := target != nil && s.surfaces.held[*target] != nil && s.surfaces.held[*target].hosted
 	if ahead {
-		if target == nil || s.surfaces.held[*target] == nil || !s.surfaces.held[*target].hosted {
+		if !hosted {
 			return
 		}
 	} else if s.surfaces.running {
 		return
+	} else if !hosted {
+		// A surface that a frame drew after the last placement started is not held by the host yet: the workbench holds the
+		// keyboard until the placement that holds the surface ends and calls again.
+		target = nil
 	}
 	if !ahead {
 		s.keyboard.answered = append(s.keyboard.answered, s.keyboard.decided...)

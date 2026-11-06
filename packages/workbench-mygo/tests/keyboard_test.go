@@ -416,3 +416,45 @@ func TestACommandThatMovesTheRingAnswersAfterTheKeyboardCall(t *testing.T) {
 		t.Fatalf("core.card.focus answered when the host had the calls %q and the keyboard in %s, not in %s", calls, describeTarget(target), tabs[other][0])
 	}
 }
+
+// A tab that a frame draws while a placement without it runs takes the keyboard only after the placement that holds it: the end
+// of the earlier placement gives the keyboard to the workbench, because the host does not hold the surface of the tab yet
+// (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+func TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, _ := keyboardCards(t, f)
+	f.run("core.card.focus", map[string]string{"card": cards[0]})
+	gate := make(chan struct{})
+	stored.orderMu.Lock()
+	stored.presentGate = gate
+	stored.orderMu.Unlock()
+	// A new size moves the surfaces, so a placement without the new tab starts and waits in presentSurfaces.
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	stored.orderMu.Lock()
+	stored.presentGate = nil
+	stored.orderMu.Unlock()
+	raw, err := json.Marshal(map[string]string{"card": cards[0], "plugin": "terminal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tab string
+	f.shell.Registry().RunLater("core.card.add-tab", raw, func(value any, err error) {
+		if err != nil {
+			t.Errorf("core.card.add-tab failed: %v", err)
+			return
+		}
+		tab = value.(map[string]string)["tab"]
+	})
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.pending.drain(t)
+	close(gate)
+	f.settle()
+	f.settle()
+	target, ok := stored.keyboardTarget()
+	if tab == "" || !ok || target == nil || *target != tab {
+		t.Fatalf("the keyboard is in %s, not in the new tab %q", describeTarget(target), tab)
+	}
+}

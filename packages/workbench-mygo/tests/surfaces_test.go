@@ -45,6 +45,8 @@ type surfaceHost struct {
 	windowFailure error
 	// presentFailure and declareFailure are the errors of each presentSurfaces and compositionDeclare.
 	presentFailure error
+	// presentGate, when set, holds each presentSurfaces until it closes, so a frame draws while a placement runs.
+	presentGate    chan struct{}
 	declareFailure error
 	// presentedFailure is the error of each waitPresented, while a surface has not presented.
 	presentedFailure error
@@ -64,6 +66,8 @@ type surfaceHost struct {
 	elements bool
 	// calls replaces the calls of the table.
 	calls map[string]workbench.HostCall
+	// held is the surfaces of the last syncSurfaces, which the host holds whichever table answered it.
+	held []string
 	// tabs gives the shell its tab ports.
 	tabs func(*workbench.Shell) workbench.TabPorts
 	// keyboard holds the argument of each surfaceFocus, decided whether each carried decided, and order the host calls of a
@@ -93,6 +97,13 @@ func (h *surfaceHost) calledNow() (string, *string) {
 	return strings.Join(h.order, " "), target
 }
 
+// holds tells whether the last syncSurfaces held the surface id.
+func (h *surfaceHost) holds(id string) bool {
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	return slices.Contains(h.held, id)
+}
+
 // keyboardTarget returns the surface of the last surfaceFocus, nil for the workbench, and whether there was one.
 func (h *surfaceHost) keyboardTarget() (*string, bool) {
 	if len(h.keyboard) == 0 {
@@ -119,6 +130,12 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		if h.presentFailure != nil {
 			return nil, h.presentFailure
 		}
+		h.orderMu.Lock()
+		gate := h.presentGate
+		h.orderMu.Unlock()
+		if gate != nil {
+			<-gate
+		}
 		h.placed++
 		h.called("presentSurfaces")
 		return []any{}, nil
@@ -130,6 +147,11 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		}
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
+		}
+		// The host holds the surfaces of the last syncSurfaces and refuses a surface that it does not hold
+		// (docs/spec/host-contract.md, surface-layout.keyboard-follows-the-focus-ring).
+		if request.Surface != nil && !h.holds(*request.Surface) {
+			return nil, fmt.Errorf("surface %q is not attached", *request.Surface)
 		}
 		h.orderMu.Lock()
 		h.keyboard = append(h.keyboard, request.Surface)
@@ -187,6 +209,23 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	}
 	for name, call := range h.calls {
 		table[name] = call
+	}
+	sync := table["syncSurfaces"]
+	table["syncSurfaces"] = func(ctx context.Context, argument json.RawMessage) (any, error) {
+		var request struct {
+			Surfaces []struct{ ID string } `json:"surfaces"`
+		}
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		held := make([]string, 0, len(request.Surfaces))
+		for _, surface := range request.Surfaces {
+			held = append(held, surface.ID)
+		}
+		h.orderMu.Lock()
+		h.held = held
+		h.orderMu.Unlock()
+		return sync(ctx, argument)
 	}
 	return table
 }
