@@ -23,3 +23,19 @@ test("a wait that succeeds returns its result without measuring the covering win
   assert.equal(await unlessCovered(async () => "line", async () => { measured = true; return null; }), "line");
   assert.equal(measured, false);
 });
+
+test("the place of a window counts the windows of the ordinary layer in front of the front window of its process", async () => {
+  const { placeIn } = await import("../frontmost.mjs");
+  const list = [{ owner: "Browser", pid: 10 }, { owner: "Browser", pid: 10 }, { owner: "soksak", pid: 42 }, { owner: "soksak", pid: 42 }];
+  assert.equal(placeIn(list, 42), 2);
+  assert.equal(placeIn(list, 10), 0);
+  assert.throws(() => placeIn(list, 7), /process 7 has no window in the window list/);
+});
+
+test("the windows behind a window count the windows of other processes behind the front window of its process", async () => {
+  const { behindIn } = await import("../frontmost.mjs");
+  const list = [{ pid: 10 }, { pid: 42 }, { pid: 10 }, { pid: 42 }, { pid: 11 }];
+  assert.equal(behindIn(list, 42), 2);
+  assert.equal(behindIn(list, 11), 0);
+  assert.throws(() => behindIn(list, 7), /process 7 has no window in the window list/);
+});

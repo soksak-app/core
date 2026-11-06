@@ -35,13 +35,48 @@ export function activateApp(pid) {
   assert.equal(activate({ pid }), true, `application ${pid} could not be activated`);
 }
 
-const windowsAbove = jxa(`
+// The windows of the ordinary layer on the screen, front to back.
+const windowList = jxa(`
 ObjC.import("CoreGraphics");
 const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1 | 16, 0))).filter((item) => item.kCGWindowLayer === 0);
-const own = list.findIndex((item) => item.kCGWindowOwnerPID === input.pid);
-if (own < 0) return JSON.stringify(null);
-return JSON.stringify(list.slice(0, own).map((item) => ({ owner: item.kCGWindowOwnerName, pid: item.kCGWindowOwnerPID,
+return JSON.stringify(list.map((item) => ({ owner: item.kCGWindowOwnerName, pid: item.kCGWindowOwnerPID,
   frame: { x: item.kCGWindowBounds.X, y: item.kCGWindowBounds.Y, width: item.kCGWindowBounds.Width, height: item.kCGWindowBounds.Height } })));`);
+
+// The windows in front of the front window of process pid, or null when the process has no window in the list.
+function windowsAbove({ pid }) {
+  const list = windowList();
+  const own = list.findIndex((item) => item.pid === pid);
+  return own < 0 ? null : list.slice(0, own);
+}
+
+/**
+ * The place of the front window of process pid in a window list ordered front to back: the number of windows in front of
+ * it. It fails when the process has no window in the list.
+ */
+export function placeIn(list, pid) {
+  const place = list.findIndex((item) => item.pid === pid);
+  assert.ok(place >= 0, `process ${pid} has no window in the window list`);
+  return place;
+}
+
+/**
+ * The number of windows of other processes behind the front window of process pid in a window list ordered front to back.
+ * It fails when the process has no window in the list.
+ */
+export function behindIn(list, pid) {
+  const place = placeIn(list, pid);
+  return list.slice(place + 1).filter((item) => item.pid !== pid).length;
+}
+
+/** The number of windows of other processes behind the front window of process pid on the screen. */
+export function windowsBehind(pid) {
+  return behindIn(windowList(), pid);
+}
+
+/** The place of the front window of process pid among the windows of the ordinary layer on the screen. */
+export function windowPlace(pid) {
+  return placeIn(windowList(), pid);
+}
 
 /**
  * A window of the ordinary layer that is in front of the front window of process pid and covers the whole frame (screen
