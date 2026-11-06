@@ -240,7 +240,7 @@ fn the_only_window_is_used_and_parameters_are_sent() {
             result("null")
         }
     });
-    let cases: [(&[&str], &str, &str); 8] = [
+    let cases: [(&[&str], &str, &str); 9] = [
         (
             &["status", "core.screen", "--surface", "tab-1"],
             "status.get",
