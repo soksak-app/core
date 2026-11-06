@@ -5,8 +5,9 @@
 #import "window_reveal.h"
 
 // A window that an application that is not active puts on the screen stays behind the front application, which stays
-// the front application. It runs on a display with another application in front, as a covered window is the normal case
-// of a check (docs/spec/hosts.md#launch-activation).
+// the front application: the first window goes behind every window and a later window directly above the frontmost window
+// of its application. It runs on a display with another application in front, as a covered window is the normal case of a
+// check (docs/spec/hosts.md#launch-activation).
 
 static int failures;
 
@@ -40,6 +41,15 @@ static NSInteger placeOf(NSWindow *window) {
     return -1;
 }
 
+// The number of normal windows on the screen.
+static NSInteger normalWindows(void) {
+    NSArray *list = CFBridgingRelease(CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID));
+    NSInteger count = 0;
+    for (NSDictionary *row in list) if ([row[(id)kCGWindowLayer] integerValue] == 0) count++;
+    return count;
+}
+
 // The place of the first normal window of the process pid, or -1.
 static NSInteger placeOfProcess(pid_t pid) {
     NSArray *list = CFBridgingRelease(CGWindowListCopyWindowInfo(
@@ -55,7 +65,9 @@ static NSInteger placeOfProcess(pid_t pid) {
 
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    // The hosts run with the regular policy, whose window that orders front goes in front of the front application. A window of
+    // an accessory application stays behind it either way, so that policy would not tell the show from an order front.
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [NSApp finishLaunching];
     spin();
 
@@ -71,6 +83,8 @@ int main(void) { @autoreleasepool {
     check(first.isVisible, @"the first window is on the screen");
     check(frontPlace < 0 || placeOf(first) > frontPlace, [NSString stringWithFormat:
         @"the first window is at place %ld, behind the front application at place %ld", (long)placeOf(first), (long)frontPlace]);
+    check(placeOf(first) == normalWindows() - 1, [NSString stringWithFormat:
+        @"the first window is at place %ld of %ld normal windows, behind every window", (long)placeOf(first), (long)normalWindows()]);
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front.processIdentifier,
         @"the first window leaves the front application in front");
 
@@ -80,7 +94,9 @@ int main(void) { @autoreleasepool {
     check(second.isVisible, @"the second window is on the screen");
     check(frontPlace < 0 || placeOf(second) > frontPlace, [NSString stringWithFormat:
         @"the second window is at place %ld, behind the front application at place %ld", (long)placeOf(second), (long)frontPlace]);
-    check(placeOf(second) < placeOf(first), @"the second window is in front of the first window of its application");
+    check(placeOf(second) == placeOf(first) - 1, [NSString stringWithFormat:
+        @"the second window is at place %ld, directly in front of the first window of its application at place %ld",
+        (long)placeOf(second), (long)placeOf(first)]);
     check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == front.processIdentifier,
         @"the second window leaves the front application in front");
     check(!NSRunningApplication.currentApplication.active, @"the application is not activated");
