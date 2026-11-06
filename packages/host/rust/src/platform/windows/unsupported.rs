@@ -131,6 +131,12 @@ pub fn keyboard_hold(_window: Handle) -> Result<(), String> {
 pub fn keyboard_decided(_window: Handle) -> Result<(), String> {
     missing("workbench keyboard")
 }
+pub fn modal_hold(_window: Handle) -> Result<(), String> {
+    missing("modal keyboard")
+}
+pub fn modal_hold_end(_window: Handle) -> Result<(), String> {
+    missing("modal keyboard")
+}
 pub fn set_surface_alpha_handle(_surface: Handle, _alpha: f64) -> Result<(), String> {
     missing("surface opacity")
 }

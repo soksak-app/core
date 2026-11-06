@@ -1500,7 +1500,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
         }
         crate::exposure::page_reloaded(window, &data);
         reload_surface_documents(window)?;
-        data.overlay.discard()?;
+        crate::modals::discard(window, &data.overlay)?;
         Ok(())
     })();
     data.view_source_events.retire();

@@ -428,6 +428,14 @@ func (implementation) KeyboardDecided(unsafe.Pointer) {
 	unreachable("workbench keyboard")
 }
 
+func (implementation) ModalHold(unsafe.Pointer) {
+	unreachable("modal keyboard")
+}
+
+func (implementation) ModalHoldEnd(unsafe.Pointer) {
+	unreachable("modal keyboard")
+}
+
 func (implementation) SetSurfaceAlphaHandle(unsafe.Pointer, float64) {
 	unreachable("surface opacity")
 }

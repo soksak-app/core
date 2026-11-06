@@ -142,8 +142,24 @@ func (r *Registry) Status(name string, read Status) {
 	r.statuses[name] = read
 }
 
-// Run runs the command name with params.
+// Run runs the command name with params and records the run, as the page records every run of a command
+// (docs/spec/logging.md#automatic-entrances).
 func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
+	started := time.Now()
+	result, err := r.run(name, params)
+	r.record(name, started, err)
+	return result, err
+}
+
+// record gives the recorder the run of the command name that started at started and ended with failure.
+func (r *Registry) record(name string, started time.Time, failure error) {
+	if r.recorder != nil {
+		r.recorder(name, time.Since(started), failure)
+	}
+}
+
+// run runs the command name with params without a record; the request that runs it records it.
+func (r *Registry) run(name string, params json.RawMessage) (any, error) {
 	r.mu.Lock()
 	run, later := r.commands[name], r.later[name]
 	r.mu.Unlock()
@@ -157,9 +173,13 @@ func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
 }
 
 // RunLater runs the command name with params and gives answer its result: at once for a command that returns, and in a later
-// step for a command that answers later.
+// step for a command that answers later. The run is recorded when it ended.
 func (r *Registry) RunLater(name string, params json.RawMessage, answer func(value any, err error)) {
-	answer = r.followed(answer)
+	started, answered := time.Now(), answer
+	answer = r.followed(func(value any, err error) {
+		r.record(name, started, err)
+		answered(value, err)
+	})
 	r.mu.Lock()
 	later := r.later[name]
 	r.mu.Unlock()
@@ -167,7 +187,7 @@ func (r *Registry) RunLater(name string, params json.RawMessage, answer func(val
 		later(params, answer)
 		return
 	}
-	answer(r.Run(name, params))
+	answer(r.run(name, params))
 }
 
 // Read returns the current value of the status name.
@@ -453,7 +473,7 @@ func (r *Registry) runRequest(name string, fields map[string]json.RawMessage) (a
 	if err := r.checkRequest(name, fields); err != nil {
 		return nil, err
 	}
-	return r.Run(name, fields["params"])
+	return r.run(name, fields["params"])
 }
 
 // checkRequest makes the checks of the page on the parameters of a command request, in their order.

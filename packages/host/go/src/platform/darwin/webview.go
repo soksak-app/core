@@ -32,6 +32,8 @@ static void main_sp_surface_focus_for_region(void *surface) { hostRunOnMain(^{ s
 static void main_sp_window_focus_workbench(void *window) { hostRunOnMain(^{ sp_window_focus_workbench(window); }); }
 static void main_sp_window_keyboard_hold(void *window) { hostRunOnMain(^{ sp_window_keyboard_hold(window); }); }
 static void main_sp_window_keyboard_decided(void *window) { hostRunOnMain(^{ sp_window_keyboard_decided(window); }); }
+static void main_sp_window_modal_hold(void *window) { hostRunOnMain(^{ sp_window_modal_hold(window); }); }
+static void main_sp_window_modal_hold_end(void *window) { hostRunOnMain(^{ sp_window_modal_hold_end(window); }); }
 static void main_webviewSetSurfaceHidden(void *view, bool hidden) { hostRunOnMain(^{ webviewSetSurfaceHidden(view, hidden); }); }
 static void main_webviewSetSurfaceAlpha(void *view, double alpha) { hostRunOnMain(^{ webviewSetSurfaceAlpha(view, alpha); }); }
 static void main_sp_surface_set_window_overlays(void *main, const double *rects, size_t count) {
@@ -290,6 +292,8 @@ func (implementation) KeyboardHold(window unsafe.Pointer)   { C.main_sp_window_k
 func (implementation) KeyboardDecided(window unsafe.Pointer) {
 	C.main_sp_window_keyboard_decided(window)
 }
+func (implementation) ModalHold(window unsafe.Pointer)    { C.main_sp_window_modal_hold(window) }
+func (implementation) ModalHoldEnd(window unsafe.Pointer) { C.main_sp_window_modal_hold_end(window) }
 func (implementation) SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64) {
 	C.main_webviewSetSurfaceAlpha(surface, C.double(alpha))
 }

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::application_log::{log_error, log_failure};
 use crate::documents;
 use crate::exposure;
-use crate::platform;
+use crate::platform::{self, Handle};
 use crate::surfaces::{PageFocus, Rect, aligned, isolate_webview};
 use crate::windows::{emit_window, root_view, window_data};
 
@@ -212,12 +212,97 @@ fn place_overlay(view: &Webview, at: Rect) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
+/// Opens or ends the wait of the input of window for its modal on the main thread (docs/spec/native-modals.md#keyboard).
+fn modal_hold(window: &Window, open: bool) -> Result<(), String> {
+    let platform = platform::current()?;
+    let hold_window = window.clone();
+    exposure::on_main(window, move || {
+        let handle = hold_window
+            .native_window()
+            .map_err(|error| error.to_string())? as Handle;
+        if open {
+            platform.modal_hold(handle)
+        } else {
+            platform.modal_hold_end(handle)
+        }
+    })
+}
+
+/// Shows a modal while the input of the window waits for it. The wait opens before the previous modal is removed, so no
+/// input reaches the view behind the modals between them; a show that fails removes its modal and ends the wait.
+fn show_holding<T>(
+    hold: impl FnOnce() -> Result<(), String>,
+    show: impl FnOnce() -> Result<T, String>,
+    discard: impl FnOnce() -> Result<(), String>,
+    end: impl FnOnce() -> Result<(), String>,
+) -> Result<T, String> {
+    hold()?;
+    let error = match show() {
+        Ok(shown) => return Ok(shown),
+        Err(error) => error,
+    };
+    let mut failures = vec![error];
+    if let Err(error) = discard() {
+        failures.push(format!("modal discard failed: {error}"));
+    }
+    if let Err(error) = end() {
+        failures.push(format!("ending the modal keyboard hold failed: {error}"));
+    }
+    Err(failures.join("; "))
+}
+
+/// Ends the wait of the input after the modal took the keyboard, so the input that waited reaches the modal in its order. A
+/// focus that fails leaves the wait for the next ready request.
+fn take_keyboard(
+    focus: impl FnOnce() -> Result<(), String>,
+    end: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    focus()?;
+    end()
+}
+
+/// Removes the modal and ends the wait of the input for it, also when the removal fails, so the input goes where the
+/// keyboard is.
+fn close_holding(
+    discard: impl FnOnce() -> Result<(), String>,
+    end: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let failures: Vec<String> = [
+        discard(),
+        end().map_err(|error| format!("ending the modal keyboard hold failed: {error}")),
+    ]
+    .into_iter()
+    .filter_map(Result::err)
+    .collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
+    }
+}
+
+/// Removes the modal of the window and ends the wait of the input for it. A main page that starts removes the modals of
+/// the previous page with it.
+pub(crate) fn discard(window: &Window, overlay: &Overlay) -> Result<(), String> {
+    close_holding(|| overlay.discard(), || modal_hold(window, false))
+}
+
 /// Draws one modal element in a webview inside the main window. The view stays hidden until the document reports that
-/// it drew the content.
+/// it drew the content. The input of the window waits from the show until the modal takes the keyboard, so a key pressed as
+/// the modal opens reaches the modal and not the view behind it (docs/spec/native-modals.md#keyboard).
 pub fn show(window: &Window, request: OverlayRequest) -> Result<Rect, String> {
     let context = window_data(window)?;
     let state = &context.overlay;
+    show_holding(
+        || modal_hold(window, true),
+        || show_modal(window, state, request),
+        || state.discard(),
+        || modal_hold(window, false),
+    )
+}
 
+/// Creates the hidden child webview of the element of request in window after it removed the previous modal.
+fn show_modal(window: &Window, state: &Overlay, request: OverlayRequest) -> Result<Rect, String> {
     // Removes the previous native view. A unique number is assigned to every display, so a message that the previous
     // document of the same id sent late does not affect the next display.
     state.discard()?;
@@ -480,7 +565,10 @@ pub fn ready(window: &Window, id: String, instance: u64) -> Result<(), String> {
         Ok(())
     })?;
     view.show().map_err(|e| e.to_string())?;
-    exposure::with_view(&view, move |webview| platform.focus_webview(webview))?;
+    take_keyboard(
+        || exposure::with_view(&view, move |webview| platform.focus_webview(webview)),
+        || modal_hold(window, false),
+    )?;
     mark_visible(state, &id, instance)?;
     if let Err(error) = emit_window(window, "modal-rendered", &id) {
         log_error("modal-rendered", error);
@@ -505,8 +593,9 @@ pub fn hide(window: &Window, id: String) -> Result<(), String> {
         *held = None;
     }
     // `discard` also clears the open record. It is not called while holding the same mutex. Otherwise the main thread
-    // waits for its own lock and stops the handling of every endpoint request.
-    state.discard()?;
+    // waits for its own lock and stops the handling of every endpoint request. A modal that closes before it took the
+    // keyboard gives the input that waited for it back where the keyboard is.
+    discard(window, state)?;
     exposure::window_changed(window);
     // An image region reports `resignFirstResponder` synchronously. Calling `set_focus` here re-enters the
     // main WebView while the current Tauri invoke still owns the WebKit dispatch lock, so the focus callback can

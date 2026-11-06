@@ -25,6 +25,10 @@ The visual definition is shared web code. Each platform still requires a working
 
 The [private native API inventory](../operations/private-native-apis.md) records transparency and input dependencies and their necessity. Review it first if modal behavior fails after a native update.
 
+## Keyboard
+
+A modal web view takes the keyboard of the window when its document reports that it rendered (`modalReady`), and not earlier, because a hidden web view that holds the keyboard would take keys that the person cannot see. A key that the person presses as the modal opens therefore waits for the modal instead of reaching the view behind it: the show of a modal opens a modal hold of the input of the window before it removes the previous modal and creates the web view, and the hold ends after the ready request gave the modal the keyboard, so the keys that waited reach the modal in their order. The hold also ends when the modal closes, when its show fails and when a main page starts before the modal took the keyboard, and the close of the window drops what it held; time does not end it. A show that replaces a modal keeps the hold for the replacement. The modal hold is the hold of the input of the window for the decision of the workbench ([keyboard of a surface](native-surfaces.md#keyboard-of-a-surface)): the hold stands while either waits, so the decided call that follows the press that opened a modal gives back no input while the modal loads. A core command that opens a modal answers after the host answered its show, so the hold is open when the command answers ([exposure](exposure.md#registration)).
+
 ## Usage
 
 An empty value or any other value is rejected by `show()`. The element also

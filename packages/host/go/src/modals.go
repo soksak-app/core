@@ -104,20 +104,48 @@ func OverlayPickDropped(open *OpenModal, id string, instance uint64, key string)
 }
 
 // OverlayShow renders one shown element in a hidden child web view. The web view is shown after its document
-// reports that it finished rendering.
+// reports that it finished rendering. The input of the window waits from the show until the modal takes the keyboard, so a key
+// pressed as the modal opens reaches the modal and not the view behind it (docs/spec/native-modals.md#keyboard); a show that
+// fails ends that wait.
 func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
 		return Rect{}, errNoWindow
 	}
+	// The wait opens before the previous modal closes, so no input reaches the view behind the modals between them.
+	mainThreadStep(func() { system.ModalHold(win.NativeWindow()) })
 	s.mu.Lock()
 	previous := s.modal
 	s.mu.Unlock()
 	if previous != nil {
-		if err := s.OverlayHide(previous.id); err != nil {
+		if err := s.hideModal(previous.id, false); err != nil {
+			mainThreadStep(s.endModalHold)
 			return Rect{}, fmt.Errorf("close previous modal: %w", err)
 		}
 	}
+	at, err := s.showModal(win, req)
+	if err != nil {
+		s.mu.Lock()
+		replaced := s.modal != nil
+		s.mu.Unlock()
+		// A modal that replaced this one while it loaded owns the wait of the input.
+		if !replaced {
+			mainThreadStep(s.endModalHold)
+		}
+		return Rect{}, err
+	}
+	return at, nil
+}
+
+// endModalHold ends the wait of the input of the window for its modal. It runs on the main thread.
+func (s *Surfaces) endModalHold() {
+	if s.window != nil {
+		system.ModalHoldEnd(s.window.NativeWindow())
+	}
+}
+
+// showModal creates the hidden child web view of the element of req in win and sends its content.
+func (s *Surfaces) showModal(win Frontend, req OverlayRequest) (Rect, error) {
 	var at Rect
 	var alignErr error
 	mainThreadStep(func() { at, alignErr = aligned(win, req.Rect) })
@@ -220,6 +248,12 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 
 // OverlayHide removes the child web view and returns the keyboard focus to the main web view.
 func (s *Surfaces) OverlayHide(id string) error {
+	return s.hideModal(id, true)
+}
+
+// hideModal removes the modal of id. release ends the wait of the input for the modal; a show that replaces the modal keeps the
+// wait for its own modal.
+func (s *Surfaces) hideModal(id string, release bool) error {
 	s.mu.Lock()
 	if s.modal == nil || s.modal.id != id {
 		s.mu.Unlock()
@@ -228,8 +262,16 @@ func (s *Surfaces) OverlayHide(id string) error {
 	view := s.modal.view
 	s.modal = nil
 	s.mu.Unlock()
+	mainThreadStep(func() {
+		if view != nil {
+			system.FocusModal(view.handle, false)
+		}
+		// A modal that closes before it took the keyboard gives the input back where the keyboard is.
+		if release {
+			s.endModalHold()
+		}
+	})
 	if view != nil {
-		mainThreadStep(func() { system.FocusModal(view.handle, false) })
 		view.Close()
 	}
 	s.setBackground(false)
@@ -247,6 +289,7 @@ func (s *Surfaces) discardOverlay() {
 	}
 	s.modal = nil
 	s.mu.Unlock()
+	mainThreadStep(s.endModalHold)
 	if view != nil {
 		view.Close()
 	}
@@ -371,6 +414,8 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 		system.ConfigureModal(view.handle, live.content.Title, live.radius)
 		system.SetWebviewHidden(view.handle, false)
 		system.FocusModal(view.handle, true)
+		// The modal holds the keyboard, so the input that waited for it reaches it in its order.
+		s.endModalHold()
 	})
 	s.mu.Lock()
 	if s.modal == live {
