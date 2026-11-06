@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F501-1: 언어 evidence는 실행 전에 수집한 입력에 command 결과를 연결하고 입력 변경을 거부한다. 승인 실패는 원래 snapshot, command 결과와 attempt 이력을 보존하며 metadata-only와 실행에 연결된 attempt를 혼용할 수 없다. macOS에서 evidence 및 adapter case 29개가 모두 통과한다.
+
 - F498-2: test를 등록하지 않는 미사용 진입점 13개를 제거하고 엄격한 discovery를 유지하며, 소유 view test에 누락된 remount revision assertion을 추가한다. macOS에서 동작 case 215개와 discovery/inventory case 67개가 통과하고 revision 고정 mutation은 해당 assertion에서 실패한다.
 
 - F502-1: Random layout 검사는 profile 가중치와 독립 slicing oracle을 유지하며 operation 생성과 전이 invariant를 공유한다. Report는 각 method의 결과를 세고 중간 결함은 복구 전에 실패한다. macOS에서 집중 소유 및 consumer test와 세 profile의 seed 12개가 모두 통과한다.

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { runCommand } from './test-command.mjs';
-import { collectEvidence, persistEvidence } from './test-evidence.mjs';
+import { runWithEvidence, persistEvidence } from './test-evidence.mjs';
 import { readNodeTestEvidence, testExecutionErrors, withNodeTestReporters } from './node-test-evidence.mjs';
 
 // The languages that a case may name. Each case declares its own timeoutMs in the manifest.
@@ -146,21 +146,20 @@ function caseResult(caseSpec, commandResult) {
   };
 }
 
-export async function runLanguageCases(cases, { onEvent, evidence = false } = {}) {
+export async function runLanguageCases(cases, { onEvent, evidence = false, root } = {}) {
   if (!Array.isArray(cases) || cases.length === 0) throw invalid('at least one discovered case is required');
   const results = [];
   for (const caseSpec of cases) {
-    const commandResult = await runCommand({
+    const execute = async () => caseResult(caseSpec, await runCommand({
       id: caseSpec.id,
       command: caseSpec.language === 'js-ts' ? '/usr/bin/env' : caseSpec.command,
       args: caseSpec.language === 'js-ts' ? ['-u', 'NODE_TEST_CONTEXT', caseSpec.command, ...withNodeTestReporters(caseSpec.args)] : caseSpec.args,
       cwd: caseSpec.cwd,
       timeoutMs: caseSpec.timeoutMs,
       onEvent: (event) => onEvent?.({ ...event, language: caseSpec.language, caseId: caseSpec.id }),
-    });
-    const result = caseResult(caseSpec, commandResult);
-    if (evidence) {
-      result.evidence = await collectEvidence({
+    }));
+    const result = evidence ? await runWithEvidence({
+        root,
         caseId: caseSpec.id,
         language: caseSpec.language,
         implementationFiles: caseSpec.implementationFiles,
@@ -168,9 +167,7 @@ export async function runLanguageCases(cases, { onEvent, evidence = false } = {}
         dependencyFiles: caseSpec.dependencyFiles,
         buildFlags: caseSpec.buildFlags,
         processes: [],
-        result,
-      });
-    }
+      }, execute) : await execute();
     results.push(result);
   }
   return {

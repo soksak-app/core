@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F501-1: Language evidence binds command outcomes to inputs captured before execution and rejects input drift. Failed acceptance retains the original snapshot, command result and attempt history; metadata-only and execution-bound attempts cannot mix. All 29 evidence and adapter cases pass on macOS.
+
 - F498-2: Remove 13 unused test entrypoints that register no tests, preserve strict discovery, and add the missing remount revision assertion to the owning view test. The 215 behavior and 67 discovery/inventory cases pass on macOS; a fixed revision mutation fails its assertion.
 
 - F502-1: Random layout checks share operation generation and transition invariants while preserving profile weights and the independent slicing oracle. Reports count each method outcome, and intermediate defects fail before recovery. Focused owner and consumer tests and all 12 three-profile seeds pass on macOS.

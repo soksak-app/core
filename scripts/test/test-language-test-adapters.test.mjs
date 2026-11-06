@@ -1,11 +1,35 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SUPPORTED_LANGUAGES, discoverLanguageCases, parseLanguageResult, runLanguageCases } from '../language-test-adapters.mjs';
 
 const command = (source) => ({ command: process.execPath, args: ['-e', source], timeoutMs: 30_000 });
+
+test('the language adapter refuses to attribute a pass to inputs changed by its command', { timeout: 30000 }, async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'soksak-language-inputs-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' });
+  git('init', '-q');
+  git('config', 'user.email', 'evidence@example.invalid');
+  git('config', 'user.name', 'evidence');
+  await writeFile(join(root, 'source.txt'), 'tested content');
+  await writeFile(join(root, 'case.cjs'), "require('node:assert/strict').equal(require('node:fs').readFileSync('source.txt', 'utf8'), 'tested content'); require('node:fs').writeFileSync('source.txt', 'untested content'); console.log('PASS: input assertion');\n");
+  await writeFile(join(root, 'package.json'), '{}');
+  git('add', '.');
+  git('commit', '-q', '-m', 'initial');
+  const cases = discoverLanguageCases({ cases: [{ id: 'input-change', language: 'shell', command: process.execPath,
+    args: ['case.cjs'], cwd: root, timeoutMs: 10000, implementationFiles: [join(root, 'source.txt')],
+    testFiles: [join(root, 'case.cjs')], dependencyFiles: [join(root, 'package.json')], buildFlags: [] }] });
+  const result = await runLanguageCases(cases, { evidence: true, root });
+  assert.equal(result.status, 'fail', 'a successful assertion against old content cannot validate new content');
+  assert.equal(result.cases[0].evidence.commandResult.status, 'pass');
+  assert.equal(result.cases[0].evidence.implementation.files[0].sha256, createHash('sha256').update('tested content').digest('hex'));
+  assert.match(result.cases[0].errors.join('\n'), /inputs changed during execution/);
+});
 
 async function nodeCase(t, source, flags = []) {
   const directory = await mkdtemp(join(tmpdir(), 'soksak-language-node-'));
