@@ -1,5 +1,5 @@
 // Runs a list of tests as separate processes in a bounded pool and reports what runs, for how long and how it ended
-// (docs/operations/examples.md#test-runner). The runner has no limit for a test file: each test of a file carries its own limit
+// (docs/operations/examples.md#test-parity). The runner has no limit for a test file: each test of a file carries its own limit
 // (node:test `timeout`, or the per-test default that the harness passes to node --test). An item may declare `timeoutMs` for a
 // command that has no per-test limit, such as a build; no such limit is above 10 minutes. The exit limit (`exitLimitMs`) bounds only the
 // exit of a test file process after its tests ended, when no test runs.

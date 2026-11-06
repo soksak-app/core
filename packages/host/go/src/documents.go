@@ -2216,7 +2216,7 @@ type ViewRequestRequest struct {
 
 // pushViewRequest posts the command request of req to the ready document of its view as {"sok": 1, "id", "command", "params"}, with the
 // member "cids" when req has cids. A request has an id and a command; a request without params carries null. A view without a ready
-// document refuses it, and so does a cids list that a log line cannot hold (docs/spec/logging.md#correlation).
+// document refuses it, and so does a cids list that a log line cannot hold (docs/spec/logging.md#correlation-identifier).
 func (s *Surfaces) pushViewRequest(req ViewRequestRequest) (any, error) {
 	if req.Surface == "" {
 		return nil, errors.New("view request names no surface")
@@ -2274,7 +2274,7 @@ func (s *Surfaces) currentViewGeneration(surface string, generation uint64) bool
 }
 
 // causeCidsOf returns the list of the cids member of a view message: none for an absent member, otherwise the list, which every
-// identifier of must be a non-empty string without a quote, a backslash or a control character (docs/spec/logging.md#correlation).
+// identifier of must be a non-empty string without a quote, a backslash or a control character (docs/spec/logging.md#correlation-identifier).
 // A null member is refused like any other non-list, because the spec defines only an omitted list.
 func causeCidsOf(raw json.RawMessage) ([]string, error) {
 	const refusal = "cids must be non-empty strings without a quote, a backslash or a control character"
@@ -2296,7 +2296,7 @@ func causeCidsOf(raw json.RawMessage) ([]string, error) {
 }
 
 // validCauseCids reports whether every identifier is a non-empty string without a quote, a backslash or a control character, which a
-// log line holds (docs/spec/logging.md#correlation).
+// log line holds (docs/spec/logging.md#correlation-identifier).
 func validCauseCids(cids []string) bool {
 	for _, cid := range cids {
 		if cid == "" {

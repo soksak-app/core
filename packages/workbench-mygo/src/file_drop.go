@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// The files dropped on the window (docs/spec/native-surfaces.md#file-drop). The host sends the text that its drop view made, and
+// The files dropped on the window (docs/spec/native-surfaces.md#surface-host-container). The host sends the text that its drop view made, and
 // the workbench gives the files to the drop command of the plugin of the view under the point, as dropFiles of
 // packages/workbench/core-exposure.js does.
 

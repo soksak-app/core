@@ -1,5 +1,5 @@
 // Records the activity of the application and of its windows as events of the ring of the process
-// (docs/spec/logging.md#automatic-entrances).
+// (docs/spec/logging.md#entrances).
 #pragma once
 
 // Installs the observers of the notifications of the application (activation, hiding), of its windows (key, main, occlusion,

@@ -1,4 +1,4 @@
-//! The crash reports of the system (docs/spec/logging.md#automatic-entrances): when the application crashes, the system writes a
+//! The crash reports of the system (docs/spec/logging.md#entrances): when the application crashes, the system writes a
 //! report into the folder of the crash reports of the user, and the next start of the host announces each report of the
 //! application once as the event `host.crash.found`.
 

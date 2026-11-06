@@ -987,10 +987,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// The native layer refuses an empty identifier and one with a character other than letters, digits, `-` and `_`.
     fn set_event_boot(&self, boot: &str) -> Result<(), String>;
     /// Installs the observers that record the activity of the application and of its windows as events of the native ring
-    /// (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
+    /// (docs/spec/logging.md#entrances). A second call installs nothing more.
     fn observe_activity(&self) -> Result<(), String>;
     /// Stores the summary of every counted source of the native observers that has deliveries after its last summary, so the tail of
-    /// a source is in the native ring before the last pull (docs/spec/logging.md#automatic-entrances).
+    /// a source is in the native ring before the last pull (docs/spec/logging.md#entrances).
     fn flush_native_observers(&self) -> Result<(), String>;
     /// Replaces the standard error of the process with file. A child process that starts afterwards also inherits that
     /// descriptor (docs/spec/hosts.md#application-log).

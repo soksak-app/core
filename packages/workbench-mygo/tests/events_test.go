@@ -871,7 +871,7 @@ func TestTheCloseOfTheWindowWaitsForTheQueuedEvents(t *testing.T) {
 }
 
 // A command that the menu, a control, a view or a shortcut runs is recorded as a request command.run is, once: the page answers
-// every run of a command through command.run (docs/spec/logging.md#automatic-entrances).
+// every run of a command through command.run (docs/spec/logging.md#entrances).
 func TestEveryRunOfACommandIsRecordedOnce(t *testing.T) {
 	declared, err := workbench.Declared()
 	if err != nil {

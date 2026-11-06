@@ -1,4 +1,4 @@
-// The records of the native library allocate no memory that they keep (docs/spec/logging.md#automatic-entrances). The sources are
+// The records of the native library allocate no memory that they keep (docs/spec/logging.md#entrances). The sources are
 // compiled with manual reference counting, so the check counts the allocations of the measuring thread through the malloc logger:
 // an allocation that is not freed by the end of a run is a leak, and the blocks held at the end of a run of activity events and of
 // log records are counted. The observers and the records run on the thread that posts the notifications; other

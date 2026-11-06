@@ -80,7 +80,7 @@ export function flushEvents() {
 
 /**
  * Whether an event of the level is stored: every level is stored in a page with a host and none in a page without one. The policy
- * that selects levels by the class of the event arrives with the log policy of the writers (docs/spec/logging.md#classes).
+ * that selects levels by the class of the event arrives with the log policy of the writers (docs/spec/logging.md#classes-and-policy).
  */
 export function eventEnabled(level) {
   if (!LOG_LEVELS.includes(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${LOG_LEVELS.join(", ")}`);
@@ -98,11 +98,11 @@ export function recordWorkbenchStart(location, startedAt) {
 // The calls of the log and of the performance switch are not recorded: a recorded `log` call would record itself. The queries
 // of the debug timeline are not recorded either: the view asks in answer to the event that the writer announced after it wrote, so
 // a recorded query would write the event that triggers the next query. The calls that draw and place a native
-// modal are of the class `frame` (docs/spec/logging.md#classes), which is stored as aggregates and not as one event per call;
+// modal are of the class `frame` (docs/spec/logging.md#classes-and-policy), which is stored as aggregates and not as one event per call;
 // a view that follows the event file draws again for every row it appends, so recorded draws would feed it forever.
 const UNRECORDED_CALLS = new Set(["log", "performance", "logQuery", "overlayUpdate", "overlayPlace"]);
 // Every host call of the page is the event `workbench.call` at the level `debug`, and a refused call is at the level `warn`
-// (docs/spec/logging.md#automatic-entrances). The callers report their own failures; the event does not fail a window check.
+// (docs/spec/logging.md#entrances). The callers report their own failures; the event does not fail a window check.
 if (batcher) {
   observeHostCalls(({ name, args, micros, ok, error, code, cids: operation }) => {
     if (UNRECORDED_CALLS.has(name)) return;

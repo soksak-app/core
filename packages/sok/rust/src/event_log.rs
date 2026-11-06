@@ -916,7 +916,7 @@ impl EventLog {
         self.queue(pending).is_ok()
     }
 
-    /// Queues the event `log.closed` that the writer reports when a host process ends (docs/spec/logging.md#self-reports).
+    /// Queues the event `log.closed` that the writer reports when a host process ends (docs/spec/logging.md#policy).
     /// `cause` is `exit`, `exit-request` or `signal`, and `signal` is the number of the termination signal of the cause
     /// `signal`. Returns false when the queue has no room.
     pub fn record_closed(&self, cause: &str, signal: Option<i32>) -> bool {

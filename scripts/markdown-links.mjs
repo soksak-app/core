@@ -1,12 +1,16 @@
 // Finds the inline links of a markdown text outside code blocks and code spans, with their positions, for the documentation
 // check and the release notes.
 
-/** Replaces each character of a code block or a code span with a space, so positions in the result match the source. */
+/**
+ * Replaces each character of a code block or a code span with a space, so positions in the result match the source. A code span
+ * ends at the next run of exactly as many backticks, and it does not cross the end of its block: a blank line or the start of a
+ * list item, a heading, a table row or a quote. A backtick that no run closes in its block is text, so it hides no later link.
+ */
 function maskCode(text) {
   const blank = (part) => part.replace(/[^\n]/g, " ");
   return text
     .replace(/^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm, blank)
-    .replace(/(`+)[^`\n][\s\S]*?\1/g, blank);
+    .replace(/(?<!`)(`+)(?!`)(?:(?!\n[ \t]*(?:\n|[-*+] |\d+\. |#|\||>))[\s\S])+?(?<!`)\1(?!`)/g, blank);
 }
 
 /** The inline links of text as { start, end, target }, where start and end bound the target inside its parentheses. */

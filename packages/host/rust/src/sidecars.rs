@@ -40,7 +40,7 @@ pub struct Message {
     pub surface: String,
     /// The message body, not interpreted.
     pub body: Box<RawValue>,
-    /// The correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+    /// The correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#messages).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub cids: Vec<String>,
 }
@@ -140,7 +140,7 @@ struct Request<'a> {
     root: Option<&'a str>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     closed: bool,
-    /// The correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#protocol).
+    /// The correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#messages).
     #[serde(skip_serializing_if = "<[String]>::is_empty")]
     cids: &'a [String],
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -151,7 +151,7 @@ struct Request<'a> {
 struct Event {
     surface: String,
     body: Box<RawValue>,
-    /// The correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+    /// The correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#messages).
     #[serde(default)]
     cids: Vec<String>,
 }

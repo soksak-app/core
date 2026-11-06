@@ -11,12 +11,12 @@ const BASE = "https://github.com/soksak-app/core/blob/v0.0.24/";
 test("each relative link of the release body names its file at the release tag", { timeout: 1000 }, () => {
   const text = [
     "[한국어](install.ko.md)",
-    "the [registry](../spec/installation.md#application-update) and [this part](#install)",
+    "the [registry](../spec/installation.md#application-update) and [this part](#install-a-release)",
     "an [address](https://soksak-app.github.io/registry/index.json) and `[code](kept.md)`",
   ].join("\n");
   assert.equal(releaseNotes(text, { file: "docs/operations/install.md", repository: "soksak-app/core", tag: "v0.0.24" }), [
     `[한국어](${BASE}docs/operations/install.ko.md)`,
-    `the [registry](${BASE}docs/spec/installation.md#application-update) and [this part](${BASE}docs/operations/install.md#install)`,
+    `the [registry](${BASE}docs/spec/installation.md#application-update) and [this part](${BASE}docs/operations/install.md#install-a-release)`,
     "an [address](https://soksak-app.github.io/registry/index.json) and `[code](kept.md)`",
   ].join("\n"));
 });

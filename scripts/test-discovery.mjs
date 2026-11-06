@@ -1,5 +1,5 @@
 // Finds the tests of Go packages and Rust packages so that each test runs as a process of its own
-// (docs/operations/examples.md#test-runner). A package is built first, through the runner, so the build reports its elapsed
+// (docs/operations/examples.md#test-parity). A package is built first, through the runner, so the build reports its elapsed
 // time too; then the test binary lists its tests, and every test becomes one process with the working directory that
 // `go test` and `cargo test` give it.
 import { execFile } from 'node:child_process';

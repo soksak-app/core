@@ -216,7 +216,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     return Promise.race([running, expired]).finally(() => clearTimeout(timer));
   }
 
-  // Every command request is the event `workbench.command` (docs/spec/logging.md#automatic-entrances), whether or not the
+  // Every command request is the event `workbench.command` (docs/spec/logging.md#entrances), whether or not the
   // trace is on.
   async function recorded(name, run) {
     const started = performance.now();
@@ -471,7 +471,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     },
 
     /**
-     * Creates the table into which the state module of plugin owner registers entries in this document. There is one per plugin, and clear() removes all entries (docs/spec/plugins.md#plugin-state).
+     * Creates the table into which the state module of plugin owner registers entries in this document. There is one per plugin, and clear() removes all entries (docs/spec/exposure.md#registration).
      */
     plugin(owner) {
       if (pages.has(owner)) throw new Error(`plugin ${owner} state is already registered`);

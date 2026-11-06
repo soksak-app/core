@@ -1,4 +1,4 @@
-// The core.surfaces entries of the mounted views that the compositor record does not hold (docs/spec/exposure.md#core-statuses).
+// The core.surfaces entries of the mounted views that the compositor record does not hold (docs/spec/exposure.md#plugin-processes).
 
 /**
  * The kind of a surface and the sidebar of a section surface, as core.surfaces reports them (docs/spec/plugins.md#sections): a

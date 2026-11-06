@@ -1,5 +1,5 @@
 // Runs the tests of the Go packages of a pattern one at a time, each as a process of its own with its own limit, through the test
-// runner (docs/operations/examples.md#test-runner). Each package with test files is compiled once with `go test -c`; each test runs
+// runner (docs/operations/examples.md#test-parity). Each package with test files is compiled once with `go test -c`; each test runs
 // as the test binary with `-test.run ^<name>$` and `-test.timeout` of its limit in the package folder, as go test runs it, so
 // `t.Deadline` reports the limit. A test that does not end panics at its limit with the stacks of its goroutines and is reported
 // with its name and elapsed time, and the next test still runs. A package of the pattern with no test files does

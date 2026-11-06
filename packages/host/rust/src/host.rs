@@ -275,7 +275,7 @@ pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
     app.manage(events);
     application_log::start_standard_error(&directory, soksak_sok::identity::identity())?;
     // The crash reports of the earlier runs are announced once, after the writer exists
-    // (docs/spec/logging.md#automatic-entrances).
+    // (docs/spec/logging.md#entrances).
     if let Err(error) = crash_report::announce_crash_reports_at_start(&directory) {
         application_log::log_error("crash reports", error);
     }

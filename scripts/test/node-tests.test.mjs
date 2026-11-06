@@ -1,4 +1,4 @@
-// The Node test files of the workspace run as processes of their own (docs/operations/examples.md#test-runner): the test script of
+// The Node test files of the workspace run as processes of their own (docs/operations/examples.md#test-parity): the test script of
 // each package names its flags and files, and each file becomes one test with its folder and flags.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

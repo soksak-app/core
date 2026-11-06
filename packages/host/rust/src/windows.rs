@@ -1508,7 +1508,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
 }
 
 /// Sends the first responder to the page when it changed since the last send. A page that has not reported ready receives
-/// none; its ready sends the current responder (docs/spec/exposure.md#core-focus). The native observation calls it on the
+/// none; its ready sends the current responder (docs/spec/exposure.md#keyboard-focus). The native observation calls it on the
 /// main thread, and the status is read in another thread.
 fn responder_changed(window: &Window) {
     crate::exposure::window_changed(window);

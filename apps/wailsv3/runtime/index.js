@@ -151,7 +151,7 @@ export const host = {
 
 export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
 
-/* The methods that a document of a surface calls, by the name its events carry (docs/spec/logging.md#automatic-entrances). */
+/* The methods that a document of a surface calls, by the name its events carry (docs/spec/logging.md#entrances). */
 const SURFACE_METHOD = {
   theme: "Theme",
   sidecarSend: "SidecarSend",

@@ -1,5 +1,5 @@
 // Runs the tests of a Rust package one at a time, each as a process of its own with its own limit, through the test runner
-// (docs/operations/examples.md#test-runner). Cargo names the test executables (`--message-format=json`), each executable names its
+// (docs/operations/examples.md#test-parity). Cargo names the test executables (`--message-format=json`), each executable names its
 // tests (`--list`), and each test runs as `<executable> --exact <name>` in the package folder, as cargo runs it. The documentation
 // tests of the library (`cargo test --doc -- --list`) run the same way, each as `cargo test --doc -- <name>`, because cargo has no
 // executable for them. A test that does not end is killed at its limit and reported with its name and elapsed time, and the next

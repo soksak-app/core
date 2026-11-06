@@ -377,6 +377,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F677",
+    implementation: [
+      { file: "scripts/check-docs.mjs", symbol: "const references = spawnSync(\"git\", [\"grep\", \"--untracked\"" },
+      { file: "scripts/check-docs.mjs", symbol: "matchAll(/<a\\s+(?:id|name)=\"([^\"]+)\"/g)" },
+      { file: "scripts/markdown-links.mjs", symbol: "function maskCode(text)" },
+    ],
+    tests: [
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs fails on a section reference of a source, a message or a text whose document or anchor is missing" },
+      { file: "scripts/test/checklist.test.mjs", id: "check-docs reads a link after a backtick that no run of its block closes" },
+    ],
+    expected: "make check-docs resolves every section reference docs/<path>.md#<anchor> of a text file against the headings and <a id> anchors of the document and fails with the file, the line and the reference, and a backtick that no run of its block closes hides no later link.",
+    levels: ["unit"],
+  },
+  {
     id: "F672",
     implementation: [
       { file: "Makefile", symbol: "CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" },

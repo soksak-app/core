@@ -93,7 +93,7 @@ var records struct {
 	lost [sok.ChannelCount]struct{ count, bytes uint64 }
 }
 
-// EmitClosed stores the event `log.closed` of the host process that ends (docs/spec/logging.md#self-reports). cause is `exit`,
+// EmitClosed stores the event `log.closed` of the host process that ends (docs/spec/logging.md#policy). cause is `exit`,
 // `exit-request` or `signal`, and signal is the termination signal of the cause `signal`.
 func EmitClosed(cause string, signal *int) {
 	records.Lock()
@@ -108,7 +108,7 @@ func EmitClosed(cause string, signal *int) {
 	}
 }
 
-// QuitWithCause requests the end of the process for cause (docs/spec/logging.md#self-reports): the event `log.closed`
+// QuitWithCause requests the end of the process for cause (docs/spec/logging.md#policy): the event `log.closed`
 // names what requested the end before quit runs, because `exit-request` alone does not.
 func QuitWithCause(cause string, quit func()) {
 	EmitClosed(cause, nil)
@@ -247,7 +247,7 @@ func emitTrace(layer string, fields map[string]any) error {
 }
 
 // EmitHost stores an event of the layer `host` with the level, the name `host.<subsystem>.<event>` and the fields. It is the
-// entrance of the sources of the host that are not records (docs/spec/logging.md#automatic-entrances). A name outside
+// entrance of the sources of the host that are not records (docs/spec/logging.md#entrances). A name outside
 // `host.` and fields that cannot be serialized are reported on the standard error and nothing is stored.
 func EmitHost(level Level, event string, fields map[string]any) {
 	if !strings.HasPrefix(event, "host.") {

@@ -1,4 +1,4 @@
-//! The crash reports of the system (docs/spec/logging.md#automatic-entrances): the start of the host announces each crash report
+//! The crash reports of the system (docs/spec/logging.md#entrances): the start of the host announces each crash report
 //! of the application once as the event `host.crash.found`. The same cases run in the Go host.
 
 #[path = "support/folder.rs"]

@@ -1,4 +1,4 @@
-// The events of a window (docs/spec/logging.md#automatic-entrances): every event that a host registers for a window is the
+// The events of a window (docs/spec/logging.md#entrances): every event that a host registers for a window is the
 // event `host.window.event` with the window and the kind.
 package host
 

@@ -44,7 +44,7 @@ function traceCommands(events, name) {
 }
 
 // The runs of the command written after offsets. A command writes its record when it answers, after the frame and the host calls
-// of its change (docs/spec/logging.md#automatic-entrances), so the status that the change set comes before the record; the count
+// of its change (docs/spec/logging.md#entrances), so the status that the change set comes before the record; the count
 // waits for the first record of the command.
 async function commandRuns(s, offsets, name) {
   await untilEventLine(s.app.configDir, offsets, (line) => line.includes(` ${REGISTRY_COMMAND}: `)

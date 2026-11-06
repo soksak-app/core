@@ -1,6 +1,6 @@
 // core.settings reports the effective values and the common values apart: a setting that the selected project overrides has
 // its project value in values and its stored common value in common, so a check that keeps the common settings reads the
-// values that it restores (docs/spec/settings.md#reported-state).
+// values that it restores (docs/spec/settings.md#status).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";

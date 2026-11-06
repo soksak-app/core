@@ -6,7 +6,7 @@
 
 ## 문제
 
-sidebar section은 declared UI다. plugin이 list, tree, button, status-line 요소로 된 status 값을 보내면 workbench가 그린다(`docs/spec/plugin-processes.ko.md#layer-rules`, `docs/spec/declared-ui.ko.md`). 그래서 plugin 내용을 그리는 일이 core의 기능이다. files tree는 `packages/workbench/declared-ui.js`가 그리고, F13-2-5가 정한 `@pierre/trees`의 디자인을 잃었다. plugin은 자기 view를 그리는 수단으로 section을 그릴 수 없다.
+sidebar section은 declared UI다. plugin이 list, tree, button, status-line 요소로 된 status 값을 보내면 workbench가 그린다(`docs/spec/plugin-processes.ko.md#층-규칙`, `docs/spec/declared-ui.ko.md`). 그래서 plugin 내용을 그리는 일이 core의 기능이다. files tree는 `packages/workbench/declared-ui.js`가 그리고, F13-2-5가 정한 `@pierre/trees`의 디자인을 잃었다. plugin은 자기 view를 그리는 수단으로 section을 그릴 수 없다.
 
 ## 규칙
 

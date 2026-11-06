@@ -78,7 +78,7 @@ export function createSurfaceContext({
     declarations: Object.freeze(structuredClone(declarations)),
     composition,
     // Aborts when the removal of the surface starts, before its regions are detached and before dispose runs
-    // (docs/spec/plugins.md#surface-module-ownership).
+    // (docs/spec/native-surfaces.md#view-surfaces).
     closing,
     // The diagnostics module of the plugin in a diagnostic build, and null in a release build. The diagnostics module is loaded after the first screen, so the workbench reads the value that it filled in
     // before it mounts the module.
@@ -99,7 +99,7 @@ export function createSurfaceContext({
     icon,
     runtime: Object.freeze({
       sidecar: callable(runtime.sidecar, "runtime.sidecar").bind(runtime),
-      // Runs a command that core declares for this surface and answers its result (docs/spec/plugins.md#surface-module-ownership).
+      // Runs a command that core declares for this surface and answers its result (docs/spec/native-surfaces.md#view-surfaces).
       command: callable(runtime.command, "runtime.command"),
       native: runtime.native,
       clipboard: runtime.clipboard,

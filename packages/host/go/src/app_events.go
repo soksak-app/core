@@ -1,4 +1,4 @@
-// The events of the application (docs/spec/logging.md#automatic-entrances): every event that a host registers for the
+// The events of the application (docs/spec/logging.md#entrances): every event that a host registers for the
 // application is the event `host.app.event` with the kind.
 package host
 

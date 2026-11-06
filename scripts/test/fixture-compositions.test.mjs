@@ -1,5 +1,5 @@
 // Checks that every tracked plugin manifest of the core repository that declares a surface composition is accepted by the manifest
-// reader of plugin-api, which refuses the removed kind dom (docs/spec/plugins.md#surface-composition). The manifests are read from
+// reader of plugin-api, which refuses the removed kind dom (docs/spec/plugins.md#pluginjson). The manifests are read from
 // the Git index, so an untracked file is not checked.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

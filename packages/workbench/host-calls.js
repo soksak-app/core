@@ -14,7 +14,7 @@ function nonFinite(value, path) {
   return null;
 }
 
-// The observer of the calls (docs/spec/logging.md#automatic-entrances): it receives {name, args, micros, ok, error} once for
+// The observer of the calls (docs/spec/logging.md#entrances): it receives {name, args, micros, ok, error} once for
 // every call that the wrapper handles, after the call ended or was refused. One observer is installed for the page.
 let observer = null;
 
@@ -66,7 +66,7 @@ function callCids(name, args) {
 }
 
 /**
- * The event `workbench.call` of a host call (docs/spec/logging.md#automatic-entrances): the level is `debug`, and `warn` for a
+ * The event `workbench.call` of a host call (docs/spec/logging.md#entrances): the level is `debug`, and `warn` for a
  * refused call. The main page and the documents of the surfaces make the event here so that both record a call alike. `cids`
  * are the correlation identifiers that the call continues, or undefined.
  */

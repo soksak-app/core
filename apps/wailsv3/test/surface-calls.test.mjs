@@ -1,5 +1,5 @@
 // The host calls of a surface document are the events `workbench.call`, relayed in batches of the host call Log
-// (docs/spec/logging.md#automatic-entrances).
+// (docs/spec/logging.md#entrances).
 import assert from "node:assert/strict";
 import test from "node:test";
 // The event workbench.call is at the level debug, which only the debug state stores (docs/spec/logging.md#policy), so the host answers

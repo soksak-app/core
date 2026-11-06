@@ -44,7 +44,7 @@ type SidecarMessage struct {
 	Sidecar string          `json:"sidecar"`
 	Surface string          `json:"surface"`
 	Body    json.RawMessage `json:"body"`
-	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#messages).
 	Cids []string `json:"cids,omitempty"`
 }
 
@@ -64,7 +64,7 @@ type sidecarRequest struct {
 	Surface string `json:"surface"`
 	Root    string `json:"root,omitempty"`
 	Closed  bool   `json:"closed,omitempty"`
-	// Cids are the correlation identifiers of the inputs that this request continues (docs/spec/sidecars.md#protocol).
+	// Cids are the correlation identifiers of the inputs that this request continues (docs/spec/sidecars.md#messages).
 	Cids []string        `json:"cids,omitempty"`
 	Body json.RawMessage `json:"body,omitempty"`
 }
@@ -81,7 +81,7 @@ type sidecarOutput struct {
 	Body    json.RawMessage `json:"body"`
 	Closed  *bool           `json:"closed"`
 	Error   *string         `json:"error"`
-	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#protocol).
+	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#messages).
 	Cids []string `json:"cids"`
 }
 

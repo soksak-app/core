@@ -1359,7 +1359,7 @@ func windowResponder(class string, view, surface uint64, main bool, named map[ui
 		switch {
 		case document && key.Name == viewRegionName:
 			// The view of a view surface is the document "" of its surface, and its responder is the owner surface
-			// (docs/spec/exposure.md#core-focus).
+			// (docs/spec/exposure.md#keyboard-focus).
 			out.Owner, out.Surface = "surface", &key.Surface
 		case document:
 			out.Owner, out.Surface, out.Document = "document", &key.Surface, &key.Name

@@ -1,5 +1,5 @@
 // Verifies the reader of the declared macOS minimum and the reader of the linker warnings that the runners judge
-// (docs/operations/examples.md#test-runner).
+// (docs/operations/examples.md#test-parity).
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

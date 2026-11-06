@@ -202,7 +202,7 @@ func NewHostCalls(h *host.Host, window host.Frontend, post func(task func())) *C
 	return calls
 }
 
-// Observe installs the observer of the calls (docs/spec/logging.md#automatic-entrances), before the first call.
+// Observe installs the observer of the calls (docs/spec/logging.md#entrances), before the first call.
 func (c *Calls) Observe(observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)) {
 	c.observer = observer
 }

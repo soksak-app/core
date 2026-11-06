@@ -1860,7 +1860,7 @@ fn responder_of(
     } else if let Some((surface, document)) = documents.get(&owner) {
         if document == crate::documents::VIEW_NAME {
             // The view of a view surface is the document "" of its surface, and its responder is the owner surface
-            // (docs/spec/exposure.md#core-focus).
+            // (docs/spec/exposure.md#keyboard-focus).
             json!({"class": class, "owner": "surface", "surface": surface, "document": null})
         } else {
             json!({"class": class, "owner": "document", "surface": surface, "document": document})

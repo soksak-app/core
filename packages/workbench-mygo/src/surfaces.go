@@ -697,7 +697,7 @@ func (s *Shell) placeSurfaces() {
 }
 
 // followRun tells each view the start of a run: an update that continues, such as a divider drag. The view asks for one frame, so
-// the first size of the run waits for the display like every later size (docs/spec/native-surfaces.md#views).
+// the first size of the run waits for the display like every later size (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Shell) followRun(going bool) {
 	if going == s.surfaces.going {
 		return

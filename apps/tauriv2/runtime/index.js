@@ -267,7 +267,7 @@ export const host = (() => {
 export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
 
 /*
- * The commands that a document of a surface calls, by the name its events carry (docs/spec/logging.md#automatic-entrances),
+ * The commands that a document of a surface calls, by the name its events carry (docs/spec/logging.md#entrances),
  * and the arguments of each command from the arguments of the call. The names and arguments are those of the Wails runtime.
  */
 function surfaceWire(surface) {

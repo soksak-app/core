@@ -1,6 +1,6 @@
 // Runs the native tests (native/darwin/Makefile) one at a time through the test runner: they open windows and share the screen, so
 // they do not run in parallel, and each one is named when it starts and ends with its elapsed time and has a limit of its own
-// (docs/operations/examples.md#test-runner). The tests are executables of the build folder; a test with arguments is written as
+// (docs/operations/examples.md#test-parity). The tests are executables of the build folder; a test with arguments is written as
 // `<executable>,<argument>,...`, because a space would split the list in the Makefile.
 import { fileURLToPath } from 'node:url';
 import { basename, resolve } from 'node:path';

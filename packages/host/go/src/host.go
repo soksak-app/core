@@ -190,7 +190,7 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	if err := StartStandardError(configDirectory, identifier); err != nil {
 		return nil, err
 	}
-	// The crash reports of the earlier runs are announced once, after the writer exists (docs/spec/logging.md#automatic-entrances).
+	// The crash reports of the earlier runs are announced once, after the writer exists (docs/spec/logging.md#entrances).
 	if err := AnnounceCrashReportsAtStart(configDirectory); err != nil {
 		LogError("crash reports", err)
 	}

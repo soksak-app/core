@@ -220,7 +220,7 @@ function onSidecarFailure(name, surface, fn) {
 export function windowSidecar(name) {
   if (!bridge) return null;
   return {
-    // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#protocol).
+    // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#messages).
     send: (surface, body, cids) => orderedSidecarPort(name).send(surface, body, cids),
     on: (surface, listener) => onSidecarMessage(name, surface, listener),
     onFailure: (surface, listener) => onSidecarFailure(name, surface, listener),

@@ -1,5 +1,5 @@
 // Every registration made through the entrance is recorded, every delivery is counted exactly, and a refused registration is an
-// event of the level error (docs/spec/logging.md#automatic-entrances). The check posts notifications and changes properties itself;
+// event of the level error (docs/spec/logging.md#entrances). The check posts notifications and changes properties itself;
 // it does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "observe.h"

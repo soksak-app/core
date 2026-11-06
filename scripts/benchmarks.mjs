@@ -1,5 +1,5 @@
 // Runs the benchmarks of the hosts, each benchmark as a process of its own with its own limit, through the test runner
-// (docs/operations/examples.md#test-runner). A Go benchmark is one `Benchmark` function of a package: the package is compiled once with
+// (docs/operations/examples.md#test-parity). A Go benchmark is one `Benchmark` function of a package: the package is compiled once with
 // `go test -c`, and each matching function runs as `<binary> -test.run ^$ -test.bench ^<name>$ -test.benchtime 1x`. A Rust benchmark is
 // one bench target with its own main, which prints its measurements, so each target runs as one command. The output of a benchmark is
 // its measurement, so it is printed after the line that names its result. A benchmark over its limit is killed and reported as TIME.

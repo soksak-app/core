@@ -1,5 +1,5 @@
 // Runs the Node test files of the workspace as processes of their own through the test runner, so each file is named when it
-// starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
+// starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-parity).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
 // `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). A file has no limit of its own. The words of the script keep the spaces of their quoted parts and lose their quotes, as the shell of a package script reads them. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it, and a path that names no file is an error. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json.
@@ -24,7 +24,7 @@ export function idleSeconds() {
 
 /**
  * A gate that opens when the person has been idle for `seconds`. No examined event source serves without a permission that an unattended run cannot grant, so the
- * gate reads the idle time every `intervalMs` (docs/operations/examples.md#test-runner).
+ * gate reads the idle time every `intervalMs` (docs/operations/examples.md#test-parity).
  */
 export function whenIdle(seconds, { idle = idleSeconds, intervalMs = 5000, write = () => {} } = {}) {
   return async (item) => {

@@ -1,4 +1,4 @@
-//! The front of a project owner is an event of the event log (docs/spec/logging.md#automatic-entrances). The writer of the
+//! The front of a project owner is an event of the event log (docs/spec/logging.md#entrances). The writer of the
 //! records is shared by the process, so the check runs in a child process that nothing else writes in.
 
 #[path = "support/folder.rs"]

@@ -3214,7 +3214,7 @@ impl<'de> Deserialize<'de> for ViewRequest {
 
 /// Returns the host message of a command request: {"sok", "id", "command", "params"}, with the member "cids" when the request has
 /// cids. A request has an id and a command, and a request without params carries null. A cids list that a log line cannot hold is
-/// refused (docs/spec/logging.md#correlation).
+/// refused (docs/spec/logging.md#correlation-identifier).
 pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
     if request.generation == 0 {
         return Err("view request has no source generation".to_string());
@@ -3248,7 +3248,7 @@ pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
 }
 
 /// Returns the cids member of a view message: none for an absent member, otherwise the list, whose identifiers must all be
-/// non-empty strings without a quote, a backslash or a control character (docs/spec/logging.md#correlation). A null member is
+/// non-empty strings without a quote, a backslash or a control character (docs/spec/logging.md#correlation-identifier). A null member is
 /// refused like any other non-list, because the spec defines only an omitted list.
 fn cause_cids_of(value: Option<&Value>) -> Result<Vec<String>, String> {
     const REFUSAL: &str =

@@ -262,7 +262,7 @@ pub fn emit_trace(layer: &str, fields: serde_json::Value) -> Result<(), String> 
 }
 
 /// Stores an event of the layer `host` with the level, the name `host.<subsystem>.<event>` and the fields. It is the entrance of
-/// the sources of the host that are not records (docs/spec/logging.md#automatic-entrances). A name outside `host.` and fields
+/// the sources of the host that are not records (docs/spec/logging.md#entrances). A name outside `host.` and fields
 /// that cannot be serialized are reported on the standard error and nothing is stored.
 pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     if !event.starts_with("host.") {
@@ -289,7 +289,7 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
 }
 
-/// Stores the event `log.closed` of the host process that ends (docs/spec/logging.md#self-reports). `cause` is `exit`,
+/// Stores the event `log.closed` of the host process that ends (docs/spec/logging.md#policy). `cause` is `exit`,
 /// `exit-request` or `signal`, and `signal` is the termination signal of the cause `signal`.
 pub fn emit_closed(cause: &str, signal: Option<i32>) {
     let log = records().log.clone();
@@ -304,7 +304,7 @@ pub fn emit_closed(cause: &str, signal: Option<i32>) {
     }
 }
 
-/// Requests the end of the process for `cause` (docs/spec/logging.md#self-reports): the event `log.closed` names what
+/// Requests the end of the process for `cause` (docs/spec/logging.md#policy): the event `log.closed` names what
 /// requested the end before `quit` runs, because `exit-request` alone does not.
 pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {
     emit_closed(cause, None);

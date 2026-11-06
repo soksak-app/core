@@ -339,7 +339,7 @@ func TestTheApplicationIsWrittenInTheLanguagesOfItsMenu(t *testing.T) {
 
 // core.settings reports the common value of every setting apart from its effective value: a setting that the selected project
 // overrides has its project value in values and its common value in common, the default when the common settings store none
-// (docs/spec/settings.md#reported-state).
+// (docs/spec/settings.md#status).
 func TestTheStatusReportsTheCommonValueOfEverySetting(t *testing.T) {
 	var writes []saved
 	store := settingsStore(t, &writes)

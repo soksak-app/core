@@ -717,7 +717,7 @@ struct DependencyPlan<'a> {
 
 /// Parses a plugin.json text into an object. file is the location for errors. The error names only the file: the parser texts
 /// of serde_json and encoding/json differ, so a parser detail would make the hosts report different texts
-/// (docs/spec/host-contract.md#installed.plugin-json.invalid-text).
+/// (docs/spec/host-contract.md, case installed.plugin-json.invalid-text).
 fn parse_manifest(file: &str, data: &[u8]) -> Result<Value, String> {
     let value: Value =
         serde_json::from_slice(data).map_err(|_| format!("{file} is not valid JSON"))?;

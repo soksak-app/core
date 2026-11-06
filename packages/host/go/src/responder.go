@@ -8,7 +8,7 @@ import (
 )
 
 // responderEvent is the window event window-responder: the web view that holds the first responder of the window, as
-// host.window reports it (docs/spec/exposure.md#core-focus).
+// host.window reports it (docs/spec/exposure.md#keyboard-focus).
 type responderEvent struct {
 	Owner    string  `json:"owner"`
 	Surface  *string `json:"surface"`

@@ -1,4 +1,4 @@
-// The node:test reporter that the test runner reads (docs/operations/examples.md#test-runner). It writes one line per test event to the
+// The node:test reporter that the test runner reads (docs/operations/examples.md#test-parity). It writes one line per test event to the
 // standard error, prefixed by EVENT_PREFIX, so the runner resets the event watchdog of the file at each event. The other lines of the
 // standard error are the TAP form, which the runner keeps as the output of the file. A line also carries the `nesting` of the test, so
 // the runner pairs the `test:dequeue` of each test with its `test:complete`, and the `exitCode` and `signal` of the error of a

@@ -1,7 +1,7 @@
 // A still capture reads a covered window without a permission prompt, the activation of the application or the real cursor:
 // while the window draws covered (`diagnostics.window.draw-covered`), the document of a browser tab stays shown, the still of
 // the covered window holds it as the still before the cover does, and a change made while covered is in the next still
-// (docs/spec/hosts.md#still-capture, docs/spec/native-surfaces.md#document-regions).
+// (docs/spec/hosts.md#platform-interface, docs/spec/native-surfaces.md#document-regions).
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdtempSync, realpathSync, rmSync, rmdirSync, unlinkSync } from "node:fs";

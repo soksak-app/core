@@ -778,7 +778,7 @@ func TestAViewTakesThePointerUpToItsEdges(t *testing.T) {
 	}
 }
 
-// Each start of a run tells each view once, and no later step of the run does (docs/spec/native-surfaces.md#views).
+// Each start of a run tells each view once, and no later step of the run does (docs/spec/native-surfaces.md#view-surfaces).
 func TestEachStartOfARunTellsEachViewOnce(t *testing.T) {
 	f, stored := surfaceShell(t)
 	left := f.tabbedCards()[0]

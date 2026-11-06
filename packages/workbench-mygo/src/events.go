@@ -217,7 +217,7 @@ func (e *Events) BeginOperation(event string, fields map[string]any) []string {
 	return cids
 }
 
-// Call stores the event workbench.call of a host call that ended (docs/spec/logging.md#automatic-entrances): the level is debug, and
+// Call stores the event workbench.call of a host call that ended (docs/spec/logging.md#entrances): the level is debug, and
 // warn for a refused call. The arguments are read only for an event that the gate stores.
 func (e *Events) Call(name string, argument any, cids []string, elapsed time.Duration, failure error) {
 	if unrecordedCalls[name] {
@@ -265,7 +265,7 @@ func callCids(name string, argument any) []string {
 	return carried.Cids
 }
 
-// Command stores the event workbench.command of a command request that ended (docs/spec/logging.md#automatic-entrances).
+// Command stores the event workbench.command of a command request that ended (docs/spec/logging.md#entrances).
 func (e *Events) Command(name string, elapsed time.Duration, failure error) {
 	level := sok.LevelDebug
 	if failure != nil {

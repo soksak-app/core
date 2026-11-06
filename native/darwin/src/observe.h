@@ -1,5 +1,5 @@
 // The one entrance of the native library for every observer, monitor, key-value observer, run loop observer, dispatch source, Apple
-// event handler, timer and delegate (docs/spec/logging.md#automatic-entrances). A registration is made only through these functions:
+// event handler, timer and delegate (docs/spec/logging.md#entrances). A registration is made only through these functions:
 // each records the registration as the event `native.observe.registered` (or `native.observe.failed` at the level error when the
 // platform refuses it) and counts every delivery by the name of its source, so a new registration is covered without a record at its
 // call site. `make check-events` rejects the registration API outside observe.m.

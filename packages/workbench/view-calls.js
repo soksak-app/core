@@ -144,7 +144,7 @@ export const PLUGIN_HOST_CALLS = new Set(["exposureReply"]);
 // events are internal to the view bridge.
 export const REGION_EVENTS = new Set(["document-stream", "document-state", "document-message", "image-event"]);
 
-// The native events that plugin code may subscribe to through its native handle (docs/spec/native-surfaces.md#plugin-host-calls, docs/spec/exposure.md#relay).
+// The native events that plugin code may subscribe to through its native handle (docs/spec/native-surfaces.md#view-surfaces, docs/spec/exposure.md#relay).
 // The four region events, and exposure-request, the declared route of view exposure: the forwarded exposure request reaches the view
 // through this subscription. Every other event name is refused.
 export const PLUGIN_NATIVE_EVENTS = new Set([...REGION_EVENTS, "exposure-request"]);

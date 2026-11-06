@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { absolute, markdownLinks } from "./markdown-links.mjs";
@@ -10,6 +10,7 @@ const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others
 const errors = [];
 // Replaces a code block with the same number of blank lines, so the line numbers of errors stay the same as in the source.
 const withoutCode = (text) => text.replace(/^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm, (block) => block.replace(/[^\n]/g, ""));
+// The anchors of a document: the id of each heading and of each explicit anchor element `<a id="...">`.
 const anchors = (text) => {
   const found = new Set();
   for (const match of withoutCode(text).matchAll(/^#{1,6}\s+(.+)$/gm)) {
@@ -18,7 +19,13 @@ const anchors = (text) => {
     while (found.has(id)) id = `${base}-${++count}`;
     found.add(id);
   }
+  for (const match of withoutCode(text).matchAll(/<a\s+(?:id|name)="([^"]+)"/g)) found.add(match[1]);
   return found;
+};
+const documentAnchors = new Map();
+const anchorsOf = (path) => {
+  if (!documentAnchors.has(path)) documentAnchors.set(path, anchors(readFileSync(path, "utf8")));
+  return documentAnchors.get(path);
 };
 
 for (const file of files) {
@@ -39,9 +46,24 @@ for (const file of files) {
     const [path, fragment] = target.split("#");
     const full = path ? resolve(dirname(file), decodeURIComponent(path)) : resolve(file);
     if (!existsSync(full)) errors.push(`${file}: missing link target ${target}`);
-    else if (fragment && extname(full) === ".md" && !anchors(readFileSync(full, "utf8")).has(decodeURIComponent(fragment))) {
+    else if (fragment && extname(full) === ".md" && !anchorsOf(full).has(decodeURIComponent(fragment))) {
       errors.push(`${file}: missing heading ${target}`);
     }
+  }
+}
+
+// A source comment, a message or a text names a section of a document by its path from the repository root and its anchor:
+// `docs/<path>.md#<anchor>`. Each such reference of a text file names an existing document and one of its anchors. The anchor
+// ends at the first character that is no letter, digit, `-` or `_`; a link target of a document is checked as a link above.
+const references = spawnSync("git", ["grep", "--untracked", "-n", "-I", "-E", "docs/[^[:space:]]+\\.md#"], { encoding: "utf8", maxBuffer: 1 << 28 });
+if (references.status !== 0 && references.status !== 1) throw new Error(`git grep failed with status ${references.status}: ${references.stderr}`);
+for (const line of references.stdout.split("\n").filter(Boolean)) {
+  const [, file, number, text] = /^(.+?):(\d+):(.*)$/.exec(line);
+  for (const match of text.matchAll(/(?<![\p{L}\p{N}_./-])(docs\/[\p{L}\p{N}_./-]+\.md)#([\p{L}\p{N}_-]+)/gu)) {
+    if (file.endsWith(".md") && text.slice(0, match.index).endsWith("](")) continue;
+    const [reference, path, fragment] = match;
+    if (!existsSync(path)) errors.push(`${file}:${number}: missing document ${reference}`);
+    else if (!anchorsOf(path).has(fragment)) errors.push(`${file}:${number}: missing heading ${reference}`);
   }
 }
 
@@ -81,4 +103,4 @@ if (counts[0] !== counts[1]) errors.push("feature translations have different ro
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exitCode = 1;
-} else console.log(`Documentation checks passed: ${files.length} files; links, translations, status fields, canonical checklist, and changelog translation`);
+} else console.log(`Documentation checks passed: ${files.length} files; links, section references, translations, status fields, canonical checklist, and changelog translation`);

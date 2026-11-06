@@ -24,7 +24,7 @@ export const ENDED_CALLS_KEPT = 256;
 /** The reasons that end a call when its peer is lost. */
 export const PEER_LOST_REASONS = ["process-ended", "surface-closed", "sidecar-ended"];
 
-// A correlation identifier that a log line can hold (docs/spec/logging.md#correlation): non-empty, without a quote, a backslash or a control character.
+// A correlation identifier that a log line can hold (docs/spec/logging.md#correlation-identifier): non-empty, without a quote, a backslash or a control character.
 const CID = /^[^"\\\u0000-\u001f\u007f]+$/;
 
 /**

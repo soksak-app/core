@@ -1,4 +1,4 @@
-// Browser example check (docs/operations/examples.md#check-browser-example). Serves the staged browser example from a loopback
+// Browser example check (docs/operations/examples.md#browser-example-check). Serves the staged browser example from a loopback
 // server, opens a project through the library form in headless Chrome, and verifies that there are no console errors,
 // unhandled exceptions, or error-level browser log entries.
 import assert from "node:assert/strict";

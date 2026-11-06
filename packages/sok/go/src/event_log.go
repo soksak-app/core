@@ -554,7 +554,7 @@ func (l *EventLog) enqueueWriterEvent(level Level, name string, fields json.RawM
 	return l.queue(pending) == nil
 }
 
-// RecordClosed queues the event `log.closed` that the writer reports when a host process ends (docs/spec/logging.md#self-reports).
+// RecordClosed queues the event `log.closed` that the writer reports when a host process ends (docs/spec/logging.md#policy).
 // cause is `exit`, `exit-request` or `signal`, and signal is the number of the termination signal of the cause `signal`. It
 // returns false when the queue has no room.
 func (l *EventLog) RecordClosed(cause string, signal *int) bool {

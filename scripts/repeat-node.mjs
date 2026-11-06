@@ -1,5 +1,5 @@
 // Runs the tests of one Node test file whose names match a pattern COUNT times in a row, each repeat as one process of `node --test`
-// through the test runner (docs/operations/examples.md#test-runner). A repeat has the limit TEST_TIMEOUT: the runner kills its process
+// through the test runner (docs/operations/examples.md#test-parity). A repeat has the limit TEST_TIMEOUT: the runner kills its process
 // group at the limit, and `--test-timeout` gives each test of the repeat the same limit, so a test that hangs is reported with its name
 // and elapsed time. A repeat uses the same file-owned execution evidence as discovery; empty selections and incomplete tests fail.
 // Usage: node scripts/repeat-node.mjs --file <file> --name <pattern> --count <n> [--timeout <seconds>]

@@ -135,7 +135,7 @@ test("the counts of a closed gate leave each second and at a flush, not with eac
 });
 
 // The main page emits workbench.start in its first module, before the policy of its setting reaches the gate, and a window check
-// finds the reload of the page by it (docs/spec/logging.md#sources), so workbench.start passes every gate like the counts.
+// finds the reload of the page by it (docs/spec/logging.md#entrances), so workbench.start passes every gate like the counts.
 test("workbench.start passes the gate before a policy is set and a gate that turns the class lifecycle off", async () => {
   const batches = [];
   const unset = createLogGate();

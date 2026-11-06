@@ -1,6 +1,6 @@
 package workbench
 
-// The text scale, the settings and the log levels that a view follows (docs/spec/native-surfaces.md#view-calls).
+// The text scale, the settings and the log levels that a view follows (docs/spec/native-surfaces.md#view-surfaces).
 
 // followScale sends each view that follows its text scale the scale that changed.
 func (s *Shell) followScale() {

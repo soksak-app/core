@@ -1,4 +1,4 @@
-// The activity of the application and of its windows is recorded as events of the ring (docs/spec/logging.md#automatic-entrances).
+// The activity of the application and of its windows is recorded as events of the ring (docs/spec/logging.md#entrances).
 // The check posts the notifications that AppKit posts and reads the events; it does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import "activity_observers.h"

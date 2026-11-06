@@ -17,7 +17,7 @@ const isObject = (value) => value !== null && typeof value === "object" && !Arra
  *   trace(event, fields)             writes a trace event; traceEnabled() tells whether the trace is on
  * A page without a host offers none of them, and the calls then store nothing. The function of a trace is not accepted without its
  * query, because it could not skip the building of the fields. A log call builds the fields of each record, because the page has no
- * level query: the writer of the event log decides whether the record is stored (docs/spec/logging.md#gate).
+ * level query: the writer of the event log decides whether the record is stored (docs/spec/logging.md#policy).
  */
 export function createPluginRuntime({ pluginId, surfaceId = null, hooks }) {
   for (const [store, query] of [["trace", "traceEnabled"]]) {

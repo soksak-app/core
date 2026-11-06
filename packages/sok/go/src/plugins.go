@@ -683,7 +683,7 @@ func ReadInstalledManifest(configDir, id string, plugin InstalledPlugin) (Instal
 
 // parseManifest parses a plugin.json text into an object. file is the location for errors. The error names only the
 // file: the parser texts of encoding/json and serde_json differ, so a parser detail would make the hosts report
-// different texts (docs/spec/host-contract.md#installed.plugin-json.invalid-text).
+// different texts (docs/spec/host-contract.md, case installed.plugin-json.invalid-text).
 func parseManifest(file string, data []byte) (map[string]any, error) {
 	value, err := DecodeJSON(data)
 	if err != nil {

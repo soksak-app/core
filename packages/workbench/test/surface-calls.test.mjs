@@ -1,4 +1,4 @@
-// The host calls of a surface document (docs/spec/logging.md#automatic-entrances): every call is the event `workbench.call`, the
+// The host calls of a surface document (docs/spec/logging.md#entrances): every call is the event `workbench.call`, the
 // events of one turn travel in one `log` request, and the records of the document keep their order among the calls.
 import assert from "node:assert/strict";
 import test from "node:test";

@@ -485,7 +485,7 @@ test("a view mount that declares its composition notifies the end of the mount w
 });
 
 // core.surfaces lists a mounted view outside the compositor record from liveMounts, and each change of the mounted views notifies
-// the core state, which reads core.surfaces again (docs/spec/exposure.md#core-statuses).
+// the core state, which reads core.surfaces again (docs/spec/exposure.md#plugin-processes).
 test("a mounted view is listed by liveMounts until it is disposed, and each change notifies the mounted-change listeners", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;

@@ -1,4 +1,4 @@
-// Keeps and removes the runs of the test runner under target/test-runs (docs/operations/examples.md#test-runner).
+// Keeps and removes the runs of the test runner under target/test-runs (docs/operations/examples.md#test-parity).
 //   node scripts/test-runs.mjs prune    removes the runs without a failure and the runs whose failures a classification names.
 // A run holds `manifest.json` and the output of each test. A run with a test that did not pass, or that stopped, stays until
 // `classified.json` (an array of `{name, record}`) names every such test with the record that classifies it.

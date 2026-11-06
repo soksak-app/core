@@ -11,7 +11,7 @@ export function orderedSidecar(port, failed) {
   if (typeof failed !== "function") throw new TypeError("orderedSidecar requires a failure handler");
   let chain = Promise.resolve();
   return {
-    // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#protocol); a request
+    // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#messages); a request
     // that continues no input sends none.
     send(surface, body, cids = []) {
       const sent = chain.then(() => port.send(surface, body, cids));

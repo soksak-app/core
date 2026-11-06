@@ -691,11 +691,11 @@ type Platform interface {
 	SetEventBoot(boot string) error
 
 	// ObserveActivity installs the observers that record the activity of the application and of its windows as events of
-	// the native ring (docs/spec/logging.md#automatic-entrances). A second call installs nothing more.
+	// the native ring (docs/spec/logging.md#entrances). A second call installs nothing more.
 	ObserveActivity() error
 
 	// FlushNativeObservers stores the summary of every counted source of the native observers that has deliveries after its last
-	// summary, so the tail of a source is in the native ring before the last pull (docs/spec/logging.md#automatic-entrances).
+	// summary, so the tail of a source is in the native ring before the last pull (docs/spec/logging.md#entrances).
 	FlushNativeObservers() error
 
 	// ReplaceStandardError replaces the standard error of the process with file. Child processes started afterward also inherit that

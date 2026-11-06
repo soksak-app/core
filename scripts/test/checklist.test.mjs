@@ -283,6 +283,38 @@ test("check-docs fails on a conflict marker in a document or a source file and n
   assert.deepEqual(errors, ["guide.md:2: a conflict marker", "guide.md:6: a conflict marker", "source.mjs:2: a conflict marker"]);
 });
 
+test("check-docs fails on a section reference of a source, a message or a text whose document or anchor is missing", { timeout: 5000 }, (t) => {
+  // The fixture names its folder through `docs`, so this file holds no reference to a document of the repository.
+  const docs = "docs";
+  const guide = "# Guide\n\n## Test parity\n\n<a id=\"following\"></a>The view follows the files.\n";
+  const result = check(t, "- [~] G1 — task\n", "- [~] G1 — 작업\n", "", undefined, {
+    [`${docs}/guide.md`]: guide,
+    [`${docs}/guide.ko.md`]: "# 안내\n\n## 테스트 동등성\n",
+    "source.mjs": `// Runs each test (${docs}/guide.md#test-parity) and follows (${docs}/guide.md#following).\n`
+      + `// Runs each test (${docs}/guide.md#test-runner).\nthrow new Error("see ${docs}/gone.md#usage");\n`,
+    "notes.md": `The runner (\`${docs}/guide.md#test-runner\`) and the 안내는 \`${docs}/guide.ko.md#테스트-동등성\`이 정한다.\n`
+      + `The [guide](${docs}/guide.md#test-parity) and packages/kit/${docs}/other.md#anything.\n`,
+    "notes.ko.md": `참고 ${docs}/guide.ko.md#테스트-동등성이 정한다.\n`,
+  });
+  assert.equal(result.status, 1, result.stdout);
+  const errors = result.stderr.split("\n").filter((line) => line.includes(` ${docs}/`)).sort();
+  assert.deepEqual(errors, [
+    `notes.ko.md:1: missing heading ${docs}/guide.ko.md#테스트-동등성이`,
+    `notes.md:1: missing heading ${docs}/guide.md#test-runner`,
+    `source.mjs:2: missing heading ${docs}/guide.md#test-runner`,
+    `source.mjs:3: missing document ${docs}/gone.md#usage`,
+  ]);
+});
+
+test("check-docs reads a link after a backtick that no run of its block closes", { timeout: 5000 }, (t) => {
+  const result = check(t, "- [~] G1 — task\n", "- [~] G1 — 작업\n", "", undefined, {
+    "guide.md": "# Guide\n\n- The `open quote of an item.\n- The [runner](missing.md) and `a span` and ``a `quoted` span``.\n",
+    "guide.ko.md": "# 안내\n",
+  });
+  assert.equal(result.status, 1, result.stdout);
+  assert.deepEqual(result.stderr.split("\n").filter((line) => line.includes("missing")), ["guide.md: missing link target missing.md"]);
+});
+
 test("check-docs passes a text that holds no conflict marker at the start of a line", { timeout: 5000 }, (t) => {
   const result = check(t, "- [~] G1 — task\n", "- [~] G1 — 작업\n", "", undefined, { "heading.md": "Title\n=======\n", "heading.ko.md": "제목\n=======\n" });
   assert.equal(result.status, 0, result.stderr);

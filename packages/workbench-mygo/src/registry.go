@@ -143,7 +143,7 @@ func (r *Registry) Status(name string, read Status) {
 }
 
 // Run runs the command name with params and records the run, as the page records every run of a command
-// (docs/spec/logging.md#automatic-entrances).
+// (docs/spec/logging.md#entrances).
 func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
 	started := time.Now()
 	result, err := r.run(name, params)
@@ -225,7 +225,7 @@ var methodKinds = map[string]string{
 	"command.run": "command", "element.rect": "element", "element.act": "element",
 }
 
-// causeID is the form of a correlation identifier of the cause of a request (docs/spec/exposure.md#requests).
+// causeID is the form of a correlation identifier of the cause of a request (docs/spec/logging.md#correlation-identifier).
 var causeID = regexp.MustCompile(`^[^"\\\x00-\x1f\x7f]+$`)
 
 // Reply is Answer for a request that may answer in a later step: a command that answers later and a request that a surface answers.
@@ -283,7 +283,7 @@ func (r *Registry) Answer(method string, params json.RawMessage, changed Changed
 }
 
 // Record installs what receives every request command.run that names a command, when it ended
-// (docs/spec/logging.md#automatic-entrances).
+// (docs/spec/logging.md#entrances).
 func (r *Registry) Record(recorder func(name string, elapsed time.Duration, failure error)) {
 	r.recorder = recorder
 }

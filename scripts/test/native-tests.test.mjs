@@ -1,4 +1,4 @@
-// The native tests run one at a time through the test runner (docs/operations/examples.md#test-runner): they open windows, so they
+// The native tests run one at a time through the test runner (docs/operations/examples.md#test-parity): they open windows, so they
 // share the screen, and each one is named when it starts and ends with its elapsed time and has a limit of its own.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

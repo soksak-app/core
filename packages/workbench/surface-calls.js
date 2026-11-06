@@ -1,4 +1,4 @@
-// The host calls of a surface document (docs/spec/logging.md#automatic-entrances). A surface is a separate webview without
+// The host calls of a surface document (docs/spec/logging.md#entrances). A surface is a separate webview without
 // the page log of the main page, so the runtime of each application sends the calls of its `page` object through this wrapper.
 // Every call is the event `workbench.call`, and the events of one turn travel to the host in one call `log`, like the events of
 // the main page (`@soksak/plugin-api/log-batch.js`). The records of the document (`page.report`) are queued behind the same batcher so that the
