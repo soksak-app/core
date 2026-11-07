@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { attachImeFrameIdentities, captureFromCallback, readImeFrameIdentities, readRetainedSources } from "./activation/ime-visual-capture.mjs";
+import { classifyCaptureCallbacks } from "./capture-callbacks.mjs";
 import { verifyTerminalReference } from "./terminal-reference-content.mjs";
 
 const key = (frame) => frame && [frame.generation, frame.raster, frame.sequence].map(String).join("/");
@@ -34,7 +35,11 @@ export function acquireTerminalReference({ evidence, captureDirectory, identityM
   assert.deepEqual(decodedRows, recordedRows, "reference decoded identity input differs from its recording");
   const framePaths = frames(captureDirectory);
   assert.equal(evidence.capture.count, framePaths.length, "reference capture count differs from retained frame files");
-  attachImeFrameIdentities(callbacks.map(callback => ({ callback })), framePaths, identities);
+  const recordedCallbacks = readFileSync(evidence.capture.callbackStatus, "utf8")
+    .trimEnd().split("\n").filter(Boolean).map(line => JSON.parse(line));
+  assert.deepEqual(callbacks, recordedCallbacks, "reference callback input differs from its complete raw recording trace");
+  const { complete } = classifyCaptureCallbacks(callbacks, framePaths);
+  attachImeFrameIdentities(complete.map(callback => ({ callback })), framePaths, identities);
   const regionObservations = decodedRows.map(row => JSON.stringify([row.frame, row.region]));
   assert.equal(new Set(regionObservations).size, regionObservations.length,
     "reference decoded identity frame and region join is ambiguous");
@@ -47,6 +52,8 @@ export function acquireTerminalReference({ evidence, captureDirectory, identityM
   const retained = readRetainedSources(captureDirectory, new Map([[key(observed.frame),
     { frame: observed.frame, render: observed.render }]]));
   const source = one(retained.sources.filter(source => key(source.frame) === key(observed.frame)), "retained source frame");
+  const sourceManifest = JSON.parse(readFileSync(join(captureDirectory, "sources", "manifest.json"), "utf8"));
+  const sourceArtifact = one(sourceManifest.artifacts.filter(artifact => key(artifact) === key(observed.frame)), "retained source artifact");
   assert.deepEqual(source.raster.screenBounds, rectPt, "reference native global placement differs from retained source");
   const issued = one(identities.artifactRecords.filter(artifact => key(artifact) === key(observed.frame)), "issued artifact");
   const matched = decodedRows.filter(row => row.status === "matched" && row.reason === null &&
@@ -58,14 +65,14 @@ export function acquireTerminalReference({ evidence, captureDirectory, identityM
     shape: cursorShapes[observed.cursor.shape],
     preedit: observed.cursor.preedit?.text ?? observed.cursor.preedit };
   const region = { surface, name: "view", regionToken: issued.regionToken, rectPt, clipRectPt: { ...rectPt } };
-  const base = { plugin: evidence.terminal.plugin, surface, name: "view", regionToken: issued.regionToken,
+  const base = { observationRequestId: observed.requestId, sourceArtifact, plugin: evidence.terminal.plugin, surface, name: "view", regionToken: issued.regionToken,
     screen: { frame: observed.frame, rows: observed.rows }, cursor,
     source: { ...source, regionToken: issued.regionToken }, region,
     issuedArtifact: { ...issued, colorSpace: colorSpace(issued.colorSpace) }, expected, criteria };
   let reference;
   for (const identityRow of matched) {
     const file = `frame-${String(identityRow.frame).padStart(4, "0")}.bgra`;
-    const callback = one(callbacks.filter(row => row.frame === file), "callback frame");
+    const callback = one(complete.filter(row => row.frame === file), "callback frame");
     assert.equal(callback.status, 0, "reference callback frame is incomplete");
     assert.equal(String(callback.displayTime), String(identityRow.displayTime), "reference callback display time differs from decoded identity");
     const capture = captureFromCallback(readFrame(join(captureDirectory, file)), callback);
@@ -76,4 +83,45 @@ export function acquireTerminalReference({ evidence, captureDirectory, identityM
     reference ??= candidate;
   }
   return { ...reference, proof: "verified-terminal-reference-acquisition" };
+}
+
+
+/** Records a later reference through the public one-shot API. Call only after
+ * measured recordings and footprint intervals have ended. */
+export async function captureTerminalReference(t, session, { plugin, surface, expected, criteria }) {
+  assert.ok(["terminal", "term"].includes(plugin), "reference plugin must be terminal or term");
+  assert.ok(typeof surface === "string" && surface, "reference surface ownership is missing");
+  const recording = await session.record({ frameIdentity: true });
+  let stopAttempted = false;
+  session.cleanup(async () => {
+    if (!stopAttempted) {
+      stopAttempted = true;
+      await recording.stop({ after: 0 });
+    }
+  });
+  try {
+    const observed = await session.run(`${plugin}.screen.observe`, {}, surface);
+    assert.ok(observed?.frame, "reference one-shot observation has no frame");
+    const host = await session.until("host.window", value => value.regions?.some(region =>
+      region.surface === surface && region.name === "view" && region.visible && region.drawing &&
+      region.error === null && key(region.presented) === key(observed.frame)),
+    "the exact observed terminal reference image was not presented");
+    const { displayed } = await session.presented();
+    stopAttempted = true;
+    const capture = await recording.stop({ after: displayed });
+    assert.equal(capture.limited, false, "reference recording reached its bounded frame limit");
+    const readJson = path => JSON.parse(readFileSync(path, "utf8"));
+    const readRows = path => readFileSync(path, "utf8").trimEnd().split("\n").filter(Boolean).map(line => JSON.parse(line));
+    return acquireTerminalReference({
+      evidence: { terminal: { plugin, surface }, observed, host, capture },
+      captureDirectory: capture.frames,
+      identityManifest: readJson(join(capture.frames, "frame-identities", "manifest.json")),
+      decodedRows: readRows(join(capture.frames, "frame-identities", "decoded-frames.jsonl")),
+      callbacks: readRows(join(capture.frames, "callback-status.jsonl")),
+      expected, criteria,
+    });
+  } catch (error) {
+    t.diagnostic(`terminal reference acquisition failed; recording retained at ${recording.frames ?? "the session-owned capture directory"}`);
+    throw error;
+  }
 }

@@ -150,7 +150,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
@@ -266,6 +266,23 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
   win32: { status: "unavailable", reason: "The native capture backend is implemented only for macOS.", resumeWhen: "Implement Windows capture and run its sampler acceptance." },
 };
 const FEATURE_LINKS = [
+  {
+    id: "F502-13-2",
+    implementation: [
+      { file: "packages/workbench/debug-ui.js", symbol: "captures = record.captures === undefined ? [] : [...record.captures];" },
+      { file: "packages/workbench-mygo/src/shell_debug.go", symbol: "d.captures = slices.Clone(recorded.Captures)" },
+      { file: "e2e/design-hosts.test.mjs", symbol: "for (const path of debug.captures) s.trackRecording(dirname(path));" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/debug-state-ui.test.mjs", id: "debug status exposes exact host-owned captures while fixture input changes only the listing" },
+      { file: "packages/workbench/test/debug-state-ui.test.mjs", id: "a new debug record clears previous capture ownership when the host returns none or fails" },
+      { file: "packages/workbench-mygo/tests/shell_debug_test.go", id: "TestDebugStatusExposesExactHostCaptureOwnership" },
+      { file: "packages/workbench-mygo/tests/shell_debug_test.go", id: "TestNewDebugRecordClearsPreviousCaptureOwnership" },
+      { file: "e2e/design-hosts.test.mjs", id: "every host places each workbench element of each state at the same place" },
+    ],
+    expected: "Page and native debug status expose the actual recording's captures and reset them at a new opening. A listing fixture does not disable real recording. The three-host design owner registers those public capture directories with the maintained recording lifecycle, preserving failure evidence and the untracked-recording audit. Unit owners establish capture ownership; complete geometry acceptance still requires the unchanged application run.",
+    levels: ["unit", "application"],
+  },
   {
     id: "F696-4-2-1",
     implementation: [{ file: "e2e/terminal-reference-acquisition.mjs", symbol: "export function acquireTerminalReference(" }],
@@ -1758,6 +1775,23 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F700",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "function afterSession(" },
+      { file: "packages/window-check/app.mjs", symbol: "async function finishSessionAudit(" },
+      { file: "packages/window-check/app.mjs", symbol: "function disposeSessionRecordings(" },
+      { file: "packages/window-check/app.mjs", symbol: "export async function finishSession(" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/session-inactive.test.mjs", id: "a failing session audit closes every session of the same check and reports every failure" },
+      { file: "packages/window-check/test/session-inactive.test.mjs", id: "parent session audit failure ${failedIndex === 0 ? \"first\" : \"last\"} preserves every app's owned recording" },
+      { file: "packages/window-check/test/session-inactive.test.mjs", id: "all successful session audits precede disposal and remove only that parent's owned recordings" },
+      { file: "e2e/semantic-screen.test.mjs", id: "hidden terminal and term screens notify through every inactive host session" },
+    ],
+    expected: "One parent-owned hook finishes every acquired session and reports all failures before disposing recordings; first or last audit failure preserves every sibling's owned evidence, while a successful parent removes only its own new recordings and releases all connections and slots.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F699",
     implementation: [
       { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) setWorkbenchDialog(" },
@@ -2345,7 +2379,7 @@ const FEATURE_LINKS = [
   {
     id: "F584-2",
     implementation: [
-      { file: "native/darwin/src/input_inject.m", symbol: "*equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];" },
+      { file: "native/darwin/src/input_inject.m", symbol: "*equivalent = [NSApp.mainMenu performKeyEquivalent:event] || [window performKeyEquivalent:event];" },
       { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_send_key_to_web_view(" },
     ],
     tests: [
@@ -10713,7 +10747,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F292-39",
-    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app, { clipboard = false } = {})" }],
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app, { clipboard = false, inactive = false } = {})" }],
     tests: [
       { file: "packages/window-check/test/session-frontmost.test.mjs", id: "a frontmost change to another application during a check does not reject the check result" },
     ],

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { loadTerminalReferenceFixture } from "./terminal-reference-fixture.mjs";
@@ -65,3 +65,34 @@ for (const [name, mutate] of invalid) {
       /cleanup|decoded|decoder|identity|artifact|manifest|capture|callback|region|frame|record|byte/i.test(error.message));
   });
 }
+
+// The native raw trace retains idle callbacks even though they have no frame.
+// These two rows are copied from the actual failing Wails reference recording;
+// only sequence is rebased to insert them into this independent replay trace.
+const rawIdleCallbacks = JSON.parse(readFileSync(new URL("./fixtures/capture-idle-callbacks.json", import.meta.url), "utf8"));
+function addIdleCallbacks(input) {
+  for (const raw of rawIdleCallbacks) input.callbacks.push({ ...raw, sequence: input.callbacks.length + 1 });
+  writeFileSync(join(input.captureDirectory, "callback-status.jsonl"), input.callbacks.map(row => JSON.stringify(row)).join("\n") + "\n");
+}
+
+test("reference acquisition retains actual idle callbacks while joining every complete frame", t => {
+  const input = loadTerminalReferenceFixture(t);
+  addIdleCallbacks(input);
+  const before = structuredClone(input.callbacks);
+  assert.equal(acquireTerminalReference(input).proof, "verified-terminal-reference-acquisition");
+  assert.deepEqual(input.callbacks, before, "classification must not remove or rewrite raw callbacks");
+});
+
+for (const [name, change] of [
+  ["unknown noncomplete status", row => { row.status = 6; }],
+  ["missing status", row => { row.status = null; }],
+  ["noncomplete callback claiming a frame", (row, input) => { row.frame = input.callbacks[0].frame; }],
+  ["complete callback without a retained frame", row => { row.status = 0; }],
+  ["callback sequence gap", row => { row.sequence++; }],
+]) test(`reference acquisition rejects ${name} in the raw callback trace`, t => {
+  const input = loadTerminalReferenceFixture(t);
+  addIdleCallbacks(input);
+  change(input.callbacks.at(-1), input);
+  writeFileSync(join(input.captureDirectory, "callback-status.jsonl"), input.callbacks.map(row => JSON.stringify(row)).join("\n") + "\n");
+  assert.throws(() => acquireTerminalReference(input), /callback|status|sequence|frame/i);
+});

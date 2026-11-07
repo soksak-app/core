@@ -22,14 +22,15 @@ const debugStateText = `{"time":"t","host":"mygo","versions":{"core":"1"},"workb
 
 // debugHost answers the debug host calls: the files by path, and the pages of logQuery in order.
 type debugHost struct {
-	files   map[string]string
-	pages   []string
-	queries []map[string]any
-	records []string
-	saved   []string
-	texts   []string
-	failing map[string]error
-	saveAll string
+	files    map[string]string
+	pages    []string
+	queries  []map[string]any
+	records  []string
+	captures []string
+	saved    []string
+	texts    []string
+	failing  map[string]error
+	saveAll  string
 }
 
 // fixtureElements are the elements of the tester of a fixture, which is made after its shell.
@@ -64,7 +65,11 @@ func (h *debugHost) serve(table map[string]workbench.HostCall) {
 	failure := func(name string) error { return h.failing[name] }
 	table["debugRecord"] = func(_ context.Context, argument json.RawMessage) (any, error) {
 		h.records = append(h.records, string(argument))
-		return map[string]string{"path": "logs/state-b.json"}, failure("debugRecord")
+		result := map[string]any{"path": "logs/state-b.json"}
+		if h.captures != nil {
+			result["captures"] = h.captures
+		}
+		return result, failure("debugRecord")
 	}
 	table["debugFiles"] = func(context.Context, json.RawMessage) (any, error) {
 		entries := []map[string]any{}
@@ -201,6 +206,42 @@ func TestTheHelpMenuOpensTheDebugView(t *testing.T) {
 	f.run("core.debug.close", nil)
 	if f.tester.HasText("logs/app.log") {
 		t.Fatal("the closed view is drawn")
+	}
+}
+
+func TestDebugStatusExposesExactHostCaptureOwnership(t *testing.T) {
+	f, stored := surfaceShell(t)
+	captures := []string{"/config/logs/captures/still-main-1/window.png", "/config/logs/captures/still-project-2/window.png"}
+	stored.debug.captures = captures
+	f.do("core.debug.open", nil)
+	var status struct {
+		Captures []string `json:"captures"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.debug")), &status); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(status.Captures, captures) {
+		t.Fatalf("capture ownership differs: %s", f.status("core.debug"))
+	}
+}
+
+func TestNewDebugRecordClearsPreviousCaptureOwnership(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.debug.captures = []string{"/config/logs/captures/still-main-1/window.png"}
+	f.do("core.debug.open", nil)
+	f.do("core.debug.close", nil)
+	stored.debug.captures = nil
+	f.do("core.debug.open", nil)
+	if !strings.Contains(f.status("core.debug"), `"captures":[]`) {
+		t.Fatalf("a host with no captures must publish an empty array: %s", f.status("core.debug"))
+	}
+	f.do("core.debug.close", nil)
+	stored.debug.failing = map[string]error{"debugRecord": errors.New("recording failed")}
+	if err := f.later("core.debug.open", nil); err != nil {
+		t.Fatal(err)
+	}
+	if status := f.status("core.debug"); !strings.Contains(status, `"captures":[]`) || !strings.Contains(status, "record: recording failed") {
+		t.Fatalf("failed recording retained captures or lost its error: %s", status)
 	}
 }
 

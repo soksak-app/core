@@ -2,13 +2,13 @@
 // key window and each character key states its text, so the terminal image region types it without the input method, and the
 // application and the input source of the person stay as they are (docs/spec/exposure.md#virtual-key-window).
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
+import { temporaryProject, ownProjectWindow } from "./project-resource.mjs";
+import { traceTerminalInput } from "./terminal-keyboard-trace.mjs";
 import { echoed, ensureTerminals, readScreenUntil, textLines } from "./terminal-screen.mjs";
 
 // Presses each character of text with that text stated, and a space as Space.
@@ -23,41 +23,38 @@ async function moveOnto(session, x, y) {
   await session.until("host.window", (host) => host.virtualKey, "the window did not become the virtual key window");
 }
 
-async function clickAndExecute(session, surface, marker) {
+async function traced(test, session, surface, label, work) {
+  const offsets = currentEventOffsets(session.app.configDir);
+  return traceTerminalInput(test, session, surface, label, work, async () => {
+    await session.flushLog();
+    return readEvents(session.app.configDir, offsets).events.filter(event => event.event === "native.input.key_down");
+  });
+}
+
+async function clickAndExecute(test, session, surface, marker) {
   const view = await session.rect("terminal.view", undefined, surface);
   const x = view.document.x + view.x + view.width / 2, y = view.document.y + view.y + view.height / 2;
   await moveOnto(session, x, y);
   await session.click(x, y);
   await session.until("host.window", (host) => host.virtualKey && host.regions.some((region) =>
     region.surface === surface && region.focused), `${surface} did not receive native focus in the virtual key window`);
-  await type(session, `echo ${marker}`);
-  await session.press("Enter");
-  // The window of a later context can be narrow enough to wrap the command and its output.
-  await readScreenUntil(session, surface, (lines) => echoed(lines, marker),
-    `${surface} did not execute its first post-context command`);
-}
-
-/**
- * A folder for a project that the check opens. The library keeps the project after its window closes, so the cleanup closes it
- * (which removes it from the library) before it removes the folder; cleanups run in the order they were registered.
- */
-function temporaryProject(s, prefix) {
-  const folder = mkdtempSync(join(tmpdir(), prefix));
-  const name = folder.slice(folder.lastIndexOf("/"));
-  s.cleanup(async () => {
-    for (const listed of await s.get("core.projects")) {
-      if (listed.root.endsWith(name)) await s.run("core.project.close", { id: listed.id });
-    }
-    await s.run("core.projects.flush");
+  await traced(test, session, surface, marker, async () => {
+    await type(session, `echo ${marker}`);
+    await session.press("Enter");
+    // The window of a later context can be narrow enough to wrap the command and its output.
+    await readScreenUntil(session, surface, (lines) => echoed(lines, marker),
+      `${surface} did not execute its first post-context command`);
   });
-  s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-  return folder;
 }
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native keyboard edits and executes independently in three terminals`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app, { inactive: true });
-    await fresh(s);
+    await fresh(s, { log: { input: "info", lifecycle: "info", call: "debug" }, reads: [
+      "native.input.key_down", "native.app.activated", "native.app.deactivated", "native.input.virtual",
+      "native.window.key", "native.window.resign_key", "native.window.main", "native.window.resign_main",
+      "native.record.info", "native.input.callback", "host.endpoint.call", "host.binding.call", "workbench.call",
+    ] });
     const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
     assert.ok(tab, "the fixture has no terminal tab");
     await s.run("core.tab.select", { tab: tab.id });
@@ -116,11 +113,13 @@ for (const app of Object.values(APPS)) {
         assert.equal(output.filter((row) => row === marker).length, 1, "command output must occur once");
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} command`);
         const continued = `continued${index}`;
-        await type(s, `echo ${continued}`);
-        await s.press("Enter");
-        const next = await readScreenUntil(s, surface, (lines) => lines.includes(continued),
-          "typing after output required another click");
-        assert.equal(next.filter((row) => row === continued).length, 1, "continued input must execute once without refocusing");
+        await traced(t, s, surface, `terminal ${index + 1} continued input`, async () => {
+          await type(s, `echo ${continued}`);
+          await s.press("Enter");
+          const next = await readScreenUntil(s, surface, (lines) => lines.includes(continued),
+            "typing after output required another click");
+          assert.equal(next.filter((row) => row === continued).length, 1, "continued input must execute once without refocusing");
+        });
         t.diagnostic(`${app.name}: PASS terminal ${index + 1} continued input`);
         // Arrow keys: input after two Left presses goes into the middle of the line, and Up recalls the previous command.
         const arrowed = `a${index}q${index}bc`;
@@ -168,7 +167,7 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     const returnedTerminal = (await s.get("core.surfaces")).find((item) =>
       item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
-    await clickAndExecute(s, returnedTerminal.surface, "afterbrowser");
+    await clickAndExecute(t, s, returnedTerminal.surface, "afterbrowser");
     t.diagnostic(`${app.name}: PASS focus after browser tab`);
 
     t.diagnostic(`${app.name}: START focus after resize`);
@@ -177,7 +176,7 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (host) => host.content.width === 800, "window did not resize for focus test");
     await s.until("terminal.session", (state) => state.cols < beforeResize.cols,
       "terminal did not resize before focus was tested again", { surface: returnedTerminal.surface });
-    await clickAndExecute(s, returnedTerminal.surface, "afterresize");
+    await clickAndExecute(t, s, returnedTerminal.surface, "afterresize");
     t.diagnostic(`${app.name}: PASS focus after resize`);
 
     t.diagnostic(`${app.name}: START focus after modal close`);
@@ -186,7 +185,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.close");
     await s.until("core.settings-modal", (modal) => !modal.open, "settings modal did not close for focus test");
     await s.presented();
-    await clickAndExecute(s, returnedTerminal.surface, "aftermodal");
+    await clickAndExecute(t, s, returnedTerminal.surface, "aftermodal");
     t.diagnostic(`${app.name}: PASS focus after modal close`);
 
     t.diagnostic(`${app.name}: START focus after project return`);
@@ -200,7 +199,7 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     const restoredTerminal = (await s.get("core.surfaces")).find((item) =>
       item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
-    await clickAndExecute(s, restoredTerminal.surface, "afterproject");
+    await clickAndExecute(t, s, restoredTerminal.surface, "afterproject");
     t.diagnostic(`${app.name}: PASS focus after project return`);
 
     t.diagnostic(`${app.name}: START focus after window switch`);
@@ -209,6 +208,7 @@ for (const app of Object.values(APPS)) {
     const opened = await s.run("core.project.open", { root: focusProject, color: "#7fe3b0" });
     const child = s.on((await s.windows(2, "focus test project window did not open"))
       .find((window) => window.window !== s.window).window);
+    const closeChild = ownProjectWindow(s, child);
     await child.until("core.grid", (grid) => grid.cards.length > 0, "focus test project window did not render");
     const childTerminalTab = (await child.get("core.grid")).cards.flatMap((card) => card.tabs)
       .find((tab) => tab.plugin === "terminal");
@@ -220,8 +220,8 @@ for (const app of Object.values(APPS)) {
     await child.presented();
     const childTerminal = (await child.get("core.surfaces")).find((item) =>
       item.visible && item.plugin === "terminal" && item.exposes.includes("status terminal.session"));
-    await clickAndExecute(child, childTerminal.surface, "afterwindow");
-    await child.close();
+    await clickAndExecute(t, child, childTerminal.surface, "afterwindow");
+    await closeChild();
     await s.windows(1, "focus test child window did not close");
     t.diagnostic(`${app.name}: PASS focus after window switch`);
   });

@@ -4,6 +4,7 @@
 // every host (docs/spec/projects.md).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import test from "node:test";
 
 import { APPS, open, requiresAll } from "@soksak/window-check/app.mjs";
@@ -152,6 +153,8 @@ async function walk(t, s, states) {
   await s.run("core.debug.open");
   const debug = await s.until("core.debug", (value) => value.open && value.entries.length === DEBUG_ENTRIES.length,
     "the debug view did not list the declared shared fixture");
+  assert.ok(Array.isArray(debug.captures), "the debug observation must declare its capture ownership");
+  for (const path of debug.captures) s.trackRecording(dirname(path));
   assert.deepEqual(debug.entries, DEBUG_ENTRIES, "hosts must render identical declared debug inputs before geometry is compared");
   await read("debug view");
   await s.run("core.debug.close");

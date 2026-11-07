@@ -218,7 +218,6 @@ func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {
 	}
 }
 
-
 // F502-13-2: the page's nowrap picker name exposes its intrinsic text box,
 // rather than the unused space of the flex row. The row remains clickable.
 func TestPickerNameHasIntrinsicTextWidth(t *testing.T) {
@@ -226,9 +225,13 @@ func TestPickerNameHasIntrinsicTextWidth(t *testing.T) {
 	f.click("core.card.add", f.tabbedCards()[0])
 	name := element(t, f.tester, "core.picker.item-name", "acme")
 	declared, err := workbench.Declared()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	catalog, err := workbench.ReadSettingsCatalog()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	values := status[map[string]any](t, f, "core.settings")["values"].(map[string]any)
 	font := catalog.Stack(values["font"].(string))
 	// The control size is relative to the declared base, not a fixed 12pt.

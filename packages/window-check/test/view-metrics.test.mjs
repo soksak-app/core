@@ -134,6 +134,11 @@ function cadenceFailureWithPaintOutcome({ wrongTailPaint = false, wrongGestureGe
   drag.contentFrames[2].timeRange = { lowerMs: 91, upperMs: 93 };
   drag.contentFrames[2].captureTimeMs = 93;
   drag.contentFrames[2].displayCapture = { frameIndex: 7, timeMs: 175 };
+  // Keep this negative owner's cadence gap above the declared 40 ms ceiling:
+  // source middles 92 -> 133 give 41 ms; the unchanged 155 ms paint still qualifies.
+  drag.contentFrames[3].frameTimeMs = 133;
+  drag.contentFrames[3].timeRange = { lowerMs: 132, upperMs: 134 };
+  drag.contentFrames[3].captureTimeMs = 134;
   drag.contentFrames[3].displayCapture = { frameIndex: 7, timeMs: 175 };
   for (const frame of drag.contentFrames.slice(0, 2)) {
     frame.displayCapture = { frameIndex: 7, timeMs: 175 };
@@ -154,7 +159,7 @@ test("view metrics judge convergence by time, not by the count of recorded frame
   [120, 125, 130].forEach((timeMs, index) => { raw.drag.tailGeometryFrames[index].timeMs = timeMs; });
   const result = assertViewMeasurements(raw, options);
   assert.equal(result.evaluation.drag.convergedFrame, 3);
-  assert.ok(result.evaluation.drag.convergenceMs <= 35, `convergence ${result.evaluation.drag.convergenceMs} ms`);
+  assert.ok(result.evaluation.drag.convergenceMs <= 40, `convergence ${result.evaluation.drag.convergenceMs} ms`);
 });
 
 test("view metrics accept exact thresholds and preserve frame and process evidence", { timeout: 1000 }, () => {
@@ -171,7 +176,7 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
   assert.equal(report.evaluation.drag.convergedFrame, 2);
   assert.deepEqual(Object.values(report.evaluation.drag.criteria).map(({ passed }) => passed), [true, true, true]);
   assert.equal(report.evaluation.drag.criteria.geometry.limitPt, 2);
-  assert.equal(report.evaluation.drag.criteria.cadence.limitMs, 35);
+  assert.equal(report.evaluation.drag.criteria.cadence.limitMs, 40);
   assert.strictEqual(report.measurements, raw);
 });
 
@@ -429,19 +434,19 @@ test("drag cadence reads the middle of a source time range, because its bounds s
 
 test("drag cadence is in-gesture and convergence meets both frame and time bounds", { timeout: 1000 }, () => {
   const cadence = metrics();
-  cadence.drag.contentFrames[1].frameTimeMs = 116;
-  cadence.drag.contentFrames[1].timeRange = { lowerMs: 115, upperMs: 117 };
-  cadence.drag.contentFrames[1].captureTimeMs = 117;
-  cadence.drag.contentFrames[2].frameTimeMs = 120;
-  cadence.drag.contentFrames[2].timeRange = { lowerMs: 119, upperMs: 121 };
-  cadence.drag.contentFrames[2].captureTimeMs = 121;
-  cadence.drag.contentFrames[3].frameTimeMs = 140;
-  cadence.drag.contentFrames[3].timeRange = { lowerMs: 139, upperMs: 141 };
-  cadence.drag.contentFrames[3].captureTimeMs = 141;
-  cadence.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 141 };
+  cadence.drag.contentFrames[1].frameTimeMs = 121;
+  cadence.drag.contentFrames[1].timeRange = { lowerMs: 120, upperMs: 122 };
+  cadence.drag.contentFrames[1].captureTimeMs = 122;
+  cadence.drag.contentFrames[2].frameTimeMs = 125;
+  cadence.drag.contentFrames[2].timeRange = { lowerMs: 124, upperMs: 126 };
+  cadence.drag.contentFrames[2].captureTimeMs = 126;
+  cadence.drag.contentFrames[3].frameTimeMs = 145;
+  cadence.drag.contentFrames[3].timeRange = { lowerMs: 144, upperMs: 146 };
+  cadence.drag.contentFrames[3].captureTimeMs = 146;
+  cadence.drag.contentFrames[3].displayCapture = { frameIndex: 6, timeMs: 146 };
   cadence.drag.gestureEndedAtMs = 130;
-  cadence.drag.tailGeometryFrames[1].timeMs = 141;
-  assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 36 ms/);
+  cadence.drag.tailGeometryFrames[1].timeMs = 146;
+  assert.throws(() => assertViewMeasurements(cadence, options), /in-gesture content-frame interval 41 ms/);
 
   const tooLate = metrics();
   tooLate.drag.gestureEndedAtMs = 130;
@@ -492,7 +497,7 @@ test("drag convergence uses the early source-backed paint capture instead of the
   assert.equal(report.evaluation.drag.convergedFrame, 2,
     "the first target-size source frame was captured two frames after gesture end");
   assert.equal(report.evaluation.drag.convergenceMs, 29,
-    "the source-backed paint capture, rather than the later presentation barrier, is within 35 ms");
+    "the source-backed paint capture, rather than the later presentation barrier, is within 40 ms");
   assert.equal(report.evaluation.drag.paintCaptureFrameIndex, 6);
   assert.equal(report.evaluation.drag.paintCaptureTimeMs, 129);
   assert.equal(report.evaluation.drag.paintSourceSequence, 3);
@@ -592,7 +597,7 @@ test("drag convergence rejects internally aligned paint at a different final tar
   assert.throws(() => assertViewMeasurements(raw, options), /source-backed final-target paint capture/);
 });
 
-test("drag convergence rejects a source-backed capture at 35.888 ms even when presentation was earlier", { timeout: 1000 }, () => {
+test("drag convergence rejects a source-backed capture at 40.888 ms even when presentation was earlier", { timeout: 1000 }, () => {
   const raw = metrics();
   raw.drag.recordedFrameCount = 67;
   raw.drag.firstGestureFrameIndex = 58;
@@ -607,7 +612,7 @@ test("drag convergence rejects a source-backed capture at 35.888 ms even when pr
   }));
   raw.drag.tailGeometryFrames = Array.from({ length: 6 }, (_, index) => ({
     frameIndex: 61 + index,
-    timeMs: [120, 135.888, 150, 200, 251, 252][index],
+    timeMs: [120, 140.888, 150, 200, 251, 252][index],
     cardRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
     nativeRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
     contentRectPt: { left: 0, top: 0, right: 120, bottom: 80 },
@@ -620,8 +625,8 @@ test("drag convergence rejects a source-backed capture at 35.888 ms even when pr
     contentFrame(2, 60, 96, 95, 97, 100, 100),
     contentFrame(3, 62, 124, 123, 125, 120, 120),
   ];
-  raw.drag.contentFrames[3].captureTimeMs = 135.888;
-  raw.drag.contentFrames[3].displayCapture = { frameIndex: 62, timeMs: 135.888 };
+  raw.drag.contentFrames[3].captureTimeMs = 140.888;
+  raw.drag.contentFrames[3].displayCapture = { frameIndex: 62, timeMs: 140.888 };
   raw.drag.finalPresentation = { displayedAtMs: 125, targetViewport: { width: 120, height: 80 },
     targetRectPt: { left: 0, top: 0, right: 120, bottom: 80 } };
 
@@ -971,4 +976,171 @@ test("view metrics allow an observed view with no attached child documents", { t
   const value = metrics();
   for (const run of value.reclaim) run.closedViews[0].documents = [];
   assert.doesNotThrow(() => assertViewMeasurements(value, options));
+});
+
+function terminalReferenceProof(frame, plugin = "fixture-view") {
+  const identity = { generation: "1", raster: "2", sequence: 3 };
+  const regionToken = "00112233445566778899aabbccddeeff";
+  return {
+    method: "terminal-reference-exact-pixels-v1", expected: "sh-3.2$", observedText: "sh-3.2$",
+    observedTextSha256: "" ,
+    reference: { plugin, observationRequestId: 1, surface: "reference-surface", name: "view", regionToken,
+      frame: identity, sourceFrame: { ...identity }, rendererFrame: { ...identity }, cursorFrame: { ...identity },
+      issuedFrame: { ...identity }, decodedFrame: { ...identity }, sourceRegionToken: regionToken,
+      issuedRegionToken: regionToken, decodedRegionToken: regionToken,
+      sourceSha256: "a".repeat(64), retainedSourceSha256: "a".repeat(64), sourceByteCount: 4096, glyphCount: 7 },
+    match: { frameIndex: frame.frameIndex, frameCount: frame.frameCount, timeMs: frame.timeMs,
+      span: { row: 0, startColumn: 0, endColumn: 7, viewportLeftEdge: true },
+      cellCount: 8, byteCount: 512, sourceCellsSha256: "b".repeat(64), capturedCellsSha256: "b".repeat(64) },
+  };
+}
+async function terminalMeasurements(plugin = "fixture-view") {
+  const { createHash } = await import("node:crypto");
+  const value = metrics();
+  value.plugin = plugin;
+  for (const frame of [value.warmDisplay.contentFrame, ...value.newProcess.firstDisplays.map(item => item.contentFrame),
+    ...value.layoutDisplay.map(item => item.contentFrame)]) {
+    frame.surface = "reference-surface";
+    frame.proof = terminalReferenceProof(frame, plugin);
+    frame.proof.observedTextSha256 = createHash("sha256").update(frame.proof.observedText).digest("hex");
+  }
+  return value;
+}
+for (const plugin of ["fixture-view", "reference-view"]) {
+  test(`${plugin} metrics accept the discriminated same-frame exact reference proof without OCR fields`, { timeout: 1000 }, async () => {
+    const value = await terminalMeasurements(plugin);
+    assert.doesNotThrow(() => assertViewMeasurements(value, { ...options, plugin, requiredContentProofMethod: "terminal-reference-exact-pixels-v1" }));
+  });
+}
+for (const [label, mutate] of [
+  ["corrupted retained source digest", proof => { proof.reference.sourceSha256 = "c".repeat(64); }],
+  ["missing observation ownership", proof => { delete proof.reference.observationRequestId; }],
+  ["mismatched renderer frame", proof => { proof.reference.rendererFrame.sequence++; }],
+  ["wrong decoded region ownership", proof => { proof.reference.decodedRegionToken = "another-region"; }],
+  ["wrong surface ownership", proof => { proof.reference.surface = "another-surface"; }],
+  ["mismatched captured cell bytes", proof => { proof.match.capturedCellsSha256 = "d".repeat(64); }],
+  ["wrong selected capture index", proof => { proof.match.frameIndex++; }],
+  ["fabricated observed text", proof => { proof.observedText = "unrelated"; }],
+  ["incomplete guard cell span", proof => { proof.match.cellCount--; }],
+]) {
+  test(`terminal metrics refuse ${label}`, { timeout: 1000 }, async () => {
+    const value = await terminalMeasurements();
+    mutate(value.layoutDisplay[0].contentFrame.proof);
+    assert.throws(() => assertViewMeasurements(value, { ...options, plugin: "fixture-view", requiredContentProofMethod: "terminal-reference-exact-pixels-v1" }), /proof|reference|digest|frame|span|cell/i);
+  });
+}
+
+test("terminal metrics refuse the legacy OCR proof even if its text happens to match", { timeout: 1000 }, () => {
+  const value = metrics();
+  value.plugin = "fixture-view";
+  assert.throws(() => assertViewMeasurements(value, { ...options, plugin: "fixture-view", requiredContentProofMethod: "terminal-reference-exact-pixels-v1" }), error => {
+    assert.ok(error instanceof AggregateError, "all three terminal proof categories must refuse the legacy form");
+    assert.deepEqual(error.errors.map(item => item.message.slice(0, item.message.indexOf(":"))),
+      ["warmDisplay", "newProcess", "layoutDisplay"]);
+    for (const item of error.errors) {
+      assert.ok(item.cause instanceof Error, "category failure must preserve its structured cause");
+      assert.match(item.cause.message, /\.proof\.method/);
+      assert.ok(item.cause.message.includes("terminal-reference-exact-pixels-v1"));
+    }
+    return true;
+  });
+});
+
+
+function exactMethodFailures(error) {
+  assert.ok(error instanceof AggregateError, "all three content categories must reject the missing required method");
+  assert.deepEqual(error.errors.map(item => item.message.slice(0, item.message.indexOf(":"))),
+    ["warmDisplay", "newProcess", "layoutDisplay"]);
+  for (const item of error.errors) {
+    assert.ok(item.cause instanceof Error, "category failure must preserve its structured cause");
+    assert.match(item.cause.message, /\.proof\.method/);
+    assert.ok(item.cause.message.includes("terminal-reference-exact-pixels-v1"));
+  }
+  return true;
+}
+
+test("a caller-required exact reference method rejects legacy text proof for an opaque view id", () => {
+  assert.throws(() => assertViewMeasurements(metrics(), {
+    ...options, requiredContentProofMethod: "terminal-reference-exact-pixels-v1",
+  }), exactMethodFailures);
+});
+
+test("a caller-required exact reference method accepts its complete proof for an opaque view id", async () => {
+  const value = await terminalMeasurements(options.plugin);
+  assert.doesNotThrow(() => assertViewMeasurements(value, {
+    ...options, requiredContentProofMethod: "terminal-reference-exact-pixels-v1",
+  }));
+});
+
+
+test("view metric runner forwards the caller-required method and rejects legacy text proof", { timeout: 1000 }, async t => {
+  await assert.rejects(runViewMeasurements({ diagnostic() {} }, {
+    app: { name: "wailsv3", configDir: configDir(t) }, get: async () => ({ refreshRate: 120 }),
+  }, {
+    plugin: options.plugin, baselinesMs: { wailsv3: 10, tauriv2: 20 },
+    requiredContentProofMethod: "terminal-reference-exact-pixels-v1", collect: async () => metrics(),
+  }), exactMethodFailures);
+});
+
+
+function cadenceBoundary(intervalMs) {
+  const value = metrics(), drag = value.drag;
+  drag.gestureEndedAtMs = 150;
+  drag.contentFrames = [
+    contentFrame(0, 2, 80, 79, 81, 100, 100),
+    contentFrame(1, 3, 80 + intervalMs, 79 + intervalMs, 81 + intervalMs, 100, 110),
+    contentFrame(2, 4, 88 + intervalMs, 87 + intervalMs, 89 + intervalMs, 100, 120),
+    contentFrame(3, 6, 170, 169, 171, 120, 120),
+    contentFrame(4, 9, 250, 249, 251, 120, 120),
+  ];
+  for (const frame of drag.contentFrames) {
+    if (frame.displayCapture?.frameIndex === 6) frame.displayCapture.timeMs = 171;
+  }
+  drag.geometryFrames.forEach((frame, index) => { frame.timeMs = drag.contentFrames[index].captureTimeMs; });
+  [160, 171, 180, 200, 251].forEach((time, index) => { drag.tailGeometryFrames[index].timeMs = time; });
+  drag.finalPresentation.displayedAtMs = 171;
+  return value;
+}
+function convergenceBoundary(delayMs) {
+  const value = metrics(), time = value.drag.gestureEndedAtMs + delayMs;
+  value.drag.tailGeometryFrames[1].timeMs = time;
+  for (const frame of value.drag.contentFrames) {
+    if (frame.displayCapture?.frameIndex === 6) frame.displayCapture.timeMs = time;
+  }
+  value.drag.finalPresentation.displayedAtMs = time;
+  return value;
+}
+
+test("the declared drag cadence accepts exactly 40 ms", () => {
+  const result = assertViewMeasurements(cadenceBoundary(40), options).evaluation.drag.criteria;
+  assert.deepEqual(result.cadence, { passed: true, maxIntervalMs: 40, limitMs: 40 });
+  assert.equal(result.convergence.passed, true);
+  assert.equal(result.geometry.passed, true);
+});
+test("the declared drag cadence rejects above 40 ms", () => {
+  assert.throws(() => assertViewMeasurements(cadenceBoundary(40.001), options), error => {
+    assert.equal(error.criteria.cadence.passed, false);
+    assert.equal(error.criteria.cadence.limitMs, 40);
+    assert.ok(error.criteria.cadence.maxIntervalMs > 40);
+    assert.equal(error.criteria.convergence.passed, true);
+    assert.equal(error.criteria.geometry.passed, true);
+    return true;
+  });
+});
+test("the declared drag convergence accepts exactly 40 ms", () => {
+  const result = assertViewMeasurements(convergenceBoundary(40), options).evaluation.drag.criteria;
+  assert.equal(result.convergence.passed, true);
+  assert.equal(result.convergence.convergenceMs, 40);
+  assert.equal(result.convergence.timeLimitMs, 40);
+  assert.equal(result.cadence.passed, true);
+  assert.equal(result.geometry.passed, true);
+});
+test("the declared drag convergence rejects above 40 ms", () => {
+  assert.throws(() => assertViewMeasurements(convergenceBoundary(40.001), options), error => {
+    assert.equal(error.criteria.convergence.passed, false);
+    assert.equal(error.criteria.cadence.passed, true);
+    assert.equal(error.criteria.geometry.passed, true);
+    assert.match(error.message, /within 40 ms/);
+    return true;
+  });
 });

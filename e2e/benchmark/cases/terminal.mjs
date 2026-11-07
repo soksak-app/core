@@ -10,7 +10,9 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTim
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
   rootNativePlacementBeforeCapture, selectOneShotViewSourceFrame,
   TAB_PLACEMENT, waitForViewReadiness, withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
-import { firstContentFrame } from "../../view-first-content.mjs";
+import { captureTerminalReference } from "../../terminal-reference-acquisition.mjs";
+import { firstTerminalReferenceLayoutFrame, createTerminalReferenceProof } from "../../terminal-reference-content.mjs";
+import { readTerminalRecordedFrames } from "../../terminal-recorded-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE }
   from "../../view-frame-geometry.mjs";
@@ -22,11 +24,6 @@ import { B3_MEASUREMENTS, B3_SETTINGS } from "../measurements.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance,
   pointerLag, shownTimes, transactionCadence } from "../../drag-measurement.mjs";
 
-
-/** Uses the fixed check-shell prompt as pixel evidence for the initial terminal content. */
-export async function terminalFirstContentFrame({ captured, rect, directory, recognizeFrame }) {
-  return firstContentFrame({ captured, rect, expected: "sh-3.2$", language: "en-US", directory, recognizeFrame });
-}
 
 /** The plugins whose tab is a terminal view: `terminal` and `term` declare the same statuses and commands under their own id. */
 const TERMINAL_PLUGINS = ["terminal", "term"];
@@ -52,6 +49,7 @@ export function terminalViewDescriptorOf(plugin) {
     placement: TAB_PLACEMENT,
     params: undefined,
     expectedContent: "sh-3.2$",
+    requiredContentProofMethod: "terminal-reference-exact-pixels-v1",
     language: "en-US",
     readinessStatus: `${plugin}.session`,
     readiness: async (s, surface) => {
@@ -224,6 +222,8 @@ function frameAtOrAfter(captured, timeMs, description) {
 }
 
 async function terminalLayoutObservation(t, s, descriptor, surface, card, directory, cornerRadiusPt) {
+  // This measurement owns the requested card/surface before any reference exists.
+  const target = { card, surface };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
     const recording = await s.record();
     const grid = await s.get("core.grid");
@@ -259,21 +259,28 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
   const measured = decoded.map((frame) => measureTerminalLayoutFrame(frame, { cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const captureAfter = Math.max(displayed, source.timeRange.upperMs);
-  const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= captureAfter);
-  assert.ok(candidates.length > 0, `terminal layout has no declared-slot pixel match at or after ${captureAfter} ms`);
-  const proof = await firstContentFrame({ captured: candidates.map((index) => decoded[index]),
-    rect: { x: root.frame.x, y: root.frame.y, w: root.frame.width, h: root.frame.height },
-    expected: descriptor.expectedContent, language: descriptor.language, directory: capture.frames });
-  const frameIndex = candidates[proof.frameIndex];
+  const normalFrames = readTerminalRecordedFrames(capture, paths, decoded);
+  // Acquire only after the normal measured recording has ended. A layout
+  // anchor has the same prompt in its OLD measured slot, not absent content.
+  const reference = await captureTerminalReference(t, s, { plugin: descriptor.plugin, surface,
+    expected: { text: descriptor.expectedContent, row: 0, startColumn: 0,
+      guards: [{ row: 0, edge: "left", column: 0 }, { row: 0, column: descriptor.expectedContent.length }] },
+    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 } });
+  // nativeRectPt is independently pixel-measured in every normal frame. No
+  // reference token, generation, raster or surface is copied into those frames.
+  const proof = firstTerminalReferenceLayoutFrame({ reference, target, frames: normalFrames,
+    geometryFrames: measured, beforeChangeTimeMs, slotInsetsPt, notBeforeTimeMs: captureAfter });
+  const frameIndex = proof.frameIndex;
   const geometry = measured[frameIndex];
   return {
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: decoded.length,
       timeMs: decoded[transition.changeFrameIndex].time },
-    contentFrame: { frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time,
+    contentFrame: { surface, frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time,
       requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
       width: source.width, height: source.height, nativePlacement,
       surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
-      proof: proof.proof },
+      proof: createTerminalReferenceProof(reference, normalFrames[frameIndex].capture, proof.matchedRectPt,
+        { surface, frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time }) },
     sourceFrame: source,
     initialGeometry: { frameIndex, timeMs: decoded[frameIndex].time, cardRectPt: geometry.cardRectPt,
       nativeRectPt: geometry.nativeRectPt, slotInsetsPt },
@@ -560,6 +567,7 @@ export async function runTerminalViewBenchmark(t, app, plugin, baselinesMs) {
     const result = await runViewMeasurements(t, s, {
       plugin,
       baselinesMs,
+      requiredContentProofMethod: descriptor.requiredContentProofMethod,
       collect: () => collectTerminalViewMeasurements(t, s, descriptor, app.configDir),
     });
     const directory = join(app.configDir, "logs", `${plugin}-view-metrics`);

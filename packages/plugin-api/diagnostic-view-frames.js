@@ -1,5 +1,133 @@
 // Diagnostic observation of the view document's content-size update after ResizeObserver and the next animation frame.
 
+/** A plugin-owned WebKit DOM renderer reference. Native snapshotting owns the
+ * pixels; this provider owns the actual visible text/layout and its lease. */
+export function createRenderedDocumentReferenceProvider({ root, provider, view = root?.ownerDocument?.defaultView }) {
+  const document = root?.ownerDocument;
+  if (!root || typeof root.getBoundingClientRect !== "function" || !document?.createTreeWalker
+    || !document?.createRange || !document.fonts?.ready || typeof view?.requestAnimationFrame !== "function"
+    || typeof view?.cancelAnimationFrame !== "function" || typeof view?.MutationObserver !== "function"
+    || typeof view?.ResizeObserver !== "function" || typeof provider !== "string" || provider === "") {
+    throw new TypeError("rendered document reference requires an actual renderer root, fonts, observers and animation-frame owner");
+  }
+  let disposed = false;
+  let revision = 1;
+  let lease = null;
+  let pendingFrame = null;
+  let rejectFrame = null;
+  const changed = () => { revision++; };
+  const mutations = new view.MutationObserver(changed);
+  const resize = new view.ResizeObserver(changed);
+  mutations.observe(root, { subtree: true, childList: true, characterData: true, attributes: true });
+  resize.observe(root);
+  document.fonts.addEventListener("loading", changed);
+  document.fonts.addEventListener("loadingdone", changed);
+  document.fonts.addEventListener("loadingerror", changed);
+  const params = (value, allowed) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)
+      || Object.keys(value).some(key => !allowed.includes(key))) throw new TypeError("rendered reference has undeclared parameters, including expected text");
+    if (!Number.isSafeInteger(value.requestId) || value.requestId <= 0) throw new TypeError("rendered reference requestId must be positive");
+  };
+  const rectangle = rect => {
+    const result = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    if (!Object.values(result).every(Number.isFinite)) throw new Error("actual renderer reference geometry is invalid");
+    return result;
+  };
+  const read = () => {
+    if (disposed || !root.isConnected) throw new Error("rendered reference root is disposed or disconnected");
+    if (mutations.takeRecords().length) revision++;
+    const runs = [];
+    const walker = document.createTreeWalker(root, view.NodeFilter.SHOW_TEXT);
+    for (let node; (node = walker.nextNode());) {
+      const parent = node.parentElement;
+      if (!parent) continue;
+      const style = view.getComputedStyle(parent);
+      if (style.display === "none" || style.visibility !== "visible" || Number(style.opacity) === 0) continue;
+      const text = node.textContent;
+      if (typeof text !== "string" || !text.trim()) continue;
+      const range = document.createRange();
+      const glyphs = [];
+      for (const { segment: grapheme, index } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)) {
+        range.setStart(node, index);
+        range.setEnd(node, index + grapheme.length);
+        const rect = rectangle(range.getBoundingClientRect());
+        if (rect.width <= 0 || rect.height <= 0) continue;
+        glyphs.push({ grapheme, rect });
+      }
+      range.detach();
+      if (glyphs.length) runs.push({ text: glyphs.map(glyph => glyph.grapheme).join(""), glyphs,
+        foreground: style.color, background: style.backgroundColor,
+        font: { family: style.fontFamily, size: style.fontSize, weight: style.fontWeight, style: style.fontStyle } });
+    }
+    return { rect: rectangle(root.getBoundingClientRect()), glyphRuns: runs,
+      viewport: { width: view.innerWidth, height: view.innerHeight } };
+  };
+  const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+  return Object.freeze({
+    version: 1,
+    async observe(request) {
+      params(request, ["requestId"]);
+      if (disposed) throw new Error("rendered reference provider is disposed");
+      if (lease) throw new Error("rendered reference request is already pending or leased");
+      const owned = { requestId: request.requestId };
+      lease = owned;
+      const cancelled = new Promise((_resolve, reject) => {
+        owned.cancel = () => reject(new Error("rendered reference owner closed or released before observation"));
+      });
+      try {
+        await Promise.race([document.fonts.ready, cancelled]);
+        if (disposed || lease !== owned) throw new Error("rendered reference owner closed before observation");
+        await Promise.race([new Promise((resolve, reject) => {
+          rejectFrame = reject;
+          let delivered = false;
+          const id = view.requestAnimationFrame(() => { delivered = true; pendingFrame = null; rejectFrame = null; resolve(); });
+          if (!delivered) pendingFrame = id;
+        }), cancelled]);
+        if (disposed || lease !== owned) throw new Error("rendered reference owner closed or released before observation");
+        const observed = read();
+        const actualRevision = { kind: "dom-layout", value: revision };
+        Object.assign(owned, { revision: actualRevision, observed });
+        return { schemaVersion: 1, sourceKind: "native-document", provider, requestId: request.requestId,
+          revision: { ...actualRevision }, documentTimeOriginMs: view.performance.timeOrigin, ...structuredClone(observed) };
+      } catch (error) {
+        if (lease === owned) lease = null;
+        throw error;
+      }
+    },
+    async validate(request) {
+      params(request, ["requestId", "revision"]);
+      if (disposed || !lease || lease.requestId !== request.requestId || !same(lease.revision, request.revision)) return false;
+      const observed = read();
+      return lease.revision.value === revision && same(lease.observed, observed);
+    },
+    async release(request) {
+      params(request, ["requestId"]);
+      if (!lease || lease.requestId !== request.requestId) throw new Error("rendered reference release belongs to another request owner");
+      const owned = lease;
+      lease = null;
+      if (!owned.observed) {
+        owned.cancel();
+        if (pendingFrame !== null) view.cancelAnimationFrame(pendingFrame);
+        pendingFrame = null; rejectFrame = null;
+      }
+    },
+    dispose() {
+      if (disposed) return;
+      const owned = lease;
+      disposed = true; lease = null;
+      if (owned && !owned.observed) owned.cancel();
+      mutations.disconnect(); resize.disconnect();
+      document.fonts.removeEventListener("loading", changed);
+      document.fonts.removeEventListener("loadingdone", changed);
+      document.fonts.removeEventListener("loadingerror", changed);
+      if (pendingFrame !== null) view.cancelAnimationFrame(pendingFrame);
+      pendingFrame = null;
+      rejectFrame?.(new Error("rendered reference provider is disposed"));
+      rejectFrame = null;
+    },
+  });
+}
+
 /**
  * Observes the actual view document root for one explicitly started diagnostic run.
  * The record describes the root size available after the next animation frame; it does not claim physical display presentation.

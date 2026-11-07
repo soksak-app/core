@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mjs";
 import { firstContentFrame, firstDifferentContentFrame } from "./view-first-content.mjs";
+import { verifyTerminalRecordedContent } from "./terminal-recorded-content.mjs";
+import { declaredSlotInsets, effectiveCardCornerRadiusPt } from "./view-frame-geometry.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
   viewRootProcessPids } from "./view-process-footprint.mjs";
@@ -603,6 +606,28 @@ export async function monotonicTimeMs(s) {
   return { monoNs: value.mono_ns, timeMs: Number(BigInt(value.mono_ns)) / 1_000_000 };
 }
 
+/** Admits an actual committed capture after the scheduled refresh boundary.
+ * Final .bgra files are atomically renamed by the native writer; .partial files
+ * are excluded by frames(). The existing bounded watcher owns subscription and
+ * cleanup, and readFrame verifies the complete header, compressed bytes and CRC. */
+export async function waitForRecordedViewAnchor(recording, afterMs, timeoutMs = 10000) {
+  assert.ok(typeof recording?.frames === "string" && recording.frames, "anchor admission requires its public recording directory");
+  assert.ok(Number.isFinite(afterMs) && afterMs >= 0, "anchor capture boundary is invalid");
+  assert.ok(Number.isFinite(timeoutMs) && timeoutMs > 0, "anchor capture watch deadline is invalid");
+  const checked = new Set();
+  let latestTimeMs = null;
+  return untilFolderState(recording.frames, () => {
+    for (const file of frames(recording.frames)) {
+      if (checked.has(file)) continue;
+      const frame = readFrame(file);
+      checked.add(file);
+      latestTimeMs = frame.time;
+      if (frame.time >= afterMs) return { file, timeMs: frame.time, afterMs };
+    }
+    return undefined;
+  }, timeoutMs, () => new Error(`anchor capture admission expired: ${JSON.stringify({ afterMs, latestTimeMs, directory: recording.frames })}`));
+}
+
 /** Waits for a view's declared status exposure before reading that status. */
 export async function waitForViewReadiness(s, surface, descriptor) {
   assert.ok(typeof surface === "string" && surface.length > 0, "view readiness requires a surface identity");
@@ -635,6 +660,23 @@ async function presentDifferentPluginAnchor(s, { card, plugin }) {
   const row = host.documents.find((document) => document.surface === anchor.id && document.document === "");
   assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
     `different-plugin anchor ${anchor.id} has no visible native view frame`);
+  if (plugin === "terminal" || plugin === "term") {
+    // Capture the public card and outer-root slot declaration BEFORE opening
+    // the new terminal. These values are a measurement plan, not old frame IDs.
+    const declaredGrid = await s.get("core.grid");
+    const declaredCard = declaredGrid.cards.find(item => item.id === card);
+    assert.ok(declaredCard && declaredGrid.plane, "terminal recording has no declared target card geometry");
+    const surfaces = await s.get("core.surfaces");
+    const slotInsetsPt = declaredSlotInsets({ grid: declaredGrid, surfaces, card, surface: anchor.id });
+    const values = (await s.get("core.settings")).values;
+    return { tab: anchor.id, displayed,
+      rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height },
+      slotPlan: { card, slotInsetsPt, nativeRectPt: { ...row.frame },
+        cardRect: { x: declaredGrid.plane.x + declaredCard.x, y: declaredGrid.plane.y + declaredCard.y,
+          width: declaredCard.w, height: declaredCard.h },
+        geometry: { cornerRadiusPt: effectiveCardCornerRadiusPt(values), cardColor: [25, 27, 36],
+          planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], colorTolerance: 3 } } };
+  }
   const menu = await s.get("host.menu");
   const language = HOST_OCR_LANGUAGES[menu?.language];
   assert.ok(language, `host.menu reported an unsupported language for anchor OCR: ${JSON.stringify(menu?.language)}`);
@@ -667,6 +709,9 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
   let capture;
   try {
     const anchor = await presentDifferentPluginAnchor(s, { card, plugin });
+    if (plugin === "terminal" || plugin === "term") {
+      anchor.captureAdmission = await waitForRecordedViewAnchor(recording, anchor.displayed);
+    }
     const requestClock = await monotonicTimeMs(s);
     const tab = await placement.open(s, { card, plugin, params });
     s.cleanup(async () => {
@@ -706,6 +751,11 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
       verifyContent: async () => {
         if (contentProof) return contentProof;
         try {
+          if (plugin === "terminal" || plugin === "term") {
+            contentProof = await verifyTerminalRecordedContent(t, s,
+              { plugin, surface: tab, card, expectedContent, capture, paths, anchor, targetRequestAtMs: requestClock.timeMs });
+            return contentProof;
+          }
           const decoded = paths.map(readFrame);
           const anchorContentFrame = await firstDifferentContentFrame({ captured: decoded, rect: anchor.rect,
             expected: expectedContent, language: anchor.language, directory: capture.frames, recognizeFrame });
@@ -888,11 +938,20 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
 }
 
 /** Runs the three initial-only process-group reclamation samples for opened view surfaces. */
+// Live reference acquisition must finish while the recorded target still
+// exists, before any footprint baseline or close/exit measurement begins.
+export async function closeVerifiedRecordedViewGroup(views, closeGroup) {
+  assert.ok(Array.isArray(views) && views.length > 0, "reclaim reference admission requires recorded views");
+  assert.equal(typeof closeGroup, "function", "reclaim requires its existing measured close operation");
+  for (const view of views) await verifyOpenedViewContent(view);
+  return closeGroup();
+}
+
 export async function collectViewReclaimMeasurements(t, s, descriptor, views, evidence = { events: [], recordings: [] }) {
   assert.ok(Array.isArray(views) && views.length > 0, "reclaim requires opened view evidence");
   const placement = descriptorPlacement(descriptor);
   const reclaim = [];
-  const closeInitial = async (views) => {
+  const closeInitial = async (views) => closeVerifiedRecordedViewGroup(views, async () => {
     const host = await s.get("host.window");
     const selectedPids = views.flatMap(({ processGroupPids }) => processGroupPids);
     const surfaces = viewProcessSurfaces(host, [...new Set(selectedPids)].sort((a, b) => a - b));
@@ -917,7 +976,7 @@ export async function collectViewReclaimMeasurements(t, s, descriptor, views, ev
         unstartedDocuments: inventory.unstartedDocuments });
     }
     return closeViewGroup(t, s, { placement, surfaces, beforeProcesses, closedViews });
-  };
+  });
   reclaim.push(await closeInitial(views));
   for (let index = 1; index < 3; index++) {
     const grid = await s.get("core.grid");
@@ -926,7 +985,6 @@ export async function collectViewReclaimMeasurements(t, s, descriptor, views, ev
     const view = await openRecordedView(t, s, { card, ...descriptor, deferContentVerification: true });
     evidence.events.push(...view.events);
     const sample = await closeInitial([view]);
-    await verifyOpenedViewContent(view);
     evidence.recordings.push(view.recording);
     reclaim.push(sample);
   }

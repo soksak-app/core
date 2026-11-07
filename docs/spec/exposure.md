@@ -22,6 +22,8 @@ A plugin declares its entries in `plugin.json` under `exposes` ([plugins](plugin
 
 Registration of an undeclared name fails. A request for a declared name that has no registration returns an error.
 
+Status observations also carry ownership of artifacts created by their public operations. Opening the debug view exposes the exact host-created still PNG paths in `core.debug.captures`; the page and native workbench follow the same record/reset contract ([debug](debug.md)). Automation registers those declared capture directories with its recording lifecycle rather than inferring them from private files or disabling failure-evidence auditing.
+
 ### Names
 
 A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id. Names use lowercase letters, digits, dots, and hyphens.

@@ -27,7 +27,7 @@ function fixture(plugin = "terminal") {
     plugin, ...region,
     screen: { frame, rows: [[{ width: 1 }, { width: 1 }, { width: 1 }],
       [{ width: 1 }, { ch: "A", width: 1 }, { width: 1 }]] },
-    cursor: { frame, render, row: 1, col: 2, focused: true, preedit: "", shape: "beam", visible: false, blinkVisible: false },
+    cursor: { frame, render, row: 0, col: 2, focused: true, preedit: "", shape: "beam", visible: false, blinkVisible: false },
     source: { frame, regionToken: region.regionToken, render, raster: {
       width: 12, height: 12, bytesPerRow: 48, data: pixels, format: "BGRA8", alpha: "premultiplied-first",
       colorSpace: "sRGB", scale: 1, screenBounds: { x: 0, y: 0, width: 12, height: 12 },
@@ -151,3 +151,42 @@ for (const [name, mutate] of invalid) {
       /reference|frame|region|glyph|guard|cursor|geometry|anchor|QR|screen/i.test(error.message));
   });
 }
+
+test("startup uses its pre-open native applied anchor rectangle instead of mixing fractional CSS insets with measured backing pixels", { timeout: 5000 }, async () => {
+  const input = fixture();
+  const reference = input.reference;
+  // Actual failed Wails contract: source height 519 backing pixels, while
+  // declared CSS inset arithmetic produced 518.8000000000001. Native applied
+  // placement is already fitted to backing pixels before the target opens.
+  const height = 519;
+  const extend = (old, stride) => {
+    const bytes = new Uint8Array(stride * height).fill(255);
+    bytes.set(old);
+    return bytes;
+  };
+  reference.source.raster.data = extend(reference.source.raster.data, 48);
+  reference.source.raster.height = height;
+  reference.source.raster.screenBounds.height = height;
+  reference.source.render.pixel.height = height;
+  reference.region.rectPt.height = height;
+  reference.issuedArtifact.height = height;
+  reference.issuedArtifact.byteCount = reference.source.raster.data.length;
+  const capture = { ...reference.capture, height, data: extend(reference.capture.data, 96),
+    screenRect: { ...reference.capture.screenRect, height }, contentRect: { ...reference.capture.contentRect, height } };
+  reference.capture = capture;
+  const frames = [
+    { capture: { ...capture, data: new Uint8Array(capture.data.length).fill(255) } },
+    { capture },
+  ];
+  const geometryFrames = frames.map((_, index) => ({ timeMs: index + 1,
+    cardRectPt: { left: 0, top: 0, right: 12, bottom: height } }));
+  const { firstTerminalReferenceStartFrame } = await import("../terminal-reference-content.mjs");
+  const result = firstTerminalReferenceStartFrame({ reference,
+    target: { card: "predeclared-card", surface: reference.surface }, frames, geometryFrames,
+    slotInsetsPt: { left: 0, top: 0, right: 0, bottom: 0.2 },
+    anchorNativeRectPt: { x: 0, y: 0, width: 12, height },
+    anchorPresentedAtMs: 0.5, targetRequestAtMs: 1.5 });
+  assert.equal(result.anchorFrameIndex, 0);
+  assert.equal(result.frameIndex, 1);
+  assert.equal(result.proof, "verified-terminal-reference-start-exact-pixels");
+});

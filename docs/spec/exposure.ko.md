@@ -8,6 +8,8 @@
 
 ## 선언
 
+공개 작업이 만든 artifact의 소유권도 status 관찰로 전달한다. Debug 열기는 host가 실제 만든 정지 PNG 경로를 `core.debug.captures`로 공개하며 page와 native workbench가 같은 기록·초기화 계약을 따른다([debug](debug.ko.md)). 자동화는 private 파일로 경로를 추측하거나 실패 증거 감사를 끄는 대신 선언된 capture 디렉터리를 recording 생명주기에 등록한다.
+
 플러그인은 `plugin.json`의 `exposes`에 항목을 선언한다([플러그인](plugins.ko.md)). 코어는 같은 형식으로 `packages/workbench/exposure.json`에 항목을 선언한다.
 
 ```json

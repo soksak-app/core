@@ -219,6 +219,7 @@ type debugStateShown struct {
 type debugViewState struct {
 	open      bool
 	recorded  *string
+	captures  []string
 	entries   []DebugEntry
 	viewing   *DebugShown
 	timeline  *debugTimelineState
@@ -434,11 +435,13 @@ func (s *Shell) openDebug(answer func(any, error)) {
 		if err != nil {
 			d.fail("record", err)
 		} else if recorded, err := decode[struct {
-			Path string `json:"path"`
+			Path     string   `json:"path"`
+			Captures []string `json:"captures"`
 		}](value); err != nil {
 			d.fail("record", err)
 		} else {
 			d.recorded = &recorded.Path
+			d.captures = slices.Clone(recorded.Captures)
 		}
 		s.readDebugFiles(func(value any, err error) {
 			if err == nil {
@@ -1091,6 +1094,7 @@ type debugViewingStatus struct {
 type debugStatus struct {
 	Open      bool                 `json:"open"`
 	Recorded  *string              `json:"recorded"`
+	Captures  []string             `json:"captures"`
 	Entries   []DebugEntry         `json:"entries"`
 	Viewing   *debugViewingStatus  `json:"viewing"`
 	Timeline  *debugTimelineStatus `json:"timeline"`
@@ -1102,7 +1106,10 @@ type debugStatus struct {
 
 func (s *Shell) debugStatusOf() debugStatus {
 	d := &s.debugView
-	status := debugStatus{Open: d.open, Recorded: d.recorded, Entries: d.entries, Scroll: d.scroll.Y, Operation: d.operation, Error: d.failure}
+	status := debugStatus{Open: d.open, Recorded: d.recorded, Captures: slices.Clone(d.captures), Entries: d.entries, Scroll: d.scroll.Y, Operation: d.operation, Error: d.failure}
+	if status.Captures == nil {
+		status.Captures = []string{}
+	}
 	if status.Entries == nil {
 		status.Entries = []DebugEntry{}
 	}

@@ -12,7 +12,7 @@ const FILES = {
   "logs/host-a.crash": "fatal error\n",
 };
 
-async function openView(t, files = FILES) {
+async function openView(t, files = FILES, record = async () => ({ path: "logs/state-2.json" })) {
   const dom = new JSDOM("<body><div id=plane></div></body>");
   globalThis.document = dom.window.document;
   globalThis.CSS = { escape: (value) => value };
@@ -20,7 +20,7 @@ async function openView(t, files = FILES) {
   t.mock.module("../host.js", { namedExports: {
     native: false,
     debug: {
-      record: async () => ({ path: "logs/state-2.json" }),
+      record,
       files: async () => Object.entries(files).map(([path, text]) => ({ path, size: text.length, modified: 1 })),
       read: async ({ path }) => {
         if (!(path in files)) throw new Error(`debug: ${path} is not a file`);
@@ -58,6 +58,36 @@ async function openView(t, files = FILES) {
 
 const linesText = () => [...document.querySelectorAll('[data-expose="core.debug.state.line"]')].map((el) => el.textContent);
 const diffText = () => [...document.querySelectorAll('[data-expose="core.debug.state.difference"]')].map((el) => el.textContent);
+
+test("debug status exposes exact host-owned captures while fixture input changes only the listing", async t => {
+  const captures = ["/config/logs/captures/still-main-1/window.png", "/config/logs/captures/still-project-2/window.png"];
+  let calls = 0;
+  const { ui } = await openView(t, FILES, async () => { calls++; return { path: "logs/state-2.json", captures }; });
+  assert.deepEqual(ui.debugState().captures, captures);
+  ui.setDebugFixtureEntries([{ path: "logs/fixture.log", size: 1, modified: 1 }]);
+  await ui.openDebug();
+  assert.equal(calls, 2, "the listing fixture must not suppress the real recording call");
+  assert.deepEqual(ui.debugState().captures, captures);
+  assert.deepEqual(ui.debugState().entries.map(entry => entry.path), ["logs/fixture.log"]);
+});
+
+test("a new debug record clears previous capture ownership when the host returns none or fails", async t => {
+  let reply = { path: "logs/state-2.json", captures: ["/config/logs/captures/still-main-1/window.png"] };
+  const { ui } = await openView(t, FILES, async () => {
+    if (reply instanceof Error) throw reply;
+    return reply;
+  });
+  assert.deepEqual(ui.debugState().captures, reply.captures);
+  ui.closeDebug();
+  reply = { path: "logs/state-2.json" };
+  await ui.openDebug();
+  assert.deepEqual(ui.debugState().captures, []);
+  ui.closeDebug();
+  reply = new Error("recording failed");
+  await ui.openDebug();
+  assert.deepEqual(ui.debugState().captures, []);
+  assert.match(ui.debugState().error, /record: recording failed/);
+});
 
 test("the file list holds the raw stderr and crash files with a view button, and a state button only on state files", async (t) => {
   const { ui } = await openView(t);

@@ -42,6 +42,8 @@ let stateDiffs = null;
 
 /** The path of the state file that opening wrote, or null. */
 let recorded = null;
+/** The exact still paths returned by the current opening's host recording. */
+let captures = [];
 /** The listed files of logs/. */
 let entries = [];
 /** The file that the view shows, {path, size, truncated}, or null while the list is shown. */
@@ -93,7 +95,7 @@ function stateStatus() {
 
 /** The status core.debug. */
 export function debugState() {
-  return { open: card !== null, recorded, entries, viewing, timeline: timelineState(), state: stateStatus(), scroll: debugScroll(), operation, error: failure };
+  return { open: card !== null, recorded, captures: [...captures], entries, viewing, timeline: timelineState(), state: stateStatus(), scroll: debugScroll(), operation, error: failure };
 }
 
 /** A size in bytes as text. */
@@ -435,6 +437,7 @@ export async function openDebug() {
   timeline = null;
   stateShown = null;
   recorded = null;
+  captures = [];
   entries = [];
   operation = null;
   failure = null;
@@ -449,7 +452,11 @@ export async function openDebug() {
   }
   draw();
   try {
-    recorded = (await debug.record(await pageStatuses())).path;
+    const record = await debug.record(await pageStatuses());
+    recorded = record.path;
+    // Non-diagnostic hosts emit no captures field. An actual returned array is
+    // copied without discovering files or inferring a path from the state file.
+    captures = record.captures === undefined ? [] : [...record.captures];
   } catch (reason) {
     fail("record", reason);
   }

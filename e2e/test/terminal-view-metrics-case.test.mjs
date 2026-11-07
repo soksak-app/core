@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { findFirstChangedSlotFrame } from "../view-frame-geometry.mjs";
-import { terminalDragGeometryFrame, terminalFirstContentFrame, terminalSourceContentFrame,
+import { terminalDragGeometryFrame, terminalSourceContentFrame,
   terminalShellSettings, terminalViewDescriptor, terminalViewDescriptorOf, writeTerminalDragLayouts, measureTerminalLayoutFrame,
   setTerminalGeometryBackground, terminalRasterTargetRectPt, TERMINAL_GEOMETRY_BACKGROUND }
   from "../benchmark/cases/terminal.mjs";
@@ -184,24 +184,8 @@ test("terminal convergence target comes from the visible native raster region", 
   assert.throws(() => terminalRasterTargetRectPt({ regions: [] }, "surface-a"), /exactly one native raster region/);
 });
 
-test("terminal first-content evidence requires the fixed initial shell prompt in captured pixels", { timeout: 5000 }, async () => {
-  const result = await terminalFirstContentFrame({
-    captured: [{ time: 10 }, { time: 20 }],
-    rect: { x: 1, y: 2, w: 30, h: 10 },
-    directory: "/tmp/terminal-capture",
-    recognizeFrame: async (_frame, rect, language) => {
-      assert.deepEqual(rect, { x: 1, y: 2, w: 30, h: 10 });
-      assert.equal(language, "en-US");
-      return { lines: [language === "en-US" ? "sh-3.2$" : "wrong language"] };
-    },
-  });
-  assert.deepEqual(result, {
-    frameIndex: 0,
-    frameCount: 2,
-    timeMs: 10,
-    proof: { expected: "sh-3.2$", actual: "sh-3.2$", lines: ["sh-3.2$"] },
-  });
-});
+// The removed OCR-only terminalFirstContentFrame owner is replaced by the
+// real terminal/term reference recordings in terminal-reference-start.test.mjs.
 
 test("the term view descriptor reads the statuses and commands of the term plugin", { timeout: 5000 }, async () => {
   const term = terminalViewDescriptorOf("term");
@@ -210,6 +194,8 @@ test("the term view descriptor reads the statuses and commands of the term plugi
   assert.equal(term.placement, TAB_PLACEMENT);
   assert.equal(terminalViewDescriptor.placement, TAB_PLACEMENT);
   assert.equal(term.expectedContent, "sh-3.2$");
+  assert.equal(term.requiredContentProofMethod, "terminal-reference-exact-pixels-v1");
+  assert.equal(terminalViewDescriptor.requiredContentProofMethod, "terminal-reference-exact-pixels-v1");
   const calls = [];
   const session = {
     async run(name, params, surface) {
@@ -233,4 +219,20 @@ test("the shell of a terminal view is the check shell of its plugin", { timeout:
   assert.deepEqual(Object.keys(terminalShellSettings("term")), ["term.shell"]);
   assert.deepEqual(terminalShellSettings("terminal"), {});
   assert.throws(() => terminalShellSettings("browser"), new Error("a terminal view is a view of the terminal or the term plugin, not browser"));
+});
+
+test("terminal card placement is measured in each frame independently of terminal content colors", { timeout: 5000 }, async () => {
+  const { measureViewCardFrameGeometry } = await import("../view-frame-geometry.mjs");
+  assert.equal(typeof measureViewCardFrameGeometry, "function", "startup needs its declared card perimeter before a terminal image exists");
+  for (const contentColor of [TERMINAL_GEOMETRY_BACKGROUND, [250, 250, 250]]) {
+    const frame = terminalLayoutFrame({ cardLeft: 200, rootLeft: 210, time: 10, contentColor });
+    const measured = measureViewCardFrameGeometry(frame, {
+      targetRect: { x: 100, y: 8, width: 375, height: 315.5 }, cornerRadiusPt: 8,
+      cardColor: [25, 27, 36], planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [32, 28, 29]],
+    });
+    assert.equal(measured.timeMs, 10);
+    assert.deepEqual(measured.cardRectPt, { left: 100, top: 8, right: 475, bottom: 323.5 });
+    assert.equal(Object.hasOwn(measured, "surface"), false);
+    assert.equal(Object.hasOwn(measured, "regionToken"), false);
+  }
 });

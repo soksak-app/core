@@ -206,6 +206,42 @@ async function workbenchReplies(client, window) {
   }
 }
 
+// A Node after-hook failure prevents later after hooks from running. Own all
+// sessions of a test in one hook, and report failures only after every session
+// has run its full audit and released its connection and window-check slot.
+const sessionFinishes = new WeakMap();
+function afterSession(t, finish, dispose) {
+  let finishes = sessionFinishes.get(t);
+  if (!finishes) {
+    finishes = [];
+    sessionFinishes.set(t, finishes);
+    t.after(async () => {
+      const failures = [];
+      try {
+        for (const completion of finishes) {
+          try { await completion.finish(); } catch (error) {
+            failures.push(error);
+            t.diagnostic(`session cleanup failed: ${error.stack ?? error}`);
+          }
+        }
+        // Disposal is a parent-owned second phase: every session has finished
+        // its audit, end mark, stall drain and connection/slot release first.
+        for (const completion of finishes) {
+          try { completion.dispose(!t.passed || failures.length > 0); } catch (error) {
+            failures.push(error);
+            t.diagnostic(`session recording disposal failed: ${error.stack ?? error}`);
+          }
+        }
+      } finally {
+        sessionFinishes.delete(t);
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length) throw new AggregateError(failures, `${failures.length} session cleanups failed`);
+    });
+  }
+  finishes.push({ finish, dispose });
+}
+
 export async function open(t, app, { clipboard = false, inactive = false } = {}) {
   if (typeof inactive !== "boolean") throw new TypeError("inactive must be a boolean");
   if (typeof clipboard !== "boolean") throw new TypeError("clipboard must be a boolean");
@@ -240,10 +276,11 @@ export async function open(t, app, { clipboard = false, inactive = false } = {})
   // Register ownership before any preparation can fail. A rejected open finishes
   // immediately; the after hook observes that completed cleanup without releasing twice.
   let finished;
-  const finish = () => finished ??= finishSession(t, session, () => {
+  const pendingDisposal = [];
+  const finish = () => finished ??= finishSessionAudit(t, session, () => {
     try { session.client.close(); } finally { releaseSlot(); }
-  });
-  t.after(finish);
+  }, pendingDisposal);
+  afterSession(t, finish, preserve => disposeSessionRecordings(t, pendingDisposal, preserve));
   try {
     // The cleanup reads the errors after this position and the recordings beside these, so both are taken before a check of
     // the endpoint can end the session.
@@ -326,6 +363,28 @@ export function recordingFolders(configDir) {
  * failure is also reported as a diagnostic.
  */
 export async function finishSession(t, session, close) {
+  // Direct callers own a complete single-session scope and retain immediate
+  // disposal semantics. open() instead gives its parent hook the disposal plan.
+  return finishSessionAudit(t, session, close);
+}
+
+function disposeSessionRecordings(t, folders, preserve) {
+  const failures = [];
+  for (const folder of folders) {
+    if (preserve || failures.length) {
+      t.diagnostic(`kept recording: ${folder}`);
+      continue;
+    }
+    try { rmSync(folder, { recursive: true, force: true }); } catch (error) {
+      failures.push(error);
+      t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length) throw new AggregateError(failures, `${failures.length} recording disposals failed`);
+}
+
+async function finishSessionAudit(t, session, close, pendingDisposal) {
   const failures = [];
   try {
     for (const clean of session.cleanups.reverse()) {
@@ -390,6 +449,8 @@ export async function finishSession(t, session, close) {
         t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
       }
       for (const folder of left) t.diagnostic(`kept recording: ${folder}`);
+    } else if (pendingDisposal) {
+      pendingDisposal.push(...left);
     } else {
       for (const folder of left) {
         try {

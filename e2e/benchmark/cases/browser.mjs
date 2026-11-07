@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
@@ -85,12 +87,30 @@ export function assertBrowserFrameMatchesSlot(geometry, slotInsetsPt) {
 }
 
 /** Serves a distinctive opaque browser document with live content pixels for layout and drag recordings. */
-async function serveContentPage(s) {
-  const server = createServer((_request, response) => {
+export async function serveContentPage(s) {
+  const require = createRequire(import.meta.url);
+  const canonicalProvider = readFileSync(require.resolve("@soksak/plugin-api/diagnostic-view-frames"), "utf8");
+  const pageProvider = `import { createRenderedDocumentReferenceProvider } from "/diagnostic-view-frames.mjs";
+const root = document.getElementById("surface");
+if (globalThis.soksakRenderedReference !== undefined) throw new Error("the controlled Browser document already has a reference owner");
+const provider = createRenderedDocumentReferenceProvider({ root, provider: "browser.controlled-page" });
+globalThis.soksakRenderedReference = provider;
+addEventListener("pagehide", () => {
+  try { provider.dispose(); }
+  finally { if (globalThis.soksakRenderedReference === provider) delete globalThis.soksakRenderedReference; }
+}, { once: true });`;
+  const server = createServer((request, response) => {
+    const pathname = new URL(request.url, "http://127.0.0.1").pathname;
+    if (pathname === "/diagnostic-view-frames.mjs" || pathname === "/rendered-reference-page.mjs") {
+      response.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
+      response.end(pathname === "/diagnostic-view-frames.mjs" ? canonicalProvider : pageProvider);
+      return;
+    }
+    if (pathname !== "/content") { response.writeHead(404); response.end(); return; }
     response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
     response.end(`<!doctype html><meta charset="utf-8"><title>${CONTENT}</title>
       <style>html,body,#surface{width:100%;height:100%;margin:0}#surface{box-sizing:border-box;overflow:hidden;background:rgb(${BROWSER_FIXTURE_CONTENT_COLOR.join(",")});color:white;font:32px sans-serif}</style>
-      <div id="surface">${CONTENT}</div>`);
+      <div id="surface">${CONTENT}</div><script type="module" src="/rendered-reference-page.mjs"></script>`);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);

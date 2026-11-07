@@ -1169,3 +1169,79 @@ test("a measured drag keeps a falsy rejection of its action", { timeout: 5000 },
     assert.equal(values["diagnostics.performance"], true);
   }
 });
+
+test("terminal anchor admission waits for a committed normal capture at the public future presentation boundary", { timeout: 10000 }, async t => {
+  const directory = mkdtempSync(join(tmpdir(), "view-anchor-capture-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  writeCapturedFrame(directory, 0, 10);
+  writeFileSync(join(directory, "frame-1.bgra.partial"), "uncommitted frame bytes");
+  assert.equal(typeof viewMetrics.waitForRecordedViewAnchor, "function", "target open must wait for actual capture admission, not a scheduled refresh timestamp");
+  const admitted = viewMetrics.waitForRecordedViewAnchor({ frames: directory }, 20);
+  writeCapturedFrame(directory, 1, 21);
+  const frame = await admitted;
+  assert.equal(frame.timeMs, 21);
+  assert.equal(frame.file, join(directory, "frame-1.bgra"));
+  assert.equal(frame.afterMs, 20);
+});
+
+test("terminal anchor admission never accepts an older captured frame when its bounded watch expires", { timeout: 10000 }, async t => {
+  const directory = mkdtempSync(join(tmpdir(), "view-anchor-old-capture-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  writeCapturedFrame(directory, 0, 10);
+  assert.equal(typeof viewMetrics.waitForRecordedViewAnchor, "function", "capture boundary admission is required");
+  await assert.rejects(viewMetrics.waitForRecordedViewAnchor({ frames: directory }, 20, 50), /anchor|capture|boundary/);
+});
+
+test("actual terminal consumer admits its captured anchor before reading the pre-open request clock", { timeout: 5000 }, async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../view-metrics-collection.mjs", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("export async function openRecordedView("), source.indexOf("function validateFootprintSample("));
+  const admission = body.indexOf("await waitForRecordedViewAnchor(");
+  assert.ok(admission > body.indexOf("await presentDifferentPluginAnchor("), "capture admission must follow the public anchor presentation");
+  assert.ok(admission < body.indexOf("await monotonicTimeMs(s)"), "target request may not start before its captured anchor admission");
+});
+
+test("reclaim finishes the same live recorded view's reference and cleanup before its footprint/close interval begins", { timeout: 5000 }, async () => {
+  const calls = ["normal recording stopped"];
+  let alive = true;
+  let referenceReleased = false;
+  const view = { surface: "recorded-original", async verifyContent() {
+    assert.equal(alive, true, "an ended view cannot provide a same-surface reference");
+    calls.push("reference started");
+    await Promise.resolve();
+    referenceReleased = true;
+    calls.push("reference capture stopped and restored");
+    return { contentFrame: { frameIndex: 2, timeMs: 3, proof: "strict-reference" } };
+  } };
+  assert.equal(typeof viewMetrics.closeVerifiedRecordedViewGroup, "function", "reclaim must own verification before it closes the target");
+  const result = await viewMetrics.closeVerifiedRecordedViewGroup([view], async () => {
+    assert.equal(referenceReleased, true);
+    assert.equal(alive, true);
+    calls.push("before footprint");
+    alive = false;
+    calls.push("original target closed", "after footprint");
+    return { exactSample: true };
+  });
+  assert.deepEqual(result, { exactSample: true });
+  assert.deepEqual(calls, ["normal recording stopped", "reference started", "reference capture stopped and restored",
+    "before footprint", "original target closed", "after footprint"]);
+  assert.equal(view.surface, "recorded-original");
+});
+
+test("reclaim preserves a failed same-target reference without closing or substituting a target", { timeout: 5000 }, async () => {
+  const failure = new Error("original reference acquisition failed");
+  let closed = false;
+  assert.equal(typeof viewMetrics.closeVerifiedRecordedViewGroup, "function", "reclaim admission must precede close");
+  await assert.rejects(viewMetrics.closeVerifiedRecordedViewGroup([{ surface: "original", verifyContent: async () => { throw failure; } }],
+    async () => { closed = true; }), error => error === failure);
+  assert.equal(closed, false);
+});
+
+test("actual reclaim collector admits reference proof before the existing measured close group", { timeout: 5000 }, async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../view-metrics-collection.mjs", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("export async function collectViewReclaimMeasurements("), source.indexOf("/** Executes process, memory"));
+  assert.ok(body.includes("closeVerifiedRecordedViewGroup(views,"), "actual initial and reopened reclaim groups must use live reference admission");
+  assert.equal(body.includes("const sample = await closeInitial([view]);\n    await verifyOpenedViewContent(view);"), false,
+    "live verification after the measured close is forbidden");
+});

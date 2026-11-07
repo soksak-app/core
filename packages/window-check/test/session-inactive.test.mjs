@@ -51,6 +51,31 @@ test("ordinary sessions do not require activation observation", { timeout: 10000
   assert.equal(endpointReads, 0);
 });
 
+test("a failing session audit closes every session of the same check and reports every failure", { timeout: 10000 }, async () => {
+  reset();
+  const probe = context();
+  const order = [];
+  for (const [index, name] of ["wailsv3", "tauriv2", "mygo"].entries()) {
+    endpoint.application = name;
+    const session = await open(probe, { ...app, name });
+    session.cleanup(() => {
+      order.push(name);
+      if (index < 2) throw new Error(`${name}: owned cleanup failed`);
+    });
+  }
+  let failure;
+  try { await probe.finish(); } catch (error) { failure = error; }
+  assert.equal(closed, 3, "an earlier failed audit must not retain later endpoint connections or window-check slots");
+  assert.deepEqual(order, ["wailsv3", "tauriv2", "mygo"]);
+  assert.ok(failure instanceof AggregateError, "all session failures must be returned together");
+  assert.deepEqual(failure.errors.map(error => error.message), [
+    "wailsv3: owned cleanup failed", "tauriv2: owned cleanup failed",
+  ]);
+  for (const name of ["wailsv3", "tauriv2"]) {
+    assert.ok(probe.diagnostics.some(line => line.includes(`${name}: owned cleanup failed`)));
+  }
+});
+
 test("inactive session snapshots before body and verifies after own cleanup", { timeout: 10000 }, async () => {
   reset();
   const t = context();
@@ -118,4 +143,62 @@ test("failed inactive cleanup preserves owned recording evidence", { timeout: 10
   await assert.rejects(t.finish(), /activation count changed/);
   assert.equal(readFileSync(join(recording, "original-frame.bgra"), "utf8"), "original capture bytes");
   assert.equal(closed, 1);
+});
+
+for (const failedIndex of [0, 2]) {
+  test(`parent session audit failure ${failedIndex === 0 ? "first" : "last"} preserves every app's owned recording`, { timeout: 10000 }, async () => {
+    reset();
+    const probe = context();
+    const recordings = [];
+    const original = new Error(`session ${failedIndex} audit failed`);
+    for (const [index, name] of ["wailsv3", "tauriv2", "mygo"].entries()) {
+      endpoint.application = name;
+      const configDir = join(root, `cohort-${failedIndex}-${name}`);
+      const session = await open(probe, { ...app, name, configDir });
+      const recording = join(configDir, "logs", "captures", "owned-recording");
+      mkdirSync(recording, { recursive: true });
+      writeFileSync(join(recording, "original-frame.bgra"), `${name}: original capture bytes`);
+      session.recordings.add(realpathSync(recording));
+      recordings.push({ name, recording });
+      session.cleanup(() => { if (index === failedIndex) throw original; });
+    }
+    await assert.rejects(probe.finish(), error => error === original);
+    assert.equal(closed, 3, "all sessions must close despite the shared parent audit failure");
+    for (const { name, recording } of recordings) {
+      assert.equal(readFileSync(join(recording, "original-frame.bgra"), "utf8"), `${name}: original capture bytes`,
+        "a successful sibling audit must not dispose evidence before the entire parent audit succeeds");
+      assert.ok(probe.diagnostics.some(line => line.includes(`kept recording: ${recording}`)));
+    }
+  });
+}
+
+test("all successful session audits precede disposal and remove only that parent's owned recordings", { timeout: 10000 }, async () => {
+  reset();
+  const probe = context();
+  const recordings = [];
+  for (const [index, name] of ["wailsv3", "tauriv2", "mygo"].entries()) {
+    endpoint.application = name;
+    const configDir = join(root, `cohort-success-${name}`);
+    const prior = join(configDir, "logs", "captures", "prior-recording");
+    mkdirSync(prior, { recursive: true });
+    writeFileSync(join(prior, "existing.txt"), "prior evidence");
+    const session = await open(probe, { ...app, name, configDir });
+    const recording = join(configDir, "logs", "captures", "owned-recording");
+    mkdirSync(recording, { recursive: true });
+    writeFileSync(join(recording, "original-frame.bgra"), `${name}: original capture bytes`);
+    session.recordings.add(realpathSync(recording));
+    recordings.push({ recording, prior });
+    session.cleanup(() => {
+      if (index === 2) for (const entry of recordings) {
+        assert.equal(readFileSync(join(entry.recording, "original-frame.bgra"), "utf8").endsWith("original capture bytes"), true,
+          "every recording must still exist during the last session audit");
+      }
+    });
+  }
+  await probe.finish();
+  assert.equal(closed, 3);
+  for (const { recording, prior } of recordings) {
+    assert.throws(() => readFileSync(join(recording, "original-frame.bgra")), { code: "ENOENT" });
+    assert.equal(readFileSync(join(prior, "existing.txt"), "utf8"), "prior evidence");
+  }
 });

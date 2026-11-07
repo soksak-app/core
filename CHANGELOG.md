@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F700: Finish every application session through one parent-owned cleanup hook and dispose successful recordings only after every sibling audit completes. Preserve all parent-owned recordings on audit failure while releasing every connection and slot. All 27 focused owners and the actual three-host parent check (7/7) pass.
+
 - F696-5: Match the exact clipboard-owning session and terminal fixture declarations in the owner-link inventory; preserve all coverage checks.
 
 - F686-10: Collect third-drag records and publish valid measurements before judging captured performance. Keep structural capture failures fatal and preserve collection and performance errors together without changing thresholds or B3 output rules.
