@@ -15,6 +15,7 @@ import (
 
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
 	binding "github.com/soksak-app/core/packages/host/mygo/src/platform/darwin/nativecallback"
 )
 
@@ -111,7 +112,7 @@ func TestNativeCallbacksUseTheFrameworkWorker(t *testing.T) {
 	purego.RegisterLibFunc(&probe, library, "sp_test_worker_probe")
 	purego.RegisterLibFunc(&touch, library, "sp_test_worker_touch")
 	purego.RegisterLibFunc(&present, library, "sp_test_worker_present")
-	var callbacks binding.Callbacks
+	var callbacks abi.Callbacks
 	fields := reflect.ValueOf(&callbacks).Elem()
 	for i := range fields.NumField() {
 		signature := fields.Field(i).Type()
@@ -158,7 +159,7 @@ func TestNativeCallbacksUseTheFrameworkWorker(t *testing.T) {
 		}
 		present(completion)
 	}
-	table, err := callbacks.Bind()
+	table, err := binding.Bind(callbacks)
 	if err != nil {
 		t.Fatal(err)
 	}

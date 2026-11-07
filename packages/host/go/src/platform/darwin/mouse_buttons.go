@@ -2,25 +2,6 @@
 
 package darwin
 
-/*
-#cgo CFLAGS: -x objective-c -fmodules
-#cgo LDFLAGS: -framework Cocoa
-#cgo pkg-config: soksak-darwin
-#include <stdbool.h>
-#include "mouse_buttons.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
-static void mouseButtonsChangedBridge(void *context, unsigned long long mask) {
-    hostRunOnWorker(^{ sp_host_callback_mouse_buttons_changed((uintptr_t)context, mask); });
-}
-static bool watchButtons(void) {
-    return ON_MAIN(bool, sp_mouse_buttons_watch(mouseButtonsChangedBridge, NULL));
-}
-*/
-import "C"
-
 import (
 	"errors"
 )
@@ -28,8 +9,7 @@ import (
 // buttonsReceiver is the function that receives the mouse button mask. There is one watch per process, so only one is kept.
 var buttonsReceiver func(uint64)
 
-//export goHost_mouse_buttons_changed
-func goHost_mouse_buttons_changed(_ C.uintptr_t, mask C.ulonglong) {
+func goHost_mouse_buttons_changed(_ uintptr, mask uint64) {
 	buttonsReceiver(uint64(mask))
 }
 
@@ -39,7 +19,7 @@ func (implementation) WatchButtons(changed func(mask uint64)) error {
 		return errors.New("the mouse buttons are already watched")
 	}
 	buttonsReceiver = changed
-	if !C.watchButtons() {
+	if !native.WatchButtons() {
 		buttonsReceiver = nil
 		return errors.New("AppKit did not install the mouse button event monitors (sp_mouse_buttons_watch must run once on the main thread)")
 	}

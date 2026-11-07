@@ -2,23 +2,6 @@
 
 package darwin
 
-/*
-#include "signals.h"
-#include <stdbool.h>
-#include "quit_request.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The request runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
-static bool installQuitRequest(void) {
-    return ON_MAIN(bool, sp_quit_request_install(^{ hostRunOnWorker(^{ sp_host_callback_quit_request(); }); }));
-}
-static void main_sp_quit_request_answer(void) { hostRunOnMain(^{ sp_quit_request_answer(); }); }
-static void main_sp_quit_request_cancel(void) { hostRunOnMain(^{ sp_quit_request_cancel(); }); }
-
-*/
-import "C"
-
 import (
 	"errors"
 	"fmt"
@@ -33,7 +16,7 @@ import (
 var terminationSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP}
 
 func (implementation) BlockAsyncSignals() error {
-	switch result := C.sp_block_async_signals(); result {
+	switch result := native.SpBlockAsyncSignals(); result {
 	case 0:
 		return nil
 	case -1:
@@ -58,17 +41,16 @@ func (implementation) OnTermination(quit func(signal os.Signal)) error {
 // quitRequest is the function that the termination request of the operating system calls.
 var quitRequest func()
 
-//export goHost_quit_request
 func goHost_quit_request() { routine.Go("quit-request", quitRequest) }
 
 func (implementation) OnQuitRequest(quit func()) error {
 	quitRequest = quit
-	if !C.installQuitRequest() {
+	if !native.InstallQuitRequest() {
 		return errors.New("failed to register the quit request handler")
 	}
 	return nil
 }
 
-func (implementation) AnswerQuitRequests() { C.main_sp_quit_request_answer() }
+func (implementation) AnswerQuitRequests() { native.MainSpQuitRequestAnswer() }
 
-func (implementation) CancelQuitRequests() { C.main_sp_quit_request_cancel() }
+func (implementation) CancelQuitRequests() { native.MainSpQuitRequestCancel() }

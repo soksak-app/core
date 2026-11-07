@@ -23,11 +23,14 @@
 // No function of this header allocates for a delivery. Every function runs on any thread unless a platform call says otherwise.
 #pragma once
 
+#ifdef __OBJC__
 #import <Cocoa/Cocoa.h>
+#endif
 #include <stdbool.h>
 
 typedef enum { SP_OBSERVE_RECORD = 0, SP_OBSERVE_COUNT = 1, SP_OBSERVE_STORED = 2 } sp_observe_mode;
 
+#ifdef __OBJC__
 // Registers a block for a notification. Returns the token of the center (remove it with removeObserver:), or nil, after the
 // event `native.observe.failed`, when the handler is missing.
 id sp_observe_notification(const char *source, sp_observe_mode mode, NSNotificationName name, id object, NSOperationQueue *queue,
@@ -80,6 +83,8 @@ NSTimer *sp_observe_timer(const char *source, sp_observe_mode mode, NSTimeInterv
 // Sets the delegate of `owner` (an object with a `delegate` property). A method of the delegate calls sp_observe_delivered(source).
 // Returns false after the event `native.observe.failed` when the owner has no delegate property.
 bool sp_observe_delegate(const char *source, sp_observe_mode mode, id owner, id delegate);
+
+#endif
 
 // Counts one delivery of `source` and stores its record by the mode of the source.
 void sp_observe_delivered(const char *source);

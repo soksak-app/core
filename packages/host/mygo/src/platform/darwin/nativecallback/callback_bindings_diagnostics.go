@@ -5,49 +5,44 @@ package nativecallback
 
 import (
 	"fmt"
-
 	"github.com/ebitengine/purego"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
+	"sync"
 )
 
-// DiagnosticCallbacks preserves the C signatures of host_callbacks.h.
-type DiagnosticCallbacks struct {
-	NativeInputSourceAdopted  func(uintptr, *byte)
-	WindowObjectsCounted      func(uintptr, int64, int64, int64, bool)
-	PageObjectsCounted        func(uintptr, int64, int64, *byte)
-	DeliveredNotifications    func(uintptr, *byte)
-	DocumentFrameIdentityDone func(uintptr, *byte, *byte)
-	InputReferenceReply       func(uintptr, *byte, *byte)
-	ProcessExitAnswered       func(uintptr, bool)
-}
+var diagnosticAddressesMutex sync.Mutex
+var diagnosticAddressesBound bool
 
-// DiagnosticTable holds function addresses in the native header's field order.
-type DiagnosticTable [7]uintptr
-
-// Bind creates process-lifetime addresses. Call once at startup and reuse the table.
-// All functions are validated before allocating any address. Native code copies the table.
-func (callbacks DiagnosticCallbacks) Bind() (DiagnosticTable, error) {
+// BindDiagnostic creates process-lifetime addresses once. Reuse the returned table.
+// Every callback is validated before any address is allocated. Native code copies the table.
+func BindDiagnostic(callbacks abi.DiagnosticCallbacks) (abi.DiagnosticTable, error) {
+	diagnosticAddressesMutex.Lock()
+	defer diagnosticAddressesMutex.Unlock()
+	if diagnosticAddressesBound {
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback profile is already bound")
+	}
 	if callbacks.NativeInputSourceAdopted == nil {
-		return DiagnosticTable{}, fmt.Errorf("native callback is missing: native_input_source_adopted")
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: native_input_source_adopted")
 	}
 	if callbacks.WindowObjectsCounted == nil {
-		return DiagnosticTable{}, fmt.Errorf("native callback is missing: window_objects_counted")
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: window_objects_counted")
 	}
 	if callbacks.PageObjectsCounted == nil {
-		return DiagnosticTable{}, fmt.Errorf("native callback is missing: page_objects_counted")
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: page_objects_counted")
 	}
 	if callbacks.DeliveredNotifications == nil {
-		return DiagnosticTable{}, fmt.Errorf("native callback is missing: delivered_notifications")
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: delivered_notifications")
 	}
 	if callbacks.DocumentFrameIdentityDone == nil {
-		return DiagnosticTable{}, fmt.Errorf("native callback is missing: document_frame_identity_done")
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: document_frame_identity_done")
 	}
 	if callbacks.InputReferenceReply == nil {
-		return DiagnosticTable{}, fmt.Errorf("native callback is missing: input_reference_reply")
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: input_reference_reply")
 	}
 	if callbacks.ProcessExitAnswered == nil {
-		return DiagnosticTable{}, fmt.Errorf("native callback is missing: process_exit_answered")
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: process_exit_answered")
 	}
-	return DiagnosticTable{
+	table := abi.DiagnosticTable{
 		purego.NewCallback(callbacks.NativeInputSourceAdopted),
 		purego.NewCallback(callbacks.WindowObjectsCounted),
 		purego.NewCallback(callbacks.PageObjectsCounted),
@@ -55,5 +50,7 @@ func (callbacks DiagnosticCallbacks) Bind() (DiagnosticTable, error) {
 		purego.NewCallback(callbacks.DocumentFrameIdentityDone),
 		purego.NewCallback(callbacks.InputReferenceReply),
 		purego.NewCallback(callbacks.ProcessExitAnswered),
-	}, nil
+	}
+	diagnosticAddressesBound = true
+	return table, nil
 }

@@ -2,29 +2,6 @@
 
 package darwin
 
-/*
-#cgo CFLAGS: -x objective-c -fmodules
-#cgo LDFLAGS: -framework Cocoa -framework UserNotifications
-#cgo pkg-config: soksak-darwin
-#include <stdlib.h>
-#include "notifications.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The callback runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
-static void notificationEventBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ sp_host_callback_notification_event((uintptr_t)context, (char *)json); });
-}
-static const char *startNotifications(void) {
-    return ON_MAIN(const char *, sp_notifications_start(notificationEventBridge, NULL));
-}
-static void main_sp_notifications_post(const char *identifier, const char *title, const char *body) {
-    hostRunOnMain(^{ sp_notifications_post(identifier, title, body); });
-}
-static void main_sp_notifications_remove(const char *identifier) { hostRunOnMain(^{ sp_notifications_remove(identifier); }); }
-*/
-import "C"
-
 import (
 	"errors"
 	"unsafe"
@@ -33,31 +10,30 @@ import (
 // notificationReceiver is the function that receives the notification center events. There is one notification center per process, so only one is kept.
 var notificationReceiver func(string)
 
-//export goHost_notification_event
-func goHost_notification_event(_ C.uintptr_t, json *C.char) {
-	notificationReceiver(C.GoString(json))
+func goHost_notification_event(_ uintptr, json *byte) {
+	notificationReceiver(native.GoString(json))
 }
 
 func (implementation) StartNotifications(receive func(event string)) error {
 	notificationReceiver = receive
-	if failure := C.startNotifications(); failure != nil {
-		return errors.New(C.GoString(failure))
+	if failure := native.StartNotifications(); failure != nil {
+		return errors.New(native.GoString(failure))
 	}
 	return nil
 }
 
 func (implementation) PostNotification(identifier, title, body string) error {
-	name, heading, text := C.CString(identifier), C.CString(title), C.CString(body)
-	defer C.free(unsafe.Pointer(name))
-	defer C.free(unsafe.Pointer(heading))
-	defer C.free(unsafe.Pointer(text))
-	C.main_sp_notifications_post(name, heading, text)
+	name, heading, text := native.CString(identifier), native.CString(title), native.CString(body)
+	defer native.Free(unsafe.Pointer(name))
+	defer native.Free(unsafe.Pointer(heading))
+	defer native.Free(unsafe.Pointer(text))
+	native.MainSpNotificationsPost(name, heading, text)
 	return nil
 }
 
 func (implementation) RemoveNotification(identifier string) error {
-	name := C.CString(identifier)
-	defer C.free(unsafe.Pointer(name))
-	C.main_sp_notifications_remove(name)
+	name := native.CString(identifier)
+	defer native.Free(unsafe.Pointer(name))
+	native.MainSpNotificationsRemove(name)
 	return nil
 }

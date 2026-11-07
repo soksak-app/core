@@ -1,6 +1,6 @@
-// Package darwin is the macOS implementation of the native host.
+// Package darwin implements the macOS host through a typed native interface.
 //
-// The window buttons, coordinate conversion, input registration, surface layout, recording and Dock menu are implemented by the native/darwin library.
-// The header and link options of the library are found in soksak-darwin of pkg-config.
-// This package registers those functions and the web view creation code of webview.m as platform.Platform.
+// Native window, webview, input, layout, recording and Dock operations belong
+// to native/darwin. The framework adapter installs their generated binding
+// before host preparation; this package owns the shared Go platform logic.
 package darwin

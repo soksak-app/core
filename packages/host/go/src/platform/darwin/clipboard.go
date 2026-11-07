@@ -2,26 +2,6 @@
 
 package darwin
 
-/*
-#cgo CFLAGS: -x objective-c -fmodules
-#cgo LDFLAGS: -framework Cocoa -framework WebKit
-#cgo pkg-config: soksak-darwin
-#include <stdlib.h>
-#include "clipboard.h"
-#include "main_thread.h"
-
-// The native calls run on the main thread (main_thread.h).
-static void *main_sp_clipboard_open(const char *name) { return ON_MAIN(void *, sp_clipboard_open(name)); }
-static void main_sp_clipboard_close(void *clipboard) { hostRunOnMain(^{ sp_clipboard_close(clipboard); }); }
-static char *main_sp_clipboard_read_text(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_text(clipboard)); }
-static char *main_sp_clipboard_write_text(void *clipboard, const char *text) {
-    return ON_MAIN(char *, sp_clipboard_write_text(clipboard, text));
-}
-static char *main_sp_clipboard_read_png(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_png(clipboard)); }
-static char *main_sp_clipboard_read_file_urls(void *clipboard) { return ON_MAIN(char *, sp_clipboard_read_file_urls(clipboard)); }
-*/
-import "C"
-
 import (
 	"encoding/base64"
 	"encoding/json"
@@ -31,13 +11,13 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-func clipboardJSON(value *C.char) (map[string]any, error) {
+func clipboardJSON(value *byte) (map[string]any, error) {
 	if value == nil {
 		return nil, fmt.Errorf("clipboard native call returned null")
 	}
-	defer C.free(unsafe.Pointer(value))
+	defer native.Free(unsafe.Pointer(value))
 	var result map[string]any
-	if err := json.Unmarshal([]byte(C.GoString(value)), &result); err != nil {
+	if err := json.Unmarshal([]byte(native.GoString(value)), &result); err != nil {
 		return nil, fmt.Errorf("invalid clipboard response: %w", err)
 	}
 	return result, nil
@@ -54,19 +34,19 @@ func clipboardStatus(result map[string]any) error {
 }
 
 func (implementation) ClipboardRead(kind string) (platform.ClipboardValue, error) {
-	board := C.main_sp_clipboard_open(nil)
+	board := native.MainSpClipboardOpen(nil)
 	if board == nil {
 		return platform.ClipboardValue{}, fmt.Errorf("cannot open system clipboard")
 	}
-	defer C.main_sp_clipboard_close(board)
-	var pointer *C.char
+	defer native.MainSpClipboardClose(board)
+	var pointer *byte
 	switch kind {
 	case "text":
-		pointer = C.main_sp_clipboard_read_text(board)
+		pointer = native.MainSpClipboardReadText(board)
 	case "png":
-		pointer = C.main_sp_clipboard_read_png(board)
+		pointer = native.MainSpClipboardReadPng(board)
 	case "fileURLs":
-		pointer = C.main_sp_clipboard_read_file_urls(board)
+		pointer = native.MainSpClipboardReadFileUrls(board)
 	default:
 		return platform.ClipboardValue{}, fmt.Errorf("unsupported clipboard type %s", kind)
 	}
@@ -116,14 +96,14 @@ func (implementation) ClipboardRead(kind string) (platform.ClipboardValue, error
 }
 
 func (implementation) ClipboardWriteText(text string) error {
-	board := C.main_sp_clipboard_open(nil)
+	board := native.MainSpClipboardOpen(nil)
 	if board == nil {
 		return fmt.Errorf("cannot open system clipboard")
 	}
-	defer C.main_sp_clipboard_close(board)
-	value := C.CString(text)
-	defer C.free(unsafe.Pointer(value))
-	result, err := clipboardJSON(C.main_sp_clipboard_write_text(board, value))
+	defer native.MainSpClipboardClose(board)
+	value := native.CString(text)
+	defer native.Free(unsafe.Pointer(value))
+	result, err := clipboardJSON(native.MainSpClipboardWriteText(board, value))
 	if err != nil {
 		return err
 	}

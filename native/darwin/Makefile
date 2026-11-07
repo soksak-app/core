@@ -90,6 +90,7 @@ BUILD      := $(CURDIR)/build
 PROCESS_IDENTITY_LIBRARY := $(CURDIR)/process-identity/lib/libsoksak-process-identity.a
 OBJECTS    := $(SOURCES:src/%.m=$(BUILD)/%.o)
 LIBRARY    := $(BUILD)/libsoksak-darwin.a
+MYGO_LIBRARY := $(BUILD)/mygo/libsoksak-darwin.dylib
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
 FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz -lc++
 ZXING_COMMIT := 287c85df6f961c8efbfb5ffd736cd9457b8b890e
@@ -132,6 +133,15 @@ endif
 .PHONY: build-host-callback-worker build-host-callback-abi build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
+
+# Keep the dynamic artifact in its own directory so existing static consumers
+# never change link mode through the linker's -l search order.
+.PHONY: build-mygo
+build-mygo: build $(MYGO_LIBRARY)
+
+$(MYGO_LIBRARY): $(OBJECTS) $(ZXING_LIBRARY)
+	@mkdir -p $(@D)
+	@clang $(CFLAGS) -dynamiclib -install_name @rpath/libsoksak-darwin.dylib $(OBJECTS) $(ZXING_LIBRARY) $(FRAMEWORKS) -framework Network -o $@
 
 $(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile $(ZXING_LIBRARY) | $(BUILD)
 	@clang $(CFLAGS) -I$(ZXING_INSTALL)/include -c $< -o $@

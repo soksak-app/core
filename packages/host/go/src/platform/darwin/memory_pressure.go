@@ -5,23 +5,6 @@ package darwin
 // The memory pressure owner of the process (docs/spec/hosts.md#memory-pressure). The implementation is memory_pressure.m of
 // native/darwin.
 
-/*
-#include <stdbool.h>
-#include <stdlib.h>
-#include "memory_pressure.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The report runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
-static bool startMemoryPressure(void) {
-    return ON_MAIN(bool, sp_memory_pressure_start(^(const char *level, unsigned long long seq) {
-        hostRunOnWorker(^{ sp_host_callback_memory_pressure((char *)level, seq); });
-    }));
-}
-static bool main_sp_memory_pressure_inject(const char *level) { return ON_MAIN(bool, sp_memory_pressure_inject(level)); }
-*/
-import "C"
-
 import (
 	"errors"
 	"unsafe"
@@ -30,23 +13,22 @@ import (
 // memoryPressureReport is the function that each report of the memory pressure source calls.
 var memoryPressureReport func(level string, seq uint64)
 
-//export goHost_memory_pressure
-func goHost_memory_pressure(level *C.char, seq C.ulonglong) {
-	memoryPressureReport(C.GoString(level), uint64(seq))
+func goHost_memory_pressure(level *byte, seq uint64) {
+	memoryPressureReport(native.GoString(level), uint64(seq))
 }
 
 func (implementation) OnMemoryPressure(report func(level string, seq uint64)) error {
 	memoryPressureReport = report
-	if !C.startMemoryPressure() {
+	if !native.StartMemoryPressure() {
 		return errors.New("failed to start the memory pressure source")
 	}
 	return nil
 }
 
 func (implementation) InjectMemoryPressure(level string) error {
-	text := C.CString(level)
-	defer C.free(unsafe.Pointer(text))
-	if !C.main_sp_memory_pressure_inject(text) {
+	text := native.CString(level)
+	defer native.Free(unsafe.Pointer(text))
+	if !native.MainSpMemoryPressureInject(text) {
 		return errors.New("the memory pressure source did not accept the level " + level)
 	}
 	return nil

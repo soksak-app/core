@@ -2,118 +2,10 @@
 
 package darwin
 
-/*
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include "input_inject.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-#import <Cocoa/Cocoa.h>
-
-static void activated(void *context, sp_activate_result result, const char *frontmost) {
-    hostRunOnWorker(^{ sp_host_callback_input_activated((uintptr_t)context, (int)result, (char *)frontmost); });
-}
-static void activateWindowAt(uintptr_t window, double x, double y, double timeout, uintptr_t handle) {
-    hostRunOnMain(^{ sp_input_activate_at((void *)window, x, y, timeout, activated, (void *)handle); });
-}
-
-static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
-    hostRunOnWorker(^{ sp_host_callback_input_delivered((uintptr_t)context, (int)result, (sp_input_held *)held); });
-}
-// pointer is a C string that the block frees after the delivery took it.
-static void injectPointer(uintptr_t window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
-    double receive, uintptr_t handle) {
-    hostRunOnMain(^{
-        sp_input_pointer_then((void *)window, pointer, x, y, phase, button, deltaX, deltaY, clicks, receive, delivered, (void *)handle);
-        free(pointer);
-    });
-}
-
-// Announces whether a view that a press passes through is a surface. For a surface it returns a non-zero value, and the upward
-// search from the hit view stops there.
-
-// Announces one step of a left button drag in page coordinates. phase is 0 for press, 1 for move and 2 for release.
-
-// Announces the first surface found while going up from a view to the content view. It returns whether a surface was found. This value
-// shows whether the input started in a view of this app and not in the page.
-static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
-    while (view != nil && view != content) {
-        if (ON_WORKER(int, sp_host_callback_surface_hit(owner, (void*)view))) {
-            return 1;
-        }
-        view = [view superview];
-    }
-    return 0;
-}
-
-// A surface is a native view, so input over a surface does not reach the page. One monitor of the app
-// receives all presses, drags and key inputs and announces the target view and the position of the input.
-//
-// The target of a press is found with hitTest:. The target of a key input is the first responder of the window, and a page that
-// took the focus by itself becomes the first responder. A page that focuses a search field when it loads would otherwise leave the page model
-// pointing at the surface pressed last without this handling. In both cases
-// the coordinates are not converted, so they do not drift from the region of the page.
-//
-// The position of a drag must be converted. The grab region of a boundary is wider than the passage between two cards, so when the passage
-// width is one line, that whole region is over a surface and a press inside it does not reach the page.
-// The page decides the meaning of the position, and this function computes the page
-// coordinates from the height of the content view that the page view filled.
-//
-// A drag that started in the page is handled by the page, so it is not delivered. Delivering it would pile up one message per pointer move on the thread
-// that redraws the plane.
-//
-// The monitor returns the event without changing it, so the view also receives the event.
-static uintptr_t surfaceWatchMouseOnMain(void* nsWindow, uintptr_t owner) {
-    __block int surfaceDragging = 0;
-    NSWindow* window = (NSWindow*)nsWindow;
-    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged
-                     | NSEventMaskLeftMouseUp | NSEventMaskKeyDown;
-    return (uintptr_t)[NSEvent addLocalMonitorForEventsMatchingMask:mask
-                                          handler:^NSEvent*(NSEvent* event) {
-        if ([event window] == window) {
-            NSView* content = [window contentView];
-            NSEventType type = [event type];
-            if (type == NSEventTypeKeyDown) {
-                NSResponder* first = [window firstResponder];
-                if ([first isKindOfClass:[NSView class]]) {
-                    surfaceWalk(owner, (NSView*)first, content);
-                }
-            } else {
-                NSPoint at = [event locationInWindow];
-                double x = at.x;
-                double y = [content bounds].size.height - at.y;
-                if (type == NSEventTypeLeftMouseDown) {
-                    surfaceDragging = surfaceWalk(owner, [content hitTest:at], content);
-                    if (surfaceDragging) hostRunOnWorker(^{ sp_host_callback_surface_point(owner, 0, x, y); });
-                } else if (surfaceDragging) {
-                    int phase = type == NSEventTypeLeftMouseDragged ? 1 : 2;
-                    hostRunOnWorker(^{ sp_host_callback_surface_point(owner, phase, x, y); });
-                    if (type == NSEventTypeLeftMouseUp) surfaceDragging = 0;
-                }
-            }
-        }
-        return event;
-    }];
-}
-
-static uintptr_t surfaceWatchMouse(uintptr_t nsWindow, uintptr_t owner) {
-    return ON_MAIN(uintptr_t, surfaceWatchMouseOnMain((void *)nsWindow, owner));
-}
-
-static void surfaceUnwatchMouse(uintptr_t monitor) {
-    hostRunOnMain(^{ if (monitor) [NSEvent removeMonitor:(id)monitor]; });
-}
-
-static sp_input_result main_sp_input_key(uintptr_t window, const char *key, const char *text, unsigned int modifiers, bool down) {
-    return ON_MAIN(sp_input_result, sp_input_key((void *)window, key, text, modifiers, down));
-}
-*/
-import "C"
-
 import (
 	"errors"
 	"fmt"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
 
 	"sync"
 	"unsafe"
@@ -126,22 +18,20 @@ import (
 var watchers = map[uintptr]handles.Handle{}
 var pointerSequence sync.Mutex
 
-//export goHost_surface_hit
-func goHost_surface_hit(owner C.uintptr_t, view unsafe.Pointer) C.int {
+func goHost_surface_hit(owner uintptr, view unsafe.Pointer) int32 {
 	if handles.Handle(owner).Value().(platform.Input).Press(uintptr(view)) {
 		return 1
 	}
 	return 0
 }
 
-//export goHost_surface_point
-func goHost_surface_point(owner C.uintptr_t, phase C.int, x C.double, y C.double) {
+func goHost_surface_point(owner uintptr, phase int32, x float64, y float64) {
 	handles.Handle(owner).Value().(platform.Input).Point(int(phase), float64(x), float64(y))
 }
 
 func (implementation) WatchInput(window platform.Window, input platform.Input) (uintptr, error) {
 	handle := handles.NewHandle(input)
-	monitor := uintptr(C.surfaceWatchMouse(C.uintptr_t(window), C.uintptr_t(handle)))
+	monitor := uintptr(native.SurfaceWatchMouse(uintptr(window), uintptr(handle)))
 	watchers[monitor] = handle
 	return monitor, nil
 }
@@ -156,31 +46,29 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 			done(result, held)
 		})
 	}
-	C.injectPointer(C.uintptr_t(window), C.CString(pointer), C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY), C.int(clicks),
-		C.double(receive), C.uintptr_t(handles.NewHandle(serialized)))
+	native.InjectPointer(uintptr(window), native.CString(pointer), float64(x), float64(y), int32(phase), int32(button), float64(deltaX), float64(deltaY), int32(clicks),
+		float64(receive), uintptr(handles.NewHandle(serialized)))
 	return nil
 }
 
 // goHost_input_delivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD
 // or SP_INPUT_POINTER_HELD and keeps it valid until done returns.
-//
-//export goHost_input_delivered
-func goHost_input_delivered(context C.uintptr_t, result C.int, held *C.sp_input_held) {
+func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld) {
 	handle := handles.Handle(uintptr(context))
 	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld))
 	handle.Delete()
-	switch C.sp_input_result(result) {
-	case C.SP_INPUT_DELIVERED:
+	switch int32(result) {
+	case abi.SP_INPUT_DELIVERED:
 		done(platform.PointerDelivered, platform.ButtonHeld{})
-	case C.SP_INPUT_INACTIVE:
+	case abi.SP_INPUT_INACTIVE:
 		done(platform.PointerInactive, platform.ButtonHeld{})
-	case C.SP_INPUT_UNRECEIVED:
+	case abi.SP_INPUT_UNRECEIVED:
 		done(platform.PointerUnreceived, platform.ButtonHeld{})
-	case C.SP_INPUT_BUTTON_HELD:
+	case abi.SP_INPUT_BUTTON_HELD:
 		done(platform.PointerButtonHeld, buttonHeld(held))
-	case C.SP_INPUT_PRESS_OPEN:
+	case abi.SP_INPUT_PRESS_OPEN:
 		done(platform.PointerPressOpen, platform.ButtonHeld{})
-	case C.SP_INPUT_POINTER_HELD:
+	case abi.SP_INPUT_POINTER_HELD:
 		done(platform.PointerHeld, pointerHeld(held))
 	default:
 		done(platform.PointerRejected, platform.ButtonHeld{})
@@ -189,15 +77,15 @@ func goHost_input_delivered(context C.uintptr_t, result C.int, held *C.sp_input_
 
 // buttonHeld reads sp_input_held. When pid is -1, there is no frontmost application. A notification of this result without a state is
 // a contract violation of the library, so it stops and names the violation.
-func buttonHeld(held *C.sp_input_held) platform.ButtonHeld {
+func buttonHeld(held *abi.SpInputHeld) platform.ButtonHeld {
 	if held == nil {
 		panic("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state")
 	}
-	result := platform.ButtonHeld{Mask: uint64(held.mask)}
-	if held.pid >= 0 {
-		result.Frontmost = &platform.FrontmostApplication{PID: int(held.pid)}
-		if held.bundleIdentifier != nil {
-			result.Frontmost.BundleIdentifier = C.GoString(held.bundleIdentifier)
+	result := platform.ButtonHeld{Mask: uint64(held.Mask)}
+	if held.Pid >= 0 {
+		result.Frontmost = &platform.FrontmostApplication{PID: int(held.Pid)}
+		if held.BundleIdentifier != nil {
+			result.Frontmost.BundleIdentifier = native.GoString(held.BundleIdentifier)
 		}
 	}
 	return result
@@ -205,11 +93,11 @@ func buttonHeld(held *C.sp_input_held) platform.ButtonHeld {
 
 // pointerHeld reads the pointer and the reason of sp_input_held. A notification of this result without them is a contract violation
 // of the library, so it stops and names the violation.
-func pointerHeld(held *C.sp_input_held) platform.ButtonHeld {
-	if held == nil || held.pointer == nil || held.reason == nil {
+func pointerHeld(held *abi.SpInputHeld) platform.ButtonHeld {
+	if held == nil || held.Pointer == nil || held.Reason == nil {
 		panic("sp_input_pointer_then reported SP_INPUT_POINTER_HELD without its pointer and reason")
 	}
-	return platform.ButtonHeld{Pointer: C.GoString(held.pointer), Reason: C.GoString(held.reason)}
+	return platform.ButtonHeld{Pointer: native.GoString(held.Pointer), Reason: native.GoString(held.Reason)}
 }
 
 type activation struct {
@@ -217,30 +105,29 @@ type activation struct {
 	done    func(error)
 }
 
-//export goHost_input_activated
-func goHost_input_activated(context C.uintptr_t, result C.int, frontmost *C.char) {
+func goHost_input_activated(context uintptr, result int32, frontmost *byte) {
 	handle := handles.Handle(uintptr(context))
 	a := handle.Value().(activation)
 	handle.Delete()
 	name := "unknown"
 	if frontmost != nil {
-		name = C.GoString(frontmost)
+		name = native.GoString(frontmost)
 	}
-	a.done(activationResult(C.sp_activate_result(result), a.timeout, name))
+	a.done(activationResult(int32(result), a.timeout, name))
 }
 
 // activationResult converts the result of sp_input_activate to an error that names the stage where it stopped and the frontmost application.
-func activationResult(result C.sp_activate_result, timeout float64, frontmost string) error {
+func activationResult(result int32, timeout float64, frontmost string) error {
 	switch result {
-	case C.SP_ACTIVATE_DONE:
+	case abi.SP_ACTIVATE_DONE:
 		return nil
-	case C.SP_ACTIVATE_REFUSED:
+	case abi.SP_ACTIVATE_REFUSED:
 		return fmt.Errorf("the system did not activate the application within %gs; the frontmost application is %s", timeout, frontmost)
-	case C.SP_ACTIVATE_NOT_KEY:
+	case abi.SP_ACTIVATE_NOT_KEY:
 		return fmt.Errorf("the application is active but the window did not become key within %gs; the frontmost application is %s", timeout, frontmost)
-	case C.SP_ACTIVATE_PENDING:
+	case abi.SP_ACTIVATE_PENDING:
 		return fmt.Errorf("the window's webviews did not apply the active state within %gs", timeout)
-	case C.SP_ACTIVATE_LOST:
+	case abi.SP_ACTIVATE_LOST:
 		return fmt.Errorf("the window lost activation before its webviews applied it; the frontmost application is %s", frontmost)
 	default:
 		return errors.New("the window cannot be activated")
@@ -249,23 +136,23 @@ func activationResult(result C.sp_activate_result, timeout float64, frontmost st
 
 // ActivateWindow makes the window the key window with sp_input_activate of native/darwin.
 func (implementation) ActivateWindow(window platform.Window, x, y, timeout float64, done func(error)) error {
-	C.activateWindowAt(C.uintptr_t(window), C.double(x), C.double(y), C.double(timeout), C.uintptr_t(handles.NewHandle(activation{timeout, done})))
+	native.ActivateWindowAt(uintptr(window), float64(x), float64(y), float64(timeout), uintptr(handles.NewHandle(activation{timeout, done})))
 	return nil
 }
 
 // InjectKey delivers input with sp_input_key of native/darwin. When text is empty, it types key.
 func (implementation) InjectKey(window platform.Window, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {
-	name := C.CString(key)
-	defer C.free(unsafe.Pointer(name))
-	var typed *C.char
+	name := native.CString(key)
+	defer native.Free(unsafe.Pointer(name))
+	var typed *byte
 	if text != "" {
-		typed = C.CString(text)
-		defer C.free(unsafe.Pointer(typed))
+		typed = native.CString(text)
+		defer native.Free(unsafe.Pointer(typed))
 	}
-	switch C.main_sp_input_key(C.uintptr_t(window), name, typed, C.uint(modifiers), C.bool(down)) {
-	case C.SP_INPUT_DELIVERED:
+	switch native.MainSpInputKey(uintptr(window), name, typed, uint32(modifiers), bool(down)) {
+	case abi.SP_INPUT_DELIVERED:
 		return platform.PointerDelivered, nil
-	case C.SP_INPUT_INACTIVE:
+	case abi.SP_INPUT_INACTIVE:
 		return platform.PointerInactive, nil
 	default:
 		return platform.PointerRejected, nil
@@ -274,7 +161,7 @@ func (implementation) InjectKey(window platform.Window, key, text string, modifi
 
 func (implementation) UnwatchInput(monitor uintptr) {
 	if handle, ok := watchers[monitor]; ok {
-		C.surfaceUnwatchMouse(C.uintptr_t(monitor))
+		native.SurfaceUnwatchMouse(uintptr(monitor))
 		handle.Delete()
 		delete(watchers, monitor)
 	}

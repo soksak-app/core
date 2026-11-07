@@ -2,24 +2,6 @@
 
 package darwin
 
-/*
-#include "ui_queue.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The main queue runs the step in C: the work runs on the worker while the main thread waits (main_thread.h).
-static void nativeUIRun(uintptr_t context) {
-    hostRunOnWorker(^{ sp_host_callback_native_ui_run(context); });
-}
-static void uiEnqueue(uintptr_t context) { sp_ui_enqueue(nativeUIRun, context); }
-static void uiEnqueueAfter(uint64_t delay, uintptr_t context) { sp_ui_enqueue_after(delay, nativeUIRun, context); }
-static void installMainThread(uintptr_t worker, uintptr_t main) {
-    hostInstallMainThread((void (*)(void (^)(void)))worker, (void (*)(void (^)(void)))main);
-}
-static void mainThreadInstalled(bool *worker, bool *main) { hostMainThreadInstalled(worker, main); }
-*/
-import "C"
-
 import (
 	"fmt"
 
@@ -29,15 +11,12 @@ import (
 	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
-// InstallMainThread installs the main-thread functions of the framework (main_thread.h), given as the addresses of the C functions.
-// A framework adapter calls it before the start of the library.
-func InstallMainThread(worker, main uintptr) {
-	C.installMainThread(C.uintptr_t(worker), C.uintptr_t(main))
-}
-
 func (implementation) RequireMainThread() error {
-	var worker, main C.bool
-	C.mainThreadInstalled(&worker, &main)
+	if err := ensureNative(); err != nil {
+		return err
+	}
+	var worker, main bool
+	native.MainThreadInstalled(&worker, &main)
 	var missing []string
 	if !worker {
 		missing = append(missing, "hostRunOnWorker")
@@ -48,12 +27,12 @@ func (implementation) RequireMainThread() error {
 	if len(missing) == 0 {
 		return nil
 	}
-	return fmt.Errorf("main-thread functions are not installed: %s; the framework adapter installs them through darwin.InstallMainThread before the start of the library", strings.Join(missing, " and "))
+	return fmt.Errorf("main-thread functions are not installed: %s; the framework adapter installs them through its native provider before the start of the library", strings.Join(missing, " and "))
 }
 
 func (implementation) EnqueueUI(work func()) error {
 	handle := handles.NewHandle(work)
-	C.uiEnqueue(C.uintptr_t(handle))
+	native.UiEnqueue(uintptr(handle))
 	return nil
 }
 
@@ -62,12 +41,11 @@ func (implementation) EnqueueUIAfter(delay time.Duration, work func()) error {
 		return fmt.Errorf("UI queue delay %s is negative", delay)
 	}
 	handle := handles.NewHandle(work)
-	C.uiEnqueueAfter(C.uint64_t(delay.Nanoseconds()), C.uintptr_t(handle))
+	native.UiEnqueueAfter(uint64(delay.Nanoseconds()), uintptr(handle))
 	return nil
 }
 
-//export goHost_native_ui_run
-func goHost_native_ui_run(context C.uintptr_t) {
+func goHost_native_ui_run(context uintptr) {
 	handle := handles.Handle(context)
 	work := handle.Value().(func())
 	handle.Delete()

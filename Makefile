@@ -398,11 +398,21 @@ bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "$(WAILS_DEBUG_TAGS)",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-mygo = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-mygo = CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) $(if $(filter release,$(2)),-ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
-build-native: check-host-callbacks
+build-native: check-host-callbacks check-host-api
 	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM)
+
+.PHONY: build-native-mygo check-host-api create-host-api
+check-host-api:
+	@node scripts/check-host-api.mjs
+
+create-host-api:
+	@node scripts/check-host-api.mjs --write
+
+build-native-mygo: check-host-callbacks check-host-api
+	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) build-mygo
 
 # Fetches and checksum-validates the pinned native dependency without compiling it.
 fetch-native:
@@ -511,17 +521,21 @@ build-wailsv3-release: build-native build
 	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
 
-build-mygo: build-native copy-frontend-mygo
+build-mygo: build-native-mygo copy-frontend-mygo
 	@$(call bundle-info,$(MYGO_DEBUG_BUNDLE),mygo)
 	@$(call bundle-dev,$(MYGO_DEBUG_BUNDLE),mygo)
-	@$(GO_ENV) go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_LINK)" -o ../../$(MYGO_DEBUG) ./src
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -tags "diagnostics dev" -o ../../$(MYGO_DEBUG) ./src
+	@mkdir -p $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks
+	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks/
 	@$(call sok-mygo,$(MYGO_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(MYGO_DEBUG_BUNDLE))
 
-build-mygo-release: build-native build
+build-mygo-release: build-native-mygo build
 	@$(call bundle-info,$(MYGO_RELEASE_BUNDLE),mygo)
 	@$(call copy-mygo,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
-	@$(GO_ENV) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(MYGO_RELEASE) ./src
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w" -o ../../$(MYGO_RELEASE) ./src
+	@mkdir -p $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks
+	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks/
 	@$(call sok-mygo,$(MYGO_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(MYGO_RELEASE_BUNDLE))
 

@@ -1,5 +1,6 @@
-//go:build darwin
-
+#include "host_api_webview.h"
+#include "host_api_window.h"
+#include "host_api_layout.h"
 #import <Block.h>
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>

@@ -4,84 +4,11 @@ package darwin
 
 // Records a window. The recording implementation is capture.m of native/darwin. It is included only in diagnostic builds.
 
-/*
-#cgo CFLAGS: -x objective-c -fmodules
-#cgo LDFLAGS: -framework Cocoa
-#cgo pkg-config: soksak-darwin
-#include <stdlib.h>
-#include <stdint.h>
-#include "capture.h"
-#include "surface_layout.h"
-#include "notifications.h"
-#include "document_view.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The callbacks run their Go functions on the worker, and the native calls of this file that use AppKit, WebKit or the capture
-// state run on the main thread (main_thread.h). The capture clock and the capture error need no thread.
-static void documentFrameIdentityDoneBridge(void *context, const char *json, const char *error) {
-	hostRunOnWorker(^{ sp_host_diagnostic_callback_document_frame_identity_done((uintptr_t)context, (char *)json, (char *)error); });
-}
-static bool scheduleDocumentFrameIdentityStart(void *document, uint64_t generation, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_frame_identity_start(document, generation, documentFrameIdentityDoneBridge, (void *)context));
-}
-static bool scheduleDocumentFrameIdentityFreeze(uint64_t generation, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_frame_identity_freeze(generation, documentFrameIdentityDoneBridge, (void *)context));
-}
-static bool scheduleDocumentFrameIdentityRemove(uint64_t generation, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_frame_identity_remove(generation, documentFrameIdentityDoneBridge, (void *)context));
-}
-
-static void deliveredNotificationsBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ sp_host_diagnostic_callback_delivered_notifications((uintptr_t)context, (char *)json); });
-}
-static void listDeliveredNotifications(void) {
-    hostRunOnMain(^{ sp_notifications_delivered(deliveredNotificationsBridge, NULL); });
-}
-#import <Cocoa/Cocoa.h>
-
-// Records at most max window server numbers of this window and the windows attached to it, and returns the number recorded.
-// The capture tool names a window by this number, so it reads the page, surfaces and modals composited by the window server without
-// moving the window to the front. The window number of this app comes first.
-static int windowNumbersOnMain(void* nsWindow, long* out, int max) {
-    NSWindow* window = (NSWindow*)nsWindow;
-    if (window == nil || max <= 0) return 0;
-    int n = 0;
-    out[n++] = (long)[window windowNumber];
-    for (NSWindow* child in [window childWindows]) {
-        if (n >= max) break;
-        out[n++] = (long)[child windowNumber];
-    }
-    return n;
-}
-static int windowNumbers(uintptr_t nsWindow, long* out, int max) { return ON_MAIN(int, windowNumbersOnMain((void *)nsWindow, out, max)); }
-static bool main_sp_capture_open(long windowNumber, bool display, char **error) {
-    return ON_MAIN(bool, sp_capture_open(windowNumber, display, error));
-}
-static bool main_sp_capture_start(const char *directory, bool frameIdentity, char **error) {
-    return ON_MAIN(bool, sp_capture_start(directory, frameIdentity, error));
-}
-static int main_sp_capture_stop(double after) { return ON_MAIN(int, sp_capture_stop(after)); }
-static bool main_sp_capture_has_stream(void) { return ON_MAIN(bool, sp_capture_has_stream()); }
-static int main_sp_capture_wait(void) { return ON_MAIN(int, sp_capture_wait()); }
-static bool main_sp_capture_limited(void) { return ON_MAIN(bool, sp_capture_limited()); }
-static double main_sp_capture_longest_gap(void) { return ON_MAIN(double, sp_capture_longest_gap()); }
-static bool main_sp_capture_still(const long *windowNumbers, int count, const char *path, char **error) {
-    return ON_MAIN(bool, sp_capture_still(windowNumbers, count, path, error));
-}
-static void main_surfaceLayoutTraceStart(void) { hostRunOnMain(^{ surfaceLayoutTraceStart(); }); }
-static size_t main_surfaceLayoutTraceStop(double *out, size_t capacity) {
-    return ON_MAIN(size_t, surfaceLayoutTraceStop(out, capacity));
-}
-static uint64_t main_surfaceLayoutTraceRequested(void) { return ON_MAIN(uint64_t, surfaceLayoutTraceRequested()); }
-static void main_surfaceLayoutTracePresented(uint64_t ticket) { hostRunOnMain(^{ surfaceLayoutTracePresented(ticket); }); }
-*/
-import "C"
-
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
 
 	"strings"
 	"unsafe"
@@ -91,7 +18,7 @@ import (
 )
 
 func captureError(operation string) error {
-	message := C.GoString(C.sp_capture_error())
+	message := native.GoString(diagnosticNative.SpCaptureError())
 	if message == "" {
 		return fmt.Errorf("capture %s failed without a native reason", operation)
 	}
@@ -99,10 +26,10 @@ func captureError(operation string) error {
 }
 
 // Reads and releases the prepare, start and stop capture errors that the caller owns.
-func captureCallError(operation string, success bool, nativeError *C.char) error {
+func captureCallError(operation string, success bool, nativeError *byte) error {
 	if nativeError != nil {
-		defer C.free(unsafe.Pointer(nativeError))
-		return fmt.Errorf("capture %s: %s", operation, C.GoString(nativeError))
+		defer native.Free(unsafe.Pointer(nativeError))
+		return fmt.Errorf("capture %s: %s", operation, native.GoString(nativeError))
 	}
 	if !success {
 		return fmt.Errorf("capture %s failed without a native reason", operation)
@@ -111,8 +38,8 @@ func captureCallError(operation string, success bool, nativeError *C.char) error
 }
 
 func (implementation) WindowNumbers(window platform.Window) ([]int, error) {
-	var buf [32]C.long
-	n := int(C.windowNumbers(C.uintptr_t(window), &buf[0], C.int(len(buf))))
+	var buf [32]int64
+	n := int(diagnosticNative.WindowNumbers(uintptr(window), &buf[0], int32(len(buf))))
 	out := make([]int, n)
 	for i := 0; i < n; i++ {
 		out[i] = int(buf[i])
@@ -121,8 +48,8 @@ func (implementation) WindowNumbers(window platform.Window) ([]int, error) {
 }
 
 func (implementation) CaptureOpen(windowNumber int, display bool) error {
-	var nativeError *C.char
-	prepared := bool(C.main_sp_capture_open(C.long(windowNumber), C.bool(display), &nativeError))
+	var nativeError *byte
+	prepared := bool(diagnosticNative.MainSpCaptureOpen(int64(windowNumber), bool(display), &nativeError))
 	return captureCallError("open", prepared, nativeError)
 }
 
@@ -130,15 +57,15 @@ func (implementation) CaptureStart(directory string, frameIdentity bool) error {
 	if strings.IndexByte(directory, 0) >= 0 {
 		return errors.New("capture start: directory contains NUL")
 	}
-	where := C.CString(directory)
-	defer C.free(unsafe.Pointer(where))
-	var nativeError *C.char
-	started := bool(C.main_sp_capture_start(where, C.bool(frameIdentity), &nativeError))
+	where := native.CString(directory)
+	defer native.Free(unsafe.Pointer(where))
+	var nativeError *byte
+	started := bool(diagnosticNative.MainSpCaptureStart(where, bool(frameIdentity), &nativeError))
 	return captureCallError("start", started, nativeError)
 }
 
 func (implementation) CaptureStop(after float64) (int, error) {
-	frames := int(C.main_sp_capture_stop(C.double(after)))
+	frames := int(diagnosticNative.MainSpCaptureStop(float64(after)))
 	if err := captureErrorIfPresent("stop"); err != nil {
 		return frames, err
 	}
@@ -147,11 +74,11 @@ func (implementation) CaptureStop(after float64) (int, error) {
 
 // CaptureHasStream reports whether the capture module still owns its current stream and writer transaction.
 func (implementation) CaptureHasStream() (bool, error) {
-	return bool(C.main_sp_capture_has_stream()), nil
+	return bool(diagnosticNative.MainSpCaptureHasStream()), nil
 }
 
 func captureErrorIfPresent(operation string) error {
-	message := C.GoString(C.sp_capture_error())
+	message := native.GoString(diagnosticNative.SpCaptureError())
 	if message == "" {
 		return nil
 	}
@@ -159,49 +86,50 @@ func captureErrorIfPresent(operation string) error {
 }
 
 func (implementation) CaptureWait() (bool, error) {
-	if C.main_sp_capture_wait() != 0 {
+	if diagnosticNative.MainSpCaptureWait() != 0 {
 		return true, nil
 	}
 	return false, captureError("wait")
 }
 
-func (implementation) CaptureLimited() bool { return bool(C.main_sp_capture_limited()) }
+func (implementation) CaptureLimited() bool { return bool(diagnosticNative.MainSpCaptureLimited()) }
 
-func (implementation) CaptureLongestGap() float64 { return float64(C.main_sp_capture_longest_gap()) }
+func (implementation) CaptureLongestGap() float64 {
+	return float64(diagnosticNative.MainSpCaptureLongestGap())
+}
 
-func (implementation) CaptureClock() float64 { return float64(C.sp_capture_clock()) }
+func (implementation) CaptureClock() float64 { return float64(diagnosticNative.SpCaptureClock()) }
 
 // deliveredDone receives the result of the notification query in progress.
 var deliveredDone func(string)
 
-//export goHost_delivered_notifications
-func goHost_delivered_notifications(_ C.uintptr_t, json *C.char) {
-	deliveredDone(C.GoString(json))
+func goHost_delivered_notifications(_ uintptr, json *byte) {
+	deliveredDone(native.GoString(json))
 }
 
 func (implementation) DeliveredNotifications(done func(json string)) {
 	deliveredDone = done
-	C.listDeliveredNotifications()
+	diagnosticNative.ListDeliveredNotifications()
 }
 
-func (implementation) LayoutTraceStart() { C.main_surfaceLayoutTraceStart() }
+func (implementation) LayoutTraceStart() { diagnosticNative.MainSurfaceLayoutTraceStart() }
 
 func (implementation) LayoutTraceRequested() (presented func()) {
-	ticket := C.main_surfaceLayoutTraceRequested()
-	return func() { C.main_surfaceLayoutTracePresented(ticket) }
+	ticket := diagnosticNative.MainSurfaceLayoutTraceRequested()
+	return func() { diagnosticNative.MainSurfaceLayoutTracePresented(ticket) }
 }
 
 func (implementation) LayoutTraceStop() ([][5]float64, error) {
 	const capacity = 4096
-	values := make([]C.double, capacity*C.SURFACE_LAYOUT_TRACE_STAGES)
-	count := int(C.main_surfaceLayoutTraceStop(&values[0], capacity))
+	values := make([]float64, capacity*abi.SURFACE_LAYOUT_TRACE_STAGES)
+	count := int(diagnosticNative.MainSurfaceLayoutTraceStop(&values[0], capacity))
 	if count > capacity {
 		return nil, fmt.Errorf("layout trace capacity exceeded: %d records, capacity %d", count, capacity)
 	}
 	records := make([][5]float64, count)
 	for i := range records {
-		for j := 0; j < C.SURFACE_LAYOUT_TRACE_STAGES; j++ {
-			records[i][j] = float64(values[i*C.SURFACE_LAYOUT_TRACE_STAGES+j])
+		for j := 0; j < abi.SURFACE_LAYOUT_TRACE_STAGES; j++ {
+			records[i][j] = float64(values[i*abi.SURFACE_LAYOUT_TRACE_STAGES+j])
 		}
 	}
 	return records, nil
@@ -214,14 +142,14 @@ func (implementation) CaptureStill(windowNumbers []int, path string) error {
 	if len(windowNumbers) == 0 {
 		return errors.New("still capture needs the number of a window")
 	}
-	numbers := make([]C.long, len(windowNumbers))
+	numbers := make([]int64, len(windowNumbers))
 	for i, number := range windowNumbers {
-		numbers[i] = C.long(number)
+		numbers[i] = int64(number)
 	}
-	target := C.CString(path)
-	defer C.free(unsafe.Pointer(target))
-	var nativeError *C.char
-	written := bool(C.main_sp_capture_still(&numbers[0], C.int(len(numbers)), target, &nativeError))
+	target := native.CString(path)
+	defer native.Free(unsafe.Pointer(target))
+	var nativeError *byte
+	written := bool(diagnosticNative.MainSpCaptureStill(&numbers[0], int32(len(numbers)), target, &nativeError))
 	return captureCallError("still", written, nativeError)
 }
 func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {
@@ -229,7 +157,7 @@ func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, genera
 		return errors.New("start document frame identity: completion callback is nil")
 	}
 	handle := handles.NewHandle(done)
-	if !bool(C.scheduleDocumentFrameIdentityStart(document, C.uint64_t(generation), C.uintptr_t(handle))) {
+	if !bool(diagnosticNative.ScheduleDocumentFrameIdentityStart(document, uint64(generation), uintptr(handle))) {
 		handle.Delete()
 		return errors.New("start document frame identity was not scheduled")
 	}
@@ -237,41 +165,40 @@ func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, genera
 }
 
 func (implementation) FreezeDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error {
-	return scheduleDocumentFrameIdentity("freeze", generation, done, func(handle C.uintptr_t) bool {
-		return bool(C.scheduleDocumentFrameIdentityFreeze(C.uint64_t(generation), handle))
+	return scheduleDocumentFrameIdentity("freeze", generation, done, func(handle uintptr) bool {
+		return bool(diagnosticNative.ScheduleDocumentFrameIdentityFreeze(uint64(generation), handle))
 	})
 }
 
 func (implementation) RemoveDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error {
-	return scheduleDocumentFrameIdentity("remove", generation, done, func(handle C.uintptr_t) bool {
-		return bool(C.scheduleDocumentFrameIdentityRemove(C.uint64_t(generation), handle))
+	return scheduleDocumentFrameIdentity("remove", generation, done, func(handle uintptr) bool {
+		return bool(diagnosticNative.ScheduleDocumentFrameIdentityRemove(uint64(generation), handle))
 	})
 }
 
-func scheduleDocumentFrameIdentity(operation string, generation uint64, done func(json.RawMessage, error), schedule func(C.uintptr_t) bool) error {
+func scheduleDocumentFrameIdentity(operation string, generation uint64, done func(json.RawMessage, error), schedule func(uintptr) bool) error {
 	if done == nil {
 		return fmt.Errorf("%s document frame identity: completion callback is nil", operation)
 	}
 	handle := handles.NewHandle(done)
-	if !schedule(C.uintptr_t(handle)) {
+	if !schedule(uintptr(handle)) {
 		handle.Delete()
 		return fmt.Errorf("%s document frame identity was not scheduled", operation)
 	}
 	return nil
 }
 
-//export goHost_document_frame_identity_done
-func goHost_document_frame_identity_done(context C.uintptr_t, reply *C.char, nativeError *C.char) {
+func goHost_document_frame_identity_done(context uintptr, reply *byte, nativeError *byte) {
 	handle := handles.Handle(context)
 	done := handle.Value().(func(json.RawMessage, error))
 	handle.Delete()
 	if nativeError != nil {
-		done(nil, errors.New(C.GoString(nativeError)))
+		done(nil, errors.New(native.GoString(nativeError)))
 		return
 	}
 	if reply == nil {
 		done(nil, errors.New("document frame identity callback returned no reply"))
 		return
 	}
-	done(json.RawMessage(C.GoString(reply)), nil)
+	done(json.RawMessage(native.GoString(reply)), nil)
 }

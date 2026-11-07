@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F686-8 (진행 중): 공유 Darwin C/Objective-C를 native library로 옮기고 두 framework adapter의 typed outbound binding과 callback factory를 생성한다. 실제 cgo 없는 application build를 통합 기준으로 삼으며 별도 divider prototype을 선행 조건에서 제외한다. Native static·dynamic build와 callback ABI 검사는 통과했지만 실제 최적화 진단 release는 bundle에서 현재 workspace starter plugin과 함께 시작하며 production G8-S5 판정은 아직 미검증이다.
+
 - F686-6-1: 고정된 kit 의존성에 소유 항목 KR26의 검사기 수정을 선언된 pnpm patch와 lockfile hash로 반영한다. 정상 검사기는 실제 runtime 진단을 허용하면서 Markdown·주석 형태를 포함한 발견 경위 서술은 거부한다. 공개 consumer 회귀 test로 확인하며 hook이나 검사를 우회하지 않는다.
 
 - F686-6: native-to-Go callback handle context를 canonical header·생성 profile·cgo export 모두에서 정수 token으로 선언한다. C bridge는 Go 진입 전에 범용 native cookie를 변환한다. 기존 token 1은 GC가 보는 pointer가 되어 stack 확장 시 무효 pointer 오류로 종료됐으며, 같은 native 회귀 test는 이제 작은 값과 상위 bit token을 stack 복사·collection 중 유지한다. 실제 native pointer의 pointer type은 유지한다. native 소유 test·cgo 없는 worker·두 adapter의 기본·진단 profile이 통과한다.

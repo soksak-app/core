@@ -2,128 +2,6 @@
 
 package darwin
 
-/*
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include "webview_geometry.h"
-#include "window_facts.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-extern void *sp_surface_create(void *view);
-extern void sp_surface_close(void *surface);
-extern void sp_surface_set_window_overlays(void *mainWebview, const double *rects, size_t count);
-#import <Cocoa/Cocoa.h>
-#import <WebKit/WebKit.h>
-
-// The native calls of this file run on the main thread (main_thread.h).
-static void *main_sp_window_main_webview(uintptr_t window) { return ON_MAIN(void *, sp_window_main_webview((void *)window)); }
-static bool main_sp_webview_collect_garbage(void *view) { return ON_MAIN(bool, sp_webview_collect_garbage(view)); }
-static void main_webviewGetFrame(void *view, double *out) { hostRunOnMain(^{ webviewGetFrame(view, out); }); }
-static void main_view_retain(void *view) { hostRunOnMain(^{ CFRetain(view); }); }
-static void main_view_release(void *view) { hostRunOnMain(^{ CFRelease(view); }); }
-static void *main_sp_window_native_view(uintptr_t window) { return ON_MAIN(void *, sp_window_native_view((void *)window)); }
-static void *main_sp_surface_create(uintptr_t window) { return ON_MAIN(void *, sp_surface_create(sp_window_composition((void *)window))); }
-static void main_sp_surface_close(void *surface) { hostRunOnMain(^{ sp_surface_close(surface); }); }
-static void main_webviewSetFrame(void *view, double x, double y, double width, double height) {
-    hostRunOnMain(^{ webviewSetFrame(view, x, y, width, height); });
-}
-static void main_sp_surface_focus(void *surface) { hostRunOnMain(^{ sp_surface_focus(surface); }); }
-static void main_sp_surface_focus_for_region(void *surface) { hostRunOnMain(^{ sp_surface_focus_for_region(surface); }); }
-static void main_sp_window_focus_workbench(uintptr_t window) { hostRunOnMain(^{ sp_window_focus_workbench((void *)window); }); }
-static void main_sp_window_keyboard_hold(uintptr_t window) { hostRunOnMain(^{ sp_window_keyboard_hold((void *)window); }); }
-static void main_sp_window_keyboard_decided(uintptr_t window) { hostRunOnMain(^{ sp_window_keyboard_decided((void *)window); }); }
-static void main_sp_window_modal_hold(uintptr_t window) { hostRunOnMain(^{ sp_window_modal_hold((void *)window); }); }
-static void main_sp_window_modal_hold_end(uintptr_t window) { hostRunOnMain(^{ sp_window_modal_hold_end((void *)window); }); }
-static void main_webviewSetSurfaceHidden(void *view, bool hidden) { hostRunOnMain(^{ webviewSetSurfaceHidden(view, hidden); }); }
-static void main_webviewSetSurfaceAlpha(void *view, double alpha) { hostRunOnMain(^{ webviewSetSurfaceAlpha(view, alpha); }); }
-static void main_sp_surface_set_window_overlays(void *main, const double *rects, size_t count) {
-    hostRunOnMain(^{ sp_surface_set_window_overlays(main, rects, count); });
-}
-static void main_webviewSetSurfaceOverlays(void *view, const double *values, size_t count) {
-    hostRunOnMain(^{ webviewSetSurfaceOverlays(view, values, count); });
-}
-
-void *nativeWebviewCreate(uintptr_t window, unsigned long long identifier, const char *name, const char *script,
-    double x, double y, double width, double height, bool hidden, bool transparent);
-bool nativeWebviewNavigate(void *view, const char *url);
-void nativeWebviewBounds(void *view, double x, double y, double width, double height);
-void nativeWebviewHidden(void *view, bool hidden);
-void nativeWebviewBackground(void *view, bool enabled);
-void nativeWebviewEval(void *view, const char *script);
-void nativeWebviewClose(void *view);
-bool nativeWindowConfigureMain(uintptr_t window, bool dark);
-bool nativeWindowSetMainWebview(uintptr_t window);
-
-
-static void fileDroppedBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ sp_host_callback_file_dropped((uintptr_t)context, (char *)json); });
-}
-
-static void fileDropReleasedBridge(void *context) {
-    hostRunOnWorker(^{ sp_host_callback_file_drop_released((uintptr_t)context); });
-}
-
-static bool windowFileDrop(void *main, uintptr_t context) {
-    return ON_MAIN(bool, sp_window_file_drop(main, fileDroppedBridge, fileDropReleasedBridge, (void *)context));
-}
-
-// A modal is a WKWebView inside the main window. A layer clips the corners, and the position and the focus of the modal
-// do not change the OS window hierarchy.
-static void modalViewConfigureOnMain(void* handle, const char* title, double radius) {
-    NSView* view = (NSView*)handle;
-    [view setWantsLayer:YES];
-    view.layer.cornerRadius = radius;
-    view.layer.masksToBounds = YES;
-    if (title != NULL) [view setAccessibilityLabel:[NSString stringWithUTF8String:title]];
-}
-
-static void modalViewFocusOnMain(void* handle, int take) {
-    NSView* view = (NSView*)handle;
-    NSWindow* window = view.window;
-    if (window == nil) return;
-    if (take) {
-        [view.superview addSubview:view positioned:NSWindowAbove relativeTo:nil];
-        [window makeFirstResponder:view];
-        return;
-    }
-    for (NSView* candidate in window.contentView.subviews) {
-        if (candidate != view && [candidate isKindOfClass:[WKWebView class]]) {
-            [window makeFirstResponder:candidate];
-            return;
-        }
-    }
-}
-
-// Fits the modal region in page coordinates inward to the display pixel grid. Fitting outward would cover the border of the card,
-// as with a surface.
-static void modalAlignedOnMain(void* parentWindow, double x, double y, double w, double h,
-                         double* out) {
-    NSWindow* parent = (NSWindow*)parentWindow;
-    if (parent == nil) return;
-    NSView* content = [parent contentView];
-    if (content == nil) return;
-    double up = content.bounds.size.height - y - h;
-    NSRect r = [parent backingAlignedRect:NSMakeRect(x, up, w, h)
-                                  options:NSAlignAllEdgesInward];
-    out[0] = r.origin.x;
-    out[1] = content.bounds.size.height - r.origin.y - r.size.height;
-    out[2] = r.size.width;
-    out[3] = r.size.height;
-}
-
-static void modalViewConfigure(void* handle, const char* title, double radius) {
-    hostRunOnMain(^{ modalViewConfigureOnMain(handle, title, radius); });
-}
-static void modalViewFocus(void* handle, int take) {
-    hostRunOnMain(^{ modalViewFocusOnMain(handle, take); });
-}
-static void modalAligned(uintptr_t parentWindow, double x, double y, double w, double h, double* out) {
-    hostRunOnMain(^{ modalAlignedOnMain((void *)parentWindow, x, y, w, h, out); });
-}
-*/
-import "C"
-
 import (
 	"errors"
 	"fmt"
@@ -139,36 +17,33 @@ import (
 // passes the same function to all web views.
 var dispatcher platform.Dispatcher
 
-//export goHost_native_committed
-func goHost_native_committed(identifier C.ulonglong) {
+func goHost_native_committed(identifier uint64) {
 	dispatcher.Commit(uint64(identifier))
 }
 
 // terminated receives the end of the WebContent process of the web views; the host passes the same function to all web views, as the dispatcher does.
 var terminated func(identifier uint64)
 
-//export goHost_native_terminated
-func goHost_native_terminated(identifier C.ulonglong) {
+func goHost_native_terminated(identifier uint64) {
 	if receiver := terminated; receiver != nil {
 		routine.Go("webview-terminated", func() { receiver(uint64(identifier)) })
 	}
 }
 
-//export goHost_native_message
-func goHost_native_message(identifier C.ulonglong, message *C.char) {
-	dispatcher.Message(uint64(identifier), C.GoString(message))
+func goHost_native_message(identifier uint64, message *byte) {
+	dispatcher.Message(uint64(identifier), native.GoString(message))
 }
 
 func (implementation) CreateWebview(window platform.Window, options platform.WebviewOptions) (unsafe.Pointer, error) {
 	dispatcher.Handle(options.Receive, options.Committed)
 	terminated = options.Terminated
-	script := C.CString(options.Script)
-	defer C.free(unsafe.Pointer(script))
-	name := C.CString(options.Name)
-	defer C.free(unsafe.Pointer(name))
-	handle := C.nativeWebviewCreate(C.uintptr_t(window), C.ulonglong(options.Identifier), name, script,
-		C.double(options.X), C.double(options.Y), C.double(options.Width), C.double(options.Height),
-		C.bool(options.Hidden), C.bool(options.Transparent))
+	script := native.CString(options.Script)
+	defer native.Free(unsafe.Pointer(script))
+	name := native.CString(options.Name)
+	defer native.Free(unsafe.Pointer(name))
+	handle := native.NativeWebviewCreate(uintptr(window), uint64(options.Identifier), name, script,
+		float64(options.X), float64(options.Y), float64(options.Width), float64(options.Height),
+		bool(options.Hidden), bool(options.Transparent))
 	if handle == nil {
 		return nil, fmt.Errorf("cannot create a native webview in this window/WebKit")
 	}
@@ -176,54 +51,51 @@ func (implementation) CreateWebview(window platform.Window, options platform.Web
 }
 
 func (implementation) NavigateWebview(view unsafe.Pointer, url string) bool {
-	target := C.CString(url)
-	defer C.free(unsafe.Pointer(target))
-	return bool(C.nativeWebviewNavigate(view, target))
+	target := native.CString(url)
+	defer native.Free(unsafe.Pointer(target))
+	return bool(native.NativeWebviewNavigate(view, target))
 }
 
 func (implementation) SetWebviewBounds(view unsafe.Pointer, x, y, width, height float64) {
-	C.nativeWebviewBounds(view, C.double(x), C.double(y), C.double(width), C.double(height))
+	native.NativeWebviewBounds(view, float64(x), float64(y), float64(width), float64(height))
 }
 
 func (implementation) SetWebviewHidden(view unsafe.Pointer, hidden bool) {
-	C.nativeWebviewHidden(view, C.bool(hidden))
+	native.NativeWebviewHidden(view, bool(hidden))
 }
 
 func (implementation) SetWebviewBackground(view unsafe.Pointer, enabled bool) {
-	C.nativeWebviewBackground(view, C.bool(enabled))
+	native.NativeWebviewBackground(view, bool(enabled))
 }
 
 func (implementation) EvaluateScript(view unsafe.Pointer, script string) {
-	value := C.CString(script)
-	defer C.free(unsafe.Pointer(value))
-	C.nativeWebviewEval(view, value)
+	value := native.CString(script)
+	defer native.Free(unsafe.Pointer(value))
+	native.NativeWebviewEval(view, value)
 }
 
-func (implementation) CloseWebview(view unsafe.Pointer) { C.nativeWebviewClose(view) }
+func (implementation) CloseWebview(view unsafe.Pointer) { native.NativeWebviewClose(view) }
 
 func (implementation) ConfigureMainWindow(window platform.Window, dark bool) error {
-	if !bool(C.nativeWindowConfigureMain(C.uintptr_t(window), C.bool(dark))) {
+	if !bool(native.NativeWindowConfigureMain(uintptr(window), bool(dark))) {
 		return errors.New("the window has no main webview or the requested appearance is unavailable")
 	}
 	return nil
 }
 
-//export goHost_file_dropped
-func goHost_file_dropped(context C.uintptr_t, json *C.char) {
+func goHost_file_dropped(context uintptr, json *byte) {
 	dropped := handles.Handle(uintptr(context)).Value().(func(string))
-	dropped(C.GoString(json))
+	dropped(native.GoString(json))
 }
 
 // Clears the handle when the drop view no longer uses the receiver.
-//
-//export goHost_file_drop_released
-func goHost_file_drop_released(context C.uintptr_t) {
+func goHost_file_drop_released(context uintptr) {
 	handles.Handle(uintptr(context)).Delete()
 }
 
 func (implementation) FileDrop(main unsafe.Pointer, dropped func(json string)) error {
 	handle := handles.NewHandle(dropped)
-	if !bool(C.windowFileDrop(main, C.uintptr_t(handle))) {
+	if !bool(native.WindowFileDrop(main, uintptr(handle))) {
 		handle.Delete()
 		return fmt.Errorf("the main webview has no window composition for file drops")
 	}
@@ -231,14 +103,14 @@ func (implementation) FileDrop(main unsafe.Pointer, dropped func(json string)) e
 }
 
 func (implementation) SetMainWebview(window platform.Window) error {
-	if bool(C.nativeWindowSetMainWebview(C.uintptr_t(window))) {
+	if bool(native.NativeWindowSetMainWebview(uintptr(window))) {
 		return nil
 	}
 	return fmt.Errorf("the main webview is not in the window hierarchy")
 }
 
 func (implementation) MainWebview(window platform.Window) (unsafe.Pointer, error) {
-	main := C.main_sp_window_main_webview(C.uintptr_t(window))
+	main := native.MainSpWindowMainWebview(uintptr(window))
 	if main == nil {
 		return nil, fmt.Errorf("the window has no registered app DOM webview")
 	}
@@ -246,79 +118,79 @@ func (implementation) MainWebview(window platform.Window) (unsafe.Pointer, error
 }
 
 func (implementation) CollectGarbage(view unsafe.Pointer) error {
-	if bool(C.main_sp_webview_collect_garbage(view)) {
+	if bool(native.MainSpWebviewCollectGarbage(view)) {
 		return nil
 	}
 	return fmt.Errorf("the JavaScript garbage collection request is unavailable")
 }
 
 func (implementation) NativeView(window platform.Window) unsafe.Pointer {
-	return C.main_sp_window_native_view(C.uintptr_t(window))
+	return native.MainSpWindowNativeView(uintptr(window))
 }
 
-func (implementation) RetainView(view unsafe.Pointer) { C.main_view_retain(view) }
+func (implementation) RetainView(view unsafe.Pointer) { native.MainViewRetain(view) }
 
-func (implementation) ReleaseView(view unsafe.Pointer) { C.main_view_release(view) }
+func (implementation) ReleaseView(view unsafe.Pointer) { native.MainViewRelease(view) }
 
 func (implementation) CreateSurface(window platform.Window) (unsafe.Pointer, error) {
-	handle := C.main_sp_surface_create(C.uintptr_t(window))
+	handle := native.MainSpSurfaceCreate(uintptr(window))
 	if handle == nil {
 		return nil, fmt.Errorf("cannot create SurfaceHost")
 	}
 	return handle, nil
 }
 
-func (implementation) CloseSurface(surface unsafe.Pointer) { C.main_sp_surface_close(surface) }
+func (implementation) CloseSurface(surface unsafe.Pointer) { native.MainSpSurfaceClose(surface) }
 func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64) {
-	C.main_webviewSetFrame(surface, C.double(x), C.double(y), C.double(width), C.double(height))
+	native.MainWebviewSetFrame(surface, float64(x), float64(y), float64(width), float64(height))
 }
 
 // SurfaceFrame returns the current region of a surface. The host fits the declared region to pixels, so
 // it can differ from the region that the page sent, and the page receives that difference.
 func (implementation) SurfaceFrame(surface unsafe.Pointer) platform.Rect {
-	var out [4]C.double
-	C.main_webviewGetFrame(surface, &out[0])
+	var out [4]float64
+	native.MainWebviewGetFrame(surface, &out[0])
 	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
 }
 func (implementation) SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool) {
-	C.main_webviewSetSurfaceHidden(surface, C.bool(hidden))
+	native.MainWebviewSetSurfaceHidden(surface, bool(hidden))
 }
-func (implementation) FocusSurface(surface unsafe.Pointer) { C.main_sp_surface_focus(surface) }
+func (implementation) FocusSurface(surface unsafe.Pointer) { native.MainSpSurfaceFocus(surface) }
 func (implementation) FocusSurfaceForRegion(surface unsafe.Pointer) {
-	C.main_sp_surface_focus_for_region(surface)
+	native.MainSpSurfaceFocusForRegion(surface)
 }
 func (implementation) FocusWorkbench(window platform.Window) {
-	C.main_sp_window_focus_workbench(C.uintptr_t(window))
+	native.MainSpWindowFocusWorkbench(uintptr(window))
 }
 func (implementation) KeyboardHold(window platform.Window) {
-	C.main_sp_window_keyboard_hold(C.uintptr_t(window))
+	native.MainSpWindowKeyboardHold(uintptr(window))
 }
 func (implementation) KeyboardDecided(window platform.Window) {
-	C.main_sp_window_keyboard_decided(C.uintptr_t(window))
+	native.MainSpWindowKeyboardDecided(uintptr(window))
 }
 func (implementation) ModalHold(window platform.Window) {
-	C.main_sp_window_modal_hold(C.uintptr_t(window))
+	native.MainSpWindowModalHold(uintptr(window))
 }
 func (implementation) ModalHoldEnd(window platform.Window) {
-	C.main_sp_window_modal_hold_end(C.uintptr_t(window))
+	native.MainSpWindowModalHoldEnd(uintptr(window))
 }
 func (implementation) SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64) {
-	C.main_webviewSetSurfaceAlpha(surface, C.double(alpha))
+	native.MainWebviewSetSurfaceAlpha(surface, float64(alpha))
 }
 func (implementation) SetWindowOverlays(main unsafe.Pointer, overlays []platform.WindowOverlay) error {
 	if main == nil {
 		return fmt.Errorf("cannot set window overlays without the registered main webview")
 	}
 	packed := platform.VisibleWindowOverlayRects(overlays)
-	values := make([]C.double, len(packed))
+	values := make([]float64, len(packed))
 	for i, value := range packed {
-		values[i] = C.double(value)
+		values[i] = float64(value)
 	}
-	var data *C.double
+	var data *float64
 	if len(values) > 0 {
 		data = &values[0]
 	}
-	C.main_sp_surface_set_window_overlays(main, data, C.size_t(len(values)/4))
+	native.MainSpSurfaceSetWindowOverlays(main, data, uint64(len(values)/4))
 	return nil
 }
 
@@ -337,33 +209,33 @@ func surfaceOverlayValues(overlays []platform.DOMOverlay) []float64 {
 
 func (implementation) SetSurfaceOverlays(view unsafe.Pointer, overlays []platform.DOMOverlay) {
 	floats := surfaceOverlayValues(overlays)
-	values := make([]C.double, len(floats))
+	values := make([]float64, len(floats))
 	for index, value := range floats {
-		values[index] = C.double(value)
+		values[index] = float64(value)
 	}
-	var data *C.double
+	var data *float64
 	if len(values) > 0 {
 		data = &values[0]
 	}
-	C.main_webviewSetSurfaceOverlays(view, data, C.size_t(len(overlays)))
+	native.MainWebviewSetSurfaceOverlays(view, data, uint64(len(overlays)))
 }
 
 func (implementation) ConfigureModal(view unsafe.Pointer, title string, radius float64) {
-	name := C.CString(title)
-	defer C.free(unsafe.Pointer(name))
-	C.modalViewConfigure(view, name, C.double(radius))
+	name := native.CString(title)
+	defer native.Free(unsafe.Pointer(name))
+	native.ModalViewConfigure(view, name, float64(radius))
 }
 
 func (implementation) FocusModal(view unsafe.Pointer, take bool) {
-	value := C.int(0)
+	value := int32(0)
 	if take {
 		value = 1
 	}
-	C.modalViewFocus(view, value)
+	native.ModalViewFocus(view, value)
 }
 
 func (implementation) AlignRect(window platform.Window, at platform.Rect) (platform.Rect, error) {
-	var out [4]C.double
-	C.modalAligned(C.uintptr_t(window), C.double(at.X), C.double(at.Y), C.double(at.W), C.double(at.H), &out[0])
+	var out [4]float64
+	native.ModalAligned(uintptr(window), float64(at.X), float64(at.Y), float64(at.W), float64(at.H), &out[0])
 	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}, nil
 }

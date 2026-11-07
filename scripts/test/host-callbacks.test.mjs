@@ -7,6 +7,71 @@ import test from "node:test";
 
 const command = new URL("../check-host-callbacks.mjs", import.meta.url).pathname;
 
+test("default callback outputs include the independent shared-host fixture and explicit outputs remain isolated", async () => {
+  const { hostCallbackOutputPaths } = await import("../check-host-callbacks.mjs");
+  const defaults = hostCallbackOutputPaths();
+  for (const [key, path] of Object.entries({
+    output: "packages/host/wailsv3/src/platform/darwin/bindings/callback_bindings.go",
+    puregoOutput: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go",
+    typesOutput: "packages/host/go/src/platform/darwin/abi/callback_types.go",
+    handlersOutput: "packages/host/go/src/platform/darwin/callback_handlers.go",
+    fixtureOutput: "packages/host/go/tests/platform/darwin/bindings/callback_bindings.go",
+  })) {
+    assert.equal(defaults[key], new URL(`../../${path}`, import.meta.url).pathname);
+  }
+  const isolated = join(tmpdir(), "fixture_callbacks.go");
+  assert.deepEqual(hostCallbackOutputPaths({ output: isolated }), {
+    output: isolated, puregoOutput: undefined, typesOutput: undefined, handlersOutput: undefined, fixtureOutput: undefined,
+  });
+});
+
+test("common handler factories follow header field names and participate in artifact checks", { timeout: 30000 }, async () => {
+  const { createHostCallbacks } = await import("../check-host-callbacks.mjs");
+  const folder = mkdtempSync(join(tmpdir(), "host-callback-handlers-"));
+  try {
+    const header = join(folder, "callbacks.h"), output = join(folder, "bindings.go"), handlers = join(folder, "handlers.go");
+    const baseHeader = "void unrelated(void);\nvoid sp_host_callback_document_changed(unsigned long context, char *value);\nvoid sp_host_callback_native_committed(unsigned long long identifier);\n";
+    writeFileSync(header, baseHeader + "void sp_host_diagnostic_callback_page_objects_counted(unsigned long context, long elements, long documents, char *failure);\n");
+    const generated = createHostCallbacks(header);
+    assert.equal(typeof generated.handlersBase, "string", "the callback generator does not own common handler factories");
+    assert.match(generated.handlersBase, /func callbackHandlers\(\) abi\.Callbacks/);
+    assert.match(generated.handlersDiagnostics, /func diagnosticCallbackHandlers\(\) abi\.DiagnosticCallbacks/);
+    const mappings = (text) => [...text.matchAll(/(\w+):\s+(goHost_\w+),/g)].map((match) => match.slice(1));
+    assert.deepEqual(mappings(generated.handlersBase), [
+      ["DocumentChanged", "goHost_document_changed"],
+      ["NativeCommitted", "goHost_native_committed"],
+    ]);
+    assert.deepEqual(mappings(generated.handlersDiagnostics), [["PageObjectsCounted", "goHost_page_objects_counted"]]);
+    assert.doesNotMatch(generated.handlersBase + generated.handlersDiagnostics, /import "C"|purego|runtimeCgo|unrelated/);
+    const args = [command, "--header", header, "--output", output, "--handlers-output", handlers];
+    let result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const diagnosticFile = join(folder, "handlers_diagnostics.go");
+    assert.equal(readFileSync(handlers, "utf8"), generated.handlersBase);
+    assert.equal(readFileSync(diagnosticFile, "utf8"), generated.handlersDiagnostics);
+    assert.match(generated.handlersBase, /go:build darwin\n/);
+    assert.match(generated.handlersDiagnostics, /go:build darwin && diagnostics/);
+    const stamp = new Date("2001-01-01T00:00:00Z");
+    utimesSync(handlers, stamp, stamp);
+    utimesSync(diagnosticFile, stamp, stamp);
+    result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(statSync(handlers).mtimeMs, stamp.getTime());
+    assert.equal(statSync(diagnosticFile).mtimeMs, stamp.getTime());
+    for (const [file, source] of [[handlers, generated.handlersBase], [diagnosticFile, generated.handlersDiagnostics]]) {
+      writeFileSync(file, source.replace(/goHost_\w+/, "goHost_wrong_handler"));
+      result = spawnSync(process.execPath, args, { encoding: "utf8" });
+      assert.notEqual(result.status, 0, "a handler wired to the wrong function passed its artifact check");
+      assert.ok(result.stderr.includes(file), result.stderr);
+      writeFileSync(file, source);
+    }
+    writeFileSync(header, baseHeader);
+    result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(existsSync(diagnosticFile), false, "obsolete diagnostic factory remains after removing its header profile");
+  } finally { rmSync(folder, { recursive: true, force: true }); }
+});
+
 test("callback bindings follow the declared native entries and a repeated write preserves the artifact", { timeout: 30000 }, () => {
   const folder = mkdtempSync(join(tmpdir(), "host-callback-bindings-"));
   try {
@@ -16,13 +81,13 @@ test("callback bindings follow the declared native entries and a repeated write 
     const written = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
     assert.equal(written.status, 0, written.stdout + written.stderr);
     const generated = readFileSync(output, "utf8");
-    assert.match(generated, /callbacks\.ready = \(\*\[0\]byte\)\(C\.goHost_ready\)/);
+    assert.match(generated, /native\.ready = \(\*\[0\]byte\)\(C\.goHost_ready\)/);
     assert.doesNotMatch(generated, /C\.goHost_unrelated/);
     assert.doesNotMatch(generated, /C\.goHost_capture/);
     const diagnosticFile = join(folder, "callbacks_diagnostics.go");
     const diagnostics = readFileSync(diagnosticFile, "utf8");
     assert.match(diagnostics, /go:build darwin && diagnostics/);
-    assert.match(diagnostics, /callbacks\.capture = \(\*\[0\]byte\)\(C\.goHost_capture\)/);
+    assert.match(diagnostics, /native\.capture = \(\*\[0\]byte\)\(C\.goHost_capture\)/);
     assert.doesNotMatch(diagnostics, /C\.goHost_ready/);
     const stamp = new Date("2001-01-01T00:00:00Z");
     utimesSync(output, stamp, stamp);
@@ -68,11 +133,12 @@ test("cgo-free callback bindings preserve native types and reject unsupported de
     writeFileSync(header, "#include <stdbool.h>\n#include <stdint.h>\n#include <stddef.h>\nbool sp_host_callback_reply(uintptr_t token, int result, long count, uint64_t sequence, double elapsed, void **bytes, size_t *length, char **kind);\nvoid sp_host_diagnostic_callback_ready(bool ready);\n");
     const generated = createHostCallbacks(header);
     assert.equal(typeof generated.puregoBase, "string", "no cgo-free binding was generated");
-    assert.match(generated.puregoBase, /Reply func\(uintptr, int32, int64, uint64, float64, \*unsafe.Pointer, \*uint64, \*\*byte\) bool/);
+    assert.match(generated.abiBase, /Reply func\(uintptr, int32, int64, uint64, float64, \*unsafe.Pointer, \*uint64, \*\*byte\) bool/);
     assert.doesNotMatch(generated.puregoBase, /import "C"|Ready/);
+    assert.doesNotMatch(generated.abiBase, /purego|runtimeCgo|import "C"/);
     assert.match(generated.puregoBase, /purego.NewCallback\(callbacks.Reply\)/);
     assert.match(generated.puregoDiagnostics, /go:build darwin && diagnostics/);
-    assert.match(generated.puregoDiagnostics, /Ready func\(bool\)/);
+    assert.match(generated.abiDiagnostics, /Ready func\(bool\)/);
     writeFileSync(header, "void sp_host_callback_bad(long double value);\n");
     assert.throws(() => createHostCallbacks(header), /callbacks.h.*unsupported.*long double/);
     writeFileSync(header, "double sp_host_callback_bad(void);\n");
@@ -82,9 +148,22 @@ test("cgo-free callback bindings preserve native types and reject unsupported de
 
 test("cgo-free generated artifacts are checked and obsolete diagnostics are removed", { timeout: 30000 }, () => {
   const folder = mkdtempSync(join(tmpdir(), "host-callback-purego-"));
+  const productionFiles = [
+    "packages/host/go/src/platform/darwin/abi/callback_types.go",
+    "packages/host/go/src/platform/darwin/abi/callback_types_diagnostics.go",
+    "packages/host/go/src/platform/darwin/callback_handlers.go",
+    "packages/host/go/src/platform/darwin/callback_handlers_diagnostics.go",
+    "packages/host/wailsv3/src/platform/darwin/bindings/callback_bindings.go",
+    "packages/host/wailsv3/src/platform/darwin/bindings/callback_bindings_diagnostics.go",
+    "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go",
+    "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings_diagnostics.go",
+    "packages/host/go/tests/platform/darwin/bindings/callback_bindings.go",
+    "packages/host/go/tests/platform/darwin/bindings/callback_bindings_diagnostics.go",
+  ].map((path) => new URL(`../../${path}`, import.meta.url));
+  const productionBefore = productionFiles.map((path) => readFileSync(path, "utf8"));
   try {
     const header = join(folder, "callbacks.h"), output = join(folder, "cgo.go"), binding = join(folder, "native.go");
-    writeFileSync(header, "void sp_host_callback_ready(void);\nvoid sp_host_diagnostic_callback_done(void);\n");
+    writeFileSync(header, "void sp_host_callback_quit_request(void);\nvoid sp_host_diagnostic_callback_process_exit_answered(unsigned long context, _Bool exited);\n");
     const args = [command, "--header", header, "--output", output, "--purego-output", binding];
     let result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -92,11 +171,15 @@ test("cgo-free generated artifacts are checked and obsolete diagnostics are remo
     const diagnosticFile = join(folder, "native_diagnostics.go");
     assert.ok(existsSync(diagnosticFile));
     const diagnostics = readFileSync(diagnosticFile, "utf8");
-    const compiled = spawnSync("go", ["test", binding, diagnosticFile], {
-      cwd: new URL("../../packages/host/mygo/", import.meta.url),
-      env: { ...process.env, CGO_ENABLED: "0" }, encoding: "utf8",
-    });
-    assert.equal(compiled.status, 0, compiled.stdout + compiled.stderr);
+    // A file-list build includes the diagnostic binding explicitly; its shared
+    // ABI dependency still requires the diagnostic profile's build tag.
+    for (const profile of [["test", binding], ["test", "-tags", "diagnostics", binding, diagnosticFile]]) {
+      const compiled = spawnSync("go", profile, {
+        cwd: new URL("../../packages/host/mygo/", import.meta.url),
+        env: { ...process.env, CGO_ENABLED: "0" }, encoding: "utf8",
+      });
+      assert.equal(compiled.status, 0, compiled.stdout + compiled.stderr);
+    }
     const stamp = new Date("2001-01-01T00:00:00Z");
     utimesSync(binding, stamp, stamp);
     utimesSync(diagnosticFile, stamp, stamp);
@@ -117,5 +200,7 @@ test("cgo-free generated artifacts are checked and obsolete diagnostics are remo
     result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.equal(existsSync(join(folder, "native_diagnostics.go")), false);
+    assert.deepEqual(productionFiles.map((path) => readFileSync(path, "utf8")), productionBefore,
+      "isolated callback fixture generation changed production artifacts");
   } finally { rmSync(folder, { recursive: true }); }
 });

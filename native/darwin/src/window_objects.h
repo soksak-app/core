@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdbool.h>
 
 // Live count of the objects that the library attaches to windows and web views and whose lifetime shows the

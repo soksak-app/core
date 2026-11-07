@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F686-8 (in progress): Move shared Darwin C/Objective-C into the native library and generate typed outbound bindings and callback factories for both framework adapters. The actual cgo-free application build is the integration criterion; separate divider prototypes no longer delay that build. Native static and dynamic builds and callback ABI checks pass; the real optimized diagnostic release starts from its bundle with the current workspace starter plugins, while production G8-S5 acceptance remains unverified.
+
 - F686-6-1: The pinned kit dependency carries the owning KR26 validator correction through a declared pnpm patch and lockfile hash. The normal validator accepts the actual runtime diagnostic while rejecting discovery narratives, including Markdown and comment forms. Public consumer regression verifies the correction; no hook or check is bypassed.
 
 - F686-6: Native-to-Go callback handle contexts are integer tokens in the canonical header, both generated profiles and cgo exports. C bridges convert generic native cookies before Go sees them. Token 1 previously became a GC-visible pointer and terminated during stack growth with an invalid-pointer error; the same native regression now preserves low and high-bit tokens across stack copies and collection. Actual native pointers retain their pointer types. The native owner, cgo-free worker and both adapter profiles pass.

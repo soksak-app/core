@@ -4,124 +4,6 @@ package darwin
 
 // The external document web view inside a surface document. The implementation is document_view.m of native/darwin.
 
-/*
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include "document_view.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The callbacks run their Go functions on the worker, and the native calls of this file run on the main thread (main_thread.h).
-
-static bool coreRootBridge(void *context, const char *plugin, const char *path, void **bytes, size_t *length, char **type) {
-    return ON_WORKER(bool, sp_host_callback_core_root_serve((uintptr_t)context, (char *)plugin, (char *)path, bytes, length, type));
-}
-
-static void coreRootSet(uintptr_t context) {
-    hostRunOnMain(^{ sp_core_root_set_resolver(coreRootBridge, (void *)context); });
-}
-
-static void documentChangedBridge(void *context, const char *state) {
-    hostRunOnWorker(^{ sp_host_callback_document_changed((uintptr_t)context, (char *)state); });
-}
-static void documentEventBridge(void *context, const char *event) {
-    hostRunOnWorker(^{ sp_host_callback_document_event((uintptr_t)context, (char *)event); });
-}
-
-static void documentMessageBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ sp_host_callback_document_message((uintptr_t)context, (char *)message); });
-}
-
-static void viewMessageBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ sp_host_callback_view_message((uintptr_t)context, (char *)message); });
-}
-
-static void viewEndedBridge(void *context) {
-    hostRunOnWorker(^{ sp_host_callback_view_ended((uintptr_t)context); });
-}
-
-static void documentStreamBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ sp_host_callback_document_stream((uintptr_t)context, (char *)message); });
-}
-
-static void documentQueriedBridge(void *context, const char *reply) {
-    hostRunOnWorker(^{ sp_host_callback_document_queried((uintptr_t)context, (char *)reply); });
-}
-
-static void documentQuery(void *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_document_query(document, documentQueriedBridge, (void *)context); });
-}
-
-static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *label, const char *channel, uintptr_t context) {
-    return ON_MAIN(void *, sp_document_create(surface, store, package, plugin, label, channel, documentChangedBridge, (void *)context));
-}
-static void documentSetMessage(void *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_document_set_message(document, documentMessageBridge, (void *)context); });
-}
-static void documentSetViewMessage(void *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_document_set_view_message(document, viewMessageBridge, (void *)context); });
-}
-static void documentSetViewEnded(void *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_document_set_view_ended(document, viewEndedBridge, (void *)context); });
-}
-static void viewResponsivenessBridge(void *context, bool responsive) {
-    hostRunOnWorker(^{ sp_host_callback_view_responsiveness((uintptr_t)context, responsive); });
-}
-static const char *documentBinaryTake(void *document, const char *id, void **bytes, size_t *length) {
-    return ON_MAIN(const char *, sp_document_binary_take(document, id, bytes, length));
-}
-static char *documentBinaryPut(void *document, const void *bytes, size_t length, const char *type, char *id) {
-    return ON_MAIN(char *, sp_document_binary_put(document, bytes, length, type, id));
-}
-static void documentAddScript(void *document, const char *source) {
-    hostRunOnMain(^{ sp_document_add_user_script(document, source); });
-}
-static void documentSetViewResponsiveness(void *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_document_set_view_responsiveness(document, viewResponsivenessBridge, (void *)context); });
-}
-static void documentSetEvent(void *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_document_set_event(document, documentEventBridge, (void *)context); });
-}
-static void documentSetStream(void *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_document_set_stream(document, documentStreamBridge, (void *)context); });
-}
-static void main_sp_view_import_map_set(const char *map) { hostRunOnMain(^{ sp_view_import_map_set(map); }); }
-static const char *main_sp_document_last_error(void) { return ON_MAIN(const char *, sp_document_last_error()); }
-static void main_sp_document_fail_creation_for_test(const char *cause) {
-    hostRunOnMain(^{ sp_document_fail_creation_for_test(cause); });
-}
-static bool main_sp_document_load(void *document, const char *url) { return ON_MAIN(bool, sp_document_load(document, url)); }
-static bool main_sp_document_zoom(void *document, double zoom) { return ON_MAIN(bool, sp_document_zoom(document, zoom)); }
-static bool main_sp_document_stream_on(void *document, const char *stream, bool on) {
-    return ON_MAIN(bool, sp_document_stream_on(document, stream, on));
-}
-static bool main_sp_document_stream_ack(void *document, unsigned long long seq) {
-    return ON_MAIN(bool, sp_document_stream_ack(document, seq));
-}
-static bool main_sp_document_post(void *document, const char *json) { return ON_MAIN(bool, sp_document_post(document, json)); }
-static bool main_sp_document_go(void *document, int action, int offset) {
-    return ON_MAIN(bool, sp_document_go(document, action, offset));
-}
-static char *main_sp_document_interaction_state(void *document) {
-    return ON_MAIN(char *, sp_document_interaction_state(document));
-}
-static const char *main_sp_document_restore(void *document, const char *state) {
-    return ON_MAIN(const char *, sp_document_restore(document, state));
-}
-static void main_sp_document_place(void *document, double left, double top, double right, double bottom, bool visible) {
-    hostRunOnMain(^{ sp_document_place(document, left, top, right, bottom, visible); });
-}
-static void main_sp_document_background(void *document, bool enabled) {
-    hostRunOnMain(^{ sp_document_background(document, enabled); });
-}
-static void main_sp_document_appearance(void *document, bool dark) {
-    hostRunOnMain(^{ sp_document_appearance(document, dark); });
-}
-static void main_sp_document_close(void *document) { hostRunOnMain(^{ sp_document_close(document); }); }
-*/
-import "C"
-
 import (
 	"errors"
 	"fmt"
@@ -147,35 +29,29 @@ var viewEnds = map[unsafe.Pointer]handles.Handle{}
 var viewResponsivenesses = map[unsafe.Pointer]handles.Handle{}
 var documentStreams = map[unsafe.Pointer]handles.Handle{}
 
-//export goHost_document_changed
-func goHost_document_changed(context C.uintptr_t, state *C.char) {
+func goHost_document_changed(context uintptr, state *byte) {
 	changed := handles.Handle(uintptr(context)).Value().(func(string))
-	changed(C.GoString(state))
+	changed(native.GoString(state))
 }
 
-//export goHost_document_message
-func goHost_document_message(context C.uintptr_t, value *C.char) {
-	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+func goHost_document_message(context uintptr, value *byte) {
+	handles.Handle(uintptr(context)).Value().(func(string))(native.GoString(value))
 }
 
-//export goHost_view_message
-func goHost_view_message(context C.uintptr_t, value *C.char) {
-	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+func goHost_view_message(context uintptr, value *byte) {
+	handles.Handle(uintptr(context)).Value().(func(string))(native.GoString(value))
 }
 
-//export goHost_view_ended
-func goHost_view_ended(context C.uintptr_t) {
+func goHost_view_ended(context uintptr) {
 	handles.Handle(uintptr(context)).Value().(func())()
 }
 
-//export goHost_view_responsiveness
-func goHost_view_responsiveness(context C.uintptr_t, responsive C.bool) {
+func goHost_view_responsiveness(context uintptr, responsive bool) {
 	handles.Handle(uintptr(context)).Value().(func(bool))(bool(responsive))
 }
 
-//export goHost_document_stream
-func goHost_document_stream(context C.uintptr_t, value *C.char) {
-	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+func goHost_document_stream(context uintptr, value *byte) {
+	handles.Handle(uintptr(context)).Value().(func(string))(native.GoString(value))
 }
 
 // coreRootSet and coreRootHandle hold the core root resolver of the application, which is registered once at its start.
@@ -184,33 +60,28 @@ var coreRootHandle handles.Handle
 
 // goHost_core_root_serve answers one request of the core root of a view with the resolver that SetCoreRoot registered. It returns false
 // for a path that the resolver does not serve. The file is copied to memory that the native scheme releases.
-//
-//export goHost_core_root_serve
-func goHost_core_root_serve(context C.uintptr_t, plugin, urlPath *C.char, bytes *unsafe.Pointer, length *C.size_t, contentType **C.char) C.bool {
+func goHost_core_root_serve(context uintptr, plugin, urlPath *byte, bytes *unsafe.Pointer, length *uint64, contentType **byte) bool {
 	resolve := handles.Handle(uintptr(context)).Value().(platform.CoreRootResolver)
-	data, kind, found := resolve(C.GoString(plugin), C.GoString(urlPath))
+	data, kind, found := resolve(native.GoString(plugin), native.GoString(urlPath))
 	if !found {
 		return false
 	}
-	*bytes = C.CBytes(data)
-	*length = C.size_t(len(data))
-	*contentType = C.CString(kind)
+	*bytes = native.CBytes(data)
+	*length = uint64(len(data))
+	*contentType = native.CString(kind)
 	return true
 }
 
 // goHost_document_queried receives the one reply of a query and releases its receiver.
-//
-//export goHost_document_queried
-func goHost_document_queried(context C.uintptr_t, value *C.char) {
+func goHost_document_queried(context uintptr, value *byte) {
 	handle := handles.Handle(uintptr(context))
 	reply := handle.Value().(func(string))
 	handle.Delete()
-	reply(C.GoString(value))
+	reply(native.GoString(value))
 }
 
-//export goHost_document_event
-func goHost_document_event(context C.uintptr_t, value *C.char) {
-	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+func goHost_document_event(context uintptr, value *byte) {
+	handles.Handle(uintptr(context)).Value().(func(string))(native.GoString(value))
 }
 
 // SetCoreRoot registers the resolver of the core root. The application registers one resolver at its start, and a second
@@ -221,38 +92,38 @@ func (implementation) SetCoreRoot(resolve platform.CoreRootResolver) error {
 	}
 	coreRootSet = true
 	coreRootHandle = handles.NewHandle(resolve)
-	C.coreRootSet(C.uintptr_t(coreRootHandle))
+	native.CoreRootSet(uintptr(coreRootHandle))
 	return nil
 }
 
 // SetViewImportMap sets the view import map of the native view handler. The handler copies the text.
 func (implementation) SetViewImportMap(text string) error {
-	cText := C.CString(text)
-	defer C.free(unsafe.Pointer(cText))
-	C.main_sp_view_import_map_set(cText)
+	cText := native.CString(text)
+	defer native.Free(unsafe.Pointer(cText))
+	native.MainSpViewImportMapSet(cText)
 	return nil
 }
 
 func (implementation) CreateDocument(surface unsafe.Pointer, options platform.DocumentOptions, changed func(state string)) (unsafe.Pointer, error) {
-	name := C.CString(options.Directory)
-	defer C.free(unsafe.Pointer(name))
-	folderText := C.CString(options.Folder)
-	defer C.free(unsafe.Pointer(folderText))
-	id := C.CString(options.Plugin)
-	defer C.free(unsafe.Pointer(id))
-	labelText := C.CString(options.Label)
-	defer C.free(unsafe.Pointer(labelText))
+	name := native.CString(options.Directory)
+	defer native.Free(unsafe.Pointer(name))
+	folderText := native.CString(options.Folder)
+	defer native.Free(unsafe.Pointer(folderText))
+	id := native.CString(options.Plugin)
+	defer native.Free(unsafe.Pointer(id))
+	labelText := native.CString(options.Label)
+	defer native.Free(unsafe.Pointer(labelText))
 	// A region has no channel script, so its channel is NULL; a view configuration has the script text.
-	var channelText *C.char
+	var channelText *byte
 	if options.Channel != "" {
-		channelText = C.CString(options.Channel)
-		defer C.free(unsafe.Pointer(channelText))
+		channelText = native.CString(options.Channel)
+		defer native.Free(unsafe.Pointer(channelText))
 	}
 	receiver := handles.NewHandle(changed)
-	document := C.documentCreate(surface, name, folderText, id, labelText, channelText, C.uintptr_t(receiver))
+	document := native.DocumentCreate(surface, name, folderText, id, labelText, channelText, uintptr(receiver))
 	if document == nil {
 		receiver.Delete()
-		return nil, creationError("cannot create a document view in this surface", C.GoString(C.main_sp_document_last_error()))
+		return nil, creationError("cannot create a document view in this surface", native.GoString(native.MainSpDocumentLastError()))
 	}
 	documents[document] = receiver
 	return document, nil
@@ -261,9 +132,9 @@ func (implementation) CreateDocument(surface unsafe.Pointer, options platform.Do
 // failNextCreation makes the next creation of a document region or view web view fail with cause in the native layer. The
 // owning unit tests call it.
 func failNextCreation(cause string) {
-	text := C.CString(cause)
-	defer C.free(unsafe.Pointer(text))
-	C.main_sp_document_fail_creation_for_test(text)
+	text := native.CString(cause)
+	defer native.Free(unsafe.Pointer(text))
+	native.MainSpDocumentFailCreationForTest(text)
 }
 
 // creationError is the error of a native creation that returned no handle, followed by the native cause. Every failure of the
@@ -279,149 +150,149 @@ func creationError(message, cause string) error {
 const missingNativeCause = "the native layer stated no cause"
 
 func (implementation) LoadDocument(document unsafe.Pointer, url string) bool {
-	address := C.CString(url)
-	defer C.free(unsafe.Pointer(address))
-	return bool(C.main_sp_document_load(document, address))
+	address := native.CString(url)
+	defer native.Free(unsafe.Pointer(address))
+	return bool(native.MainSpDocumentLoad(document, address))
 }
 
 func (implementation) ZoomDocument(document unsafe.Pointer, zoom float64) bool {
-	return bool(C.main_sp_document_zoom(document, C.double(zoom)))
+	return bool(native.MainSpDocumentZoom(document, float64(zoom)))
 }
 
 func (implementation) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
 	receiver := handles.NewHandle(message)
-	C.documentSetViewMessage(document, C.uintptr_t(receiver))
+	native.DocumentSetViewMessage(document, uintptr(receiver))
 	viewMessages[document] = receiver
 	return nil
 }
 
 func (implementation) SetViewEnded(document unsafe.Pointer, ended func()) error {
 	receiver := handles.NewHandle(ended)
-	C.documentSetViewEnded(document, C.uintptr_t(receiver))
+	native.DocumentSetViewEnded(document, uintptr(receiver))
 	viewEnds[document] = receiver
 	return nil
 }
 
 func (implementation) SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error {
 	receiver := handles.NewHandle(responsiveness)
-	C.documentSetViewResponsiveness(document, C.uintptr_t(receiver))
+	native.DocumentSetViewResponsiveness(document, uintptr(receiver))
 	viewResponsivenesses[document] = receiver
 	return nil
 }
 
 func (implementation) TakeDocumentBinary(document unsafe.Pointer, id string) ([]byte, error) {
-	cID := C.CString(id)
-	defer C.free(unsafe.Pointer(cID))
+	cID := native.CString(id)
+	defer native.Free(unsafe.Pointer(cID))
 	var bytes unsafe.Pointer
-	var length C.size_t
-	if text := C.documentBinaryTake(document, cID, &bytes, &length); text != nil {
-		return nil, errors.New(C.GoString(text))
+	var length uint64
+	if text := native.DocumentBinaryTake(document, cID, &bytes, &length); text != nil {
+		return nil, errors.New(native.GoString(text))
 	}
-	defer C.free(bytes)
-	return C.GoBytes(bytes, C.int(length)), nil
+	defer native.Free(bytes)
+	return native.GoBytes(bytes, int32(length)), nil
 }
 
 func (implementation) PutDocumentBinary(document unsafe.Pointer, bytes []byte, contentType string) (string, error) {
-	cType := C.CString(contentType)
-	defer C.free(unsafe.Pointer(cType))
+	cType := native.CString(contentType)
+	defer native.Free(unsafe.Pointer(cType))
 	var cBytes unsafe.Pointer
 	if len(bytes) > 0 {
-		cBytes = C.CBytes(bytes)
-		defer C.free(cBytes)
+		cBytes = native.CBytes(bytes)
+		defer native.Free(cBytes)
 	}
-	id := (*C.char)(C.calloc(33, 1))
-	defer C.free(unsafe.Pointer(id))
-	if text := C.documentBinaryPut(document, cBytes, C.size_t(len(bytes)), cType, id); text != nil {
-		defer C.free(unsafe.Pointer(text))
-		return "", errors.New(C.GoString(text))
+	id := (*byte)(native.Calloc(33, 1))
+	defer native.Free(unsafe.Pointer(id))
+	if text := native.DocumentBinaryPut(document, cBytes, uint64(len(bytes)), cType, id); text != nil {
+		defer native.Free(unsafe.Pointer(text))
+		return "", errors.New(native.GoString(text))
 	}
-	return C.GoString(id), nil
+	return native.GoString(id), nil
 }
 
 func (implementation) AddDocumentScript(document unsafe.Pointer, source string) error {
-	cSource := C.CString(source)
-	defer C.free(unsafe.Pointer(cSource))
-	C.documentAddScript(document, cSource)
+	cSource := native.CString(source)
+	defer native.Free(unsafe.Pointer(cSource))
+	native.DocumentAddScript(document, cSource)
 	return nil
 }
 
 func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value string)) error {
 	receiver := handles.NewHandle(event)
-	C.documentSetEvent(document, C.uintptr_t(receiver))
+	native.DocumentSetEvent(document, uintptr(receiver))
 	documentEvents[document] = receiver
 	return nil
 }
 
 func (implementation) SetDocumentMessage(document unsafe.Pointer, message func(value string)) error {
 	receiver := handles.NewHandle(message)
-	C.documentSetMessage(document, C.uintptr_t(receiver))
+	native.DocumentSetMessage(document, uintptr(receiver))
 	documentMessages[document] = receiver
 	return nil
 }
 
 func (implementation) SetDocumentStream(document unsafe.Pointer, stream func(value string)) error {
 	receiver := handles.NewHandle(stream)
-	C.documentSetStream(document, C.uintptr_t(receiver))
+	native.DocumentSetStream(document, uintptr(receiver))
 	documentStreams[document] = receiver
 	return nil
 }
 
 func (implementation) SetDocumentStreamOn(document unsafe.Pointer, stream string, on bool) bool {
-	name := C.CString(stream)
-	defer C.free(unsafe.Pointer(name))
-	return bool(C.main_sp_document_stream_on(document, name, C.bool(on)))
+	name := native.CString(stream)
+	defer native.Free(unsafe.Pointer(name))
+	return bool(native.MainSpDocumentStreamOn(document, name, bool(on)))
 }
 
 func (implementation) AckDocumentStream(document unsafe.Pointer, seq uint64) bool {
-	return bool(C.main_sp_document_stream_ack(document, C.ulonglong(seq)))
+	return bool(native.MainSpDocumentStreamAck(document, uint64(seq)))
 }
 
 func (implementation) PostDocument(document unsafe.Pointer, json string) bool {
-	value := C.CString(json)
-	defer C.free(unsafe.Pointer(value))
-	return bool(C.main_sp_document_post(document, value))
+	value := native.CString(json)
+	defer native.Free(unsafe.Pointer(value))
+	return bool(native.MainSpDocumentPost(document, value))
 }
 
 func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bool {
-	return bool(C.main_sp_document_go(document, C.int(action), C.int(offset)))
+	return bool(native.MainSpDocumentGo(document, int32(action), int32(offset)))
 }
 
 func (implementation) QueryDocument(document unsafe.Pointer, reply func(value string)) {
-	C.documentQuery(document, C.uintptr_t(handles.NewHandle(reply)))
+	native.DocumentQuery(document, uintptr(handles.NewHandle(reply)))
 }
 
 func (implementation) DocumentInteractionState(document unsafe.Pointer) (string, bool) {
-	state := C.main_sp_document_interaction_state(document)
+	state := native.MainSpDocumentInteractionState(document)
 	if state == nil {
 		return "", false
 	}
-	defer C.free(unsafe.Pointer(state))
-	return C.GoString(state), true
+	defer native.Free(unsafe.Pointer(state))
+	return native.GoString(state), true
 }
 
 func (implementation) RestoreDocument(document unsafe.Pointer, state string) error {
-	value := C.CString(state)
-	defer C.free(unsafe.Pointer(value))
-	if refusal := C.main_sp_document_restore(document, value); refusal != nil {
-		return errors.New(C.GoString(refusal))
+	value := native.CString(state)
+	defer native.Free(unsafe.Pointer(value))
+	if refusal := native.MainSpDocumentRestore(document, value); refusal != nil {
+		return errors.New(native.GoString(refusal))
 	}
 	return nil
 }
 
 func (implementation) PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool) {
-	C.main_sp_document_place(document, C.double(left), C.double(top), C.double(right), C.double(bottom), C.bool(visible))
+	native.MainSpDocumentPlace(document, float64(left), float64(top), float64(right), float64(bottom), bool(visible))
 }
 
 func (implementation) SetDocumentBackground(document unsafe.Pointer, enabled bool) {
-	C.main_sp_document_background(document, C.bool(enabled))
+	native.MainSpDocumentBackground(document, bool(enabled))
 }
 
 func (implementation) SetDocumentAppearance(document unsafe.Pointer, dark bool) {
-	C.main_sp_document_appearance(document, C.bool(dark))
+	native.MainSpDocumentAppearance(document, bool(dark))
 }
 
 func (implementation) CloseDocument(document unsafe.Pointer) {
-	C.main_sp_document_close(document)
+	native.MainSpDocumentClose(document)
 	if receiver, ok := documents[document]; ok {
 		receiver.Delete()
 		delete(documents, document)

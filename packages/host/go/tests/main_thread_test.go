@@ -7,7 +7,6 @@ import (
 	"testing/fstest"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
-	"github.com/soksak-app/core/packages/host/go/src/platform/darwin"
 	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
@@ -45,7 +44,7 @@ func (f startFramework) NewWindow(host.WindowOptions) host.Frontend {
 
 // contract: host.main-thread.start-requires-both-functions
 func TestTheStartRequiresBothMainThreadFunctions(t *testing.T) {
-	const installs = "; the framework adapter installs them through darwin.InstallMainThread before the start of the library"
+	const installs = "; the framework adapter installs them through its native provider before the start of the library"
 	run := fixture.TestOnlyRunDirectly()
 	for _, c := range []struct {
 		name         string
@@ -57,9 +56,9 @@ func TestTheStartRequiresBothMainThreadFunctions(t *testing.T) {
 		{"only hostRunOnMain", 0, run, "main-thread functions are not installed: hostRunOnWorker" + installs},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			darwin.InstallMainThread(c.worker, c.main)
+			fixture.InstallMainThread(c.worker, c.main)
 			// TestMain installed the test function for both, which the other tests of the package run through.
-			t.Cleanup(func() { darwin.InstallMainThread(run, run) })
+			t.Cleanup(func() { fixture.InstallMainThread(run, run) })
 			session, err := host.Prepare(startFramework{t}, fstest.MapFS{}, host.Options{ConfigDir: t.TempDir()})
 			if session != nil {
 				t.Error("the start returned a session")

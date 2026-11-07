@@ -6,11 +6,6 @@ package darwin
 // and reads the state of the main run loop (stall_watch.h), and the system tool `sample` writes the stacks of every thread of this
 // process.
 
-/*
-#include "stall_watch.h"
-*/
-import "C"
-
 import (
 	"fmt"
 	"os"
@@ -29,11 +24,11 @@ func (implementation) SampleThreads(path string) error {
 }
 
 func (implementation) StallHeartbeat() (uint64, uint64) {
-	var now, answered C.uint64_t
-	C.sp_stall_heartbeat(&now, &answered)
+	var now, answered uint64
+	native.SpStallHeartbeat(&now, &answered)
 	return uint64(now), uint64(answered)
 }
 
 func (implementation) StallAwaitAwake() {
-	C.sp_stall_await_awake()
+	native.SpStallAwaitAwake()
 }

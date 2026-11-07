@@ -5,166 +5,131 @@ package nativecallback
 
 import (
 	"fmt"
-	"unsafe"
-
 	"github.com/ebitengine/purego"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
+	"sync"
 )
 
-// Callbacks preserves the C signatures of host_callbacks.h.
-type Callbacks struct {
-	NativeCommitted           func(uint64)
-	NativeTerminated          func(uint64)
-	NativeMessage             func(uint64, *byte)
-	FileDropped               func(uintptr, *byte)
-	FileDropReleased          func(uintptr)
-	ImageReleased             func(uintptr, uint64, uint64, int32)
-	ImageChanged              func(uintptr, *byte)
-	NativeStartPageReady      func(uintptr, *byte)
-	NativeLayoutReady         func(uintptr, bool)
-	NativePresentationDone    func(uintptr)
-	NativeSettledPresent      func(uintptr, unsafe.Pointer)
-	NativeSettledPresentEnded func(uintptr)
-	NativeLayoutStarted       func(uintptr)
-	NativeLayoutEnded         func(uintptr)
-	NativeSettledDone         func(uintptr, float64, *byte)
-	NotificationEvent         func(uintptr, *byte)
-	QuitRequest               func()
-	NativeUiRun               func(uintptr)
-	NativeResponderChanged    func(uintptr)
-	NativeFullscreenDone      func(uintptr)
-	SurfaceHit                func(uintptr, unsafe.Pointer) int32
-	SurfacePoint              func(uintptr, int32, float64, float64)
-	InputDelivered            func(uintptr, int32, unsafe.Pointer)
-	InputActivated            func(uintptr, int32, *byte)
-	DocumentChanged           func(uintptr, *byte)
-	DocumentMessage           func(uintptr, *byte)
-	ViewMessage               func(uintptr, *byte)
-	ViewEnded                 func(uintptr)
-	ViewResponsiveness        func(uintptr, bool)
-	DocumentStream            func(uintptr, *byte)
-	CoreRootServe             func(uintptr, *byte, *byte, *unsafe.Pointer, *uint64, **byte) bool
-	DocumentQueried           func(uintptr, *byte)
-	DocumentEvent             func(uintptr, *byte)
-	MemoryPressure            func(*byte, uint64)
-	DockNewWindow             func()
-	MouseButtonsChanged       func(uintptr, uint64)
-}
+var callbackAddressesMutex sync.Mutex
+var callbackAddressesBound bool
 
-// Table holds function addresses in the native header's field order.
-type Table [36]uintptr
-
-// Bind creates process-lifetime addresses. Call once at startup and reuse the table.
-// All functions are validated before allocating any address. Native code copies the table.
-func (callbacks Callbacks) Bind() (Table, error) {
+// Bind creates process-lifetime addresses once. Reuse the returned table.
+// Every callback is validated before any address is allocated. Native code copies the table.
+func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
+	callbackAddressesMutex.Lock()
+	defer callbackAddressesMutex.Unlock()
+	if callbackAddressesBound {
+		return abi.CallbackTable{}, fmt.Errorf("native callback profile is already bound")
+	}
 	if callbacks.NativeCommitted == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_committed")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_committed")
 	}
 	if callbacks.NativeTerminated == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_terminated")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_terminated")
 	}
 	if callbacks.NativeMessage == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_message")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_message")
 	}
 	if callbacks.FileDropped == nil {
-		return Table{}, fmt.Errorf("native callback is missing: file_dropped")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: file_dropped")
 	}
 	if callbacks.FileDropReleased == nil {
-		return Table{}, fmt.Errorf("native callback is missing: file_drop_released")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: file_drop_released")
 	}
 	if callbacks.ImageReleased == nil {
-		return Table{}, fmt.Errorf("native callback is missing: image_released")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: image_released")
 	}
 	if callbacks.ImageChanged == nil {
-		return Table{}, fmt.Errorf("native callback is missing: image_changed")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: image_changed")
 	}
 	if callbacks.NativeStartPageReady == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_start_page_ready")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_start_page_ready")
 	}
 	if callbacks.NativeLayoutReady == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_layout_ready")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_layout_ready")
 	}
 	if callbacks.NativePresentationDone == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_presentation_done")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_presentation_done")
 	}
 	if callbacks.NativeSettledPresent == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_settled_present")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_settled_present")
 	}
 	if callbacks.NativeSettledPresentEnded == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_settled_present_ended")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_settled_present_ended")
 	}
 	if callbacks.NativeLayoutStarted == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_layout_started")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_layout_started")
 	}
 	if callbacks.NativeLayoutEnded == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_layout_ended")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_layout_ended")
 	}
 	if callbacks.NativeSettledDone == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_settled_done")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_settled_done")
 	}
 	if callbacks.NotificationEvent == nil {
-		return Table{}, fmt.Errorf("native callback is missing: notification_event")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: notification_event")
 	}
 	if callbacks.QuitRequest == nil {
-		return Table{}, fmt.Errorf("native callback is missing: quit_request")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: quit_request")
 	}
 	if callbacks.NativeUiRun == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_ui_run")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_ui_run")
 	}
 	if callbacks.NativeResponderChanged == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_responder_changed")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_responder_changed")
 	}
 	if callbacks.NativeFullscreenDone == nil {
-		return Table{}, fmt.Errorf("native callback is missing: native_fullscreen_done")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_fullscreen_done")
 	}
 	if callbacks.SurfaceHit == nil {
-		return Table{}, fmt.Errorf("native callback is missing: surface_hit")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: surface_hit")
 	}
 	if callbacks.SurfacePoint == nil {
-		return Table{}, fmt.Errorf("native callback is missing: surface_point")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: surface_point")
 	}
 	if callbacks.InputDelivered == nil {
-		return Table{}, fmt.Errorf("native callback is missing: input_delivered")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: input_delivered")
 	}
 	if callbacks.InputActivated == nil {
-		return Table{}, fmt.Errorf("native callback is missing: input_activated")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: input_activated")
 	}
 	if callbacks.DocumentChanged == nil {
-		return Table{}, fmt.Errorf("native callback is missing: document_changed")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_changed")
 	}
 	if callbacks.DocumentMessage == nil {
-		return Table{}, fmt.Errorf("native callback is missing: document_message")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_message")
 	}
 	if callbacks.ViewMessage == nil {
-		return Table{}, fmt.Errorf("native callback is missing: view_message")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: view_message")
 	}
 	if callbacks.ViewEnded == nil {
-		return Table{}, fmt.Errorf("native callback is missing: view_ended")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: view_ended")
 	}
 	if callbacks.ViewResponsiveness == nil {
-		return Table{}, fmt.Errorf("native callback is missing: view_responsiveness")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: view_responsiveness")
 	}
 	if callbacks.DocumentStream == nil {
-		return Table{}, fmt.Errorf("native callback is missing: document_stream")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_stream")
 	}
 	if callbacks.CoreRootServe == nil {
-		return Table{}, fmt.Errorf("native callback is missing: core_root_serve")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: core_root_serve")
 	}
 	if callbacks.DocumentQueried == nil {
-		return Table{}, fmt.Errorf("native callback is missing: document_queried")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_queried")
 	}
 	if callbacks.DocumentEvent == nil {
-		return Table{}, fmt.Errorf("native callback is missing: document_event")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: document_event")
 	}
 	if callbacks.MemoryPressure == nil {
-		return Table{}, fmt.Errorf("native callback is missing: memory_pressure")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: memory_pressure")
 	}
 	if callbacks.DockNewWindow == nil {
-		return Table{}, fmt.Errorf("native callback is missing: dock_new_window")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: dock_new_window")
 	}
 	if callbacks.MouseButtonsChanged == nil {
-		return Table{}, fmt.Errorf("native callback is missing: mouse_buttons_changed")
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: mouse_buttons_changed")
 	}
-	return Table{
+	table := abi.CallbackTable{
 		purego.NewCallback(callbacks.NativeCommitted),
 		purego.NewCallback(callbacks.NativeTerminated),
 		purego.NewCallback(callbacks.NativeMessage),
@@ -201,5 +166,7 @@ func (callbacks Callbacks) Bind() (Table, error) {
 		purego.NewCallback(callbacks.MemoryPressure),
 		purego.NewCallback(callbacks.DockNewWindow),
 		purego.NewCallback(callbacks.MouseButtonsChanged),
-	}, nil
+	}
+	callbackAddressesBound = true
+	return table, nil
 }

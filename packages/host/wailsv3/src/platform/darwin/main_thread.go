@@ -19,7 +19,23 @@ import (
 	_ "github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
+	"github.com/soksak-app/core/packages/host/wailsv3/src/platform/darwin/bindings"
 )
 
 // The functions are installed before any start of the library (docs/spec/hosts.md, main thread of the Wails host).
-func init() { darwin.InstallMainThread(uintptr(C.worker()), uintptr(C.mainThread())) }
+func init() {
+	if err := darwin.InstallNativeProvider(func(callbacks abi.Callbacks) (abi.NativeFunctions, error) {
+		functions := bindings.Functions()
+		if err := functions.Validate(); err != nil {
+			return abi.NativeFunctions{}, err
+		}
+		functions.InstallMainThread(uintptr(C.worker()), uintptr(C.mainThread()))
+		if err := bindings.InstallCallbacks(callbacks); err != nil {
+			return abi.NativeFunctions{}, err
+		}
+		return functions, nil
+	}); err != nil {
+		panic(err)
+	}
+}

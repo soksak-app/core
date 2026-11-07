@@ -5,33 +5,13 @@ package darwin
 // Counts the live library objects attached to windows and web views. The implementation is window_objects.m of native/darwin. It is included only in
 // diagnostic builds.
 
-/*
-#cgo CFLAGS: -x objective-c -fmodules
-#cgo pkg-config: soksak-darwin
-#include <stdbool.h>
-#include <stdint.h>
-#include "window_objects.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
-static void counted(void *context, const sp_window_objects *counts, bool reached) {
-    long compositions = counts->windowCompositions, hosts = counts->surfaceHosts, registrations = counts->inputRegistrations;
-    hostRunOnWorker(^{ sp_host_diagnostic_callback_window_objects_counted((uintptr_t)context, compositions, hosts, registrations, reached); });
-}
-static void countWhen(const sp_window_objects *expected, double seconds, uintptr_t handle) {
-    hostRunOnMain(^{ sp_window_objects_when(expected, seconds, counted, (void *)handle); });
-}
-*/
-import "C"
-
 import (
 	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
 )
 
-//export goHost_window_objects_counted
-func goHost_window_objects_counted(handle C.uintptr_t, compositions, hosts, registrations C.long, reached C.bool) {
+func goHost_window_objects_counted(handle uintptr, compositions, hosts, registrations int64, reached bool) {
 	// handle is the value that WindowObjectsWhen created, and the library calls done once.
 	h := handles.Handle(handle)
 	done := h.Value().(func(platform.WindowObjects, bool))
@@ -47,13 +27,13 @@ func goHost_window_objects_counted(handle C.uintptr_t, compositions, hosts, regi
 // Call it in a main-thread step.
 func (implementation) WindowObjectsWhen(expected *platform.WindowObjects, seconds float64,
 	done func(platform.WindowObjects, bool)) {
-	var wanted *C.sp_window_objects
+	var wanted *abi.SpWindowObjects
 	if expected != nil {
-		wanted = &C.sp_window_objects{
-			windowCompositions: C.long(expected.WindowCompositions),
-			surfaceHosts:       C.long(expected.SurfaceHosts),
-			inputRegistrations: C.long(expected.InputRegistrations),
+		wanted = &abi.SpWindowObjects{
+			WindowCompositions: int64(expected.WindowCompositions),
+			SurfaceHosts:       int64(expected.SurfaceHosts),
+			InputRegistrations: int64(expected.InputRegistrations),
 		}
 	}
-	C.countWhen(wanted, C.double(seconds), C.uintptr_t(handles.NewHandle(done)))
+	diagnosticNative.CountWhen(wanted, float64(seconds), uintptr(handles.NewHandle(done)))
 }

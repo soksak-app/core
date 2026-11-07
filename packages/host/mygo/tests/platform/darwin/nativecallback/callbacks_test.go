@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego"
+	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
 	binding "github.com/soksak-app/core/packages/host/mygo/src/platform/darwin/nativecallback"
 )
 
@@ -24,34 +25,34 @@ func complete(value any, handler func(string, []reflect.Value) []reflect.Value) 
 }
 
 func TestMissingCallbacksAllocateNoAddresses(t *testing.T) {
-	var callbacks binding.Callbacks
+	var callbacks abi.Callbacks
 	complete(&callbacks, func(string, []reflect.Value) []reflect.Value { return nil })
 	for i := range reflect.TypeOf(callbacks).NumField() {
 		missing := callbacks
 		reflect.ValueOf(&missing).Elem().Field(i).SetZero()
-		if _, err := missing.Bind(); err == nil || !strings.Contains(err.Error(), "missing") {
+		if _, err := binding.Bind(missing); err == nil || !strings.Contains(err.Error(), "missing") {
 			t.Fatalf("field %d: %v", i, err)
 		}
 	}
 	callbacks.MouseButtonsChanged = nil
 	// The purego pool holds 2000 addresses. Any allocation on the invalid path exhausts it.
 	for range 2001 {
-		if _, err := callbacks.Bind(); err == nil {
+		if _, err := binding.Bind(callbacks); err == nil {
 			t.Fatal("missing last callback accepted")
 		}
 	}
-	var diagnostics binding.DiagnosticCallbacks
+	var diagnostics abi.DiagnosticCallbacks
 	complete(&diagnostics, func(string, []reflect.Value) []reflect.Value { return nil })
 	for i := range reflect.TypeOf(diagnostics).NumField() {
 		missing := diagnostics
 		reflect.ValueOf(&missing).Elem().Field(i).SetZero()
-		if _, err := missing.Bind(); err == nil {
+		if _, err := binding.BindDiagnostic(missing); err == nil {
 			t.Fatalf("diagnostic field %d accepted", i)
 		}
 	}
 	diagnostics.ProcessExitAnswered = nil
 	for range 2001 {
-		if _, err := diagnostics.Bind(); err == nil {
+		if _, err := binding.BindDiagnostic(diagnostics); err == nil {
 			t.Fatal("missing last diagnostic callback accepted")
 		}
 	}
@@ -130,11 +131,11 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 				want = true
 			case reflect.UnsafePointer:
 				want = expectedContext
-				if name == "InputDelivered" && i == 2 {
-					want = expectedHeld
-				}
 			case reflect.Pointer:
 				want = expectedText
+				if name == "InputDelivered" && i == 2 {
+					want = (*abi.SpInputHeld)(expectedHeld)
+				}
 			default:
 				failures = append(failures, fmt.Sprintf("unsupported test argument %s[%d]: %s", name, i, arg.Type()))
 				continue
@@ -156,17 +157,26 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 		}
 		return nil
 	}
-	var callbacks binding.Callbacks
+	var callbacks abi.Callbacks
 	complete(&callbacks, handler)
-	table, err := callbacks.Bind()
+	table, err := binding.Bind(callbacks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var diagnostics binding.DiagnosticCallbacks
+	var diagnostics abi.DiagnosticCallbacks
 	complete(&diagnostics, handler)
-	diagnosticTable, err := diagnostics.Bind()
+	diagnosticTable, err := binding.BindDiagnostic(diagnostics)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Bound addresses live until process exit; a second bind must not allocate or replace them.
+	for range 2001 {
+		if _, err := binding.Bind(callbacks); err == nil {
+			t.Fatal("base callback rebinding accepted")
+		}
+		if _, err := binding.BindDiagnostic(diagnostics); err == nil {
+			t.Fatal("diagnostic callback rebinding accepted")
+		}
 	}
 	for _, profile := range []struct {
 		diagnostic bool

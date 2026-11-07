@@ -5,25 +5,6 @@ package darwin
 // Counts the elements and documents of a web view. The implementation is sp_webview_count_objects of native/darwin, which evaluates the count in
 // the page content world or in the content world of document regions. It is included only in diagnostic builds.
 
-/*
-#cgo CFLAGS: -x objective-c -fmodules
-#cgo pkg-config: soksak-darwin
-#include <stdbool.h>
-#include <stdint.h>
-#include "webview_geometry.h"
-#include "main_thread.h"
-#include "host_callbacks.h"
-
-// The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
-static void pageCounted(void *context, long elements, long documents, const char *failure) {
-    hostRunOnWorker(^{ sp_host_diagnostic_callback_page_objects_counted((uintptr_t)context, elements, documents, (char *)failure); });
-}
-static void countPageObjects(void *view, bool document, uintptr_t handle) {
-    hostRunOnMain(^{ sp_webview_count_objects(view, document, pageCounted, (void *)handle); });
-}
-*/
-import "C"
-
 import (
 	"errors"
 
@@ -32,14 +13,13 @@ import (
 	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
-//export goHost_page_objects_counted
-func goHost_page_objects_counted(handle C.uintptr_t, elements, documents C.long, failure *C.char) {
+func goHost_page_objects_counted(handle uintptr, elements, documents int64, failure *byte) {
 	// handle is the value that CountPageObjects created, and the library calls done once.
 	h := handles.Handle(handle)
 	done := h.Value().(func(int64, int64, error))
 	h.Delete()
 	if failure != nil {
-		done(0, 0, errors.New(C.GoString(failure)))
+		done(0, 0, errors.New(native.GoString(failure)))
 		return
 	}
 	done(int64(elements), int64(documents), nil)
@@ -47,5 +27,5 @@ func goHost_page_objects_counted(handle C.uintptr_t, elements, documents C.long,
 
 // CountPageObjects evaluates the counts of view and gives done the result. Call it in a main-thread step.
 func (implementation) CountPageObjects(view unsafe.Pointer, document bool, done func(elements, documents int64, err error)) {
-	C.countPageObjects(view, C.bool(document), C.uintptr_t(handles.NewHandle(done)))
+	diagnosticNative.CountPageObjects(view, bool(document), uintptr(handles.NewHandle(done)))
 }
