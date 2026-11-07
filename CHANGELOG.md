@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F502-13-2: Verify workbench geometry across all three clean host applications with the unchanged 1 pt criterion and passing run audit. Retain original PNGs inside add-picker, rename and card-sidebar states before cleanup; all 15 were visually inspected. Three ownership and retained-byte cases pass. F502-4, F685 and G8 remain separate.
+
 - F584-5: Verify the default virtual-input tier on rebuilt Wails, Tauri and mygo: all 71 input/HWP cases pass with zero skips and 62 same-boot, unchanged-count inactive session proofs. Preserve the eight system-only activation checks and their explicit reasons. Startup activation and G8 performance remain separate.
 
 - F701: Set view-drag source cadence and captured-paint convergence to an inclusive 40 ms ceiling. All 76 owners pass, including four cases accepting 40 ms and rejecting 40.001 ms. Identity, source-pixel and geometry criteria are unchanged; actual 61.806 ms captured convergence remains a benchmark failure.

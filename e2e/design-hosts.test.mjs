@@ -10,6 +10,7 @@ import test from "node:test";
 import { APPS, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { designDifferences } from "@soksak/window-check/design-rects.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { retainDesignStateCapture } from "./still-capture.mjs";
 
 const DEBUG_ENTRIES = JSON.parse(readFileSync(new URL("./fixtures/design-debug-entries.json", import.meta.url), "utf8"));
 
@@ -84,7 +85,12 @@ async function walk(t, s, states) {
   const shown = async (when) => t.diagnostic(`${s.app.name} occluded ${when}: ${(await s.get("host.window")).occluded}`);
   await shown("at the start");
   const names = (await s.request("exposure.list")).element.map((entry) => entry.name).filter((name) => name.startsWith("core."));
-  const read = async (state) => { states[state] = await reading(s, names); };
+  const read = async (state) => {
+    states[state] = await reading(s, names);
+    if (state.endsWith(" add menu") || ["space rename", "project rename", "card sidebar"].includes(state)) {
+      await retainDesignStateCapture(s, t, state);
+    }
+  };
 
   await read("workspace");
 

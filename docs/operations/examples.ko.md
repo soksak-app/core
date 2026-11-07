@@ -125,6 +125,8 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 
 `make test-app-capture-input-close`는 각 application에서 검사 여섯 개를 선택한다. 연속 recording artifact 보존, terminal theme background, 외부 resize 뒤 cell pixel, native click focus, 실제 Editor save/error·keep/discard baseline과 별도의 native core save-close protocol fixture다. Activation이나 native 전체 suite 없이 일반 fresh-configuration runner, 전체 log audit와 process cleanup을 사용한다. Fixture는 성공한 save 뒤에도 modified report를 의도적으로 유지한다. Core는 그 tab을 보존하고 이후 save가 clean을 보고하면 같은 tab을 닫아야 한다. 이는 실제 Editor filesystem write race가 아닌 native core 경계 검증이다. 선택한 검사를 두 독립 fresh configuration에서 실행한다. 이미 build한 bundle이 바뀌지 않았으며 해당 identity와 설치 component 입력을 기록한 경우에만 make의 `-o build-wailsv3 -o build-tauriv2 -o build-mygo -o build-registry` option으로 재사용한다.
 
+선택한 `e2e/design-hosts.test.mjs` walk는 각 add picker, space·project rename과 card sidebar 상태가 아직 표시되는 동안 session 정리 전에 원본 PNG를 복사한다. 보존 파일은 `<SOKSAK_RUN_FOLDER>/design-hosts/<host>/<state>.png`이며 run folder는 fallback 없이 절대 경로로 명시해야 한다. 기존 still-capture helper가 먼저 native source recording의 session 소유권을 등록하며 복사는 source를 미리 삭제하거나 전체 부모 audit를 우회하지 않는다. 원본 해상도의 보존 PNG를 기존 1 pt geometry 비교와 함께 직접 확인한다. 정리 후 still은 앞선 상태의 근거가 아니다.
+
 디스플레이를 켜고 `make test-app`를 실행한다. `make test-app-section-design`은 원본 해상도로 확인하도록 애플리케이션의 files, browser section을 light, dark mode로 찍은 still을 `target/section-design`에 남긴다. 각 end-to-end target(`test-app`, `test-app-activation`, `test-app-real`, `test-app-person`)은 세 debug 애플리케이션과 workspace registry를 빌드하고, 자기 tier의 창 검사 script와 native end-to-end target으로 `scripts/test-app.mjs`를 실행한다.
 
 1. 실행마다 새 설정 root `target/e2e/<time>-<random>`을 만든다.

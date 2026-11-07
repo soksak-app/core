@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F502-13-2: Clean host 앱 세 개에서 기존 1 pt 기준과 run audit로 workbench geometry를 검증했다. Add picker·rename·card sidebar 상태 안에서 정리 전 원본 PNG를 보존하고 15개를 모두 직접 확인했다. 소유권·바이트 보존 검사 3개가 통과하며 F502-4·F685·G8은 별도로 남는다.
+
 - F584-5: 다시 빌드한 Wails·Tauri·mygo에서 기본 virtual-input tier를 검증했다. Input·HWP 사례 71개가 skip 없이 모두 통과했고 같은 boot·동일 activation count를 확인한 비활성 session 증명 62개를 보존했다. System이 필요한 activation check 8개와 각각의 이유는 유지하며 startup activation과 G8 성능 인수는 별도다.
 
 - F701: View drag의 source cadence와 captured-paint convergence에 40 ms 이하 기준을 적용한다. 정확히 40 ms를 허용하고 40.001 ms를 거부하는 경계 사례 네 개를 포함해 소유 검사 76개가 모두 통과했다. Identity·source pixel·geometry 기준은 바꾸지 않으며 실제 captured convergence 61.806 ms는 여전히 benchmark 실패다.
