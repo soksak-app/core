@@ -183,6 +183,8 @@
     "scheduleDocumentFrameIdentityFreeze",
     "scheduleDocumentFrameIdentityRemove",
     "scheduleDocumentFrameIdentityStart",
+    "scheduleDocumentReferenceIdentityStart",
+    "scheduleDocumentReferenceObserve",
     "sp_capture_clock",
     "sp_capture_error",
     "whenExited",

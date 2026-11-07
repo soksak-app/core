@@ -677,6 +677,25 @@ impl Platform for Darwin {
         capture::document_frame_identity_start(document, generation, done)
     }
     #[cfg(feature = "diagnostics")]
+    fn document_reference_identity_start(
+        &self,
+        document: Handle,
+        generation: u64,
+        done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        capture::document_reference_identity_start(document, generation, done)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn document_reference_observe(
+        &self,
+        document: Handle,
+        request_id: u64,
+        directory: &str,
+        done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        capture::document_reference_observe(document, request_id, directory, done)
+    }
+    #[cfg(feature = "diagnostics")]
     fn document_frame_identity_freeze(
         &self,
         generation: u64,

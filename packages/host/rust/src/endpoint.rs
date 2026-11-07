@@ -81,6 +81,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.capture.start",
     "diagnostics.capture.stop",
     "diagnostics.capture.document-identity.start",
+    "diagnostics.capture.document-reference",
     "diagnostics.capture.still",
     "diagnostics.modal.hold",
     "diagnostics.modal.held",
@@ -1487,6 +1488,15 @@ mod draw_covered_declaration_test {
     #[test]
     fn draw_covered_method_is_declared() {
         assert!(super::declared("diagnostics.window.draw-covered"));
+    }
+}
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod document_reference_declaration_test {
+    // contract: diagnostics.capture.document-reference.is-declared
+    #[test]
+    fn document_reference_observation_is_publicly_declared() {
+        assert!(super::declared("diagnostics.capture.document-reference"));
     }
 }
 

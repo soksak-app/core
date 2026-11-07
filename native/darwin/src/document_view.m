@@ -8,6 +8,7 @@
 #import <Cocoa/Cocoa.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <CoreImage/CoreImage.h>
+#import <ImageIO/ImageIO.h>
 #import <QuartzCore/QuartzCore.h>
 #import <Security/Security.h>
 #import <WebKit/WebKit.h>
@@ -1884,6 +1885,293 @@ bool sp_document_zoom(void *document, double zoom) {
 }
 
 #ifdef SOKSAK_DIAGNOSTIC
+static NSMapTable *activeDocumentReferences;
+static const uint64_t documentReferenceMaximumInteger = 9007199254740991ULL;
+
+// JavaScript JSON numbers share NSNumber with booleans. Validate the carrier
+// before reading a numeric selector, and preserve the safe-integer contract.
+static BOOL documentReferenceSafeInteger(id value, uint64_t *out) {
+    if (![value isKindOfClass:NSNumber.class] || CFGetTypeID((CFTypeRef)value) == CFBooleanGetTypeID()) return NO; // silent: this predicate rejects a nonnumeric carrier; the caller returns the explicit invalid-metadata error.
+    double number = [value doubleValue];
+    if (!isfinite(number) || number < 1 || number > documentReferenceMaximumInteger || floor(number) != number) return NO; // silent: this predicate rejects an unsafe ordinal; the caller returns the explicit invalid-metadata error.
+    if (out) *out = (uint64_t)number;
+    return YES;
+}
+
+static NSDictionary *referenceScreenBounds(SPDocumentView *view) {
+    NSRect local = [view convertRect:view.bounds toView:nil];
+    NSRect screen = [view.window convertRectToScreen:local];
+    NSScreen *primary = NSScreen.screens.firstObject;
+    if (!primary) return nil;
+    screen.origin.y = NSMaxY(primary.frame) - NSMaxY(screen);
+    return @{ @"x": @(screen.origin.x), @"y": @(screen.origin.y),
+        @"width": @(screen.size.width), @"height": @(screen.size.height) };
+}
+
+static NSDictionary *writeDocumentReferencePNG(CGImageRef input, NSString *path,
+    SPDocumentFrameIdentity *identity, NSDictionary *bounds) {
+    size_t width = input ? CGImageGetWidth(input) : 0, height = input ? CGImageGetHeight(input) : 0;
+    if (!width || !height || width > SIZE_MAX / 4 || height > SIZE_MAX / (width * 4)) return nil;
+    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef bitmap = srgb ? CGBitmapContextCreate(NULL, width, height, 8, width * 4, srgb,
+        kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst) : NULL;
+    if (srgb) CGColorSpaceRelease(srgb);
+    if (!bitmap) return nil;
+    CGContextSetBlendMode(bitmap, kCGBlendModeCopy);
+    CGContextDrawImage(bitmap, CGRectMake(0, 0, width, height), input);
+    double scale = width / [bounds[@"width"] doubleValue];
+    CGRect roi = CGRectMake((identity->screenROI.origin.x - [bounds[@"x"] doubleValue]) * scale,
+        (identity->screenROI.origin.y - [bounds[@"y"] doubleValue]) * scale,
+        identity->screenROI.size.width * scale, identity->screenROI.size.height * scale);
+    SPCaptureFrameIdentity decoded = {0};
+    NSString *unknown = nil, *decodeError = nil;
+    BOOL identityValid = isfinite(scale) && scale > 0
+        && height == [bounds[@"height"] doubleValue] * scale
+        && identity->frozen && identity->issuedSlots > 0 && identity->issuedSlots <= identity->payloads.count
+        && sp_capture_frame_identity_decode(CGBitmapContextGetData(bitmap), width * height * 4, width, height, width * 4,
+            roi, [NSSet setWithArray:[identity->payloads subarrayWithRange:NSMakeRange(0, identity->issuedSlots)]],
+            &decoded, &unknown, &decodeError);
+    [unknown release]; [decodeError release];
+    CGImageRef image = CGBitmapContextCreateImage(bitmap);
+    CGContextRelease(bitmap);
+    if (!image) return nil;
+    CGImageDestinationRef destination = CGImageDestinationCreateWithURL((CFURLRef)[NSURL fileURLWithPath:path],
+        CFSTR("public.png"), 1, NULL);
+    if (destination) CGImageDestinationAddImage(destination, image, NULL);
+    BOOL written = destination && CGImageDestinationFinalize(destination);
+    if (destination) CFRelease(destination);
+    CGImageRelease(image);
+    NSData *bytes = written ? [NSData dataWithContentsOfFile:path] : nil;
+    // Preserve the actual PNG even when its issued QR cannot be decoded.
+    if (!bytes || !identityValid || decoded.generation != identity->generation) return nil;
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(bytes.bytes, (CC_LONG)bytes.length, digest);
+    NSMutableString *hash = [NSMutableString string];
+    for (NSUInteger index = 0; index < sizeof digest; index++) [hash appendFormat:@"%02x", digest[index]];
+    NSMutableString *region = [NSMutableString string];
+    const uint8_t *token = identity->regionToken.bytes;
+    for (NSUInteger index = 0; index < identity->regionToken.length; index++) [region appendFormat:@"%02x", token[index]];
+    return @{ @"file": path.lastPathComponent, @"format": @"PNG", @"width": @(width), @"height": @(height),
+        @"colorSpace": (id)kCGColorSpaceSRGB, @"byteCount": @(bytes.length), @"sha256": hash,
+        @"identity": @{ @"region": region,
+            @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)decoded.generation],
+            @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)decoded.raster],
+            @"sequence": @(decoded.sequence), @"roiPx": @{ @"x": @(roi.origin.x), @"y": @(roi.origin.y),
+                @"width": @(roi.size.width), @"height": @(roi.size.height) } } };
+}
+
+@interface SPDocumentReferenceObservation : NSObject
+@property(retain) SPDocumentView *view;
+@property(retain) NSURL *url;
+@property(copy) NSString *directory;
+@property(retain) NSDictionary *bounds;
+@property(retain) NSDictionary *producer;
+@property(retain) SPDocumentFrameIdentity *identity;
+@property(assign) uint64_t requestID;
+@property(assign) sp_document_frame_identity_reply reply;
+@property(assign) void *context;
+@property(assign) BOOL completed;
+@property(assign) BOOL acquired;
+@property(assign) BOOL observing;
+@property(assign) BOOL releasing;
+@property(retain) NSTimer *deadline;
+- (void)complete:(NSDictionary *)result error:(NSString *)failure;
+- (void)finish:(NSDictionary *)result error:(NSString *)failure;
+- (void)begin;
+- (void)snapshot;
+@end
+
+static void documentReferenceFrozen(void *context, const char *json, const char *error) {
+    SPDocumentReferenceObservation *observation = (SPDocumentReferenceObservation *)context;
+    (void)json;
+    if (error) [observation finish:nil error:[NSString stringWithUTF8String:error]];
+    else [observation snapshot];
+    [observation release];
+}
+
+@implementation SPDocumentReferenceObservation
+- (void)dealloc {
+    [_deadline invalidate]; [_deadline release];
+    [_view release]; [_url release]; [_directory release]; [_bounds release]; [_producer release]; [_identity release];
+    [super dealloc];
+}
+- (BOOL)current {
+    return !self.view.closed && self.view.window && !self.view.isHiddenOrHasHiddenAncestor
+        && self.identity == activeDocumentFrameIdentity && self.identity->view == self.view
+        && !self.identity->invalidated && !self.identity->removed
+        && [self.view.URL isEqual:self.url] && [referenceScreenBounds(self.view) isEqual:self.bounds];
+}
+- (void)complete:(NSDictionary *)result error:(NSString *)failure {
+    if (self.completed) return;
+    self.completed = YES;
+    [self.deadline invalidate]; self.deadline = nil;
+    [activeDocumentReferences removeObjectForKey:self.view];
+    NSData *json = result && !failure ? [NSJSONSerialization dataWithJSONObject:result options:0 error:NULL] : nil;
+    NSString *text = json ? [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease] : nil;
+    self.reply(self.context, text.UTF8String, failure.UTF8String ?: (text ? NULL : "document reference result could not be serialized"));
+}
+- (void)finish:(NSDictionary *)result error:(NSString *)failure {
+    if (self.releasing) return;
+    // observe owns a public provider request before it returns its metadata.
+    // Release that pending request as well; otherwise WK retains the pending
+    // async call, this observation, and its closed native document in a cycle.
+    if (!self.observing) { [self complete:result error:failure]; return; }
+    self.releasing = YES;
+    [self.view callAsyncJavaScript:@"const p=globalThis.soksakRenderedReference; if(!p) throw new Error('document reference provider disappeared'); await p.release({requestId}); return true;"
+        arguments:@{ @"requestId": @(self.requestID) } inFrame:nil inContentWorld:WKContentWorld.pageWorld
+        completionHandler:^(id released, NSError *error) {
+        (void)released;
+        if (self.completed) {
+            if (error) sp_log_error("document reference", error.localizedDescription.UTF8String);
+            return;
+        }
+        [self complete:result error:failure ?: (error ? error.localizedDescription : nil)];
+    }];
+}
+- (void)begin {
+    self.observing = YES;
+    [self.view callAsyncJavaScript:@"const p=globalThis.soksakRenderedReference; if(!p || p.version!==1 || typeof p.observe!=='function' || typeof p.validate!=='function' || typeof p.release!=='function') throw new Error('document reference renderer provider is unavailable'); return await p.observe({requestId});"
+        arguments:@{ @"requestId": @(self.requestID) } inFrame:nil inContentWorld:WKContentWorld.pageWorld
+        completionHandler:^(id value, NSError *error) {
+        if (error || ![value isKindOfClass:NSDictionary.class]) {
+            [self finish:nil error:error ? error.localizedDescription : @"document reference provider returned no metadata"];
+            return;
+        }
+        self.acquired = YES;
+        if (self.completed) { [self finish:nil error:@"document reference completed before its producer"]; return; }
+        NSDictionary *producer = value;
+        NSString *sourceKind = producer[@"sourceKind"];
+        NSDictionary *revision = [producer[@"revision"] isKindOfClass:NSDictionary.class] ? producer[@"revision"] : nil;
+        uint64_t schemaVersion = 0, requestID = 0, revisionOrdinal = 0;
+        BOOL validSchema = documentReferenceSafeInteger(producer[@"schemaVersion"], &schemaVersion) && schemaVersion == 1;
+        BOOL validRequest = documentReferenceSafeInteger(producer[@"requestId"], &requestID) && requestID == self.requestID;
+        BOOL validRevision = documentReferenceSafeInteger(revision[@"value"], &revisionOrdinal);
+        // Revision domains belong to the public renderer provider. The host
+        // validates the generic carrier format and delegates the unchanged
+        // opaque revision to that provider across the snapshot lifetime.
+        BOOL validRevisionDomain = [revision[@"kind"] isKindOfClass:NSString.class] && [revision[@"kind"] length] > 0;
+        BOOL nativeDocument = [sourceKind isEqual:@"native-document"] && !producer[@"pngBase64"];
+        BOOL rendererPNG = [sourceKind isEqual:@"renderer-png"] && [producer[@"pngBase64"] isKindOfClass:NSString.class];
+        if (!validRequest || !validSchema
+            || ![producer[@"provider"] isKindOfClass:NSString.class] || ![producer[@"glyphRuns"] isKindOfClass:NSArray.class]
+            || (!nativeDocument && !rendererPNG) || !validRevisionDomain || !validRevision
+            || ![self current]) {
+            [self finish:nil error:@"document reference producer request, revision, target or glyph metadata is invalid"];
+            return;
+        }
+        self.producer = producer;
+        [self retain];
+        if (!sp_document_frame_identity_freeze(self.identity->generation, documentReferenceFrozen, self)) {
+            [self release];
+            [self finish:nil error:@"document reference identity freeze was not scheduled"];
+        }
+    }];
+}
+- (void)snapshot {
+        if (self.completed) return;
+        sp_document_frame_identity_after_target_update(self.view, ^{
+            if (self.completed) return;
+            if (![self current]) { [self finish:nil error:@"document reference target changed before snapshot"]; return; }
+            WKSnapshotConfiguration *configuration = [[[WKSnapshotConfiguration alloc] init] autorelease];
+            configuration.rect = self.view.bounds;
+            configuration.afterScreenUpdates = YES;
+            [self.view takeSnapshotWithConfiguration:configuration completionHandler:^(NSImage *image, NSError *snapshotError) {
+                if (self.completed) return;
+                if (snapshotError || !image || ![self current]) {
+                    [self finish:nil error:snapshotError ? snapshotError.localizedDescription : @"document reference target changed or snapshot is missing"];
+                    return;
+                }
+                NSRect proposed = NSMakeRect(0, 0, image.size.width, image.size.height);
+                CGImageRef pixels = [image CGImageForProposedRect:&proposed context:nil hints:nil];
+                NSDictionary *source = writeDocumentReferencePNG(pixels, [self.directory stringByAppendingPathComponent:@"native.png"], self.identity, self.bounds);
+                if (!source) { [self finish:nil error:@"document reference native snapshot could not be written or its actual issued QR could not be decoded"]; return; }
+                NSMutableDictionary *metadata = [[self.producer mutableCopy] autorelease];
+                NSString *encoded = metadata[@"pngBase64"];
+                if (encoded) {
+                    NSData *rendererPNG = [encoded isKindOfClass:NSString.class] && encoded.length <= 32 * 1024 * 1024
+                        ? [[[NSData alloc] initWithBase64EncodedString:encoded options:0] autorelease] : nil;
+                    if (!rendererPNG || ![rendererPNG writeToFile:[self.directory stringByAppendingPathComponent:@"renderer.png"] atomically:YES]) {
+                        [self finish:nil error:@"document reference actual renderer PNG is invalid or could not be written"];
+                        return;
+                    }
+                    [metadata removeObjectForKey:@"pngBase64"];
+                    metadata[@"pngFile"] = @"renderer.png";
+                }
+                [self.view callAsyncJavaScript:@"const p=globalThis.soksakRenderedReference; return p ? await p.validate({requestId,revision}) : false;"
+                    arguments:@{ @"requestId": @(self.requestID), @"revision": metadata[@"revision"] }
+                    inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id valid, NSError *validationError) {
+                    if (self.completed) return;
+                    if (validationError || ![valid isEqual:@YES] || ![self current]) {
+                        [self finish:nil error:validationError ? validationError.localizedDescription : @"document reference renderer revision changed during native snapshot"];
+                        return;
+                    }
+                    NSMutableDictionary *snapshot = [[source mutableCopy] autorelease];
+                    snapshot[@"rectPt"] = self.bounds;
+                    snapshot[@"scale"] = @([source[@"width"] doubleValue] / [self.bounds[@"width"] doubleValue]);
+                    NSDictionary *result = @{ @"schemaVersion": @1, @"requestId": @(self.requestID), @"producer": metadata, @"source": snapshot };
+                    NSData *manifest = [NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:NULL];
+                    if (!manifest || ![manifest writeToFile:[self.directory stringByAppendingPathComponent:@"manifest.json"] atomically:YES]) {
+                        [self finish:nil error:@"document reference manifest could not be written"];
+                        return;
+                    }
+                    [self finish:result error:nil];
+                }];
+            }];
+        });
+}
+@end
+
+static void documentReferenceClose(SPDocumentView *view) {
+    SPDocumentReferenceObservation *observation = [activeDocumentReferences objectForKey:view];
+    if (observation && !observation.completed) {
+        [observation finish:nil error:@"document reference target was closed"];
+    }
+}
+
+bool sp_document_reference_observe(void *document, uint64_t request_id, const char *directory,
+    sp_document_frame_identity_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"document reference belongs to the native main thread");
+    if (!reply) return false;
+    SPDocumentView *view = (SPDocumentView *)document;
+    if (!view || view.closed || !view.window || !view.URL || view.isHiddenOrHasHiddenAncestor || !request_id || request_id > documentReferenceMaximumInteger || !directory) {
+        reply(context, NULL, "document reference requires an open exact native document, safe-integer requestId and artifact directory");
+        return true;
+    }
+    if (!activeDocumentFrameIdentity || activeDocumentFrameIdentity->view != view
+        || activeDocumentFrameIdentity->invalidated || activeDocumentFrameIdentity->removed
+        || activeDocumentFrameIdentity->startPending || activeDocumentFrameIdentity->frozen) {
+        reply(context, NULL, "document reference requires this exact document's active advancing capture identity producer");
+        return true;
+    }
+    if (!activeDocumentReferences) activeDocumentReferences = [[NSMapTable strongToStrongObjectsMapTable] retain];
+    if ([activeDocumentReferences objectForKey:view]) {
+        reply(context, NULL, "document reference already owns an observation of this document");
+        return true;
+    }
+    SPDocumentReferenceObservation *observation = [SPDocumentReferenceObservation new];
+    observation.view = view; observation.url = view.URL;
+    observation.identity = activeDocumentFrameIdentity;
+    observation.directory = [NSString stringWithUTF8String:directory]; observation.bounds = referenceScreenBounds(view);
+    observation.requestID = request_id; observation.reply = reply; observation.context = context;
+    if (!observation.directory || !observation.bounds) {
+        [observation release]; reply(context, NULL, "document reference native geometry is unavailable"); return true;
+    }
+    [activeDocumentReferences setObject:observation forKey:view];
+    observation.deadline = sp_observe_timer("document.reference.timeout", SP_OBSERVE_RECORD, 10.0, NO,
+        @"document reference observation", ^(NSTimer *timer) {
+        (void)timer;
+        [observation finish:nil error:@"document reference observation exceeded its native deadline"];
+        [observation complete:nil error:@"document reference observation exceeded its native deadline"];
+    });
+    if (!observation.deadline) {
+        [observation complete:nil error:@"document reference deadline could not be created"];
+        [observation release]; return true;
+    }
+    [observation begin];
+    [observation release];
+    return true;
+}
+
 static WKContentWorld *frameIdentityWorld(void) {
     return [WKContentWorld worldWithName:@"soksak-diagnostic-frame-identity"];
 }
@@ -1949,16 +2237,29 @@ static void frameIdentityStartFailed(SPDocumentFrameIdentity *identity, NSString
     frameIdentityRemoveMessageHandler(view);
 }
 
+static bool startDocumentFrameIdentity(void *handle, uint64_t generation,
+    sp_document_frame_identity_reply reply, void *context, BOOL rootOnly);
+
+bool sp_document_reference_identity_start(void *handle, uint64_t generation,
+    sp_document_frame_identity_reply reply, void *context) {
+    return startDocumentFrameIdentity(handle, generation, reply, context, NO);
+}
+
 bool sp_document_frame_identity_start(void *handle, uint64_t generation,
     sp_document_frame_identity_reply reply, void *context) {
+    return startDocumentFrameIdentity(handle, generation, reply, context, YES);
+}
+
+static bool startDocumentFrameIdentity(void *handle, uint64_t generation,
+    sp_document_frame_identity_reply reply, void *context, BOOL rootOnly) {
     NSCAssert(NSThread.isMainThread, @"document frame identity start requires the main thread");
     if (!reply) return false;
     SPDocumentView *view = (SPDocumentView *)handle;
     NSString *failure = nil;
-    if (!view || !generation) failure = @"a root document and nonzero generation are required";
-    else if (view.closed || !view.pluginRootView || !view.webSurface || !view.window || !view.URL)
-        failure = @"the requested plugin root document is not open and visible";
-    else if (view.isHiddenOrHasHiddenAncestor) failure = @"the requested plugin root document is hidden";
+    if (!view || !generation) failure = rootOnly ? @"a root document and nonzero generation are required" : @"a document and nonzero generation are required";
+    else if (view.closed || (rootOnly && !view.pluginRootView) || !view.webSurface || !view.window || !view.URL)
+        failure = rootOnly ? @"the requested plugin root document is not open and visible" : @"the requested exact document is not open and visible";
+    else if (view.isHiddenOrHasHiddenAncestor) failure = rootOnly ? @"the requested plugin root document is hidden" : @"the requested exact document is hidden";
     else if (!sp_image_capture_match_identity_session_active())
         failure = @"document frame identity requires an active frameIdentity capture";
     else if (activeDocumentFrameIdentity) failure = @"one document frame identity source is allowed per capture";
@@ -2343,6 +2644,7 @@ void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
 #ifdef SOKSAK_DIAGNOSTIC
+    documentReferenceClose(view);
     frameIdentityClose(view);
     [view restoreViewportMarker];
 #endif

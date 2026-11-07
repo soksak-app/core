@@ -314,6 +314,35 @@ int main(void) { @autoreleasepool {
         check(surfaceLayoutPrefersNear60FPS(region) == 0,
             [NSString stringWithFormat:@"a document region renders at the display refresh rate (preference %d)",
                 surfaceLayoutPrefersNear60FPS(region)]);
+        sp_image_capture_match_begin(NULL, NULL);
+        char *referenceSessionError = NULL;
+        BOOL referenceSession = sp_image_capture_match_identity_session_begin(&referenceSessionError);
+        check(referenceSession && referenceSessionError == NULL, @"an exact document reference owns an active identity session");
+        free(referenceSessionError);
+        clearFrameIdentityReply();
+        check(sp_document_frame_identity_start(region, 43, frameIdentityReply, NULL), @"the existing root-only entry replies for an attached target");
+        until(@"the existing root-only entry rejects the attached document", ^BOOL { return frameIdentityReplyCount == 1; });
+        check(frameIdentityReplyError != nil, @"an attached document does not acquire the existing plugin-root identity capability");
+        clearFrameIdentityReply();
+        check(sp_document_reference_identity_start(region, 43, frameIdentityReply, NULL), @"the exact document reference entry schedules its attached target");
+        until(@"the exact attached document reports its first actual QR draw", ^BOOL { return frameIdentityReplyCount == 1; });
+        NSDictionary *referenceStart = frameIdentityReplyJSON
+            ? [NSJSONSerialization JSONObjectWithData:[frameIdentityReplyJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil] : nil;
+        check(frameIdentityReplyError == nil && [referenceStart[@"generation"] unsignedLongLongValue] == 43
+            && [referenceStart[@"roi"] isKindOfClass:NSDictionary.class],
+            [NSString stringWithFormat:@"the exact attached target exposes actual identity geometry without a root grant: %@ %@", referenceStart, frameIdentityReplyError ?: @""]);
+        if (frameIdentityReplyError == nil) {
+            clearFrameIdentityReply();
+            check(sp_document_frame_identity_freeze(43, frameIdentityReply, NULL), @"the attached reference freezes its actual issued tuple");
+            until(@"the attached reference producer freezes", ^BOOL { return frameIdentityReplyCount == 1; });
+            check(frameIdentityReplyError == nil, @"the attached reference producer freeze succeeds");
+            clearFrameIdentityReply();
+            check(sp_document_frame_identity_remove(43, frameIdentityReply, NULL), @"the attached reference removes only its own generation");
+            until(@"the attached reference marker is removed", ^BOOL { return frameIdentityReplyCount == 1; });
+            check(frameIdentityReplyError == nil, @"the attached reference marker removal succeeds");
+        }
+        sp_image_capture_match_end();
+        clearFrameIdentityReply();
         sp_document_close(region);
     }
     sp_core_root_set_resolver(NULL, NULL);

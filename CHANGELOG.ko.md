@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F584-5: 다시 빌드한 Wails·Tauri·mygo에서 기본 virtual-input tier를 검증했다. Input·HWP 사례 71개가 skip 없이 모두 통과했고 같은 boot·동일 activation count를 확인한 비활성 session 증명 62개를 보존했다. System이 필요한 activation check 8개와 각각의 이유는 유지하며 startup activation과 G8 성능 인수는 별도다.
+
+- F701: View drag의 source cadence와 captured-paint convergence에 40 ms 이하 기준을 적용한다. 정확히 40 ms를 허용하고 40.001 ms를 거부하는 경계 사례 네 개를 포함해 소유 검사 76개가 모두 통과했다. Identity·source pixel·geometry 기준은 바꾸지 않으며 실제 captured convergence 61.806 ms는 여전히 benchmark 실패다.
+
 - F700: 부모가 소유한 cleanup hook 하나로 모든 애플리케이션 session을 정리하고, 모든 형제 audit가 끝난 뒤에만 성공한 녹화를 삭제한다. Audit가 실패하면 부모가 소유한 모든 녹화를 보존하면서 모든 connection과 slot을 해제한다. 집중 owner 27개와 실제 세 host 부모 검사 7/7이 통과한다.
 
 - F696-5: 소유 연결 inventory에 클립보드 소유 세션·terminal fixture의 정확한 선언을 반영하고 모든 coverage 검사를 유지한다.

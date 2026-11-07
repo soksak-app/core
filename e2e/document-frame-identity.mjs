@@ -178,3 +178,47 @@ function validROI(value, withScale) {
   return keys.every((key) => Number.isFinite(value[key])) && value.width > 0 && value.height > 0
     && (!withScale || value.scale > 0);
 }
+
+
+/** Collects the public native response and its reference recording. This is an
+ * unverified wire packet: acquisition must still join actual source bytes,
+ * issued document identities, every decoded capture, and exact glyph pixels. */
+export async function captureDocumentReference(session, target) {
+  if (!target || typeof target !== "object" || Array.isArray(target)
+    || Object.keys(target).some(key => !["surface", "document", "requestId"].includes(key))) {
+    throw new TypeError("document reference capture has undeclared target parameters");
+  }
+  if (typeof target.surface !== "string" || target.surface === "" || typeof target.document !== "string"
+    || !Number.isSafeInteger(target.requestId) || target.requestId <= 0) {
+    throw new TypeError("document reference capture requires exact surface, document and requestId ownership");
+  }
+  const recording = await session.record({ frameIdentity: true });
+  let stopAttempted = false;
+  const stop = async options => {
+    stopAttempted = true;
+    return recording.stop(options);
+  };
+  session.cleanup(async () => { if (!stopAttempted) await stop({ after: 0 }); });
+  try {
+    const observed = await session.request("diagnostics.capture.document-reference", {
+      surface: target.surface, document: target.document, requestId: target.requestId,
+    });
+    if (typeof observed?.directory !== "string" || observed.directory === "") {
+      throw new Error("document reference capture has no public native artifact directory");
+    }
+    session.trackRecording(observed.directory);
+    const host = await session.get("host.window");
+    const presentation = await session.presented();
+    if (!Number.isFinite(presentation?.displayed) || presentation.displayed < 0) {
+      throw new Error("document reference capture has no actual host presentation time");
+    }
+    const capture = await stop({ after: presentation.displayed });
+    return { observed, host, capture };
+  } catch (error) {
+    if (!stopAttempted) {
+      try { await stop({ after: 0 }); }
+      catch (cleanup) { throw new AggregateError([error, cleanup], "document reference request and recording cleanup failed"); }
+    }
+    throw error;
+  }
+}

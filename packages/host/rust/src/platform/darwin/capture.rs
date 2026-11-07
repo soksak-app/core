@@ -21,6 +21,19 @@ unsafe extern "C" {
         reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
         context: *mut c_void,
     ) -> bool;
+    fn sp_document_reference_identity_start(
+        document: *mut c_void,
+        generation: u64,
+        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
+        context: *mut c_void,
+    ) -> bool;
+    fn sp_document_reference_observe(
+        document: *mut c_void,
+        request_id: u64,
+        directory: *const c_char,
+        reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
+        context: *mut c_void,
+    ) -> bool;
     fn sp_document_frame_identity_freeze(
         generation: u64,
         reply: extern "C" fn(*mut c_void, *const c_char, *const c_char),
@@ -49,6 +62,31 @@ unsafe extern "C" {
 }
 
 type IdentityDone = Box<dyn FnOnce(Result<String, String>) + Send>;
+
+pub fn document_reference_observe(
+    document: Handle,
+    request_id: u64,
+    directory: &str,
+    done: IdentityDone,
+) -> Result<(), String> {
+    let directory =
+        CString::new(directory).map_err(|_| "document reference directory contains NUL")?;
+    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
+    if unsafe {
+        sp_document_reference_observe(
+            document as *mut c_void,
+            request_id,
+            directory.as_ptr(),
+            document_frame_identity_reply,
+            context,
+        )
+    } {
+        Ok(())
+    } else {
+        unsafe { drop(Box::from_raw(context.cast::<IdentityDone>())) };
+        Err("document reference observation was not scheduled".into())
+    }
+}
 
 extern "C" fn document_frame_identity_reply(
     context: *mut c_void,
@@ -110,6 +148,27 @@ fn schedule_document_frame_identity(
         Err(format!(
             "{operation} document frame identity was not scheduled"
         ))
+    }
+}
+
+pub fn document_reference_identity_start(
+    document: Handle,
+    generation: u64,
+    done: IdentityDone,
+) -> Result<(), String> {
+    let context = Box::into_raw(Box::new(done)).cast::<c_void>();
+    if unsafe {
+        sp_document_reference_identity_start(
+            document as *mut c_void,
+            generation,
+            document_frame_identity_reply,
+            context,
+        )
+    } {
+        Ok(())
+    } else {
+        unsafe { drop(Box::from_raw(context.cast::<IdentityDone>())) };
+        Err("start document frame identity was not scheduled".into())
     }
 }
 

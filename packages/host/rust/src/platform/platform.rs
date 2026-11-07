@@ -832,6 +832,27 @@ pub trait Platform: CoreRootHost + Send + Sync {
         Err("not implemented on this platform".into())
     }
     #[cfg(feature = "diagnostics")]
+    /// Observes the public renderer provider and native pixels of this exact document.
+    fn document_reference_identity_start(
+        &self,
+        _document: Handle,
+        _generation: u64,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("document reference identity is not implemented on this platform".into())
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn document_reference_observe(
+        &self,
+        _document: Handle,
+        _request_id: u64,
+        _directory: &str,
+        _done: Box<dyn FnOnce(Result<String, String>) + Send>,
+    ) -> Result<(), String> {
+        Err("document reference observation is not implemented on this platform".into())
+    }
+    #[cfg(feature = "diagnostics")]
     /// Freezes the document-frame identity producer. Completion runs once on the UI thread.
     fn document_frame_identity_freeze(
         &self,

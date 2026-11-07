@@ -150,7 +150,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/document_reference_test.go", "packages/host/go/src/document_reference_lifetime_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
@@ -173,6 +173,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/src/webview_geometry.m",
   ], [
     "native/darwin/tests/document_view_test.m",
+    "native/darwin/tests/document_reference_test.m",
     "native/darwin/tests/image_region_test.m",
     "native/darwin/tests/image_region_capture_presentation_test.m",
     "native/darwin/tests/image_nonce_ownership_test.m",
@@ -266,6 +267,34 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
   win32: { status: "unavailable", reason: "The native capture backend is implemented only for macOS.", resumeWhen: "Implement Windows capture and run its sampler acceptance." },
 };
 const FEATURE_LINKS = [
+  {
+    id: "F696-4",
+    implementation: [
+      { file: "packages/host/go/src/document_reference.go", symbol: "func diagnosticCaptureDocumentReference(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func awaitDocumentObservation(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn capture_document_reference(" },
+      { file: "native/darwin/src/document_view.m", symbol: "bool sp_document_reference_observe(" },
+      { file: "packages/plugin-api/diagnostic-view-frames.js", symbol: "export function createRenderedDocumentReferenceProvider(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/document_reference_test.go", id: "TestDocumentReferenceObservationIsPubliclyDeclared" },
+      { file: "packages/host/go/src/document_reference_test.go", id: "TestDocumentReferenceObservationRejectsInvalidRequests" },
+      { file: "packages/host/go/src/document_reference_lifetime_test.go", id: "TestDocumentReferenceAwaitKeepsLateErrorOwnershipAfterSchedulingFailure" },
+      { file: "packages/host/go/src/document_reference_lifetime_test.go", id: "TestDocumentReferenceAwaitRejectsDuplicateNativeCompletion" },
+      { file: "packages/host/go/src/document_reference_lifetime_test.go", id: "TestDocumentReferenceAwaitSchedulesThroughItsHostDispatcher" },
+      { file: "packages/host/rust/src/endpoint.rs", id: "document_reference_observation_is_publicly_declared" },
+      { file: "native/darwin/tests/document_core_root_test.m", id: "an attached document does not acquire the existing plugin-root identity capability" },
+      { file: "native/darwin/tests/document_reference_test.m", id: "the asynchronous native reference completes once through the SDK worker bridge" },
+      { file: "native/darwin/tests/document_reference_test.m", id: "the actual native PNG is retained for exact pixel consumers" },
+      { file: "native/darwin/tests/document_reference_test.m", id: "the decoded uint64 document raster is canonical text across the public JSON boundary" },
+      { file: "native/darwin/tests/document_reference_test.m", id: "revision failure preserves the actual native PNG" },
+      { file: "native/darwin/tests/document_reference_test.m", id: "native success and error release the exact public provider lease once" },
+      { file: "packages/plugin-api/test/document-reference-provider.test.mjs", id: "DOM renderer reference owns actual painted text and geometry without accepting consumer text" },
+      { file: "packages/plugin-api/test/document-reference-provider.test.mjs", id: "releasing a DOM reference cancels its pending font wait without waiting for a font or animation event" },
+    ],
+    expected: "The public exact-document transaction and producer lease owners retain native PNG/issued identity, reject invalid ownership, preserve failure evidence, and release pending observations on close through the existing worker callback boundary. These scoped owners do not close F696-4: actual application references, strict earliest-frame consumer conversion and declared platform delivery remain separate acceptance gates.",
+    levels: ["unit"],
+  },
   {
     id: "F502-13-2",
     implementation: [
@@ -1773,6 +1802,20 @@ const FEATURE_LINKS = [
     ],
     expected: "Still captures include rendered child settings modals at their device-pixel geometry, both normally and while covered, after the declared WebKit modal document has loaded.",
     levels: ["unit", "application"],
+  },
+  {
+    id: "F701",
+    implementation: [
+      { file: "packages/window-check/view-metrics.mjs", symbol: "const DRAG_CONTENT_INTERVAL_LIMIT_MS = 40;" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag cadence accepts exactly 40 ms" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag cadence rejects above 40 ms" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag convergence accepts exactly 40 ms" },
+      { file: "packages/window-check/test/view-metrics.test.mjs", id: "the declared drag convergence rejects above 40 ms" },
+    ],
+    expected: "Cadence and captured-paint convergence accept 40 ms inclusively and reject a larger interval; geometry and source proof remain unchanged, and this contract is not application performance acceptance.",
+    levels: ["unit"],
   },
   {
     id: "F700",

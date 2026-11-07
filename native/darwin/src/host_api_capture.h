@@ -5,7 +5,9 @@
 #include <stdint.h>
 
 // Host-facing native operations; callback contexts are integer tokens, never Go pointers.
+bool scheduleDocumentReferenceIdentityStart(void *document, uint64_t generation, uintptr_t context);
 bool scheduleDocumentFrameIdentityStart(void *document, uint64_t generation, uintptr_t context);
+bool scheduleDocumentReferenceObserve(void *document, uint64_t requestId, const char *directory, uintptr_t context);
 bool scheduleDocumentFrameIdentityFreeze(uint64_t generation, uintptr_t context);
 bool scheduleDocumentFrameIdentityRemove(uint64_t generation, uintptr_t context);
 void listDeliveredNotifications(void);

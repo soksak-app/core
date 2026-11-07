@@ -192,6 +192,7 @@ pub(crate) fn call(
                 .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
         }
         "diagnostics.capture.still" => capture_still(window),
+        "diagnostics.capture.document-reference" => capture_document_reference(window, &params),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
         "diagnostics.host.events" => host_events(window, &params),
@@ -361,6 +362,16 @@ fn capture_document_identity_start(
     params: &Map<String, Value>,
 ) -> Result<Value, Failure> {
     let request = parse_capture_document_identity_request(params)?;
+    start_document_identity(window, request, None)
+}
+
+// Capture-stop remains the single owner of a selected or pending generation,
+// including exact attached-document references that time out during start.
+fn start_document_identity(
+    window: &Window,
+    request: CaptureDocumentIdentityRequest,
+    reference_target: Option<(String, Handle)>,
+) -> Result<Value, Failure> {
     let _guard = lifecycle_lock(&DOCUMENT_FRAME_IDENTITY).map_err(internal)?;
     let (active, selected) = RECORDING.frame_identity_state();
     if !active {
@@ -410,21 +421,33 @@ fn capture_document_identity_start(
                 operation_request.surface, operation_request.generation
             ));
         }
-        let document = resolve_document_frame_identity_root(
-            &data.documents,
-            data.view_source_origins
-                .current_view(&operation_request.surface),
-            &operation_request,
-        )?;
-        platform.document_frame_identity_start(
-            document,
-            operation_request.generation,
-            Box::new(move |result| {
-                if let Err(error) = sender.send(result) {
-                    log_late_document_frame_identity_result(error.0);
+        let document = match &reference_target {
+            Some((name, expected)) => {
+                let current = data
+                    .documents
+                    .get(&(operation_request.surface.clone(), name.clone()))?;
+                if current != *expected {
+                    return Err("document reference native target was replaced".into());
                 }
-            }),
-        )
+                current
+            }
+            None => resolve_document_frame_identity_root(
+                &data.documents,
+                data.view_source_origins
+                    .current_view(&operation_request.surface),
+                &operation_request,
+            )?,
+        };
+        let done = Box::new(move |result| {
+            if let Err(error) = sender.send(result) {
+                log_late_document_frame_identity_result(error.0);
+            }
+        });
+        if reference_target.is_some() {
+            platform.document_reference_identity_start(document, operation_request.generation, done)
+        } else {
+            platform.document_frame_identity_start(document, operation_request.generation, done)
+        }
     });
     match scheduled {
         Ok(()) => {}
@@ -861,6 +884,120 @@ fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, F
 /// Takes one still image of the window without giving it focus, writes it to `<config-dir>/captures/still-*/window.png`
 /// and returns the path. It is observation material that a person checks visually during development, and the requester
 /// deletes the directory after checking.
+fn capture_document_reference(
+    window: &Window,
+    params: &Map<String, Value>,
+) -> Result<Value, Failure> {
+    if params
+        .keys()
+        .any(|key| !["window", "surface", "document", "requestId"].contains(&key.as_str()))
+    {
+        return Err(Failure::params(
+            "document reference parameters contain an undeclared field",
+        ));
+    }
+    let surface = params
+        .get("surface")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| Failure::params("document reference requires a surface"))?
+        .to_string();
+    let document = params
+        .get("document")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Failure::params("document reference requires an exact document name"))?
+        .to_string();
+    let request_id = params
+        .get("requestId")
+        .and_then(Value::as_u64)
+        .filter(|value| *value > 0 && *value <= 9_007_199_254_740_991)
+        .ok_or_else(|| {
+            Failure::params(
+                "document reference requestId must be a positive JavaScript safe integer",
+            )
+        })?;
+    let held = window.clone();
+    let key = (surface.clone(), document.clone());
+    let (generation, expected_handle) = on_main(window, move || {
+        let data = crate::windows::window_data(&held)?;
+        let generation = data
+            .view_source_origins
+            .current_view(&key.0)
+            .ok_or("document reference surface has no current renderer view")?;
+        let handle = data.documents.get(&key)?;
+        Ok((generation, handle))
+    })
+    .map_err(internal)?;
+    let identity_start = start_document_identity(
+        window,
+        CaptureDocumentIdentityRequest {
+            surface: surface.clone(),
+            generation,
+        },
+        Some((document.clone(), expected_handle)),
+    )?;
+    let platform = platform::current().map_err(internal)?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(internal)?
+        .as_nanos();
+    let directory = window
+        .state::<Workspace>()
+        .directory()
+        .join("logs")
+        .join("captures")
+        .join(format!("document-reference-{request_id}-{stamp}"));
+    platform.private_directory(&directory).map_err(internal)?;
+    let captured_directory = directory.to_string_lossy().to_string();
+    let held = window.clone();
+    let key = (surface.clone(), document.clone());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    on_main(window, move || {
+        let data = crate::windows::window_data(&held)?;
+        if data.view_source_origins.current_view(&key.0) != Some(generation) {
+            return Err("document reference renderer incarnation changed".into());
+        }
+        let handle = data.documents.get(&key)?;
+        if handle != expected_handle { return Err("document reference native target was replaced".into()); }
+        platform.document_reference_observe(handle, request_id, &captured_directory, Box::new(move |result| {
+            if let Err(error) = sender.send(result) {
+                let (level, text) = match error.0 {
+                    Ok(_) => ("info", "document reference callback arrived after its request ended".to_string()),
+                    Err(error) => ("error", format!("document reference callback failed after its request ended: {error}")),
+                };
+                crate::application_log::Entry::new(level, "host", "diagnostics", text).log();
+            }
+        }))
+    }).map_err(internal)?;
+    let raw = receiver
+        .recv_timeout(TIMEOUT)
+        .map_err(|_| {
+            internal(format!(
+                "document reference timed out; artifacts retained at {}",
+                directory.display()
+            ))
+        })?
+        .map_err(internal)?;
+    let mut value: Value = serde_json::from_str(&raw)
+        .map_err(|error| internal(format!("document reference returned invalid JSON: {error}")))?;
+    let fields = value
+        .as_object_mut()
+        .ok_or_else(|| internal("document reference result is not an object"))?;
+    if fields.get("requestId").and_then(Value::as_u64) != Some(request_id) {
+        return Err(internal(
+            "document reference result belongs to another request",
+        ));
+    }
+    fields.insert(
+        "target".into(),
+        json!({"surface":surface,"document":document}),
+    );
+    fields.insert("directory".into(), json!(directory.to_string_lossy()));
+    fields.insert("identityStart".into(), identity_start);
+    fields.insert("generation".into(), json!(generation));
+    Ok(value)
+}
+
 fn capture_still(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
@@ -1031,7 +1168,9 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
     }
     if let Some(entries) = request.get("debugEntries") {
         if !entries.is_array() {
-            return Err(Failure::params("diagnostics.fixture debugEntries must be an array"));
+            return Err(Failure::params(
+                "diagnostics.fixture debugEntries must be an array",
+            ));
         }
         params.insert("debugEntries".into(), entries.clone());
     }

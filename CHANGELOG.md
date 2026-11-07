@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F584-5: Verify the default virtual-input tier on rebuilt Wails, Tauri and mygo: all 71 input/HWP cases pass with zero skips and 62 same-boot, unchanged-count inactive session proofs. Preserve the eight system-only activation checks and their explicit reasons. Startup activation and G8 performance remain separate.
+
+- F701: Set view-drag source cadence and captured-paint convergence to an inclusive 40 ms ceiling. All 76 owners pass, including four cases accepting 40 ms and rejecting 40.001 ms. Identity, source-pixel and geometry criteria are unchanged; actual 61.806 ms captured convergence remains a benchmark failure.
+
 - F700: Finish every application session through one parent-owned cleanup hook and dispose successful recordings only after every sibling audit completes. Preserve all parent-owned recordings on audit failure while releasing every connection and slot. All 27 focused owners and the actual three-host parent check (7/7) pass.
 
 - F696-5: Match the exact clipboard-owning session and terminal fixture declarations in the owner-link inventory; preserve all coverage checks.

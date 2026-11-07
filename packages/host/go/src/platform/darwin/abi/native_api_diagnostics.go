@@ -9,33 +9,35 @@ import (
 )
 
 type DiagnosticFunctions struct {
-	CountPageObjects                    func(unsafe.Pointer, bool, uintptr)
-	CountWhen                           func(*SpWindowObjects, float64, uintptr)
-	InputReference                      func(uintptr, *byte, *byte, uintptr)
-	InputSourceSelectAndAwait           func(*byte, uintptr)
-	ListDeliveredNotifications          func()
-	MainSpCaptureHasStream              func() bool
-	MainSpCaptureLimited                func() bool
-	MainSpCaptureLongestGap             func() float64
-	MainSpCaptureOpen                   func(int64, bool, **byte) bool
-	MainSpCaptureStart                  func(*byte, bool, **byte) bool
-	MainSpCaptureStill                  func(*int64, int32, *byte, **byte) bool
-	MainSpCaptureStop                   func(float64) int32
-	MainSpCaptureWait                   func() int32
-	MainSpDocumentDrawCovered           func(uintptr, bool) bool
-	MainSpDocumentViewportMarker        func(unsafe.Pointer, bool, *uint8, *float64, **byte) bool
-	MainSpInputSourceCurrent            func() *byte
-	MainSurfaceLayoutTracePresented     func(uint64)
-	MainSurfaceLayoutTraceRequested     func() uint64
-	MainSurfaceLayoutTraceStart         func()
-	MainSurfaceLayoutTraceStop          func(*float64, uint64) uint64
-	ScheduleDocumentFrameIdentityFreeze func(uint64, uintptr) bool
-	ScheduleDocumentFrameIdentityRemove func(uint64, uintptr) bool
-	ScheduleDocumentFrameIdentityStart  func(unsafe.Pointer, uint64, uintptr) bool
-	SpCaptureClock                      func() float64
-	SpCaptureError                      func() *byte
-	WhenExited                          func(int32, float64, uintptr)
-	WindowNumbers                       func(uintptr, *int64, int32) int32
+	CountPageObjects                       func(unsafe.Pointer, bool, uintptr)
+	CountWhen                              func(*SpWindowObjects, float64, uintptr)
+	InputReference                         func(uintptr, *byte, *byte, uintptr)
+	InputSourceSelectAndAwait              func(*byte, uintptr)
+	ListDeliveredNotifications             func()
+	MainSpCaptureHasStream                 func() bool
+	MainSpCaptureLimited                   func() bool
+	MainSpCaptureLongestGap                func() float64
+	MainSpCaptureOpen                      func(int64, bool, **byte) bool
+	MainSpCaptureStart                     func(*byte, bool, **byte) bool
+	MainSpCaptureStill                     func(*int64, int32, *byte, **byte) bool
+	MainSpCaptureStop                      func(float64) int32
+	MainSpCaptureWait                      func() int32
+	MainSpDocumentDrawCovered              func(uintptr, bool) bool
+	MainSpDocumentViewportMarker           func(unsafe.Pointer, bool, *uint8, *float64, **byte) bool
+	MainSpInputSourceCurrent               func() *byte
+	MainSurfaceLayoutTracePresented        func(uint64)
+	MainSurfaceLayoutTraceRequested        func() uint64
+	MainSurfaceLayoutTraceStart            func()
+	MainSurfaceLayoutTraceStop             func(*float64, uint64) uint64
+	ScheduleDocumentFrameIdentityFreeze    func(uint64, uintptr) bool
+	ScheduleDocumentFrameIdentityRemove    func(uint64, uintptr) bool
+	ScheduleDocumentFrameIdentityStart     func(unsafe.Pointer, uint64, uintptr) bool
+	ScheduleDocumentReferenceIdentityStart func(unsafe.Pointer, uint64, uintptr) bool
+	ScheduleDocumentReferenceObserve       func(unsafe.Pointer, uint64, *byte, uintptr) bool
+	SpCaptureClock                         func() float64
+	SpCaptureError                         func() *byte
+	WhenExited                             func(int32, float64, uintptr)
+	WindowNumbers                          func(uintptr, *int64, int32) int32
 }
 
 func (functions DiagnosticFunctions) Validate() error {
@@ -107,6 +109,12 @@ func (functions DiagnosticFunctions) Validate() error {
 	}
 	if functions.ScheduleDocumentFrameIdentityStart == nil {
 		return fmt.Errorf("native API function is missing: scheduleDocumentFrameIdentityStart")
+	}
+	if functions.ScheduleDocumentReferenceIdentityStart == nil {
+		return fmt.Errorf("native API function is missing: scheduleDocumentReferenceIdentityStart")
+	}
+	if functions.ScheduleDocumentReferenceObserve == nil {
+		return fmt.Errorf("native API function is missing: scheduleDocumentReferenceObserve")
 	}
 	if functions.SpCaptureClock == nil {
 		return fmt.Errorf("native API function is missing: sp_capture_clock")

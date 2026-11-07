@@ -63,6 +63,12 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		ScheduleDocumentFrameIdentityStart: func(a0 unsafe.Pointer, a1 uint64, a2 uintptr) bool {
 			return bool(C.scheduleDocumentFrameIdentityStart(a0, C.uint64_t(a1), C.uintptr_t(a2)))
 		},
+		ScheduleDocumentReferenceIdentityStart: func(a0 unsafe.Pointer, a1 uint64, a2 uintptr) bool {
+			return bool(C.scheduleDocumentReferenceIdentityStart(a0, C.uint64_t(a1), C.uintptr_t(a2)))
+		},
+		ScheduleDocumentReferenceObserve: func(a0 unsafe.Pointer, a1 uint64, a2 *byte, a3 uintptr) bool {
+			return bool(C.scheduleDocumentReferenceObserve(a0, C.uint64_t(a1), (*C.char)(unsafe.Pointer(a2)), C.uintptr_t(a3)))
+		},
 		SpCaptureClock: func() float64 { return float64(C.sp_capture_clock()) },
 		SpCaptureError: func() *byte { return (*byte)(unsafe.Pointer(C.sp_capture_error())) },
 		WhenExited:     func(a0 int32, a1 float64, a2 uintptr) { C.whenExited(C.int32_t(a0), C.double(a1), C.uintptr_t(a2)) },

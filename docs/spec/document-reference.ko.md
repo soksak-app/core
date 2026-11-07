@@ -6,7 +6,9 @@
 
 측정 구간 뒤에 시작한 `frameIdentity: true` 참조 recording이 활성 상태여야 한다. 호스트가 실제 현재 view generation과 정확한 native document를 해석하고 기존 capture identity 수명으로 source를 선택한 뒤 document producer를 설치한다. Root 전용 identity 권한은 별도 진입점으로 유지한다. 요청이 timeout되어도 capture-stop이 pending start, freeze, removal을 소유한다.
 
-문서 렌더러는 공개 page provider `soksakRenderedReference` version 1을 소유한다. 메서드는 `observe({requestId})`, `validate({requestId, revision})`, `release({requestId})`다. 정확한 요청 소유자가 해제할 때까지 한 요청만 producer를 빌린다. Observe는 소비자의 검증 기준을 받지 않는다. Dispose, 렌더러 교체, 문서 revision이나 geometry 변경은 관측을 무효화한다. Pending 관측이 해제되면 나중에 성공을 반환할 수 없다.
+Native 경계는 숫자 carrier를 읽기 전에 검증한다. `schemaVersion`은 정확히 숫자 1이어야 하고, 반환된 `requestId`는 원래 요청의 양의 safe integer와 같아야 하며, `revision.value`도 양의 safe integer여야 한다. JSON null, object, array, string, boolean, 소수와 범위 밖 값은 오류다. Foundation bridge를 통해 boolean을 숫자로 받아들이지 않는다. 잘못된 metadata는 worker bridge를 통해 정확히 한 번 오류를 반환하고, native snapshot을 게시하기 전에 해당 provider lease를 해제한다. Native 관측은 기존 10.0초 deadline을 중앙 `sp_observe_timer` 입구(`document.reference.timeout`)로 유지하며 completion에서 timer를 무효화하고 해제한다.
+
+문서 렌더러는 공개 page provider `soksakRenderedReference` version 1을 소유한다. 메서드는 `observe({requestId})`, `validate({requestId, revision})`, `release({requestId})`다. 정확한 요청 소유자가 해제할 때까지 한 요청만 producer를 빌린다. Observe는 소비자의 검증 기준을 받지 않는다. Dispose, 렌더러 교체, 문서 revision이나 geometry 변경은 관측을 무효화한다. Pending 관측이 해제되면 나중에 성공을 반환할 수 없다. Revision domain은 provider가 소유하는 비어 있지 않은 문자열이다. 호스트는 renderer 이름으로 분기하지 않고 이 domain과 양의 safe-integer counter를 그대로 같은 provider의 validate에 전달한다.
 
 DOM producer는 렌더러 소유 root의 실제 텍스트와 grapheme 사각형을 브라우저 Range와 layout API로 읽는다. Revision은 `{kind:"dom-layout", value}`, source kind는 `native-document`다. Editor는 실제 CodeMirror `contentDOM`을 전달하며 자동화가 selector로 내부 구조를 찾지 않는다. 제어하는 Browser 문서가 canonical SDK provider를 직접 불러온다. DOM metadata 자체는 물리적 presentation이나 glyph pixel 증거가 아니다.
 
@@ -34,4 +36,8 @@ Native 전체 소유 검사는 새 source로 컴파일됐다. 최초 fixture 실
 
 Go 최초 시도는 오래된 native library의 누락 symbol 때문에 동작 검사 전에 막혔다. 유지되는 ABI 생성과 `build-mygo`로 현재 dynamic native artifact를 만든 뒤 원래 선언·잘못된 요청 검사와 요청 수명 검사 합계 다섯 개가 통과했다(`f696-document-reference-host-dynamic-current.log`). 검증 framework cohort는 **758**이며 checker 후보 6b9/85c4가 설치·게시됐다고 처리하지 않는다.
 
-F696과 OCR 소비자 parent는 열린 상태다. Rust 경계·backend 소유 검사, 새 앱 원본 PNG·reference recording, 엄격한 가장 이른 frame 소비자 전환과 plugin에 독립적인 proof-method 경계는 각각 검증해야 한다. Native core가 provider 소유 revision domain을 opaque하게 전달하지 않고 특정 renderer domain 이름을 검사하는 R7 결합도 남아 있다. Framework checker 후보는 설치되거나 게시된 framework가 아니다. Linux·Windows·CI·의존성 배달에도 명시적인 검증 항목이 남는다. 이 producer 결과만으로 OCR 교체·최종 G8·다중 플랫폼 완료·새 실제 앱의 pixel 증거를 주장하지 않는다.
+이어서 provider가 소유하는 다른 revision domain을 가진 네 번째 실제 native case가 core의 renderer 이름 제한 때문에 metadata 거부로 실패했다(`f696-native-reference-opaque-domain-red.log`). Core가 generic source 형식과 안전한 counter를 검증하고 opaque domain을 그대로 같은 provider의 validate에 전달하도록 고친 뒤 원래 세 case와 새 case가 모두 4.300초에 통과했다(`f696-native-reference-opaque-domain-green.log`). Rust 공개 endpoint 선언 소유 검사도 통과했다(`f696-document-reference-rust-declaration-green.log`). 이 결과는 유지되는 native·Go·Rust 경계 검사이며 새 앱 소비자의 pixel 검증을 대신하지 않는다.
+
+F696과 OCR 소비자 parent는 열린 상태다. 새 앱 원본 PNG·reference recording, 엄격한 가장 이른 frame 소비자 전환과 plugin에 독립적인 proof-method 경계는 각각 검증해야 한다. Malformed provider metadata의 NSNull·coercion을 엄격히 거부하는 native JSON carrier 검증은 별도 RED/GREEN으로 진행 중이다. Framework checker 후보는 설치되거나 게시된 framework가 아니다. Linux·Windows·CI·의존성 배달에도 명시적인 검증 항목이 남는다. 이 producer 결과만으로 OCR 교체·최종 G8·다중 플랫폼 완료·새 실제 앱의 pixel 증거를 주장하지 않는다.
+
+잘못된 carrier owner의 최초 실행은 기존 네 사례를 통과한 뒤 `NSNull integerValue`의 uncaught `NSInvalidArgumentException`으로 4.869초에 중단됐다(`f696-native-malformed-carriers-red.log`). 이제 숫자를 읽기 전에 엄격한 NSNumber 검증으로 CFBoolean을 제외하고, 요청·revision 값의 safe integer 범위와 정확한 schema version 1을 검증한다. 같은 기존 네 사례와 잘못된 carrier 19개를 합친 23/23이 21.486초에 exit 0으로 통과했다(`f696-native-malformed-carriers-green.log`). 잘못된 provider 결과마다 worker bridge를 통해 명시적인 metadata 오류를 한 번 반환하고 해당 provider lease를 한 번 해제하며, 증거 디렉터리를 보존하고 native PNG는 게시하지 않는다. 중앙 관측 timer의 deadline은 기존 10.0초를 유지한다. 이는 native transaction과 carrier 검증이며 실제 앱 reference·pixel acceptance는 별도로 남는다.

@@ -414,6 +414,7 @@ NATIVE_TESTS = observe_test \
   view_import_map_test \
   document_view_import_map_test \
   document_core_root_test \
+  document_reference_test \
   document_view_load_test \
   view_channel_test \
   view_focus_test \
