@@ -97,7 +97,7 @@ export function rasterIdentity(presented) {
 const SAMPLES = 16;
 
 /** The number of distinct colours at the sampled points of the surface area of the frame. */
-function colours(frame, rect) {
+export function colours(frame, rect) {
   const ratio = frame.scale * frame.contentScale;
   const seen = new Set();
   for (let i = 1; i < SAMPLES; i++) {
