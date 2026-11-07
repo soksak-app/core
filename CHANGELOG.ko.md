@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F674: Wails main-thread stack test는 background 우선순위에서 추적되는 Go 반복 명령으로 연속 12회 모두 통과했다. 각 실행은 7.028–12.946초로 기존 120초 한도 안에 끝났다. 두 host의 주입 heartbeat 검사도 통과해 남은 background 검증을 마쳤다.
+
 - F686-1: 공유 native library가 Go platform 대신 main_thread.h와 main_thread.m을 소유한다. native test는 독립적인 설치 상태, 동기 전달과 반환값, 빠진 함수의 이름을 남기는 종료를 검증한다. Go 시작 검사와 두 adapter의 main-thread stack 및 stall 동작을 유지하며 native 및 audit 사례가 통과한다. mygo의 cgo 없는 binding은 아직 완료되지 않았다.
 
 - F686: mygo 빌드 계약은 purego나 dynamic library를 강제하지 않고 cgo 없는 Go 의존성을 요구한다. 공유 Go host와 Wails adapter의 변경도 그 경로를 유지해야 한다. 현재 cgo 없는 application 빌드는 공유 darwin 구현 타입이 cgo 파일에 정의되어 실패하며, 의존성 목록 조회만으로는 계약을 검증하지 못한다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F674: The Wails main-thread stack test passes 12 of 12 consecutive runs through the tracked Go repeat command under background priority, each in 7.028–12.946 s within the unchanged 120 s limit. Both hosts also pass the injected-heartbeat check; the remaining background validation is complete.
+
 - F686-1: The shared native library owns main_thread.h and main_thread.m instead of the Go platform. Native tests cover independent installation state, synchronous dispatch and return values, and termination with the missing function name. The Go startup check and both adapters retain their main-thread stack and stall behavior; the native and audit cases pass. This does not complete the cgo-free mygo binding.
 
 - F686: The mygo build contract requires cgo-free Go dependencies without requiring purego or a dynamic library. Shared Go host and Wails adapter changes must preserve that path. The current cgo-free application build fails because the shared darwin implementation type is defined in a cgo file; dependency listing alone does not verify the contract.
