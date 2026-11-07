@@ -37,7 +37,7 @@ for (const app of Object.values(APPS)) {
           ? await prepareFloorDrag(t, s, await openFloorPage(s), app.configDir)
           : await prepareTerminalDrag(t, s, terminal, app.configDir);
         const { pageProcess } = await s.get("host.window");
-        const { elements, recorded } = await runViewDrag({ options: OPTIONS, pageProcess, steps: {
+        await runViewDrag({ options: OPTIONS, pageProcess, steps: {
           readElements: async () => readWindowElements(app),
           conditions: async (state) => {
             const conditions = await b3Conditions(s, B3_SETTINGS["view-drag"][state]);
@@ -58,7 +58,6 @@ for (const app of Object.values(APPS)) {
             t.diagnostic(`benchmark report ${path}: ${JSON.stringify(report.performance)}`);
             t.diagnostic(`transaction cadence (ms): ${JSON.stringify(report.transactionCadence)}`);
             assert.ok(report.frameCount > 30, "the benchmark has too few captured frames");
-            result.assertPerformance();
             return result;
           },
           untilFramesQuiet: () => untilFramesQuiet({ frames: async () => [(await s.get("host.window")).frames] }),
@@ -70,10 +69,12 @@ for (const app of Object.values(APPS)) {
             await gesture();
             return null;
           },
+          publish: async ({ elements, recorded }) => {
+            if (elements !== null) t.diagnostic(`${app.name} accessibility elements: ${JSON.stringify(elements)}`);
+            if (recorded !== null) t.diagnostic(`${app.name} third drag: ${recorded.records.length} U7 records`);
+            if (run.state === FRAME_RECORDS) Object.assign(run.measurements, viewDragB3Values(FRAME_RECORDS, { recorded, gcLoop: OPTIONS.gcLoop }));
+          },
         } });
-        if (elements !== null) t.diagnostic(`${app.name} accessibility elements: ${JSON.stringify(elements)}`);
-        if (recorded !== null) t.diagnostic(`${app.name} third drag: ${recorded.records.length} U7 records`);
-        if (run.state === FRAME_RECORDS) Object.assign(run.measurements, viewDragB3Values(FRAME_RECORDS, { recorded, gcLoop: OPTIONS.gcLoop }));
       });
     });
 }

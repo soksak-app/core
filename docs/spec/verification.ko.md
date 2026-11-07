@@ -8,6 +8,9 @@
 
 창 검사 세션은 클립보드를 변경할 수 있는 동작 전에 `open(t, app, { clipboard: true })`로 보존 소유를 명시한다. 복사 단축키·fixture 직접 쓰기·터미널 선택 해제·허용된 OSC 52 출력은 소유가 필요하다. 무관한 세션은 클립보드를 읽거나 복원하지 않는다. 소유 획득 실패는 검사를 실패시키며 보존을 건너뛰지 않는다. 연결·실행 슬롯 정리를 준비 전에 등록하고 준비 실패 시 즉시 실행하며 준비 오류와 정리 오류를 함께 보존한다.
 
+
+View-drag benchmark는 구조가 유효한 캡처 수집과 기준 판정을 분리한다. Frame 누락·잘못된 geometry·불완전한 gesture는 수집을 즉시 중단한다. 유효한 캡처 gesture 뒤에는 세 번째 드래그와 수치를 수집·기록한 다음 캡처 성능을 판정한다. 세 번째 단계의 수집이나 기록이 실패해도 성능 단언을 실행하며, 둘 다 실패하면 두 원래 오류를 보존한다. B3 writer의 선택 조건과 실패 판정 규칙은 유지한다. 이 수집 순서는 성능 통과를 증명하거나 기준값을 바꾸지 않는다.
+
 ## 범위와 증거
 
 View display acceptance는 설치되고 활성화된 view plugin을 열거하고 실제로 연 tab을 식별한다. 각 plugin은 선언된 readiness와 예상 capture pixel을 검사하는 명시적 content case를 요구한다. Case가 없으면 plugin과 tab 식별자를 밝히며 실패한다. Colour variation만으로 plugin content를 입증할 수 없다. Missing case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.

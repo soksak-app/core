@@ -1,9 +1,83 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { TERMINAL_DRAG_PLAN } from "../benchmark/cases/terminal.mjs";
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
-import { dragProcesses, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
+import { completeViewDrag, dragProcesses, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
+
+test("the benchmark defers captured thresholds until valid third-drag measurements are published", { timeout: 5000 }, () => {
+  const source = readFileSync(new URL("../benchmark/view-drag.test.mjs", import.meta.url), "utf8");
+  const capture = source.slice(source.indexOf("capturedDrag: async () => {"), source.indexOf("untilFramesQuiet:"));
+  assert.ok(capture.includes("assert.ok(report.frameCount > 30"), "capture completeness must still be validated before continuing");
+  assert.ok(!capture.includes("assertPerformance("), "captured performance must not prevent third-drag collection");
+  assert.match(source, /publish: async \(\{ elements, recorded \}\) =>/, "the actual benchmark must publish collected results through runViewDrag");
+  const publish = source.slice(source.indexOf("publish: async"));
+  assert.match(publish, /Object\.assign\(run\.measurements, viewDragB3Values\(/);
+  const runner = readFileSync(new URL("../benchmark/cases/view-drag.mjs", import.meta.url), "utf8");
+  const collection = runner.slice(runner.indexOf("export async function runViewDrag("), runner.indexOf("export async function completeViewDrag("));
+  assert.match(collection, /await completeViewDrag\(captured, async \(\) =>/);
+  assert.match(collection, /await steps\.publish\(result\)/);
+});
+
+test("valid view drags publish third-stage B3 values before a captured threshold failure", { timeout: 5000 }, async () => {
+  const calls = [];
+  const threshold = new Error("captured frame p90 exceeds the unchanged target");
+  const captured = { assertPerformance() { calls.push("captured thresholds"); throw threshold; } };
+  const measurements = {};
+  await assert.rejects(async () => completeViewDrag(captured, () => {
+    calls.push("publish third metrics");
+    Object.assign(measurements, viewDragB3Values("frame-records", { recorded: { records: THIRD_DRAG }, gcLoop: false }));
+  }), (error) => error === threshold);
+  assert.deepEqual(calls, ["publish third metrics", "captured thresholds"]);
+  assert.deepEqual(measurements, { dragFrameP90Ms: 4, dragStepP90Ms: 1.5, dragFirstFrameMs: 3 });
+});
+
+test("view-drag judgment preserves both invalid third metrics and captured threshold failures", { timeout: 5000 }, async () => {
+  const threshold = new Error("captured step p90 exceeds the unchanged target");
+  let metricFailure;
+  let judgments = 0;
+  await assert.rejects(async () => completeViewDrag({ assertPerformance() { judgments++; throw threshold; } }, () => {
+    try { viewDragB3Values("frame-records", { recorded: null, gcLoop: false }); }
+    catch (error) { metricFailure = error; throw error; }
+  }), (error) => error instanceof AggregateError && error.errors.length === 2 &&
+    error.errors[0] === metricFailure && error.errors[1] === threshold);
+  assert.equal(judgments, 1, "invalid metrics must not hide the captured threshold failure");
+});
+
+test("view-drag judgment retains a metrics-only failure and accepts only two successful judgments", { timeout: 5000 }, async () => {
+  const metricFailure = new Error("invalid frame records");
+  let judgments = 0;
+  const captured = { assertPerformance() { judgments++; } };
+  await assert.rejects(async () => completeViewDrag(captured, () => { throw metricFailure; }), (error) => error === metricFailure);
+  await completeViewDrag(captured, () => {});
+  assert.equal(judgments, 2);
+});
+
+test("a structurally invalid captured drag prevents the third drag and metric publication", { timeout: 5000 }, async () => {
+  const calls = [];
+  const invalid = new Error("captured geometry is incomplete");
+  const steps = recordingSteps(calls);
+  steps.capturedDrag = async () => { calls.push("capture validation"); throw invalid; };
+  await assert.rejects(runViewDrag({ options: { accessibility: false, floor: false, gcLoop: false }, pageProcess: null, steps }),
+    (error) => error === invalid);
+  assert.deepEqual(calls, ['conditions "0"', "processes", "native drag", "processes", "first drag 0.5 s", "capture validation"]);
+});
+
+test("a third-stage collection failure preserves the valid captured threshold failure exactly once", { timeout: 5000 }, async () => {
+  const calls = [];
+  const collectionFailure = new Error("third drag record collection failed");
+  const threshold = new Error("captured frame p90 exceeds the unchanged target");
+  let judgments = 0;
+  const steps = recordingSteps(calls);
+  steps.capturedDrag = async () => ({ assertPerformance() { judgments++; throw threshold; } });
+  steps.record = async () => { throw collectionFailure; };
+  steps.publish = async () => { assert.fail("incomplete third-stage collection must not publish metrics"); };
+  await assert.rejects(runViewDrag({ options: { accessibility: false, floor: false, gcLoop: false }, pageProcess: null, steps }),
+    (error) => error instanceof AggregateError && error.errors.length === 2 &&
+      error.errors[0] === collectionFailure && error.errors[1] === threshold);
+  assert.equal(judgments, 1, "a valid capture must be judged even when third-stage collection fails");
+});
 
 test("the view drag takes ACCESSIBILITY, FLOOR and GC_LOOP as unset or 1", { timeout: 5000 }, () => {
   assert.deepEqual(viewDragOptions({}), { accessibility: false, floor: false, gcLoop: false });
@@ -18,6 +92,7 @@ test("the first drag is the captured drag without capture, delivered as native i
   assert.deepEqual(NATIVE_DRAG_PLAN, { ...TERMINAL_DRAG_PLAN, native: true });
 });
 
+const CAPTURED = { frameCount: 50, assertPerformance() {} };
 /** The steps of a view drag that record their calls in `calls`; `fail` names a step that throws. */
 function recordingSteps(calls, fail = new Set()) {
   const step = (name, value) => async (...args) => {
@@ -33,7 +108,7 @@ function recordingSteps(calls, fail = new Set()) {
       return [{ role: "host", pid: 7, cpuSeconds: at === 0 ? 1 : 1.5, peakBytes: at === 0 ? 100 * 1024 : 140 * 1024 }];
     },
     nativeDrag: step("native drag", { took: 800 }),
-    capturedDrag: step("captured drag", { frameCount: 50 }),
+    capturedDrag: step("captured drag", CAPTURED),
     untilFramesQuiet: step("frames quiet"),
     frameRecords: step("frame records"),
     gcLoop: step("gc loop"),
@@ -41,6 +116,7 @@ function recordingSteps(calls, fail = new Set()) {
     record: async (gesture) => { calls.push("record start"); const result = await gesture(); calls.push("record end"); return { result }; },
     conditions: async (state) => { calls.push(`conditions ${JSON.stringify(state)}`); },
     firstDragRead: async (figures) => { calls.push(`first drag ${figures.cpuSeconds} s`); },
+    publish: async () => { calls.push("publish"); },
   };
 }
 
@@ -49,9 +125,9 @@ test("the view drag runs the drags of B3 in order and reads the processes around
   const result = await runViewDrag({ options: { accessibility: true, floor: false, gcLoop: true }, pageProcess: null, steps: recordingSteps(calls) });
   assert.deepEqual(calls, [
     "elements", 'conditions "0"', "processes", "native drag", "processes", "first drag 0.5 s", "captured drag", "frames quiet",
-    "frame records", 'conditions "frame-records"', "record start", "gc loop true", "uncaptured drag", "gc loop false", "record end",
+    "frame records", 'conditions "frame-records"', "record start", "gc loop true", "uncaptured drag", "gc loop false", "record end", "publish",
   ]);
-  assert.deepEqual(result, { elements: ["AXWindow"], captured: { frameCount: 50 }, recorded: { result: { took: 800 } } });
+  assert.deepEqual(result, { elements: ["AXWindow"], captured: CAPTURED, recorded: { result: { took: 800 } } });
 });
 
 test("without ACCESSIBILITY and GC_LOOP the view drag reads no element and leaves the collector alone", { timeout: 5000 }, async () => {
@@ -59,7 +135,7 @@ test("without ACCESSIBILITY and GC_LOOP the view drag reads no element and leave
   await runViewDrag({ options: { accessibility: false, floor: false, gcLoop: false }, pageProcess: 812, steps: recordingSteps(calls) });
   assert.deepEqual(calls, [
     'conditions "0"', "processes", "native drag", "processes", "first drag 0.5 s", "captured drag", "frames quiet", "frame records",
-    'conditions "frame-records"', "record start", "uncaptured drag", "record end",
+    'conditions "frame-records"', "record start", "uncaptured drag", "record end", "publish",
   ]);
 });
 

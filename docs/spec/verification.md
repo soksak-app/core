@@ -8,6 +8,9 @@ Common window-check preparation declares executable paths without building or wa
 
 Window sessions acquire clipboard preservation only through an explicit `open(t, app, { clipboard: true })` declaration before any action that can change the clipboard. Copy shortcuts, direct fixture writes, terminal selection release and allowed OSC 52 output require ownership. An unrelated session does not read or restore the clipboard. Ownership failure rejects the check; it never skips preservation. Connection and execution-slot cleanup is registered before preparation and runs immediately on preparation rejection, preserving both preparation and cleanup failures.
 
+
+The view-drag benchmark separates structurally valid capture collection from threshold judgment. Missing frames, invalid geometry and incomplete gestures stop collection immediately. After a valid captured gesture, the third drag and its metrics are collected and published before the captured-performance assertion. A third-stage collection or publication failure still runs that assertion; both original errors are preserved when both fail. The B3 writer keeps its existing selected-condition and failed-verdict rules. This collection order does not establish a performance pass or change any threshold.
+
 ## Coverage and evidence
 
 View display acceptance enumerates installed enabled view plugins and identifies the actual opened tab. Each plugin requires an explicit content case that checks its declared readiness and expected captured pixels. A missing case fails with the plugin and tab identifiers. Colour variation alone does not prove plugin content; rejecting a missing case removes a false pass without lowering the acceptance criterion.

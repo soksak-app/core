@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F686-10: Collect third-drag records and publish valid measurements before judging captured performance. Keep structural capture failures fatal and preserve collection and performance errors together without changing thresholds or B3 output rules.
+
 - F696-3: Acquire clipboard ownership only for checks that can change it. Release endpoint connections and application slots immediately when session preparation fails; preserve preparation and cleanup errors together.
 
 - F696-2: Select update fixture release keys through the existing OS and architecture declaration. Reject unknown architectures instead of treating them as x64.

@@ -67,6 +67,7 @@ async function withCleanup(action, cleanup, what, cleaning) {
  *                         B3_MEASUREMENTS: "0" at the start of its interval, before the first drag, and FRAME_RECORDS after
  *                         frameRecords
  *   firstDragRead(figures) receives the figures of the first drag (firstDragFigures) as soon as they are read
+ *   publish(result)       publishes the collected figures before captured performance is judged
  * `pageProcess` is pageProcess of host.window. The settings that the steps change return when the check ends (keepCommonSettings of
  * @soksak/window-check), so the trace state of the third drag is not set back here; diagnostics.gc.loop is not a setting and is turned
  * off after the third drag whether it fails or not. Returns the elements, the captured drag and the record of the third drag.
@@ -82,15 +83,37 @@ export async function runViewDrag({ options, pageProcess, steps }) {
   const after = await steps.readProcesses();
   await steps.firstDragRead(firstDragFigures(before, after));
   const captured = await steps.capturedDrag();
-  await steps.untilFramesQuiet();
-  await steps.frameRecords();
-  await steps.conditions(FRAME_RECORDS);
-  const recorded = await steps.record(async () => {
-    if (!options.gcLoop) return steps.uncapturedDrag();
-    await steps.gcLoop(true);
-    return withCleanup(() => steps.uncapturedDrag(), () => steps.gcLoop(false), "the third drag", "turning diagnostics.gc.loop off");
+  let result;
+  await completeViewDrag(captured, async () => {
+    await steps.untilFramesQuiet();
+    await steps.frameRecords();
+    await steps.conditions(FRAME_RECORDS);
+    const recorded = await steps.record(async () => {
+      if (!options.gcLoop) return steps.uncapturedDrag();
+      await steps.gcLoop(true);
+      return withCleanup(() => steps.uncapturedDrag(), () => steps.gcLoop(false), "the third drag", "turning diagnostics.gc.loop off");
+    });
+    result = { elements, captured, recorded };
+    await steps.publish(result);
   });
-  return { elements, captured, recorded };
+  return result;
+}
+
+/** Publishes the measurements of a valid drag before judging its captured performance; neither failure hides the other. */
+export async function completeViewDrag(captured, publishMeasurements) {
+  const failures = [];
+  try {
+    await publishMeasurements();
+  } catch (error) {
+    failures.push(error);
+  }
+  try {
+    captured.assertPerformance();
+  } catch (error) {
+    failures.push(error);
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, "view-drag measurements and captured performance failed");
 }
 
 /**
