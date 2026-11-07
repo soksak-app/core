@@ -25,6 +25,8 @@ mygo adapter의 cgo 없는 callback binding은 같은 header에서 `src/platform
 
 ABI 후보는 새 foreign-call runtime을 만들지 않고 mygo adapter가 이미 선언한 purego 버전을 사용한다. 이 구현은 Go 함수를 process 종료까지 유지하고 유한한 callback 주소 pool을 가지므로 adapter는 한 번 binding하고 주소를 재사용한다. 불완전한 profile 검증은 주소를 할당하지 않아야 한다. 현재 서명은 부호 있는 32-bit C `int`, 부호 있는 64-bit Darwin `long`, 부호 없는 64-bit counter, pointer 폭의 정수 token, 혼합 `double` 인수, bool과 native pointer 출력을 요구한다. purego는 이 인수 형태를 받지만 실수 callback 반환형은 거부하므로 생성기는 binding 출력 전에 해당 반환형을 명시적으로 거부한다. native fixture는 malloc 호환 저장소에 응답 byte와 MIME 문자열을 할당하고 내용을 검증한 뒤 해제하며, host callback은 별도로 넘겨받은 오류 문자열을 해제한다. 호출 전 강제 garbage collection으로 callback 수명 유지를 확인한다. native field offset·table 크기·명시적인 callback 호출 순서가 독립적인 layout·함수 식별 기준이다. 호출 횟수만으로는 같은 서명의 함수 교환을 놓치며 첫 두 주소를 교환한 통제 변이는 순서 검사에서 실패한다. scalar-only 생성기 fixture도 cgo를 끄고 컴파일한다. 이 검사에서 사용하지 않는 unsafe import가 드러났으며 import는 생성 서명의 필요에 따른다. 이 근거는 후보 ABI에 한정된다. 실제 framework worker 전달, main-thread 재진입, drag frame 비용과 cgo 없는 application 전체 build는 후보 통합 전에 계속 필요하다. callback 수명과 지원 반환형의 제약은 [고정된 purego callback 구현](https://github.com/ebitengine/purego/blob/v0.11.1/syscall_unix.go)에 따른다.
 
+공개 mygo worker 주소 함수는 해당 실행 문맥에서만 전달한다. worker 수명주기가 실행 중일 때 main thread의 호출은 worker로 넘기고, 그 step 안의 worker 호출은 main thread로 넘긴다. 관계없는 thread에서는 둘 다 inline 실행한다. 따라서 일반 Go thread의 ABI fixture는 worker 전달을 증명하지 못한다. 통합 test는 공개 framework 수명주기를 시작하고 native main-thread code에서 진입하며 재진입 completion 양쪽의 native thread 식별자를 관찰해야 한다.
+
 ## 호스트 트리
 
 Language host library:
