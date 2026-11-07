@@ -500,10 +500,10 @@ int main(int argc, char **argv) { @autoreleasepool {
             cleanupTokenA, cleanupRasterA[0], cleanupRasterA[1], cleanupRasterA[2], 94, 10, 2);
         BOOL cleanupTaggedB = cleanupRawB && sp_region_present(cleanupRegionB, IOSurfaceGetID(cleanupSurfaceB),
             cleanupTokenB, cleanupRasterB[0], cleanupRasterB[1], cleanupRasterB[2], 95, 10, 2);
-        // A tagged frame is the diagnostic CGImage with the identity code; the raw frame is the host-owned IOSurface.
+        // Tagged and raw frames both use IOSurfaces; the QR changes the tagged pixels.
         CFTypeID taggedTypeA = cleanupLayerA.contents ? CFGetTypeID((__bridge CFTypeRef)cleanupLayerA.contents) : 0;
         CFTypeID taggedTypeB = cleanupLayerB.contents ? CFGetTypeID((__bridge CFTypeRef)cleanupLayerB.contents) : 0;
-        check(cleanupTaggedA && cleanupTaggedB && taggedTypeA == CGImageGetTypeID() && taggedTypeB == CGImageGetTypeID()
+        check(cleanupTaggedA && cleanupTaggedB && taggedTypeA == IOSurfaceGetTypeID() && taggedTypeB == IOSurfaceGetTypeID()
             && !imageBytesEqual(layerContentsImage(cleanupLayerA), cleanupSnapshotA)
             && !imageBytesEqual(layerContentsImage(cleanupLayerB), cleanupSnapshotB),
             @"TEST 1A: both static regions retain tagged layers before a capture failure");

@@ -1,7 +1,7 @@
 // Reads the presented frame of an image layer. An image region presents a host-owned IOSurface as the contents of its layer
 // (docs/spec/native-surfaces.md#image-regions), so a check copies the bytes of that surface into a CGImage with the color space
-// that the surface declares, which sp_declared_color_space_create reads, or DeviceRGB when it declares none. A frame that
-// carries the opt-in diagnostic identity code is a CGImage, which is returned as it is. The image is autoreleased; NULL means
+// that the surface declares, which sp_declared_color_space_create reads, or DeviceRGB when it declares none. Identity
+// diagnostics preserve the same IOSurface representation. The image is autoreleased; NULL means
 // the layer has no image, or a declaration that names no color space, whose error is written to the standard error.
 #import <CoreGraphics/CoreGraphics.h>
 #import <IOSurface/IOSurface.h>
@@ -12,7 +12,6 @@
 static inline CGImageRef layerContentsImage(CALayer *layer) {
     id contents = layer.contents;
     if (!contents) return NULL;
-    if (CFGetTypeID((__bridge CFTypeRef)contents) == CGImageGetTypeID()) return (__bridge CGImageRef)contents;
     if (CFGetTypeID((__bridge CFTypeRef)contents) != IOSurfaceGetTypeID()) return NULL;
     IOSurfaceRef surface = (__bridge IOSurfaceRef)contents;
     if (IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) return NULL;

@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "files": [
+    {
+      "path": "capture/callback-status.jsonl",
+      "gzip": "000000.gz",
+      "byteCount": 5343,
+      "sha256": "61dc57cffdd10eb0ff12fcd079ce14c38bf31afa46e0252943fc9947ed275980"
+    },
+    {
+      "path": "capture/display-link.json",
+      "gzip": "000001.gz",
+      "byteCount": 8132,
+      "sha256": "c30e8e57f25dcfef4638f903ab6f8b046a873f81ae1a5c50759b015119629101"
+    },
+    {
+      "path": "capture/frame-0499.bgra",
+      "gzip": "000002.gz",
+      "byteCount": 194363,
+      "sha256": "c18510a31828fa692f9b1b4850734cc3f680b88cb8440bdb77ef35564bdb6a9f"
+    },
+    {
+      "path": "capture/frame-0500.bgra",
+      "gzip": "000003.gz",
+      "byteCount": 200817,
+      "sha256": "922c67456a85f6745fc8ec7eb34fa509d3774a44544adbd86d2f6b43975535c9"
+    },
+    {
+      "path": "capture/frame-0501.bgra",
+      "gzip": "000004.gz",
+      "byteCount": 200817,
+      "sha256": "a7ed1a14108254abb530b9520365d1b6e19fb48fa77f316ae1945d3d592a3754"
+    },
+    {
+      "path": "capture/frame-0502.bgra",
+      "gzip": "000005.gz",
+      "byteCount": 200817,
+      "sha256": "c0581f1ae5d14b8ded1ae1df3871c819f8b8909c6f1e6970e05450f690e09026"
+    },
+    {
+      "path": "capture/frame-0503.bgra",
+      "gzip": "000006.gz",
+      "byteCount": 200817,
+      "sha256": "e53eec2f521dd51ef8681d994706cb5dd934995c2c554472a47be7aa1d282989"
+    },
+    {
+      "path": "capture/frame-identities/decoded-frames.jsonl",
+      "gzip": "000007.gz",
+      "byteCount": 1125,
+      "sha256": "98762a2f53fabd326dbb982410d0d374afd56415fba94cc7c062988b1ea133ca"
+    },
+    {
+      "path": "capture/frame-identities/manifest.json",
+      "gzip": "000008.gz",
+      "byteCount": 465,
+      "sha256": "7a4d1c5f3268921b4d6406529a8817c95c853493629051d15c093bd200e01c1e"
+    },
+    {
+      "path": "capture/sources/manifest.json",
+      "gzip": "000009.gz",
+      "byteCount": 459,
+      "sha256": "65e5e6e84b27ace248b6ac27d8f3058b10950bf9505a652c89f9682628ad4fef"
+    },
+    {
+      "path": "evidence.json",
+      "gzip": "000010.gz",
+      "byteCount": 96765,
+      "sha256": "77461e706f0fd8e2ae1cee5d2244438184fec115d39966910d362ff291366323"
+    }
+  ]
+}

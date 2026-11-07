@@ -1504,9 +1504,17 @@ static CGColorSpaceRef createDeclaredColorSpace(CFPropertyListRef properties) {
     return colors;
 }
 
-// Copies the pixels and the declared color space of an accepted transfer image into a host-owned IOSurface and returns it
-// retained, or NULL when the declared color space cannot be decoded or a surface cannot be locked or created. The spare copy
-// of the region is reused when it has the same size and the compositor no longer uses it.
+// Allocates the BGRA presentation storage shared by ordinary and diagnostic copies.
+static IOSurfaceRef createPresentationSurface(size_t width, size_t height) {
+    return IOSurfaceCreate((CFDictionaryRef)@{
+        (id)kIOSurfaceWidth: @(width),
+        (id)kIOSurfaceHeight: @(height),
+        (id)kIOSurfaceBytesPerElement: @4,
+        (id)kIOSurfacePixelFormat: @(kCVPixelFormatType_32BGRA),
+    });
+}
+
+// Copies validated source pixels/color metadata, reusing only an available matching spare.
 static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, char *declaredColorSpaceName, size_t nameCapacity) {
     size_t width = IOSurfaceGetWidth(source);
     size_t height = IOSurfaceGetHeight(source);
@@ -1529,12 +1537,7 @@ static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, c
         copy = spare;
         view.spare = NULL;
     } else {
-        copy = IOSurfaceCreate((CFDictionaryRef)@{
-            (id)kIOSurfaceWidth: @(width),
-            (id)kIOSurfaceHeight: @(height),
-            (id)kIOSurfaceBytesPerElement: @4,
-            (id)kIOSurfacePixelFormat: @(kCVPixelFormatType_32BGRA),
-        });
+        copy = createPresentationSurface(width, height);
     }
     if (!copy) {
         if (colorProperties) CFRelease(colorProperties);
@@ -1563,6 +1566,34 @@ static IOSurfaceRef copyPresentation(SPImageRegion *view, IOSurfaceRef source, c
     IOSurfaceUnlock(copy, 0, NULL);
     IOSurfaceUnlock(source, kIOSurfaceLockReadOnly, NULL);
     return copy;
+}
+
+// Diagnostic pixels have the same presentation contract as ordinary frames.
+// Keep the original presentation for restore/lease ownership; only the layer
+// retains this separate host-owned tagged surface. Never write supplier bytes.
+static IOSurfaceRef copyTaggedPresentation(IOSurfaceRef source, NSData *pixels, size_t stride) {
+    size_t width = IOSurfaceGetWidth(source), height = IOSurfaceGetHeight(source);
+    if (!width || width > SIZE_MAX / 4 || stride < width * 4 || !height || height > SIZE_MAX / stride
+        || pixels.length != stride * height) return NULL;
+    IOSurfaceRef tagged = createPresentationSurface(width, height);
+    if (!tagged) return NULL;
+    CFPropertyListRef colors = IOSurfaceCopyValue(source, kIOSurfaceColorSpace);
+    if (colors) {
+        IOSurfaceSetValue(tagged, kIOSurfaceColorSpace, colors);
+        CFRelease(colors);
+    }
+    if (IOSurfaceLock(tagged, 0, NULL) != kIOReturnSuccess) {
+        CFRelease(tagged);
+        return NULL;
+    }
+    uint8_t *to = IOSurfaceGetBaseAddress(tagged);
+    size_t targetStride = IOSurfaceGetBytesPerRow(tagged);
+    BOOL valid = to && targetStride >= width * 4;
+    if (valid) for (size_t row = 0; row < height; row++)
+        memcpy(to + row * targetStride, (const uint8_t *)pixels.bytes + row * stride, width * 4);
+    IOSurfaceUnlock(tagged, 0, NULL);
+    if (!valid) { CFRelease(tagged); return NULL; }
+    return tagged;
 }
 
 // Returns the accepted surface retained for the lease mode after the check of its declared color space, which the copy mode
@@ -1767,6 +1798,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
     id displayContents = (__bridge id)presentation;
     CGImageRef taggedSnapshot = NULL;
+    IOSurfaceRef taggedPresentation = NULL;
     CFDataRef sourceBytes = NULL;
     if (identityTagging) {
         CGDataProviderRef provider = CGImageGetDataProvider(snapshot);
@@ -1824,6 +1856,10 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
             }
             if (!identityFailure && ![issuedPayload isEqualToString:encodedPayload])
                 identityFailure = @"frame identity encoder returned a payload outside the issued set";
+            if (!identityFailure) {
+                taggedPresentation = copyTaggedPresentation(presentation, taggedPixels, imageStride);
+                if (!taggedPresentation) identityFailure = @"frame identity tagged IOSurface presentation could not be copied";
+            }
             if (!identityFailure && !sp_image_capture_match_identity_record(nonce, identity, roi,
                 taggedPixels.bytes, imageWidth, imageHeight, imageStride, colorSpaceName, &identityError)) {
                 identityFailure = [NSString stringWithUTF8String:identityError ?: "tagged source artifact was not accepted"];
@@ -1836,7 +1872,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
                     : @"frame identity artifact failed before tagged presentation";
                 free(sessionError);
             }
-            if (!identityFailure) displayContents = (__bridge id)taggedSnapshot;
+            if (!identityFailure) displayContents = (__bridge id)taggedPresentation;
             else if (issuedPayload) {
                 char *evictionError = NULL;
                 if (!sp_image_capture_match_identity_evict(nonce, identity, &evictionError))
@@ -1898,6 +1934,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
     if (sourceBytes) CFRelease(sourceBytes);
     if (taggedSnapshot) CGImageRelease(taggedSnapshot);
+    if (taggedPresentation) CFRelease(taggedPresentation);
     if (snapshot) CGImageRelease(snapshot);
     if (previous && view.released) {
         // The lease of the replaced surface ends with the committed swap; a surface sent again while held is not released.

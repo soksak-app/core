@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "encoding": "standard gzip per original native file; manifest SHA256 is over decompressed original bytes",
+  "recordings": [
+    {
+      "name": "terminal-positive",
+      "sourceDirectory": "target/e2e/20261107T170825-Naslh4/reference-validation/terminal-reference-wire",
+      "expectation": "positive",
+      "facts": "Actual terminal.screen.observe after F698; strict pixel acquisition verified by root; bundled command and original-resolution prompt capture inspected.",
+      "repack": "node e2e/test/recording-fixture.mjs --source <absolute core checkout>/target/e2e/20261107T170825-Naslh4/reference-validation/terminal-reference-wire --output <absolute core checkout>/e2e/test/fixtures/terminal-reference/terminal-positive"
+    },
+    {
+      "name": "term-positive",
+      "sourceDirectory": "target/e2e/20261107T170825-Naslh4/reference-validation/term-reference-wire",
+      "expectation": "positive",
+      "facts": "Actual term alias screen.observe after F698; strict pixel acquisition verified by root; bundled command and original-resolution prompt capture inspected.",
+      "repack": "node e2e/test/recording-fixture.mjs --source <absolute core checkout>/target/e2e/20261107T170825-Naslh4/reference-validation/term-reference-wire --output <absolute core checkout>/e2e/test/fixtures/terminal-reference/term-positive"
+    },
+    {
+      "name": "terminal-bad-color",
+      "sourceDirectory": "target/e2e/20261107T161531-mAk2wR/observation/terminal-reference-wire",
+      "expectation": "negative",
+      "facts": "Actual pre-F698 source history 6/1/5 has ten red-channel pixel differences of plus or minus one between captured glyph pixels and retained/issued pixels; valid renderer metadata must not excuse mismatched pixels.",
+      "repack": "node e2e/test/recording-fixture.mjs --source <absolute core checkout>/target/e2e/20261107T161531-mAk2wR/observation/terminal-reference-wire --output <absolute core checkout>/e2e/test/fixtures/terminal-reference/terminal-bad-color"
+    },
+    {
+      "name": "terminal-missing-metadata",
+      "sourceDirectory": "target/e2e/20261107T151731-JHI5xV/terminal-reference-wire",
+      "expectation": "negative",
+      "facts": "Actual earlier wire recording without required atomic renderer metadata.",
+      "repack": "node e2e/test/recording-fixture.mjs --source <absolute core checkout>/target/e2e/20261107T151731-JHI5xV/terminal-reference-wire --output <absolute core checkout>/e2e/test/fixtures/terminal-reference/terminal-missing-metadata"
+    },
+    {
+      "name": "terminal-painted-missing-metadata",
+      "sourceDirectory": "target/e2e/20261107T151731-JHI5xV/terminal-reference-wire-painted",
+      "expectation": "negative",
+      "facts": "Actual earlier painted wire recording without required atomic renderer metadata.",
+      "repack": "node e2e/test/recording-fixture.mjs --source <absolute core checkout>/target/e2e/20261107T151731-JHI5xV/terminal-reference-wire-painted --output <absolute core checkout>/e2e/test/fixtures/terminal-reference/terminal-painted-missing-metadata"
+    }
+  ]
+}

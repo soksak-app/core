@@ -21,7 +21,7 @@ function overlaps(a, b) {
 }
 
 /** Returns the earliest normal capture with the verified complete glyph-and-guard pixels after a different anchor. */
-export function firstTerminalReferenceContentFrame({ reference, frames, anchorFrameIndex }) {
+function verifiedReferenceMatcher(reference) {
   assert.ok(reference && ["terminal", "term"].includes(reference.plugin), "terminal reference plugin is invalid");
   const { source, screen, cursor, expected, region, issuedArtifact, identityRow } = reference;
   const key = tuple(screen?.frame, "reference screen");
@@ -48,9 +48,12 @@ export function firstTerminalReferenceContentFrame({ reference, frames, anchorFr
     cellWidth: render.grid.cellWidth, cellHeight: render.grid.cellHeight, x: render.grid.origin.x, y: render.grid.origin.y },
   "reference renderer grid differs from source geometry");
   for (const [field, value] of Object.entries({ width: raster.width, height: raster.height, stride: raster.bytesPerRow,
-    scale: raster.scale, pixelFormat: raster.format, alpha: raster.alpha, colorSpace: raster.colorSpace, byteCount: raster.data.byteLength })) {
+    pixelFormat: raster.format, alpha: raster.alpha, colorSpace: raster.colorSpace, byteCount: raster.data.byteLength })) {
     assert.equal(issuedArtifact[field], value, `reference issued artifact ${field} differs from source`);
   }
+  // Issued identity manifest v1 has no scale field. Scale is proved by retained
+  // source bounds/dimensions, native placement, and canonical capture mapping.
+  assert.ok(!Object.hasOwn(issuedArtifact, "scale"), "reference issued artifact scale is not declared by manifest v1");
   assert.ok(expected && typeof expected.text === "string" && expected.text.trim().length > 0 &&
     Number.isInteger(expected.row) && expected.row >= 0 && Number.isInteger(expected.startColumn) && expected.startColumn >= 0,
   "reference expected glyph span is invalid");
@@ -133,17 +136,58 @@ export function firstTerminalReferenceContentFrame({ reference, frames, anchorFr
     y: (reference.capture.contentRect.y + region.rectPt.y - reference.capture.screenRect.y) * raster.scale + qr.y,
     width: qr.width, height: qr.height };
   assert.deepEqual(identityRow.roi, sourceROI, "reference decoded QR geometry differs from issued source");
-  assert.ok(matches(reference.capture, region), "reference source glyph and guard pixels differ from its capture");
+  if (!matches(reference.capture, region)) {
+    // Evidence only: the canonical matcher above remains the acceptance rule.
+    // Report exact source/capture bytes at the identical selected coordinates.
+    const capture = reference.capture;
+    const differences = [];
+    let differingPixels = 0;
+    for (const cell of cells) {
+      const sx = raster.grid.x + cell.column * raster.grid.cellWidth;
+      const sy = raster.grid.y + cell.row * raster.grid.cellHeight;
+      const cx = (capture.contentRect.x + region.rectPt.x - capture.screenRect.x) * raster.scale + sx;
+      const cy = (capture.contentRect.y + region.rectPt.y - capture.screenRect.y) * raster.scale + sy;
+      for (let y = 0; y < raster.grid.cellHeight; y++) for (let x = 0; x < raster.grid.cellWidth; x++) {
+        const from = (sy + y) * raster.bytesPerRow + (sx + x) * 4;
+        const to = (cy + y) * capture.bytesPerRow + (cx + x) * 4;
+        const sourceBGRA = [...raster.data.subarray(from, from + 4)];
+        const captureBGRA = [...capture.data.subarray(to, to + 4)];
+        if (sourceBGRA.every((byte, index) => byte === captureBGRA[index])) continue;
+        differingPixels++;
+        if (differences.length < 12) differences.push({ cell, sourcePixel: { x: sx + x, y: sy + y },
+          capturePixel: { x: cx + x, y: cy + y }, sourceBGRA, captureBGRA,
+          deltaBGRA: captureBGRA.map((byte, index) => byte - sourceBGRA[index]),
+          glyph: render.glyphs.find(glyph => glyph.row === cell.row && glyph.col === cell.column) ?? null });
+      }
+    }
+    assert.fail(`reference source glyph and guard pixels differ from its capture: ${JSON.stringify({
+      differingPixels, differences, source: { format: raster.format, alpha: raster.alpha,
+        colorSpace: raster.colorSpace, scale: raster.scale, screenBounds: raster.screenBounds },
+      capture: { format: capture.format, alpha: capture.alpha, colorSpace: capture.colorSpace,
+        scaleFactor: capture.scaleFactor, screenRect: capture.screenRect, contentRect: capture.contentRect },
+      region, issuedQR: qr, decodedQR: identityRow.roi })}`);
+  }
   for (const glyph of glyphs) {
     const measured = measureRenderedCell(reference.capture, { ...raster, frame: source.frame }, render,
       { ...glyph, frame: source.frame, cursor, marked: false }, reference.criteria);
     assert.equal(measured.result, "measured", `reference glyph has no valid ink: ${measured.reason ?? measured.result}`);
   }
+  return matches;
+}
+
+/** Verifies the acquired reference itself; makes no claim about earlier captures. */
+export function verifyTerminalReference(reference) {
+  verifiedReferenceMatcher(reference);
+  return { proof: "verified-terminal-reference-acquisition" };
+}
+
+export function firstTerminalReferenceContentFrame({ reference, frames, anchorFrameIndex }) {
+  const matches = verifiedReferenceMatcher(reference);
   assert.ok(Array.isArray(frames) && Number.isInteger(anchorFrameIndex) && anchorFrameIndex >= 0 && anchorFrameIndex < frames.length,
     "reference comparison requires a distinct anchor frame");
   const matched = frames.map((frame) => matches(frame.capture, frame.region));
   assert.ok(!matched[anchorFrameIndex], "anchor already contains the verified reference content");
   const frameIndex = matched.findIndex((value, index) => index > anchorFrameIndex && value);
   assert.ok(frameIndex >= 0, "no captured region contains the verified terminal reference pixels");
-  return { frameIndex, proof: "verified-terminal-reference-exact-pixels", referenceFrame: source.frame };
+  return { frameIndex, proof: "verified-terminal-reference-exact-pixels", referenceFrame: reference.source.frame };
 }

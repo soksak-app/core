@@ -38,7 +38,7 @@ function fixture(plugin = "terminal") {
       region: region.regionToken, identity: { generation: "1", raster: "2", sequence: 30 },
       roi: { x: 0, y: 0, width: 1, height: 1 } },
     issuedArtifact: { regionToken: region.regionToken, generation: "1", raster: "2", sequence: 30,
-      width: 12, height: 12, stride: 48, scale: 1, pixelFormat: "BGRA8", alpha: "premultiplied-first",
+      width: 12, height: 12, stride: 48, pixelFormat: "BGRA8", alpha: "premultiplied-first",
       colorSpace: "sRGB", byteCount: pixels.byteLength,
       roi: { x: 0, y: 0, width: 1, height: 1 } },
     expected: { text: "A", row: 1, startColumn: 1,
@@ -121,10 +121,17 @@ for (const plugin of ["terminal", "term"]) {
   });
 }
 
+test("issued identity manifest v1 need not declare scale when source and capture geometry prove it", { timeout: 5000 }, async () => {
+  const input = fixture();
+  assert.equal(Object.hasOwn(input.reference.issuedArtifact, "scale"), false);
+  assert.equal((await measure(input)).frameIndex, 2);
+});
+
 const invalid = [
   ["blank reference source", (x) => { x.reference.source.raster.data.fill(255); x.reference.capture.data.fill(255); }],
   ["stale screen tuple", (x) => { x.reference.screen.frame = { ...x.reference.screen.frame, sequence: 29 }; }],
   ["missing frame association", (x) => { delete x.reference.source.frame; }],
+  ["unsupported issued scale even when it matches source", (x) => { x.reference.issuedArtifact.scale = 1; }],
   ["different source region", (x) => { x.reference.source.regionToken = "another-region"; }],
   ["wrong decoded region", (x) => { x.reference.identityRow.region = "another-region"; }],
   ["QR overlaps a complete guard cell", (x) => { x.reference.issuedArtifact.roi = { x: 0, y: 6, width: 1, height: 1 }; x.reference.identityRow.roi = x.reference.issuedArtifact.roi; }],

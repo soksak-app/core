@@ -11,13 +11,15 @@
 #import "support/layer_contents.h"
 #import "capture.h"
 #import "image_region.h"
+#import "image_capture_match.h"
+#import "capture_frame_identity.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "support/surface_view.h"
 #import "support/capture_frame.m"
 
-static const size_t sourceWidth = 96;
-static const size_t sourceHeight = 32;
+static size_t sourceWidth = 96;
+static size_t sourceHeight = 32;
 static int failures;
 typedef struct { size_t x, y; uint8_t expected[4], captured[4]; } SPP86MismatchPixel;
 static const SPP86MismatchPixel p86ReferenceDifferences[] = {
@@ -35,6 +37,28 @@ static void check(BOOL ok, NSString *label) {
 }
 
 static void discardRegionEvent(void *context, const char *json) { (void)context; (void)json; }
+static void discardedLease(void *context, uint64_t generation, uint64_t raster, int sequence) {
+    (void)context; (void)generation; (void)raster; (void)sequence;
+}
+
+static BOOL outsideQRExact(NSData *expected, NSData *actual, BOOL tagged) {
+    if (!expected || !actual || expected.length != actual.length) return NO;
+    const uint8_t *a = expected.bytes, *b = actual.bytes;
+    for (size_t y = 0; y < sourceHeight; y++) for (size_t x = 0; x < sourceWidth; x++) {
+        if (tagged && x >= sourceWidth - 192 && y < 192) continue;
+        if (memcmp(a + (y * sourceWidth + x) * 4, b + (y * sourceWidth + x) * 4, 4)) return NO;
+    }
+    return YES;
+}
+
+static NSData *tightSurfaceBytes(IOSurfaceRef surface) {
+    if (!surface || IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) return nil;
+    NSMutableData *data = [NSMutableData dataWithLength:sourceWidth * sourceHeight * 4];
+    for (size_t y = 0; y < sourceHeight; y++) memcpy((uint8_t *)data.mutableBytes + y * sourceWidth * 4,
+        (uint8_t *)IOSurfaceGetBaseAddress(surface) + y * IOSurfaceGetBytesPerRow(surface), sourceWidth * 4);
+    IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
+    return data;
+}
 
 static void expired(int signalNumber) {
     (void)signalNumber;
@@ -155,10 +179,11 @@ static NSData *cropFrame(NSData *decoded, uint32_t width, uint32_t height, uint3
     return crop;
 }
 
-int main(int argc, const char **argv) { @autoreleasepool {
+static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
+    sourceWidth = tagged ? 320 : 96;
+    sourceHeight = tagged ? 256 : 32;
+    fprintf(stdout, "PRESENTATION_CASE tagged=%d lease=%d\n", tagged, lease);
     signal(SIGALRM, expired); alarm(30);
-    check(argc == 1, @"the test receives no reproduction-mode argument");
-    if (argc != 1) return 1;
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -182,6 +207,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
     webviewSetSurfaceHidden(surfaceHost, false);
     void *region = placed ? sp_region_create(surfaceHost, "pixel-fixture", discardRegionEvent, NULL) : NULL;
     if (region) sp_region_place(region, 0, 0, 0, 0, true);
+    if (region && lease) sp_region_lease(region, discardedLease, NULL);
     check(region != NULL, @"the native image region is created through the normal surface composition");
     [window orderFrontRegardless];
     spinUntil(^BOOL { return onScreen(window); }, 5);
@@ -189,15 +215,43 @@ int main(int argc, const char **argv) { @autoreleasepool {
     double raster[3] = {0};
     BOOL rasterReady = region && sp_region_raster(region, raster)
         && raster[0] == sourceWidth && raster[1] == sourceHeight;
-    check(rasterReady, @"the region raster matches the 96x32 pixel fixture");
+    check(rasterReady, @"the region raster matches the declared pixel fixture");
     unsigned char nonce[16] = {0};
     NSData *sourceBytes = nil;
     IOSurfaceRef source = fixtureSurface(nonce, &sourceBytes);
     check(source && sourceBytes.length == sourceWidth * sourceHeight * 4,
         @"the anonymized opaque BGRA fixture and sRGB IOSurface are complete");
-    BOOL presented = source && region && rasterReady && sp_region_present(region, IOSurfaceGetID(source), nonce,
+    dispatch_queue_t identityWriter = NULL;
+    if (tagged) {
+        NSString *issuedDirectory = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"tagged-issued"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:issuedDirectory withIntermediateDirectories:YES attributes:nil error:NULL];
+        identityWriter = dispatch_queue_create("soksak.presentation-test.identity-writer", DISPATCH_QUEUE_SERIAL);
+        sp_image_capture_match_begin(issuedDirectory.fileSystemRepresentation, identityWriter);
+    }
+    char *identityError = NULL;
+    BOOL identityReady = !tagged || sp_image_capture_match_identity_session_begin(&identityError);
+    check(identityReady, [NSString stringWithFormat:@"the requested identity session starts (%s)", identityError ?: ""]);
+    free(identityError);
+    BOOL presented = identityReady && source && region && rasterReady && sp_region_present(region, IOSurfaceGetID(source), nonce,
         sourceWidth, sourceHeight, raster[2], 2, 1, 1);
     check(presented, @"sp_region_present accepts the exact opaque fixture");
+    CALayer *presentedLayer = (CALayer *)((NSView *)region).layer.sublayers.firstObject;
+    check(presentedLayer.contents && CFGetTypeID((__bridge CFTypeRef)presentedLayer.contents) == IOSurfaceGetTypeID(),
+        @"identity diagnostics preserve the production IOSurface layer presentation type");
+    check([sourceBytes isEqualToData:tightSurfaceBytes(source)], @"presentation never mutates supplier pixels in copy or lease mode");
+    NSSet<NSString *> *issuedPayloads = nil;
+    if (tagged) {
+        char *payloadError = NULL;
+        BOOL copiedPayloads = sp_image_capture_match_identity_copy_payloads(nonce, &issuedPayloads, &payloadError);
+        check(copiedPayloads && issuedPayloads.count == 1,
+            [NSString stringWithFormat:@"the active region exposes exactly its actual issued payload (%s)", payloadError ?: ""]);
+        free(payloadError);
+        // End acquisition without replacing the presented tagged contents. The
+        // following ordinary SCK recording measures that exact presentation.
+        sp_image_capture_match_identity_session_end();
+        sp_image_capture_match_end();
+        dispatch_release(identityWriter);
+    }
     check(!NSApp.isActive, @"the fixture remains inactive before recording");
     // Match the capture owner’s settled-window path so the first sample is a complete recorded frame.
     NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
@@ -213,30 +267,47 @@ int main(int argc, const char **argv) { @autoreleasepool {
     free(captureError); captureError = NULL;
     int firstFrame = started ? sp_capture_wait() : 0;
     check(firstFrame == 1, [NSString stringWithFormat:@"a complete capture frame arrives (%s)", sp_capture_error()]);
+    // Stop restores the supplier presentation. Retain the actually recorded
+    // tagged layer bytes/profile before that lifecycle transition occurs.
+    CALayer *imageLayer = (CALayer *)((NSView *)region).layer.sublayers.firstObject;
+    CGImageRef activeLayerImage = layerContentsImage(imageLayer);
+    NSData *layerBytes = [tightImageBytes(activeLayerImage) copy];
+    NSString *sourceICC = [colorSpaceICC_SHA256(activeLayerImage ? CGImageGetColorSpace(activeLayerImage) : NULL) copy];
     int frameCount = started ? sp_capture_stop(0) : 0;
     check(started && frameCount > 0 && sp_capture_error() && strlen(sp_capture_error()) == 0,
         [NSString stringWithFormat:@"the capture artifact finalizes (%d, %s)", frameCount, sp_capture_error() ?: ""]);
-    NSData *encoded = [NSData dataWithContentsOfFile:[NSString stringWithFormat:@"%s/frame-0001.bgra", directory]];
+    // Frame filenames continue across recordings in one native process. Join
+    // the actual complete callback's declared filename instead of assuming 1.
+    NSDictionary *statusRow = firstImageMatchRecord([NSString stringWithUTF8String:directory]);
+    NSString *frameName = statusRow[@"frame"];
+    BOOL validFrameName = [frameName isKindOfClass:NSString.class]
+        && [frameName.lastPathComponent isEqualToString:frameName];
+    check(validFrameName, @"the complete callback declares its exact recorded frame filename");
+    NSData *encoded = validFrameName ? [NSData dataWithContentsOfFile:
+        [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:frameName]] : nil;
     NSData *decoded = readCaptureFrame(encoded);
     uint32_t dimensions[3] = {0}; double captureInfo[7] = {0};
     if (decoded.length >= 68) { memcpy(dimensions, decoded.bytes, sizeof(dimensions)); memcpy(captureInfo, (const uint8_t *)decoded.bytes + 12, sizeof(captureInfo)); }
-    NSDictionary *statusRow = firstImageMatchRecord([NSString stringWithUTF8String:directory]);
     NSDictionary *captureFacts = statusRow[@"imageMatch"][@"captureFrame"];
+    check(decoded && dimensions[0] == [captureFacts[@"width"] unsignedIntValue]
+        && dimensions[1] == [captureFacts[@"height"] unsignedIntValue]
+        && dimensions[2] == [captureFacts[@"stride"] unsignedIntValue],
+        @"actual callback dimensions and stride agree with the decoded capture file");
     id captureColorValue = captureFacts[@"colorSpace"];
     NSString *captureColorName = [captureColorValue isKindOfClass:NSString.class] ? captureColorValue : nil;
     CGColorSpaceRef captureProfile = captureColorName
         ? CGColorSpaceCreateWithName((__bridge CFStringRef)captureColorName) : NULL;
     NSString *captureICCReference = colorSpaceICC_SHA256(captureProfile);
     if (captureProfile) CGColorSpaceRelease(captureProfile);
-    CALayer *imageLayer = (CALayer *)((NSView *)region).layer.sublayers.firstObject;
-    NSData *layerBytes = tightImageBytes(layerContentsImage(imageLayer));
-    BOOL sourceLayerExact = sourceBytes && layerBytes && [sourceBytes isEqualToData:layerBytes];
+    BOOL sourceLayerExact = outsideQRExact(sourceBytes, layerBytes, tagged);
+    if (tagged) check(layerBytes && ![sourceBytes isEqualToData:layerBytes] && sourceLayerExact,
+        @"identity tagging changes actual QR pixels and preserves every source pixel outside the declared ROI");
     NSColorSpace *windowColorSpace = window.colorSpace;
     NSString *windowColorName = windowColorSpace.localizedName ?: @"unavailable";
     NSString *windowICC = colorSpaceICC_SHA256(windowColorSpace.CGColorSpace);
-    CGColorSpaceRef sourceProfile = imageLayer.contents
-        ? CGImageGetColorSpace(layerContentsImage(imageLayer)) : NULL;
-    NSString *sourceICC = colorSpaceICC_SHA256(sourceProfile);
+    check(imageLayer.contents && CFGetTypeID((__bridge CFTypeRef)imageLayer.contents) == IOSurfaceGetTypeID()
+        && [sourceBytes isEqualToData:tightImageBytes(layerContentsImage(imageLayer))],
+        @"capture stop restores the complete untagged supplier presentation");
     NSView *regionView = (NSView *)region;
     NSRect localRegion = [regionView convertRect:regionView.bounds toView:nil];
     NSRect screenRegion = [window convertRectToScreen:localRegion];
@@ -253,6 +324,18 @@ int main(int argc, const char **argv) { @autoreleasepool {
     NSData *capturedCrop = captureFacts && fabs(cropXValue - cropX) < 0.000001
         && fabs(cropYValue - cropY) < 0.000001 && fabs(pixelsPerPoint - raster[2]) < 0.000001
         ? cropFrame(decoded, dimensions[0], dimensions[1], dimensions[2], cropX, cropY, sourceWidth, sourceHeight) : nil;
+    if (tagged) {
+        SPCaptureFrameIdentity decodedIdentity = {0};
+        NSString *unknown = nil, *decodeError = nil;
+        check(issuedPayloads.count == 1 && capturedCrop != nil,
+            @"actual issued payload and decoded capture crop exist before QR decoding");
+        BOOL decodedQR = issuedPayloads.count == 1 && capturedCrop && sp_capture_frame_identity_decode(capturedCrop.bytes, capturedCrop.length,
+            sourceWidth, sourceHeight, sourceWidth * 4, CGRectMake(sourceWidth - 192, 0, 192, 192),
+            issuedPayloads, &decodedIdentity, &unknown, &decodeError);
+        check(decodedQR && decodedIdentity.generation == 2 && decodedIdentity.raster == 1 && decodedIdentity.sequence == 1,
+            [NSString stringWithFormat:@"the actually recorded QR decodes to the issued presented frame (%@, %@)", unknown, decodeError]);
+        [unknown release]; [decodeError release];
+    }
     BOOL actualGeometry = rasterReady && raster[2] == backingScale
         && [captureFacts[@"scaleFactor"] doubleValue] == backingScale
         && [captureFacts[@"contentScale"] doubleValue] == 1
@@ -274,7 +357,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
         const uint8_t *expected = sourceBytes.bytes, *actual = capturedCrop.bytes;
         for (size_t y = 0; y < sourceHeight; y++) for (size_t x = 0; x < sourceWidth; x++) {
             size_t offset = (y * sourceWidth + x) * 4;
-            if (memcmp(expected + offset, actual + offset, 4) != 0) {
+            if (!(tagged && x >= sourceWidth - 192 && y < 192) && memcmp(expected + offset, actual + offset, 4) != 0) {
                 NSMutableArray *e = [NSMutableArray array], *a = [NSMutableArray array];
                 for (size_t c = 0; c < 4; c++) { [e addObject:@(expected[offset + c])]; [a addObject:@(actual[offset + c])]; }
                 [differences addObject:@{@"x": @(x), @"y": @(y), @"expectedBGRA": e, @"actualBGRA": a}];
@@ -287,7 +370,7 @@ int main(int argc, const char **argv) { @autoreleasepool {
             @"sha256": sourceBytes ? sha256(sourceBytes) : @"unavailable"},
         @"imageLayer": @{@"pixelFormat": @"BGRA8", @"alpha": @"premultiplied-first",
             @"colorSpaceICC_SHA256": sourceICC, @"tightBytesSHA256": layerBytes ? sha256(layerBytes) : @"unavailable",
-            @"matchesSourceBytes": @(sourceLayerExact)},
+            @"matchesSourcePixelsOutsideQR": @(sourceLayerExact)},
         @"windowBackingColorSpace": @{@"localizedName": windowColorName, @"iccSHA256": windowICC},
         @"capture": captureFacts ?: @{}, @"crop": @{@"x": @(cropX), @"y": @(cropY), @"width": @(sourceWidth),
             @"height": @(sourceHeight), @"sha256": capturedCrop ? sha256(capturedCrop) : @"unavailable"},
@@ -299,16 +382,21 @@ int main(int argc, const char **argv) { @autoreleasepool {
         @"captureHeaderContentRect": @{@"x": @(captureInfo[0]), @"y": @(captureInfo[1]),
             @"width": @(captureInfo[2]), @"height": @(captureInfo[3])},
         @"actualGeometry": @(actualGeometry),
-        @"exact": @(sourceBytes && capturedCrop && [sourceBytes isEqualToData:capturedCrop]),
+        @"exact": @(outsideQRExact(sourceBytes, capturedCrop, tagged)),
+        @"identityTagged": @(tagged), @"lease": @(lease),
         @"differenceCount": @(differences.count), @"differences": differences,
         @"windowActive": @(NSApp.isActive),
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:evidence options:NSJSONWritingPrettyPrinted error:NULL];
     fprintf(stdout, "IMAGE_REGION_CAPTURE_EVIDENCE %s\n", json ? [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] UTF8String] : "{}");
     fflush(stdout);
-    BOOL exact = sourceBytes && capturedCrop && [sourceBytes isEqualToData:capturedCrop];
+    BOOL exact = outsideQRExact(sourceBytes, capturedCrop, tagged);
     check(!NSApp.isActive, @"recording and comparison do not activate the application");
-    check(sourceLayerExact, @"the image-layer CGImage provider bytes equal the opaque IOSurface source bytes");
+    check(sourceLayerExact, @"the presented IOSurface snapshot preserves source pixels outside the QR");
+    CGColorSpaceRef declaredSRGB = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    check([sourceICC isEqualToString:colorSpaceICC_SHA256(declaredSRGB)], @"identity presentation preserves the source sRGB profile");
+    if (declaredSRGB) CGColorSpaceRelease(declaredSRGB);
+    check([sourceBytes isEqualToData:tightSurfaceBytes(source)], @"recording leaves supplier bytes immutable in copy or lease mode");
     check(actualGeometry,
         [NSString stringWithFormat:@"the source and capture match actual backing geometry (region %.0fx%.0f pixels at scale %.0f; capture %ux%u, factor %.0f)",
             raster[0], raster[1], raster[2], dimensions[0], dimensions[1], [captureFacts[@"scaleFactor"] doubleValue]]);
@@ -317,11 +405,21 @@ int main(int argc, const char **argv) { @autoreleasepool {
 
     if (source) CFRelease(source);
     [sourceBytes release];
+    [layerBytes release]; [sourceICC release];
+    [issuedPayloads release];
     sp_region_close(region);
     sp_surface_unplace_view(page);
     [page removeFromSuperview];
     if (surfaceHost) sp_surface_close(surfaceHost);
     [page release]; [main release]; [window close]; [content release]; [window release];
     if (exact) [[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory] error:NULL];
-    return failures ? 1 : 0;
 } }
+
+int main(int argc, const char **argv) {
+    (void)argv;
+    if (argc != 1) return 1;
+    runPresentationCase(NO, NO);
+    runPresentationCase(YES, NO);
+    runPresentationCase(YES, YES);
+    return failures ? 1 : 0;
+}
