@@ -9518,7 +9518,7 @@ const FEATURE_LINKS = [
   {
     id: "F94",
     implementation: [
-      { file: "e2e/real/terminal.test.mjs", symbol: "async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [] } = {})" },
+      { file: "e2e/real/terminal.test.mjs", symbol: "async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [], clipboard = false } = {})" },
     ],
     tests: [
       { file: "e2e/real/terminal.test.mjs", id: "a real wheel over a long history is shown without lag, stalls, or reversal" },
@@ -10575,7 +10575,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F292-39",
-    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app)" }],
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app, { clipboard = false } = {})" }],
     tests: [
       { file: "packages/window-check/test/session-frontmost.test.mjs", id: "a frontmost change to another application during a check does not reject the check result" },
     ],

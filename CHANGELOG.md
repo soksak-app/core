@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F696-5: Match the exact clipboard-owning session and terminal fixture declarations in the owner-link inventory; preserve all coverage checks.
+
 - F686-10: Collect third-drag records and publish valid measurements before judging captured performance. Keep structural capture failures fatal and preserve collection and performance errors together without changing thresholds or B3 output rules.
 
 - F696-3: Acquire clipboard ownership only for checks that can change it. Release endpoint connections and application slots immediately when session preparation fails; preserve preparation and cleanup errors together.
