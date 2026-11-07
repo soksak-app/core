@@ -356,6 +356,7 @@ NATIVE_TESTS = observe_test \
   signals_test \
   host_callbacks_test \
   host_test_api_test \
+  host_api_process_footprint_test \
   window_motion_test \
   input_inject_test \
   input_virtual_test \
