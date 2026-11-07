@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F693: 등록된 Go E2E case를 선언된 native test artifact와 함께 유지되는 cgo 없는 mygo runner에서 실행한다. 직접 cgo 실행과 0개 선택 loop를 제거한다. Inventory는 새 미지정 E2E 소유자를 거부하며 공유 Go·Wails의 일반 contract coverage는 유지한다. Leased-frame 소유 검사는 CGO_ENABLED=0에서 통과하고 activation을 포함한 전체 suite acceptance는 별도로 남는다.
+
 - F592: 성공한 release job에서 원래 공개 Wails fork pin의 clean-runner build를 확인했다. 해당 pin의 과거 검증이며 현재 release tag 통합·전체 CI·배포는 별도 미완료 조건을 유지한다.
 
 - F691-1: capture recognizer의 관찰 전용 --compute-devices 명령으로 Accurate Vision 요청 설정과 지원 compute stage·device를 노출한다. 실제 인식 동작은 유지한다. 명시적 CPU 후보도 실제 warm-up에서 E5RT code 13으로 실패해 제거했으며 capability 보고는 OCR·G8-S5 통과 근거가 아니다.

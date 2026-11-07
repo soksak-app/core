@@ -267,6 +267,19 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F693",
+    implementation: [
+      { file: "Makefile", symbol: "test-app-host-go: build-native-mygo build-native-tests" },
+      { file: "Makefile", symbol: "CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'e2e diagnostics mygo' --test '^TestE2E' --count 1 --timeout $(TEST_TIMEOUT)" },
+    ],
+    tests: [
+      { file: "scripts/test/test-kinds.test.mjs", id: "the root Go E2E target selects every actual registered test through the cgo-free maintained runner" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "a future shared or Wails Go E2E test fails ownership until the maintained target maps it" },
+    ],
+    expected: "The maintained Go E2E target declares its native prerequisites and selects registered TestE2E cases through the cgo-free runner with the e2e diagnostics mygo profile. Source-inventory checks reject unmapped future owners. This link establishes target, profile and inventory ownership; it does not certify execution of the complete display suite.",
+    levels: ["unit"],
+  },
+  {
     id: "F691-1",
     implementation: [
       { file: "native/darwin/tests/capture_text_test.m", symbol: "static VNRecognizeTextRequest *textRequest(void) {" },

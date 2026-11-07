@@ -96,6 +96,8 @@ Benchmark는 B3 순서로 세 drag를 실행한다. 먼저 capture 없이 `diagn
 
 test는 unit test이거나 end-to-end 검사다. end-to-end 검사는 CI runner가 제공하지 않는 셋 중 하나가 필요하다: 실행 중인 애플리케이션(`e2e/`의 window check. `e2e/activation/`, `e2e/person/`, `e2e/real/`, `e2e/observation/`을 포함한다), frame을 내보내는 display(`native/darwin/Makefile`의 `NATIVE_E2E_TESTS`, `make -C native/darwin test-app`), 또는 사람이나 애플리케이션의 활성화(activation tier인 `make test-app-activation`, 실제 입력 등급인 `make test-app-real`, 사람이 조작하는 검사인 `make test-app-person`). Display나 process의 activation이 필요한 Go test는 build constraint `e2e`와 `TestE2E`로 시작하는 이름을 가지며 `make test-app-host-go`가 실행한다. 그 밖의 test는 모두 unit test다: `scripts/node-tests.mjs`가 실행하는 Node test(harness 자신의 test인 `e2e/test/`, `packages/window-check/test/`를 포함한다), host test, `NATIVE_TESTS`, process identity test.
 
+현재 등록된 Go TestE2E case는 mygo adapter가 소유한다. test-app-host-go target은 선언된 native production·test artifact를 build하고 CGO_ENABLED=0 및 e2e·diagnostics·mygo tag로 유지되는 Go runner에서 해당 case를 실행한다. 선택한 test가 0개면 실패한다. Source inventory는 선언된 package 범위 밖의 새 Go E2E 소유자를 거부한다. 공유 Go·Wails의 일반 host-contract 명령은 유지하며 이전 0개 실행은 E2E coverage가 아니다. Process를 활성화하는 case에는 기존 activation tier 승인이 필요하다.
+
 저장소의 CI와 release job은 자기 unit test와 구조 검사만 실행하고 workspace의 다른 저장소를 checkout하지 않는다. end-to-end 검사는 display가 있는 컴퓨터에서 make로 로컬에서만 실행한다. make target의 이름이 그 검사의 종류를 정한다: 이름이 `test-app` 또는 `benchmark-`로 시작하는 target은 end-to-end 검사를 실행하고, `test`와 그 밖의 test target은 unit test만 실행한다. `scripts/test/test-kinds.test.mjs`가 target, `@soksak/e2e`의 test script(`node --test test/`, 창 검사 helper의 unit test), 어떤 workflow도 그 target이나 창 검사 script를 부르지 않음을 검사한다.
 
 ## 창 검사

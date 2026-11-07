@@ -74,7 +74,11 @@ function startsApplications(path, readScript) {
  * runPlan. `readScript(path)` reads a file of the checkout.
  */
 function misnamedRootTargets(makefile, readScript) {
+  const goRunnerUsesE2E = (recipe) => [...recipe.matchAll(/\bnode\s+scripts\/go-tests\.mjs\b([^\n]*)/g)].some(([, args]) =>
+    [...args.matchAll(/(?:^|\s)--tags(?:=|\s+)("[^"\n]*"|'[^'\n]*'|[^\s]+)/g)].some(([, value]) =>
+      value.replace(/^['"]|['"]$/g, "").split(/[\s,]+/).includes("e2e")));
   const endToEnd = (recipe) => /run test-app|--script test-app|make -C native\/darwin test-app|test-app\.mjs|\bgo\b.*\btest\b.*-tags[ =]"?(?:[\w ]* )?e2e\b/.test(recipe)
+    || goRunnerUsesE2E(recipe)
     || [...recipe.matchAll(/\bnode\s+(scripts\/[\w./-]+\.mjs)\b/g)].some(([, path]) => startsApplications(path, readScript));
   return rules(makefile).filter((rule) => endToEnd(rule.recipe) && !/^(?:test-app|benchmark-)/.test(rule.target)).map((rule) => rule.target);
 }
@@ -93,10 +97,75 @@ test("a root target that runs go test with the tag e2e outside the test-app and 
   assert.deepEqual(misnamedRootTargets(makefile, () => ""), ["host-go"]);
 });
 
-test("the root target test-app-host-go runs the tests with the build constraint e2e of the Go library and adapters", { timeout: 1000 }, () => {
-  const recipe = rules(read("Makefile")).find((rule) => rule.target === "test-app-host-go")?.recipe ?? "";
-  assert.match(recipe, /-tags e2e/, "make test-app-host-go does not run the tag e2e");
-  for (const library of ["packages/host/go", "packages/host/wailsv3", "packages/host/mygo"]) assert.ok(read("Makefile").includes(library), library);
+test("the maintained Go runner cannot hide e2e tags inside a unit-named target", { timeout: 1000 }, () => {
+  const invocation = "CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'e2e diagnostics mygo' --test '^TestE2E' --count 1 --timeout $(TEST_TIMEOUT)";
+  const makefile = `host-go:\n\t@${invocation}\n\ntest-app-host-go:\n\t@${invocation}\n\nunit:\n\t@node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'diagnostics mygo' --test '^TestUnit' --count 1\n`;
+  assert.deepEqual(misnamedRootTargets(makefile, () => ""), ["host-go"]);
+});
+
+// Inventory TestE2E owner paths from the source naming/build-constraint convention.
+// Go's selected build graph and runtime test listing remain the execution authority.
+function goEndToEndDeclarations(files) {
+  const declarations = [];
+  for (const [file, source] of files) {
+    for (const [, name] of source.matchAll(/^func\s+(TestE2E[^\s(]*)\s*\(/gm)) {
+      assert.match(source, /^\/\/go:build\s+[^\n]*\be2e\b/m, `${file}: ${name} must carry the e2e build constraint`);
+      declarations.push({ file, name, owner: posix.dirname(file) });
+    }
+  }
+  return declarations;
+}
+
+function unmappedGoEndToEndTests(files, patterns) {
+  return goEndToEndDeclarations(files).filter(({ owner }) => !patterns.some((pattern) => {
+    const selected = pattern.replace(/^\.\//, "");
+    const subtree = selected.endsWith("/...") ? selected.slice(0, -4) : undefined;
+    return subtree === undefined ? owner === selected : owner === subtree || owner.startsWith(subtree + "/");
+  })).map(({ file, name }) => `${file}: ${name}`);
+}
+
+function goHostTestSources() {
+  const files = new Map();
+  function visit(folder) {
+    for (const entry of readdirSync(join(ROOT, folder), { withFileTypes: true })) {
+      const path = posix.join(folder, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile() && entry.name.endsWith("_test.go")) files.set(path, read(path));
+    }
+  }
+  for (const host of ["go", "wailsv3", "mygo"]) visit(`packages/host/${host}`);
+  return files;
+}
+
+test("the root Go E2E target selects every actual registered test through the cgo-free maintained runner", { timeout: 1000 }, () => {
+  const makefile = read("Makefile");
+  const recipe = rules(makefile).find((rule) => rule.target === "test-app-host-go")?.recipe ?? "";
+  const patterns = [...recipe.matchAll(/--package\s+'([^']+)'/g)].map((match) => match[1]);
+  assert.deepEqual(patterns, ["./packages/host/mygo/tests/..."], "declare the actual E2E owner instead of zero-match host loops");
+  const sources = goHostTestSources();
+  assert.ok(goEndToEndDeclarations(sources).length > 0, "the target has no actual registered Go E2E tests");
+  assert.deepEqual(unmappedGoEndToEndTests(sources, patterns), [], "a registered Go E2E test has no maintained target");
+  assert.match(makefile, /^test-app-host-go:[^\n]*\bbuild-native-mygo\b[^\n]*\bbuild-native-tests\b/m);
+  assert.match(recipe, /CGO_ENABLED=0/);
+  assert.match(recipe, /node scripts\/go-tests\.mjs/);
+  assert.match(recipe, /--tags 'e2e diagnostics mygo'/);
+  assert.match(recipe, /--test '\^TestE2E'/);
+  assert.match(recipe, /--count 1/);
+  assert.match(recipe, /--timeout \$\(TEST_TIMEOUT\)/);
+  assert.doesNotMatch(recipe, /(?:^|\s)go(?:\s+-C\s+\S+)?\s+test\b|-extldflags|GO_LINK|GO_ENV|for package|SOKSAK_NATIVE_(?:TEST_)?LIBRARY/,
+    "the target must use the selected runner environment and declared artifacts");
+  assert.doesNotMatch(makefile, /^E2E_GO_PACKAGES\s*=/m, "obsolete zero-match package loops remain declared");
+});
+
+test("a future shared or Wails Go E2E test fails ownership until the maintained target maps it", () => {
+  for (const host of ["go", "wailsv3"]) {
+    const file = `packages/host/${host}/tests/new_display_test.go`;
+    for (const parameter of ["t *testing.T", "check *testing.T", "\n  check *testing.T,\n"]) {
+      const files = new Map([[file, `//go:build darwin && e2e\n\npackage host_test\nimport "testing"\nfunc TestE2EANewDisplayContract(${parameter}) {}\n`]]);
+      assert.deepEqual(unmappedGoEndToEndTests(files, ["./packages/host/mygo/tests/..."]), [`${file}: TestE2EANewDisplayContract`]);
+      assert.deepEqual(unmappedGoEndToEndTests(files, [`./packages/host/${host}/tests/...`]), []);
+    }
+  }
 });
 
 test("the root make targets are the only entry points of the window checks", { timeout: 1000 }, () => {

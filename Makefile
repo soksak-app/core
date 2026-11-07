@@ -626,11 +626,11 @@ check-release-mygo: build-mygo-release
 # and the native end-to-end target of its tier in a new configuration root under target/e2e: it starts the applications, runs the
 # checks and quits the applications.
 E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-registry
-# The tests of the Go language host library and of the Go framework adapters that carry the build constraint e2e: they need a display
-# or the activation of a process, and their names start with TestE2E.
-E2E_GO_PACKAGES = packages/host/go packages/host/wailsv3 packages/host/mygo
-test-app-host-go: build-native
-	@for package in $(E2E_GO_PACKAGES); do $(GO_ENV) go -C $$package test -tags e2e,diagnostics -run '^TestE2E' -ldflags "$(GO_LINK)" ./tests/... || exit 1; done
+# The registered Go TestE2E cases currently belong to the mygo adapter. The source
+# inventory in test-kinds.test.mjs rejects future cases outside this declared scope.
+# Display and activation requirements remain those of each case.
+test-app-host-go: build-native-mygo build-native-tests
+	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'e2e diagnostics mygo' --test '^TestE2E' --count 1 --timeout $(TEST_TIMEOUT)
 
 test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app --native test-app $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
