@@ -2135,6 +2135,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F592",
+    implementation: [
+      { file: "apps/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" },
+      { file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" },
+      { file: ".github/workflows/release.yml", symbol: "run: make check-release-wailsv3" },
+      { file: "Makefile", symbol: "build-wailsv3-release: build-native build" },
+      { file: "Makefile", symbol: "check-release-wailsv3: build-wailsv3-release" },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "release builds audited candidate packages and publication consumes their immutable identities" },
+      { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
+    ],
+    expected: "Static ownership only: the module links identify public Wails fork replacement declarations, and existing unit owners check the release workflow/build declarations and selected-host audit routing. These links do not prove a current-HEAD release build or reproduce the historical clean-clone result; F592 records its verified historical CI job in the checklist.",
+    levels: ["unit"],
+  },
+  {
     id: "F591",
     implementation: [{ file: "packages/host/go/src/windows.go", symbol: "win.NativeWindow() != 0" }],
     tests: [{ file: "packages/host/go/src/windows_main_page_test.go", id: "TestAWindowThatIsGoneReadsNoStateOnAChange" }],

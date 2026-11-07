@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F592: 성공한 release job에서 원래 공개 Wails fork pin의 clean-runner build를 확인했다. 해당 pin의 과거 검증이며 현재 release tag 통합·전체 CI·배포는 별도 미완료 조건을 유지한다.
+
 - F691-1: capture recognizer의 관찰 전용 --compute-devices 명령으로 Accurate Vision 요청 설정과 지원 compute stage·device를 노출한다. 실제 인식 동작은 유지한다. 명시적 CPU 후보도 실제 warm-up에서 E5RT code 13으로 실패해 제거했으며 capability 보고는 OCR·G8-S5 통과 근거가 아니다.
 
 - F692: host surface input monitor를 기존 native observer 입구로 등록한다. 등록과 정확한 전달 횟수를 관찰하고 반환 token을 제거하면 전달이 끝난다. Native 소유 검사와 기존 source guard가 통과하며 직접 등록 금지는 유지한다.
