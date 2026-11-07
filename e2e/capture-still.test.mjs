@@ -1,12 +1,13 @@
 // Checks the real opaque pixels of a still PNG and the native bounds. The display state of the preview is not used for the verdict.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, realpathSync, rmSync, unlinkSync, rmdirSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { readPng, distance } from "@soksak/window-check/png.mjs";
+import { distance } from "@soksak/window-check/png.mjs";
+import { readStillCapture } from "./still-capture.mjs";
 for (const app of Object.values(APPS))
   test(`${app.name}: inactive still PNG contains opaque native boundaries`, { timeout: 120000 }, async (t) => {
     console.info(`START ${app.name}: still PNG observation`);
@@ -34,15 +35,12 @@ for (const app of Object.values(APPS))
     assert.equal(before.active, false);
     const surface = (await s.surfaces()).find((item) => item.surface === tab.id);
     assert.ok(surface?.applied, "native surface absent");
-    const { path } = await s.request("diagnostics.capture.still", {});
-    s.cleanup(() => rmdirSync(dirname(path)));
-    s.cleanup(() => unlinkSync(path));
+    const { path, image } = await readStillCapture(s, t);
     // Every diagnostic file of an application is in <config-dir>/logs, captures in its captures folder (F124.2).
     const captures = join(realpathSync(app.configDir), "logs", "captures");
     assert.ok(realpathSync(path).startsWith(`${captures}/`), `the still capture ${path} is not in ${captures}`);
     {
-      const image = readPng(path),
-        scale = before.scale,
+      const scale = before.scale,
         rect = surface.applied;
       assert.equal(image.width, before.content.width * scale);
       assert.equal(image.height, before.content.height * scale);
@@ -79,10 +77,7 @@ for (const app of Object.values(APPS))
     s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
     const still = async () => {
       await s.presented();
-      const { path } = await s.request("diagnostics.capture.still", {});
-      s.cleanup(() => rmdirSync(dirname(path)));
-      s.cleanup(() => unlinkSync(path));
-      return readPng(path);
+      return (await readStillCapture(s, t)).image;
     };
     const without = await still();
     await s.run("core.settings.open");
@@ -137,10 +132,7 @@ for (const app of Object.values(APPS))
     await s.until("host.window", (w) => w.occluded === true, "the covered window was not reported occluded");
     const still = async () => {
       await s.presented();
-      const { path } = await s.request("diagnostics.capture.still", {});
-      s.cleanup(() => rmdirSync(dirname(path)));
-      s.cleanup(() => unlinkSync(path));
-      return readPng(path);
+      return (await readStillCapture(s, t)).image;
     };
     const without = await still();
     await s.run("core.settings.open");

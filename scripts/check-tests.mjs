@@ -2284,6 +2284,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F584-5-1",
+    implementation: [
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) drawPicker(" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestEscapeAndAPressOutsideCloseTheMenu" },
+      { file: "packages/workbench-mygo/tests/shortcuts_test.go", id: "TestThePickerLayerTakesEscapeItself" },
+      { file: "packages/workbench-mygo/tests/shortcuts_test.go", id: "TestTheRenameFieldTakesItsKeysItself" },
+      { file: "e2e/view-keyboard-routing.test.mjs", id: "${app.name}: native picker Escape dismisses its modal once" },
+    ],
+    expected: "The mygo picker runs core.picker.close through its binder once for Escape or an outside press; actual three-host routing distinguishes the mygo registry command from modal-webview dismissal.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F584-2",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "*equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];" },
