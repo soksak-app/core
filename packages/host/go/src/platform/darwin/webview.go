@@ -57,11 +57,11 @@ bool nativeWindowSetMainWebview(uintptr_t window);
 
 
 static void fileDroppedBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ sp_host_callback_file_dropped(context, (char *)json); });
+    hostRunOnWorker(^{ sp_host_callback_file_dropped((uintptr_t)context, (char *)json); });
 }
 
 static void fileDropReleasedBridge(void *context) {
-    hostRunOnWorker(^{ sp_host_callback_file_drop_released(context); });
+    hostRunOnWorker(^{ sp_host_callback_file_drop_released((uintptr_t)context); });
 }
 
 static bool windowFileDrop(void *main, uintptr_t context) {
@@ -209,7 +209,7 @@ func (implementation) ConfigureMainWindow(window platform.Window, dark bool) err
 }
 
 //export goHost_file_dropped
-func goHost_file_dropped(context unsafe.Pointer, json *C.char) {
+func goHost_file_dropped(context C.uintptr_t, json *C.char) {
 	dropped := handles.Handle(uintptr(context)).Value().(func(string))
 	dropped(C.GoString(json))
 }
@@ -217,7 +217,7 @@ func goHost_file_dropped(context unsafe.Pointer, json *C.char) {
 // Clears the handle when the drop view no longer uses the receiver.
 //
 //export goHost_file_drop_released
-func goHost_file_drop_released(context unsafe.Pointer) {
+func goHost_file_drop_released(context C.uintptr_t) {
 	handles.Handle(uintptr(context)).Delete()
 }
 

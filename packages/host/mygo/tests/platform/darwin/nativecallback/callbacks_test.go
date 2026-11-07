@@ -86,10 +86,28 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 	purego.RegisterLibFunc(&release, handle, "sp_test_callback_free")
 	purego.RegisterLibFunc(&run, handle, "sp_test_callback_run")
 	expectedContext, expectedHeld, expectedText := context(), held(), text()
+	var tokenPhase bool
+	var tokenCalls []uintptr
+	var tokenNames []string
+	var expectedToken uintptr
 	seen := map[string]int{}
 	var order []string
 	var failures []string
 	handler := func(name string, args []reflect.Value) []reflect.Value {
+		if tokenPhase {
+			tokenNames = append(tokenNames, name)
+			// Keep the actual ABI argument live while Go grows and scans the callback stack.
+			growCallbackStack(args[0].Interface(), 64)
+			if args[0].Kind() != reflect.Uintptr {
+				failures = append(failures, "handle context is not an integer ABI argument")
+			} else {
+				tokenCalls = append(tokenCalls, uintptr(args[0].Uint()))
+				if args[0].Uint() != uint64(expectedToken) {
+					failures = append(failures, "handle token lost its bits")
+				}
+			}
+			return nil
+		}
 		seen[name]++
 		order = append(order, name)
 		for i, arg := range args {
@@ -199,6 +217,32 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 	if install(unsafe.Pointer(&table[0])) == nil {
 		t.Fatal("native table replacement accepted")
 	}
+	var runToken func(uintptr)
+	purego.RegisterLibFunc(&runToken, handle, "sp_test_callback_token")
+	tokenPhase = true
+	for _, token := range []uintptr{1, 0xfedcba9876543201} {
+		expectedToken = token
+		runToken(token)
+	}
+	if !reflect.DeepEqual(tokenCalls, []uintptr{1, 0xfedcba9876543201}) || !reflect.DeepEqual(tokenNames, []string{"ImageChanged", "ImageChanged"}) {
+		t.Errorf("native token callback sequence: names %v, tokens %v", tokenNames, tokenCalls)
+	}
+	for _, failure := range failures {
+		t.Error(failure)
+	}
 	runtime.KeepAlive(table)
 	runtime.KeepAlive(diagnosticTable)
+}
+
+// growCallbackStack retains the ABI value across stack copies; it never dereferences the cookie.
+func growCallbackStack(value any, depth int) {
+	var padding [2048]byte
+	padding[depth] = byte(depth)
+	if depth > 0 {
+		growCallbackStack(value, depth-1)
+	} else {
+		runtime.GC()
+	}
+	runtime.KeepAlive(value)
+	runtime.KeepAlive(&padding)
 }

@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F686-6-1: The pinned kit dependency carries the owning KR26 validator correction through a declared pnpm patch and lockfile hash. The normal validator accepts the actual runtime diagnostic while rejecting discovery narratives, including Markdown and comment forms. Public consumer regression verifies the correction; no hook or check is bypassed.
+
+- F686-6: Native-to-Go callback handle contexts are integer tokens in the canonical header, both generated profiles and cgo exports. C bridges convert generic native cookies before Go sees them. Token 1 previously became a GC-visible pointer and terminated during stack growth with an invalid-pointer error; the same native regression now preserves low and high-bit tokens across stack copies and collection. Actual native pointers retain their pointer types. The native owner, cgo-free worker and both adapter profiles pass.
+
 - F686-5: A cgo-free consumer runs the generated callbacks through the actual mygo worker lifecycle and checks exact worker identity, synchronous results, borrowed native scope and reentrant main-thread presentation completion. Native startup now owns the unchanged asynchronous signal-mask operation used by both Go adapters. A direct-call mutation fails the worker test; the real path, native signal cases and both adapter profiles pass. Full cgo-free application integration and drag-frame performance remain open.
 
 - F686-4: The mygo adapter has header-generated cgo-free typed callback bindings. Generation rejects unsupported types and floating callback results, validates complete profiles before address allocation and checks both generated profiles. The cgo-free native ABI tests invoke all 43 callbacks, verify their identities and native table layout, preserve scalar widths and native memory ownership, and retain callbacks across garbage collection. Actual worker integration, drag-frame cost and the complete cgo-free application build remain open.

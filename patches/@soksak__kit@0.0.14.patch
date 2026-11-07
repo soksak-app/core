@@ -1,0 +1,13 @@
+diff --git a/docs.js b/docs.js
+index 1ea7c1c..fe16d81 100755
+--- a/docs.js
++++ b/docs.js
+@@ -75,7 +75,7 @@ export const DOC_PATTERNS = [
+   ["personal path", /\/Users\/|~\/backup/],
+   ["local build log", /\bbuild\/logs\//],
+   ["temporary log", /\/tmp\/[^\s`]*\.(?:log|txt)/],
+-  ["account of who found or requested", /\bFound (?:on|while)\b|\b(?:Requested|Reported|Found|Decided) by\b|\bthe user's (?:decision|request|report)\b|사용자 결정|사용자가 (?:보고|발견|결정)|\bas the user asked\b|\bthe user (?:asked|decided|requested)\b|사용자 요청|사용자가 요청|발견:|\d{4}-\d{2}-\d{2}(?:[^.\n]|\.(?! )){0,80}?발견했|사용자가(?:[^.\n]|\.(?! )){0,120}?보고했/i],
++  ["account of who found or requested", /(?<=^\s*(?:(?:#{1,6}|[-+*]|\d+[.)]|>)\s+)*|[.!?:;—]\s+)Found on\b|(?<=\b(?:defects?|bugs?|issues?|failures?|problems?|regressions?|errors?|faults?|crashes|it|this|that|these|those)\s+(?:was|were|is|are|has been|have been|had been)\s+)Found on\b|\bFound on (?=\d{4}-\d{2}-\d{2}\b)|\bFound while\b|\b(?:Requested|Reported|Found|Decided) by\b|\bthe user's (?:decision|request|report)\b|사용자 결정|사용자가 (?:보고|발견|결정)|\bas the user asked\b|\bthe user (?:asked|decided|requested)\b|사용자 요청|사용자가 요청|발견:|\d{4}-\d{2}-\d{2}(?:[^.\n]|\.(?! )){0,80}?발견했|사용자가(?:[^.\n]|\.(?! )){0,120}?보고했/i],
+   // macOS is an operating system name. "Mac" refers to that computer only when no letter follows it.
+   ["local environment", /\b[Tt]his (?:machine|Mac)(?![A-Za-z])|이 (?:머신|Mac)(?![A-Za-z])/],
+ ];

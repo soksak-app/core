@@ -15,7 +15,7 @@ package darwin
 // The callbacks run their Go functions on the worker, and the native calls of this file run on the main thread (main_thread.h).
 
 static bool coreRootBridge(void *context, const char *plugin, const char *path, void **bytes, size_t *length, char **type) {
-    return ON_WORKER(bool, sp_host_callback_core_root_serve(context, (char *)plugin, (char *)path, bytes, length, type));
+    return ON_WORKER(bool, sp_host_callback_core_root_serve((uintptr_t)context, (char *)plugin, (char *)path, bytes, length, type));
 }
 
 static void coreRootSet(uintptr_t context) {
@@ -23,30 +23,30 @@ static void coreRootSet(uintptr_t context) {
 }
 
 static void documentChangedBridge(void *context, const char *state) {
-    hostRunOnWorker(^{ sp_host_callback_document_changed(context, (char *)state); });
+    hostRunOnWorker(^{ sp_host_callback_document_changed((uintptr_t)context, (char *)state); });
 }
 static void documentEventBridge(void *context, const char *event) {
-    hostRunOnWorker(^{ sp_host_callback_document_event(context, (char *)event); });
+    hostRunOnWorker(^{ sp_host_callback_document_event((uintptr_t)context, (char *)event); });
 }
 
 static void documentMessageBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ sp_host_callback_document_message(context, (char *)message); });
+    hostRunOnWorker(^{ sp_host_callback_document_message((uintptr_t)context, (char *)message); });
 }
 
 static void viewMessageBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ sp_host_callback_view_message(context, (char *)message); });
+    hostRunOnWorker(^{ sp_host_callback_view_message((uintptr_t)context, (char *)message); });
 }
 
 static void viewEndedBridge(void *context) {
-    hostRunOnWorker(^{ sp_host_callback_view_ended(context); });
+    hostRunOnWorker(^{ sp_host_callback_view_ended((uintptr_t)context); });
 }
 
 static void documentStreamBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ sp_host_callback_document_stream(context, (char *)message); });
+    hostRunOnWorker(^{ sp_host_callback_document_stream((uintptr_t)context, (char *)message); });
 }
 
 static void documentQueriedBridge(void *context, const char *reply) {
-    hostRunOnWorker(^{ sp_host_callback_document_queried(context, (char *)reply); });
+    hostRunOnWorker(^{ sp_host_callback_document_queried((uintptr_t)context, (char *)reply); });
 }
 
 static void documentQuery(void *document, uintptr_t context) {
@@ -66,7 +66,7 @@ static void documentSetViewEnded(void *document, uintptr_t context) {
     hostRunOnMain(^{ sp_document_set_view_ended(document, viewEndedBridge, (void *)context); });
 }
 static void viewResponsivenessBridge(void *context, bool responsive) {
-    hostRunOnWorker(^{ sp_host_callback_view_responsiveness(context, responsive); });
+    hostRunOnWorker(^{ sp_host_callback_view_responsiveness((uintptr_t)context, responsive); });
 }
 static const char *documentBinaryTake(void *document, const char *id, void **bytes, size_t *length) {
     return ON_MAIN(const char *, sp_document_binary_take(document, id, bytes, length));
@@ -148,33 +148,33 @@ var viewResponsivenesses = map[unsafe.Pointer]handles.Handle{}
 var documentStreams = map[unsafe.Pointer]handles.Handle{}
 
 //export goHost_document_changed
-func goHost_document_changed(context unsafe.Pointer, state *C.char) {
+func goHost_document_changed(context C.uintptr_t, state *C.char) {
 	changed := handles.Handle(uintptr(context)).Value().(func(string))
 	changed(C.GoString(state))
 }
 
 //export goHost_document_message
-func goHost_document_message(context unsafe.Pointer, value *C.char) {
+func goHost_document_message(context C.uintptr_t, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
 //export goHost_view_message
-func goHost_view_message(context unsafe.Pointer, value *C.char) {
+func goHost_view_message(context C.uintptr_t, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
 //export goHost_view_ended
-func goHost_view_ended(context unsafe.Pointer) {
+func goHost_view_ended(context C.uintptr_t) {
 	handles.Handle(uintptr(context)).Value().(func())()
 }
 
 //export goHost_view_responsiveness
-func goHost_view_responsiveness(context unsafe.Pointer, responsive C.bool) {
+func goHost_view_responsiveness(context C.uintptr_t, responsive C.bool) {
 	handles.Handle(uintptr(context)).Value().(func(bool))(bool(responsive))
 }
 
 //export goHost_document_stream
-func goHost_document_stream(context unsafe.Pointer, value *C.char) {
+func goHost_document_stream(context C.uintptr_t, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
@@ -186,7 +186,7 @@ var coreRootHandle handles.Handle
 // for a path that the resolver does not serve. The file is copied to memory that the native scheme releases.
 //
 //export goHost_core_root_serve
-func goHost_core_root_serve(context unsafe.Pointer, plugin, urlPath *C.char, bytes *unsafe.Pointer, length *C.size_t, contentType **C.char) C.bool {
+func goHost_core_root_serve(context C.uintptr_t, plugin, urlPath *C.char, bytes *unsafe.Pointer, length *C.size_t, contentType **C.char) C.bool {
 	resolve := handles.Handle(uintptr(context)).Value().(platform.CoreRootResolver)
 	data, kind, found := resolve(C.GoString(plugin), C.GoString(urlPath))
 	if !found {
@@ -201,7 +201,7 @@ func goHost_core_root_serve(context unsafe.Pointer, plugin, urlPath *C.char, byt
 // goHost_document_queried receives the one reply of a query and releases its receiver.
 //
 //export goHost_document_queried
-func goHost_document_queried(context unsafe.Pointer, value *C.char) {
+func goHost_document_queried(context C.uintptr_t, value *C.char) {
 	handle := handles.Handle(uintptr(context))
 	reply := handle.Value().(func(string))
 	handle.Delete()
@@ -209,7 +209,7 @@ func goHost_document_queried(context unsafe.Pointer, value *C.char) {
 }
 
 //export goHost_document_event
-func goHost_document_event(context unsafe.Pointer, value *C.char) {
+func goHost_document_event(context C.uintptr_t, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 

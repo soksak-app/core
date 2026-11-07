@@ -12,14 +12,14 @@ package darwin
 #import <Cocoa/Cocoa.h>
 
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
-    hostRunOnWorker(^{ sp_host_callback_input_activated(context, (int)result, (char *)frontmost); });
+    hostRunOnWorker(^{ sp_host_callback_input_activated((uintptr_t)context, (int)result, (char *)frontmost); });
 }
 static void activateWindowAt(uintptr_t window, double x, double y, double timeout, uintptr_t handle) {
     hostRunOnMain(^{ sp_input_activate_at((void *)window, x, y, timeout, activated, (void *)handle); });
 }
 
 static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
-    hostRunOnWorker(^{ sp_host_callback_input_delivered(context, (int)result, (sp_input_held *)held); });
+    hostRunOnWorker(^{ sp_host_callback_input_delivered((uintptr_t)context, (int)result, (sp_input_held *)held); });
 }
 // pointer is a C string that the block frees after the delivery took it.
 static void injectPointer(uintptr_t window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
@@ -165,7 +165,7 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 // or SP_INPUT_POINTER_HELD and keeps it valid until done returns.
 //
 //export goHost_input_delivered
-func goHost_input_delivered(context unsafe.Pointer, result C.int, held *C.sp_input_held) {
+func goHost_input_delivered(context C.uintptr_t, result C.int, held *C.sp_input_held) {
 	handle := handles.Handle(uintptr(context))
 	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld))
 	handle.Delete()
@@ -218,7 +218,7 @@ type activation struct {
 }
 
 //export goHost_input_activated
-func goHost_input_activated(context unsafe.Pointer, result C.int, frontmost *C.char) {
+func goHost_input_activated(context C.uintptr_t, result C.int, frontmost *C.char) {
 	handle := handles.Handle(uintptr(context))
 	a := handle.Value().(activation)
 	handle.Delete()

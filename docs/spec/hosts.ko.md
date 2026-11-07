@@ -31,6 +31,8 @@ cgo 없는 worker consumer는 별도 native test library를 읽고 window나 활
 
 화면을 표시하는 cgo 없는 divider prototype은 공개 `ui.Split`, `Content.RecordFrames`, `mygo.RecordSteps`, `Window.NativeHandle`과 native pointer-input 전달을 사용하고 입력 완료를 worker를 통해 생성된 callback table로 보낼 수 있다. divider 이동을 입증하고 재사용되는 frame record를 즉시 복사하며 누락 record와 입력 실패를 거부해야 한다. frame·step 표본 수, thread 식별, display 조건과 build 출처를 기록한다. frame 공식은 `Request - Start - DrawableWait`이고 step 공식은 전달된 native 호출 시간을 포함한 `Return - Entry`다. timestamp 연결에는 `CLOCK_UPTIME_RAW`를 사용한다. prototype 수치를 8.33 ms와 비교하는 것으로 G8-S5를 입증하지 못한다. 일반 split에는 production terminal·webview surface 배치와 callback 구성이 빠져 있기 때문이다. 해당 최종 지표는 통합 application 또는 동일한 production S5 컴포넌트·실행 경로가 필요하다. 측정 전에 native-to-Go ABI도 정수 handle context가 C 범용 void-pointer 표현에 기대지 않고 Go stack 확장과 collection 중 정수로 유지되는지 확인해야 한다.
 
+host callback의 context 인수는 `uintptr_t`로 선언한 정수 handle token이다. 범용 native API가 cookie를 `void *`로 보관할 수는 있지만 C bridge는 host callback 호출 전에 이를 정수로 바꾼다. Go binding은 그 token으로 `unsafe.Pointer`를 만들지 않는다. 앞선 ABI fixture는 context에 실제 native 주소를 넣어 정수 handle 의미를 놓쳤다. 소유 fixture는 이제 정수 context를 사용하고 실제 작은 값·상위 bit token을 유지한 채 stack을 확장한다. 기존 pointer 선언은 무효했다. native token 1이 `reflect.Value.call`의 살아 있는 pointer slot에 남아 callback stack을 강제로 확장하자 `invalid pointer found on stack`으로 종료됐다. foreign-call runtime이 이미 pointer 인수를 구성하므로 Go handler 안에서 정수로 바꾸는 것은 늦다. native ABI 회귀 test는 작은 token과 상위 bit가 설정된 token을 stack 복사·collection 중 유지한다. 실제 native 객체·문자열·held-input·출력 buffer pointer는 pointer로 남긴다. 회귀 test는 작은 값·상위 bit 값의 정확한 ImageChanged 호출 순서를 요구한다. native callback을 없앤 변이는 빈 호출 기록으로 실패한다. runtime의 무효 pointer 검사는 끄지 않는다.
+
 ## 호스트 트리
 
 Language host library:

@@ -68,16 +68,16 @@ static void point(uintptr_t owner, int phase, double x, double y) {
     receivedPoint = owner == 19 && phase == -3 && x == 12.25 && y == -0.5;
 }
 static bool receivedImage;
-static void image(void *context, uint64_t generation, uint64_t raster, int sequence) {
-    receivedImage = context == &view && generation == UINT64_C(0xf123456789abcdef)
+static void image(uintptr_t context, uint64_t generation, uint64_t raster, int sequence) {
+    receivedImage = context == 17 && generation == UINT64_C(0xf123456789abcdef)
         && raster == UINT64_C(0x8123456789abcdef) && sequence == -7;
 }
 #ifdef SOKSAK_DIAGNOSTIC
 static bool receivedExit;
 static void processExited(uintptr_t context, bool exited) { receivedExit = context == 29 && exited; }
 #endif
-static bool serve(void *context, char *plugin, char *path, void **bytes, size_t *length, char **contentType) {
-    if (context != &view || strcmp(plugin, "plugin") || strcmp(path, "/file")) return false;
+static bool serve(uintptr_t context, char *plugin, char *path, void **bytes, size_t *length, char **contentType) {
+    if (context != 17 || strcmp(plugin, "plugin") || strcmp(path, "/file")) return false;
     *bytes = strdup("body");
     *length = 4;
     *contentType = strdup("text/plain");
@@ -112,18 +112,18 @@ int main(void) { @autoreleasepool {
           "the native owner copies the table and preserves a signed callback result");
     hostRunOnWorker(^{ sp_host_callback_surface_point(19, -3, 12.25, -0.5); });
     check(receivedPoint, "integer and floating callback arguments keep their values");
-    hostRunOnWorker(^{ sp_host_callback_image_released(&view, UINT64_C(0xf123456789abcdef), UINT64_C(0x8123456789abcdef), -7); });
-    check(receivedImage, "pointer, unsigned 64-bit and signed callback arguments keep their values");
+    hostRunOnWorker(^{ sp_host_callback_image_released(17, UINT64_C(0xf123456789abcdef), UINT64_C(0x8123456789abcdef), -7); });
+    check(receivedImage, "integer token, unsigned 64-bit and signed callback arguments keep their values");
     __block void *bytes = NULL;
     __block size_t length = 0;
     __block char *contentType = NULL;
-    bool served = ON_WORKER(bool, sp_host_callback_core_root_serve(&view, "plugin", "/file", &bytes, &length, &contentType));
+    bool served = ON_WORKER(bool, sp_host_callback_core_root_serve(17, "plugin", "/file", &bytes, &length, &contentType));
     check(served && bytes && !memcmp(bytes, "body", 4) && length == 4 && contentType && !strcmp(contentType, "text/plain"),
           "a boolean callback returns its byte pointer, length and string output");
     free(bytes);
     free(contentType);
     bytes = NULL; length = 0; contentType = NULL;
-    served = ON_WORKER(bool, sp_host_callback_core_root_serve(&view, "missing", "/file", &bytes, &length, &contentType));
+    served = ON_WORKER(bool, sp_host_callback_core_root_serve(17, "missing", "/file", &bytes, &length, &contentType));
     check(!served && !bytes && length == 0 && !contentType, "a false callback result preserves its untouched output pointers");
     check(sp_host_callbacks_install(&callbacks) != NULL, "the installed callback table cannot be replaced");
     check(ON_WORKER(int, sp_host_callback_surface_hit(17, &view)) == -37, "a rejected replacement preserves the installed callbacks");

@@ -8,6 +8,7 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
 patchedDependencies:
+  '@soksak/kit@0.0.14': patches/@soksak__kit@0.0.14.patch
   '@parcel/watcher@2.6.0': patches/@parcel__watcher@2.6.0.patch
 overrides:
   '@parcel/watcher-android-arm64': '-'

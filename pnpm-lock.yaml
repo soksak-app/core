@@ -20,6 +20,7 @@ overrides:
 
 patchedDependencies:
   '@parcel/watcher@2.6.0': a1a61ea8b5382d4cc5a9934f045fd8e1d5d7d0f7d70457b06731ce1d70bacddb
+  '@soksak/kit@0.0.14': e8de6923f59e902ebc8c9de2741026cb32ace0b697ff9cd959bfa41629bb4e3b
 
 importers:
 
@@ -34,7 +35,7 @@ importers:
     devDependencies:
       '@soksak/kit':
         specifier: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz
-        version: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz
+        version: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz(patch_hash=e8de6923f59e902ebc8c9de2741026cb32ace0b697ff9cd959bfa41629bb4e3b)
       '@yarnpkg/parsers':
         specifier: 3.1.0
         version: 3.1.0
@@ -602,7 +603,7 @@ snapshots:
       node-addon-api: 7.1.1
       picomatch: 4.0.7
 
-  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz':
+  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz(patch_hash=e8de6923f59e902ebc8c9de2741026cb32ace0b697ff9cd959bfa41629bb4e3b)':
     dependencies:
       ajv: 8.20.0
       smol-toml: 1.9.1

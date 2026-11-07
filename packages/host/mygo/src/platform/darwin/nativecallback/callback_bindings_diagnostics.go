@@ -5,7 +5,6 @@ package nativecallback
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -15,7 +14,7 @@ type DiagnosticCallbacks struct {
 	NativeInputSourceAdopted  func(uintptr, *byte)
 	WindowObjectsCounted      func(uintptr, int64, int64, int64, bool)
 	PageObjectsCounted        func(uintptr, int64, int64, *byte)
-	DeliveredNotifications    func(unsafe.Pointer, *byte)
+	DeliveredNotifications    func(uintptr, *byte)
 	DocumentFrameIdentityDone func(uintptr, *byte, *byte)
 	InputReferenceReply       func(uintptr, *byte, *byte)
 	ProcessExitAnswered       func(uintptr, bool)

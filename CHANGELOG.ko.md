@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F686-6-1: 고정된 kit 의존성에 소유 항목 KR26의 검사기 수정을 선언된 pnpm patch와 lockfile hash로 반영한다. 정상 검사기는 실제 runtime 진단을 허용하면서 Markdown·주석 형태를 포함한 발견 경위 서술은 거부한다. 공개 consumer 회귀 test로 확인하며 hook이나 검사를 우회하지 않는다.
+
+- F686-6: native-to-Go callback handle context를 canonical header·생성 profile·cgo export 모두에서 정수 token으로 선언한다. C bridge는 Go 진입 전에 범용 native cookie를 변환한다. 기존 token 1은 GC가 보는 pointer가 되어 stack 확장 시 무효 pointer 오류로 종료됐으며, 같은 native 회귀 test는 이제 작은 값과 상위 bit token을 stack 복사·collection 중 유지한다. 실제 native pointer의 pointer type은 유지한다. native 소유 test·cgo 없는 worker·두 adapter의 기본·진단 profile이 통과한다.
+
 - F686-5: cgo 없는 consumer가 생성된 callback을 실제 mygo worker 수명주기로 실행하여 정확한 worker 식별·동기 반환값·빌린 native 범위·재진입 main-thread presentation completion을 확인한다. 두 Go adapter의 시작 시 사용하는 비동기 signal-mask 연산은 동작 변경 없이 native가 소유한다. 직접 호출 변이는 worker test에서 실패하며 실제 전달 경로·native signal 사례·두 adapter의 기본·진단 profile은 통과한다. cgo 없는 application 전체 통합과 drag frame 성능은 아직 남아 있다.
 
 - F686-4: mygo adapter의 cgo 없는 typed callback binding을 header에서 생성한다. 지원하지 않는 type과 실수 callback 반환형을 거부하고 주소 할당 전 profile의 모든 함수를 확인하며 두 생성 profile을 검사한다. cgo 없는 native ABI test는 callback 43개의 호출·함수 식별·native table layout, scalar 폭과 native memory 소유권, GC 이후 callback 수명 유지를 확인한다. 실제 worker 통합·drag frame 비용·cgo 없는 application 전체 build는 아직 남아 있다.

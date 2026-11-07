@@ -33,7 +33,7 @@ static bool scheduleDocumentFrameIdentityRemove(uint64_t generation, uintptr_t c
 }
 
 static void deliveredNotificationsBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ sp_host_diagnostic_callback_delivered_notifications(context, (char *)json); });
+    hostRunOnWorker(^{ sp_host_diagnostic_callback_delivered_notifications((uintptr_t)context, (char *)json); });
 }
 static void listDeliveredNotifications(void) {
     hostRunOnMain(^{ sp_notifications_delivered(deliveredNotificationsBridge, NULL); });
@@ -175,7 +175,7 @@ func (implementation) CaptureClock() float64 { return float64(C.sp_capture_clock
 var deliveredDone func(string)
 
 //export goHost_delivered_notifications
-func goHost_delivered_notifications(_ unsafe.Pointer, json *C.char) {
+func goHost_delivered_notifications(_ C.uintptr_t, json *C.char) {
 	deliveredDone(C.GoString(json))
 }
 
