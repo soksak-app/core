@@ -44,8 +44,20 @@ for (const app of Object.values(APPS)) {
     // selection.
     await s.press("x", { text: "x" });
     await s.until("hwp.document", (value) => value.modified, "a native key did not edit the document", { surface }).catch(async (error) => {
-      const { key, virtualKey, active, responder, documents, input } = await s.get("host.window");
-      error.message += `; host.window ${JSON.stringify({ key, virtualKey, active, responder, documents, input })}`;
+      for (const method of ["getDocumentState", "getSelectionContext"]) {
+        try {
+          const result = await s.run("hwp.request", { method }, surface);
+          t.diagnostic(`${app.name}: failed native edit ${method} ${JSON.stringify(result)}`);
+        } catch (diagnosticError) {
+          t.diagnostic(`${app.name}: failed native edit ${method} diagnostic failed: ${diagnosticError.stack ?? diagnosticError}`);
+        }
+      }
+      try {
+        const { key, virtualKey, active, responder, documents, input } = await s.get("host.window");
+        t.diagnostic(`${app.name}: failed native edit host.window ${JSON.stringify({ key, virtualKey, active, responder, documents, input })}`);
+      } catch (diagnosticError) {
+        t.diagnostic(`${app.name}: failed native edit host.window diagnostic failed: ${diagnosticError.stack ?? diagnosticError}`);
+      }
       throw error;
     });
     await s.press("ArrowLeft", { modifiers: ["shift"] });
