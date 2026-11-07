@@ -22,7 +22,7 @@ const STEPS = 30;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the selection highlight of a drag follows the pointer while a status line redraws`, { timeout: 120000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;

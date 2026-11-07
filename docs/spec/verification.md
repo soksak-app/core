@@ -5,6 +5,9 @@
 
 Common window-check preparation declares executable paths without building or warming an OCR model. A complete explicit declaration works independently of default platform discovery. The remaining OCR content consumers are being replaced under F696; their current requirements do not apply to unrelated functional or performance checks. Public semantic content and actual captured rendering remain separate assertions.
 
+
+Window sessions acquire clipboard preservation only through an explicit `open(t, app, { clipboard: true })` declaration before any action that can change the clipboard. Copy shortcuts, direct fixture writes, terminal selection release and allowed OSC 52 output require ownership. An unrelated session does not read or restore the clipboard. Ownership failure rejects the check; it never skips preservation. Connection and execution-slot cleanup is registered before preparation and runs immediately on preparation rejection, preserving both preparation and cleanup failures.
+
 ## Coverage and evidence
 
 View display acceptance enumerates installed enabled view plugins and identifies the actual opened tab. Each plugin requires an explicit content case that checks its declared readiness and expected captured pixels. A missing case fails with the plugin and tab identifiers. Colour variation alone does not prove plugin content; rejecting a missing case removes a false pass without lowering the acceptance criterion.

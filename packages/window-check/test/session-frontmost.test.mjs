@@ -28,7 +28,7 @@ const identity = (pid) => pid === 10
   : { pid, name: "a different application", bundle: `org.example.app-${pid}` };
 
 mock.module("node:child_process", {
-  namedExports: {
+  exports: {
     ...childProcess,
     execFileSync(command, args, options) {
       if (command !== "osascript") return childProcess.execFileSync(command, args, options);
@@ -47,14 +47,14 @@ mock.module("node:child_process", {
   },
 });
 mock.module("../pasteboard.mjs", {
-  namedExports: { readPasteboard: () => ({ items: [], unreadable: [] }), writePasteboard: () => [], restorableItems: () => ({ items: [], skipped: [] }), restoreFailure: () => null },
+  exports: { readPasteboard: () => ({ items: [], unreadable: [] }), writePasteboard: () => [], restorableItems: () => ({ items: [], skipped: [] }), restoreFailure: () => null },
 });
 mock.module("../event-log.mjs", {
-  namedExports: { readEventErrors: () => ({ errors: [] }), sessionEventBoot: () => 0, sessionEventStart: () => ({}) },
+  exports: { readEventErrors: () => ({ errors: [] }), sessionEventBoot: () => 0, sessionEventStart: () => ({}) },
 });
 class EndpointError extends Error {}
 mock.module("@soksak/client", {
-  namedExports: {
+  exports: {
     EndpointError,
     connect: async () => ({
       endpoint: { pid: host, application: "wailsv3", executable: binary, started: new Date(Date.now() + 60_000).toISOString() },

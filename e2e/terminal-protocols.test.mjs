@@ -154,7 +154,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: implemented OSC sequences change the title, colors, cursor, and clipboard and reply`, { timeout: 120000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     s.cleanup(() => closeTerminalTabs(s));
@@ -265,7 +265,7 @@ for (const app of Object.values(APPS)) {
       "OSC 52 query");
   });
   test(`${app.name}: mouse, focus, paste, and alternate-scroll modes report input`, { timeout: 120000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     s.cleanup(() => closeTerminalTabs(s));

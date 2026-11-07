@@ -76,7 +76,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: the real-input pasteboard helpers restore every item type`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     const items = [{
       "public.utf8-plain-text": Buffer.from("real input").toString("base64"),
       "public.png": Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),

@@ -79,9 +79,9 @@ async function blankCellsWithPixels(s, surface) {
 
 // Writes one line to the terminal and returns the row of that line and the screen origin. The check brings the window to the front and then sends real input.
 // `log` and `reads` are the log policy and the records that the check declares (prepareFixture).
-async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [] } = {}) {
+async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [], clipboard = false } = {}) {
   requireTrusted();
-  const s = await open(t, app);
+  const s = await open(t, app, { clipboard });
   await fresh(s, { log, reads });
   const [terminal] = await ensureTerminals(s, 1);
   const surface = terminal.surface;
@@ -109,7 +109,7 @@ const same = (a, b) => a.every((value, index) => Math.abs(value - b[index]) <= 8
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real click clears a terminal selection`, { timeout: 90000 }, async (t) => {
-    const { s, surface, session, origin, row } = await prepare(t, app, "SELECTME");
+    const { s, surface, session, origin, row } = await prepare(t, app, "SELECTME", { clipboard: true });
     const blank = 10;
     const background = await cellPixel(s, surface, session, blank, row);
 
@@ -152,7 +152,7 @@ for (const app of Object.values(APPS)) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real Command+V pastes the clipboard text without another key`, { timeout: 90000 }, async (t) => {
-    const { s, surface, origin, session, row } = await prepare(t, app, "PASTEHERE");
+    const { s, surface, origin, session, row } = await prepare(t, app, "PASTEHERE", { clipboard: true });
     const point = cellPoint(origin, session, 0, row + 1);
     click(point.x, point.y);
     await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
@@ -179,7 +179,7 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real Command+V pastes a clipboard image as a quoted owned path`, { timeout: 90000 }, async (t) => {
-    const { s, surface, origin, session, row } = await prepare(t, app, "IMAGEHERE");
+    const { s, surface, origin, session, row } = await prepare(t, app, "IMAGEHERE", { clipboard: true });
     const point = cellPoint(origin, session, 0, row + 1);
     click(point.x, point.y);
     await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");
@@ -199,7 +199,7 @@ for (const app of Object.values(APPS)) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real drag copies the selection and Command+C copies it again`, { timeout: 90000 }, async (t) => {
-    const { s, surface, session, origin, row } = await prepare(t, app, "COPYME");
+    const { s, surface, session, origin, row } = await prepare(t, app, "COPYME", { clipboard: true });
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("BEFORE-COPY").toString("base64") }]);
     const before = (await s.get("terminal.session", surface)).selectionReleases;
     // A selection covers a cell only when the pointer passes the middle of that cell, so the press happens near the left edge of the first cell.
@@ -259,7 +259,7 @@ for (const app of Object.values(APPS)) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real drag that leaves the view selects to the nearest cell`, { timeout: 90000 }, async (t) => {
-    const { s, surface, session, origin, row } = await prepare(t, app, "LEFTEDGE");
+    const { s, surface, session, origin, row } = await prepare(t, app, "LEFTEDGE", { clipboard: true });
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("BEFORE").toString("base64") }]);
     const before = (await s.get("terminal.session", surface)).selectionReleases;
     // A drag that selects the start of a line easily moves the pointer out of the left side of the view.
@@ -288,7 +288,7 @@ async function selectedCharacters(s, surface, row) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real drag, Command+C, and Command+V paste exactly the characters shown as selected`, { timeout: 180000 }, async (t) => {
     const line = "0123456789ABCDEFGHIJ";
-    const { s, surface, session, origin, row } = await prepare(t, app, line);
+    const { s, surface, session, origin, row } = await prepare(t, app, line, { clipboard: true });
     const view = await s.rect("terminal.view", undefined, surface);
     const cases = [
       ["forward", cellPoint(origin, session, 2, row), cellPoint(origin, session, 8, row)],
@@ -711,7 +711,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: a real pointer move is reported with ?1003 and a real Shift drag selects while ?1002 is on`, { timeout: 90000 }, async (t) => {
-    const { s, surface, session, origin, row } = await prepare(t, app, "SHIFTSELECT");
+    const { s, surface, session, origin, row } = await prepare(t, app, "SHIFTSELECT", { clipboard: true });
     // Reads the input COUNT bytes in raw mode and writes them as R<ID>:<hexadecimal>. It uses %s so that the characters of the command line differ from the display.
     const read = async (id, on, count, off) => {
       await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
@@ -748,7 +748,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: a real Shift drag selects while ?1003 motion reporting is on`, { timeout: 90000 }, async (t) => {
-    const { s, surface, session, origin, row } = await prepare(t, app, "SHIFT1003");
+    const { s, surface, session, origin, row } = await prepare(t, app, "SHIFT1003", { clipboard: true });
     const read = async (id, on, count, off) => {
       await s.run("terminal.input", { bytes: `printf '${on}'; stty raw -echo; printf 'WAIT%s\\r\\n' ${id}; ` +
         `R=$(dd bs=1 count=${count} 2>/dev/null | od -An -tx1 | tr -d ' \\n'); stty sane; printf '${off}'; printf 'R%s:%s\\n' ${id} "$R"\r` }, surface);
@@ -837,7 +837,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: a fixture TUI Shift drag selects visible prompt text`, { timeout: 120000 }, async (t) => {
-    const { s, surface } = await prepare(t, app, "TUISHIFT");
+    const { s, surface } = await prepare(t, app, "TUISHIFT", { clipboard: true });
     await s.run("terminal.input", { bytes: LAUNCH }, surface);
     const lines = await readScreenUntil(s, surface, (value) => value.some((line) => line.includes(PROMPT)),
       "the fixture TUI prompt did not appear for Shift selection");

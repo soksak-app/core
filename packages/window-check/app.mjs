@@ -206,7 +206,8 @@ async function workbenchReplies(client, window) {
   }
 }
 
-export async function open(t, app) {
+export async function open(t, app, { clipboard = false } = {}) {
+  if (typeof clipboard !== "boolean") throw new TypeError("clipboard must be a boolean");
   if (!requiredApps(process.env).includes(app.name)) return null;
   if (!existsSync(app.binary)) {
     throw new Error(
@@ -235,42 +236,49 @@ export async function open(t, app) {
   const session = new Session(app, client);
   // The record of an application that stops replying names the check (F351).
   session.check = t.name;
-  // Check-specific cleanups and released presses run before the pasteboard restoration. Input-source restoration is
-  // inserted at the start of this list and runs after the pasteboard restoration.
-  const pasteboard = readPasteboard();
-  session.cleanup(() => {
-    const { items, skipped } = restorableItems(pasteboard);
-    for (const line of skipped) t.diagnostic(`${app.name}: pasteboard ${line}`);
-    const written = writePasteboard(items);
-    const failure = restoreFailure(items, written, readPasteboard());
-    if (failure !== null) {
-      throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${failure}`);
+  // Register ownership before any preparation can fail. A rejected open finishes
+  // immediately; the after hook observes that completed cleanup without releasing twice.
+  let finished;
+  const finish = () => finished ??= finishSession(t, session, () => {
+    try { session.client.close(); } finally { releaseSlot(); }
+  });
+  t.after(finish);
+  try {
+    // The cleanup reads the errors after this position and the recordings beside these, so both are taken before a check of
+    // the endpoint can end the session.
+    session.eventStart = sessionEventStart(app.configDir);
+    // The errors of this session are the errors of the host of this boot and of the processes it started (files of earlier boots are not judged).
+    session.eventBoot = sessionEventBoot(app.configDir, client.endpoint.pid);
+    session.recordingsBefore = recordingFolders(app.configDir);
+    if (clipboard) {
+      const pasteboard = readPasteboard();
+      session.cleanup(() => {
+        const { items, skipped } = restorableItems(pasteboard);
+        for (const line of skipped) t.diagnostic(`${app.name}: pasteboard ${line}`);
+        const written = writePasteboard(items);
+        const failure = restoreFailure(items, written, readPasteboard());
+        if (failure !== null) throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${failure}`);
+      });
     }
-  });
-  // A press that the check left open is released after the cleanup of the check. Cleanups run in reverse order of
-  // registration.
-  session.cleanup(async () => {
-    for (const line of await session.releasePresses()) t.diagnostic(line);
-  });
-  // The cleanup of a check runs before the connection is closed. node:test runs after hooks in registration order.
-  // A relaunch replaces the connection of the session, so the connection is read when the check ends.
-  t.after(() => finishSession(t, session, () => {
-    session.client.close();
-    releaseSlot();
-  }));
-  // The cleanup reads the errors after this position and the recordings beside these, so both are taken before a check of
-  // the endpoint can end the session.
-  session.eventStart = sessionEventStart(app.configDir);
-  // The errors of this session are the errors of the host of this boot and of the processes it started (files of earlier boots are not judged).
-  session.eventBoot = sessionEventBoot(app.configDir, client.endpoint.pid);
-  session.recordingsBefore = recordingFolders(app.configDir);
-  const { endpoint } = client;
-  if (endpoint.application !== app.name) {
-    throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
+    // Reverse cleanup order releases presses before restoring clipboard; input-source
+    // restoration is inserted at the beginning and therefore runs after both.
+    session.cleanup(async () => {
+      for (const line of await session.releasePresses()) t.diagnostic(line);
+    });
+    const { endpoint } = client;
+    if (endpoint.application !== app.name) {
+      throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
+    }
+    assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
+    await session.markTest("start", t.name);
+    return session;
+  } catch (error) {
+    try { await finish(); } catch (cleanupError) {
+      finished = Promise.resolve();
+      throw new AggregateError([error, cleanupError], "session preparation and cleanup failed");
+    }
+    throw error;
   }
-  assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
-  await session.markTest("start", t.name);
-  return session;
 }
 
 /** The names of the recording folders under logs/captures of the configuration folder; none without the folder. */

@@ -19,8 +19,8 @@ const INPUT_INJECTION = "native.record.info";
 const READS = [REGISTRY_COMMAND, MODAL_ANSWER, PICKER_CLOSE, "workbench.input.shortcut.failed", INPUT_INJECTION,
   "native.input.key_down"];
 
-async function openProbe(t, app) {
-  const s = await open(t, app);
+async function openProbe(t, app, options) {
+  const s = await open(t, app, options);
   await fresh(s, { performanceTrace: true, log: { input: "info", lifecycle: "info", call: "debug" }, reads: READS });
   await keepCommonSettings(s);
   s.cleanup(async () => {
@@ -273,7 +273,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: native cmd+c copies selected address text without view keydown`, { timeout: 60000 }, async (t) => {
-    const s = await openProbe(t, app);
+    const s = await openProbe(t, app, { clipboard: true });
     const browser = await focusedBrowser(s);
     const address = await s.get("browser.address.text", browser.surface);
     assert.equal(address.value, browser.routingURL,

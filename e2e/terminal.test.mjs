@@ -1490,7 +1490,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: a native drag over blank terminal cells ends without a surface error`, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1553,7 +1553,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: a native drag into the padding below the last row selects to the last row`, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
@@ -1599,7 +1599,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: native terminal selection renders and copies through one explicit paste`, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     // The failure report holds the transcript lines, which are records of the page at the level info.
     await fresh(s, { log: { lifecycle: "info" }, reads: ["workbench.record.info"] });
     const [terminal] = await ensureTerminals(s, 1);
@@ -1693,7 +1693,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: an explicit PNG paste writes an owned image and inserts its quoted path`, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;

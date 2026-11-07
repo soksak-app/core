@@ -98,7 +98,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: a session with output, a resize, a scroll, a selection, a theme and input replays with every hash equal`, { timeout: 90000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { clipboard: true });
     await fresh(s, { log: EVERY_LEVEL, reads: READS });
     t.diagnostic(`${app.name}: START terminal replay of the view state`);
     const { mode } = (await s.get("core.settings")).values;
