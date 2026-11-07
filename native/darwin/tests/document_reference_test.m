@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 #import "document_view.h"
 #import "host_api_capture.h"
@@ -68,6 +69,50 @@ static id evaluate(void *document, NSString *script) {
     check(until(^BOOL { return done; }), @"the renderer fixture operation completes");
     return [answer autorelease];
 }
+// Diagnostic only: inspect the same public WK snapshot configuration without
+// coercing its geometry. The production operation remains the acceptance owner.
+static void fractionalSnapshotMetrics(void *document, NSString *directory) {
+    WKWebView *view = (WKWebView *)document;
+    NSRect native = view.bounds;
+    NSRect backing = [view convertRectToBacking:native];
+    WKSnapshotConfiguration *configuration = [[[WKSnapshotConfiguration alloc] init] autorelease];
+    configuration.rect = native; configuration.afterScreenUpdates = YES;
+    __block BOOL done = NO;
+    [view takeSnapshotWithConfiguration:configuration completionHandler:^(NSImage *image, NSError *error) {
+        NSMutableArray *representations = [NSMutableArray array];
+        for (NSImageRep *rep in image.representations) {
+            NSMutableDictionary *item = [NSMutableDictionary dictionaryWithDictionary:@{
+                @"class": NSStringFromClass(rep.class), @"pixelsWide": @(rep.pixelsWide), @"pixelsHigh": @(rep.pixelsHigh),
+                @"pointWidth": @(rep.size.width), @"pointHeight": @(rep.size.height) }];
+            if ([rep isKindOfClass:NSBitmapImageRep.class]) {
+                CGImageRef bitmap = [(NSBitmapImageRep *)rep CGImage];
+                item[@"cgWidth"] = @(bitmap ? CGImageGetWidth(bitmap) : 0);
+                item[@"cgHeight"] = @(bitmap ? CGImageGetHeight(bitmap) : 0);
+            }
+            [representations addObject:item];
+        }
+        NSRect proposed = NSMakeRect(0,0,image.size.width,image.size.height);
+        CGImageRef cg = image ? [image CGImageForProposedRect:&proposed context:nil hints:nil] : NULL;
+        NSDictionary *metrics = @{ @"nativeBounds": @{@"x":@(native.origin.x),@"y":@(native.origin.y),
+            @"width":@(native.size.width),@"height":@(native.size.height)},
+            @"backingRect": @{@"x":@(backing.origin.x),@"y":@(backing.origin.y),
+                @"width":@(backing.size.width),@"height":@(backing.size.height)},
+            @"windowBackingScale": @(view.window.backingScaleFactor),
+            @"imagePointWidth": @(image.size.width), @"imagePointHeight": @(image.size.height),
+            @"cgWidth": @(cg ? CGImageGetWidth(cg) : 0), @"cgHeight": @(cg ? CGImageGetHeight(cg) : 0),
+            @"proposedAfter": @{@"x":@(proposed.origin.x),@"y":@(proposed.origin.y),
+                @"width":@(proposed.size.width),@"height":@(proposed.size.height)},
+            @"representations": representations, @"error": error.localizedDescription ?: (id)NSNull.null };
+        NSData *bytes = [NSJSONSerialization dataWithJSONObject:metrics options:NSJSONWritingPrettyPrinted error:NULL];
+        check(bytes && [bytes writeToFile:[directory stringByAppendingPathComponent:@"fractional-snapshot-metrics.json"] atomically:YES],
+            @"fractional native snapshot records original bounds and image representations");
+        fprintf(stdout,"fractional snapshot metrics: %s\n",[[[NSString alloc] initWithData:bytes encoding:NSUTF8StringEncoding] autorelease].UTF8String);
+        check(error == nil, @"the diagnostic fractional WK snapshot succeeds");
+        done = YES;
+    }];
+    check(until(^BOOL { return done; }), @"fractional WK snapshot diagnostics complete");
+}
+
 static NSString *const page = @"<!doctype html><meta charset=utf-8><title>loading</title>"
     "<style>body{margin:0;background:white}#paint{margin:12px;color:black;font:20px sans-serif}</style>"
     "<div id=paint>ACTUAL NATIVE REFERENCE</div><script>"
@@ -130,19 +175,26 @@ int main(void) { @autoreleasepool {
         @{@"field":@"revision", @"value":@"1.5"},
         @{@"field":@"revision", @"value":@"9007199254740992"},
     ];
-    for (int mode=0; mode<4+(int)invalidCarriers.count; mode++) {
+    for (int mode=0; mode<5+(int)invalidCarriers.count; mode++) {
+        BOOL fractional = mode == 4;
+        [window setContentSize:fractional ? NSMakeSize(760,257) : NSMakeSize(500,400)];
+        main.frame = window.contentView.bounds;
+        webviewSetFrame(surface,0,0,fractional ? 760 : 500,fractional ? 256.5 : 400);
         [title release]; title=nil;
         NSString *store = [temporary stringByAppendingPathComponent:[NSString stringWithFormat:@"store-%d",mode]];
         void *document = sp_document_create(surface,store.fileSystemRepresentation,folder.fileSystemRepresentation,"probe",NULL,NULL,changed,NULL);
         check(document != NULL,@"the reference fixture creates its exact attached document");
         if (!document) continue;
         sp_document_place(document,0,0,0,0,true);
+        if (fractional) check(((NSView *)document).bounds.size.width == 760 && ((NSView *)document).bounds.size.height == 256.5,
+            @"the fractional owner reaches actual half-point native view bounds without rounding");
         check(sp_document_load(document,"soksak://probe/ui/reference.html"),@"the renderer-owned reference page loads");
         check(until(^BOOL { return [title isEqual:@"reference-ready"]; }),@"the public renderer provider is initialized");
+        if (fractional) evaluate(document,@"for(const [edge,color] of [['top','rgb(17,43,91)'],['bottom','rgb(203,71,29)']]){const band=document.createElement('div');Object.assign(band.style,{position:'fixed',left:'0',width:'32px',height:'0.5px',background:color,zIndex:'2147483646',[edge]:'0'});document.body.append(band);}true");
         if (mode==1) evaluate(document,@"globalThis.rejectValidation=true;true");
         if (mode==2) evaluate(document,@"globalThis.holdObservation=true;true");
         if (mode==3) evaluate(document,@"globalThis.referenceRevisionDomain='fixture-provider-paint';true");
-        NSDictionary *carrier = mode >= 4 ? invalidCarriers[mode-4] : nil;
+        NSDictionary *carrier = mode >= 5 ? invalidCarriers[mode-5] : nil;
         if (carrier) evaluate(document, [NSString stringWithFormat:
             @"globalThis.invalidCarrier={field:'%@',value:(%@)};true", carrier[@"field"], carrier[@"value"]]);
         sp_image_capture_match_begin(NULL,NULL); char *sessionError=NULL;
@@ -152,6 +204,7 @@ int main(void) { @autoreleasepool {
         check(until(^BOOL { return identityDone; }) && !identityError,@"the actual target issues its initial QR draw");
         NSString *directory = [evidence stringByAppendingPathComponent:[NSString stringWithFormat:@"case-%d",mode]];
         [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:NULL];
+        if (fractional) fractionalSnapshotMetrics(document,directory);
         expectedContext=73+mode;
         replies=0; callbackUsedWorker=NO; [replyJSON release]; replyJSON=nil; [replyError release]; replyError=nil;
         check(scheduleDocumentReferenceObserve(document,carrier && [carrier[@"field"] isEqual:@"requestId"] ? 1 : 7,directory.fileSystemRepresentation,expectedContext),@"the public SDK native reference operation schedules");
@@ -161,13 +214,37 @@ int main(void) { @autoreleasepool {
         }
         check(until(^BOOL { return replies>0; }),@"the native reference callback completes");
         check(replies==1 && callbackUsedWorker,@"the asynchronous native reference completes once through the SDK worker bridge");
-        if (mode==0 || mode==3) {
+        if (mode==0 || mode==3 || fractional) {
             NSDictionary *result = replyJSON ? [NSJSONSerialization JSONObjectWithData:[replyJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
             check(!replyError && [result[@"source"][@"identity"][@"generation"] isEqual:[NSString stringWithFormat:@"%d",44+mode]],
                 [NSString stringWithFormat:@"the native snapshot decodes its actual issued target identity: %@",replyError ?: result]);
             check([result[@"source"][@"identity"][@"raster"] isEqual:@"18446744073709551615"],
                 @"the decoded uint64 document raster is canonical text across the public JSON boundary");
             check([[NSFileManager defaultManager] fileExistsAtPath:[directory stringByAppendingPathComponent:@"native.png"]],@"the actual native PNG is retained for exact pixel consumers");
+            if (fractional) check([result[@"source"][@"scale"] doubleValue] == window.backingScaleFactor,
+                @"the fractional reference preserves the actual native backing scale rather than inferring a rounded-point ratio");
+            if (fractional) {
+                NSBitmapImageRep *png = [[[NSBitmapImageRep alloc] initWithData:[NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:@"native.png"]]] autorelease];
+                check(png.pixelsWide == 1520 && png.pixelsHigh == 513,
+                    @"the fractional native PNG preserves every physical backing row");
+                // Read encoded integer samples, not NSColor's color-managed conversion.
+                BOOL raw = png.pixelsWide == 1520 && png.pixelsHigh == 513
+                    && png.bitsPerSample == 8 && png.samplesPerPixel == 4 && png.hasAlpha
+                    && png.colorSpace.colorSpaceModel == NSColorSpaceModelRGB
+                    && !(png.bitmapFormat & NSBitmapFormatFloatingPointSamples);
+                check(raw, [NSString stringWithFormat:@"the PNG exposes actual 8-bit RGBA samples: bits=%ld samples=%ld format=%lu",
+                    (long)png.bitsPerSample, (long)png.samplesPerPixel, (unsigned long)png.bitmapFormat]);
+                NSUInteger top[4] = {0}, bottom[4] = {0};
+                if (raw) { [png getPixel:top atX:10 y:0]; [png getPixel:bottom atX:10 y:512]; }
+                NSUInteger rgb = png.bitmapFormat & NSBitmapFormatAlphaFirst ? 1 : 0;
+                NSUInteger alpha = rgb ? 0 : 3;
+                check(raw && top[rgb]==17 && top[rgb+1]==43 && top[rgb+2]==91 && top[alpha]==255,
+                    [NSString stringWithFormat:@"the native snapshot preserves the asymmetric exact first physical row without flipping: encoded RGBA=[%lu,%lu,%lu,%lu]",
+                        (unsigned long)top[rgb],(unsigned long)top[rgb+1],(unsigned long)top[rgb+2],(unsigned long)top[alpha]]);
+                check(raw && bottom[rgb]==203 && bottom[rgb+1]==71 && bottom[rgb+2]==29 && bottom[alpha]==255,
+                    [NSString stringWithFormat:@"the native snapshot preserves the distinct final physical row without stretching a shorter image: encoded RGBA=[%lu,%lu,%lu,%lu]",
+                        (unsigned long)bottom[rgb],(unsigned long)bottom[rgb+1],(unsigned long)bottom[rgb+2],(unsigned long)bottom[alpha]]);
+            }
         } else if (mode==1) {
             check([replyError containsString:@"revision changed"], [NSString stringWithFormat:@"renderer revision validation failure is explicit: %@",replyError]);
             check([[NSFileManager defaultManager] fileExistsAtPath:[directory stringByAppendingPathComponent:@"native.png"]],@"revision failure preserves the actual native PNG");

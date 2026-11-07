@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F696-4: Native backing scale에서 정확한 원본 공개 image representation을 사용해 소수점 문서 snapshot의 모든 물리 행을 보존한다. PNG geometry·발급 QR·renderer revision 검사는 유지한다. 첫 행과 마지막 행의 정확한 encoded pixel을 포함한 native 24개 사례가 통과하며 실제 application reference 연결은 남아 있다.
+
 - F502-11: 정확히 고정된 mygo source에서 launch·show 활성화와 application 소유 lifecycle 제어를 검증했다. 선언된 default 전체 module·vet 세 profile·tagged runtime-check 두 profile이 통과하며, 앞선 module-cache 실패와 별도의 F502-3 main-stack 실패는 보존한다.
 
 - F502-13-2: Clean host 앱 세 개에서 기존 1 pt 기준과 run audit로 workbench geometry를 검증했다. Add picker·rename·card sidebar 상태 안에서 정리 전 원본 PNG를 보존하고 15개를 모두 직접 확인했다. 소유권·바이트 보존 검사 3개가 통과하며 F502-4·F685·G8은 별도로 남는다.

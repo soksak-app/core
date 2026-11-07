@@ -15,6 +15,8 @@
 #import <objc/runtime.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1908,6 +1910,58 @@ static NSDictionary *referenceScreenBounds(SPDocumentView *view) {
         @"width": @(screen.size.width), @"height": @(screen.size.height) };
 }
 
+// A WK snapshot can retain a half-point final row in its original representation
+// while NSImage's context-free CGImage selection drops it. Draw the exact public
+// representation at its native backing scale; never resize a selected CGImage.
+static CGImageRef copyDocumentReferencePixels(NSImage *image, SPDocumentView *view) {
+    NSRect logical = view.bounds;
+    NSRect backing = [view convertRectToBacking:logical];
+    double scale = view.window.backingScaleFactor;
+    double width = logical.size.width * scale, height = logical.size.height * scale;
+    if (!isfinite(scale) || scale <= 0 || !isfinite(width) || !isfinite(height)
+        || width <= 0 || height <= 0 || floor(width) != width || floor(height) != height
+        || backing.size.width != width || backing.size.height != height
+        || !NSEqualSizes(image.size, logical.size)) return NULL;
+    // 2^size_t_bits is an exact floating-point exclusive conversion boundary.
+    // Validate before converting, then perform all allocation overflow checks
+    // as integer arithmetic rather than rounding SIZE_MAX into a CGFloat.
+    double sizeLimit = ldexp(1.0, (int)(sizeof(size_t) * CHAR_BIT));
+    if (width >= sizeLimit || height >= sizeLimit) return NULL;
+    size_t pixelWidth = (size_t)width, pixelHeight = (size_t)height;
+    if (pixelWidth > SIZE_MAX / 4) return NULL;
+    size_t stride = pixelWidth * 4;
+    if (pixelHeight > SIZE_MAX / stride) return NULL;
+    NSImageRep *exact = nil;
+    for (NSImageRep *representation in image.representations) {
+        if (representation.pixelsWide != width || representation.pixelsHigh != height
+            || !NSEqualSizes(representation.size, logical.size)) continue;
+        if (exact) return NULL; // Ambiguous representation ownership is not proof.
+        exact = representation;
+    }
+    if (!exact) return NULL;
+    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef bitmap = srgb ? CGBitmapContextCreate(NULL, pixelWidth, pixelHeight,
+        8, stride, srgb, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst) : NULL;
+    if (srgb) CGColorSpaceRelease(srgb);
+    if (!bitmap) return NULL;
+    CGContextScaleCTM(bitmap, scale, scale);
+    CGContextSetInterpolationQuality(bitmap, kCGInterpolationNone);
+    NSGraphicsContext *context = [NSGraphicsContext graphicsContextWithCGContext:bitmap flipped:NO];
+    BOOL drawn = NO;
+    [NSGraphicsContext saveGraphicsState];
+    @try {
+        [NSGraphicsContext setCurrentContext:context];
+        NSRect full = NSMakeRect(0, 0, logical.size.width, logical.size.height);
+        drawn = [exact drawInRect:full fromRect:full operation:NSCompositingOperationCopy
+            fraction:1 respectFlipped:NO hints:nil];
+    } @finally {
+        [NSGraphicsContext restoreGraphicsState];
+    }
+    CGImageRef pixels = drawn ? CGBitmapContextCreateImage(bitmap) : NULL;
+    CGContextRelease(bitmap);
+    return pixels;
+}
+
 static NSDictionary *writeDocumentReferencePNG(CGImageRef input, NSString *path,
     SPDocumentFrameIdentity *identity, NSDictionary *bounds) {
     size_t width = input ? CGImageGetWidth(input) : 0, height = input ? CGImageGetHeight(input) : 0;
@@ -2081,9 +2135,9 @@ static void documentReferenceFrozen(void *context, const char *json, const char 
                     [self finish:nil error:snapshotError ? snapshotError.localizedDescription : @"document reference target changed or snapshot is missing"];
                     return;
                 }
-                NSRect proposed = NSMakeRect(0, 0, image.size.width, image.size.height);
-                CGImageRef pixels = [image CGImageForProposedRect:&proposed context:nil hints:nil];
+                CGImageRef pixels = copyDocumentReferencePixels(image, self.view);
                 NSDictionary *source = writeDocumentReferencePNG(pixels, [self.directory stringByAppendingPathComponent:@"native.png"], self.identity, self.bounds);
+                if (pixels) CGImageRelease(pixels);
                 if (!source) { [self finish:nil error:@"document reference native snapshot could not be written or its actual issued QR could not be decoded"]; return; }
                 NSMutableDictionary *metadata = [[self.producer mutableCopy] autorelease];
                 NSString *encoded = metadata[@"pngBase64"];

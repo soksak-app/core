@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F696-4: Preserve every physical row of fractional document snapshots through the exact original public image representation at native backing scale. Keep strict PNG geometry, issued QR and renderer revision checks. Verify all 24 native cases, including exact encoded first and final rows; actual application reference association remains open.
+
 - F502-11: Verify launch/show activation and application-owned lifecycle controls on the exact pinned mygo source. The declared default-module, three vet and two tagged runtime-check profiles pass; preserve the earlier module-cache failure and separate F502-3 main-stack failure.
 
 - F502-13-2: Verify workbench geometry across all three clean host applications with the unchanged 1 pt criterion and passing run audit. Retain original PNGs inside add-picker, rename and card-sidebar states before cleanup; all 15 were visually inspected. Three ownership and retained-byte cases pass. F502-4, F685 and G8 remain separate.
