@@ -15,16 +15,36 @@ async function step(name, emitEvent, work) {
   }
 }
 
+// The renderer input is diagnostic data, not another debug layout. Validate the
+// whole listing before a fixture can mutate projects/settings or its provider.
+export function validateDebugEntries(value) {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) throw new Error("diagnostics.fixture debugEntries must be an array");
+  const paths = new Set();
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) ||
+        Object.keys(entry).sort().join(",") !== "modified,path,size" ||
+        typeof entry.path !== "string" || !entry.path.startsWith("logs/") || /[\\:\0]/.test(entry.path) ||
+        entry.path.split("/").some(part => !part || part === "." || part === "..") || paths.has(entry.path) ||
+        !Number.isSafeInteger(entry.size) || entry.size < 0 || !Number.isSafeInteger(entry.modified) || entry.modified < 0) {
+      throw new Error("diagnostics.fixture debugEntries contains an invalid or duplicate file");
+    }
+    paths.add(entry.path);
+  }
+  return structuredClone(value);
+}
+
 /**
  * The state that a window check starts from (docs/spec/diagnostics.md): every project is closed, the common settings are the defaults
  * with the values that the check gives, and one project of the folder `root` is open on a fresh layout. `modules` are the
  * modules `projects`, `settings` and `plane` of the page, and `emitEvent(level, event, fields)` writes each step (docs/spec/logging.md).
  */
-export async function prepareFixture({ root, settings: overrides }, { projects, settings, plane, emitEvent }) {
+export async function prepareFixture({ root, settings: overrides, debugEntries }, { projects, settings, plane, debug, emitEvent }) {
   if (typeof root !== "string" || !root) throw new Error("diagnostics.fixture requires root");
   if (overrides !== undefined && (typeof overrides !== "object" || overrides === null || Array.isArray(overrides))) {
     throw new Error("diagnostics.fixture settings must be an object");
   }
+  const entries = validateDebugEntries(debugEntries);
   // The awaited steps inside the project operations are steps of the fixture too, so a project step that does not end names the
   // step of the operation that it waits for.
   projects.runSteps((name, work) => step(name, emitEvent, work));
@@ -38,5 +58,6 @@ export async function prepareFixture({ root, settings: overrides }, { projects, 
   } finally {
     projects.runSteps(null);
   }
+  debug.setDebugFixtureEntries(entries);
   return { root };
 }

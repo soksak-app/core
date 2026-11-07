@@ -5,7 +5,41 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strings"
 )
+
+// fixtureDebugEntries validates the complete diagnostic input before any
+// fixture state changes. Missing is reset; an explicit empty array is a list.
+func fixtureDebugEntries(raw json.RawMessage) ([]DebugEntry, bool, error) {
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil || items == nil {
+		return nil, false, errors.New("diagnostics.fixture debugEntries must be an array")
+	}
+	entries := make([]DebugEntry, 0, len(items))
+	paths := make(map[string]bool)
+	for _, item := range items {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(item, &fields); err != nil || len(fields) != 3 || fields["path"] == nil || fields["size"] == nil || fields["modified"] == nil || string(fields["size"]) == "null" || string(fields["modified"]) == "null" {
+			return nil, false, errors.New("diagnostics.fixture debugEntries requires path, size and modified")
+		}
+		var entry DebugEntry
+		if err := json.Unmarshal(item, &entry); err != nil || !strings.HasPrefix(entry.Path, "logs/") || strings.ContainsAny(entry.Path, "\\:\x00") ||
+			entry.Size < 0 || entry.Modified < 0 || entry.Size > 9007199254740991 || entry.Modified > 9007199254740991 || paths[entry.Path] {
+			return nil, false, errors.New("diagnostics.fixture debugEntries contains an invalid or duplicate file")
+		}
+		for _, part := range strings.Split(entry.Path, "/") {
+			if part == "" || part == "." || part == ".." {
+				return nil, false, errors.New("diagnostics.fixture debugEntries has an invalid path")
+			}
+		}
+		paths[entry.Path] = true
+		entries = append(entries, entry)
+	}
+	return entries, true, nil
+}
 
 // registerFixture answers diagnostics.fixture, which the host asks of the window that a check starts from (docs/spec/diagnostics.md).
 func (s *Shell) registerFixture() {
@@ -24,8 +58,9 @@ const layoutFaultText = "diagnostic layout fault"
 // and one project of the root open on a fresh layout.
 func (s *Shell) prepareFixture(raw json.RawMessage, answer func(any, error)) {
 	value, err := params[struct {
-		Root     string         `json:"root"`
-		Settings map[string]any `json:"settings"`
+		Root         string          `json:"root"`
+		Settings     map[string]any  `json:"settings"`
+		DebugEntries json.RawMessage `json:"debugEntries"`
 	}](raw)
 	if err != nil {
 		answer(nil, Refuse(InvalidParams, "diagnostics.fixture: %s", err))
@@ -35,6 +70,12 @@ func (s *Shell) prepareFixture(raw json.RawMessage, answer func(any, error)) {
 		answer(nil, errors.New("diagnostics.fixture requires root"))
 		return
 	}
+	entries, fixtureActive, err := fixtureDebugEntries(value.DebugEntries)
+	if err != nil {
+		answer(nil, Refuse(InvalidParams, "%s", err))
+		return
+	}
+
 	s.flushProjects(func(err error) {
 		if err != nil {
 			answer(nil, err)
@@ -61,6 +102,8 @@ func (s *Shell) prepareFixture(raw json.RawMessage, answer func(any, error)) {
 						answer(nil, err)
 						return
 					}
+					s.closeDebug()
+					s.debugFixtureEntries, s.debugFixtureActive = entries, fixtureActive
 					answer(map[string]any{"root": value.Root}, nil)
 				})
 			})

@@ -81,7 +81,7 @@ type metrics struct {
 	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
 	lineHeight, lineHeightTight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
-	barTabRootPad, barTabRootW, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
@@ -118,6 +118,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("line-height-tight", &m.lineHeightTight)
 	read("bar-tab-root-pad", &m.barTabRootPad)
 	read("bar-tab-root-w", &m.barTabRootW)
+	read("bar-tab-root-h", &m.barTabRootH)
 	read("project-column-w", &m.projectColumnW)
 	read("project-column-gap", &m.projectColumnGap)
 	read("project-column-pad", &m.projectColumnPad)
@@ -316,8 +317,11 @@ type Shell struct {
 	settings       *SettingsStore
 	settingsWindow settingsWindow
 	debugView      debugViewState
-	menuLanguage   string
-	plugins        []LoadedPlugin
+	// Diagnostic listing input belongs to this shell lifetime, not the live log store.
+	debugFixtureEntries []DebugEntry
+	debugFixtureActive  bool
+	menuLanguage        string
+	plugins             []LoadedPlugin
 	// refused holds the ids of the installed plugins whose manifest the window refused.
 	refused map[string]bool
 	// settingsActor is the command of the settings change that runs.

@@ -17,6 +17,7 @@ function modules(calls) {
       },
     },
     plane: { fresh: () => ({ cards: [] }) },
+    debug: { setDebugFixtureEntries() {} },
     emitEvent: () => {},
   };
 }
@@ -71,3 +72,32 @@ test("the awaited steps of the project operations that the fixture runs are reco
   ]);
   assert.equal(runners.at(-1), null, "the fixture left its step runner installed after it ended");
 });
+
+
+const debugEntries = [
+  { path: "logs/design/a.log", size: 12, modified: 2000 },
+  { path: "logs/design/b.log", size: 3, modified: 1000 },
+];
+test("diagnostics.fixture installs an explicit debug listing and the next fixture resets it", async () => {
+  const supplied = [];
+  const dependencies = { ...modules([]), debug: { setDebugFixtureEntries(value) { supplied.push(value); } } };
+  await prepareFixture({ root: "/tmp/project", debugEntries }, dependencies);
+  assert.deepEqual(supplied, [debugEntries]);
+  await prepareFixture({ root: "/tmp/project" }, dependencies);
+  assert.deepEqual(supplied, [debugEntries, null], "omitting the fixture must restore the live listing provider");
+});
+for (const [name, entries] of [
+  ["non-array", {}],
+  ["traversal", [{ ...debugEntries[0], path: "logs/../outside" }]],
+  ["duplicate paths", [debugEntries[0], debugEntries[0]]],
+  ["negative size", [{ ...debugEntries[0], size: -1 }]],
+  ["fractional modified time", [{ ...debugEntries[0], modified: 1.5 }]],
+]) {
+  test(`diagnostics.fixture rejects debug entries with ${name} before changing projects`, async () => {
+    const calls = [];
+    await assert.rejects(prepareFixture({ root: "/tmp/project", debugEntries: entries }, {
+      ...modules(calls), debug: { setDebugFixtureEntries() { throw new Error("must validate before installation"); } },
+    }), /debugEntries/);
+    assert.deepEqual(calls, []);
+  });
+}

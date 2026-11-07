@@ -187,3 +187,5 @@ A failure that the caller of an operation receives, and that the caller shows th
 ## Reading
 
 The application log answers what failed and where, the performance trace answers when and in what order, and the state file answers what the application held at one time. A report of a defect names the files of `logs/` and the time of the defect.
+
+Diagnostic `diagnostics.fixture` accepts optional `debugEntries`: an ordered array of `{path,size,modified}` renderer-list inputs. Paths are unique portable relative paths below `logs/`, size and modified are nonnegative safe integers. Invalid input fails before project/settings mutation. The ordinary debug model and list renderer consume these exact entries instead of host-dependent listing results; recording, file read/save behavior and actual logs remain unchanged. Each subsequent fixture without the field restores the live provider, and reload creates an unset provider. This diagnostic-only input must be supplied identically on every compared host and checked through public `core.debug.entries`; it is not a second layout implementation or an acceptance normalization.

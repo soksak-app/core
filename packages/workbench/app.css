@@ -134,7 +134,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .bar-tab--add{background:transparent;color:var(--muted);font-size:var(--bar-tab-add-text);line-height:var(--line-height-tight);padding:0 var(--bar-tab-add-pad)}
 .bar-tab--add:hover{background:var(--chip-hover)}
 .bar-tab__root{padding:0 var(--bar-tab-root-pad);border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
-  background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:var(--bar-tab-root-w)}
+  background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:var(--bar-tab-root-w);height:var(--bar-tab-root-h)}
 
 /* Icon switches. */
 .act{display:inline-flex;align-items:center;justify-content:center;width:var(--act-w);height:var(--act-h);

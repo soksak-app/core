@@ -3,11 +3,14 @@
 // The workbench of each host draws the chrome metrics of packages/workbench/workbench.json, so each element stands at one place on
 // every host (docs/spec/projects.md).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { designDifferences } from "@soksak/window-check/design-rects.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
+
+const DEBUG_ENTRIES = JSON.parse(readFileSync(new URL("./fixtures/design-debug-entries.json", import.meta.url), "utf8"));
 
 const SIZE = { width: 1200, height: 760 };
 
@@ -63,6 +66,14 @@ async function reading(s, names) {
 /** Walks the states of one host and reads each of them into states; a state that the host does not reach ends the walk with its error. */
 async function walk(t, s, states) {
   await fresh(s);
+  // fresh deliberately reloads the workbench. Install the shared diagnostic
+  // provider afterwards, preserving the public settings of that preparation.
+  const settings = (await s.get("core.settings")).common;
+  await s.request("diagnostics.fixture", { settings, debugEntries: DEBUG_ENTRIES });
+  s.cleanup(async () => {
+    await s.run("core.debug.close");
+    await s.request("diagnostics.fixture", { settings });
+  });
   await s.run("host.window.resize", SIZE);
   await s.until("host.window", (w) => w.content.width === SIZE.width && w.content.height === SIZE.height, "the window did not resize");
   // An inactive application shows its window behind the frontmost window, where its image regions do not draw and no frame is
@@ -139,7 +150,9 @@ async function walk(t, s, states) {
   await s.until("core.screen", (screen) => screen.screen === "workspace", "the library did not return to the workspace");
 
   await s.run("core.debug.open");
-  await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the logs folder");
+  const debug = await s.until("core.debug", (value) => value.open && value.entries.length === DEBUG_ENTRIES.length,
+    "the debug view did not list the declared shared fixture");
+  assert.deepEqual(debug.entries, DEBUG_ENTRIES, "hosts must render identical declared debug inputs before geometry is compared");
   await read("debug view");
   await s.run("core.debug.close");
   await s.until("core.debug", (debug) => !debug.open, "the debug view did not close");

@@ -100,6 +100,9 @@ type SidebarSection struct {
 
 // SidebarFrame is what a sidebar draws.
 type SidebarFrame struct {
+	// SetInsets reserve a card border and native-input grip outside the exposed
+	// set. The full sidebar column and its status line keep their original size.
+	SetInsets struct{ Top, Right, Bottom, Left float32 }
 	// Sidebar is `left`, `right` or `<card>:<side>`.
 	Sidebar string
 	Space   string
@@ -248,6 +251,9 @@ func sectionItem(frame SidebarFrame, section SidebarSection) string {
 // native view of the section surface stands, and at the end for each section that is not visible.
 func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32, seat seatDrawer) {
 	room := height - metrics.FootH
+	inset := frame.SetInsets
+	setWidth := max(float32(0), width-inset.Left-inset.Right)
+	setRoom := max(float32(0), room-inset.Top-inset.Bottom)
 	// The group of the sidebar is its set, as the page names its container when it draws a set, and the set holds no status line. A
 	// sidebar without a set is a group as a whole and has no element.
 	named := frame.Set != ""
@@ -259,18 +265,19 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 		// The set takes all the room, so a set of short sections leaves the status line at the bottom.
 		var set ui.Element
 		if named {
-			set = ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(width, room).Role(ui.RoleGroup).Label(frame.Sidebar)
+			set = ui.Column(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(setWidth, setRoom).
+				Margin(inset.Top, inset.Right, inset.Bottom, inset.Left).Role(ui.RoleGroup).Label(frame.Sidebar)
 		} else {
 			set = ui.Column(c).Size(width, room)
 		}
 		set.Children(func() {
 			switch {
 			case frame.Layout == "tabs":
-				drawSectionTabs(c, binder, frame, metrics, width, room, seat)
+				drawSectionTabs(c, binder, frame, metrics, setWidth, setRoom, seat)
 			case frame.Orientation == "horizontal":
-				drawHorizontalList(c, binder, frame, metrics, width, room, seat)
+				drawHorizontalList(c, binder, frame, metrics, setWidth, setRoom, seat)
 			default:
-				drawVerticalList(c, binder, drag, frame, metrics, width, room, seat)
+				drawVerticalList(c, binder, drag, frame, metrics, setWidth, setRoom, seat)
 			}
 		})
 		drawSidebarStatus(c, binder, frame, metrics)

@@ -156,3 +156,35 @@ func TestTheTraceSwitchFollowsTheSetting(t *testing.T) {
 		t.Fatalf("the host received %v", stored.traces)
 	}
 }
+
+
+// The diagnostic list is an explicit renderer input, never a snapshot of the
+// different logs each host happened to produce during a geometry comparison.
+func TestFixtureDebugEntriesDriveTheOrdinaryDebugListAndReset(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	input := `{"root":"/work/check","debugEntries":[{"path":"logs/design/a.log","size":12,"modified":2000},{"path":"logs/design/b.log","size":3,"modified":1000}]}`
+	if _, err := fixtureAnswer(t, f, input); err != nil { t.Fatal(err) }
+	f.run("core.debug.open", nil)
+	shown := status[struct{ Entries []workbench.DebugEntry `json:"entries"` }](t, f, "core.debug")
+	want := []workbench.DebugEntry{{Path:"logs/design/a.log",Size:12,Modified:2000},{Path:"logs/design/b.log",Size:3,Modified:1000}}
+	if !slices.Equal(shown.Entries, want) { t.Fatalf("debug list %+v, want exact declared entries %+v", shown.Entries, want) }
+	for _, entry := range want { f.box("core.debug.save", entry.Path) }
+	f.run("core.debug.close", nil)
+	if _, err := fixtureAnswer(t, f, `{"root":"/work/check"}`); err != nil { t.Fatal(err) }
+	f.run("core.debug.open", nil)
+	shown = status[struct{ Entries []workbench.DebugEntry `json:"entries"` }](t, f, "core.debug")
+	if slices.Equal(shown.Entries, want) || len(shown.Entries) != 2 || shown.Entries[0].Path != "newer.log" {
+		t.Fatalf("next fixture did not restore live host listing: %+v", shown.Entries)
+	}
+}
+
+func TestFixtureDebugEntriesRefuseInvalidDataBeforeChangingProjects(t *testing.T) {
+	for _, entries := range []string{`{}`, `[{"path":"logs/../outside","size":1,"modified":1}]`, `[{"path":"logs/a","size":-1,"modified":1}]`, `[{"path":"logs/a","size":1,"modified":1.5}]`, `[{"path":"logs/a","size":1,"modified":1},{"path":"logs/a","size":2,"modified":2}]`} {
+		t.Run(entries, func(t *testing.T) {
+			f := newShell(t, &storedHost{})
+			_, err := fixtureAnswer(t, f, `{"root":"/work/check","debugEntries":`+entries+`}`)
+			if err == nil { t.Fatal("invalid debugEntries were accepted") }
+			if len(f.host.projects) != 0 { t.Fatalf("invalid fixture changed projects: %+v", f.host.projects) }
+		})
+	}
+}

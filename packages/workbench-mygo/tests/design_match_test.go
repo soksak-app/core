@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 const designTolerance = 1
@@ -97,13 +98,13 @@ func TestTheSearchOfPluginsIsTheWholeField(t *testing.T) {
 	}
 }
 
-// The field of a rename has the line height of the page.
-func TestTheRenameFieldHasTheHeightOfThePage(t *testing.T) {
+// A double-click rename exposes the whole input border box, whose shared height is 26.
+func TestADoubleClickRenameHasTheSharedInputBorderBoxHeight(t *testing.T) {
 	f := openedShell(t)
 	id := f.host.projects[0]["id"].(string)
 	doubleClick(f, f.box("core.project-tab", id))
-	if field := f.box("core.rename.input", ""); !designNear(field.H, 19) {
-		t.Fatalf("the field is %v tall, want 19", field.H)
+	if field := f.box("core.rename.input", ""); !designNear(field.H, 26) {
+		t.Fatalf("the input border box is %v tall, want 26", field.H)
 	}
 }
 
@@ -214,5 +215,48 @@ func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {
 	failure, _ := reply["error"].(map[string]any)
 	if failure == nil || failure["message"] != "surface "+surface+" has no valid applied frame" {
 		t.Fatalf("the view under the library answers %v", reply)
+	}
+}
+
+
+// F502-13-2: the page's nowrap picker name exposes its intrinsic text box,
+// rather than the unused space of the flex row. The row remains clickable.
+func TestPickerNameHasIntrinsicTextWidth(t *testing.T) {
+	f := projectWithPlugins(t)
+	f.click("core.card.add", f.tabbedCards()[0])
+	name := element(t, f.tester, "core.picker.item-name", "acme")
+	declared, err := workbench.Declared()
+	if err != nil { t.Fatal(err) }
+	catalog, err := workbench.ReadSettingsCatalog()
+	if err != nil { t.Fatal(err) }
+	values := status[map[string]any](t, f, "core.settings")["values"].(map[string]any)
+	font := catalog.Stack(values["font"].(string))
+	// The control size is relative to the declared base, not a fixed 12pt.
+	size := float32(values["size"].(float64) * declared.ChromeNumber("text-control-at-base", "") / declared.ChromeNumber("text-base", ""))
+	var width float32
+	ui.NewTester(func(c *ui.Context) {
+		width, _ = c.MeasureText(0, ui.Span{Text: "Acme", Font: font, Size: size})
+	}, 400, 300).Frame()
+	if !designNear(name.Bounds.W, width) {
+		t.Fatalf("picker name exposes width %v, want intrinsic text width %v", name.Bounds.W, width)
+	}
+	row := f.box("core.picker.item", "acme")
+	if row.W <= name.Bounds.W {
+		t.Fatalf("the clickable picker row %+v must retain room beyond its intrinsic name %+v", row, name.Bounds)
+	}
+}
+
+// F502-13-2: the page input has a 26-point border box, independently of
+// the font's natural line height. Its vertical centre stays in the top bar.
+func TestProjectRenameUsesTheSharedInputHeight(t *testing.T) {
+	f := openedShell(t)
+	if len(f.host.projects) == 0 {
+		t.Fatal("project fixture must finish opening a project before rename geometry is measured")
+	}
+	id := f.host.projects[0]["id"].(string)
+	f.run("core.rename.begin", map[string]string{"kind": "project", "id": id})
+	field := f.box("core.rename.input", "")
+	if !designNear(field.H, 26) || !designNear(field.Y, 6.5) {
+		t.Fatalf("project rename is %+v, want shared border-box height 26 at y 6.5", field)
 	}
 }

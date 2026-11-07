@@ -46,8 +46,12 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	}
 	box := f.box("core.card", card)
 	side := f.box("core.sidebar", item)
-	if side.X != box.X+cardBorder || side.W != 190 {
-		t.Fatalf("the sidebar stands at %+v in the card %+v", side, box)
+	// The 190-point column reserves its inner border (1) and native-input
+	// grip (6) outside the set, as .card-sidebar > .set does on the page.
+	const columnWidth = 190
+	const setWidth = columnWidth - cardBorder - 6
+	if side.X != box.X+cardBorder || side.W != setWidth {
+		t.Fatalf("the sidebar set stands at %+v in the card %+v, want width %v excluding border and grip", side, box, setWidth)
 	}
 	// The page names the set core.sidebar, and the status line of the sidebar stands below it in the same column (plane.js draws
 	// `.set` and `.card-sidebar__status` in `.card-sidebar`): the column runs from below the header to the end of the footer.
@@ -57,7 +61,10 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	if side.Y != head.Y+head.H || line.Y != side.Y+side.H || line.Y+line.H != status.Y+status.H {
 		t.Fatalf("the sidebar %+v and its status line %+v do not run from below the header %+v to the end of the footer %+v", side, line, head, status)
 	}
-	if status.X != box.X+cardBorder+side.W || status.W != box.W-2*cardBorder-side.W {
+	if line.W != columnWidth {
+		t.Fatalf("status line width %v must preserve full sidebar column width %v", line.W, columnWidth)
+	}
+	if status.X != box.X+cardBorder+columnWidth || status.W != box.W-2*cardBorder-columnWidth {
 		t.Fatalf("the footer %+v does not span the content column of the card %+v", status, box)
 	}
 	f.audit()

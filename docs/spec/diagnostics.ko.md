@@ -187,3 +187,5 @@ Diagnostic capture는 matching용 image source를 메모리에 보존한다. `fr
 ## 읽기
 
 application log는 무엇이 어디서 실패했는지, performance trace는 언제 어떤 순서였는지, state file은 한 시점에 애플리케이션이 무엇을 가졌는지를 답한다. 결함 보고는 `logs/`의 파일과 결함의 시각을 밝힌다.
+
+진단 diagnostics.fixture의 선택 debugEntries는 {path,size,modified}의 순서 있는 목록 renderer 입력이다. Path는 logs/ 아래의 유일한 이식 가능한 상대경로이며 size와 modified는 음수가 아닌 안전한 정수다. 잘못된 입력은 project/settings 변경 전에 거부한다. 기존 debug model과 목록 renderer가 같은 입력을 사용하고 실제 record·file read/save·logs는 바꾸지 않는다. 다음 fixture가 필드를 생략하면 실제 host provider로 복원하고 reload는 미설정 provider로 시작한다. 비교하는 모든 host에 같은 목록을 주고 공개 core.debug.entries로 일치를 검증해야 하며 별도 layout 구현이나 acceptance 정규화가 아니다.

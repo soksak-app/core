@@ -409,6 +409,16 @@ func (s *Shell) debugStatuses() []map[string]any {
 	return statuses
 }
 
+// readDebugFiles selects the explicit diagnostic input or the ordinary host
+// provider. Both feed the same model and list renderer.
+func (s *Shell) readDebugFiles(answer func(any, error)) {
+	if s.debugFixtureActive {
+		answer(slices.Clone(s.debugFixtureEntries), nil)
+		return
+	}
+	s.calls.Call("debugFiles", nil, answer)
+}
+
 // openDebug opens the view: it records the state into logs/ and lists the files of logs/. A failed step is shown in the view and
 // the next step still runs.
 func (s *Shell) openDebug(answer func(any, error)) {
@@ -430,7 +440,7 @@ func (s *Shell) openDebug(answer func(any, error)) {
 		} else {
 			d.recorded = &recorded.Path
 		}
-		s.calls.Call("debugFiles", nil, func(value any, err error) {
+		s.readDebugFiles(func(value any, err error) {
 			if err == nil {
 				var entries []DebugEntry
 				if entries, err = decode[[]DebugEntry](value); err == nil {

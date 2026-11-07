@@ -29,6 +29,7 @@ registry.method("diagnostics.fixture", async (params) => {
     projects: await import("./projects.js"),
     settings: await import("./settings.js"),
     plane: await import("./plane.js"),
+    debug: await import("./debug-ui.js"),
     // events: forwarded
     emitEvent: (level, event, fields) => emitEvent(level, event, fields),
   });

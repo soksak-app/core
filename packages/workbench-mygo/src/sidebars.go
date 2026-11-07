@@ -409,6 +409,20 @@ func (s *Sidebars) CardFrame(set *SidebarSet, space, side string, owner FocusedS
 	}
 	frame := SidebarFrame{Sidebar: owner.Card + ":" + side, Space: space, Orientation: orientation,
 		Status: layout.SideName(side) + " 사이드바 · " + set.Title}
+	// The set must stop before the native-input grip at the inner card edge
+	// (example-model.md); its status line still spans the full column.
+	border, _ := s.options.Look()
+	inset := float32(s.divider) + border
+	switch side {
+	case "left":
+		frame.SetInsets.Right = inset
+	case "right":
+		frame.SetInsets.Left = inset
+	case "top":
+		frame.SetInsets.Bottom = inset
+	case "bottom":
+		frame.SetInsets.Top = inset
+	}
 	s.fill(&frame, set)
 	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: set.ID, owner: owner})
 	return frame

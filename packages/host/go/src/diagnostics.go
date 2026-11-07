@@ -291,7 +291,8 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 	}
 	// settings are the common settings applied over the defaults. When given, it must be an object.
 	var request struct {
-		Settings json.RawMessage `json:"settings"`
+		Settings     json.RawMessage `json:"settings"`
+		DebugEntries json.RawMessage `json:"debugEntries"`
 	}
 	if err := json.Unmarshal(params, &request); err != nil {
 		return nil, err
@@ -303,6 +304,13 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 			return nil, fmt.Errorf("diagnostics.fixture settings must be an object")
 		}
 		page["settings"] = settings
+	}
+	if len(request.DebugEntries) > 0 {
+		var entries []json.RawMessage
+		if err := json.Unmarshal(request.DebugEntries, &entries); err != nil || entries == nil {
+			return nil, fmt.Errorf("diagnostics.fixture debugEntries must be an array")
+		}
+		page["debugEntries"] = request.DebugEntries
 	}
 	return h.ask(s, "diagnostics.fixture", page, pageTimeout)
 }

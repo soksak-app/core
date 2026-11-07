@@ -17,6 +17,15 @@ import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 /** The name of the view: its visible title and the name the host gives its window. */
 const NAME = "디버그";
 
+// Optional diagnostic input for this document lifetime. Ordinary file reads,
+// saves and state recording still use the real host; only the list source varies.
+let fixtureEntries = null;
+export function setDebugFixtureEntries(entries) {
+  closeDebug();
+  fixtureEntries = entries === null ? null : structuredClone(entries);
+}
+const debugListing = async () => fixtureEntries === null ? debug.files() : structuredClone(fixtureEntries);
+
 /* The elements exist only while the view is open. */
 let scrim = null;
 let card = null;
@@ -445,7 +454,7 @@ export async function openDebug() {
     fail("record", reason);
   }
   try {
-    entries = newestFirst(await debug.files());
+    entries = newestFirst(await debugListing());
   } catch (reason) {
     fail("list", reason);
   }

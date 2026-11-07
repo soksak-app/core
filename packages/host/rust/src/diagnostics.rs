@@ -1029,6 +1029,12 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
         }
         params.insert("settings".into(), settings.clone());
     }
+    if let Some(entries) = request.get("debugEntries") {
+        if !entries.is_array() {
+            return Err(Failure::params("diagnostics.fixture debugEntries must be an array"));
+        }
+        params.insert("debugEntries".into(), entries.clone());
+    }
     exposure::parsed(&host.page(window, "diagnostics.fixture", params, TIMEOUT)?)
 }
 

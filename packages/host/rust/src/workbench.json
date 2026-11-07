@@ -575,6 +575,7 @@
     "bar-tab-add-pad": "7px",
     "bar-tab-root-pad": "8px",
     "bar-tab-root-w": "180px",
+    "bar-tab-root-h": "26px",
     "act-w": "24px",
     "act-h": "22px",
     "act-icon": "16px",

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	testplatform "github.com/soksak-app/core/packages/host/go/tests/platform"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -100,6 +101,7 @@ func noteElementNames(nodes []ui.ElementNode) {
 // TestMain judges the element names after a whole run of the package. A run of chosen tests shows only what they show, and a listing
 // of the tests runs none, so neither is judged. The judgment needs every test, which no test of its own can have.
 func TestMain(m *testing.M) {
+	testplatform.InstallMainThread()
 	code := m.Run()
 	if flag.Lookup("test.run").Value.String() == "" && flag.Lookup("test.list").Value.String() == "" {
 		declared, err := workbench.ReadDeclarations()

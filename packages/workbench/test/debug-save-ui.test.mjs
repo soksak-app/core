@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-async function openView(t, answer = { saved: "/d/soksak.tar.gz", total: 3000 }) {
+async function openView(t, answer = { saved: "/d/soksak.tar.gz", total: 3000 }, fixtureEntries) {
   const dom = new JSDOM("<body><div id=plane></div></body>");
   globalThis.document = dom.window.document;
   globalThis.CSS = { escape: (value) => value };
@@ -31,8 +31,12 @@ async function openView(t, answer = { saved: "/d/soksak.tar.gz", total: 3000 }) 
   t.mock.module("../shown-errors.js", { namedExports: { hideError: () => {}, showError: () => {} } });
   const ui = await import(`../debug-ui.js?save-${Math.random()}`);
   document.getElementById("plane").getBoundingClientRect = () => ({ left: 0, top: 0 });
-  await ui.openDebug();
   t.after(() => { ui.closeDebug(); dom.window.close(); });
+  if (fixtureEntries !== undefined) {
+    assert.equal(typeof ui.setDebugFixtureEntries, "function", "diagnostic debug list input is missing");
+    ui.setDebugFixtureEntries(fixtureEntries);
+  }
+  await ui.openDebug();
   const tell = (kind, body) => { for (const listener of listeners[kind]) listener(body); };
   return { ui, tell };
 }
@@ -72,4 +76,23 @@ test("a cancelled save panel ends the operation without a progress bar", async (
   assert.deepEqual(ui.debugState().operation, { action: "save-all", path: null, state: "done" });
   assert.equal(progressBar().closest(".dbg-card__progress").hidden, true);
   assert.equal(saveButton().disabled, false);
+});
+
+
+test("a diagnostic debug fixture uses the existing list renderer and resets to live entries", async t => {
+  const entries = [
+    { path: "logs/design/a.log", size: 12, modified: 2000 },
+    { path: "logs/design/b.log", size: 3, modified: 1000 },
+  ];
+  const { ui } = await openView(t, undefined, entries);
+  assert.deepEqual(ui.debugState().entries, entries);
+  assert.equal(document.querySelectorAll('[data-expose="core.debug.file"]').length, 2,
+    "the ordinary file list must render every declared entry");
+  assert.equal(document.querySelectorAll('[data-expose="core.debug.save"]').length, 2,
+    "fixture rows keep the existing action controls rather than a new layout");
+  ui.closeDebug();
+  ui.setDebugFixtureEntries(null);
+  await ui.openDebug();
+  assert.deepEqual(ui.debugState().entries, []);
+  assert.equal(document.querySelectorAll('[data-expose="core.debug.file"]').length, 0);
 });
