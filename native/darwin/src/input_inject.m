@@ -1147,15 +1147,22 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
         }
     }
     if (!event) { *why = "the key event cannot be created"; return SP_INPUT_REJECTED; }
+    // Bind the complete immutable key payload at its producer boundary. An
+    // NSEvent wrapping a CGEvent can materialize these fields lazily: leaving
+    // that work to a consumer made native menu matching depend on whether an
+    // earlier observer had read them. Keep the original event, input-source
+    // translation, flags and stated-text mark; never substitute characters.
+    (void)event.characters;
+    (void)event.charactersIgnoringModifiers;
     // An inactive application has no key window for a key, and -[NSApplication sendEvent:] drops it while it answers delivered.
-    // The key enters the virtual key window. A key down with Command or Control is offered as a key equivalent to the window
-    // and then to the main menu, as -[NSApplication sendEvent:] does for its key window, so Command+C and Command+V run the
-    // items of the menu; a key that neither takes is sent to the window, which gives it to the first responder. A key down of a
+    // The virtual path enforces this project's declared native-menu ownership (shortcuts.json): an enabled menu equivalent
+    // owns the key before a view. NSMenu resolves and validates that owner; an unclaimed key reaches window equivalents,
+    // then the first responder. This is project policy, not AppKit's default view-first dispatch order. A key down of a
     // named key or with a stated text goes to a web view without its input context: a stated text is typed through the text
     // input of the web view, and a named key runs the command of its key binding.
     if (enterVirtual(window)) {
         if (down && (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl))) {
-            *equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];
+            *equivalent = [NSApp.mainMenu performKeyEquivalent:event] || [window performKeyEquivalent:event];
         }
         bool toWebView = !*equivalent && down && (named || text) && sp_input_virtual_send_key_to_web_view(window, event);
         *typed = toWebView && text && !named;

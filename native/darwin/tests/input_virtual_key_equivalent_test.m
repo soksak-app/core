@@ -1,7 +1,7 @@
 // Checks key equivalents of the virtual key window (docs/spec/exposure.md#virtual-key-window): the test process is never
 // active, so its window takes keys as the virtual key window. A key down with Command is offered as a key equivalent to the
-// window and then to the main menu before the first responder receives it, as the application dispatch does for its key
-// window: Command+C and Command+V run copy: and paste: of the first responder through the items of the Edit menu, a key
+// main menu and then to the window before the first responder receives it, enforcing the project's native-menu ownership
+// policy for virtual input: Command+C and Command+V run copy: and paste: of the first responder through the items of the Edit menu, a key
 // equivalent of a view of the window runs there and not in the menu, a key that waits behind the held input of the window takes
 // its key equivalent in its turn, and a key that no one takes as an equivalent, and a key without Command, reach the first
 // responder as a key down. The record of each key down states whether the key waited.
@@ -35,6 +35,7 @@ static NSString *keyName(NSEvent *event) {
 // key, and takes Command+K as its own key equivalent.
 @interface Clipboard : NSView
 @property(retain) NSMutableArray<NSString *> *calls;
+@property BOOL claimsSelectAll;
 @end
 @implementation Clipboard
 - (BOOL)acceptsFirstResponder { return YES; }
@@ -44,6 +45,11 @@ static NSString *keyName(NSEvent *event) {
 - (void)keyDown:(NSEvent *)event { [self.calls addObject:[@"keyDown:" stringByAppendingString:keyName(event)]]; }
 - (void)keyUp:(NSEvent *)event { [self.calls addObject:[@"keyUp:" stringByAppendingString:keyName(event)]]; }
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
+    if (self.claimsSelectAll && event.type == NSEventTypeKeyDown && [keyName(event) isEqual:@"a"] &&
+        (event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask) == NSEventModifierFlagCommand) {
+        [self.calls addObject:@"equivalent:a"];
+        return YES;
+    }
     if (event.type != NSEventTypeKeyDown || (event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask) != NSEventModifierFlagCommand
         || ![keyName(event) isEqual:@"k"]) {
         return [super performKeyEquivalent:event];
@@ -138,12 +144,33 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"Command+V runs paste: once through the Paste item (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
 
-    // A key equivalent of a view of the window runs in the window before the menu.
+    // A key not owned by the menu reaches the equivalent of the view.
     [clipboard.calls removeAllObjects];
     records = press(window, "k", 8);
     check([clipboard.calls isEqual:@[@"equivalent:k", @"keyUp:k"]],
         [NSString stringWithFormat:@"Command+K runs the equivalent of the view (calls %@)", clipboard.calls]);
     check(recordsEquivalent(records, YES), [NSString stringWithFormat:@"the key down record states the equivalent (records %@)", records]);
+
+    // Project native-menu ownership wins a collision with a view equivalent.
+    clipboard.claimsSelectAll = YES;
+    check(NSApp.mainMenu == main && editItem.submenu == edit, @"the collision uses the actual installed main/Edit menus");
+    check([edit itemWithTitle:@"Select All"] != nil, @"the collision has an actual Select All item");
+    [clipboard.calls removeAllObjects];
+    records = press(window, "a", 8);
+    check([clipboard.calls isEqual:@[@"selectAll:Select All", @"keyUp:a"]],
+        [NSString stringWithFormat:@"an enabled native-menu equivalent owns the key before a claiming view (calls %@)", clipboard.calls]);
+    // Disabled menu entries do not own an equivalent; NSMenu performs the
+    // enabled-state decision and the view still gets its unclaimed shortcut.
+    edit.autoenablesItems = NO;
+    NSMenuItem *selectAll = [edit itemWithTitle:@"Select All"];
+    selectAll.enabled = NO;
+    [clipboard.calls removeAllObjects];
+    records = press(window, "a", 8);
+    check([clipboard.calls isEqual:@[@"equivalent:a", @"keyUp:a"]],
+        [NSString stringWithFormat:@"a disabled menu equivalent leaves the key to the view (calls %@)", clipboard.calls]);
+    selectAll.enabled = YES;
+    edit.autoenablesItems = YES;
+    clipboard.claimsSelectAll = NO;
 
     // A key that waits behind the held input of the window takes its key equivalent in its turn: Command+A runs selectAll:
     // through the Select All item and does not reach the view as a key down, and the record of the key down states that it waited.

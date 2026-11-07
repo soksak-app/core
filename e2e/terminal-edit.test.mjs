@@ -32,6 +32,10 @@ for (const app of Object.values(APPS)) {
     // A selection covers a cell only when the pointer passes the middle of the cell, so the press is near the left edge of the first cell and the release is after the middle of the last cell
     // (docs/spec/persistent-services.md).
     const shift = 0.3 * session.cellWidth;
+    // The existing bounded public trace distinguishes DOM capture, queued sidecar
+    // input and its replies if native delivery succeeds but release is missing.
+    await s.run("terminal.pointer.trace", { action: "start" }, surface);
+    s.cleanup(() => s.run("terminal.pointer.trace", { action: "stop" }, surface));
     const pressed = currentEventOffsets(s.app.configDir);
     await s.pointer(cell(0).x - shift, cell(0).y, "down");
     await s.pointer(cell(3).x, cell(3).y, "drag");
@@ -40,12 +44,23 @@ for (const app of Object.values(APPS)) {
     try {
       await s.until("terminal.session", (value) => value.selectionReleases === before + 1, "the selection was not released", { surface });
     } catch (error) {
-      // A failure states the injection record of each phase of the drag: its point, its result and the pointer that held it.
-      await s.flushLog();
-      const records = readEvents(s.app.configDir, pressed).events
-        .filter((event) => event.event === "native.record.info" && event.fields?.where === "input inject")
-        .map((event) => JSON.parse(event.fields.text)).filter((record) => record.kind === "pointer");
-      error.message = `pointer records ${JSON.stringify(records)}; responder ${JSON.stringify((await s.get("host.window")).responder)}; ${error.message}`;
+      // Diagnostics must not replace the original release timeout if a read fails.
+      try {
+        await s.flushLog();
+        const records = readEvents(s.app.configDir, pressed).events
+          .filter((event) => event.event === "native.record.info" && event.fields?.where === "input inject")
+          .map((event) => JSON.parse(event.fields.text)).filter((record) => record.kind === "pointer");
+        t.diagnostic(`${app.name}: failed selection release native pointer records ${JSON.stringify(records)}`);
+      } catch (diagnosticError) {
+        t.diagnostic(`${app.name}: selection release native records diagnostic failed: ${diagnosticError.stack ?? diagnosticError}`);
+      }
+      for (const [name, target] of [["terminal.pointer.trace", surface], ["terminal.session", surface], ["host.window", undefined]]) {
+        try {
+          t.diagnostic(`${app.name}: failed selection release ${name} ${JSON.stringify(await s.get(name, target))}`);
+        } catch (diagnosticError) {
+          t.diagnostic(`${app.name}: selection release ${name} diagnostic failed: ${diagnosticError.stack ?? diagnosticError}`);
+        }
+      }
       throw error;
     }
     await s.until("host.window", (window) => window.responder?.surface === surface, "the terminal did not take native focus");

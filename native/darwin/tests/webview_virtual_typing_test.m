@@ -88,13 +88,73 @@ static BOOL recordsTextInput(NSString *records, BOOL typed) {
 
 static NSString *value(WKWebView *view) { return evaluate(view, @"document.getElementById('field').value"); }
 
+// Real WebKit editing differs from the synchronous fake Clipboard responder:
+// inspect this fixture's own input after an evaluation roundtrip, not a timer.
+static void checkWebKitEditEquivalents(NSWindow *window, WKWebView *view) {
+    NSMenu *previousMenu = [NSApp.mainMenu retain];
+    NSPasteboard *board = NSPasteboard.generalPasteboard;
+    NSMutableArray<NSPasteboardItem *> *saved = [NSMutableArray array];
+    for (NSPasteboardItem *item in board.pasteboardItems) {
+        NSPasteboardItem *copy = [[[NSPasteboardItem alloc] init] autorelease];
+        for (NSPasteboardType type in item.types) {
+            NSData *data = [item dataForType:type];
+            check(data != nil, [NSString stringWithFormat:@"the clipboard fixture saves %@", type]);
+            if (data) [copy setData:data forType:type];
+        }
+        [saved addObject:copy];
+    }
+    @try {
+        NSMenu *main = [[[NSMenu alloc] initWithTitle:@"Main"] autorelease];
+        NSMenuItem *edit = [[[NSMenuItem alloc] initWithTitle:@"Edit" action:NULL keyEquivalent:@""] autorelease];
+        NSMenu *menu = [[[NSMenu alloc] initWithTitle:@"Edit"] autorelease];
+        for (NSArray *entry in @[@[@"Select All", @"selectAll:", @"a"], @[@"Copy", @"copy:", @"c"]]) {
+            NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:entry[0] action:NSSelectorFromString(entry[1]) keyEquivalent:entry[2]] autorelease];
+            item.target = nil;
+            item.keyEquivalentModifierMask = NSEventModifierFlagCommand;
+            [menu addItem:item];
+        }
+        edit.submenu = menu;
+        [main addItem:edit];
+        NSApp.mainMenu = main;
+        NSString *expected = @"https://fixture.invalid/address-copy";
+        evaluate(view, @"cancel=false;events=[];const f=document.getElementById('field');f.value='https://fixture.invalid/address-copy';f.focus();f.setSelectionRange(0,0);null;");
+        check([window makeFirstResponder:view], @"the actual WebKit view is the native editing responder");
+        [board clearContents];
+        [board setString:@"ROUTING-SENTINEL" forType:NSPasteboardTypeString];
+        NSString *selectRecords = capturedRecords(^{
+            check(sp_input_key(window, "a", NULL, 8, true) == SP_INPUT_DELIVERED &&
+                sp_input_key(window, "a", NULL, 8, false) == SP_INPUT_DELIVERED, @"real WebKit Command+A is delivered");
+        });
+        NSDictionary *selected = evaluate(view, @"(()=>{const f=document.getElementById('field');return {value:f.value,focused:document.activeElement===f,start:f.selectionStart,end:f.selectionEnd,events:events.slice()};})()");
+        check([selected[@"value"] isEqual:expected] && [selected[@"focused"] boolValue] &&
+            [selected[@"start"] integerValue] == 0 && [selected[@"end"] integerValue] == expected.length,
+            [NSString stringWithFormat:@"Command+A selects the actual WebKit input after its evaluation roundtrip: %@; records %@; responder %@", selected, selectRecords, window.firstResponder]);
+        NSString *copyRecords = capturedRecords(^{
+            check(sp_input_key(window, "c", NULL, 8, true) == SP_INPUT_DELIVERED &&
+                sp_input_key(window, "c", NULL, 8, false) == SP_INPUT_DELIVERED, @"real WebKit Command+C is delivered");
+        });
+        // The roundtrip observes the fixture context after native dispatch; it
+        // never executes copy, writes the clipboard, or changes selection.
+        id afterCopy = evaluate(view, @"(()=>{const f=document.getElementById('field');return {focused:document.activeElement===f,start:f.selectionStart,end:f.selectionEnd,events:events.slice()};})()");
+        NSString *copied = [board stringForType:NSPasteboardTypeString];
+        NSArray *keyDowns = [afterCopy[@"events"] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"SELF BEGINSWITH %@", @"keydown:"]];
+        check(keyDowns.count == 0, [NSString stringWithFormat:@"menu Command+A/C reach no page keydown: %@; select records %@; copy records %@", keyDowns, selectRecords, copyRecords]);
+        check([copied isEqual:expected], [NSString stringWithFormat:@"Command+C copies the actual WebKit selection after its evaluation roundtrip: clipboard %@; context %@; records %@; responder %@", copied, afterCopy, copyRecords, window.firstResponder]);
+    } @finally {
+        [board clearContents];
+        if (saved.count) [board writeObjects:saved];
+        NSApp.mainMenu = previousMenu;
+        [previousMenu release];
+    }
+}
+
 int main(void) { @autoreleasepool {
     setvbuf(stdout, NULL, _IOLBF, 0);
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(everything), @"the policy stores every level of every class");
     [NSApplication sharedApplication];
-    method_setImplementation(class_getInstanceMethod(NSTextInputContext.class, @selector(handleEventByInputMethod:completionHandler:)),
-        (IMP)inputMethodTakesAndAnswersNothing);
+    Method inputMethod = class_getInstanceMethod(NSTextInputContext.class, @selector(handleEventByInputMethod:completionHandler:));
+    IMP originalInputMethod = method_setImplementation(inputMethod, (IMP)inputMethodTakesAndAnswersNothing);
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 420, 300)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -148,6 +208,17 @@ int main(void) { @autoreleasepool {
         [events componentsJoinedByString:@", "], value(view)]);
     check(recordsTextInput(records, NO), [NSString stringWithFormat:@"the key down record of a named key states no text input (records %@)", records]);
     check(inputMethodKeyDowns == 0, [NSString stringWithFormat:@"no key down reaches the input method, got %d", inputMethodKeyDowns]);
+
+    // The typing cases above deliberately use a handled-YES/no-command input
+    // context. Native editing must be an independent control with AppKit's
+    // original implementation; that fake would consume its editing commands.
+    method_setImplementation(inputMethod, originalInputMethod);
+    @try {
+        printf("CONTROL: real WebKit editing uses the original AppKit input method implementation; dispatch order unchanged\n");
+        checkWebKitEditEquivalents(window, view);
+    } @finally {
+        method_setImplementation(inputMethod, (IMP)inputMethodTakesAndAnswersNothing);
+    }
 
     [window close];
     [window release];
