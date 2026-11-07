@@ -1680,6 +1680,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F686-4",
+    implementation: [
+      { file: "scripts/check-host-callbacks.mjs", symbol: "function renderPuregoCallbacks" },
+      { file: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go", symbol: "func (callbacks Callbacks) Bind()" },
+      { file: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings_diagnostics.go", symbol: "func (callbacks DiagnosticCallbacks) Bind()" },
+      { file: "native/darwin/tests/host_callback_abi.m", symbol: "int sp_test_callback_run(void)" },
+    ],
+    tests: [
+      { file: "scripts/test/host-callbacks.test.mjs", id: "cgo-free callback bindings preserve native types and reject unsupported declarations" },
+      { file: "scripts/test/host-callbacks.test.mjs", id: "cgo-free generated artifacts are checked and obsolete diagnostics are removed" },
+      { file: "packages/host/mygo/tests/platform/darwin/nativecallback/callbacks_test.go", id: "TestMissingCallbacksAllocateNoAddresses" },
+      { file: "packages/host/mygo/tests/platform/darwin/nativecallback/callbacks_test.go", id: "TestNativeCallbacksPreserveTheDeclaredABI" },
+    ],
+    expected: "Header-generated cgo-free callback bindings preserve all 43 native callback identities, scalar widths, native pointers, results and table layout, reject unsupported declarations and allocate no addresses for incomplete profiles.",
+    levels: ["unit"],
+  },
+  {
     id: "F686-3",
     implementation: [
       { file: "native/darwin/src/host_callbacks.m", symbol: "const char *sp_host_callbacks_install(" },

@@ -1,0 +1,90 @@
+// Test-only native caller for the generated cgo-free callback ABI.
+#include "host_callbacks.h"
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int context;
+static sp_input_held held;
+static char text[] = "borrowed";
+void *sp_test_callback_context(void) { return &context; }
+void *sp_test_callback_held(void) { return &held; }
+char *sp_test_callback_text(void) { return text; }
+void *sp_test_callback_bytes(void) {
+    unsigned char *bytes = malloc(4);
+    memcpy(bytes, (unsigned char[]){0, 255, 0, 73}, 4);
+    return bytes;
+}
+char *sp_test_callback_kind(void) { return strdup("application/octet-stream"); }
+void sp_test_callback_free(void *pointer) { free(pointer); }
+
+size_t sp_test_callback_layout(size_t *offsets, bool diagnostic) {
+    size_t i = 0;
+    if (diagnostic) {
+#define OFFSET(mode, result, name, parameters, arguments) offsets[i++] = offsetof(sp_host_diagnostic_callbacks, name);
+        SP_HOST_DIAGNOSTIC_CALLBACKS(OFFSET)
+#undef OFFSET
+        return sizeof(sp_host_diagnostic_callbacks);
+    }
+#define OFFSET(mode, result, name, parameters, arguments) offsets[i++] = offsetof(sp_host_callbacks, name);
+    SP_HOST_CALLBACKS(OFFSET)
+#undef OFFSET
+    return sizeof(sp_host_callbacks);
+}
+
+int sp_test_callback_run(void) {
+    const uint64_t identifier = UINT64_C(0xfedcba9876543210);
+    const uintptr_t token = UINT64_C(0xfedcba9876543201);
+    sp_host_callback_native_committed(identifier);
+    sp_host_callback_native_terminated(identifier);
+    sp_host_callback_native_message(identifier, text);
+    sp_host_callback_file_dropped(&context, text);
+    sp_host_callback_file_drop_released(&context);
+    sp_host_callback_image_released(&context, identifier, identifier, -37);
+    sp_host_callback_image_changed(&context, text);
+    sp_host_callback_native_start_page_ready(token, text);
+    sp_host_callback_native_layout_ready(token, true);
+    sp_host_callback_native_presentation_done(token);
+    // This ABI fixture checks opaque pointer identity; completion ownership has its native owner test.
+    sp_host_callback_native_settled_present(token, &context);
+    sp_host_callback_native_settled_present_ended(token);
+    sp_host_callback_native_layout_started(token);
+    sp_host_callback_native_layout_ended(token);
+    sp_host_callback_native_settled_done(token, -12.5, strdup("transferred"));
+    sp_host_callback_notification_event(&context, text);
+    sp_host_callback_quit_request();
+    sp_host_callback_native_ui_run(token);
+    sp_host_callback_native_responder_changed(token);
+    sp_host_callback_native_fullscreen_done(token);
+    if (sp_host_callback_surface_hit(token, &context) != -51) return 1;
+    sp_host_callback_surface_point(token, -37, -12.5, -12.5);
+    sp_host_callback_input_delivered(&context, -37, &held);
+    sp_host_callback_input_activated(&context, -37, text);
+    sp_host_callback_document_changed(&context, text);
+    sp_host_callback_document_message(&context, text);
+    sp_host_callback_view_message(&context, text);
+    sp_host_callback_view_ended(&context);
+    sp_host_callback_view_responsiveness(&context, true);
+    sp_host_callback_document_stream(&context, text);
+    void *bytes = NULL;
+    size_t length = 0;
+    char *kind = NULL;
+    bool served = sp_host_callback_core_root_serve(&context, text, text, &bytes, &length, &kind);
+    bool valid = served && bytes && length == 4 && !memcmp(bytes, (unsigned char[]){0, 255, 0, 73}, 4) && kind && !strcmp(kind, "application/octet-stream");
+    free(bytes);
+    free(kind);
+    if (!valid) return 2;
+    sp_host_callback_document_queried(&context, text);
+    sp_host_callback_document_event(&context, text);
+    sp_host_callback_memory_pressure(text, identifier);
+    sp_host_callback_dock_new_window();
+    sp_host_callback_mouse_buttons_changed(&context, identifier);
+    sp_host_diagnostic_callback_native_input_source_adopted(token, text);
+    sp_host_diagnostic_callback_window_objects_counted(token, -83, -83, -83, true);
+    sp_host_diagnostic_callback_page_objects_counted(token, -83, -83, text);
+    sp_host_diagnostic_callback_delivered_notifications(&context, text);
+    sp_host_diagnostic_callback_document_frame_identity_done(token, text, text);
+    sp_host_diagnostic_callback_input_reference_reply(token, text, text);
+    sp_host_diagnostic_callback_process_exit_answered(token, true);
+    return 0;
+}

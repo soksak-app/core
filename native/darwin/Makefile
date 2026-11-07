@@ -129,7 +129,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-abi build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -206,6 +206,12 @@ $(BUILD):
 # is active when it exits.
 $(PROCESS_IDENTITY_LIBRARY):
 	@$(MAKE) -C $(CURDIR)/process-identity MACOS_MINIMUM=$(MACOS_MINIMUM) build
+
+# Isolated ABI fixture: no application bundle or production library is changed.
+$(BUILD)/libhost_callback_abi.dylib: tests/host_callback_abi.m src/host_callbacks.m src/host_callbacks.h src/input_inject.h Makefile | $(BUILD)
+	@clang $(CFLAGS) -DSOKSAK_DIAGNOSTIC -dynamiclib -I$(CURDIR)/src tests/host_callback_abi.m src/host_callbacks.m -o $@
+
+build-host-callback-abi: $(BUILD)/libhost_callback_abi.dylib
 
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@

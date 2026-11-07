@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F686-4: mygo adapter의 cgo 없는 typed callback binding을 header에서 생성한다. 지원하지 않는 type과 실수 callback 반환형을 거부하고 주소 할당 전 profile의 모든 함수를 확인하며 두 생성 profile을 검사한다. cgo 없는 native ABI test는 callback 43개의 호출·함수 식별·native table layout, scalar 폭과 native memory 소유권, GC 이후 callback 수명 유지를 확인한다. 실제 worker 통합·drag frame 비용·cgo 없는 application 전체 build는 아직 남아 있다.
+
 - F686-3: native callback은 하나의 공개 typed header와 기본·진단용 완전 등록 table을 사용한다. header에서 생성한 cgo binding이 native의 Go export 직접 연결을 대체한다. 등록은 필수 함수 누락과 교체를 거부하며 worker 감사는 전달 경계를 유지한다. 넘겨받은 presentation completion은 공개 native 연산이 실행·해제한다. mygo의 cgo 없는 binding은 아직 남아 있다.
 
 - F686-2: native callback 값은 cgo를 끄면 링크되지 않는 runtime/cgo.Handle 대신 공유 Go callback handle 소유자를 사용한다. 정수 token은 명시적 해제까지 Go 값을 유지하며 0, 해제된 handle의 조회와 이중 해제를 거부한다. cgo 없는 수명 사례와 race 실행, Darwin platform 사례와 두 adapter의 main-thread callback 검사가 통과한다. native binding 생성과 cgo 없는 application 전체 빌드는 아직 남아 있다.

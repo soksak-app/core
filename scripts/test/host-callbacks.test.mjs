@@ -59,3 +59,63 @@ test("a header without callback entry points is rejected by its path", { timeout
     assert.match(result.stderr, /no native callback entry points/);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
+
+test("cgo-free callback bindings preserve native types and reject unsupported declarations", { timeout: 30000 }, async () => {
+  const { createHostCallbacks } = await import("../check-host-callbacks.mjs");
+  const folder = mkdtempSync(join(tmpdir(), "host-callback-types-"));
+  try {
+    const header = join(folder, "callbacks.h");
+    writeFileSync(header, "#include <stdbool.h>\n#include <stdint.h>\n#include <stddef.h>\nbool sp_host_callback_reply(uintptr_t token, int result, long count, uint64_t sequence, double elapsed, void **bytes, size_t *length, char **kind);\nvoid sp_host_diagnostic_callback_ready(bool ready);\n");
+    const generated = createHostCallbacks(header);
+    assert.equal(typeof generated.puregoBase, "string", "no cgo-free binding was generated");
+    assert.match(generated.puregoBase, /Reply func\(uintptr, int32, int64, uint64, float64, \*unsafe.Pointer, \*uint64, \*\*byte\) bool/);
+    assert.doesNotMatch(generated.puregoBase, /import "C"|Ready/);
+    assert.match(generated.puregoBase, /purego.NewCallback\(callbacks.Reply\)/);
+    assert.match(generated.puregoDiagnostics, /go:build darwin && diagnostics/);
+    assert.match(generated.puregoDiagnostics, /Ready func\(bool\)/);
+    writeFileSync(header, "void sp_host_callback_bad(long double value);\n");
+    assert.throws(() => createHostCallbacks(header), /callbacks.h.*unsupported.*long double/);
+    writeFileSync(header, "double sp_host_callback_bad(void);\n");
+    assert.throws(() => createHostCallbacks(header), /callbacks.h.*unsupported callback result.*double/);
+  } finally { rmSync(folder, { recursive: true }); }
+});
+
+test("cgo-free generated artifacts are checked and obsolete diagnostics are removed", { timeout: 30000 }, () => {
+  const folder = mkdtempSync(join(tmpdir(), "host-callback-purego-"));
+  try {
+    const header = join(folder, "callbacks.h"), output = join(folder, "cgo.go"), binding = join(folder, "native.go");
+    writeFileSync(header, "void sp_host_callback_ready(void);\nvoid sp_host_diagnostic_callback_done(void);\n");
+    const args = [command, "--header", header, "--output", output, "--purego-output", binding];
+    let result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(readFileSync(binding, "utf8"), /package nativecallback/);
+    const diagnosticFile = join(folder, "native_diagnostics.go");
+    assert.ok(existsSync(diagnosticFile));
+    const diagnostics = readFileSync(diagnosticFile, "utf8");
+    const compiled = spawnSync("go", ["test", binding, diagnosticFile], {
+      cwd: new URL("../../packages/host/mygo/", import.meta.url),
+      env: { ...process.env, CGO_ENABLED: "0" }, encoding: "utf8",
+    });
+    assert.equal(compiled.status, 0, compiled.stdout + compiled.stderr);
+    const stamp = new Date("2001-01-01T00:00:00Z");
+    utimesSync(binding, stamp, stamp);
+    utimesSync(diagnosticFile, stamp, stamp);
+    result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(statSync(binding).mtimeMs, stamp.getTime());
+    assert.equal(statSync(diagnosticFile).mtimeMs, stamp.getTime());
+    writeFileSync(diagnosticFile, diagnostics + "\n// stale\n");
+    result = spawnSync(process.execPath, args, { encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.ok(result.stderr.includes(diagnosticFile), result.stderr);
+    writeFileSync(diagnosticFile, diagnostics);
+    writeFileSync(binding, "stale");
+    result = spawnSync(process.execPath, args, { encoding: "utf8" });
+    assert.notEqual(result.status, 0);
+    assert.ok(result.stderr.includes(binding), result.stderr);
+    writeFileSync(header, "void sp_host_callback_ready(void);\n");
+    result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(existsSync(join(folder, "native_diagnostics.go")), false);
+  } finally { rmSync(folder, { recursive: true }); }
+});

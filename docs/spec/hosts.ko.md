@@ -21,6 +21,10 @@ Go callback 소유자는 마지막 native 사용이 끝나 소유자가 해제�
 
 공유 native header `native/darwin/src/host_callbacks.h`는 기본 callback 36개와 진단 callback 7개의 native-to-host ABI를 선언한다. 각 profile은 해당 작업 시작 전에 한 번 등록한다. native library는 완전한 table을 복사하며 누락이나 교체를 거부한다. 함수 주소는 process 종료까지 유효하다. native code는 Go export를 링크하는 대신 등록된 `sp_host_callback_*`와 `sp_host_diagnostic_callback_*` 진입점을 참조하며, 각 호출은 여전히 `hostRunOnWorker`나 `ON_WORKER`를 거친다. profile 등록 전 callback을 호출하면 진입점 이름을 남기고 abort한다. `make create-host-callbacks`는 clang을 통해 header에서 cgo 등록을 생성하고, `make check-host-callbacks`는 오래된 binding을 거부하며 native build의 선행 조건이다. 진단 등록은 Go의 `diagnostics` build tag에서만 선택된다.
 
+mygo adapter의 cgo 없는 callback binding은 같은 header에서 `src/platform/darwin/nativecallback`으로 생성한다. Darwin LP64 scalar의 정확한 폭과 native pointer 간접 참조를 유지하며 지원하지 않는 선언은 거부한다. callback 주소 할당 전 필수 함수 전부를 확인한다. `Bind`는 시작 시 profile마다 한 번 호출하며 반환 table을 재사용하고 함수 주소는 process 종료까지 유지한다. `make test-host-callbacks`는 격리된 native ABI fixture를 컴파일하고 callback 43개와 native table 크기·offset을 확인하는 cgo 없는 소유 test를 실행한다. 이 ABI test는 main-thread worker 통합이나 drag frame 성능의 근거가 아니다.
+
+ABI 후보는 새 foreign-call runtime을 만들지 않고 mygo adapter가 이미 선언한 purego 버전을 사용한다. 이 구현은 Go 함수를 process 종료까지 유지하고 유한한 callback 주소 pool을 가지므로 adapter는 한 번 binding하고 주소를 재사용한다. 불완전한 profile 검증은 주소를 할당하지 않아야 한다. 현재 서명은 부호 있는 32-bit C `int`, 부호 있는 64-bit Darwin `long`, 부호 없는 64-bit counter, pointer 폭의 정수 token, 혼합 `double` 인수, bool과 native pointer 출력을 요구한다. purego는 이 인수 형태를 받지만 실수 callback 반환형은 거부하므로 생성기는 binding 출력 전에 해당 반환형을 명시적으로 거부한다. native fixture는 malloc 호환 저장소에 응답 byte와 MIME 문자열을 할당하고 내용을 검증한 뒤 해제하며, host callback은 별도로 넘겨받은 오류 문자열을 해제한다. 호출 전 강제 garbage collection으로 callback 수명 유지를 확인한다. native field offset·table 크기·명시적인 callback 호출 순서가 독립적인 layout·함수 식별 기준이다. 호출 횟수만으로는 같은 서명의 함수 교환을 놓치며 첫 두 주소를 교환한 통제 변이는 순서 검사에서 실패한다. scalar-only 생성기 fixture도 cgo를 끄고 컴파일한다. 이 검사에서 사용하지 않는 unsafe import가 드러났으며 import는 생성 서명의 필요에 따른다. 이 근거는 후보 ABI에 한정된다. 실제 framework worker 전달, main-thread 재진입, drag frame 비용과 cgo 없는 application 전체 build는 후보 통합 전에 계속 필요하다. callback 수명과 지원 반환형의 제약은 [고정된 purego callback 구현](https://github.com/ebitengine/purego/blob/v0.11.1/syscall_unix.go)에 따른다.
+
 ## 호스트 트리
 
 Language host library:
@@ -334,6 +338,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H46 | 없음 | 없음 | `src/frames.go`, `src/frames_test.go` | 이 adapter는 mygo 창의 frame 보고를 host의 수로 넘긴다(행 H40). 다른 framework의 창은 host에 frame을 보고하지 않는다 |
 | H49 | 없음 | 없음 | `tests/drag_test.go` | 이 test 가 세는 step 은 row P10 의 기록이고, 그 기록은 mygo framework adapter 만 낸다 |
 | H52 | 없음 | 없음 | `tests/launch_self_activation_test.go` | mygo framework adapter 의 `tests/launch_activation_test.go` 는 창을 띄우고 display 가 필요하다. 이 test 는 창을 띄우지 않으므로 host contract run 이 display 없이 mygo host 의 이 case 를 지키고 focus 를 가져가지 않는다 |
+| H61 | 없음 | 없음 | `src/platform/darwin/nativecallback/`, `tests/platform/darwin/nativecallback/` | mygo adapter는 공유 native header에서 cgo 없는 typed callback binding을 생성하고 cgo를 끈 ABI test로 확인한다. Wails는 cgo 등록을, Tauri는 Rust 함수 주소를 사용한다 |
 | B1 | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | none | native modal web view와 surface 위 shape의 call이다. mygo host의 window는 modal과 shape를 native UI로 그리므로 `packages/workbench-mygo`의 `hostCalls`에는 이 call이 없다. |
 | B2 | none | none | `setDialogBackground` | workbench가 직접 그리는 dialog를 host에 알리는 call이다. Wails와 Tauri host에서는 mode `dialog`의 modal web view가 document를 blur하고, mygo host의 window에는 그런 web view가 없다(B 행 B1). |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |

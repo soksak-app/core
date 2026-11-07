@@ -9,6 +9,11 @@ check-docs:
 	@pnpm exec sok-check docs
 
 .PHONY: check-host-callbacks create-host-callbacks
+.PHONY: test-host-callbacks
+test-host-callbacks: check-host-callbacks
+	@$(MAKE) -C native/darwin build-host-callback-abi
+	@CGO_ENABLED=0 SOKSAK_NATIVE_CALLBACK_ABI_LIBRARY='$(abspath native/darwin/build/libhost_callback_abi.dylib)' $(MAKE) repeat-go PACKAGE=./packages/host/mygo/tests/platform/darwin/nativecallback COUNT=1 TAGS=diagnostics
+
 check-host-callbacks:
 	@node scripts/check-host-callbacks.mjs
 
