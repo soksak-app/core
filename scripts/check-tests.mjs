@@ -1646,6 +1646,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F674",
+    implementation: [
+      { file: "native/darwin/src/stall_watch.m", symbol: "void sp_stall_counts(" },
+      { file: "packages/host/go/tests/platform/darwin/stack_sampler.go", symbol: "func CheckStallWatch(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", id: "TestTheMainThreadRunsNoCodeOutsideItsOwnStack" },
+      { file: "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", id: "TestAHeartbeatSentIntoAWaitFailsTheStallCheck" },
+      { file: "packages/host/mygo/tests/platform/darwin/main_thread_stack_test.go", id: "TestTheMainThreadRunsNoCodeOutsideItsOwnStack" },
+      { file: "packages/host/mygo/tests/platform/darwin/main_thread_stack_test.go", id: "TestAHeartbeatSentIntoAWaitFailsTheStallCheck" },
+    ],
+    expected: "Both Go hosts reject a heartbeat sent into a waiting run loop and accept waits woken by another source.",
+    levels: ["unit"],
+  },
+  {
     id: "F532",
     implementation: [
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "crate::event_record::quit_with_cause(\"update\", || host.0.quit());" },
