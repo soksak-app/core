@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F690: Give the native process-footprint query one directly tested ledger conversion path. Preserve Go-facing errors and units; owning native cases verify every ledger, overflow-safe pair sums, untouched outputs on negative ledgers and real Mach query metadata.
+
 - F687-2: Move sampler, native run-loop recorder, direct block runner and IOSurface supply into one test-only native API. Generate complete static/dynamic bindings and select standalone providers at compile time. Inject the actual production stall functions, preserve sampling and ownership assertions, reject incomplete records and invalid artifact paths, and isolate lifecycle unit cases per process. Actual mygo stack, fault and leased-image cases pass with CGO_ENABLED=0.
 
 - F688: Match the save-close probe manifest to the declared workspace release candidate. The existing version assertion now passes without excluding fixture manifests or changing its criterion.

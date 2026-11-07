@@ -54,11 +54,19 @@ int hostProcessFootprint(int pid, uint64_t *values, int *step, uint32_t *count,
         (int64_t)info.ledger_tag_neural_footprint,
         (int64_t)info.ledger_tag_neural_footprint_compressed,
     };
+    hostProcessFootprintValues(ledgers, values, negativeLedger, negativeValue);
+    return KERN_SUCCESS;
+}
+
+bool hostProcessFootprintValues(const int64_t *ledgers, uint64_t *values,
+    int *negativeLedger, int64_t *negativeValue) {
+    *negativeLedger = -1;
+    *negativeValue = 0;
     for (int index = 0; index < 13; index++) {
         if (ledgers[index] < 0) {
             *negativeLedger = index;
             *negativeValue = ledgers[index];
-            return KERN_SUCCESS;
+            return false;
         }
     }
     values[0] = (uint64_t)ledgers[0] / 1024;
@@ -68,5 +76,5 @@ int hostProcessFootprint(int pid, uint64_t *values, int *step, uint32_t *count,
         int first = 3 + (index - 3) * 2;
         values[index] = ((uint64_t)ledgers[first] + (uint64_t)ledgers[first + 1]) / 1024;
     }
-    return KERN_SUCCESS;
+    return true;
 }
