@@ -1,6 +1,6 @@
 {
   "name": "@sok-check/probe-close",
-  "version": "0.0.39",
+  "version": "0.0.40",
   "private": true,
   "type": "module",
   "description": "Window check fixture for a save reply that retains modified tab state.",

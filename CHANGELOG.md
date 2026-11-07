@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F688: Match the save-close probe manifest to the declared workspace release candidate. The existing version assertion now passes without excluding fixture manifests or changing its criterion.
+
 - F687-1: Initialize adapter test providers before native operations and isolate standalone cgo bootstrap exports from the shared sampler. Individual menu, startup-error and main-thread tests preserve their criteria; Wails no longer links two callback export sets. Mygo test support still requires the cgo-free sampler migration.
 
 - F686-8: Extend main/worker audits to the canonical native wrappers and generated Wails bindings. Real private headers and normalized Clang provenance preserve callback enforcement after the move; empty source selection fails. Rejection regressions and the actual consumer pass without changing thread rules.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F688: Save-close probe manifest를 선언된 workspace release candidate와 맞춘다. Fixture manifest를 제외하거나 기준을 바꾸지 않고 기존 version assertion이 통과한다.
+
 - F687-1: Native 연산 전에 adapter test provider를 초기화하고 독립 cgo bootstrap export를 공유 sampler와 분리한다. 개별 menu·시작 오류·main-thread test의 기준을 유지하며 Wails에서 callback export 두 벌을 link하지 않는다. Mygo test 지원은 아직 cgo 없는 sampler 이동이 필요하다.
 
 - F686-8: Main·worker 감사를 canonical native wrapper와 생성 Wails binding에 연결한다. 실제 private header와 정규화한 Clang 위치가 이동 후 callback 제약을 유지하며 source 선택이 비면 실패한다. 거부 회귀 test와 실제 consumer는 thread 규칙 변경 없이 통과한다.
