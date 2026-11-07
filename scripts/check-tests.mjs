@@ -1743,6 +1743,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F633",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_webview_render_occluded(" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func captureStill(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn capture_still(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_render_occluded_test.m", id: "the modal web view does not detect the occlusion of its window" },
+      { file: "e2e/capture-still.test.mjs", id: "${app.name}: a still with the settings modal open holds the modal" },
+      { file: "e2e/capture-still.test.mjs", id: "${app.name}: a still of a covered window with the settings modal open holds the modal" },
+    ],
+    expected: "Still captures include rendered child settings modals at their device-pixel geometry, both normally and while covered, after the declared WebKit modal document has loaded.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F699",
     implementation: [
       { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) setWorkbenchDialog(" },
