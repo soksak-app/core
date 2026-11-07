@@ -1,7 +1,30 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 import { processExecutable, releasePlatform } from '../platform/platform.js';
+
+test('application update registry fixtures select the declared release platform without architecture fallback', { timeout: 10000 }, () => {
+  for (const fixture of ['operation-chains.test.mjs', 'app-update.test.mjs']) {
+    const source = readFileSync(new URL(`../../e2e/${fixture}`, import.meta.url), 'utf8');
+    const declaration = source.match(/const key = ([^;]+);/);
+    assert.ok(declaration, `${fixture}: missing registry release key`);
+    const key = (platform, arch, name) => runInNewContext(declaration[1], {
+      process: { platform, arch }, app: { name },
+      releasePlatform: () => releasePlatform({ platform, arch }),
+    });
+    for (const [platform, os] of [['darwin', 'darwin'], ['linux', 'linux'], ['win32', 'windows']]) {
+      for (const arch of ['arm64', 'x64']) {
+        for (const host of ['wailsv3', 'tauriv2', 'mygo']) {
+          assert.equal(key(platform, arch, host), `${os}-${arch}-${host}`, `${fixture}: ${platform}-${arch}-${host}`);
+        }
+      }
+    }
+    assert.throws(() => key('unknown', 'arm64', 'mygo'), /unavailable/, fixture);
+    assert.throws(() => key('darwin', 'unknown', 'mygo'), /unavailable/, fixture);
+  }
+});
 
 test('release platform keys match declared operating systems and architectures', { timeout: 10000 }, () => {
   for (const [platform, os] of [['darwin', 'darwin'], ['linux', 'linux'], ['win32', 'windows']]) {

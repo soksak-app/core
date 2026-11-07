@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F696-2: 기존 OS·아키텍처 선언으로 업데이트 fixture의 릴리스 키를 선택한다. 알 수 없는 아키텍처를 x64로 간주하지 않고 거부한다.
+
 - F696-1: 공통 창 검사 준비에서 OCR 빌드와 예열 강제를 제거한다. 모든 플랫폼에서 명시한 실행 파일을 유지하고 미지원 기본 탐색은 요청한 연산에서만 거부한다.
 
 - F694: cgo 없는 mygo 앱과 포함된 CLI 빌드에서 선언된 macOS 최소 버전을 Go 내부 linker에 직접 전달한다. Debug·release tag, release stripping과 bundle 경로를 유지하고 Go의 기본 SDK와 Wails의 별도 cgo linker 정책을 유지한다. 소유 검사는 배포 환경 변수와 함께 내부 linker flag도 요구한다.

@@ -13,12 +13,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
+import { releasePlatform } from "../scripts/platform/platform.js";
 
 const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const NEWER = "99.0.0";
 
 for (const app of Object.values(APPS)) {
-  const key = `darwin-${process.arch === "arm64" ? "arm64" : "x64"}-${app.name}`;
+  const key = `${releasePlatform()}-${app.name}`;
 
   /** Serves an index with the core release `url` for this application and makes the window read it. */
   async function serve(s, before, url, sha256, edit = () => {}) {
