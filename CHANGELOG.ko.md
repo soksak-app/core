@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F696-1: 공통 창 검사 준비에서 OCR 빌드와 예열 강제를 제거한다. 모든 플랫폼에서 명시한 실행 파일을 유지하고 미지원 기본 탐색은 요청한 연산에서만 거부한다.
+
 - F694: cgo 없는 mygo 앱과 포함된 CLI 빌드에서 선언된 macOS 최소 버전을 Go 내부 linker에 직접 전달한다. Debug·release tag, release stripping과 bundle 경로를 유지하고 Go의 기본 SDK와 Wails의 별도 cgo linker 정책을 유지한다. 소유 검사는 배포 환경 변수와 함께 내부 linker flag도 요구한다.
 
 - F693: 등록된 Go E2E case를 선언된 native test artifact와 함께 유지되는 cgo 없는 mygo runner에서 실행한다. 직접 cgo 실행과 0개 선택 loop를 제거한다. Inventory는 새 미지정 E2E 소유자를 거부하며 공유 Go·Wails의 일반 contract coverage는 유지한다. Leased-frame 소유 검사는 CGO_ENABLED=0에서 통과하고 activation을 포함한 전체 suite acceptance는 별도로 남는다.

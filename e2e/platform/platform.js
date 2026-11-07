@@ -1,9 +1,7 @@
-// Select the operating-system implementation used by E2E setup.
-const modules = {
-  darwin: "./darwin/darwin.js",
-};
+// Default artifact discovery is an operation of the selected platform, not an import requirement.
+import { debugBinaries as darwinDebugBinaries } from "./darwin/darwin.js";
 
-const selected = modules[process.platform];
-if (!selected) throw new Error(`E2E setup is not implemented on ${process.platform}`);
-
-export const { captureTextCommand, debugBinaries, warmCaptureText } = await import(selected);
+export function debugBinaries(target, { platform = process.platform } = {}) {
+  if (platform === "darwin") return darwinDebugBinaries(target);
+  throw new Error(`Default E2E executable discovery is not implemented on ${platform}; declare SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2 and SOKSAK_BINARY_MYGO`);
+}

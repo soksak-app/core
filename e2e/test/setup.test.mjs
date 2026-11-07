@@ -6,7 +6,8 @@ import { isAbsolute } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { CAPTURE_TEXT_LANGUAGES } from "../view-content.mjs";
-import { captureTextCommand, debugBinaries, targetDirectory, warmCaptureText } from "../setup.mjs";
+import { debugBinaries, targetDirectory } from "../setup.mjs";
+import { captureTextCommand, warmCaptureText } from "../platform/darwin/darwin.js";
 
 // The cargo that the functions run when a test gives it.
 const CARGO = "/toolchain/bin/cargo";
@@ -85,3 +86,41 @@ test("a warm-up that fails or exceeds its limit fails the setup with its cause",
     /^Error: capture text warm-up: spawnSync ENOENT$/);
   assert.throws(() => warmCaptureText(command, [], () => assert.fail("no language runs no warm-up")), /needs at least one language/);
 });
+
+
+test("common setup declares binaries without building or running OCR", { timeout: 10000 }, () => {
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import childProcess from "node:child_process";
+    import { syncBuiltinESMExports } from "node:module";
+    childProcess.spawnSync = (command, args) => {
+      if (args[0] !== "metadata") throw new Error("unexpected setup dependency: " + command + " " + args.join(" "));
+      return { status: 0, stdout: JSON.stringify({ target_directory: "/declared/target", workspace_root: "/declared/source" }) };
+    };
+    syncBuiltinESMExports();
+    const { globalSetup } = await import(${JSON.stringify(new URL("../setup.mjs", import.meta.url).href)});
+    await globalSetup();
+    process.stdout.write(JSON.stringify({ binary: process.env.SOKSAK_BINARY_MYGO, ocr: process.env.SOKSAK_CAPTURE_TEXT }));
+  `], { encoding: "utf8", timeout: 10000, env: Object.fromEntries(Object.entries(process.env)
+    .filter(([key]) => !key.startsWith("SOKSAK_BINARY_") && key !== "SOKSAK_CAPTURE_TEXT")) });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { binary: "/declared/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo" });
+});
+
+
+for (const platform of ["linux", "win32"]) {
+  test(`${platform}: declared binaries allow common setup without native platform preparation`, { timeout: 10000 }, () => {
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+      import childProcess from "node:child_process";
+      import { syncBuiltinESMExports } from "node:module";
+      Object.defineProperty(process, "platform", { value: ${JSON.stringify(platform)} });
+      childProcess.spawnSync = () => { throw new Error("declared binaries must need no discovery or native preparation"); };
+      syncBuiltinESMExports();
+      const { globalSetup } = await import(${JSON.stringify(new URL("../setup.mjs", import.meta.url).href)});
+      await globalSetup();
+      process.stdout.write(process.env.SOKSAK_BINARY_MYGO);
+    `], { encoding: "utf8", timeout: 10000, env: { ...process.env,
+      SOKSAK_BINARY_MYGO: "/declared/mygo", SOKSAK_BINARY_WAILSV3: "/declared/wails", SOKSAK_BINARY_TAURIV2: "/declared/tauri" } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "/declared/mygo");
+  });
+}

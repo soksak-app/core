@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F696-1: Remove mandatory OCR build and warm-up from common window-check preparation. Preserve explicitly declared executables on every platform and reject unsupported default discovery only when requested.
+
 - F694: Pass the declared macOS minimum directly to Go's internal linker for cgo-free mygo app and bundled CLI builds. Preserve debug/release tags, release stripping and bundle paths; keep Go's SDK default and the separate Wails cgo linker policy. Owner checks require the internal-linker flag alongside the deployment environment.
 
 - F693: Run the registered Go E2E cases through the maintained cgo-free mygo runner with declared native test artifacts. Remove direct cgo-enabled and zero-match loops. Inventory checks reject future unmapped E2E owners; shared Go and Wails ordinary contract commands retain their coverage. The leased-frame owner passes with CGO_ENABLED=0; activation-bearing full-suite acceptance remains separate.

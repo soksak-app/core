@@ -2,6 +2,9 @@
 
 [English](verification.md)
 
+
+공통 창 검사 준비는 OCR 모델을 빌드하거나 예열하지 않고 실행 파일 경로를 선언한다. 모든 실행 파일을 명시하면 기본 플랫폼 탐색과 독립적으로 동작한다. 남은 OCR 콘텐츠 소비자는 F696에서 교체하며, 그 소비자의 현재 요구사항을 무관한 기능·성능 검사에 적용하지 않는다. 공개 인터페이스의 의미적 콘텐츠와 실제 캡처 출력은 별도 단언으로 유지한다.
+
 ## 범위와 증거
 
 View display acceptance는 설치되고 활성화된 view plugin을 열거하고 실제로 연 tab을 식별한다. 각 plugin은 선언된 readiness와 예상 capture pixel을 검사하는 명시적 content case를 요구한다. Case가 없으면 plugin과 tab 식별자를 밝히며 실패한다. Colour variation만으로 plugin content를 입증할 수 없다. Missing case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.

@@ -53,8 +53,6 @@ export function e2ePlan({ root, configRoot, script, native, whenIdle, candidate,
   const appBinary = (app) => join(appBundle(app), 'Contents', 'MacOS', `sok-${app}`);
   const registry = candidate ? candidate.registry.path : join(root, 'target', 'registry', 'index.json');
   return [
-    // The model of each recognition language is compiled here, under the limit of the warm-up, before any application starts.
-    { name: 'capture text warm-up', phase: 'prepare', kind: 'run', argv: ['node', 'e2e/setup.mjs'], env },
     { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'create-test-certificates'], env },
     ...(candidate ? APPS.flatMap((app) => {
       const sok = join(appBundle(app), 'Contents', 'MacOS', 'sok');
