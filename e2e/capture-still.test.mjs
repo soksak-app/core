@@ -4,7 +4,7 @@ import test from "node:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { distance } from "@soksak/window-check/png.mjs";
 import { readStillCapture } from "./still-capture.mjs";
@@ -83,8 +83,8 @@ for (const app of Object.values(APPS))
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await s.until("core.modal", (modal) => modal?.id === "settings", "the settings modal did not open");
-    if ((await s.get("core.modal")).document !== null) {
-      await s.until("core.modal", (modal) => modal.document.loaded === true, "the settings document did not load");
+    if (MAIN_PAGE_APPS.some((candidate) => candidate.name === app.name)) {
+      await s.until("core.modal", (modal) => modal?.document?.loaded === true, "the settings document did not load");
     }
     const withModal = await still();
     assert.equal(withModal.width, without.width);
@@ -138,8 +138,8 @@ for (const app of Object.values(APPS))
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await s.until("core.modal", (modal) => modal?.id === "settings", "the settings modal did not open");
-    if ((await s.get("core.modal")).document !== null) {
-      await s.until("core.modal", (modal) => modal.document.loaded === true, "the settings document did not load");
+    if (MAIN_PAGE_APPS.some((candidate) => candidate.name === app.name)) {
+      await s.until("core.modal", (modal) => modal?.document?.loaded === true, "the settings document did not load");
     }
     const withModal = await still();
     assert.equal(withModal.width, without.width);
