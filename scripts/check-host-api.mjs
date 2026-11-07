@@ -1,6 +1,6 @@
 // Native headers own the outbound ABI. Clang resolves declarations and constant expressions.
 import {execFileSync} from 'node:child_process';
-import {existsSync, readFileSync, writeFileSync, mkdirSync} from 'node:fs';
+import {existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync} from 'node:fs';
 import {resolve, dirname, basename} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {parseArgs} from 'node:util';
@@ -141,13 +141,27 @@ export function createHostApi(header,manifest){
  return {shared:shared(core,false),sharedDiagnostics:shared(diagnostic,true),wails:wails(core,false),wailsDiagnostics:wails(diagnostic,true),mygo:mygo(core,false),mygoDiagnostics:mygo(diagnostic,true)};
 }
 
+// The test bootstrap owns its binding; reusable sampler support must not import it.
+export function hostApiOutputPaths(){
+ return [['shared','packages/host/go/src/platform/darwin/abi/native_api.go'],['sharedDiagnostics','packages/host/go/src/platform/darwin/abi/native_api_diagnostics.go'],['wails','packages/host/wailsv3/src/platform/darwin/bindings/native_api.go'],['wailsDiagnostics','packages/host/wailsv3/src/platform/darwin/bindings/native_api_diagnostics.go'],['wails','packages/host/go/tests/platform/darwin/standalone/bindings/native_api.go'],['wailsDiagnostics','packages/host/go/tests/platform/darwin/standalone/bindings/native_api_diagnostics.go'],['mygo','packages/host/mygo/src/platform/darwin/bindings/native_api.go'],['mygoDiagnostics','packages/host/mygo/src/platform/darwin/bindings/native_api_diagnostics.go']];
+}
+
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{
   const {values}=parseArgs({options:{write:{type:'boolean'},header:{type:'string'},manifest:{type:'string'}}});
   const header=resolve(values.header??`${ROOT}native/darwin/src/host_api.h`);
   const manifest=JSON.parse(readFileSync(resolve(values.manifest??`${ROOT}native/darwin/src/host_api.json`),'utf8'));
   const generated=createHostApi(header,manifest);
-  const files=[['shared','packages/host/go/src/platform/darwin/abi/native_api.go'],['sharedDiagnostics','packages/host/go/src/platform/darwin/abi/native_api_diagnostics.go'],['wails','packages/host/wailsv3/src/platform/darwin/bindings/native_api.go'],['wailsDiagnostics','packages/host/wailsv3/src/platform/darwin/bindings/native_api_diagnostics.go'],['wails','packages/host/go/tests/platform/darwin/bindings/native_api.go'],['wailsDiagnostics','packages/host/go/tests/platform/darwin/bindings/native_api_diagnostics.go'],['mygo','packages/host/mygo/src/platform/darwin/bindings/native_api.go'],['mygoDiagnostics','packages/host/mygo/src/platform/darwin/bindings/native_api_diagnostics.go']];
+  const files=hostApiOutputPaths();
+  // Standalone bootstrap bindings must never remain beside the reusable sampler.
+  for (const name of ["native_api.go", "native_api_diagnostics.go"]) {
+   const legacy=resolve(ROOT,"packages/host/go/tests/platform/darwin/bindings",name);
+   if(!existsSync(legacy))continue;
+   if(!readFileSync(legacy,'utf8').startsWith(MARKER))throw new Error(`${legacy}: refusing to remove a file not owned by the native API generator`);
+   if(!values.write)throw new Error(`${legacy}: obsolete standalone bootstrap binding; run make create-host-api`);
+   unlinkSync(legacy);
+  }
+
   for(const [key,path]of files){const file=resolve(ROOT,path),text=generated[key];if(!existsSync(file)||readFileSync(file,'utf8')!==text){if(!values.write)throw new Error(`${file}: native API binding is stale; run make create-host-api`);mkdirSync(dirname(file),{recursive:true});writeFileSync(file,text);}}
   process.stdout.write(`Native host API bindings ${values.write?'written':'checked'}\n`);
  }catch(error){process.stderr.write(`${error.message}${error.stderr?'\n'+error.stderr:''}\n`);process.exitCode=1;}

@@ -29,12 +29,14 @@ func init() { runtime.LockOSThread() }
 // does, without a window and with the prohibited activation policy, so it takes no activation and shows no Dock icon. The tests
 // start when the application finished launching, and the process ends with their status.
 func TestMain(m *testing.M) {
-	if err := sampler.CaptureMainThread(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	system, err := platform.Current()
+	if err == nil {
+		err = system.RequireMainThread()
+	}
+	if err == nil {
+		err = sampler.CaptureMainThread()
 	}
 	// The host blocks the asynchronous signals on the main thread before the application runs.
-	system, err := platform.Current()
 	if err == nil {
 		err = system.BlockAsyncSignals()
 	}

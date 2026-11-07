@@ -15,7 +15,7 @@ test("default callback outputs include the independent shared-host fixture and e
     puregoOutput: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go",
     typesOutput: "packages/host/go/src/platform/darwin/abi/callback_types.go",
     handlersOutput: "packages/host/go/src/platform/darwin/callback_handlers.go",
-    fixtureOutput: "packages/host/go/tests/platform/darwin/bindings/callback_bindings.go",
+    fixtureOutput: "packages/host/go/tests/platform/darwin/standalone/bindings/callback_bindings.go",
   })) {
     assert.equal(defaults[key], new URL(`../../${path}`, import.meta.url).pathname);
   }
@@ -157,8 +157,8 @@ test("cgo-free generated artifacts are checked and obsolete diagnostics are remo
     "packages/host/wailsv3/src/platform/darwin/bindings/callback_bindings_diagnostics.go",
     "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go",
     "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings_diagnostics.go",
-    "packages/host/go/tests/platform/darwin/bindings/callback_bindings.go",
-    "packages/host/go/tests/platform/darwin/bindings/callback_bindings_diagnostics.go",
+    "packages/host/go/tests/platform/darwin/standalone/bindings/callback_bindings.go",
+    "packages/host/go/tests/platform/darwin/standalone/bindings/callback_bindings_diagnostics.go",
   ].map((path) => new URL(`../../${path}`, import.meta.url));
   const productionBefore = productionFiles.map((path) => readFileSync(path, "utf8"));
   try {

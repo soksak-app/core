@@ -1,6 +1,6 @@
 //go:build darwin
 
-package darwin
+package standalone
 
 /*
 #include <stdint.h>

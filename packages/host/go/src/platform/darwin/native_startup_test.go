@@ -14,7 +14,7 @@ import (
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin/abi"
-	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
+	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone"
 )
 
 const earlyShowChild = "SOKSAK_DARWIN_EARLY_SHOW_CHILD"

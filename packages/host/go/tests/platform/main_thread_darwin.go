@@ -6,7 +6,7 @@ package platform
 import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin"
-	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
+	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone"
 )
 
 // InstallMainThread installs the test main-thread function for both functions of the darwin layer.

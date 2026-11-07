@@ -24,3 +24,12 @@ test("native host API bindings follow the declared C functions and reject unsupp
   assert.throws(()=>createHostApi(header,{core:["broken"],diagnostics:[],records:[],constants:[]}),/unsupported.*long double/);
  }finally{rmSync(folder,{recursive:true});}
 });
+
+
+test("native API test bindings belong to the standalone bootstrap package", async () => {
+ const {hostApiOutputPaths}=await import("../check-host-api.mjs");
+ const paths=hostApiOutputPaths();
+ assert.ok(paths.some(([key,path])=>key==="wails"&&path==="packages/host/go/tests/platform/darwin/standalone/bindings/native_api.go"));
+ assert.ok(paths.some(([key,path])=>key==="wailsDiagnostics"&&path==="packages/host/go/tests/platform/darwin/standalone/bindings/native_api_diagnostics.go"));
+ assert.equal(paths.some(([,path])=>path.startsWith("packages/host/go/tests/platform/darwin/bindings/")),false);
+});

@@ -7,6 +7,7 @@ package adapter_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,6 +50,14 @@ var helpers = map[string]func(){quitHelper: runQuitHelper, applicationHelper: ru
 // TestMain runs the application of the framework on the main thread. The tests start when the application finished launching, and
 // the process ends with their status.
 func TestMain(m *testing.M) {
+	system, err := platform.Current()
+	if err == nil {
+		err = system.RequireMainThread()
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	for name, helper := range helpers {
 		if os.Getenv(name) != "" {
 			helper()
@@ -170,6 +179,45 @@ func TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint(t *testing.T) {
 	}
 	if framework.MainPage() {
 		t.Fatal("the mygo framework reports a main page")
+	}
+}
+
+// The test application owns the same explicit provider startup boundary as the
+// production host. A selected pure framework test must not bypass a broken
+// native installation merely because its body does not invoke native code.
+func TestTheTestApplicationReportsNativeStartupFailureBeforeRunningSelectedTests(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	library := filepath.Join(t.TempDir(), "missing-native-library.dylib")
+	if !filepath.IsAbs(library) {
+		t.Fatalf("test library path is not absolute: %s", library)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, executable, "-test.run=^TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint$", "-test.v")
+	// A startup test must not accidentally enter a helper selected in its parent.
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if _, helper := helpers[name]; !helper && name != "SOKSAK_NATIVE_LIBRARY" {
+			command.Env = append(command.Env, entry)
+		}
+	}
+	command.Env = append(command.Env, "SOKSAK_NATIVE_LIBRARY="+library)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("native startup failure did not return before the deadline: %v\n%s", ctx.Err(), output)
+	}
+	if err == nil {
+		t.Fatalf("selected framework test bypassed the invalid native provider:\n%s", output)
+	}
+	text := string(output)
+	if !strings.Contains(text, "native library "+library) {
+		t.Fatalf("native startup failure did not name its library: %v\n%s", err, output)
+	}
+	if strings.Contains(text, "panic:") || strings.Contains(text, "PASS: TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint") {
+		t.Fatalf("native startup failure panicked or ran the selected test:\n%s", output)
 	}
 }
 

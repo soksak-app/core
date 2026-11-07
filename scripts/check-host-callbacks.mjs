@@ -222,7 +222,7 @@ export function hostCallbackOutputPaths(values = {}) {
     puregoOutput: values["purego-output"] ?? defaultOutput("packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go"),
     typesOutput: values["types-output"] ?? defaultOutput("packages/host/go/src/platform/darwin/abi/callback_types.go"),
     handlersOutput: values["handlers-output"] ?? defaultOutput("packages/host/go/src/platform/darwin/callback_handlers.go"),
-    fixtureOutput: defaultOutput("packages/host/go/tests/platform/darwin/bindings/callback_bindings.go"),
+    fixtureOutput: defaultOutput("packages/host/go/tests/platform/darwin/standalone/bindings/callback_bindings.go"),
   };
 }
 
@@ -235,11 +235,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     // The common Darwin package owns only plain Go types and handlers now.
     // Remove its former generated cgo registration through the same checked workflow.
     if (!values.output) {
-      for (const name of ["callback_bindings.go", "callback_bindings_diagnostics.go"]) {
-        const legacy = `${ROOT}packages/host/go/src/platform/darwin/${name}`;
+      for (const path of [
+        "packages/host/go/src/platform/darwin/callback_bindings.go",
+        "packages/host/go/src/platform/darwin/callback_bindings_diagnostics.go",
+        "packages/host/go/tests/platform/darwin/bindings/callback_bindings.go",
+        "packages/host/go/tests/platform/darwin/bindings/callback_bindings_diagnostics.go",
+      ]) {
+        const legacy = `${ROOT}${path}`;
         if (!existsSync(legacy)) continue;
         if (!readFileSync(legacy, "utf8").startsWith(GENERATED)) throw new Error(`${legacy}: refusing to remove a file not owned by the callback generator`);
-        if (!values.write) throw new Error(`${legacy}: obsolete common cgo callback binding; run make create-host-callbacks`);
+        if (!values.write) throw new Error(`${legacy}: obsolete cgo callback binding; run make create-host-callbacks`);
         unlinkSync(legacy);
       }
     }

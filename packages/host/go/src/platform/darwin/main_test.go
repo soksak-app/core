@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
+	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone"
 )
 
 // TestMain installs the test main-thread function for both functions, because the tests of this package run the darwin layer

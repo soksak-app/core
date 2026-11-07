@@ -7,7 +7,7 @@ import (
 	"testing/fstest"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
-	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
+	fixture "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone"
 )
 
 // startFramework is a framework adapter that installs its main-thread functions as each case states and is never reached: a start

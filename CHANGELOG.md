@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F687-1: Initialize adapter test providers before native operations and isolate standalone cgo bootstrap exports from the shared sampler. Individual menu, startup-error and main-thread tests preserve their criteria; Wails no longer links two callback export sets. Mygo test support still requires the cgo-free sampler migration.
+
 - F686-8: Extend main/worker audits to the canonical native wrappers and generated Wails bindings. Real private headers and normalized Clang provenance preserve callback enforcement after the move; empty source selection fails. Rejection regressions and the actual consumer pass without changing thread rules.
 
 - F686-8: Move shared Darwin C/Objective-C into the native library and generate typed outbound bindings and callback factories for both framework adapters. The actual cgo-free application build is the integration criterion; separate divider prototypes no longer delay that build. Native static and dynamic builds and callback ABI checks pass; the real optimized diagnostic release starts from its bundle with the current workspace starter plugins, while production G8-S5 acceptance remains unverified.
