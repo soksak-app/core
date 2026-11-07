@@ -29,6 +29,8 @@ ABI 후보는 새 foreign-call runtime을 만들지 않고 mygo adapter가 이�
 
 cgo 없는 worker consumer는 별도 native test library를 읽고 window나 활성화 없이 공개 framework 수명주기를 실행한다. 시작 시 native main thread에서 `sp_block_async_signals`를 호출한다. 공유 native 연산은 fault mask를 보존하고 다른 thread를 거부하며 기존 cgo preamble 구현을 동작 변경 없이 대체한다. test는 callback thread를 공개 framework step의 정확한 worker thread와 비교하고, 중첩 작업과 넘겨받은 presentation completion 실행 시 native main-thread 식별자를 관찰한다. 빌린 native stack 문자열은 동기 반환까지 유효 범위 안에 둔다. 실패는 framework 종료 전에 비정상 종료하며 성공 종료는 event loop 반환 후에만 찍는 marker를 요구한다. framework가 종료 유예 이후 상태 0으로 강제 종료할 수 있기 때문이다. 부모 subprocess는 60초 deadline을 둔다. worker 전달을 직접 호출로 바꾼 변이는 native main thread에서 Go에 진입하기 전에 실패한다. Objective-C block fixture는 native 상태 pointer를 통해 stack buffer에 접근하고 block 정리를 위해 Objective-C runtime을 명시적으로 링크한다.
 
+화면을 표시하는 cgo 없는 divider prototype은 공개 `ui.Split`, `Content.RecordFrames`, `mygo.RecordSteps`, `Window.NativeHandle`과 native pointer-input 전달을 사용하고 입력 완료를 worker를 통해 생성된 callback table로 보낼 수 있다. divider 이동을 입증하고 재사용되는 frame record를 즉시 복사하며 누락 record와 입력 실패를 거부해야 한다. frame·step 표본 수, thread 식별, display 조건과 build 출처를 기록한다. frame 공식은 `Request - Start - DrawableWait`이고 step 공식은 전달된 native 호출 시간을 포함한 `Return - Entry`다. timestamp 연결에는 `CLOCK_UPTIME_RAW`를 사용한다. prototype 수치를 8.33 ms와 비교하는 것으로 G8-S5를 입증하지 못한다. 일반 split에는 production terminal·webview surface 배치와 callback 구성이 빠져 있기 때문이다. 해당 최종 지표는 통합 application 또는 동일한 production S5 컴포넌트·실행 경로가 필요하다. 측정 전에 native-to-Go ABI도 정수 handle context가 C 범용 void-pointer 표현에 기대지 않고 Go stack 확장과 collection 중 정수로 유지되는지 확인해야 한다.
+
 ## 호스트 트리
 
 Language host library:
