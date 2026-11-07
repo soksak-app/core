@@ -267,6 +267,20 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F696-4-2-1",
+    implementation: [{ file: "e2e/terminal-reference-acquisition.mjs", symbol: "export function acquireTerminalReference(" }],
+    tests: [{ file: "e2e/test/terminal-reference-acquisition.test.mjs", id: "actual screen.observe acquisition yields a verified complete reference with global geometry" }],
+    expected: "Core integration consumes the committed terminal renderer-owned atomic observation through actual captured-reference evidence. Plugin and sidecar lifecycle owners remain recorded in their owning repositories. This link proves the observation integration, not the remaining OCR consumer migration or final G8 acceptance.",
+    levels: ["unit"],
+  },
+  {
+    id: "F696-4-2-1-1",
+    implementation: [{ file: "e2e/terminal-reference-acquisition.mjs", symbol: "export function acquireTerminalReference(" }],
+    tests: [{ file: "e2e/test/terminal-reference-acquisition.test.mjs", id: "actual term alias screen.observe acquisition yields a verified complete reference" }],
+    expected: "The actual term recording verifies core integration of the independently owned Alacritty observation backend, without inheriting terminal success. Backend lifecycle and lease/cache evidence belongs to its owning repository; this integration owner does not close OCR consumers or final performance acceptance.",
+    levels: ["unit"],
+  },
+  {
     id: "F698",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef copyTaggedPresentation(" },

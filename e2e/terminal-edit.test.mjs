@@ -13,7 +13,7 @@ import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard
 for (const app of Object.values(APPS)) {
   test(`${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app, { clipboard: true });
-    await fresh(s, { log: { input: "info" }, reads: ["native.record.info"] });
+    await fresh(s, { log: { input: "info", lifecycle: "info" }, reads: ["native.record.info"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     await s.run("terminal.input", { bytes: "clear; printf 'EDITMENU\\n'\r" }, surface);
