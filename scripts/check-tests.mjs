@@ -1743,6 +1743,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F699",
+    implementation: [
+      { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) setWorkbenchDialog(" },
+      { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) setBackground()" },
+      { file: "packages/host/go/src/start.go", symbol: "func (h *Host) pageStarting(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/modals_workbench_test.go", id: "TestAWorkbenchStartingEndsItsPredecessorsDialogBackground" },
+      { file: "packages/host/go/src/modals_workbench_test.go", id: "TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground" },
+      { file: "e2e/modal.test.mjs", id: "mygo: reloading under settings leaves successor terminal images and documents unblurred" },
+    ],
+    expected: "Reload retires the previous workbench dialog background claim while preserving an independent current native dialog; successor images and documents are unblurred when no effective dialog remains.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F647",
     implementation: [
       { file: "packages/workbench-mygo/src/host_calls.go", symbol: "func (c *Calls) End() {" },
