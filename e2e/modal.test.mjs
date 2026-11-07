@@ -8,6 +8,56 @@ import test from "node:test";
 import { APPS, MAIN_PAGE_APPS, open, recordingFolders } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { ensureTerminals } from "./terminal-screen.mjs";
+import { readStillCapture } from "./still-capture.mjs";
+
+// The native workbench owns its dialog claim only until that workbench ends.
+// Reload directly under settings: preparing another fixture here would erase
+// the lifecycle boundary that this regression must exercise.
+if (APPS.mygo) test("mygo: reloading under settings leaves successor terminal images and documents unblurred", { timeout: 90000 }, async (t) => {
+  const s = await open(t, APPS.mygo);
+  await fresh(s);
+  s.cleanup(async () => {
+    // Capture a failed native state before cleanup can close its dialog.
+    if (!t.passed) await readStillCapture(s, t);
+    await s.run("core.settings.close");
+  });
+  const [terminal] = await ensureTerminals(s, 1);
+  const before = await s.until("host.window", (host) => host.regions.some((region) =>
+    region.surface === terminal.surface && region.name === "view" && region.visible && region.presented && region.blurred === false),
+  "the initial terminal image did not present without blur");
+  const original = before.regions.find((region) => region.surface === terminal.surface && region.name === "view");
+  t.diagnostic(`before reload terminal: ${JSON.stringify(original)}`);
+  await s.presented();
+  const baseline = await readStillCapture(s, t);
+  assert.ok(baseline.image.width > 0 && baseline.image.height > 0, "initial still is empty");
+  const predecessor = (await s.get("core.window.workbench")).start;
+  await s.run("core.settings.open");
+  await s.until("core.window.workbench", (workbench) => workbench.background === true,
+    "settings did not acquire the workbench dialog background");
+  await s.until("host.window", (host) => host.regions.some((region) =>
+    region.surface === terminal.surface && region.name === "view" && region.visible && region.blurred === true),
+  "settings did not blur the actual terminal image");
+  await s.presented();
+  await readStillCapture(s, t);
+  await s.run("host.window.reload");
+  await s.until("core.window.workbench", (workbench) => workbench.start !== predecessor &&
+    workbench.readyState === "complete" && workbench.background === false,
+  "the successor workbench did not start without a dialog");
+  await s.until("core.modal", (modal) => modal === null, "the successor retained a modal");
+  await s.until("core.picker", (picker) => picker.open === false, "the successor retained a picker");
+  const [successor] = await ensureTerminals(s, 1);
+  const after = await s.until("host.window", (host) => {
+    const image = host.regions.find((region) => region.surface === successor.surface && region.name === "view");
+    return image?.visible && image.presented && image.presented.generation !== original.presented.generation &&
+      host.regions.filter((region) => region.visible).every((region) => region.blurred === false) &&
+      host.documents.every((document) => document.blurred === false);
+  }, "the successor's newly attached terminal image or documents inherited the ended dialog blur");
+  t.diagnostic(`after reload native backgrounds: ${JSON.stringify({ regions: after.regions, documents: after.documents, modal: after.modal })}`);
+  await s.presented();
+  const restored = await readStillCapture(s, t);
+  assert.ok(restored.image.width > 0 && restored.image.height > 0, "successor still is empty");
+});
 
 /** The address of a loopback server that serves one empty document. The check closes it when it ends. */
 async function serveDocument(s) {
