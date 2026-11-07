@@ -1743,6 +1743,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F647",
+    implementation: [
+      { file: "packages/workbench-mygo/src/host_calls.go", symbol: "func (c *Calls) End() {" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) ensureCurrentPresentationJoins(" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing" },
+      { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestEndedCallsAnswerNothingAndCallNothing" },
+      { file: "packages/host/go/src/view_join_test.go", id: "TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent" },
+      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+    ],
+    expected: "Reload ends the previous mygo workbench calls: ended calls invoke and answer nothing, cancelled presentation tickets report no longer current, and actual terminal-edit reload completes before selection and menu copy/paste.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F502-19",
     implementation: [
       { file: "packages/workbench-mygo/src/text_size.go", symbol: "func NextTextSize(steps []float64, value float64, direction int) (float64, error) {" },
