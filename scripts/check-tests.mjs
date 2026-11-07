@@ -267,6 +267,50 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F687-3",
+    implementation: [
+      { file: "scripts/go-repeat-inputs.mjs", symbol: "export function resolveGoNativeInputs(" },
+      { file: "scripts/test-hosts.mjs", symbol: "const cgoEnabled = host === 'mygo' ? '0' : '1';" },
+      { file: "scripts/test-discovery.mjs", symbol: "const { env: selectedEnv } = resolveGoNativeInputs({ patterns, tags, cwd, env });" },
+      { file: "scripts/go-tests.mjs", symbol: "export async function runGoTests(" },
+      { file: "native/darwin/Makefile", symbol: "dynamic_library=$(MYGO_LIBRARY)" },
+      { file: "native/darwin/Makefile", symbol: "dynamic_library=$(HOST_TEST_DYNAMIC)" },
+      { file: "Makefile", symbol: "test-mygo: build-native-mygo build-native-tests" },
+    ],
+    tests: [
+      { file: "scripts/test/go-repeat-inputs.test.mjs", id: "native discovery uses selected Go import IDs and leaves unrelated graphs free of pkg-config work" },
+      { file: "scripts/test/go-repeat-inputs.test.mjs", id: "explicit native artifact presence rejects invalid values without pkg-config fallback" },
+      { file: "scripts/test/go-repeat-inputs.test.mjs", id: "selected cgo graph hashes both pkg-config static artifacts and preserves caller flags" },
+      { file: "scripts/test/test-hosts.test.mjs", id: "Go host run profiles preserve shared coverage with CGO0 for every mygo run and separate generic from cgo link flags" },
+      { file: "scripts/test/test-discovery.test.mjs", id: "Go discovery preserves the selected CGO0 environment through compilation, binary listing and test execution" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "Go test runner preserves the selected native environment through graph, build, listing and execution without cgo-only flags in CGO0" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "Go test runner keeps generic linker flags and separately applies cgo linker flags only to a CGO1 build" },
+      { file: "scripts/test/native-pkgconfig.test.mjs", id: "native artifact variables follow relocation and preserve unchanged pkg-config files" },
+      { file: "scripts/test/workflows.test.mjs", id: "make test-mygo runs the contract run of the mygo host and the unit tests of the mygo application" },
+    ],
+    expected: "Maintained mygo test profiles retain shared coverage with CGO0 while Wails uses CGO1. Native inputs come from selected binding identities and declared pkg-config artifacts or validated explicit paths; unrelated graphs need no native discovery and invalid explicit inputs cannot fall back. Selected environments reach discovery, build, listing and execution; generic flags are preserved and cgo-only flags reach only CGO1. These owner links do not claim that the full host suites ran.",
+    levels: ["unit"],
+  },
+  {
+    id: "F687",
+    implementation: [
+      { file: "packages/host/go/src/platform/darwin/native.go", symbol: "func ensureNative() error {" },
+      { file: "native/darwin/tests/support/host_test_api.h", symbol: "sp_host_test_install_stall_functions" },
+      { file: "scripts/go-repeat-inputs.mjs", symbol: "export function resolveGoNativeInputs(" },
+      { file: "Makefile", symbol: "test-mygo: build-native-mygo build-native-tests" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/platform/darwin/native_startup_test.go", id: "TestShowWindowInitializesNativeProviderBeforeHostStartup" },
+      { file: "packages/host/go/tests/platform/darwin/stack_sampler_test.go", id: "TestNativeTestFacadeRequiresOneCompleteProviderAndRejectsIncompleteRecordings" },
+      { file: "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", id: "TestTheMainThreadRunsNoCodeOutsideItsOwnStack" },
+      { file: "packages/host/mygo/tests/platform/darwin/main_thread_stack_test.go", id: "TestTheMainThreadRunsNoCodeOutsideItsOwnStack" },
+      { file: "packages/host/mygo/tests/platform/darwin/main_thread_stack_test.go", id: "TestAHeartbeatSentIntoAWaitFailsTheStallCheck" },
+      { file: "scripts/test/test-hosts.test.mjs", id: "Go host run profiles preserve shared coverage with CGO0 for every mygo run and separate generic from cgo link flags" },
+    ],
+    expected: "The F687 children provide initialization before early native operations, canonical native test helpers with explicit production stall addresses, and maintained cgo-free mygo verification profiles without removing shared cases or changing stack/stall criteria. The named startup, facade, adapter and runner owners retain their separate verification scopes; this aggregate link does not establish a full-suite result.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F688",
     implementation: [
       { file: "e2e/fixtures/save-close/probe/package.json", symbol: '"name": "@sok-check/probe-close"' },
