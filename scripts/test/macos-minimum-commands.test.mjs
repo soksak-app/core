@@ -2,8 +2,9 @@
 // of the Makefile declares, and that the native library reads that declaration (docs/spec/hosts.md#nativedarwin). `make -n`
 // expands each target with every other target taken as up to date, so the check reads the commands that the target itself runs,
 // and a minimum given on the command line replaces the declared one, so a command that writes a version of its own is found.
-// A Go command needs MACOSX_DEPLOYMENT_TARGET and CGO_CFLAGS for its cgo compile and -extldflags for its external link; a Rust
-// command needs MACOSX_DEPLOYMENT_TARGET, which rustc reads for its link and the cc crate for its compile.
+// Go's selected CGO0 profile needs its public internal-linker -macos minimum;
+// a cgo profile needs CGO_CFLAGS and -extldflags. Mixed host runs need both.
+// Rust reads MACOSX_DEPLOYMENT_TARGET for its link and its cc crate compiles.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -52,10 +53,18 @@ function toolchains(line) {
   const languages = /scripts\/language-test-adapters\.mjs/.test(line);
   // A cross compile for Windows builds no cgo package, so it compiles and links nothing for macOS.
   const windows = /\bGOOS=windows\b/.test(line);
+  const hostRunner = /scripts\/test-hosts\.mjs/.test(line);
+  const mygo = hostRunner && /--host(?:=|\s+)mygo\b/.test(line);
+  const wails = hostRunner && /--host(?:=|\s+)wailsv3\b/.test(line);
+  const mixed = hostRunner && !/--host(?:=|\s+)(?:wailsv3|mygo|tauriv2)\b/.test(line);
+  const cgoFree = /\bCGO_ENABLED=0\b/.test(line) || mygo;
+  const linksGo = !windows && ((go !== null && go[1] !== "vet") || goRunner);
   return {
     go: !windows && (go !== null || goRunner || languages),
     // The Go case of the language test cases is a package without cgo, which the Go linker links itself.
-    goLink: !windows && ((go !== null && go[1] !== "vet") || goRunner),
+    goLink: linksGo,
+    goInternal: linksGo && (mixed || cgoFree && !wails),
+    goCgo: !windows && !languages && (go !== null || goRunner) && (mixed || wails || !cgoFree),
     rust: RUST_COMMAND.test(line) || rustRunner || languages,
   };
 }
@@ -66,10 +75,11 @@ function missing(line, version) {
   const absent = [];
   const deployment = `MACOSX_DEPLOYMENT_TARGET=${version} `;
   if ((uses.go || uses.rust) && !line.includes(deployment)) absent.push(deployment.trim());
-  if (uses.go && !new RegExp(`CGO_CFLAGS="[^"]*-mmacosx-version-min=${version.replace(".", "\\.")}[ "]`).test(line)) {
+  if (uses.goCgo && !new RegExp(`CGO_CFLAGS="[^"]*-mmacosx-version-min=${version.replace(".", "\\.")}[ "]`).test(line)) {
     absent.push(`CGO_CFLAGS with -mmacosx-version-min=${version}`);
   }
-  if (uses.goLink && !line.includes(`-extldflags=-mmacosx-version-min=${version}`)) absent.push(`-extldflags=-mmacosx-version-min=${version}`);
+  if (uses.goLink && uses.goCgo && !line.includes(`-extldflags=-mmacosx-version-min=${version}`)) absent.push(`-extldflags=-mmacosx-version-min=${version}`);
+  if (uses.goInternal && !new RegExp(`(?:^|[\\s'"=])-macos=${version.replace(".", "\\.")}(?=$|[\\s'"])`).test(line)) absent.push(`-macos=${version}`);
   return { uses, absent };
 }
 
@@ -90,6 +100,33 @@ test("every Go and Rust command of a make target compiles and links for the decl
     assert.ok(seen.has(entry), `the expansion found no command of ${entry}: ${[...seen].join(", ")}`);
   }
   assert.deepEqual(failures, [], `commands that do not apply MACOS_MINIMUM=${PROBE}:\n${failures.join("\n")}`);
+});
+
+test("CGO0 minimum verification requires the exact internal flag rather than cgo settings or an arbitrary generic flag", () => {
+  const command = `CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=${PROBE} go build -ldflags`;
+  assert.deepEqual(missing(`${command} "-macos=${PROBE}" ./src`, PROBE).absent, []);
+  for (const flags of ["-s -w", "-macos=13.0", `-extldflags=-mmacosx-version-min=${PROBE}`]) {
+    assert.ok(missing(`${command} "${flags}" ./src`, PROBE).absent.includes(`-macos=${PROBE}`), flags);
+  }
+  const mygo = `MACOSX_DEPLOYMENT_TARGET=${PROBE} node scripts/test-hosts.mjs --host mygo`;
+  assert.deepEqual(missing(`${mygo} --go-ldflags="-macos=${PROBE}"`, PROBE).absent, []);
+  assert.ok(missing(`${mygo} --go-ldflags="-macos=13.0"`, PROBE).absent.includes(`-macos=${PROBE}`));
+});
+
+test("mixed host minimum verification requires both internal and external linker profiles", () => {
+  const command = `MACOSX_DEPLOYMENT_TARGET=${PROBE} CGO_CFLAGS="-mmacosx-version-min=${PROBE}" node scripts/test-hosts.mjs`;
+  const internal = `--go-ldflags="-macos=${PROBE}"`;
+  const external = `--cgo-ldflags="-extldflags=-mmacosx-version-min=${PROBE}"`;
+  assert.deepEqual(missing(`${command} ${internal} ${external}`, PROBE).absent, []);
+  assert.ok(missing(`${command} ${external}`, PROBE).absent.includes(`-macos=${PROBE}`));
+  assert.ok(missing(`${command} ${internal}`, PROBE).absent.includes(`-extldflags=-mmacosx-version-min=${PROBE}`));
+});
+
+test("portable repeat-go forwards the explicitly selected internal macOS minimum", { timeout: 30000 }, () => {
+  const lines = commandsOf("repeat-go", makeTargets(), [`MACOS_MINIMUM=${PROBE}`, "GO_LDFLAGS=$(GO_INTERNAL_LINK)", "PACKAGE=./packages/host/mygo/tests", "COUNT=1"]);
+  const command = lines.find((line) => line.includes("node scripts/go-tests.mjs"));
+  assert.ok(command, "repeat-go declares no maintained Go runner command");
+  assert.match(command, /--ldflags=['"]-macos=99\.7['"]/);
 });
 
 test("the native library compiles, configures and declares in its pkg-config file the macOS minimum of the Makefile", { timeout: 60000 }, () => {

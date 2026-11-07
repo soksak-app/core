@@ -23,7 +23,14 @@ test("managed mygo verification prepares declared native fixtures and selects CG
   assert.ok(mygo.prerequisites.includes("build-native-mygo"));
   assert.ok(mygo.prerequisites.includes("build-native-tests"));
   assert.match(mygo.recipe, /CGO_ENABLED=0[^\n]*scripts\/go-tests\.mjs/);
-  assert.doesNotMatch(mygo.recipe, /--(?:cgo-|go-)?ldflags/);
+  // F694: a cgo-free link still needs Go's public internal-linker macOS
+  // minimum. Generic linker flags are mandatory; cgo external flags stay out.
+  assert.ok(/^GO_INTERNAL_LINK\s*=\s*-macos=\$\(MACOS_MINIMUM\)\s*$/m.test(text), "GO_INTERNAL_LINK must declare -macos=$(MACOS_MINIMUM)");
+  const workbench = mygo.recipe.split("\n").find((line) => line.includes("scripts/go-tests.mjs"));
+  const contract = mygo.recipe.split("\n").find((line) => line.includes("scripts/test-hosts.mjs"));
+  assert.match(workbench, /--ldflags=['"]\$\(GO_INTERNAL_LINK\)['"]/);
+  assert.match(contract, /--go-ldflags=['"]\$\(GO_INTERNAL_LINK\)['"]/);
+  assert.doesNotMatch(mygo.recipe, /--cgo-ldflags|\$\(GO_LINK\)|-extldflags/);
   const fixtures = rule("build-native-tests");
   for (const target of ["build-host-test", "build-host-callback-abi", "build-host-callback-worker"]) {
     assert.ok(fixtures.recipe.includes(target), `missing native fixture ${target}`);
@@ -33,9 +40,11 @@ test("managed mygo verification prepares declared native fixtures and selects CG
     assert.ok(selected.prerequisites.includes("build-native-tests"), name);
     assert.match(selected.recipe, /--cgo-ldflags=/);
   }
+  assert.match(rule("test-hosts").recipe, /--go-ldflags=['"]\$\(GO_INTERNAL_LINK\)['"]/, "the mixed host run must retain the internal macOS minimum in its CGO0 profile");
   const repeat = rule("repeat-go");
   assert.doesNotMatch(repeat.recipe, /go-repeat-inputs\.mjs/);
   assert.match(repeat.recipe, /--cgo-ldflags=/);
+  assert.match(repeat.recipe, /--ldflags='\$\(GO_LDFLAGS\)'/, "portable repeat-go must forward caller-selected generic GO_LDFLAGS");
   const debug = rule("check-host-debug");
   for (const directory of ["apps/mygo", "packages/host/mygo"]) {
     const line = debug.recipe.split("\n").find((line) => line.includes(`go vet -C ${directory} `));
@@ -44,7 +53,8 @@ test("managed mygo verification prepares declared native fixtures and selects CG
   }
   const benchmark = rule("benchmark-empty-window").recipe;
   assert.match(benchmark, /CGO_ENABLED=0/);
-  assert.doesNotMatch(benchmark, /-ldflags/);
+  assert.match(benchmark, /-ldflags ['"]\$\(GO_INTERNAL_LINK\)['"]/);
+  assert.doesNotMatch(benchmark, /\$\(GO_LINK\)|-extldflags/);
 });
 
 // Runs make with only HOME, the bare PATH and, when given, CARGO_HOME in its environment, so no variable of the environment of

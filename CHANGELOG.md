@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F694: Pass the declared macOS minimum directly to Go's internal linker for cgo-free mygo app and bundled CLI builds. Preserve debug/release tags, release stripping and bundle paths; keep Go's SDK default and the separate Wails cgo linker policy. Owner checks require the internal-linker flag alongside the deployment environment.
+
 - F693: Run the registered Go E2E cases through the maintained cgo-free mygo runner with declared native test artifacts. Remove direct cgo-enabled and zero-match loops. Inventory checks reject future unmapped E2E owners; shared Go and Wails ordinary contract commands retain their coverage. The leased-frame owner passes with CGO_ENABLED=0; activation-bearing full-suite acceptance remains separate.
 
 - F592: Confirm the original published Wails fork pin's clean-runner build from its successful release job. This is historical verification of that pin; the current release-tag integration, complete CI and publication retain their separate open requirements.

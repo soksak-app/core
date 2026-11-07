@@ -267,6 +267,26 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F694",
+    implementation: [
+      { file: "Makefile", symbol: "GO_INTERNAL_LINK = -macos=$(MACOS_MINIMUM)" },
+      { file: "Makefile", symbol: 'go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_INTERNAL_LINK)"' },
+      { file: "Makefile", symbol: '-ldflags "-s -w $(GO_INTERNAL_LINK)"' },
+      { file: "Makefile", symbol: "sok-mygo = CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C packages/sok/go" },
+    ],
+    tests: [
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "CGO0 minimum verification requires the exact internal flag rather than cgo settings or an arbitrary generic flag" },
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "mixed host minimum verification requires both internal and external linker profiles" },
+      { file: "scripts/test/macos-minimum-commands.test.mjs", id: "portable repeat-go forwards the explicitly selected internal macOS minimum" },
+      { file: "scripts/test/makefile-recipes.test.mjs", id: "managed mygo verification prepares declared native fixtures and selects CGO0" },
+      { file: "scripts/test/native-pkgconfig.test.mjs", id: "the mygo application stages its view root, not a main page" },
+      { file: "scripts/test/test-hosts.test.mjs", id: "Go host run profiles preserve shared coverage with CGO0 for every mygo run and separate generic from cgo link flags" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "the root Go E2E target selects every actual registered test through the cgo-free maintained runner" },
+    ],
+    expected: "Cgo-free mygo app and bundled CLI builds pass the declared macOS minimum directly to Go's internal linker through -macos. Build owners require the exact debug/release linker flags, preserve tags, release stripping and bundle paths, and retain the separate cgo linker policy without an SDK override. Managed Go profiles propagate the generic linker flags. These links establish source and profile guards; artifact release-audit evidence is recorded separately.",
+    levels: ["unit"],
+  },
+  {
     id: "F693",
     implementation: [
       { file: "Makefile", symbol: "test-app-host-go: build-native-mygo build-native-tests" },

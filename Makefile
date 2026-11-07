@@ -230,13 +230,14 @@ repeat-rust: check-cargo
 	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(filter undefined,$(origin TEST_TARGET)),,--test-target "$$TEST_TARGET") $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of the Go packages of PACKAGE COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
+# GO_LDFLAGS forwards caller-selected generic linker flags; it has no platform-specific default.
 # Each test of each package is its own process with the limit TEST_TIMEOUT, named when it starts and reported with its result and elapsed time (scripts/go-tests.mjs).
 # A pattern whose packages have no test files fails when none has test files; a run in which no test matches fails.
 # This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
 repeat-go:
-	@case "$(PACKAGE)" in '') echo "repeat-go requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
+	@case "$(PACKAGE)" in '') echo "repeat-go requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>] [GO_LDFLAGS=<flags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-go requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@$(call go-env) node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --cgo-ldflags='$(GO_LINK)'
+	@$(call go-env) node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LDFLAGS)' --cgo-ldflags='$(GO_LINK)'
 
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
 # Each repeat is one process of node --test with the limit TEST_TIMEOUT: the runner kills it at the limit and names it when it starts
@@ -351,17 +352,20 @@ check-cargo:
 # The minimum macOS version of the native apps. The capture code uses the macOS 14.4 API
 # getCurrentProcessShareableContentWithCompletionHandler. This is the one declaration of the version: native/darwin reads it,
 # and every Go and Rust command of a target gets it here (docs/spec/hosts.md#nativedarwin).
-# Go passes it to every cgo package through CGO_CFLAGS and to the linker through -extldflags, and clang reads
+# Go passes it to cgo packages through CGO_CFLAGS and their external linker through -extldflags.
+# Cgo-free native profiles pass GO_INTERNAL_LINK to the Go internal linker. Clang reads
 # MACOSX_DEPLOYMENT_TARGET for a compile or a link without a version flag. Rust and cc read MACOSX_DEPLOYMENT_TARGET.
 MACOS_MINIMUM = 14.4
 export PKG_CONFIG_PATH := $(CURDIR)/native/darwin/build
 # go build puts CGO_CFLAGS into the cache key but not the contents of the static libraries that cgo links.
 # Putting the library hash into CGO_CFLAGS recompiles and relinks the cgo packages when a library changes.
 GO_CFLAGS    = -O2 -g -mmacosx-version-min=$(MACOS_MINIMUM)
-# The environment of a Go command; the argument adds to CGO_CFLAGS. A Go command that links also passes GO_LINK.
+# The environment of a Go command; the argument adds to CGO_CFLAGS. Cgo links also pass GO_LINK.
 go-env       = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) CGO_CFLAGS="$(GO_CFLAGS)$(if $(1), $(1))"
 GO_ENV       = $(call go-env,-DSOKSAK_DARWIN_LIBRARY=$$(shasum -a 256 native/darwin/build/libsoksak-darwin.a | cut -c1-16))
 GO_LINK      = -extldflags=-mmacosx-version-min=$(MACOS_MINIMUM)
+# The cgo-free Go linker does not read MACOSX_DEPLOYMENT_TARGET.
+GO_INTERNAL_LINK = -macos=$(MACOS_MINIMUM)
 CARGO_ENV    = MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM)
 
 # The notification center of macOS delivers only to processes started from a bundle, so applications run from the bundle
@@ -397,7 +401,7 @@ bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "$(WAILS_DEBUG_TAGS)",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
-sok-mygo = CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) $(if $(filter release,$(2)),-ldflags "-s -w") $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
+sok-mygo = CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_INTERNAL_LINK)" $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 build-native: check-host-callbacks check-host-api
@@ -527,7 +531,7 @@ build-wailsv3-release: build-native build
 build-mygo: build-native-mygo copy-frontend-mygo
 	@$(call bundle-info,$(MYGO_DEBUG_BUNDLE),mygo)
 	@$(call bundle-dev,$(MYGO_DEBUG_BUNDLE),mygo)
-	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -tags "diagnostics dev" -o ../../$(MYGO_DEBUG) ./src
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_INTERNAL_LINK)" -o ../../$(MYGO_DEBUG) ./src
 	@mkdir -p $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks
 	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks/
 	@$(call sok-mygo,$(MYGO_DEBUG_BUNDLE),debug)
@@ -536,7 +540,7 @@ build-mygo: build-native-mygo copy-frontend-mygo
 build-mygo-release: build-native-mygo build
 	@$(call bundle-info,$(MYGO_RELEASE_BUNDLE),mygo)
 	@$(call copy-mygo,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
-	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w" -o ../../$(MYGO_RELEASE) ./src
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_INTERNAL_LINK)" -o ../../$(MYGO_RELEASE) ./src
 	@mkdir -p $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks
 	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks/
 	@$(call sok-mygo,$(MYGO_RELEASE_BUNDLE),release)
@@ -592,7 +596,7 @@ check-rust-format: check-cargo
 # (docs/spec/host-contract.md) run at the same level.
 # Host contract tests build their fixture plugins and sidecars under test-owned temporary directories.
 test-hosts: check-cargo build-native-mygo build-native-tests copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
-	@$(call go-env) $(CARGO_ENV) node scripts/test-hosts.mjs --cgo-ldflags="$(GO_LINK)"
+	@$(call go-env) $(CARGO_ENV) node scripts/test-hosts.mjs --go-ldflags="$(GO_INTERNAL_LINK)" --cgo-ldflags="$(GO_LINK)"
 
 # Per-language CI checks use the same selected host contract without discovering or building the other host.
 test-wailsv3: build-native build-native-tests copy-core-frontend-wailsv3
@@ -603,8 +607,8 @@ test-tauriv2: check-cargo build-native copy-core-frontend-tauriv2
 
 # The contract run of the mygo host, and the unit tests of its workbench and of its application.
 test-mygo: build-native-mygo build-native-tests copy-core-frontend-mygo
-	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/workbench-mygo/...' --count 1 --timeout $(TEST_TIMEOUT)
-	@$(call go-env) node scripts/test-hosts.mjs --host mygo
+	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/workbench-mygo/...' --count 1 --timeout $(TEST_TIMEOUT) --ldflags='$(GO_INTERNAL_LINK)'
+	@$(call go-env) node scripts/test-hosts.mjs --host mygo --go-ldflags="$(GO_INTERNAL_LINK)"
 	@pnpm -F @soksak/mygo test
 
 # Release host checks build and audit only the selected application bundle; the release reads no registry (docs/spec/verification.md).
@@ -630,7 +634,7 @@ E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-registry
 # inventory in test-kinds.test.mjs rejects future cases outside this declared scope.
 # Display and activation requirements remain those of each case.
 test-app-host-go: build-native-mygo build-native-tests
-	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'e2e diagnostics mygo' --test '^TestE2E' --count 1 --timeout $(TEST_TIMEOUT)
+	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'e2e diagnostics mygo' --test '^TestE2E' --count 1 --timeout $(TEST_TIMEOUT) --ldflags='$(GO_INTERNAL_LINK)'
 
 test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app --native test-app $(if $(WHEN_IDLE),--when-idle $(WHEN_IDLE))
@@ -683,7 +687,7 @@ benchmark-resize-catch-up:
 # The benchmark of an empty mygo window (docs/operations/examples.md#empty-window-benchmark): it opens a window of the framework without
 # the mygo framework adapter. SECONDS is the time over which it reads the CPU.
 benchmark-empty-window:
-	@CGO_ENABLED=0 $(call go-env) go -C packages/host/mygo run ./benchmark/cmd $(if $(SECONDS),--seconds $(SECONDS))
+	@CGO_ENABLED=0 $(call go-env) go -C packages/host/mygo run -ldflags "$(GO_INTERNAL_LINK)" ./benchmark/cmd $(if $(SECONDS),--seconds $(SECONDS))
 
 benchmark-idle-tab:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:idle-tab

@@ -152,6 +152,7 @@ test("the root Go E2E target selects every actual registered test through the cg
   assert.match(recipe, /--test '\^TestE2E'/);
   assert.match(recipe, /--count 1/);
   assert.match(recipe, /--timeout \$\(TEST_TIMEOUT\)/);
+  assert.match(recipe, /--ldflags=['"]\$\(GO_INTERNAL_LINK\)['"]/, "CGO0 E2E binaries must declare the same internal-linker macOS minimum");
   assert.doesNotMatch(recipe, /(?:^|\s)go(?:\s+-C\s+\S+)?\s+test\b|-extldflags|GO_LINK|GO_ENV|for package|SOKSAK_NATIVE_(?:TEST_)?LIBRARY/,
     "the target must use the selected runner environment and declared artifacts");
   assert.doesNotMatch(makefile, /^E2E_GO_PACKAGES\s*=/m, "obsolete zero-match package loops remain declared");

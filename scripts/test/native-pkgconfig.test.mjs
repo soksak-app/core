@@ -94,14 +94,21 @@ test("the mygo application stages its view root, not a main page", { timeout: 10
     const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", target], { cwd: workspace, encoding: "utf8" });
     assert.match(output, flags, output);
   }
-  const builds = (output) => {
+  const builds = (output, release = false) => {
     const commands = output.split(/\r?\n/).filter((line) => /\bgo build -C (?:apps\/mygo|packages\/sok\/go)\s/.test(line));
     assert.equal(commands.length, 2, `one application and one bundled CLI build are required:\n${output}`);
     for (const command of commands) {
       assert.match(command, new RegExp(`^CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=${minimum} go build `), command);
       assert.doesNotMatch(command, /-extldflags|CGO_CFLAGS|CGO_LDFLAGS/, command);
+      const linkerArguments = [...command.matchAll(/(?:^|\s)-ldflags "([^"]*)"/g)];
+      assert.equal(linkerArguments.length, 1, `the internal linker must receive the declared minimum: ${command}`);
+      assert.equal((command.match(/(?:^|\s)-ldflags(?:=|\s)/g) ?? []).length, 1, command);
+      const flags = linkerArguments[0][1].trim().split(/\s+/).sort();
+      const expected = [`-macos=${macosMinimum(workspace)}`, ...(release ? ['-s', '-w'] : [])].sort();
+      assert.deepEqual(flags, expected, `the cgo-free internal linker flags must preserve the minimum and release mode without an SDK override: ${command}`);
     }
-    return commands;
+    // Linker flags have their own exact assertions; keep the existing tag, source and bundle-path assertions independent of argument position.
+    return commands.map((command) => command.replace(/(?:^|\s)-ldflags "[^"]*"/, ''));
   };
   const build = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "build-mygo"], { cwd: workspace, encoding: "utf8" });
   const debug = builds(build);
@@ -109,11 +116,11 @@ test("the mygo application stages its view root, not a main page", { timeout: 10
   assert.match(debug[1], /go build -C packages\/sok\/go\s+-tags "diagnostics dev mygo" -o \S+\/Contents\/MacOS\/sok \.\/src\/cmd\/sok$/, debug[1]);
   for (const diagnostics of ["", "1"]) {
     const release = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", `DIAGNOSTIC_RELEASE=${diagnostics}`, "build-mygo-release"], { cwd: workspace, encoding: "utf8" });
-    const commands = builds(release);
+    const commands = builds(release, true);
     const appTags = diagnostics ? String.raw`-tags diagnostics\s+` : '';
     const cliTags = diagnostics ? 'diagnostics mygo' : 'mygo';
-    assert.match(commands[0], new RegExp(String.raw`go build -C apps/mygo -trimpath\s+${appTags}-ldflags "-s -w" -o \S+/Contents/MacOS/sok-mygo \./src$`), commands[0]);
-    assert.match(commands[1], new RegExp(String.raw`go build -C packages/sok/go -trimpath -ldflags "-s -w" -tags "${cliTags}" -o \S+/Contents/MacOS/sok \./src/cmd/sok$`), commands[1]);
+    assert.match(commands[0], new RegExp(String.raw`go build -C apps/mygo -trimpath\s+${appTags}-o \S+/Contents/MacOS/sok-mygo \./src$`), commands[0]);
+    assert.match(commands[1], new RegExp(String.raw`go build -C packages/sok/go -trimpath -tags "${cliTags}" -o \S+/Contents/MacOS/sok \./src/cmd/sok$`), commands[1]);
     if (!diagnostics) assert.doesNotMatch(commands[0], /-tags/, commands[0]);
   }
 });
