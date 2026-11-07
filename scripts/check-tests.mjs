@@ -2328,6 +2328,21 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F584-3",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_pointer_current_name" },
+      { file: "native/darwin/src/webview_input.m", symbol: "NSMapTable<NSWindow *, NSMapTable<NSString *, WKWebView *> *> *pointerHolders" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_pointers_test.m", id: "same-window foreign hover move is refused" },
+      { file: "native/darwin/tests/input_pointers_test.m", id: "same-window first page drag" },
+      { file: "e2e/two-pointers.test.mjs", id: "${app.name}: two pointers press and drag at once on two pages of one window" },
+      { file: "e2e/two-pointers.test.mjs", id: "${app.name}: two pointers press and drag at once in two windows" },
+    ],
+    expected: "Named pointers retain separate window/page hover and press ownership, preserve declared sharing rejections, and deliver exact independent gesture event counts on the three macOS hosts.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F584-2",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "*equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];" },
