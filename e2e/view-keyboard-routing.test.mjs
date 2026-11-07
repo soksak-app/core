@@ -20,7 +20,7 @@ const READS = [REGISTRY_COMMAND, MODAL_ANSWER, PICKER_CLOSE, "workbench.input.sh
   "native.input.key_down"];
 
 async function openProbe(t, app, options) {
-  const s = await open(t, app, options);
+  const s = await open(t, app, { ...options, inactive: true });
   await fresh(s, { performanceTrace: true, log: { input: "info", lifecycle: "info", call: "debug" }, reads: READS });
   await keepCommonSettings(s);
   s.cleanup(async () => {

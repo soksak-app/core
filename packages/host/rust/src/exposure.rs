@@ -108,6 +108,9 @@ fn host_declarations() -> Value {
                 "key": {"type": "boolean"},
                 "virtualKey": {"type": "boolean"},
                 "active": {"type": "boolean"},
+                "activationObservation": {"type":"object", "required":["registered","count"], "properties":{
+                    "registered":{"type":"boolean"}, "count":{"type":"string","pattern":"^(0|[1-9][0-9]*)$"}
+                }},
                 "occluded": {"type": "boolean"},
                 "children": {"type": "integer"},
                 "controls": {"type": "array", "items": rect},
@@ -1982,6 +1985,23 @@ fn window_frame_counters() -> serde_json::Map<String, Value> {
         .collect()
 }
 
+// Native evidence is mandatory; retain the object and decimal string exactly.
+fn window_activation_observation(facts: &Value) -> Result<Value, String> {
+    let observation = facts.get("activationObservation")
+        .and_then(Value::as_object)
+        .ok_or("window facts missing or invalid activationObservation")?;
+    observation.get("registered").and_then(Value::as_bool)
+        .ok_or("window facts activationObservation.registered must be a boolean")?;
+    let count = observation.get("count").and_then(Value::as_str)
+        .ok_or("window facts activationObservation.count must be a canonical uint64 decimal string")?;
+    let number = count.parse::<u64>()
+        .map_err(|_| "window facts activationObservation.count must be a canonical uint64 decimal string")?;
+    if number.to_string() != count {
+        return Err("window facts activationObservation.count must be a canonical uint64 decimal string".into());
+    }
+    Ok(Value::Object(observation.clone()))
+}
+
 fn window_status(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let target = window.clone();
@@ -2089,7 +2109,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     let responder = responder_of(
         class, owner, container, main, &named, &documents, modal_view,
     );
+    let activation_observation = window_activation_observation(&facts).map_err(internal)?;
     let mut status = json!({
+        "activationObservation": activation_observation,
         "responder": responder,
         "frame": facts["frame"],
         "pointer": facts["pointer"],
@@ -2795,5 +2817,31 @@ mod reply_tests {
             relay.reply("probe", &no_message).expect_err("no message"),
             "error has no message"
         );
+    }
+}
+
+#[cfg(test)]
+mod activation_observation_tests {
+    use super::*;
+
+    #[test]
+    fn host_window_preserves_exact_activation_observation() {
+        for observation in [json!({"registered":true,"count":"0"}), json!({"registered":false,"count":"18446744073709551615"})] {
+            let facts = json!({"activationObservation":observation});
+            assert_eq!(window_activation_observation(&facts).unwrap(), observation);
+        }
+    }
+
+    #[test]
+    fn host_window_refuses_missing_or_invalid_activation_observation() {
+        let invalid = [Value::Null, json!({}), json!({"registered":true}), json!({"count":"1"}),
+            json!({"registered":"true","count":"1"}), json!({"registered":false,"count":1}),
+            json!({"registered":false,"count":""}), json!({"registered":false,"count":"01"}),
+            json!({"registered":false,"count":"-1"}), json!({"registered":false,"count":"+1"}),
+            json!({"registered":false,"count":"1.0"}), json!({"registered":false,"count":"18446744073709551616"})];
+        assert!(window_activation_observation(&json!({})).unwrap_err().contains("activationObservation"));
+        for observation in invalid {
+            assert!(window_activation_observation(&json!({"activationObservation":observation})).unwrap_err().contains("activationObservation"));
+        }
     }
 }

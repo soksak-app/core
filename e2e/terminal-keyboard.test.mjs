@@ -56,7 +56,7 @@ function temporaryProject(s, prefix) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native keyboard edits and executes independently in three terminals`, { timeout: 180000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s);
     const tab = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
     assert.ok(tab, "the fixture has no terminal tab");

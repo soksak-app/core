@@ -14,7 +14,7 @@ type pageProcessPlatform struct {
 }
 
 func (p *pageProcessPlatform) WindowFacts(platform.Window) (string, error) {
-	text, err := json.Marshal(map[string]any{"pageProcess": p.pid, "nativeSurfaces": []any{}, "webviews": []any{}})
+	text, err := json.Marshal(map[string]any{"pageProcess": p.pid, "nativeSurfaces": []any{}, "webviews": []any{}, "activationObservation": map[string]any{"registered": false, "count": "0"}})
 	return string(text), err
 }
 

@@ -163,3 +163,13 @@ Each platform runs these checks against the endpoint:
 - a termination signal requests the normal exit once, and the next one ends the process;
 - sockets of ended processes of the same application are removed before listening.
 - a second process using the same configuration directory is refused, and normal close removes `process.lock`.
+
+### Window activation observation
+
+`host.window.activationObservation` preserves the native window-facts object:
+`registered` is a boolean reporting whether the activation observer is installed,
+and `count` is a canonical unsigned 64-bit decimal string (`"0"` or digits without
+leading zeroes). The string preserves counts beyond JavaScript's safe integer
+range. Missing or invalid native evidence fails the status read; the host does
+not substitute an unregistered observer or a zero count. This observation does
+not activate a window and is separate from the current `active` state.

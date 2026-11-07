@@ -4,12 +4,25 @@
 #import "activity_observers.h"
 #import "support/records.h"
 #import "event_ring.h"
+#import "observe.h"
+#import "window_facts.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
+}
+
+static NSDictionary *activationObservation(NSWindow *window) {
+    char *text = sp_window_facts(window, window.contentView);
+    check(text != NULL, @"activation observation is available through real window facts");
+    if (!text) return nil;
+    NSDictionary *facts = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:text length:strlen(text)] options:0 error:NULL];
+    sp_facts_free(text);
+    NSDictionary *observation = facts[@"activationObservation"];
+    check([observation isKindOfClass:NSDictionary.class], @"window facts include activation observation capability and count");
+    return observation;
 }
 
 int main(void) { @autoreleasepool {
@@ -25,8 +38,32 @@ int main(void) { @autoreleasepool {
     [window.contentView addSubview:field];
     [window makeFirstResponder:field];
 
+    NSDictionary *unregistered = activationObservation(window);
+    check([unregistered[@"registered"] isEqual:@NO] && [unregistered[@"count"] isEqual:@"0"],
+        @"before activity installation, zero count is explicitly unregistered");
     sp_observe_activity();
     sp_observe_activity();  // a second call installs nothing more
+    NSDictionary *registered = activationObservation(window);
+    id capability = registered[@"registered"];
+    check(capability && CFGetTypeID((__bridge CFTypeRef)capability) == CFBooleanGetTypeID() && [capability boolValue],
+        @"the actual activation observer is installed once and reported as a boolean capability");
+    unsigned long long baseline = sp_observe_count("activity.app.activated");
+    check([registered[@"count"] isEqual:[NSString stringWithFormat:@"%llu", baseline]],
+        @"the public count is a canonical decimal string of the existing exact counter");
+    const int8_t errorsOnly[SP_CLASS_COUNT] = {SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR};
+    check(sp_event_set_policy(errorsOnly), @"activation counting is tested with info and debug events disabled");
+    NSNotificationCenter *activationCenter = NSNotificationCenter.defaultCenter;
+    [activationCenter postNotificationName:NSApplicationDidBecomeActiveNotification object:NSApp];
+    [activationCenter postNotificationName:NSApplicationDidResignActiveNotification object:NSApp];
+    [activationCenter postNotificationName:NSApplicationDidHideNotification object:NSApp];
+    [activationCenter postNotificationName:NSApplicationDidUnhideNotification object:NSApp];
+    NSDictionary *counted = activationObservation(window);
+    check(sp_observe_count("activity.app.activated") == baseline + 1 &&
+        [counted[@"count"] isEqual:[NSString stringWithFormat:@"%llu", baseline + 1]],
+        @"one activation counts once despite repeated installation and a closed event gate; other activity does not count");
+    NSDictionary *reread = activationObservation(window);
+    check([reread isEqual:counted], @"reading activation facts neither installs an observer nor changes the count");
+    check(sp_event_set_policy(everything), @"the remaining activity checks retain their original all-level policy");
     NSRunningApplication *frontmostAtDeactivation = NSWorkspace.sharedWorkspace.frontmostApplication;
     NSArray<NSDictionary *> *events = capturedEvents(^{
         NSNotificationCenter *center = NSNotificationCenter.defaultCenter;

@@ -18,7 +18,7 @@ import { collectHwpStartupResourceEvidence } from "./hwp-startup.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an hwp file opens from the tree, draws its pages and takes the keyboard focus on a press`, { timeout: 180000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s, { performanceTrace: true });
     const { surface } = await openHwp(s);
     // A press on the page in the region gives the editor the keyboard focus and places its caret.
@@ -29,7 +29,7 @@ for (const app of Object.values(APPS)) {
   });
 
   test(`${app.name}: an hwp file takes native keys and a drag on the virtual key window and saves`, { timeout: 180000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s);
     const { surface, file } = await openHwp(s);
     const region = await studio(s, surface);

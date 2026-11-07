@@ -9,7 +9,7 @@ import { fresh } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: Command-zero in a focused view runs the native text-size menu command`, { timeout: 60000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s, {
       log: { input: "info", lifecycle: "info", call: "debug" },
       reads: ["native.input.key_down", "native.record.info", "native.window.first_responder", "workbench.command"],

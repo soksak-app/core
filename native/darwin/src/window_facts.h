@@ -15,6 +15,9 @@ void *sp_window_set_main_webview(void *window, void *main);
 void *sp_window_main_webview(void *window);
 
 // {frame, content, scale, key, active, children, controls, webviews, nativeSurfaces, appDomWebviews, documentWebviews}
+//   activationObservation {registered: boolean, count: canonical unsigned decimal string}; the process-lifetime
+//             activation notification counter counts independently of event policy. registered is true only after
+//             the actual observer was installed. Reading facts does not install observers or change the count.
 //   frame     window frame {x, y, width, height}, screen coordinates
 //   content   content area {width, height}
 //   controls  window buttons [{x, y, width, height, hidden}], window coordinates

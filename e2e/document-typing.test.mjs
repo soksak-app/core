@@ -26,7 +26,7 @@ async function serve(s) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the virtual key window gives a document region typed text`, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s);
     const base = await serve(s);
     await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),

@@ -163,3 +163,12 @@ composition의 hit testing이 child view보다 native surface input을 먼저 �
 - 종료 신호는 정상 종료를 한 번 요청하고, 다음 신호는 프로세스를 끝낸다;
 - 수신 전에 같은 애플리케이션의 끝난 프로세스 소켓을 제거한다.
 - 같은 설정 디렉터리의 두 번째 프로세스를 거부하고 정상 종료 때 `process.lock`을 삭제한다.
+
+### 창 활성화 관찰
+
+`host.window.activationObservation`은 native window facts의 객체를 그대로 전달한다.
+`registered`는 활성화 observer가 설치됐는지를 나타내는 boolean이며,
+`count`는 정규 unsigned 64-bit 십진 문자열이다(`"0"` 또는 앞에 0이 없는 숫자).
+문자열은 JavaScript의 안전한 정수 범위를 넘는 횟수도 보존한다. Native 증거가
+없거나 잘못됐으면 상태 읽기가 실패한다. Host는 미등록 상태나 횟수 0을 대신
+만들지 않는다. 이 관찰은 창을 활성화하지 않으며 현재 `active` 상태와 별개다.

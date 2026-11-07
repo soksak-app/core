@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,9 +61,13 @@ var hostStatus = map[string]hostEntry{
 			"key":         map[string]any{"type": "boolean"},
 			"virtualKey":  map[string]any{"type": "boolean"},
 			"active":      map[string]any{"type": "boolean"},
-			"occluded":    map[string]any{"type": "boolean"},
-			"children":    map[string]any{"type": "integer"},
-			"controls":    map[string]any{"type": "array", "items": rectSchema},
+			"activationObservation": map[string]any{"type": "object", "required": []string{"registered", "count"}, "properties": map[string]any{
+				"registered": map[string]any{"type": "boolean"},
+				"count":      map[string]any{"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+			}},
+			"occluded": map[string]any{"type": "boolean"},
+			"children": map[string]any{"type": "integer"},
+			"controls": map[string]any{"type": "array", "items": rectSchema},
 			"webviews": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"frame": rectSchema, "main": map[string]any{"type": "boolean"}, "document": map[string]any{"type": "boolean"},
 				"visible": map[string]any{"type": "boolean"}, "focused": map[string]any{"type": "boolean"}, "order": map[string]any{"type": "integer"},
@@ -1175,9 +1180,32 @@ type point struct {
 	Y float64 `json:"y"`
 }
 
+// validateActivationObservation refuses missing evidence rather than inventing
+// a zero counter. Keep the native object intact in the public status.
+func validateActivationObservation(raw json.RawMessage) error {
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+		return fmt.Errorf("window facts missing or invalid activationObservation")
+	}
+	registered := strings.TrimSpace(string(value["registered"]))
+	if registered != "true" && registered != "false" {
+		return fmt.Errorf("window facts activationObservation.registered must be a boolean")
+	}
+	var count string
+	if err := json.Unmarshal(value["count"], &count); err != nil {
+		return fmt.Errorf("window facts activationObservation.count must be a canonical unsigned decimal string")
+	}
+	number, err := strconv.ParseUint(count, 10, 64)
+	if err != nil || strconv.FormatUint(number, 10) != count {
+		return fmt.Errorf("window facts activationObservation.count must be a canonical uint64 decimal string")
+	}
+	return nil
+}
+
 // windowFacts is the result of sp_window_facts of native/darwin.
 type windowFacts struct {
-	Responder struct {
+	ActivationObservation json.RawMessage `json:"activationObservation"`
+	Responder             struct {
 		Class   string `json:"class"`
 		Webview uint64 `json:"webview"`
 		Surface uint64 `json:"surface"`
@@ -1390,6 +1418,7 @@ type WindowFrameCounters struct {
 
 // WindowStatus is the value of host.window.
 type WindowStatus struct {
+	ActivationObservation json.RawMessage `json:"activationObservation"`
 	WindowFrameCounters
 	Responder        WindowResponder  `json:"responder"`
 	Frame            frame            `json:"frame"`
@@ -1498,9 +1527,13 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	if err != nil {
 		return WindowStatus{}, err
 	}
+	if err := validateActivationObservation(facts.ActivationObservation); err != nil {
+		return WindowStatus{}, err
+	}
 	// The native facts were read in the same UI-thread operation.
 	out := WindowStatus{
-		Frame: facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
+		ActivationObservation: facts.ActivationObservation,
+		Frame:                 facts.Frame, Pointer: facts.Pointer, Content: frame{Width: facts.Content.Width, Height: facts.Content.Height},
 		Scale: facts.Scale, RefreshRate: facts.RefreshRate, Maximized: facts.Zoomed, Key: facts.Key, VirtualKey: facts.VirtualKey, Active: facts.Active, Occluded: facts.Occluded, Children: facts.Children,
 		Quitting: s.host.quit.Active(),
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,

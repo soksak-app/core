@@ -29,7 +29,7 @@ async function focusTerminal(s, surface) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the keyboard returns to the terminal after native Escape closes the add picker`, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s);
     const [{ surface }] = await ensureTerminals(s, 1);
     await s.presented();
@@ -68,7 +68,7 @@ async function keyRecords(s, offsets, key) {
 for (const app of Object.values(APPS)) {
   for (const [name, key, options] of [["Escape", "Escape", {}], ["a character", "q", { text: "q" }]]) {
     test(`${app.name}: ${name} pressed as the add picker opens does not reach the terminal`, async (t) => {
-      const s = await open(t, app);
+      const s = await open(t, app, { inactive: true });
       await fresh(s, { log: { input: "info", lifecycle: "info" }, reads: ["native.record.info"] });
       const [{ surface }] = await ensureTerminals(s, 1);
       await s.presented();

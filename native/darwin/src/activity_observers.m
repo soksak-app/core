@@ -2,6 +2,15 @@
 #import "activity_observers.h"
 #import "event_ring.h"
 #import "observe.h"
+#import <stdatomic.h>
+
+// The observer belongs to the process. Publish capability only after its actual installation succeeds.
+static id activationObserver;
+static _Atomic bool activationRegistered;
+
+bool sp_activity_activation_registered(void) {
+    return atomic_load_explicit(&activationRegistered, memory_order_acquire);
+}
 
 static void emit(uint8_t eventClass, NSString *name, NSDictionary *fields) {
     NSError *error = nil;
@@ -46,7 +55,8 @@ void sp_observe_activity(void) {
             NSString *name = application[notification];
             BOOL activation = [notification isEqualToString:NSApplicationDidBecomeActiveNotification];
             BOOL deactivation = [notification isEqualToString:NSApplicationDidResignActiveNotification];
-            sp_observe_notification("activity.app", SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) {
+            id observer = sp_observe_notification(activation ? "activity.app.activated" : "activity.app",
+                SP_OBSERVE_STORED, notification, nil, nil, ^(NSNotification *note) {
                 // default: before any other application was activated, the activation names the pid 0 and the empty bundle.
                 NSDictionary *fields;
                 if (activation) {
@@ -63,6 +73,10 @@ void sp_observe_activity(void) {
                 // events: native.app.activated, native.app.deactivated, native.app.hidden, native.app.unhidden
                 emit(SP_CLASS_LIFECYCLE, name, fields);
             });
+            if (activation && observer) {
+                activationObserver = [observer retain];
+                atomic_store_explicit(&activationRegistered, true, memory_order_release);
+            }
         }
         NSDictionary<NSNotificationName, NSString *> *windows = @{
             NSWindowDidBecomeKeyNotification: @"native.window.key",

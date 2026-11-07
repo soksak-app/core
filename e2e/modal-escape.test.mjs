@@ -10,7 +10,7 @@ import { fresh } from "./fixture.mjs";
 // without one draws the picker in the window itself, which becomes the virtual key window under the pointer over the card.
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the key window closes its add picker with native Escape`, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s);
     const grid = await s.get("core.grid");
     const card = grid.cards.find((item) => item.pane === 0);

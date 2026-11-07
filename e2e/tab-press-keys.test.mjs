@@ -23,7 +23,7 @@ async function readyTerminal(s, tab) {
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: keys typed right after a press on a tab reach its terminal whole`, { timeout: 90000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s, { log: { input: "debug" }, reads: READS });
     const grid = await s.get("core.grid");
     const card = grid.cards.find((item) => !item.fixed && item.tabs?.some((tab) => tab.plugin === "terminal"));

@@ -6,6 +6,7 @@
 #import "window_facts.h"
 #import "input_virtual.h"
 #import "observe.h"
+#import "activity_observers.h"
 #import "application_log.h"
 #import "event_ring.h"
 #import "webview_geometry.h"
@@ -200,6 +201,10 @@ char *sp_window_facts(void *handle, void *surfaceView) {
         @"virtualKey": @(sp_input_virtual_is(handle)),
         @"zoomed": @(window.isZoomed),
         @"active": @(sp_input_virtual_real_active()),
+        @"activationObservation": @{
+            @"registered": @(sp_activity_activation_registered()),
+            @"count": [NSString stringWithFormat:@"%llu", sp_observe_count("activity.app.activated")],
+        },
         // WebKit delays drawing of a window that other windows fully cover, which is a condition
         // of the presentation measurement.
         @"occluded": @((BOOL)((window.occlusionState & NSWindowOcclusionStateVisible) == 0)),

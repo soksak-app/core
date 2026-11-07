@@ -16,7 +16,7 @@ const READS = ["native.surface.key_kept", "native.surface.keys_delivered", "nati
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: keys typed as a new tab opens reach its terminal whole`, { timeout: 60000 }, async (t) => {
-    const s = await open(t, app);
+    const s = await open(t, app, { inactive: true });
     await fresh(s, { log: { input: "debug" }, reads: READS });
     // A pointer move that presses nothing makes the window the virtual key window.
     const adding = await s.request("element.rect", { name: "core.space-tab.add" });

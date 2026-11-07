@@ -47,7 +47,7 @@ type pageFactsPlatform struct {
 }
 
 func (p *pageFactsPlatform) WindowFacts(platform.Window) (string, error) {
-	return fmt.Sprintf(`{"pageProcess":%d,"nativeSurfaces":[],"webviews":[]}`, p.process), nil
+	return fmt.Sprintf(`{"pageProcess":%d,"nativeSurfaces":[],"webviews":[],"activationObservation":{"registered":false,"count":"0"}}`, p.process), nil
 }
 
 // A window without a main page has no page process, so host.window reports null and the sampler reads no page. A window

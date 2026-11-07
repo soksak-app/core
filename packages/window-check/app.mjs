@@ -206,7 +206,8 @@ async function workbenchReplies(client, window) {
   }
 }
 
-export async function open(t, app, { clipboard = false } = {}) {
+export async function open(t, app, { clipboard = false, inactive = false } = {}) {
+  if (typeof inactive !== "boolean") throw new TypeError("inactive must be a boolean");
   if (typeof clipboard !== "boolean") throw new TypeError("clipboard must be a boolean");
   if (!requiredApps(process.env).includes(app.name)) return null;
   if (!existsSync(app.binary)) {
@@ -270,6 +271,15 @@ export async function open(t, app, { clipboard = false } = {}) {
       throw new Error(`${app.configDir}/endpoint.json belongs to ${endpoint.application}, not ${app.name}`);
     }
     assertEndpointUsesCurrentBuild(endpoint, realpathSync(app.binary), statSync(app.binary).mtimeMs);
+    if (inactive) {
+      const baseline = await inactiveObservation(session);
+      session.verifyInactive = async () => {
+        const after = await inactiveObservation(session);
+        if (after.pid !== baseline.pid || after.started !== baseline.started) throw new Error(`${app.name}: inactive endpoint boot changed`);
+        if (after.count !== baseline.count) throw new Error(`${app.name}: activation count changed from ${baseline.count} to ${after.count}`);
+        t.diagnostic(`${app.name}: inactive proof pid=${after.pid} started=${after.started} activation count ${baseline.count}→${after.count}, registered=true active=false`);
+      };
+    }
     await session.markTest("start", t.name);
     return session;
   } catch (error) {
@@ -279,6 +289,27 @@ export async function open(t, app, { clipboard = false } = {}) {
     }
     throw error;
   }
+}
+
+// This opt-in proof observes only this application's registered native source.
+// Reread endpoint.json: a cached connection identity cannot establish boot stability.
+async function inactiveObservation(session) {
+  const { readEndpoint } = await import("@soksak/client");
+  const state = await session.get("host.window");
+  const endpoint = await readEndpoint(session.app.configDir);
+  const connected = session.client.endpoint;
+  if (!Number.isInteger(endpoint.pid) || endpoint.pid <= 0 || typeof endpoint.started !== "string" ||
+      !Number.isFinite(Date.parse(endpoint.started)) || endpoint.pid !== connected.pid || endpoint.started !== connected.started) {
+    throw new Error(`${session.app.name}: inactive endpoint boot differs from its connection`);
+  }
+  const observation = state?.activationObservation;
+  if (state?.active !== false) throw new Error(`${session.app.name}: inactive proof requires active:false`);
+  if (observation?.registered !== true) throw new Error(`${session.app.name}: activation observation is not registered`);
+  const count = observation.count;
+  if (typeof count !== "string" || !/^(0|[1-9][0-9]*)$/.test(count) || BigInt(count) > 18_446_744_073_709_551_615n) {
+    throw new Error(`${session.app.name}: activation count must be a canonical uint64 decimal string`);
+  }
+  return { pid: endpoint.pid, started: endpoint.started, count };
 }
 
 /** The names of the recording folders under logs/captures of the configuration folder; none without the folder. */
@@ -328,6 +359,14 @@ export async function finishSession(t, session, close) {
     for (const error of await endWatches(WATCH_END_LIMIT)) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+    }
+    // Verify after the test's own cleanups, before any successful evidence deletion.
+    // A failed proof enters the normal preservation/error path.
+    if (session.verifyInactive) {
+      try { await session.verifyInactive(); } catch (error) {
+        failures.push(error);
+        t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+      }
     }
     // A failed check keeps every recording that its cleanups left so the frames remain available for diagnosis. A
     // recording left by an otherwise successful check is itself a failure; preserve it for the same reason.
