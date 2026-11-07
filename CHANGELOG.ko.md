@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F686-1: 공유 native library가 Go platform 대신 main_thread.h와 main_thread.m을 소유한다. native test는 독립적인 설치 상태, 동기 전달과 반환값, 빠진 함수의 이름을 남기는 종료를 검증한다. Go 시작 검사와 두 adapter의 main-thread stack 및 stall 동작을 유지하며 native 및 audit 사례가 통과한다. mygo의 cgo 없는 binding은 아직 완료되지 않았다.
+
 - F686: mygo 빌드 계약은 purego나 dynamic library를 강제하지 않고 cgo 없는 Go 의존성을 요구한다. 공유 Go host와 Wails adapter의 변경도 그 경로를 유지해야 한다. 현재 cgo 없는 application 빌드는 공유 darwin 구현 타입이 cgo 파일에 정의되어 실패하며, 의존성 목록 조회만으로는 계약을 검증하지 못한다.
 
 - F685: Wails, mygo, tao fork는 release tag `v3.0.0-beta.27-soksak.1`, `v0.7.4-244-g4abb83d-soksak.1`, `tao-v0.37.2-soksak.1`로 고정된다. window handle은 모든 운영체제에서 정수인 `platform.Window`이고, darwin 구현은 native code 안에서만 이를 NSWindow의 주소로 바꾸며, Windows COM helper는 system의 memory를 `RtlMoveMemory`로 복사하므로 어떤 Go source도 정수를 pointer로 바꾸지 않는다.

@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 // The main-thread functions of the framework (docs/spec/hosts.md, main thread of the Wails host). The framework adapter installs them
-// before the start of the library, from the functions of its framework; main_thread.m holds what it installed. Go code runs on
+// before the start of the library, from the functions of its framework; native/darwin holds what it installed. Go code runs on
 // the worker of the framework, never on the main thread:
 //
 // - Each callback of the native code into Go runs its Go function through hostRunOnWorker, which hands it to the worker while

@@ -24,7 +24,20 @@ const mainThread = [
   "#define ON_MAIN(T, expression) ({ __block T onMainResult; hostRunOnMain(^{ onMainResult = (expression); }); onMainResult; })",
   "#define ON_WORKER(T, expression) ({ __block T onWorkerResult; hostRunOnWorker(^{ onWorkerResult = (expression); }); onWorkerResult; })",
 ].join("\n");
-const base = { [HEADER]: header, [`${LAYER}/main_thread.h`]: mainThread };
+const base = { [HEADER]: header, ["native/darwin/src/main_thread.h"]: mainThread };
+
+test("main-thread audit accepts native dispatch installation and queries without dispatching them", { timeout: 30000 }, () => {
+  const files = {
+    ...base,
+    "native/darwin/src/main_thread.h": mainThread + "\n#include <stdbool.h>\nvoid hostInstallMainThread(void (*worker)(void (^)(void)), void (*main)(void (^)(void)));\nvoid hostMainThreadInstalled(bool *worker, bool *main);",
+    [`${LAYER}/ui_queue.go`]: goFile([
+      '#include "main_thread.h"',
+      'static void install(void) { hostInstallMainThread(0, 0); }',
+      'static void installed(void) { bool worker, main; hostMainThreadInstalled(&worker, &main); }',
+    ].join("\n"), 'func configure() { C.install(); C.installed() }'),
+  };
+  assert.deepEqual(auditMainThreadCalls(files), []);
+});
 
 /** Returns a Go file of the darwin layer with the preamble and the Go body. */
 function goFile(preamble, body) {
@@ -172,7 +185,7 @@ test("main-thread audit counts a call of a block as a call of a native function"
 test("main-thread audit names the thread-safe native functions with a reason", { timeout: 30000 }, async () => {
   const { MAIN_THREAD_FREE } = await import("../check-host-files.mjs");
   for (const [name, reason] of Object.entries(MAIN_THREAD_FREE)) {
-    assert.match(name, /^sp_[a-z_*]+$/, name);
+    assert.match(name, /^(?:sp_[a-z_*]+|hostInstallMainThread|hostMainThreadInstalled)$/, name);
     assert.ok(reason.length > 20, `${name} has no reason`);
   }
 });

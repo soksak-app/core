@@ -330,6 +330,7 @@ NATIVE_TESTS = observe_test \
   surface_container_test \
   surface_layout_observe_test \
   ui_queue_test \
+  main_thread_test \
   window_motion_test \
   input_inject_test \
   input_virtual_test \

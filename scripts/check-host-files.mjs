@@ -409,6 +409,8 @@ export function auditPrefixes(tracked) {
  * a name that ends with * covers the functions with that prefix. Each value states why the function needs no thread.
  */
 export const MAIN_THREAD_FREE = {
+  hostInstallMainThread: "startup installs the framework dispatch pointers before the host starts, without calling a block or accessing AppKit",
+  hostMainThreadInstalled: "startup reads the installed dispatch pointers without calling a block or accessing AppKit",
   "sp_event_*": "the event ring and its policy are atomic state that any thread writes and the host drains",
   sp_mono_ns: "the clock reads mach_continuous_time, which any thread reads",
   sp_observe_flush: "the observation counters are atomic, and the flush writes them to the event ring",
@@ -593,7 +595,8 @@ function auditFolder(folder, paths) {
       if (use) uses.push({ ...use, ...enclosing(entry), path: unit.path, line });
     }
   }
-  const isNative = (name) => native.has(name) && !mainThreadFree(name);
+  const isNative = (name) => native.has(name) && !mainThreadFree(name)
+    && !WORKER_WRAPPERS.has(name) && !MAIN_WRAPPERS.has(name);
   const errors = [];
   for (const use of uses) {
     if (use.kind === "reference" && exports.has(use.name) && use.wrapper !== "hostRunOnWorker") {

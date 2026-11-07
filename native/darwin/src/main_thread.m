@@ -1,5 +1,3 @@
-//go:build darwin
-
 #include <stdio.h>
 #include <stdlib.h>
 
