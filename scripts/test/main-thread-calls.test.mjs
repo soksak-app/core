@@ -39,6 +39,15 @@ test("main-thread audit accepts native dispatch installation and queries without
   assert.deepEqual(auditMainThreadCalls(files), []);
 });
 
+test("main-thread audit accepts native startup signal masking without dispatch", { timeout: 30000 }, () => {
+  const files = {
+    ...base,
+    "native/darwin/src/signals.h": "int sp_block_async_signals(void);",
+    [`${LAYER}/termination.go`]: goFile('#include "signals.h"', "func prepare() { C.sp_block_async_signals() }"),
+  };
+  assert.deepEqual(auditMainThreadCalls(files), []);
+});
+
 /** Returns a Go file of the darwin layer with the preamble and the Go body. */
 function goFile(preamble, body) {
   return `//go:build darwin\n\npackage darwin\n\n/*\n${preamble}\n*/\nimport "C"\n\n${body}\n`;

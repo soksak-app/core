@@ -206,6 +206,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin window", "objective-c", ["native/darwin/src/window_*.m"], ["native/darwin/tests/window_*_test.m"], { sharedTests: true }),
   lane("Darwin host callbacks", "objective-c", ["native/darwin/src/host_callbacks.m"], ["native/darwin/tests/host_callbacks_test.m"], { sharedTests: true }),
   lane("Host callback binding generation", "js-ts", ["scripts/check-host-callbacks.mjs"], ["scripts/test/host-callbacks.test.mjs"]),
+  lane("Darwin signal masks", "objective-c", ["native/darwin/src/signals.m"], ["native/darwin/tests/signals_test.m"], { sharedTests: true }),
   lane("Darwin main-thread dispatch", "objective-c", ["native/darwin/src/main_thread.m"], ["native/darwin/tests/main_thread_test.m"], { sharedTests: true }),
   lane("Darwin UI queue", "objective-c", ["native/darwin/src/ui_queue.m"], ["native/darwin/tests/ui_queue_test.m"], { sharedTests: true }),
   lane("Darwin process exit", "objective-c", ["native/darwin/src/process_exit.m"], ["native/darwin/tests/process_exit_test.m"], { sharedTests: true }),
@@ -1677,6 +1678,23 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/tests/callback/handle_test.go", id: "TestConcurrentCallbackOwnersKeepSeparateHandles" },
     ],
     expected: "Native callbacks retain and release Go values through integer handles without requiring cgo; invalid and deleted handles are rejected.",
+    levels: ["unit"],
+  },
+  {
+    id: "F686-5",
+    implementation: [
+      { file: "native/darwin/src/signals.m", symbol: "int sp_block_async_signals(void)" },
+      { file: "native/darwin/tests/host_callback_worker.m", symbol: "int sp_test_worker_probe(" },
+      { file: "native/darwin/tests/host_callback_worker.m", symbol: "void sp_test_worker_present(" },
+      { file: "packages/host/go/src/platform/darwin/termination.go", symbol: "C.sp_block_async_signals()" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/signals_test.m", id: "main-thread asynchronous signals are blocked without changing fault masks" },
+      { file: "native/darwin/tests/signals_test.m", id: "asynchronous signal setup rejects another thread" },
+      { file: "packages/host/mygo/tests/platform/darwin/nativeworker/worker_test.go", id: "TestNativeCallbacksUseTheFrameworkWorker" },
+      { file: "scripts/test/main-thread-calls.test.mjs", id: "main-thread audit accepts native startup signal masking without dispatch" },
+    ],
+    expected: "Native callbacks enter the exact running mygo worker with cgo disabled and preserve synchronous results, borrowed native scope and reentrant main-thread presentation completion. Shared native startup owns signal masking and rejects another thread.",
     levels: ["unit"],
   },
   {

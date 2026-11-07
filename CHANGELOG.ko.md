@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F686-5: cgo 없는 consumer가 생성된 callback을 실제 mygo worker 수명주기로 실행하여 정확한 worker 식별·동기 반환값·빌린 native 범위·재진입 main-thread presentation completion을 확인한다. 두 Go adapter의 시작 시 사용하는 비동기 signal-mask 연산은 동작 변경 없이 native가 소유한다. 직접 호출 변이는 worker test에서 실패하며 실제 전달 경로·native signal 사례·두 adapter의 기본·진단 profile은 통과한다. cgo 없는 application 전체 통합과 drag frame 성능은 아직 남아 있다.
+
 - F686-4: mygo adapter의 cgo 없는 typed callback binding을 header에서 생성한다. 지원하지 않는 type과 실수 callback 반환형을 거부하고 주소 할당 전 profile의 모든 함수를 확인하며 두 생성 profile을 검사한다. cgo 없는 native ABI test는 callback 43개의 호출·함수 식별·native table layout, scalar 폭과 native memory 소유권, GC 이후 callback 수명 유지를 확인한다. 실제 worker 통합·drag frame 비용·cgo 없는 application 전체 build는 아직 남아 있다.
 
 - F686-3: native callback은 하나의 공개 typed header와 기본·진단용 완전 등록 table을 사용한다. header에서 생성한 cgo binding이 native의 Go export 직접 연결을 대체한다. 등록은 필수 함수 누락과 교체를 거부하며 worker 감사는 전달 경계를 유지한다. 넘겨받은 presentation completion은 공개 native 연산이 실행·해제한다. mygo의 cgo 없는 binding은 아직 남아 있다.

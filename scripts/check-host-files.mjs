@@ -409,6 +409,7 @@ export function auditPrefixes(tracked) {
  * a name that ends with * covers the functions with that prefix. Each value states why the function needs no thread.
  */
 export const MAIN_THREAD_FREE = {
+  sp_block_async_signals: "startup masks asynchronous signals on the calling native main thread before the framework starts; another thread is rejected and no AppKit state is accessed",
   hostInstallMainThread: "startup installs the framework dispatch pointers before the host starts, without calling a block or accessing AppKit",
   hostMainThreadInstalled: "startup reads the installed dispatch pointers without calling a block or accessing AppKit",
   "sp_event_*": "the event ring and its policy are atomic state that any thread writes and the host drains",

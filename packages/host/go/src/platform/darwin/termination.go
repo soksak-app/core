@@ -3,8 +3,7 @@
 package darwin
 
 /*
-#include <pthread.h>
-#include <signal.h>
+#include "signals.h"
 #include <stdbool.h>
 #include "quit_request.h"
 #include "main_thread.h"
@@ -17,17 +16,6 @@ static bool installQuitRequest(void) {
 static void main_sp_quit_request_answer(void) { hostRunOnMain(^{ sp_quit_request_answer(); }); }
 static void main_sp_quit_request_cancel(void) { hostRunOnMain(^{ sp_quit_request_cancel(); }); }
 
-// blockAsyncSignals blocks every signal except the synchronous faults on the main thread and returns 0, -1 on another thread,
-// or the error number of pthread_sigmask. A fault that the main thread raises is delivered to it whether it is blocked or not, so
-// the faults stay unblocked to reach their handlers.
-static int blockAsyncSignals(void) {
-    if (!pthread_main_np()) return -1;
-    sigset_t set;
-    sigfillset(&set);
-    const int faults[] = {SIGILL, SIGTRAP, SIGABRT, SIGEMT, SIGFPE, SIGBUS, SIGSEGV, SIGSYS};
-    for (size_t i = 0; i < sizeof faults / sizeof faults[0]; i++) sigdelset(&set, faults[i]);
-    return pthread_sigmask(SIG_BLOCK, &set, NULL);
-}
 */
 import "C"
 
@@ -45,7 +33,7 @@ import (
 var terminationSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP}
 
 func (implementation) BlockAsyncSignals() error {
-	switch result := C.blockAsyncSignals(); result {
+	switch result := C.sp_block_async_signals(); result {
 	case 0:
 		return nil
 	case -1:

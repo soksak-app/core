@@ -129,7 +129,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: build-host-callback-abi build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-worker build-host-callback-abi build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -206,6 +206,12 @@ $(BUILD):
 # is active when it exits.
 $(PROCESS_IDENTITY_LIBRARY):
 	@$(MAKE) -C $(CURDIR)/process-identity MACOS_MINIMUM=$(MACOS_MINIMUM) build
+
+# The worker consumer loads its own native state and uses the real framework lifecycle.
+$(BUILD)/libhost_callback_worker.dylib: tests/host_callback_worker.m src/host_callbacks.m src/main_thread.m src/signals.m $(wildcard src/*.h) Makefile | $(BUILD)
+	@clang $(CFLAGS) -dynamiclib -I$(CURDIR)/src tests/host_callback_worker.m src/host_callbacks.m src/main_thread.m src/signals.m -lobjc -o $@
+
+build-host-callback-worker: $(BUILD)/libhost_callback_worker.dylib
 
 # Isolated ABI fixture: no application bundle or production library is changed.
 $(BUILD)/libhost_callback_abi.dylib: tests/host_callback_abi.m src/host_callbacks.m src/host_callbacks.h src/input_inject.h Makefile | $(BUILD)
@@ -337,6 +343,7 @@ NATIVE_TESTS = observe_test \
   surface_layout_observe_test \
   ui_queue_test \
   main_thread_test \
+  signals_test \
   host_callbacks_test \
   window_motion_test \
   input_inject_test \

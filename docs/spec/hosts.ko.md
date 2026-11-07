@@ -27,6 +27,8 @@ ABI 후보는 새 foreign-call runtime을 만들지 않고 mygo adapter가 이�
 
 공개 mygo worker 주소 함수는 해당 실행 문맥에서만 전달한다. worker 수명주기가 실행 중일 때 main thread의 호출은 worker로 넘기고, 그 step 안의 worker 호출은 main thread로 넘긴다. 관계없는 thread에서는 둘 다 inline 실행한다. 따라서 일반 Go thread의 ABI fixture는 worker 전달을 증명하지 못한다. 통합 test는 공개 framework 수명주기를 시작하고 native main-thread code에서 진입하며 재진입 completion 양쪽의 native thread 식별자를 관찰해야 한다.
 
+cgo 없는 worker consumer는 별도 native test library를 읽고 window나 활성화 없이 공개 framework 수명주기를 실행한다. 시작 시 native main thread에서 `sp_block_async_signals`를 호출한다. 공유 native 연산은 fault mask를 보존하고 다른 thread를 거부하며 기존 cgo preamble 구현을 동작 변경 없이 대체한다. test는 callback thread를 공개 framework step의 정확한 worker thread와 비교하고, 중첩 작업과 넘겨받은 presentation completion 실행 시 native main-thread 식별자를 관찰한다. 빌린 native stack 문자열은 동기 반환까지 유효 범위 안에 둔다. 실패는 framework 종료 전에 비정상 종료하며 성공 종료는 event loop 반환 후에만 찍는 marker를 요구한다. framework가 종료 유예 이후 상태 0으로 강제 종료할 수 있기 때문이다. 부모 subprocess는 60초 deadline을 둔다. worker 전달을 직접 호출로 바꾼 변이는 native main thread에서 Go에 진입하기 전에 실패한다. Objective-C block fixture는 native 상태 pointer를 통해 stack buffer에 접근하고 block 정리를 위해 Objective-C runtime을 명시적으로 링크한다.
+
 ## 호스트 트리
 
 Language host library:
@@ -341,6 +343,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H49 | 없음 | 없음 | `tests/drag_test.go` | 이 test 가 세는 step 은 row P10 의 기록이고, 그 기록은 mygo framework adapter 만 낸다 |
 | H52 | 없음 | 없음 | `tests/launch_self_activation_test.go` | mygo framework adapter 의 `tests/launch_activation_test.go` 는 창을 띄우고 display 가 필요하다. 이 test 는 창을 띄우지 않으므로 host contract run 이 display 없이 mygo host 의 이 case 를 지키고 focus 를 가져가지 않는다 |
 | H61 | 없음 | 없음 | `src/platform/darwin/nativecallback/`, `tests/platform/darwin/nativecallback/` | mygo adapter는 공유 native header에서 cgo 없는 typed callback binding을 생성하고 cgo를 끈 ABI test로 확인한다. Wails는 cgo 등록을, Tauri는 Rust 함수 주소를 사용한다 |
+| H62 | 없음 | 없음 | `tests/platform/darwin/nativeworker/` | 생성된 cgo 없는 callback binding은 실제 mygo main-thread worker 수명주기를 통한 consumer 검증이 필요하다. Wails와 Tauri는 이 foreign-call binding을 사용하지 않는다 |
 | B1 | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | none | native modal web view와 surface 위 shape의 call이다. mygo host의 window는 modal과 shape를 native UI로 그리므로 `packages/workbench-mygo`의 `hostCalls`에는 이 call이 없다. |
 | B2 | none | none | `setDialogBackground` | workbench가 직접 그리는 dialog를 host에 알리는 call이다. Wails와 Tauri host에서는 mode `dialog`의 modal web view가 document를 blur하고, mygo host의 window에는 그런 web view가 없다(B 행 B1). |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |

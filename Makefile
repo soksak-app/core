@@ -9,6 +9,11 @@ check-docs:
 	@pnpm exec sok-check docs
 
 .PHONY: check-host-callbacks create-host-callbacks
+.PHONY: test-host-callback-worker
+test-host-callback-worker: check-host-callbacks
+	@$(MAKE) -C native/darwin build-host-callback-worker
+	@CGO_ENABLED=0 SOKSAK_NATIVE_CALLBACK_WORKER_LIBRARY='$(abspath native/darwin/build/libhost_callback_worker.dylib)' $(MAKE) repeat-go PACKAGE=./packages/host/mygo/tests/platform/darwin/nativeworker COUNT=1
+
 .PHONY: test-host-callbacks
 test-host-callbacks: check-host-callbacks
 	@$(MAKE) -C native/darwin build-host-callback-abi
