@@ -95,3 +95,5 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 - Waiting and held checklist items are excluded from work selection and prioritization until their recorded conditions are demonstrably resolved. Only then may they enter consideration and move to `[ ]` or `[~]`; do not run their implementation or verification beforehand.
 
 - Independent development may run in parallel, but the lead alone runs and schedules builds and verification commands. Check free disk space before build batches and after cleanup. Reclaim abandoned temporary files and declared build output only after checking process and file ownership; preserve source, Git metadata, active build roots and required evidence. Do not run cleanup pollers or clear shared caches while builds use them.
+
+- Preserve discovered facts, failure causes, architectural decisions, their evidence and unresolved verification conditions in the owning specification, checklist or changelog. Record the situation and conclusion without directly quoting the operator; transient chat and raw run logs do not replace durable project records.
