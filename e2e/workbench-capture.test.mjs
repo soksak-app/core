@@ -11,7 +11,8 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
 import { prepareTerminalDrag, TERMINAL_DRAG_PLAN } from "./benchmark/cases/terminal.mjs";
-import { NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
+import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
+import { execute, windowApplicationRows } from "../scripts/measure-app-usage.mjs";
 import { colours } from "./view-display.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -30,11 +31,15 @@ for (const app of Object.values(APPS)) {
       const directory = mkdtempSync(join(logs, "workbench-capture-"));
       const offsets = currentEventOffsets(app.configDir);
       const evidence = { diagnostic: true, performanceAcceptance: false, control, rect,
-        order: ["fresh", "prepareTerminalDrag", "default policy", "native first drag", "captured second drag"],
+        order: ["fresh", "prepareTerminalDrag", "default policy", "process snapshot before", "native first drag", "process snapshot after", "captured second drag"],
         capture: null, callbacks: [], samples: [], events: [] };
       let failure;
+      const processes = () => dragProcesses({ run: execute, rows: async () => windowApplicationRows({
+        configDir: app.configDir, statuses: [{ ...(await s.get("host.window")), window: s.window }] }) });
       try {
+        evidence.processesBefore = await processes();
         await drag(s, NATIVE_DRAG_PLAN);
+        evidence.processesAfter = await processes();
         const captured = await drag(s, TERMINAL_DRAG_PLAN, { capture: true });
         evidence.capture = captured;
         evidence.callbacks = readFileSync(captured.callbackStatus, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
