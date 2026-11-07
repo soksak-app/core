@@ -1,5 +1,10 @@
 # 기능 상태
 
+
+- [~] F696 — 공통 검증 파이프라인의 플랫폼 가정을 제거한다. 수정 전 조사 결과: `e2e/platform/platform.js`가 import 시 Linux와 Windows를 거부한다. `e2e/setup.mjs`와 `scripts/test-app.mjs`는 인식을 사용하지 않는 검사에도 Apple Vision 준비를 강제한다. `e2e/view-content.mjs`와 `e2e/view-first-content.mjs`는 콘텐츠 검사에 OCR을 사용한다. `scripts/test-app.mjs`는 macOS 앱 번들 구조, native/darwin 실행과 Command+Q를 전제한다. `e2e/operation-chains.test.mjs`는 레지스트리 키를 darwin으로 고정한다. `scripts/platform/platform.js`의 실행 중 프로세스 식별은 Darwin만 구현한다. 활성화 검사에는 Apple 입력 소스 식별자가 고정되어 있다. 애플리케이션 CI·릴리스 작업은 macOS에서 빌드하고 Darwin 번들을 배포하며, Ubuntu의 메타데이터·게시 작업은 Linux 앱 검증이 아니다. 결정: 기능·성능 검증에서 OCR과 무조건적인 준비를 제거한다. 동작과 콘텐츠는 공개 명령·상태·이벤트로 검증하고, 실제 화면 합성은 캡처 픽셀과 기하 검증으로 분리한다. 내부 콘텐츠 응답만으로 화면 표시를 증명하지 않는다. 실행 파일과 릴리스 키는 선언된 플랫폼 산출물에서 해석한다. 네이티브 입력·캡처·프로세스 식별·입력 소스 조작은 명시적인 플랫폼 계약으로 분리한다. Linux·Windows의 미구현은 구현할 결함으로 남기며 조용히 건너뛰거나 대체 성공으로 처리하지 않는다. OS별 IME fixture는 해당 플랫폼이 소유하고 다른 플랫폼에도 같은 동작 계약을 적용한다. CI는 지원 OS에서 화면 없는 소유 모듈 검사를 실행하며 실제 창 검증은 디스플레이가 필요한 로컬 실행으로 별도 선언한다. 남은 일: OCR 소비자별 기존 단언을 보존할 관찰 인터페이스를 정리하고, 실패하는 소유 모듈 테스트를 추가한 뒤 공통 OCR 준비와 인식 소비자를 제거한다. 실행기·산출물·업데이트의 플랫폼 가정을 수정하고 누락된 플랫폼 연산을 구현하여 각 지원 플랫폼에서 검증한다. 이번 조사는 구현 완료나 멀티플랫폼 통과를 의미하지 않는다.
+  - [o] F696-1 — 공통 OCR 준비와 import 시 플랫폼 거부를 제거한다. RED: 공통 준비가 네이티브 인식기 빌드를 시도하고 실행 계획이 예열을 강제하며 Linux·Windows 실행 파일을 선언해도 import가 실패한다. GREEN: 같은 회귀 검사가 통과하고 준비 단계 소유 검사 11개가 통과한다. 공통 준비는 실행 파일만 선언하며 모든 경로가 명시되면 탐색하지 않는다. 지원하지 않는 기본 탐색은 해당 연산에서 명시적으로 실패한다. 실행기 소유 검사 27개도 통과한다. 문서·공개 인터페이스 소스 검사가 통과하고 구현을 커밋했다. OCR 콘텐츠 소비자는 F696에 남으며 이 단위의 검증 대상이 아니다.
+  - [o] F696-2 — 업데이트 fixture의 Darwin 고정 키와 아키텍처 폴백을 제거한다. RED: 실제 fixture 식이 linux-arm64-wailsv3 대신 darwin-arm64-wailsv3를 반환한다. GREEN: 두 fixture가 기존 releasePlatform 계약을 사용하며 세 OS 키·두 아키텍처·세 호스트와 미지원 값 거부를 포함한 플랫폼 소유 검사 4개가 통과한다. 문서·공개 인터페이스 소스 검사가 통과하고 구현을 커밋했다.
+
 ## 현재 개발 acceptance
 
 - **Terminal 연속 모음 입력과 Backspace** — 현재 양쪽 host check-shell cohort에서 구현 O, 검증 O다. F239-47-6의 전체 document, glyph, underline, capture identity, 오류 감사, 복원 및 종료 acceptance가 통과한다. 별도 zsh follow-up은 해당 상태를 유지한다. Latin-prefix Korean 입력은 F239-204의 별도 실패이며 이 repeated-vowel 통과 범위에 포함되지 않는다.
