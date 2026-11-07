@@ -235,7 +235,7 @@ func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.Raw
 // documentDrawCoveredPlatform is implemented only by platforms that make the document regions of a window draw while it is
 // covered.
 type documentDrawCoveredPlatform interface {
-	DrawDocumentsCovered(window unsafe.Pointer, draw bool) error
+	DrawDocumentsCovered(window platform.Window, draw bool) error
 }
 
 // diagnosticWindowDrawCovered makes the image regions and the documents of the document regions of the window draw while the
@@ -259,7 +259,7 @@ func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMe
 	if !ok {
 		return nil, errors.New("the covered drawing of document regions is unavailable on this platform")
 	}
-	if err := s.useWindow(func(window unsafe.Pointer) error { return documents.DrawDocumentsCovered(window, *p.Draw) }); err != nil {
+	if err := s.useWindow(func(window platform.Window) error { return documents.DrawDocumentsCovered(window, *p.Draw) }); err != nil {
 		return nil, nativeError(codeHandler, err)
 	}
 	s.images.SetDrawCovered(*p.Draw)

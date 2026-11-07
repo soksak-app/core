@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -146,7 +145,7 @@ func (f *Framework) ObserveLayout() error {
 
 // layoutStarted holds the frames of every other window from the start of a preparation of window, and releases the hold of window
 // before the preparation asks for its frame.
-func (f *Framework) layoutStarted(window unsafe.Pointer) {
+func (f *Framework) layoutStarted(window platform.Window) {
 	f.transaction = true
 	for _, frontend := range f.windows() {
 		if frontend.NativeWindow() == window {
@@ -158,7 +157,7 @@ func (f *Framework) layoutStarted(window unsafe.Pointer) {
 }
 
 // layoutEnded releases every hold when the transaction ends, before the next waiting transaction starts.
-func (f *Framework) layoutEnded(unsafe.Pointer) {
+func (f *Framework) layoutEnded(platform.Window) {
 	f.transaction = false
 	for _, frontend := range f.windows() {
 		frontend.release()

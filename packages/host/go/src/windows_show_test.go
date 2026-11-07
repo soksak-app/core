@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -17,10 +16,10 @@ const showWithoutHostChild = "SOKSAK_SHOW_WITHOUT_HOST_CHILD"
 // showPlatform records the windows that the show of a framework passed to the registered platform.
 type showPlatform struct {
 	platform.Platform
-	shown []unsafe.Pointer
+	shown []platform.Window
 }
 
-func (p *showPlatform) ShowWindow(window unsafe.Pointer) error {
+func (p *showPlatform) ShowWindow(window platform.Window) error {
 	p.shown = append(p.shown, window)
 	return nil
 }
@@ -34,10 +33,10 @@ func TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts(t *testing.
 	t.Cleanup(func() { system = previous })
 	fake := &showPlatform{}
 	t.Cleanup(platform.Substitute(fake))
-	window := unsafe.Pointer(new(byte))
+	window := platform.Window(1)
 	ShowWindow(window)
 	if len(fake.shown) != 1 || fake.shown[0] != window {
-		t.Fatalf("the registered platform showed %v, want the one window %p", fake.shown, window)
+		t.Fatalf("the registered platform showed %v, want the one window %v", fake.shown, window)
 	}
 }
 
@@ -49,7 +48,7 @@ func TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError
 	if os.Getenv(showWithoutHostChild) != "" {
 		system = nil
 		platform.Substitute(nil)
-		ShowWindow(unsafe.Pointer(new(byte)))
+		ShowWindow(platform.Window(1))
 		t.Fatal(returned)
 	}
 	command := exec.Command(os.Args[0], "-test.run", "^TestAWindowShowWithoutARegisteredPlatformEndsTheProcessThroughTheFatalError$", "-test.count=1")

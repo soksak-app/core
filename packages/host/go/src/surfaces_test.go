@@ -1502,7 +1502,7 @@ type noticeFrontend struct {
 	notices chan func(error)
 }
 
-func (*noticeFrontend) NativeWindow() unsafe.Pointer { return unsafe.Pointer(new(int)) }
+func (*noticeFrontend) NativeWindow() platform.Window { return 1 }
 
 func (f *noticeFrontend) AfterPresentation(done func(error)) error {
 	f.notices <- done
@@ -1529,12 +1529,12 @@ func (*layoutPlatform) EnqueueUI(task func()) error {
 
 func (p *layoutPlatform) MonotonicNanos() (uint64, error) { return p.clock.Add(1), nil }
 
-func (p *layoutPlatform) CommitLayout(_ unsafe.Pointer, ticket uint64) bool {
+func (p *layoutPlatform) CommitLayout(_ platform.Window, ticket uint64) bool {
 	p.commits <- ticket
 	return true
 }
 
-func (p *layoutPlatform) CancelLayoutTicket(_ unsafe.Pointer, ticket uint64) error {
+func (p *layoutPlatform) CancelLayoutTicket(_ platform.Window, ticket uint64) error {
 	p.cancels <- ticket
 	return nil
 }

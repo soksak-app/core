@@ -133,8 +133,8 @@ static void *nativeFunctionPresentationOnMain(uintptr_t present) {
     return copy;
 }
 
-extern void goNativeLayoutStarted(void *window);
-extern void goNativeLayoutEnded(void *window);
+extern void goNativeLayoutStarted(uintptr_t window);
+extern void goNativeLayoutEnded(uintptr_t window);
 
 static void nativeWindowPrepareOnMain(void *handle) {
     NSWindow *window = (NSWindow *)handle;
@@ -271,17 +271,17 @@ static void *nativeWindowObserveResponderOnMain(void *handle, uintptr_t callback
 
 // The functions that Go code calls. Go code runs on the worker of the framework, and each function runs its body on the main
 // thread through hostRunOnMain (docs/spec/hosts.md, main thread of the Wails host).
-bool nativeWindowAfterPresentation(void *handle, uintptr_t callback) {
-    return ON_MAIN(bool, nativeWindowAfterPresentationOnMain(handle, callback));
+bool nativeWindowAfterPresentation(uintptr_t handle, uintptr_t callback) {
+    return ON_MAIN(bool, nativeWindowAfterPresentationOnMain((void *)handle, callback));
 }
-bool nativeWindowJoinView(void *window, uint64_t ticket, void *view, uintptr_t callback) {
-    return ON_MAIN(bool, nativeWindowJoinViewOnMain(window, ticket, view, callback));
+bool nativeWindowJoinView(uintptr_t window, uint64_t ticket, void *view, uintptr_t callback) {
+    return ON_MAIN(bool, nativeWindowJoinViewOnMain((void *)window, ticket, view, callback));
 }
-void *nativeWindowMainPresentation(void *handle) {
-    return ON_MAIN(void *, nativeWindowMainPresentationOnMain(handle));
+void *nativeWindowMainPresentation(uintptr_t handle) {
+    return ON_MAIN(void *, nativeWindowMainPresentationOnMain((void *)handle));
 }
-void nativeWindowAfterSettled(void *handle, void *present, uintptr_t callback) {
-    hostRunOnMain(^{ nativeWindowAfterSettledOnMain(handle, present, callback); });
+void nativeWindowAfterSettled(uintptr_t handle, void *present, uintptr_t callback) {
+    hostRunOnMain(^{ nativeWindowAfterSettledOnMain((void *)handle, present, callback); });
 }
 void *nativeFunctionPresentation(uintptr_t present) {
     return ON_MAIN(void *, nativeFunctionPresentationOnMain(present));
@@ -295,25 +295,25 @@ void nativeWindowPresented(void *presented, const char *error) {
 }
 void nativeLayoutObserve(void) {
     hostRunOnMain(^{
-        surfaceLayoutObserve(^(void *window) { hostRunOnWorker(^{ goNativeLayoutStarted(window); }); },
-            ^(void *window) { hostRunOnWorker(^{ goNativeLayoutEnded(window); }); });
+        surfaceLayoutObserve(^(void *window) { hostRunOnWorker(^{ goNativeLayoutStarted((uintptr_t)window); }); },
+            ^(void *window) { hostRunOnWorker(^{ goNativeLayoutEnded((uintptr_t)window); }); });
     });
 }
-void nativeWindowPrepare(void *handle) {
-    hostRunOnMain(^{ nativeWindowPrepareOnMain(handle); });
+void nativeWindowPrepare(uintptr_t handle) {
+    hostRunOnMain(^{ nativeWindowPrepareOnMain((void *)handle); });
 }
-bool nativeWindowConfigureMain(void *handle, bool dark) {
-    return ON_MAIN(bool, nativeWindowConfigureMainOnMain(handle, dark));
+bool nativeWindowConfigureMain(uintptr_t handle, bool dark) {
+    return ON_MAIN(bool, nativeWindowConfigureMainOnMain((void *)handle, dark));
 }
-bool nativeWindowSetMainWebview(void *handle) {
-    return ON_MAIN(bool, nativeWindowSetMainWebviewOnMain(handle));
+bool nativeWindowSetMainWebview(uintptr_t handle) {
+    return ON_MAIN(bool, nativeWindowSetMainWebviewOnMain((void *)handle));
 }
 void nativeWebviewBounds(void *handle, double x, double y, double width, double height) {
     hostRunOnMain(^{ nativeWebviewBoundsOnMain(handle, x, y, width, height); });
 }
-void *nativeWebviewCreate(void *handle, unsigned long long identifier, const char *name, const char *script,
+void *nativeWebviewCreate(uintptr_t handle, unsigned long long identifier, const char *name, const char *script,
     double x, double y, double width, double height, bool hidden, bool transparent) {
-    return ON_MAIN(void *, nativeWebviewCreateOnMain(handle, identifier, name, script, x, y, width, height, hidden,
+    return ON_MAIN(void *, nativeWebviewCreateOnMain((void *)handle, identifier, name, script, x, y, width, height, hidden,
         transparent));
 }
 bool nativeWebviewNavigate(void *handle, const char *url) {
@@ -331,15 +331,15 @@ void nativeWebviewEval(void *handle, const char *script) {
 void nativeWebviewClose(void *handle) {
     hostRunOnMain(^{ nativeWebviewCloseOnMain(handle); });
 }
-void nativeWindowLayoutBegin(void *window, uint64_t ticket, uintptr_t callback) {
-    hostRunOnMain(^{ nativeWindowLayoutBeginOnMain(window, ticket, callback); });
+void nativeWindowLayoutBegin(uintptr_t window, uint64_t ticket, uintptr_t callback) {
+    hostRunOnMain(^{ nativeWindowLayoutBeginOnMain((void *)window, ticket, callback); });
 }
-void nativeWindowStartPage(void *window, uint64_t ticket, double height, uintptr_t callback) {
-    hostRunOnMain(^{ nativeWindowStartPageOnMain(window, ticket, height, callback); });
+void nativeWindowStartPage(uintptr_t window, uint64_t ticket, double height, uintptr_t callback) {
+    hostRunOnMain(^{ nativeWindowStartPageOnMain((void *)window, ticket, height, callback); });
 }
-bool nativeWindowFullscreen(void *handle, bool on, uintptr_t callback) {
-    return ON_MAIN(bool, nativeWindowFullscreenOnMain(handle, on, callback));
+bool nativeWindowFullscreen(uintptr_t handle, bool on, uintptr_t callback) {
+    return ON_MAIN(bool, nativeWindowFullscreenOnMain((void *)handle, on, callback));
 }
-void *nativeWindowObserveResponder(void *handle, uintptr_t callback) {
-    return ON_MAIN(void *, nativeWindowObserveResponderOnMain(handle, callback));
+void *nativeWindowObserveResponder(uintptr_t handle, uintptr_t callback) {
+    return ON_MAIN(void *, nativeWindowObserveResponderOnMain((void *)handle, callback));
 }

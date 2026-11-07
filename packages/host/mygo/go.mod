@@ -22,4 +22,4 @@ require (
 // The replacement runs no Go code on the main thread, reports the presentation
 // of a frame, lets the application own its activation, its signals and the
 // notification center delegate, and draws while a window is occluded.
-replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.0.0-20261106123426-3b18efc20896
+replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.1

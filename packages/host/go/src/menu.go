@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // The contract table of the top-level menus. (id, ko, en). The title of app is the application name, so it is left empty.
@@ -246,7 +247,7 @@ func (h *Host) SetMenuLanguage(ctx context.Context, languageJSON json.RawMessage
 // runMenuCommand requests the main page of the main application window to run a command. The main window is
 // read on the UI thread. It is recorded when there is no main window.
 func runMenuCommand(command string) {
-	var main unsafe.Pointer
+	var main platform.Window
 	var err error
 	mainThreadStep(func() { main, err = system.MainWindow() })
 	if err != nil {
@@ -254,7 +255,7 @@ func runMenuCommand(command string) {
 		return
 	}
 	for _, window := range framework.Windows() {
-		if main != nil && window.NativeWindow() == main {
+		if main != 0 && window.NativeWindow() == main {
 			window.Emit("menu-command", map[string]any{"name": command})
 			return
 		}

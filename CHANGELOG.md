@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F685: The Wails, mygo and tao forks are pinned by their release tags `v3.0.0-beta.27-soksak.1`, `v0.7.4-244-g4abb83d-soksak.1` and `tao-v0.37.2-soksak.1`. A window handle is `platform.Window`, an integer on every operating system; the darwin implementation turns it into the address of its NSWindow only in native code, and the Windows COM helpers copy memory of the system through `RtlMoveMemory`, so no Go source turns an integer into a pointer.
 - F684-1: `capture_text_test --warm <language>...` compiles the text recognition model of each language in a process of its own; the window-check setup and `scripts/test-app.mjs` run it for `en-US` and `ko-KR` under a limit of 600 s before the checks, and the native runner runs it before `capture_text_test` through a `build:` entry, so the limits of 10 s and 120 s measure only recognition and the test.
 - F684: `capture_text_test` reports a failure that Vision reports for a request, such as the `e5rtError` of a text recognition model that the system cannot load, as `error: the system text recognizer failed: <error>` with exit status 3 instead of a recognition result with status 1, and its default invocation checks that report with an injected failure.
 - F683-2: The test runner of `pnpm test` fails a process whose output holds a process warning of node, through `processWarnings` of `scripts/node-warnings.mjs`, the rule that the language adapter also uses.

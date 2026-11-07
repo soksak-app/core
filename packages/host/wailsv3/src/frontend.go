@@ -16,19 +16,24 @@ type Frontend struct {
 	window *application.WebviewWindow
 }
 
-func (f Frontend) ID() uint                     { return f.window.ID() }
-func (f Frontend) Name() string                 { return f.window.Name() }
-func (f Frontend) NativeWindow() unsafe.Pointer { return f.window.NativeWindow() }
-func (f Frontend) SetTitle(title string)        { f.window.SetTitle(title) }
-func (f Frontend) Show()                        { f.window.Show() }
-func (f Frontend) Focus()                       { f.window.Focus() }
-func (f Frontend) IsFocused() bool              { return f.window.IsFocused() }
-func (f Frontend) Close()                       { f.window.Close() }
-func (f Frontend) Maximize()                    { f.window.Maximise() }
-func (f Frontend) Unmaximize()                  { f.window.UnMaximise() }
-func (f Frontend) IsMaximized() bool            { return f.window.IsMaximised() }
-func (f Frontend) IsFullscreen() bool           { return f.window.IsFullscreen() }
-func (f Frontend) IsMinimized() bool            { return f.window.IsMinimised() }
+func (f Frontend) ID() uint              { return f.window.ID() }
+func (f Frontend) Name() string          { return f.window.Name() }
+func (f Frontend) SetTitle(title string) { f.window.SetTitle(title) }
+func (f Frontend) Show()                 { f.window.Show() }
+func (f Frontend) Focus()                { f.window.Focus() }
+func (f Frontend) IsFocused() bool       { return f.window.IsFocused() }
+func (f Frontend) Close()                { f.window.Close() }
+func (f Frontend) Maximize()             { f.window.Maximise() }
+func (f Frontend) Unmaximize()           { f.window.UnMaximise() }
+func (f Frontend) IsMaximized() bool     { return f.window.IsMaximised() }
+func (f Frontend) IsFullscreen() bool    { return f.window.IsFullscreen() }
+func (f Frontend) IsMinimized() bool     { return f.window.IsMinimised() }
+
+// NativeWindow is the native window, or the zero Window once the framework closed the window. Wails gives the handle as a pointer
+// on macOS and as an integer on Windows, and either converts to the integer of the handle.
+func (f Frontend) NativeWindow() platform.Window {
+	return platform.Window(uintptr(f.window.NativeWindow()))
+}
 
 // WailsPixels is the nearest integer of a logical length of the port, which Wails holds as an integer.
 func WailsPixels(length float64) int { return int(math.Round(length)) }
@@ -91,7 +96,7 @@ func (f Frontend) AfterPresentation(done func(err error)) error {
 	if err != nil {
 		return err
 	}
-	return system.AfterPresentation(f.window.NativeWindow(), func() { done(nil) })
+	return system.AfterPresentation(f.NativeWindow(), func() { done(nil) })
 }
 
 // SettledPresentation is the settled presentation of the main page: the block of its main web view.
@@ -100,7 +105,7 @@ func (f Frontend) SettledPresentation() (unsafe.Pointer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return system.MainPresentation(f.window.NativeWindow())
+	return system.MainPresentation(f.NativeWindow())
 }
 
 // StartWorkbench reloads the main page.

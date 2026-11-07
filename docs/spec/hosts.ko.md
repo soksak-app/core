@@ -161,7 +161,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 
 ## 플랫폼 인터페이스
 
-`src/platform/platform.*`가 인터페이스를 정의하고, 각 `src/platform/<os>/`가 이를 구현한다. 연산은 네이티브 창과 뷰 핸들을 받는다.
+`src/platform/platform.*`가 인터페이스를 정의하고, 각 `src/platform/<os>/`가 이를 구현한다. 연산은 네이티브 창과 뷰 핸들을 받는다. Go에서 창 핸들은 `platform.Window`이고 모든 운영체제에서 정수다. HWND는 Windows가 소유한 값이지 주소가 아니므로 Go pointer가 그것을 담지 않고, darwin 구현만 native code를 부르는 자리에서 핸들을 NSWindow의 주소로 바꾼다. 뷰 핸들은 native code 객체를 가리키는 `unsafe.Pointer`다.
 
 | 영역 | 연산 |
 | --- | --- |

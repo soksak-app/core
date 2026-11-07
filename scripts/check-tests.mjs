@@ -1894,7 +1894,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F591",
-    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "win.NativeWindow() != nil" }],
+    implementation: [{ file: "packages/host/go/src/windows.go", symbol: "win.NativeWindow() != 0" }],
     tests: [{ file: "packages/host/go/src/windows_main_page_test.go", id: "TestAWindowThatIsGoneReadsNoStateOnAChange" }],
     expected: "A change of a window whose native window is gone reads no state and logs no error.",
     levels: ["unit"],
@@ -2506,7 +2506,7 @@ const FEATURE_LINKS = [
   {
     id: "F559",
     implementation: [
-      { file: "packages/host/mygo/src/frontend.go", symbol: "func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {" },
+      { file: "packages/host/mygo/src/frontend.go", symbol: "func WindowScale(invoke func(func()), name string, native func() platform.Window, read func(platform.Window) (string, error)) (float64, error) {" },
       { file: "packages/workbench-mygo/src/plane_verify.go", symbol: "func (s *Shell) failWindowRead(err error) {" },
     ],
     tests: [
@@ -2957,7 +2957,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/framework.go", symbol: "SettledPresentation() (unsafe.Pointer, error)" },
       { file: "packages/host/rust/src/framework.rs", symbol: "fn after_presentation(&self, done: PresentationDone) -> Result<()>;" },
       { file: "packages/host/rust/src/framework.rs", symbol: "fn settled_presentation(&self) -> Result<*mut c_void>;" },
-      { file: "packages/host/go/src/platform/darwin/layout.go", symbol: "func (implementation) MainPresentation(window unsafe.Pointer) (unsafe.Pointer, error) {" },
+      { file: "packages/host/go/src/platform/darwin/layout.go", symbol: "func (implementation) MainPresentation(window platform.Window) (unsafe.Pointer, error) {" },
       { file: "packages/host/rust/src/platform/darwin/layout.rs", symbol: "pub fn main_presentation(view: &PlatformWebview) -> Handle {" },
       { file: "packages/host/wailsv3/src/frontend.go", symbol: "func (f Frontend) SettledPresentation() (unsafe.Pointer, error) {" },
       { file: "packages/host/tauriv2/src/frontend.rs", symbol: "fn settled_presentation(&self) -> port::Result<*mut c_void> {" },

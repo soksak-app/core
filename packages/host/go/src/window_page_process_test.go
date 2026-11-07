@@ -3,7 +3,8 @@ package host
 import (
 	"encoding/json"
 	"testing"
-	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // pageProcessPlatform reports the window facts of a window with a page process of pid.
@@ -12,7 +13,7 @@ type pageProcessPlatform struct {
 	pid int
 }
 
-func (p *pageProcessPlatform) WindowFacts(unsafe.Pointer) (string, error) {
+func (p *pageProcessPlatform) WindowFacts(platform.Window) (string, error) {
 	text, err := json.Marshal(map[string]any{"pageProcess": p.pid, "nativeSurfaces": []any{}, "webviews": []any{}})
 	return string(text), err
 }
@@ -25,7 +26,7 @@ func (mainPageFramework) MainPage() bool { return true }
 func pageProcessSurfaces(t *testing.T, selected Framework, pid int) *Surfaces {
 	t.Helper()
 	window := &elementWindow{}
-	window.native = unsafe.Pointer(new(byte))
+	window.native = platform.Window(1)
 	previousFramework, previousSystem := framework, system
 	framework, system = selected, &pageProcessPlatform{pid: pid}
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })

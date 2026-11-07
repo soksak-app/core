@@ -13,7 +13,7 @@ static void nativeUIRun(uintptr_t context) {
 }
 static void uiEnqueue(uintptr_t context) { sp_ui_enqueue(nativeUIRun, context); }
 static void uiEnqueueAfter(uint64_t delay, uintptr_t context) { sp_ui_enqueue_after(delay, nativeUIRun, context); }
-static void installMainThread(void *worker, void *main) {
+static void installMainThread(uintptr_t worker, uintptr_t main) {
     hostInstallMainThread((void (*)(void (^)(void)))worker, (void (*)(void (^)(void)))main);
 }
 static void mainThreadInstalled(bool *worker, bool *main) { hostMainThreadInstalled(worker, main); }
@@ -25,12 +25,13 @@ import (
 	"runtime/cgo"
 	"strings"
 	"time"
-	"unsafe"
 )
 
-// InstallMainThread installs the main-thread functions of the framework (main_thread.h). A framework adapter calls it before the
-// start of the library.
-func InstallMainThread(worker, main unsafe.Pointer) { C.installMainThread(worker, main) }
+// InstallMainThread installs the main-thread functions of the framework (main_thread.h), given as the addresses of the C functions.
+// A framework adapter calls it before the start of the library.
+func InstallMainThread(worker, main uintptr) {
+	C.installMainThread(C.uintptr_t(worker), C.uintptr_t(main))
+}
 
 func (implementation) RequireMainThread() error {
 	var worker, main C.bool

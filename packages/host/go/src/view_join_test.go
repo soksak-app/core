@@ -15,7 +15,7 @@ const presentationJoinTrace = "host.trace.view.presentation-join"
 
 type synchronousPresentationPlatform struct{ *lifecyclePlatform }
 
-func (p synchronousPresentationPlatform) JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
+func (p synchronousPresentationPlatform) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
 	abandon, joined, err := p.lifecyclePlatform.JoinView(window, ticket, view, presented)
 	if err == nil && joined {
 		presented()
@@ -26,7 +26,7 @@ func (p synchronousPresentationPlatform) JoinView(window unsafe.Pointer, ticket 
 // contract: view.presentation-wait.joins
 func TestUnsettledChangedRootPlacementJoinsItsPresentation(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placements := []Placement{{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}}
 	request := PresentRequest{Ticket: 23, Placements: placements, Settled: false}
 	if err := s.joinViewsForPresentRequest(window, request, placements); err != nil {
@@ -43,7 +43,7 @@ func TestUnsettledChangedRootPlacementJoinsItsPresentation(t *testing.T) {
 // contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
 	request := PresentRequest{Ticket: 36, Placements: []Placement{placement}, Settled: false}
 	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
@@ -80,7 +80,7 @@ func TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit(t *testing.T) {
 func TestRestartLimitLeavesNoReplacementGenerationToJoin(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
 	request := PresentRequest{Ticket: 37, Placements: []Placement{placement}, Settled: false}
 	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
@@ -118,7 +118,7 @@ func TestRestartLimitInvalidatesPlacementAfterItsJoinPresented(t *testing.T) {
 		clock.set(offset)
 		endView(t, s, fake)
 	}
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
 	request := PresentRequest{Ticket: 39, Placements: []Placement{placement}, Settled: false}
 	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
@@ -157,7 +157,7 @@ func TestRestartLimitInvalidatesPlacementAfterItsJoinPresented(t *testing.T) {
 // contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestInitiallyAbsentRootGenerationIsNotPromoted(t *testing.T) {
 	s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
 	if _, err := s.documents.Remove(DocumentKey{Surface: placement.ID, Name: viewRegionName}); err != nil {
 		t.Fatalf("remove initial root document: %v", err)
@@ -184,7 +184,7 @@ func TestChangedPlacementJoinTracksCommittedGeometryVisibilityAndGeneration(t *t
 	if err := s.documents.Reserve(childKey); err != nil || !s.documents.Set(childKey, child) {
 		t.Fatalf("register nested document: reserve error %v", err)
 	}
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
 	request := func(ticket uint64, p Placement) PresentRequest {
 		return PresentRequest{Ticket: ticket, Placements: []Placement{p}, Settled: false}
@@ -259,7 +259,7 @@ func TestChangedPlacementJoinTracksCommittedGeometryVisibilityAndGeneration(t *t
 // contract: view.presentation-wait.joins
 func TestOlderViewPresentationCannotEndANewerJoin(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 1, Y: 2, W: 300, H: 160}, Visible: true}
 	first := PresentRequest{Ticket: 40, Placements: []Placement{placement}}
 	if err := s.joinViewsForPresentRequest(window, first, []Placement{placement}); err != nil {
@@ -293,7 +293,7 @@ func TestLayoutCancellationClearsItsJoinWithoutPresentationAbandonment(t *testin
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	var events []string
 	s.events = func(name string, data any) { events = append(events, name) }
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 1, Y: 2, W: 300, H: 160}, Visible: true}
 	request := PresentRequest{Ticket: 42, Placements: []Placement{placement}}
 	if err := s.joinViewsForPresentRequest(window, request, []Placement{placement}); err != nil {
@@ -313,7 +313,7 @@ func TestLayoutCancellationClearsItsJoinWithoutPresentationAbandonment(t *testin
 		t.Fatalf("canceled join abandonment count is %d; want 1", fake.joins[0].abandons)
 	}
 	if len(fake.cancelledLayouts) != 1 || fake.cancelledLayouts[0] != window {
-		t.Fatalf("native layout cancellations are %v; want exactly window %p", fake.cancelledLayouts, window)
+		t.Fatalf("native layout cancellations are %v; want exactly window %v", fake.cancelledLayouts, window)
 	}
 	if len(fake.cancelledTickets) != 1 || fake.cancelledTickets[0] != request.Ticket {
 		t.Fatalf("native layout cancellation tickets are %v; want only %d", fake.cancelledTickets, request.Ticket)
@@ -337,7 +337,7 @@ func TestLayoutCancellationClearsItsJoinWithoutPresentationAbandonment(t *testin
 // that its preparation is no longer current, as the native commit of a cancelled ticket answers on every host.
 func TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 1, Y: 2, W: 300, H: 160}, Visible: true}
 	request := PresentRequest{Ticket: 9, Placements: []Placement{placement}}
 	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
@@ -358,7 +358,7 @@ func TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent(t *testing.T)
 // A shown view joins the open transaction once, and its presentation ends the wait without an abandon.
 func TestAShownViewJoinsTheOpenTransactionOnce(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	shown := []Placement{{ID: "probe-surface", Visible: true}}
 	if err := s.joinShownViews(window, 7, shown); err != nil {
 		t.Fatalf("join: %v", err)
@@ -367,7 +367,7 @@ func TestAShownViewJoinsTheOpenTransactionOnce(t *testing.T) {
 		t.Fatalf("the shown view joined %d transactions, want 1", len(fake.joins))
 	}
 	if fake.joins[0].ticket != 7 || fake.joins[0].window != window {
-		t.Fatalf("the join has ticket %d and window %p, want 7 and the window of the layout", fake.joins[0].ticket, fake.joins[0].window)
+		t.Fatalf("the join has ticket %d and window %v, want 7 and the window of the layout", fake.joins[0].ticket, fake.joins[0].window)
 	}
 	if err := s.joinShownViews(window, 7, shown); err != nil {
 		t.Fatalf("second join: %v", err)
@@ -394,7 +394,7 @@ func TestAShownViewJoinsTheOpenTransactionOnce(t *testing.T) {
 // Each end without presentation abandons the native join of the view once: the process end, the hidden view and the unresponsive notice.
 func TestEachEndWithoutPresentationAbandonsTheViewJoin(t *testing.T) {
 	shown := []Placement{{ID: "probe-surface", Visible: true}}
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	for _, reason := range []string{"process-ended", "hidden", "unresponsive"} {
 		t.Run(reason, func(t *testing.T) {
 			isolateTraceRecords(t)
@@ -446,7 +446,7 @@ func TestPresentationJoinTraceKeepsExactIdentityAcrossCallbackAndAbandonment(t *
 	wasOn := performanceOn.Swap(true)
 	t.Cleanup(func() { performanceOn.Store(wasOn) })
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Visible: true}
 	channel, ok := s.documents.view(placement.ID)
 	if !ok {
@@ -502,7 +502,7 @@ func TestSynchronousPresentationJoinCallbackPrecedesNativeJoinResult(t *testing.
 	t.Cleanup(func() { performanceOn.Store(wasOn) })
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
 	system = synchronousPresentationPlatform{fake}
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Visible: true}
 	channel, ok := s.documents.view(placement.ID)
 	if !ok {
@@ -529,7 +529,7 @@ func TestSynchronousPresentationJoinCallbackPrecedesNativeJoinResult(t *testing.
 // contract: view.presentation-wait.ends-at-the-presentation-limit
 func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtThePresentationLimit(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
 	request := PresentRequest{Ticket: 41, Placements: []Placement{placement}}
 	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
@@ -564,7 +564,7 @@ func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtThePresentationLimit(t *testi
 // contract: view.presentation-wait.ends-at-the-presentation-limit
 func TestTheLimitOfAPresentedJoinChangesNothing(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
 	request := PresentRequest{Ticket: 41, Placements: []Placement{placement}}
 	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
@@ -636,9 +636,11 @@ func (p *keyboardHoldPlatform) EnqueueUI(run func()) error {
 	run()
 	return nil
 }
-func (p *keyboardHoldPlatform) FocusWorkbench(unsafe.Pointer) { p.calls = append(p.calls, "workbench") }
-func (p *keyboardHoldPlatform) KeyboardHold(unsafe.Pointer)   { p.calls = append(p.calls, "hold") }
-func (p *keyboardHoldPlatform) KeyboardDecided(unsafe.Pointer) {
+func (p *keyboardHoldPlatform) FocusWorkbench(platform.Window) {
+	p.calls = append(p.calls, "workbench")
+}
+func (p *keyboardHoldPlatform) KeyboardHold(platform.Window) { p.calls = append(p.calls, "hold") }
+func (p *keyboardHoldPlatform) KeyboardDecided(platform.Window) {
 	p.calls = append(p.calls, "decided")
 }
 

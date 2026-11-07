@@ -160,7 +160,7 @@ The shell sidecar repository uses the same Go mechanism in its `src/platform/` (
 
 ## Platform interface
 
-`src/platform/platform.*` defines the interface that each `src/platform/<os>/` implements. Operations take native window and view handles.
+`src/platform/platform.*` defines the interface that each `src/platform/<os>/` implements. Operations take native window and view handles. In Go a window handle is `platform.Window`, an integer on every operating system: an HWND is a value that Windows owns and not an address, so no Go pointer holds it, and only the darwin implementation turns a handle into the address of its NSWindow at the call of native code. A view handle is an `unsafe.Pointer` to an object of native code.
 
 | Area | Operations |
 | --- | --- |

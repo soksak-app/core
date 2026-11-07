@@ -777,7 +777,7 @@ func readPressThenDeliver(read, deliver func() error) error {
 
 // viewAt reads the web view under the coordinates of a directly injected press. A direct injection does not pass through
 // the local event monitor of AppKit, so the host publishes its surface press separately from the monitor.
-func viewAt(window unsafe.Pointer, x, y float64) (uintptr, error) {
+func viewAt(window platform.Window, x, y float64) (uintptr, error) {
 	text, err := system.WindowHit(window, x, y)
 	if err != nil {
 		return 0, err
@@ -1010,7 +1010,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 
 // setWindowOverlays gives the main web view of window the declared overlays. A window without a main page has none, because its
 // workbench draws over native views through the covers of the framework (docs/spec/native-surfaces.md#surface-host-container).
-func setWindowOverlays(window unsafe.Pointer, overlays []platform.WindowOverlay) error {
+func setWindowOverlays(window platform.Window, overlays []platform.WindowOverlay) error {
 	if !framework.MainPage() {
 		return nil
 	}
@@ -1428,7 +1428,7 @@ func (s *Surfaces) KeyboardDecided() error {
 }
 
 // onWindowUI runs call with the native window on the UI thread and returns after it ran.
-func (s *Surfaces) onWindowUI(call func(window unsafe.Pointer)) error {
+func (s *Surfaces) onWindowUI(call func(window platform.Window)) error {
 	if s.window == nil {
 		return errNoWindow
 	}
@@ -1445,7 +1445,7 @@ func (s *Surfaces) onWindowUI(call func(window unsafe.Pointer)) error {
 }
 
 // finishLayoutPresentation reads the actual surface frames and commits an accepted presentation on the UI thread.
-func (s *Surfaces) finishLayoutPresentation(window unsafe.Pointer, req PresentRequest) ([]Placement, error) {
+func (s *Surfaces) finishLayoutPresentation(window platform.Window, req PresentRequest) ([]Placement, error) {
 	if err := s.ensureCurrentPresentationJoins(window, req); err != nil {
 		if cancel := s.cancelLayoutPresentation(window, req.Ticket); cancel != nil {
 			err = fmt.Errorf("%w; cancelling layout: %v", err, cancel)
@@ -1482,7 +1482,7 @@ func (s *Surfaces) finishLayoutPresentation(window unsafe.Pointer, req PresentRe
 // ensureCurrentPresentationJoins verifies that each visible root view in the request still matches its ticket join. The presentation
 // recorded the state of its ticket before it waited, so a ticket without state was cancelled meanwhile, by a reload, the close of the
 // window or cancelSurfaces, and its preparation is no longer current.
-func (s *Surfaces) ensureCurrentPresentationJoins(window unsafe.Pointer, req PresentRequest) error {
+func (s *Surfaces) ensureCurrentPresentationJoins(window platform.Window, req PresentRequest) error {
 	state := s.presentation.pending[req.Ticket]
 	if state == nil {
 		return fmt.Errorf("surface preparation %d is no longer current", req.Ticket)

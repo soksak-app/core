@@ -18,7 +18,7 @@ static char *main_sp_dock_items(void) { return ON_MAIN(char *, sp_dock_items());
 static char *main_sp_menu_items(void) { return ON_MAIN(char *, sp_menu_items()); }
 static char *main_sp_preferred_language(void) { return ON_MAIN(char *, sp_preferred_language()); }
 static bool main_sp_menu_select(const char *menu, const char *title) { return ON_MAIN(bool, sp_menu_select(menu, title)); }
-static void *main_sp_app_main_window(void) { return ON_MAIN(void *, sp_app_main_window()); }
+static uintptr_t main_sp_app_main_window(void) { return (uintptr_t)ON_MAIN(void *, sp_app_main_window()); }
 static bool main_sp_dock_select(const char *title) { return ON_MAIN(bool, sp_dock_select(title)); }
 */
 import "C"
@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
@@ -71,7 +72,9 @@ func (implementation) MenuSelect(menu, title string) error {
 	return nil
 }
 
-func (implementation) MainWindow() (unsafe.Pointer, error) { return C.main_sp_app_main_window(), nil }
+func (implementation) MainWindow() (platform.Window, error) {
+	return platform.Window(C.main_sp_app_main_window()), nil
+}
 
 func (implementation) DockSelect(title string) error {
 	text := C.CString(title)

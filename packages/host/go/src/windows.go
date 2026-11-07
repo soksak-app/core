@@ -95,14 +95,14 @@ var errNoWindow = errors.New("the main window is gone")
 var errWindowClosed = errors.New("project window is closed")
 
 // UseNativeWindow reads the native window of the window name with native in one step of the UI thread that invoke runs, and runs use with that window.
-// The destroy of Wails closes the window on the UI thread and sets the native window to nil, so a window closed before that step
-// is nil. For that window, it does not run use and returns the error 1003 of a window that does not exist. Native code does not receive a closed
+// The destroy of Wails closes the window on the UI thread and sets the native window to zero, so a window closed before that step
+// is zero. For that window, it does not run use and returns the error 1003 of a window that does not exist. Native code does not receive a closed
 // window.
-func UseNativeWindow(invoke func(func()), name string, native func() unsafe.Pointer, use func(window unsafe.Pointer) error) error {
+func UseNativeWindow(invoke func(func()), name string, native func() platform.Window, use func(window platform.Window) error) error {
 	var err error
 	invoke(func() {
 		window := native()
-		if window == nil {
+		if window == 0 {
 			err = errMissingWindow(name)
 			return
 		}
@@ -112,7 +112,7 @@ func UseNativeWindow(invoke func(func()), name string, native func() unsafe.Poin
 }
 
 // useWindow runs use with the native window of this window in one step of the UI thread. A window that closed before that step gives 1003.
-func (s *Surfaces) useWindow(use func(window unsafe.Pointer) error) error {
+func (s *Surfaces) useWindow(use func(window platform.Window) error) error {
 	return UseNativeWindow(mainThreadStep, s.name, s.window.NativeWindow, use)
 }
 
@@ -254,7 +254,7 @@ func (h *Host) WindowClose(ctx context.Context) error {
 // ShowWindow puts a native window on the screen without taking the front from another application, for the show of a
 // framework (docs/spec/hosts.md#launch-activation). The show asks for the registered platform: a framework shows a window
 // whether or not the start of the host selected one.
-func ShowWindow(window unsafe.Pointer) {
+func ShowWindow(window platform.Window) {
 	current, err := platform.Current()
 	if err != nil {
 		fatalError("window show", err)
@@ -449,7 +449,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			win.Show()
 		})
 	}
-	if win.NativeWindow() != nil {
+	if win.NativeWindow() != 0 {
 		s.prepareNative()
 	}
 	// Tells the connections that watch host.window about changes of the window position, size, key state and occlusion state. A framework sends the occlusion
@@ -458,7 +458,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		// An occluded or minimized window draws no image region (docs/spec/native-surfaces.md#image-regions).
 		mainThreadStep(func() {
 			// A window that closes still reports changes, and it has no state left to read.
-			if win.NativeWindow() != nil {
+			if win.NativeWindow() != 0 {
 				if err := s.readOnScreen(); err != nil {
 					LogError("window on screen", err)
 				}
@@ -606,7 +606,7 @@ func ValidateTitlebarHeight(height float64) error {
 // titlebarChrome sets the title bar of the window to height (pt) and returns the window button region and title bar height after that and the function that restores the previous height.
 // A surface preparation calls it on the UI thread inside the layout transaction of the window, so the new height goes to the screen together with the commit of that transaction.
 // A full screen window does not change the height, returns Row 0, and has nothing to restore.
-func titlebarChrome(window unsafe.Pointer, height float64) (Chrome, func() error, error) {
+func titlebarChrome(window platform.Window, height float64) (Chrome, func() error, error) {
 	previous, err := system.TitlebarHeight(window)
 	if err != nil {
 		return Chrome{}, nil, err

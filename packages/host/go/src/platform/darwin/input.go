@@ -14,8 +14,8 @@ extern void goInputActivated(void *context, int result, char *frontmost);
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
     hostRunOnWorker(^{ goInputActivated(context, (int)result, (char *)frontmost); });
 }
-static void activateWindowAt(void *window, double x, double y, double timeout, uintptr_t handle) {
-    hostRunOnMain(^{ sp_input_activate_at(window, x, y, timeout, activated, (void *)handle); });
+static void activateWindowAt(uintptr_t window, double x, double y, double timeout, uintptr_t handle) {
+    hostRunOnMain(^{ sp_input_activate_at((void *)window, x, y, timeout, activated, (void *)handle); });
 }
 
 extern void goInputDelivered(void *context, int result, sp_input_held *held);
@@ -23,10 +23,10 @@ static void delivered(void *context, sp_input_result result, const sp_input_held
     hostRunOnWorker(^{ goInputDelivered(context, (int)result, (sp_input_held *)held); });
 }
 // pointer is a C string that the block frees after the delivery took it.
-static void injectPointer(void *window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
+static void injectPointer(uintptr_t window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     double receive, uintptr_t handle) {
     hostRunOnMain(^{
-        sp_input_pointer_then(window, pointer, x, y, phase, button, deltaX, deltaY, clicks, receive, delivered, (void *)handle);
+        sp_input_pointer_then((void *)window, pointer, x, y, phase, button, deltaX, deltaY, clicks, receive, delivered, (void *)handle);
         free(pointer);
     });
 }
@@ -100,16 +100,16 @@ static uintptr_t surfaceWatchMouseOnMain(void* nsWindow, uintptr_t owner) {
     }];
 }
 
-static uintptr_t surfaceWatchMouse(void* nsWindow, uintptr_t owner) {
-    return ON_MAIN(uintptr_t, surfaceWatchMouseOnMain(nsWindow, owner));
+static uintptr_t surfaceWatchMouse(uintptr_t nsWindow, uintptr_t owner) {
+    return ON_MAIN(uintptr_t, surfaceWatchMouseOnMain((void *)nsWindow, owner));
 }
 
 static void surfaceUnwatchMouse(uintptr_t monitor) {
     hostRunOnMain(^{ if (monitor) [NSEvent removeMonitor:(id)monitor]; });
 }
 
-static sp_input_result main_sp_input_key(void *window, const char *key, const char *text, unsigned int modifiers, bool down) {
-    return ON_MAIN(sp_input_result, sp_input_key(window, key, text, modifiers, down));
+static sp_input_result main_sp_input_key(uintptr_t window, const char *key, const char *text, unsigned int modifiers, bool down) {
+    return ON_MAIN(sp_input_result, sp_input_key((void *)window, key, text, modifiers, down));
 }
 */
 import "C"
@@ -141,15 +141,15 @@ func goSurfacePoint(owner C.uintptr_t, phase C.int, x C.double, y C.double) {
 	cgo.Handle(owner).Value().(platform.Input).Point(int(phase), float64(x), float64(y))
 }
 
-func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (uintptr, error) {
+func (implementation) WatchInput(window platform.Window, input platform.Input) (uintptr, error) {
 	handle := cgo.NewHandle(input)
-	monitor := uintptr(C.surfaceWatchMouse(window, C.uintptr_t(handle)))
+	monitor := uintptr(C.surfaceWatchMouse(C.uintptr_t(window), C.uintptr_t(handle)))
 	watchers[monitor] = handle
 	return monitor, nil
 }
 
 // InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application.
-func (implementation) InjectPointer(window unsafe.Pointer, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	pointerSequence.Lock()
 	var once sync.Once
 	serialized := func(result platform.PointerResult, held platform.ButtonHeld) {
@@ -158,7 +158,7 @@ func (implementation) InjectPointer(window unsafe.Pointer, pointer string, x, y 
 			done(result, held)
 		})
 	}
-	C.injectPointer(window, C.CString(pointer), C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY), C.int(clicks),
+	C.injectPointer(C.uintptr_t(window), C.CString(pointer), C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY), C.int(clicks),
 		C.double(receive), C.uintptr_t(cgo.NewHandle(serialized)))
 	return nil
 }
@@ -250,13 +250,13 @@ func activationResult(result C.sp_activate_result, timeout float64, frontmost st
 }
 
 // ActivateWindow makes the window the key window with sp_input_activate of native/darwin.
-func (implementation) ActivateWindow(window unsafe.Pointer, x, y, timeout float64, done func(error)) error {
-	C.activateWindowAt(window, C.double(x), C.double(y), C.double(timeout), C.uintptr_t(cgo.NewHandle(activation{timeout, done})))
+func (implementation) ActivateWindow(window platform.Window, x, y, timeout float64, done func(error)) error {
+	C.activateWindowAt(C.uintptr_t(window), C.double(x), C.double(y), C.double(timeout), C.uintptr_t(cgo.NewHandle(activation{timeout, done})))
 	return nil
 }
 
 // InjectKey delivers input with sp_input_key of native/darwin. When text is empty, it types key.
-func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {
+func (implementation) InjectKey(window platform.Window, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {
 	name := C.CString(key)
 	defer C.free(unsafe.Pointer(name))
 	var typed *C.char
@@ -264,7 +264,7 @@ func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifie
 		typed = C.CString(text)
 		defer C.free(unsafe.Pointer(typed))
 	}
-	switch C.main_sp_input_key(window, name, typed, C.uint(modifiers), C.bool(down)) {
+	switch C.main_sp_input_key(C.uintptr_t(window), name, typed, C.uint(modifiers), C.bool(down)) {
 	case C.SP_INPUT_DELIVERED:
 		return platform.PointerDelivered, nil
 	case C.SP_INPUT_INACTIVE:

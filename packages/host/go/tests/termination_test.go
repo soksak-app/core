@@ -13,9 +13,9 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
-	"unsafe"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // terminationChild is the environment variable that tells that the process is a child process.
@@ -176,7 +176,7 @@ func (quitWindow) Frames() *host.WindowFrames { return nil }
 
 func (quitWindow) ID() uint                               { return 1 }
 func (w quitWindow) Name() string                         { return w.name }
-func (quitWindow) NativeWindow() unsafe.Pointer           { return nil }
+func (quitWindow) NativeWindow() platform.Window          { return 0 }
 func (quitWindow) OnWindowEvent(host.WindowEvent, func()) {}
 func (quitWindow) OnClosing(func() bool)                  {}
 func (quitWindow) IsFocused() bool                        { return false }

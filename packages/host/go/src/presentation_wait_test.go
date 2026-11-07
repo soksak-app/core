@@ -2,7 +2,8 @@ package host
 
 import (
 	"testing"
-	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // contract: view.presentation-wait.ends
@@ -115,7 +116,7 @@ func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
 	system = queue
 	t.Cleanup(func() { system = saved })
 	events := recordWindowEvents(s)
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	shown := []Placement{{ID: "probe-surface", Visible: true}}
 	if err := s.joinShownViews(window, 7, shown); err != nil {
 		t.Fatalf("join: %v", err)
@@ -150,7 +151,7 @@ func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
 func TestAnInvisiblePlacementAtPresentEndsNoWaitUntilItsSync(t *testing.T) {
 	isolateTraceRecords(t)
 	s, fake, native := newLifecycleSurfaces(t, &fakeClock{})
-	window := unsafe.Pointer(new(int))
+	window := platform.Window(1)
 	shown := []Placement{{ID: "probe-surface", Visible: true}}
 	if err := s.joinShownViews(window, 7, shown); err != nil {
 		t.Fatalf("join: %v", err)

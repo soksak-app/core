@@ -29,7 +29,8 @@ strip = true
 strip = false
 # tao 0.37.2 calls activateIgnoringOtherApps(false) at launch when an application does not ignore other applications,
 # and that call activates the application when no other application is active, so a background relaunch can come to
-# the front (docs/spec/hosts.md#launch-activation). The fork commit on tag tao-v0.37.2 makes no call in that case and
-# leaves the activation to Launch Services. The override is removed when a tao release on crates.io carries the change.
+# the front (docs/spec/hosts.md#launch-activation). The fork release tao-v0.37.2-soksak.1, built on tag tao-v0.37.2, makes no
+# call in that case and leaves the activation to Launch Services. The override is removed when a tao release on crates.io
+# carries the change.
 [patch.crates-io]
-tao = { git = "https://github.com/min-0-max/tao", rev = "1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6" }
+tao = { git = "https://github.com/min-0-max/tao", tag = "tao-v0.37.2-soksak.1" }

@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // contract: window-close.surfaces.closes-regions-then-surface
@@ -111,8 +112,8 @@ func TestClosingAWindowReportsEveryFailureAndClosesTheRest(t *testing.T) {
 // not passed to native code and is answered with 1003.
 // contract: window-close.native-window.used-in-reading-step
 func TestACloseBeforeTheNativeStepDoesNotReachNativeCode(t *testing.T) {
-	var window int
-	native := unsafe.Pointer(&window)
+	const open = platform.Window(1)
+	native := open
 	// The UI thread of the test. Work sent by other threads runs in order before the next step runs.
 	var pending []func()
 	invoke := func(step func()) {
@@ -123,22 +124,22 @@ func TestACloseBeforeTheNativeStepDoesNotReachNativeCode(t *testing.T) {
 		}
 		step()
 	}
-	var used []unsafe.Pointer
-	use := func(window unsafe.Pointer) error {
+	var used []platform.Window
+	use := func(window platform.Window) error {
 		used = append(used, window)
 		return nil
 	}
-	if err := host.UseNativeWindow(invoke, "w2", func() unsafe.Pointer { return native }, use); err != nil {
+	if err := host.UseNativeWindow(invoke, "w2", func() platform.Window { return native }, use); err != nil {
 		t.Fatalf("an open window: %v", err)
 	}
-	// After the endpoint found the window, the UI thread handles the destroy of that window. The destroy sets the native window to nil.
-	pending = append(pending, func() { native = nil })
-	err := host.UseNativeWindow(invoke, "w2", func() unsafe.Pointer { return native }, use)
+	// After the endpoint found the window, the UI thread handles the destroy of that window. The destroy sets the native window to zero.
+	pending = append(pending, func() { native = 0 })
+	err := host.UseNativeWindow(invoke, "w2", func() platform.Window { return native }, use)
 	var coded *host.RPCError
 	if !errors.As(err, &coded) || coded.Code != 1003 || coded.Message != `window "w2" does not exist` {
 		t.Fatalf("a window closed before the step: %v", err)
 	}
-	if len(used) != 1 || used[0] != unsafe.Pointer(&window) {
-		t.Fatalf("native code received %v, want only the open window %v", used, unsafe.Pointer(&window))
+	if len(used) != 1 || used[0] != open {
+		t.Fatalf("native code received %v, want only the open window %v", used, open)
 	}
 }

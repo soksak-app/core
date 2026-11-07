@@ -34,12 +34,18 @@ func (placementPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)           
 
 // contract: window.frames.native-views-of-the-last-placement
 func TestAPlacementStoresTheNativeViewElementsOfTheWindow(t *testing.T) {
+	var first, second int
+	surfaces := map[uintptr]unsafe.Pointer{1: unsafe.Pointer(&first), 2: unsafe.Pointer(&second)}
+	surface := func(view uintptr) (unsafe.Pointer, bool) {
+		handle, ok := surfaces[view]
+		return handle, ok
+	}
 	f := &Frontend{frames: host.NewWindowFrames("main")}
-	f.placeSurfaces(placementPlatform{}, []mygo.NativePlacement{{View: 1}, {View: 2}})
+	f.placeSurfaces(placementPlatform{}, surface, []mygo.NativePlacement{{View: 1}, {View: 2}})
 	if got := f.frames.NativeViews(); got != 2 {
 		t.Fatalf("after a placement of two views the window holds %d native view elements", got)
 	}
-	f.placeSurfaces(placementPlatform{}, nil)
+	f.placeSurfaces(placementPlatform{}, surface, nil)
 	if got := f.frames.NativeViews(); got != 0 {
 		t.Fatalf("after a placement of no view the window holds %d native view elements", got)
 	}

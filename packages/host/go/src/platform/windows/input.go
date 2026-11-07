@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"time"
-	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -19,7 +18,7 @@ const activateStep = 20 * time.Millisecond
 
 // InjectPointer delivers a pointer input through the DevTools protocol of the web view of the window. It uses no real pointer and no
 // system focus, so a window behind others takes it. Call it on the UI thread.
-func (implementation) InjectPointer(window unsafe.Pointer, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	view, err := webviewOf(uintptr(window))
 	if err != nil {
 		return err
@@ -46,7 +45,7 @@ func (implementation) InjectPointer(window unsafe.Pointer, pointer string, x, y 
 
 // InjectKey queues a key input through the DevTools protocol of the web view of the window. The next input reports a call that failed,
 // because this call answers on the UI thread before the call ends. Call it on the UI thread.
-func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {
+func (implementation) InjectKey(window platform.Window, key, text string, modifiers uint, down bool) (platform.PointerResult, error) {
 	view, err := webviewOf(uintptr(window))
 	if err != nil {
 		return platform.PointerRejected, err
@@ -63,7 +62,7 @@ func (implementation) InjectKey(window unsafe.Pointer, key, text string, modifie
 
 // ActivateWindow asks the system for the foreground and gives the web view the focus. Input does not need it: a run that a person checks
 // asks for it. The system refuses a process that is not in front, and that refusal is the answer after timeout. Call it on the UI thread.
-func (implementation) ActivateWindow(window unsafe.Pointer, _, _, timeout float64, done func(error)) error {
+func (implementation) ActivateWindow(window platform.Window, _, _, timeout float64, done func(error)) error {
 	view, err := webviewOf(uintptr(window))
 	if err != nil {
 		return err

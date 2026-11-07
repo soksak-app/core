@@ -22,6 +22,9 @@ require (
 
 // The replacement runs no Go code on the main thread, avoids duplicate
 // transport-error records, rejects callbacks from retired windows while
-// preserving window event routing, and gives a window and its web view the
-// size that it was asked for.
-replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-20261105142514-75cb0e38d6aa
+// preserving window event routing, gives a window and its web view the
+// size that it was asked for, lets the application decide the show of a
+// window and its activation at launch, and accepts the first mouse when
+// asked. On Windows it passes a handle as the integer that it is and
+// copies memory of the system without a Go pointer to it.
+replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3 v3.0.0-beta.27-soksak.1

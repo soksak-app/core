@@ -49,11 +49,11 @@ type modalKeyboardPlatform struct {
 	refuse bool
 }
 
-func (p *modalKeyboardPlatform) AlignRect(_ unsafe.Pointer, at platform.Rect) (platform.Rect, error) {
+func (p *modalKeyboardPlatform) AlignRect(_ platform.Window, at platform.Rect) (platform.Rect, error) {
 	return at, nil
 }
 
-func (p *modalKeyboardPlatform) CreateWebview(unsafe.Pointer, platform.WebviewOptions) (unsafe.Pointer, error) {
+func (p *modalKeyboardPlatform) CreateWebview(platform.Window, platform.WebviewOptions) (unsafe.Pointer, error) {
 	if p.refuse {
 		return nil, errors.New("refused")
 	}
@@ -65,8 +65,8 @@ func (*modalKeyboardPlatform) ConfigureModal(unsafe.Pointer, string, float64) {}
 func (*modalKeyboardPlatform) SetWebviewHidden(unsafe.Pointer, bool)          {}
 func (*modalKeyboardPlatform) CloseWebview(unsafe.Pointer)                    {}
 func (*modalKeyboardPlatform) EvaluateScript(unsafe.Pointer, string)          {}
-func (p *modalKeyboardPlatform) ModalHold(unsafe.Pointer)                     { p.calls = append(p.calls, "hold") }
-func (p *modalKeyboardPlatform) ModalHoldEnd(unsafe.Pointer)                  { p.calls = append(p.calls, "end") }
+func (p *modalKeyboardPlatform) ModalHold(platform.Window)                    { p.calls = append(p.calls, "hold") }
+func (p *modalKeyboardPlatform) ModalHoldEnd(platform.Window)                 { p.calls = append(p.calls, "end") }
 func (p *modalKeyboardPlatform) FocusModal(_ unsafe.Pointer, take bool) {
 	p.calls = append(p.calls, fmt.Sprintf("focus %t", take))
 }

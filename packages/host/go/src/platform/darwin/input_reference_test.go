@@ -16,7 +16,7 @@ func TestInputReferenceRejectsNUL(t *testing.T) {
 		document *string
 	}{{nul, nil}, {"wait", &nul}} {
 		count := 0
-		implementation{}.InputReference(nil, request.action, request.document, func(value json.RawMessage, err error) {
+		implementation{}.InputReference(0, request.action, request.document, func(value json.RawMessage, err error) {
 			count++
 			if value != nil || err == nil || !strings.Contains(err.Error(), "NUL") {
 				t.Fatalf("reply %s, %v", value, err)

@@ -6,6 +6,8 @@ package host
 import (
 	"context"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // Framework is the application of a framework: everything that the library asks of the framework without naming a window
@@ -76,8 +78,8 @@ type Frontend interface {
 	// ID identifies the window in this run and Name is its window identifier of the endpoint.
 	ID() uint
 	Name() string
-	// NativeWindow is the native window handle, or nil once the framework closed the window.
-	NativeWindow() unsafe.Pointer
+	// NativeWindow is the native window handle, or the zero Window once the framework closed the window.
+	NativeWindow() platform.Window
 	// Emit delivers an event to the workbench of the window.
 	Emit(name string, data ...any)
 	SetTitle(title string)

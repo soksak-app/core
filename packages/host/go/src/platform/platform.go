@@ -3,7 +3,8 @@
 // The package platform/<os>/ registers the operating system specific implementation with Register in init. The host package
 // imports all operating system packages, so only the implementation of the current operating system is registered.
 //
-// Windows and views are passed as unsafe.Pointer handles. Call a function that receives a handle on the UI thread.
+// Windows are passed as Window handles and views as unsafe.Pointer handles. Call a function that receives a handle on the UI
+// thread.
 package platform
 
 import (
@@ -53,6 +54,11 @@ type DocumentOptions struct {
 	// the only one that serves the core root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
 	Channel string
 }
+
+// Window is the handle of a native window: the address of an NSWindow on macOS and an HWND on Windows. An HWND is a value that
+// the system owns and not an address, so a handle is an integer on every operating system, and only an implementation whose
+// handle is an address turns it into a pointer. The zero Window is no window.
+type Window uintptr
 
 type Rect struct {
 	X, Y, W, H float64
@@ -119,7 +125,7 @@ type Input struct {
 // InputReference is supplied only by diagnostic platform builds. It creates an ordinary text view for comparing native keyboard input.
 // Call it on the main thread. Completion runs once there, within five seconds for wait and immediately for other actions.
 type InputReference interface {
-	InputReference(window unsafe.Pointer, action string, document *string, done func(json.RawMessage, error))
+	InputReference(window Window, action string, document *string, done func(json.RawMessage, error))
 }
 
 // DocumentFrameIdentityCapture manages the diagnostic identity marker in one live view root.
@@ -258,7 +264,7 @@ type PageObjectCounter interface {
 // diagnostic code uses it by checking the value of Current() against this interface.
 type Capturer interface {
 	// WindowNumbers returns the window server numbers of the window and its child windows. The number of the window itself comes first.
-	WindowNumbers(window unsafe.Pointer) ([]int, error)
+	WindowNumbers(window Window) ([]int, error)
 	// CaptureOpen makes the window with the window server number windowNumber the recording target. With display, it records the windows of this app on the display
 	// that holds the window.
 	CaptureOpen(windowNumber int, display bool) error
@@ -320,51 +326,51 @@ type Platform interface {
 	// EnqueueUIAfter runs work once as a main-thread step of EnqueueUI after delay has passed.
 	EnqueueUIAfter(delay time.Duration, work func()) error
 	// PrepareWindow fits the sizes of the content view of the window and the main web view.
-	PrepareWindow(window unsafe.Pointer) error
+	PrepareWindow(window Window) error
 	// Fullscreen switches the window to full screen or back and calls done on the UI thread when the transition
 	// ends. A request that arrives during a transition is handled after that transition ends.
-	Fullscreen(window unsafe.Pointer, on bool, done func()) error
+	Fullscreen(window Window, on bool, done func()) error
 	// ObserveResponder calls changed on the UI thread each time the first responder of the window changes, and returns the
 	// observation. An existing observation of the window stops calling back, and its owner still ends it. Call it on the UI thread.
-	ObserveResponder(window unsafe.Pointer, changed func()) (unsafe.Pointer, error)
+	ObserveResponder(window Window, changed func()) (unsafe.Pointer, error)
 	// EndResponderObservation ends an observation of ObserveResponder once, so its changed is not called again. It does not use
 	// the window, so it may run after the window was released. Call it on the UI thread.
 	EndResponderObservation(observation unsafe.Pointer)
 
 	// TitlebarHeight returns the title bar height (pt) of the window. It is 0 while the title bar is not shown, as in full screen, and
 	// it returns an error when the window has no buttons. Call it on the UI thread.
-	TitlebarHeight(window unsafe.Pointer) (float64, error)
+	TitlebarHeight(window Window) (float64, error)
 	// SetTitlebarHeight sets the title bar of the window to height (pt). AppKit places the window buttons at the vertical center of that height,
 	// so the host does not move the buttons. It returns an error when the window has no buttons. A full screen window does not show the title bar, and
 	// AppKit restores the height at which it entered when it leaves, so the call succeeds without changing the height. Call it on the UI thread.
-	SetTitlebarHeight(window unsafe.Pointer, height float64) error
+	SetTitlebarHeight(window Window, height float64) error
 	// WindowControls returns the region that the window buttons occupy in page coordinates.
-	WindowControls(window unsafe.Pointer) (Rect, error)
+	WindowControls(window Window) (Rect, error)
 	// WindowFacts returns the frame, the active state, the window buttons and the web views of the window as JSON. The form is
 	// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the UI thread.
-	WindowFacts(window unsafe.Pointer) (string, error)
+	WindowFacts(window Window) (string, error)
 	// WindowOnScreen returns whether some part of the window is visible on screen, the same as sp_window_on_screen of
 	// native/darwin/src/window_facts.h. Call it on the UI thread.
-	WindowOnScreen(window unsafe.Pointer) (bool, error)
+	WindowOnScreen(window Window) (bool, error)
 	// WindowColorSpace returns the current AppKit backing color space and ICC profile fingerprint as JSON.
 	// Call it on the UI thread for a one-shot diagnostic query.
-	WindowColorSpace(window unsafe.Pointer) (string, error)
+	WindowColorSpace(window Window) (string, error)
 	// ProcessFootprint returns the physical footprint of the process pid and its parts: the size that the system attributes to the
 	// process, which counts the pages that no other process shares. The resident size counts the shared pages too. It returns an
 	// error when the process cannot be read, such as a process that has ended.
 	ProcessFootprint(pid int) (ProcessFootprint, error)
-	SetMainWebview(window unsafe.Pointer) error
+	SetMainWebview(window Window) error
 	// RevealAfterLoad keeps the window transparent and makes it opaque when the next display ends after the first load of the main web view finished.
 	// The caller puts the window on the screen after this call (native/darwin/src/window_reveal.h). Call it on the UI thread.
-	RevealAfterLoad(window unsafe.Pointer) error
+	RevealAfterLoad(window Window) error
 	// ShowWindow puts the window on the screen without taking the front from another application: it comes to the
 	// front of an active application, and an application that is not active keeps it behind the front window
 	// (native/darwin/src/window_reveal.h, docs/spec/hosts.md#launch-activation).
-	ShowWindow(window unsafe.Pointer) error
+	ShowWindow(window Window) error
 	// FileDrop receives, as dropped, the files that were dropped on the window of the main web view. json is {"urls":[...],"x":..,"y":..}
 	// (page coordinates). Call it on the UI thread.
 	FileDrop(main unsafe.Pointer, dropped func(json string)) error
-	MainWebview(window unsafe.Pointer) (unsafe.Pointer, error)
+	MainWebview(window Window) (unsafe.Pointer, error)
 	// SampleThreads writes the stacks of the threads of this process, sampled for one second, into the file path. The watch of
 	// the main thread calls it for a stall (docs/spec/logging.md, stalls).
 	SampleThreads(path string) error
@@ -381,7 +387,7 @@ type Platform interface {
 	// uses it. Call it on the UI thread.
 	CollectGarbage(view unsafe.Pointer) error
 	// ConfigureMainWindow makes the background of the main web view of the window transparent and fits the appearance of the window to dark. Call it on the UI thread.
-	ConfigureMainWindow(window unsafe.Pointer, dark bool) error
+	ConfigureMainWindow(window Window, dark bool) error
 	ClipboardRead(kind string) (ClipboardValue, error)
 	ClipboardWriteText(text string) error
 	// OpenLink opens a URL with the default application of the user for its scheme. Call it on the UI thread.
@@ -398,15 +404,15 @@ type Platform interface {
 	RemoveNotification(identifier string) error
 	// WindowHit returns the hit test result {view, main, identifier} at the window coordinates (x, y) as JSON.
 	// Call it on the UI thread.
-	WindowHit(window unsafe.Pointer, x, y float64) (string, error)
+	WindowHit(window Window, x, y float64) (string, error)
 	// MoveWindow moves the top left of the window frame to the screen coordinates (x, y). Call it on the UI thread.
-	MoveWindow(window unsafe.Pointer, x, y float64) error
+	MoveWindow(window Window, x, y float64) error
 	// Screens returns the displays [{x, y, width, height, scale}] as JSON in screen coordinates.
 	// Call it on the UI thread.
 	Screens() (string, error)
 
 	// CreateWebview adds a native web view above the main web view of the window and returns its handle.
-	CreateWebview(window unsafe.Pointer, options WebviewOptions) (unsafe.Pointer, error)
+	CreateWebview(window Window, options WebviewOptions) (unsafe.Pointer, error)
 	// NavigateWebview opens url relative to the address of the main document. It returns false when url is invalid.
 	NavigateWebview(view unsafe.Pointer, url string) bool
 	SetWebviewBounds(view unsafe.Pointer, x, y, width, height float64)
@@ -418,10 +424,10 @@ type Platform interface {
 	CloseWebview(view unsafe.Pointer)
 	// NativeView returns the native view of window, an empty view that holds the surface hosts of a window without a main web view
 	// and that the framework puts in the window (docs/spec/native-surfaces.md#surface-host-container).
-	NativeView(window unsafe.Pointer) unsafe.Pointer
+	NativeView(window Window) unsafe.Pointer
 	// CreateSurface creates a logical SurfaceHost in the view that holds the surface hosts of window: below the main DOM web view, or
 	// in the native view of a window without one.
-	CreateSurface(window unsafe.Pointer) (unsafe.Pointer, error)
+	CreateSurface(window Window) (unsafe.Pointer, error)
 	// RetainView keeps a view alive through its close until ReleaseView, and ReleaseView ends that. Call them on the main thread.
 	RetainView(view unsafe.Pointer)
 	ReleaseView(view unsafe.Pointer)
@@ -435,15 +441,15 @@ type Platform interface {
 	FocusSurface(surface unsafe.Pointer)
 	// FocusSurfaceForRegion gives the keyboard to a surface that declared an image region, which keeps the keys until the region shows.
 	FocusSurfaceForRegion(surface unsafe.Pointer)
-	FocusWorkbench(window unsafe.Pointer)
+	FocusWorkbench(window Window)
 	// KeyboardHold holds the input of window until KeyboardDecided, the decision of the workbench about the keyboard
 	// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
-	KeyboardHold(window unsafe.Pointer)
-	KeyboardDecided(window unsafe.Pointer)
+	KeyboardHold(window Window)
+	KeyboardDecided(window Window)
 	// ModalHold holds the input of window from the show of a modal web view until ModalHoldEnd, after the modal took the
 	// keyboard or closed before that (docs/spec/native-modals.md#keyboard). Call them on the main thread.
-	ModalHold(window unsafe.Pointer)
-	ModalHoldEnd(window unsafe.Pointer)
+	ModalHold(window Window)
+	ModalHoldEnd(window Window)
 	SetWindowOverlays(main unsafe.Pointer, overlays []WindowOverlay) error
 	// SetSurfaceOverlays sets the declared DOM overlays to process before the native input.
 	SetSurfaceOverlays(view unsafe.Pointer, overlays []DOMOverlay)
@@ -452,7 +458,7 @@ type Platform interface {
 	// FocusModal moves the keyboard focus to the modal web view or returns it to the main web view.
 	FocusModal(view unsafe.Pointer, take bool)
 	// AlignRect fits a region in page coordinates inward to the display pixels.
-	AlignRect(window unsafe.Pointer, at Rect) (Rect, error)
+	AlignRect(window Window, at Rect) (Rect, error)
 
 	// CreateDocument creates a hidden external document web view inside the surface web view surface, with the values of options.
 	// changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward, error, scroll}) on the UI thread.
@@ -543,26 +549,26 @@ type Platform interface {
 	CloseImage(image unsafe.Pointer)
 
 	// BeginLayout starts a surface layout transaction. When the layout becomes possible, it calls ready on the UI thread.
-	BeginLayout(window unsafe.Pointer, ticket uint64, ready func(allowed bool)) error
+	BeginLayout(window Window, ticket uint64, ready func(allowed bool)) error
 	// CommitLayout fixes the layout of ticket and returns whether it fixed it.
-	CommitLayout(window unsafe.Pointer, ticket uint64) bool
+	CommitLayout(window Window, ticket uint64) bool
 	// CancelLayout cancels the layout in progress.
-	CancelLayout(window unsafe.Pointer) error
+	CancelLayout(window Window) error
 	// CancelLayoutTicket cancels only the matching owner ticket; it does not cancel a later queued ticket.
-	CancelLayoutTicket(window unsafe.Pointer, ticket uint64) error
+	CancelLayoutTicket(window Window, ticket uint64) error
 	// JoinView joins the view webview to the open layout transaction of window with ticket, so that the commit waits until the view
 	// presents. presented is called on the UI thread when the view presents. abandon ends the join without presentation and is
 	// nil when joined is false, which means that no transaction of ticket is open.
-	JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (abandon func() error, joined bool, err error)
+	JoinView(window Window, ticket uint64, view unsafe.Pointer, presented func()) (abandon func() error, joined bool, err error)
 	// StartPageTitlebar sets the title bar of the window to height (pt) when a new page starts. For a visible window, it sets it inside the start
 	// transaction of ticket and commits it together with the first display of the new page (surfaceLayoutStartPage). It calls ready on the
 	// UI thread after setting it or after a failure. Call it on the UI thread.
-	StartPageTitlebar(window unsafe.Pointer, ticket uint64, height float64, ready func(error)) error
+	StartPageTitlebar(window Window, ticket uint64, height float64, ready func(error)) error
 	// AfterPresentation checks the display readiness of the app document before the open layout is committed.
-	AfterPresentation(window unsafe.Pointer, done func()) error
+	AfterPresentation(window Window, done func()) error
 	// MainPresentation makes the block of the main web view of window, which reads the document and waits for the presentation
 	// update after that read. The caller owns the block until it passes the block to AfterSettled.
-	MainPresentation(window unsafe.Pointer) (unsafe.Pointer, error)
+	MainPresentation(window Window) (unsafe.Pointer, error)
 	// FunctionPresentation makes the block of a window without a main web view: the settled wait calls present on the worker to bring
 	// the content of the window to the screen, each time that it asks for it. present calls back through its argument, and it returns
 	// an error when it cannot. The caller owns the block until it passes the block to AfterSettled. Call it on the UI thread.
@@ -570,15 +576,15 @@ type Platform interface {
 	// AfterSettled takes the block present and calls done on the UI thread after the block and the visible app document displayed
 	// the screen, in a state in which the window has no open surface layout transaction. displayed is the time (ms, mach absolute
 	// time) at which that screen is displayed.
-	AfterSettled(window, present unsafe.Pointer, done func(displayed float64, err error)) error
+	AfterSettled(window Window, present unsafe.Pointer, done func(displayed float64, err error)) error
 	// ObserveLayout registers the observer of the layout transactions of the process, in place of the earlier one: started runs on
 	// the worker when a preparation of the window starts, and ended when the transaction of the window ends. Call it on the UI thread.
-	ObserveLayout(started, ended func(window unsafe.Pointer)) error
+	ObserveLayout(started, ended func(window Window)) error
 	// InjectSettledFailure makes the next settled wait fail in a diagnostic build.
-	InjectSettledFailure(window unsafe.Pointer) error
+	InjectSettledFailure(window Window) error
 
 	// CreateShape creates a shape view that is drawn over a surface. It returns a nil handle when the window has no content view.
-	CreateShape(window unsafe.Pointer, x, y, w, h float64) (unsafe.Pointer, error)
+	CreateShape(window Window, x, y, w, h float64) (unsafe.Pointer, error)
 	SetShapeFrame(shape unsafe.Pointer, x, y, w, h float64)
 	// SetShapeStyle sets the corner radius, the line width, the fill color and the line color. The colors are sRGB in the range 0-1 and alpha.
 	SetShapeStyle(shape unsafe.Pointer, radius, lineWidth float64, fill, line [4]float64)
@@ -587,7 +593,7 @@ type Platform interface {
 	DestroyShape(shape unsafe.Pointer)
 
 	// WatchInput watches the presses, drags and key inputs of the window and returns the watch number.
-	WatchInput(window unsafe.Pointer, input Input) (uintptr, error)
+	WatchInput(window Window, input Input) (uintptr, error)
 	// UnwatchInput releases the watch that WatchInput returned.
 	UnwatchInput(monitor uintptr)
 
@@ -602,14 +608,14 @@ type Platform interface {
 	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event or receive seconds passed.
 	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld
 	// or PointerHeld.
-	InjectPointer(window unsafe.Pointer, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(result PointerResult, held ButtonHeld)) error
+	InjectPointer(window Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, receive float64, done func(result PointerResult, held ButtonHeld)) error
 	// ActivateWindow activates the application and the window. It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
 	// or calls done with an error that names the stage where it stopped when it does not finish within timeout seconds.
 	// When the coordinates are a native surface, it does not wait for the web view state.
-	ActivateWindow(window unsafe.Pointer, x, y, timeout float64, done func(error)) error
+	ActivateWindow(window Window, x, y, timeout float64, done func(error)) error
 	// InjectKey delivers a key input to the window and returns whether it delivered it. modifiers is the bit sum of 1 Shift, 2 Control,
 	// 4 Option and 8 Command.
-	InjectKey(window unsafe.Pointer, key, text string, modifiers uint, down bool) (PointerResult, error)
+	InjectKey(window Window, key, text string, modifiers uint, down bool) (PointerResult, error)
 
 	// Listen creates the listener of the local endpoint in directory. directory must be exclusive to the current user.
 	// application is part of the address name.
@@ -718,8 +724,8 @@ type Platform interface {
 	ApplicationActive() (bool, error)
 	// MenuSelect runs the item with the title title in the submenu with the title menu. Call it on the UI thread.
 	MenuSelect(menu, title string) error
-	// MainWindow is the handle of the main window of the application. It is nil when there is none. Call it on the UI thread.
-	MainWindow() (unsafe.Pointer, error)
+	// MainWindow is the handle of the main window of the application. It is zero when there is none. Call it on the UI thread.
+	MainWindow() (Window, error)
 	// DockSelect runs the Dock menu item with the title title. Call it on the UI thread.
 	DockSelect(title string) error
 

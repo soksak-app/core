@@ -5,7 +5,6 @@ package host_test
 import (
 	"testing"
 	"testing/fstest"
-	"unsafe"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform/darwin"
@@ -50,12 +49,12 @@ func TestTheStartRequiresBothMainThreadFunctions(t *testing.T) {
 	run := fixture.TestOnlyRunDirectly()
 	for _, c := range []struct {
 		name         string
-		worker, main unsafe.Pointer
+		worker, main uintptr
 		want         string
 	}{
-		{"no function", nil, nil, "main-thread functions are not installed: hostRunOnWorker and hostRunOnMain" + installs},
-		{"only hostRunOnWorker", run, nil, "main-thread functions are not installed: hostRunOnMain" + installs},
-		{"only hostRunOnMain", nil, run, "main-thread functions are not installed: hostRunOnWorker" + installs},
+		{"no function", 0, 0, "main-thread functions are not installed: hostRunOnWorker and hostRunOnMain" + installs},
+		{"only hostRunOnWorker", run, 0, "main-thread functions are not installed: hostRunOnMain" + installs},
+		{"only hostRunOnMain", 0, run, "main-thread functions are not installed: hostRunOnWorker" + installs},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			darwin.InstallMainThread(c.worker, c.main)

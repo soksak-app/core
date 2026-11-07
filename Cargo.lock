@@ -3582,7 +3582,7 @@ dependencies = [
 [[package]]
 name = "tao"
 version = "0.37.2"
-source = "git+https://github.com/min-0-max/tao?rev=1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6#1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6"
+source = "git+https://github.com/min-0-max/tao?tag=tao-v0.37.2-soksak.1#c3e3d6b7eedb0c86e1227a2de5efc623e7af2ec7"
 dependencies = [
  "bitflags 2.13.1",
  "block2",
@@ -3609,7 +3609,7 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "raw-window-handle",
- "tao-macros 0.1.4 (git+https://github.com/min-0-max/tao?rev=1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6)",
+ "tao-macros 0.1.4 (git+https://github.com/min-0-max/tao?tag=tao-v0.37.2-soksak.1)",
  "unicode-segmentation",
  "url",
  "windows",
@@ -3632,7 +3632,7 @@ dependencies = [
 [[package]]
 name = "tao-macros"
 version = "0.1.4"
-source = "git+https://github.com/min-0-max/tao?rev=1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6#1f9b8d3a33b8be0e9cee0f617f901ef88c4190c6"
+source = "git+https://github.com/min-0-max/tao?tag=tao-v0.37.2-soksak.1#c3e3d6b7eedb0c86e1227a2de5efc623e7af2ec7"
 dependencies = [
  "proc-macro2",
  "quote",

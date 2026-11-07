@@ -32,15 +32,27 @@ const (
 	processFailedArgsGetKind = 3
 )
 
-// comPointer gives the address that a COM call returned as a pointer. COM memory is not memory of Go, so it does not move.
-func comPointer(address uintptr) unsafe.Pointer {
-	return *(*unsafe.Pointer)(unsafe.Pointer(&address))
+var procRtlMoveMemory = kernel32.NewProc("RtlMoveMemory")
+
+// readAddress reads the address-sized value at address. The address is memory of COM and not of Go, so Go never turns it into a
+// pointer: the system copies the value into a variable of Go.
+func readAddress(address uintptr) uintptr {
+	var value uintptr
+	// default: RtlMoveMemory returns nothing and sets no error.
+	procRtlMoveMemory.Call(uintptr(unsafe.Pointer(&value)), address, unsafe.Sizeof(value))
+	return value
+}
+
+// writeAddress writes value at address, which is memory of COM and not of Go, through a copy of the system.
+func writeAddress(address, value uintptr) {
+	// default: RtlMoveMemory returns nothing and sets no error.
+	procRtlMoveMemory.Call(address, uintptr(unsafe.Pointer(&value)), unsafe.Sizeof(value))
 }
 
 // comCall calls slot of the vtable of object.
 func comCall(object uintptr, slot int, args ...uintptr) uintptr {
-	vtable := *(*uintptr)(comPointer(object))
-	method := *(*uintptr)(unsafe.Add(comPointer(vtable), slot*int(unsafe.Sizeof(uintptr(0)))))
+	vtable := readAddress(object)
+	method := readAddress(vtable + uintptr(slot)*unsafe.Sizeof(uintptr(0)))
 	all := append([]uintptr{object}, args...)
 	// default: a COM method reports its failure in the HRESULT that it returns, which every caller checks, not through GetLastError.
 	result, _, _ := syscall.SyscallN(method, all...)
@@ -98,7 +110,7 @@ var (
 			if handler := handlers[this]; handler != nil {
 				handler.refs++
 			}
-			*(*uintptr)(comPointer(out)) = this
+			writeAddress(out, this)
 			return 0
 		})
 		run := func(this, result, value uintptr) uintptr {

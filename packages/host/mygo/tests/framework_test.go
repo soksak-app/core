@@ -20,7 +20,6 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
-	"unsafe"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -393,7 +392,7 @@ func TestAWindowStartsHiddenWithItsWorkbench(t *testing.T) {
 	if window.Window().IsVisible() {
 		t.Fatal("a new window is visible before the host shows it")
 	}
-	if window.NativeWindow() == nil {
+	if window.NativeWindow() == 0 {
 		t.Fatal("a new window has no native window")
 	}
 	if got := window.Window().Title(); got != "soksak" {
@@ -484,12 +483,12 @@ func TestAClosingHookKeepsOrClosesTheWindow(t *testing.T) {
 	keep := true
 	window.OnClosing(func() bool { return keep })
 	window.Close()
-	if window.NativeWindow() == nil {
+	if window.NativeWindow() == 0 {
 		t.Fatal("a hook that keeps the window closed it")
 	}
 	keep = false
 	window.Close()
-	if window.NativeWindow() != nil {
+	if window.NativeWindow() != 0 {
 		t.Fatal("a hook that lets the window close kept it")
 	}
 	if got := framework.Windows(); len(got) != 0 {
@@ -520,8 +519,8 @@ func TestTheLayoutObserverReportsTheTransactionOfAWindow(t *testing.T) {
 	}
 	native := window.NativeWindow()
 	reports := make(chan string, 8)
-	report := func(what string) func(unsafe.Pointer) {
-		return func(reported unsafe.Pointer) {
+	report := func(what string) func(platform.Window) {
+		return func(reported platform.Window) {
 			if reported != native {
 				t.Errorf("%s reported another window", what)
 			}
@@ -613,19 +612,18 @@ func TestAShownWindowCountsItsFramesAndThenDrawsNone(t *testing.T) {
 // receives no window then, because it records every such read as an error: the read gives the error of a closed window.
 // contract: mygo.framework.window-operations
 func TestAScaleOfAClosedWindowCallsNoNativeCode(t *testing.T) {
-	window := 1
-	native := unsafe.Pointer(&window)
-	var read []unsafe.Pointer
-	facts := func(handle unsafe.Pointer) (string, error) {
+	const native = platform.Window(1)
+	var read []platform.Window
+	facts := func(handle platform.Window) (string, error) {
 		read = append(read, handle)
 		return `{"scale":2}`, nil
 	}
 	invoke := func(step func()) { step() }
-	scale, err := adapter.WindowScale(invoke, "main", func() unsafe.Pointer { return native }, facts)
+	scale, err := adapter.WindowScale(invoke, "main", func() platform.Window { return native }, facts)
 	if err != nil || scale != 2 {
 		t.Fatalf("the open window has scale %v, error %v", scale, err)
 	}
-	_, err = adapter.WindowScale(invoke, "main", func() unsafe.Pointer { return nil }, facts)
+	_, err = adapter.WindowScale(invoke, "main", func() platform.Window { return 0 }, facts)
 	if !host.WindowClosed(err) {
 		t.Fatalf("the closed window gave %v", err)
 	}

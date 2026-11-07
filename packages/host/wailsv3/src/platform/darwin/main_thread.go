@@ -3,11 +3,13 @@
 package darwin
 
 /*
+#include <stdint.h>
+
 extern void wailsRunOnWorker(void (^task)(void));
 extern void wailsRunOnMain(void (^call)(void));
 
-static void *worker(void) { return (void *)wailsRunOnWorker; }
-static void *mainThread(void) { return (void *)wailsRunOnMain; }
+static uintptr_t worker(void) { return (uintptr_t)wailsRunOnWorker; }
+static uintptr_t mainThread(void) { return (uintptr_t)wailsRunOnMain; }
 */
 import "C"
 
@@ -20,4 +22,4 @@ import (
 )
 
 // The functions are installed before any start of the library (docs/spec/hosts.md, main thread of the Wails host).
-func init() { darwin.InstallMainThread(C.worker(), C.mainThread()) }
+func init() { darwin.InstallMainThread(uintptr(C.worker()), uintptr(C.mainThread())) }

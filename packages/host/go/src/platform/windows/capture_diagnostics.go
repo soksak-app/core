@@ -4,11 +4,12 @@ package windows
 
 import (
 	"errors"
-	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // WindowNumbers returns the handle of the window. It is the number that CaptureStill takes, and a web view is no window of its own here.
-func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
+func (implementation) WindowNumbers(window platform.Window) ([]int, error) {
 	return []int{int(uintptr(window))}, nil
 }
 

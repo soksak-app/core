@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"unsafe"
 
 	"github.com/egoist/mygo"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 	_ "github.com/soksak-app/core/packages/host/mygo/src/platform/darwin"
 )
@@ -77,7 +77,7 @@ func Run(assets fs.FS, options host.Options, workbench Workbench) error {
 func ConfigureApplication() {
 	mygo.App.SetName("soksak")
 	mygo.App.SetSelfActivation(false)
-	mygo.App.SetWindowShow(func(window uintptr) { host.ShowWindow(*(*unsafe.Pointer)(unsafe.Pointer(&window))) })
+	mygo.App.SetWindowShow(func(window uintptr) { host.ShowWindow(platform.Window(window)) })
 	mygo.App.SetSignalQuit(false)
 	mygo.App.SetNotificationDelegate(false)
 	mygo.App.OnWindowAllClosed(func() {})

@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // contract: window.facts.modal-order-is-above-every-webview
@@ -45,7 +46,7 @@ type pageFactsPlatform struct {
 	process int
 }
 
-func (p *pageFactsPlatform) WindowFacts(unsafe.Pointer) (string, error) {
+func (p *pageFactsPlatform) WindowFacts(platform.Window) (string, error) {
 	return fmt.Sprintf(`{"pageProcess":%d,"nativeSurfaces":[],"webviews":[]}`, p.process), nil
 }
 
@@ -56,7 +57,7 @@ func TestWindowReportsNoPageProcessWithoutAMainPage(t *testing.T) {
 	savedFramework, savedSystem := framework, system
 	t.Cleanup(func() { framework, system = savedFramework, savedSystem })
 	window := &elementWindow{}
-	window.native = unsafe.Pointer(new(byte))
+	window.native = platform.Window(1)
 	surfaces := &Surfaces{host: &Host{quit: &Quit{}}, window: window, images: NewImages(), documents: NewDocuments(), invoke: func(task func()) { task() }}
 	for _, c := range []struct {
 		name      string

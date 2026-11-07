@@ -38,8 +38,8 @@ type Frontend struct {
 	// held and released belong to the main thread: whether the adapter holds the frames of the window, and what waits for its release.
 	held     bool
 	released []func()
-	// placed belongs to the main thread: the box that each native view element last gave its surface host.
-	placed map[uintptr]mygo.RectF
+	// placed belongs to the main thread: the surface host of each native view element and the box that the element last gave it.
+	placed map[uintptr]placedSurface
 	// address belongs to the main thread: the address of the window, which names the project that it shows.
 	address string
 }
@@ -64,7 +64,7 @@ func (f *Frontend) placeNativeView() {
 	system, err := platform.Current()
 	if err == nil {
 		native := system.NativeView(f.NativeWindow())
-		err = f.window.NewNativeView(uintptr(native), func(views []mygo.NativePlacement) { f.placeSurfaces(system, views) })
+		err = f.window.NewNativeView(uintptr(native), func(views []mygo.NativePlacement) { f.placeSurfaces(system, f.elementSurface, views) })
 	}
 	if err != nil {
 		host.LogError("window native view", err)
@@ -75,27 +75,50 @@ func (f *Frontend) placeNativeView() {
 // is in the content coordinates of the window as on the other hosts, and native/darwin converts it into the container of the surface
 // hosts, so the elements alone place the hosts (docs/spec/hosts.md#native-views). A surface that the frame no longer shows hides here,
 // before the framework takes the keyboard from the views that left: native/darwin notes what held the keyboard when a surface hides,
-// and gives it back when the surface shows.
-func (f *Frontend) placeSurfaces(system platform.Platform, views []mygo.NativePlacement) {
+// and gives it back when the surface shows. surface gives the surface host of the element that a view names.
+func (f *Frontend) placeSurfaces(system platform.Platform, surface func(view uintptr) (unsafe.Pointer, bool), views []mygo.NativePlacement) {
 	f.frames.SetNativeViews(int64(len(views)))
-	placed := make(map[uintptr]mygo.RectF, len(views))
+	placed := make(map[uintptr]placedSurface, len(views))
 	for _, view := range views {
-		placed[view.View] = view.Box
-		surface := *(*unsafe.Pointer)(unsafe.Pointer(&view.View))
-		box, shown := f.placed[view.View]
-		if !shown || box != view.Box {
-			system.SetSurfaceBounds(surface, view.Box.X, view.Box.Y, view.Box.W, view.Box.H)
+		last, shown := f.placed[view.View]
+		handle := last.surface
+		if !shown {
+			// The framework names the view by the integer that the workbench gave it, so the surface host is the one of the element.
+			// An element that left the window before its first placement shows nothing.
+			var ok bool
+			if handle, ok = surface(view.View); !ok {
+				continue
+			}
+		}
+		placed[view.View] = placedSurface{surface: handle, box: view.Box}
+		if !shown || last.box != view.Box {
+			system.SetSurfaceBounds(handle, view.Box.X, view.Box.Y, view.Box.W, view.Box.H)
 		}
 		if !shown {
-			system.SetSurfaceHiddenHandle(surface, false)
+			system.SetSurfaceHiddenHandle(handle, false)
 		}
 	}
-	for view := range f.placed {
+	for view, last := range f.placed {
 		if _, shown := placed[view]; !shown {
-			system.SetSurfaceHiddenHandle(*(*unsafe.Pointer)(unsafe.Pointer(&view)), true)
+			system.SetSurfaceHiddenHandle(last.surface, true)
 		}
 	}
 	f.placed = placed
+}
+
+// placedSurface is a surface host that a native view element placed and the box that the element last gave it.
+type placedSurface struct {
+	surface unsafe.Pointer
+	box     mygo.RectF
+}
+
+// elementSurface returns the surface host of the element of the window whose surface host is view.
+func (f *Frontend) elementSurface(view uintptr) (unsafe.Pointer, bool) {
+	h := f.framework.host.Load()
+	if h == nil {
+		return nil, false
+	}
+	return host.ElementSurface(h, f, view)
 }
 
 // started builds the workbench of the window and connects the window to it. Call it on the main thread.
@@ -206,9 +229,9 @@ func (f *Frontend) Scale() (float64, error) {
 
 // WindowScale reads the backing scale of the window of name from its native facts in one step of the main thread. A step that finds
 // no native window calls no native code, because native code records a read without a window as an error.
-func WindowScale(invoke func(func()), name string, native func() unsafe.Pointer, read func(unsafe.Pointer) (string, error)) (float64, error) {
+func WindowScale(invoke func(func()), name string, native func() platform.Window, read func(platform.Window) (string, error)) (float64, error) {
 	var text string
-	err := host.UseNativeWindow(invoke, name, native, func(window unsafe.Pointer) error {
+	err := host.UseNativeWindow(invoke, name, native, func(window platform.Window) error {
 		var err error
 		text, err = read(window)
 		return err
@@ -231,11 +254,8 @@ func (f *Frontend) Position() (x, y float64) {
 	return float64(left), float64(top)
 }
 
-// NativeWindow is the NSWindow, or nil once the window closed. The framework gives the handle as an integer.
-func (f *Frontend) NativeWindow() unsafe.Pointer {
-	handle := f.window.NativeHandle()
-	return *(*unsafe.Pointer)(unsafe.Pointer(&handle))
-}
+// NativeWindow is the NSWindow, or the zero Window once the window closed.
+func (f *Frontend) NativeWindow() platform.Window { return platform.Window(f.window.NativeHandle()) }
 
 // Emit delivers an event to the workbench of the window. The reload request of a main page starts the workbench again, because a
 // workbench without a page has nothing to read again.

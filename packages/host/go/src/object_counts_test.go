@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // The surface count of diagnostics.objects is the number of native views of the surfaces of the window, and it falls back when a view is
@@ -32,7 +34,7 @@ type objectPlatform struct {
 	pagelessPlatform
 }
 
-func (*objectPlatform) MainWebview(unsafe.Pointer) (unsafe.Pointer, error) {
+func (*objectPlatform) MainWebview(platform.Window) (unsafe.Pointer, error) {
 	return nil, errors.New("the window has no registered app DOM webview")
 }
 
@@ -43,7 +45,7 @@ func (*objectPlatform) CountPageObjects(_ unsafe.Pointer, _ bool, done func(elem
 // contract: diagnostics.objects.page-is-null-without-a-main-page
 func TestAWindowWithoutAMainPageCountsItsHostObjects(t *testing.T) {
 	window := &elementWindow{}
-	window.native = unsafe.Pointer(new(byte))
+	window.native = platform.Window(1)
 	previousFramework, previousSystem := framework, system
 	framework, system = pagelessFramework{window: window}, &objectPlatform{}
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })

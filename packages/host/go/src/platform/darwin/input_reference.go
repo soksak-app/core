@@ -13,8 +13,8 @@ extern void goInputReferenceReply(uintptr_t context, char *reply, char *failure)
 static void referenceReply(void *context, const char *reply, const char *failure) {
     hostRunOnWorker(^{ goInputReferenceReply((uintptr_t)context, (char *)reply, (char *)failure); });
 }
-static void inputReference(void *window, const char *action, const char *document, uintptr_t context) {
-    hostRunOnMain(^{ sp_input_reference(window, action, document, referenceReply, (void *)context); });
+static void inputReference(uintptr_t window, const char *action, const char *document, uintptr_t context) {
+    hostRunOnMain(^{ sp_input_reference((void *)window, action, document, referenceReply, (void *)context); });
 }
 */
 import "C"
@@ -25,9 +25,11 @@ import (
 	"runtime/cgo"
 	"strings"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-func (implementation) InputReference(window unsafe.Pointer, action string, document *string, done func(json.RawMessage, error)) {
+func (implementation) InputReference(window platform.Window, action string, document *string, done func(json.RawMessage, error)) {
 	if strings.IndexByte(action, 0) >= 0 || (document != nil && strings.IndexByte(*document, 0) >= 0) {
 		done(nil, errors.New("input reference action and document cannot contain NUL"))
 		return
@@ -39,7 +41,7 @@ func (implementation) InputReference(window unsafe.Pointer, action string, docum
 		expected = C.CString(*document)
 		defer C.free(unsafe.Pointer(expected))
 	}
-	C.inputReference(window, operation, expected, C.uintptr_t(cgo.NewHandle(done)))
+	C.inputReference(C.uintptr_t(window), operation, expected, C.uintptr_t(cgo.NewHandle(done)))
 }
 
 //export goInputReferenceReply

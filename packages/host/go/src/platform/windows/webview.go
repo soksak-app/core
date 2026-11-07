@@ -9,6 +9,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	sys "golang.org/x/sys/windows"
 )
 
@@ -30,8 +31,8 @@ var (
 // SetWebview makes a WebView2 the one that takes the input and the capture of the window, whose handle is the HWND. core is its
 // ICoreWebView2 and controller its ICoreWebView2Controller, which this package holds until EndWebview. ended runs on the UI thread when the
 // process of its page ended (processFailureOf). Call it on the UI thread.
-func SetWebview(window, core, controller unsafe.Pointer, ended func()) error {
-	if window == nil || core == nil || controller == nil || ended == nil {
+func SetWebview(window platform.Window, core, controller unsafe.Pointer, ended func()) error {
+	if window == 0 || core == nil || controller == nil || ended == nil {
 		return errors.New("a web view needs its window, its ICoreWebView2, its controller and the function of the end of its page")
 	}
 	if err := startUIThread(); err != nil {
@@ -56,7 +57,7 @@ func SetWebview(window, core, controller unsafe.Pointer, ended func()) error {
 }
 
 // EndWebview ends the WebView2 of the window. Call it on the UI thread.
-func EndWebview(window unsafe.Pointer) {
+func EndWebview(window platform.Window) {
 	webviewsMu.Lock()
 	view := webviews[uintptr(window)]
 	delete(webviews, uintptr(window))

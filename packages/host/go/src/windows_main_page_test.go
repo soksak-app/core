@@ -26,11 +26,11 @@ func (f pagelessFramework) NewWindow(WindowOptions) Frontend { return f.window }
 // pagelessWindow is a window of pagelessFramework that records its show.
 type pagelessWindow struct {
 	frontendRecord
-	native unsafe.Pointer
+	native platform.Window
 	shows  int
 }
 
-func (w *pagelessWindow) NativeWindow() unsafe.Pointer      { return w.native }
+func (w *pagelessWindow) NativeWindow() platform.Window     { return w.native }
 func (w *pagelessWindow) OnWindowEvent(WindowEvent, func()) {}
 func (w *pagelessWindow) OnClosing(func() bool)             {}
 func (w *pagelessWindow) Show()                             { w.shows++ }
@@ -42,19 +42,19 @@ type pagelessPlatform struct {
 	calls []string
 }
 
-func (p *pagelessPlatform) SetTitlebarHeight(unsafe.Pointer, float64) error {
+func (p *pagelessPlatform) SetTitlebarHeight(platform.Window, float64) error {
 	p.calls = append(p.calls, "titlebar")
 	return nil
 }
 
-func (p *pagelessPlatform) ObserveResponder(unsafe.Pointer, func()) (unsafe.Pointer, error) {
+func (p *pagelessPlatform) ObserveResponder(platform.Window, func()) (unsafe.Pointer, error) {
 	p.calls = append(p.calls, "responder")
 	return nil, nil
 }
 
 // contract: application.window.no-main-page-calls-no-main-web-view
 func TestAWindowWithoutAMainPageCallsNoMainWebViewOperation(t *testing.T) {
-	window := &pagelessWindow{native: unsafe.Pointer(new(byte))}
+	window := &pagelessWindow{native: platform.Window(1)}
 	previousFramework, previousSystem := framework, system
 	fake := &pagelessPlatform{}
 	framework, system = pagelessFramework{window: window}, fake
@@ -85,8 +85,8 @@ type goneWindowPlatform struct {
 	read chan struct{}
 }
 
-func (p *goneWindowPlatform) WindowOnScreen(window unsafe.Pointer) (bool, error) {
-	if window == nil {
+func (p *goneWindowPlatform) WindowOnScreen(window platform.Window) (bool, error) {
+	if window == 0 {
 		p.read <- struct{}{}
 		return false, errors.New("window on screen: the window is gone")
 	}
@@ -96,14 +96,14 @@ func (p *goneWindowPlatform) WindowOnScreen(window unsafe.Pointer) (bool, error)
 // A window that closes may still report a change of its state, and with no native window there is nothing to read.
 // contract: application.window.gone-window-reads-no-state-on-change
 func TestAWindowThatIsGoneReadsNoStateOnAChange(t *testing.T) {
-	window := &eventWindow{pagelessWindow: pagelessWindow{native: unsafe.Pointer(new(byte))}, listeners: map[WindowEvent][]func(){}}
+	window := &eventWindow{pagelessWindow: pagelessWindow{native: platform.Window(1)}, listeners: map[WindowEvent][]func(){}}
 	previousFramework, previousSystem := framework, system
 	fake := &goneWindowPlatform{read: make(chan struct{}, 4)}
 	framework, system = pagelessFramework{window: window}, fake
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
 	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
 	host.newWindow("main", "")
-	window.native = nil
+	window.native = 0
 	for _, listener := range window.listeners[WindowMove] {
 		listener()
 	}
@@ -120,7 +120,7 @@ type rasterPlatform struct {
 	placed chan unsafe.Pointer
 }
 
-func (p *rasterPlatform) WindowOnScreen(unsafe.Pointer) (bool, error) { return true, nil }
+func (p *rasterPlatform) WindowOnScreen(platform.Window) (bool, error) { return true, nil }
 
 func (p *rasterPlatform) SurfacePlacedImage(image unsafe.Pointer) bool {
 	p.placed <- image
@@ -129,7 +129,7 @@ func (p *rasterPlatform) SurfacePlacedImage(image unsafe.Pointer) bool {
 
 // contract: application.window.scale-change-refreshes-rasters
 func TestAChangeOfTheBackingScaleRefreshesTheRastersOfTheWindow(t *testing.T) {
-	window := &eventWindow{pagelessWindow: pagelessWindow{native: unsafe.Pointer(new(byte))}, listeners: map[WindowEvent][]func(){}}
+	window := &eventWindow{pagelessWindow: pagelessWindow{native: platform.Window(1)}, listeners: map[WindowEvent][]func(){}}
 	previousFramework, previousSystem := framework, system
 	fake := &rasterPlatform{placed: make(chan unsafe.Pointer, 4)}
 	framework, system = pagelessFramework{window: window}, fake
@@ -202,7 +202,7 @@ func TestAWindowWithoutAMainPageSetsNoWindowOverlays(t *testing.T) {
 	previousFramework, previousSystem := framework, system
 	framework, system = pagelessFramework{}, &pagelessPlatform{}
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
-	if err := setWindowOverlays(unsafe.Pointer(new(byte)), nil); err != nil {
+	if err := setWindowOverlays(platform.Window(1), nil); err != nil {
 		t.Fatal(err)
 	}
 }

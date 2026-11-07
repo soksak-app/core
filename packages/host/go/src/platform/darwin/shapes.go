@@ -75,8 +75,8 @@ static void shapeSetFrame(void* handle, double x, double y, double w, double h) 
     hostRunOnMain(^{ shapeSetFrameOnMain(handle, x, y, w, h); });
 }
 static void surfaceRaise(void* handle) { hostRunOnMain(^{ surfaceRaiseOnMain(handle); }); }
-static void* shapeCreate(void* nsWindow, double x, double y, double w, double h) {
-    return ON_MAIN(void*, shapeCreateOnMain(nsWindow, x, y, w, h));
+static void* shapeCreate(uintptr_t nsWindow, double x, double y, double w, double h) {
+    return ON_MAIN(void*, shapeCreateOnMain((void *)nsWindow, x, y, w, h));
 }
 static void shapeSetStyle(void* handle, double radius, double lineWidth,
                           double fr, double fg, double fb, double fa,
@@ -87,10 +87,14 @@ static void shapeDestroy(void* handle) { hostRunOnMain(^{ shapeDestroyOnMain(han
 */
 import "C"
 
-import "unsafe"
+import (
+	"unsafe"
 
-func (implementation) CreateShape(window unsafe.Pointer, x, y, w, h float64) (unsafe.Pointer, error) {
-	return C.shapeCreate(window, C.double(x), C.double(y), C.double(w), C.double(h)), nil
+	"github.com/soksak-app/core/packages/host/go/src/platform"
+)
+
+func (implementation) CreateShape(window platform.Window, x, y, w, h float64) (unsafe.Pointer, error) {
+	return C.shapeCreate(C.uintptr_t(window), C.double(x), C.double(y), C.double(w), C.double(h)), nil
 }
 
 func (implementation) SetShapeFrame(shape unsafe.Pointer, x, y, w, h float64) {

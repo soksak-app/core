@@ -221,7 +221,7 @@ var startMouseSource = sync.OnceValue(func() error {
 
 // WatchInput delivers the presses and the drags of the window, read from raw input. The key inputs are not watched,
 // because the keyboard is not registered. Call it on the UI thread.
-func (implementation) WatchInput(window unsafe.Pointer, input platform.Input) (uintptr, error) {
+func (implementation) WatchInput(window platform.Window, input platform.Input) (uintptr, error) {
 	if err := startMouseSource(); err != nil {
 		return 0, err
 	}

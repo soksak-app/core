@@ -3,8 +3,7 @@
 package windows
 
 import (
-	"unsafe"
-
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	sys "golang.org/x/sys/windows"
 )
 
@@ -23,7 +22,7 @@ func holdsForeground() bool {
 }
 
 // ShowWindow answers no failure: the system call reports only whether the window was already shown.
-func (implementation) ShowWindow(window unsafe.Pointer) error {
+func (implementation) ShowWindow(window platform.Window) error {
 	procShowWindow.Call(uintptr(window), uintptr(showCommand(holdsForeground())))
 	return nil
 }

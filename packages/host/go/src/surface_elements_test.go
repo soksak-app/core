@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // elementWindow is a window of pagelessFramework whose settled presentation fails when failing is set.
@@ -38,13 +40,13 @@ func (p *elementPlatform) ReleaseView(view unsafe.Pointer) {
 	p.held = slices.Delete(p.held, index, index+1)
 }
 
-func (p *elementPlatform) StartPageTitlebar(_ unsafe.Pointer, _ uint64, _ float64, ready func(error)) error {
+func (p *elementPlatform) StartPageTitlebar(_ platform.Window, _ uint64, _ float64, ready func(error)) error {
 	p.titlebar++
 	ready(nil)
 	return nil
 }
 
-func (p *elementPlatform) AfterSettled(_, _ unsafe.Pointer, done func(float64, error)) error {
+func (p *elementPlatform) AfterSettled(_ platform.Window, _ unsafe.Pointer, done func(float64, error)) error {
 	p.settled = done
 	return nil
 }
@@ -52,7 +54,7 @@ func (p *elementPlatform) AfterSettled(_, _ unsafe.Pointer, done func(float64, e
 // elements returns the surfaces of a window without a main page.
 func elements(t *testing.T, window *elementWindow) (*Surfaces, *elementPlatform) {
 	t.Helper()
-	window.native = unsafe.Pointer(new(byte))
+	window.native = platform.Window(1)
 	fake := &elementPlatform{}
 	previousFramework, previousSystem := framework, system
 	framework, system = pagelessFramework{window: window}, fake

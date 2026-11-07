@@ -47,6 +47,27 @@ func ElementOf(h *Host, window Frontend, id string) (SurfaceElement, bool) {
 	return s.element(id)
 }
 
+// ElementSurface returns the surface host of the element of window whose surface host is view, which a framework names by the
+// integer of its address. The host received the surface host from native code, and the framework gives back only its integer, so
+// the pointer comes from the element and not from the integer. It is no method of Host, because each exported method of Host is a
+// host call of a page.
+func ElementSurface(h *Host, window Frontend, view uintptr) (unsafe.Pointer, bool) {
+	h.mu.Lock()
+	s := h.windows[window.ID()]
+	h.mu.Unlock()
+	if s == nil {
+		return nil, false
+	}
+	s.elements.mu.Lock()
+	defer s.elements.mu.Unlock()
+	for _, element := range s.elements.by {
+		if uintptr(element.Surface) == view {
+			return element.Surface, true
+		}
+	}
+	return nil, false
+}
+
 func (s *Surfaces) element(id string) (SurfaceElement, bool) {
 	s.elements.mu.Lock()
 	defer s.elements.mu.Unlock()

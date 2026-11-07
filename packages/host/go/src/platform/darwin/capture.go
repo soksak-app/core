@@ -55,7 +55,7 @@ static int windowNumbersOnMain(void* nsWindow, long* out, int max) {
     }
     return n;
 }
-static int windowNumbers(void* nsWindow, long* out, int max) { return ON_MAIN(int, windowNumbersOnMain(nsWindow, out, max)); }
+static int windowNumbers(uintptr_t nsWindow, long* out, int max) { return ON_MAIN(int, windowNumbersOnMain((void *)nsWindow, out, max)); }
 static bool main_sp_capture_open(long windowNumber, bool display, char **error) {
     return ON_MAIN(bool, sp_capture_open(windowNumber, display, error));
 }
@@ -86,6 +86,8 @@ import (
 	"runtime/cgo"
 	"strings"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 func captureError(operation string) error {
@@ -108,9 +110,9 @@ func captureCallError(operation string, success bool, nativeError *C.char) error
 	return nil
 }
 
-func (implementation) WindowNumbers(window unsafe.Pointer) ([]int, error) {
+func (implementation) WindowNumbers(window platform.Window) ([]int, error) {
 	var buf [32]C.long
-	n := int(C.windowNumbers(window, &buf[0], C.int(len(buf))))
+	n := int(C.windowNumbers(C.uintptr_t(window), &buf[0], C.int(len(buf))))
 	out := make([]int, n)
 	for i := 0; i < n; i++ {
 		out[i] = int(buf[i])

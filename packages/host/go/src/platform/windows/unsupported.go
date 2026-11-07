@@ -29,57 +29,57 @@ func unreachable(name string) {
 	panic(unsupported(name))
 }
 
-func (implementation) PrepareWindow(unsafe.Pointer) error {
+func (implementation) PrepareWindow(platform.Window) error {
 	return unsupported("window preparation")
 }
 
-func (implementation) Fullscreen(unsafe.Pointer, bool, func()) error {
+func (implementation) Fullscreen(platform.Window, bool, func()) error {
 	return unsupported("full screen")
 }
 
-func (implementation) ObserveResponder(unsafe.Pointer, func()) (unsafe.Pointer, error) {
+func (implementation) ObserveResponder(platform.Window, func()) (unsafe.Pointer, error) {
 	return nil, unsupported("first responder observation")
 }
 
 func (implementation) EndResponderObservation(unsafe.Pointer) {}
 
-func (implementation) TitlebarHeight(unsafe.Pointer) (float64, error) {
+func (implementation) TitlebarHeight(platform.Window) (float64, error) {
 	return 0, unsupported("window title bar")
 }
 
-func (implementation) SetTitlebarHeight(unsafe.Pointer, float64) error {
+func (implementation) SetTitlebarHeight(platform.Window, float64) error {
 	return unsupported("window title bar")
 }
 
-func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {
+func (implementation) WindowControls(platform.Window) (platform.Rect, error) {
 	return platform.Rect{}, unsupported("window controls")
 }
 
-func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
+func (implementation) WindowFacts(platform.Window) (string, error) {
 	return "", unsupported("window state")
 }
-func (implementation) WindowOnScreen(unsafe.Pointer) (bool, error) {
+func (implementation) WindowOnScreen(platform.Window) (bool, error) {
 	return false, unsupported("window on screen")
 }
-func (implementation) WindowColorSpace(unsafe.Pointer) (string, error) {
+func (implementation) WindowColorSpace(platform.Window) (string, error) {
 	return "", unsupported("window color space")
 }
 func (implementation) ProcessFootprint(int) (platform.ProcessFootprint, error) {
 	return platform.ProcessFootprint{}, unsupported("process footprint")
 }
-func (implementation) ConfigureMainWindow(unsafe.Pointer, bool) error {
+func (implementation) ConfigureMainWindow(platform.Window, bool) error {
 	return unsupported("main window configuration")
 }
-func (implementation) RevealAfterLoad(unsafe.Pointer) error {
+func (implementation) RevealAfterLoad(platform.Window) error {
 	return unsupported("window reveal")
 }
-func (implementation) SetMainWebview(unsafe.Pointer) error {
+func (implementation) SetMainWebview(platform.Window) error {
 	return unsupported("main webview identity")
 }
 func (implementation) FileDrop(unsafe.Pointer, func(string)) error {
 	return unsupported("file drop")
 }
-func (implementation) MainWebview(unsafe.Pointer) (unsafe.Pointer, error) {
+func (implementation) MainWebview(platform.Window) (unsafe.Pointer, error) {
 	return nil, unsupported("main webview identity")
 }
 func (implementation) SampleThreads(string) error {
@@ -115,11 +115,11 @@ func (implementation) PostNotification(string, string, string) error {
 }
 func (implementation) RemoveNotification(string) error { return unsupported("system notifications") }
 
-func (implementation) WindowHit(unsafe.Pointer, float64, float64) (string, error) {
+func (implementation) WindowHit(platform.Window, float64, float64) (string, error) {
 	return "", unsupported("window hit testing")
 }
 
-func (implementation) MoveWindow(unsafe.Pointer, float64, float64) error {
+func (implementation) MoveWindow(platform.Window, float64, float64) error {
 	return unsupported("window placement")
 }
 
@@ -221,15 +221,15 @@ func (implementation) MenuSelect(string, string) error {
 	return unsupported("application menu")
 }
 
-func (implementation) MainWindow() (unsafe.Pointer, error) {
-	return nil, unsupported("main window")
+func (implementation) MainWindow() (platform.Window, error) {
+	return 0, unsupported("main window")
 }
 
 func (implementation) DockSelect(string) error {
 	return unsupported("Dock menu")
 }
 
-func (implementation) CreateWebview(unsafe.Pointer, platform.WebviewOptions) (unsafe.Pointer, error) {
+func (implementation) CreateWebview(platform.Window, platform.WebviewOptions) (unsafe.Pointer, error) {
 	return nil, unsupported("native webview")
 }
 
@@ -374,7 +374,7 @@ func (implementation) CloseWebview(unsafe.Pointer) {
 	unreachable("native webview close")
 }
 
-func (implementation) NativeView(unsafe.Pointer) unsafe.Pointer {
+func (implementation) NativeView(platform.Window) unsafe.Pointer {
 	unreachable("native view")
 	return nil
 }
@@ -387,7 +387,7 @@ func (implementation) ReleaseView(unsafe.Pointer) {
 	unreachable("view retention")
 }
 
-func (implementation) CreateSurface(unsafe.Pointer) (unsafe.Pointer, error) {
+func (implementation) CreateSurface(platform.Window) (unsafe.Pointer, error) {
 	return nil, unsupported("surface host")
 }
 
@@ -416,23 +416,23 @@ func (implementation) FocusSurfaceForRegion(unsafe.Pointer) {
 	unreachable("surface keyboard")
 }
 
-func (implementation) FocusWorkbench(unsafe.Pointer) {
+func (implementation) FocusWorkbench(platform.Window) {
 	unreachable("workbench keyboard")
 }
 
-func (implementation) KeyboardHold(unsafe.Pointer) {
+func (implementation) KeyboardHold(platform.Window) {
 	unreachable("workbench keyboard")
 }
 
-func (implementation) KeyboardDecided(unsafe.Pointer) {
+func (implementation) KeyboardDecided(platform.Window) {
 	unreachable("workbench keyboard")
 }
 
-func (implementation) ModalHold(unsafe.Pointer) {
+func (implementation) ModalHold(platform.Window) {
 	unreachable("modal keyboard")
 }
 
-func (implementation) ModalHoldEnd(unsafe.Pointer) {
+func (implementation) ModalHoldEnd(platform.Window) {
 	unreachable("modal keyboard")
 }
 
@@ -456,40 +456,40 @@ func (implementation) FocusModal(unsafe.Pointer, bool) {
 	unreachable("modal focus")
 }
 
-func (implementation) AlignRect(unsafe.Pointer, platform.Rect) (platform.Rect, error) {
+func (implementation) AlignRect(platform.Window, platform.Rect) (platform.Rect, error) {
 	return platform.Rect{}, unsupported("pixel alignment")
 }
 
-func (implementation) BeginLayout(unsafe.Pointer, uint64, func(bool)) error {
+func (implementation) BeginLayout(platform.Window, uint64, func(bool)) error {
 	return unsupported("surface layout")
 }
 
-func (implementation) CommitLayout(unsafe.Pointer, uint64) bool {
+func (implementation) CommitLayout(platform.Window, uint64) bool {
 	unreachable("surface layout commit")
 	return false
 }
 
-func (implementation) CancelLayout(unsafe.Pointer) error {
+func (implementation) CancelLayout(platform.Window) error {
 	return unsupported("surface layout cancel")
 }
 
-func (implementation) CancelLayoutTicket(unsafe.Pointer, uint64) error {
+func (implementation) CancelLayoutTicket(platform.Window, uint64) error {
 	return unsupported("surface layout ticket cancel")
 }
 
-func (implementation) JoinView(unsafe.Pointer, uint64, unsafe.Pointer, func()) (func() error, bool, error) {
+func (implementation) JoinView(platform.Window, uint64, unsafe.Pointer, func()) (func() error, bool, error) {
 	return nil, false, unsupported("view presentation wait")
 }
 
-func (implementation) StartPageTitlebar(unsafe.Pointer, uint64, float64, func(error)) error {
+func (implementation) StartPageTitlebar(platform.Window, uint64, float64, func(error)) error {
 	return unsupported("start title bar")
 }
 
-func (implementation) MainPresentation(unsafe.Pointer) (unsafe.Pointer, error) {
+func (implementation) MainPresentation(platform.Window) (unsafe.Pointer, error) {
 	return nil, unsupported("native presentation")
 }
 
-func (implementation) AfterSettled(unsafe.Pointer, unsafe.Pointer, func(float64, error)) error {
+func (implementation) AfterSettled(platform.Window, unsafe.Pointer, func(float64, error)) error {
 	return unsupported("native presentation")
 }
 
@@ -497,19 +497,19 @@ func (implementation) FunctionPresentation(func(func(error)) error) (unsafe.Poin
 	return nil, unsupported("native presentation")
 }
 
-func (implementation) ObserveLayout(_, _ func(unsafe.Pointer)) error {
+func (implementation) ObserveLayout(_, _ func(platform.Window)) error {
 	return unsupported("native presentation")
 }
 
-func (implementation) InjectSettledFailure(unsafe.Pointer) error {
+func (implementation) InjectSettledFailure(platform.Window) error {
 	return unsupported("native presentation")
 }
 
-func (implementation) AfterPresentation(unsafe.Pointer, func()) error {
+func (implementation) AfterPresentation(platform.Window, func()) error {
 	return unsupported("native presentation")
 }
 
-func (implementation) CreateShape(unsafe.Pointer, float64, float64, float64, float64) (unsafe.Pointer, error) {
+func (implementation) CreateShape(platform.Window, float64, float64, float64, float64) (unsafe.Pointer, error) {
 	return nil, unsupported("native shapes")
 }
 

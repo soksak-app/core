@@ -5,11 +5,13 @@ package adapter
 import (
 	"io/fs"
 	"log/slog"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	_ "github.com/soksak-app/core/packages/host/wailsv3/src/platform/darwin"
 )
 
@@ -80,6 +82,7 @@ func Run(assets fs.FS, options host.Options) error {
 // shows front (docs/spec/hosts.md#launch-activation).
 func LaunchMacOptions() application.MacOptions {
 	return application.MacOptions{
-		ActivationPolicy: application.ActivationPolicyRegular, DisableActivationOnLaunch: true, WindowShow: host.ShowWindow,
+		ActivationPolicy: application.ActivationPolicyRegular, DisableActivationOnLaunch: true,
+		WindowShow: func(window unsafe.Pointer) { host.ShowWindow(platform.Window(uintptr(window))) },
 	}
 }

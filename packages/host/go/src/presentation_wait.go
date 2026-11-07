@@ -3,7 +3,8 @@ package host
 import (
 	"fmt"
 	"sync"
-	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // presentationPlacement is the last accepted placement of one plugin root view.
@@ -280,7 +281,7 @@ func (w *presentationWait) finishIfReady(ticket uint64) {
 }
 
 // joinViewsForPresentRequest attaches changed, newly shown, or recreated root views to the request's layout transaction.
-func (s *Surfaces) joinViewsForPresentRequest(window unsafe.Pointer, req PresentRequest, placements []Placement) error {
+func (s *Surfaces) joinViewsForPresentRequest(window platform.Window, req PresentRequest, placements []Placement) error {
 	generations := make(map[string]uint64, len(placements))
 	for _, placement := range placements {
 		if view, ok := s.documents.view(placement.ID); ok {
@@ -292,7 +293,7 @@ func (s *Surfaces) joinViewsForPresentRequest(window unsafe.Pointer, req Present
 }
 
 // joinShownViews joins each changed shown root view that waits for no presentation yet to the open layout transaction of window.
-func (s *Surfaces) joinShownViews(window unsafe.Pointer, ticket uint64, placements []Placement) error {
+func (s *Surfaces) joinShownViews(window platform.Window, ticket uint64, placements []Placement) error {
 	for _, p := range placements {
 		if !p.Visible || s.presentation.waits(p.ID) || s.viewRecords().specs[p.ID] == nil {
 			continue
@@ -307,7 +308,7 @@ func (s *Surfaces) joinShownViews(window unsafe.Pointer, ticket uint64, placemen
 	return nil
 }
 
-func (s *Surfaces) joinViewForPresentation(window unsafe.Pointer, ticket uint64, placement Placement) (uint64, bool, error) {
+func (s *Surfaces) joinViewForPresentation(window platform.Window, ticket uint64, placement Placement) (uint64, bool, error) {
 	view, err := s.documents.Get(DocumentKey{Surface: placement.ID, Name: viewRegionName})
 	if err != nil {
 		return 0, false, nil
@@ -377,7 +378,7 @@ func (s *Surfaces) endPresentationWaitAtLimit(surface string, ticket, generation
 }
 
 // cancelLayoutPresentation abandons the ticket's joins before native cancellation, which does not invoke presentation callbacks.
-func (s *Surfaces) cancelLayoutPresentation(window unsafe.Pointer, ticket uint64) error {
+func (s *Surfaces) cancelLayoutPresentation(window platform.Window, ticket uint64) error {
 	var joinErr error
 	if err := s.presentation.cancelTicket(ticket); err != nil {
 		joinErr = err
@@ -392,7 +393,7 @@ func (s *Surfaces) cancelLayoutPresentation(window unsafe.Pointer, ticket uint64
 }
 
 // cancelAllLayoutPresentations abandons host waits before native cancellation of the window's open layout.
-func (s *Surfaces) cancelAllLayoutPresentations(window unsafe.Pointer) error {
+func (s *Surfaces) cancelAllLayoutPresentations(window platform.Window) error {
 	joinErr := s.presentation.cancelAll()
 	if err := system.CancelLayout(window); err != nil {
 		if joinErr != nil {

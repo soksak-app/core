@@ -932,7 +932,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		if p.X == nil || p.Y == nil {
 			return nil, rpcError(codeInvalidParams, "x and y are required")
 		}
-		return nil, s.useWindow(func(window unsafe.Pointer) error { return system.MoveWindow(window, *p.X, *p.Y) })
+		return nil, s.useWindow(func(window platform.Window) error { return system.MoveWindow(window, *p.X, *p.Y) })
 	case "host.menu.select":
 		var p struct {
 			Menu, Title *string
@@ -1030,7 +1030,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	}
 	done := make(chan delivery, 1)
 	var pressed uintptr
-	err = s.useWindow(func(window unsafe.Pointer) error {
+	err = s.useWindow(func(window platform.Window) error {
 		return readPressThenDeliver(func() error {
 			if input.Phase != "down" {
 				return nil
@@ -1094,7 +1094,7 @@ func PointerHeldMessage(held platform.ButtonHeld) string {
 // When activation does not finish, it returns a 1006 error that names the stage where it stopped.
 func (s *Surfaces) activate(x, y float64) error {
 	done := make(chan error, 1)
-	err := s.useWindow(func(window unsafe.Pointer) error {
+	err := s.useWindow(func(window platform.Window) error {
 		return system.ActivateWindow(window, x, y, activateTimeout.Seconds(), func(result error) { done <- result })
 	})
 	if err != nil {
@@ -1112,7 +1112,7 @@ func (b hostBackend) Key(window string, input KeyInput) error {
 		return err
 	}
 	var result platform.PointerResult
-	err = s.useWindow(func(window unsafe.Pointer) error {
+	err = s.useWindow(func(window platform.Window) error {
 		var injected error
 		result, injected = system.InjectKey(window, input.Key, input.Text, input.Modifiers, input.Down)
 		return injected
@@ -1145,9 +1145,9 @@ func native(read func() (string, error), into any, inspect func()) error {
 
 // nativeFacts puts into into the native JSON that read read from the native window of this window in one step of the UI thread.
 // inspect runs after the read in the same step. A window that closed before that step gives 1003.
-func (s *Surfaces) nativeFacts(read func(window unsafe.Pointer) (string, error), into any, inspect func()) error {
+func (s *Surfaces) nativeFacts(read func(window platform.Window) (string, error), into any, inspect func()) error {
 	var text string
-	err := s.useWindow(func(window unsafe.Pointer) error {
+	err := s.useWindow(func(window platform.Window) error {
 		var err error
 		text, err = read(window)
 		if err == nil && inspect != nil {
@@ -1475,7 +1475,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 	var named map[uint64]string
 	var documents map[uint64]DocumentKey
 	regions := []WindowRegion{}
-	err := s.nativeFacts(func(window unsafe.Pointer) (string, error) {
+	err := s.nativeFacts(func(window platform.Window) (string, error) {
 		named = s.viewNames()
 		documents = s.documents.Names()
 		for _, key := range s.images.Names() {
@@ -1615,7 +1615,7 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 		} `json:"hit"`
 	}
 	var documents map[uint64]DocumentKey
-	err := s.nativeFacts(func(window unsafe.Pointer) (string, error) { return system.WindowHit(window, x, y) }, &got, func() {
+	err := s.nativeFacts(func(window platform.Window) (string, error) { return system.WindowHit(window, x, y) }, &got, func() {
 		documents = s.documents.Names()
 	})
 	if err != nil {
@@ -1636,7 +1636,7 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 // transition, so the native code continues the handling after that transition ends.
 func (s *Surfaces) fullscreen(on bool) error {
 	done := make(chan struct{}, 1)
-	err := s.useWindow(func(window unsafe.Pointer) error {
+	err := s.useWindow(func(window platform.Window) error {
 		return system.Fullscreen(window, on, func() { done <- struct{}{} })
 	})
 	if err != nil {

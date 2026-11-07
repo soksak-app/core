@@ -79,7 +79,7 @@ type lifecyclePlatform struct {
 	posted       []string
 	// joins holds the native joins of the views, in the order of their joins.
 	joins            []*viewJoin
-	cancelledLayouts []unsafe.Pointer
+	cancelledLayouts []platform.Window
 	cancelledTickets []uint64
 	layoutOperations []string
 	// delayed holds the work of EnqueueUIAfter with its delay, in order; the test runs it.
@@ -94,7 +94,7 @@ type delayedUI struct {
 
 // viewJoin is one join of a view to a layout transaction. abandons counts the calls of its abandon.
 type viewJoin struct {
-	window    unsafe.Pointer
+	window    platform.Window
 	ticket    uint64
 	view      unsafe.Pointer
 	presented func()
@@ -102,7 +102,7 @@ type viewJoin struct {
 }
 
 // JoinView records the join and returns the function that counts its abandon.
-func (p *lifecyclePlatform) JoinView(window unsafe.Pointer, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
+func (p *lifecyclePlatform) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
 	join := &viewJoin{window: window, ticket: ticket, view: view, presented: presented}
 	p.joins = append(p.joins, join)
 	return func() error {
@@ -124,12 +124,12 @@ func (p *lifecyclePlatform) EnqueueUIAfter(delay time.Duration, run func()) erro
 	return nil
 }
 
-func (p *lifecyclePlatform) CancelLayout(window unsafe.Pointer) error {
+func (p *lifecyclePlatform) CancelLayout(window platform.Window) error {
 	p.cancelledLayouts = append(p.cancelledLayouts, window)
 	return nil
 }
 
-func (p *lifecyclePlatform) CancelLayoutTicket(window unsafe.Pointer, ticket uint64) error {
+func (p *lifecyclePlatform) CancelLayoutTicket(window platform.Window, ticket uint64) error {
 	p.cancelledLayouts = append(p.cancelledLayouts, window)
 	p.cancelledTickets = append(p.cancelledTickets, ticket)
 	p.layoutOperations = append(p.layoutOperations, "cancel-ticket")
