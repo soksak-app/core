@@ -51,9 +51,10 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"runtime/cgo"
+
 	"unsafe"
 
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
@@ -68,7 +69,7 @@ func (implementation) PrepareWindow(window platform.Window) error {
 }
 
 func (implementation) Fullscreen(window platform.Window, on bool, done func()) error {
-	handle := cgo.NewHandle(done)
+	handle := handles.NewHandle(done)
 	if !bool(C.nativeWindowFullscreen(C.uintptr_t(window), C.bool(on), C.uintptr_t(handle))) {
 		handle.Delete()
 		return errors.New("the window does not support full screen")
@@ -77,10 +78,10 @@ func (implementation) Fullscreen(window platform.Window, on bool, done func()) e
 }
 
 // The observation callbacks by observation. They are read and changed only in main-thread steps.
-var responderObservers = map[unsafe.Pointer]cgo.Handle{}
+var responderObservers = map[unsafe.Pointer]handles.Handle{}
 
 func (implementation) ObserveResponder(window platform.Window, changed func()) (unsafe.Pointer, error) {
-	handle := cgo.NewHandle(changed)
+	handle := handles.NewHandle(changed)
 	observation := C.nativeWindowObserveResponder(C.uintptr_t(window), C.uintptr_t(handle))
 	if observation == nil {
 		handle.Delete()
@@ -100,12 +101,12 @@ func (implementation) EndResponderObservation(observation unsafe.Pointer) {
 
 //export goNativeResponderChanged
 func goNativeResponderChanged(value C.uintptr_t) {
-	cgo.Handle(value).Value().(func())()
+	handles.Handle(value).Value().(func())()
 }
 
 //export goNativeFullscreenDone
 func goNativeFullscreenDone(value C.uintptr_t) {
-	handle := cgo.Handle(value)
+	handle := handles.Handle(value)
 	done := handle.Value().(func())
 	handle.Delete()
 	done()

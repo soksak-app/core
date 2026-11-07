@@ -28,9 +28,11 @@ import "C"
 
 import (
 	"errors"
-	"runtime/cgo"
+
 	"strings"
 	"unsafe"
+
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
 // InputSource returns the identifier of the currently selected keyboard input source. Call it in a main-thread step.
@@ -54,12 +56,12 @@ func (implementation) SelectInputSource(identifier string, adopted func(error)) 
 	}
 	wanted := C.CString(identifier)
 	defer C.free(unsafe.Pointer(wanted))
-	C.inputSourceSelectAndAwait(wanted, C.uintptr_t(cgo.NewHandle(adopted)))
+	C.inputSourceSelectAndAwait(wanted, C.uintptr_t(handles.NewHandle(adopted)))
 }
 
 //export goNativeInputSourceAdopted
 func goNativeInputSourceAdopted(value C.uintptr_t, failure *C.char) {
-	handle := cgo.Handle(value)
+	handle := handles.Handle(value)
 	adopted := handle.Value().(func(error))
 	handle.Delete()
 	if failure == nil {

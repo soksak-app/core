@@ -26,14 +26,16 @@ import "C"
 
 import (
 	"errors"
-	"runtime/cgo"
+
 	"unsafe"
+
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
 //export goPageObjectsCounted
 func goPageObjectsCounted(handle C.uintptr_t, elements, documents C.long, failure *C.char) {
 	// handle is the value that CountPageObjects created, and the library calls done once.
-	h := cgo.Handle(handle)
+	h := handles.Handle(handle)
 	done := h.Value().(func(int64, int64, error))
 	h.Delete()
 	if failure != nil {
@@ -45,5 +47,5 @@ func goPageObjectsCounted(handle C.uintptr_t, elements, documents C.long, failur
 
 // CountPageObjects evaluates the counts of view and gives done the result. Call it in a main-thread step.
 func (implementation) CountPageObjects(view unsafe.Pointer, document bool, done func(elements, documents int64, err error)) {
-	C.countPageObjects(view, C.bool(document), C.uintptr_t(cgo.NewHandle(done)))
+	C.countPageObjects(view, C.bool(document), C.uintptr_t(handles.NewHandle(done)))
 }

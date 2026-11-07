@@ -55,24 +55,26 @@ import "C"
 
 import (
 	"errors"
-	"runtime/cgo"
+
 	"unsafe"
+
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
 // images are the event receiver handles of each image region handle, and leases the receivers of the released surfaces of
 // each region in the lease mode. They are read and changed only in main-thread steps.
-var images = map[unsafe.Pointer]cgo.Handle{}
-var leases = map[unsafe.Pointer]cgo.Handle{}
+var images = map[unsafe.Pointer]handles.Handle{}
+var leases = map[unsafe.Pointer]handles.Handle{}
 
 //export goImageReleased
 func goImageReleased(context unsafe.Pointer, generation, raster C.uint64_t, sequence C.int) {
-	released := cgo.Handle(uintptr(context)).Value().(func(uint64, uint64, int))
+	released := handles.Handle(uintptr(context)).Value().(func(uint64, uint64, int))
 	released(uint64(generation), uint64(raster), int(sequence))
 }
 
 //export goImageChanged
 func goImageChanged(context unsafe.Pointer, json *C.char) {
-	changed := cgo.Handle(uintptr(context)).Value().(func(string))
+	changed := handles.Handle(uintptr(context)).Value().(func(string))
 	changed(C.GoString(json))
 }
 
@@ -80,10 +82,10 @@ func (implementation) CreateImage(surface unsafe.Pointer, name string, changed f
 	released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error) {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
-	receiver := cgo.NewHandle(changed)
-	var lease cgo.Handle
+	receiver := handles.NewHandle(changed)
+	var lease handles.Handle
 	if released != nil {
-		lease = cgo.NewHandle(released)
+		lease = handles.NewHandle(released)
 	}
 	image := C.imageCreate(surface, cname, C.uintptr_t(receiver), C.uintptr_t(lease))
 	if image == nil {

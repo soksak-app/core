@@ -17,6 +17,8 @@ The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `e
 
 The mygo application and its Go dependencies must build with `CGO_ENABLED=0`. Purego is an implementation choice, not a requirement. Changes to the shared Go host or the Wails adapter must preserve this cgo-free mygo path; a framework-specific foreign function binding belongs behind the platform interface and must not impose cgo on another adapter.
 
+The Go callback owner retains a value under a nonzero integer token until its last native use ends and the owner deletes it. Zero and deleted tokens are invalid; deleting twice or reading an invalid token panics. Tokens are not Go pointers and are not reused after deletion. The callback package builds and runs with `CGO_ENABLED=0`; it uses `sync.Map` and atomic token allocation because `runtime/cgo.Handle` links cgo runtime symbols even when only its handle operations are used.
+
 ## Host tree
 
 The language host libraries:
@@ -284,6 +286,7 @@ The allowed differences are two tables, and a row ID is unique across both. The 
 | H56 | `src/diagnostics_cpu_profile_test.go` | none | The test of the endpoint method of row E3, which exists only on the Go language host library |
 | H57 | none | `tests/support/drawing.rs` | The Rust integration tests are separate crates, so the tests of the drawing state of image regions share their helpers through this module; the Go tests of the same files share them inside the package `host_test`, so the Go language host library has no such file |
 | H58 | `src/windows_show_test.go` | none | A Go framework hands each window that it shows to `ShowWindow`, which asks the platform that `platform.Register` registered, so a show can run before a start of the host or with no registration; this test substitutes the registration through `platform.Substitute`. The Rust language host library registers no platform: `platform::current` returns the implementation that the build compiled for its operating system |
+| H59 | `src/callback/handle.go`, `tests/callback/handle_test.go` | none | Native callbacks retain Go values by integer tokens until explicit deletion, including in a cgo-free build. Rust callbacks retain their values through `Box::into_raw` and reclaim them through `Box::from_raw`, so they need no garbage-collected value registry |
 | E1 | `diagnostics.heap.profile` | none | The endpoint method writes a heap profile of the Go runtime (`runtime/pprof`); the Rust language host library has no garbage-collected heap to profile. A row whose ID starts with E lists endpoint methods, and `make check-hosts-same` reads it |
 | E2 | `diagnostics.gc.loop` | none | The endpoint method runs `runtime.GC` of the Go runtime without pause; the Rust language host library has no garbage-collected heap to collect |
 | E3 | `diagnostics.cpu.profile` | none | The endpoint method profiles the Go runtime (`runtime/pprof`): `sample` reads a goroutine without the frames of its caller, while it reads every frame of the Rust language host library |

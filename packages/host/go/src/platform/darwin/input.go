@@ -117,20 +117,21 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"runtime/cgo"
+
 	"sync"
 	"unsafe"
 
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // watchers are the input receiver handles of each monitor number. They are read and changed only in main-thread steps.
-var watchers = map[uintptr]cgo.Handle{}
+var watchers = map[uintptr]handles.Handle{}
 var pointerSequence sync.Mutex
 
 //export goSurfaceHit
 func goSurfaceHit(owner C.uintptr_t, view unsafe.Pointer) C.int {
-	if cgo.Handle(owner).Value().(platform.Input).Press(uintptr(view)) {
+	if handles.Handle(owner).Value().(platform.Input).Press(uintptr(view)) {
 		return 1
 	}
 	return 0
@@ -138,11 +139,11 @@ func goSurfaceHit(owner C.uintptr_t, view unsafe.Pointer) C.int {
 
 //export goSurfacePoint
 func goSurfacePoint(owner C.uintptr_t, phase C.int, x C.double, y C.double) {
-	cgo.Handle(owner).Value().(platform.Input).Point(int(phase), float64(x), float64(y))
+	handles.Handle(owner).Value().(platform.Input).Point(int(phase), float64(x), float64(y))
 }
 
 func (implementation) WatchInput(window platform.Window, input platform.Input) (uintptr, error) {
-	handle := cgo.NewHandle(input)
+	handle := handles.NewHandle(input)
 	monitor := uintptr(C.surfaceWatchMouse(C.uintptr_t(window), C.uintptr_t(handle)))
 	watchers[monitor] = handle
 	return monitor, nil
@@ -159,7 +160,7 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 		})
 	}
 	C.injectPointer(C.uintptr_t(window), C.CString(pointer), C.double(x), C.double(y), C.int(phase), C.int(button), C.double(deltaX), C.double(deltaY), C.int(clicks),
-		C.double(receive), C.uintptr_t(cgo.NewHandle(serialized)))
+		C.double(receive), C.uintptr_t(handles.NewHandle(serialized)))
 	return nil
 }
 
@@ -168,7 +169,7 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 //
 //export goInputDelivered
 func goInputDelivered(context unsafe.Pointer, result C.int, held *C.sp_input_held) {
-	handle := cgo.Handle(uintptr(context))
+	handle := handles.Handle(uintptr(context))
 	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld))
 	handle.Delete()
 	switch C.sp_input_result(result) {
@@ -221,7 +222,7 @@ type activation struct {
 
 //export goInputActivated
 func goInputActivated(context unsafe.Pointer, result C.int, frontmost *C.char) {
-	handle := cgo.Handle(uintptr(context))
+	handle := handles.Handle(uintptr(context))
 	a := handle.Value().(activation)
 	handle.Delete()
 	name := "unknown"
@@ -251,7 +252,7 @@ func activationResult(result C.sp_activate_result, timeout float64, frontmost st
 
 // ActivateWindow makes the window the key window with sp_input_activate of native/darwin.
 func (implementation) ActivateWindow(window platform.Window, x, y, timeout float64, done func(error)) error {
-	C.activateWindowAt(C.uintptr_t(window), C.double(x), C.double(y), C.double(timeout), C.uintptr_t(cgo.NewHandle(activation{timeout, done})))
+	C.activateWindowAt(C.uintptr_t(window), C.double(x), C.double(y), C.double(timeout), C.uintptr_t(handles.NewHandle(activation{timeout, done})))
 	return nil
 }
 

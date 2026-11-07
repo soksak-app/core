@@ -17,6 +17,8 @@ Language host library는 framework를 이름으로 부르지 않는 모든 것�
 
 mygo application과 그 Go 의존성은 `CGO_ENABLED=0`으로 빌드되어야 한다. purego는 구현 선택이며 필수 조건이 아니다. 공유 Go host나 Wails adapter의 변경은 이 mygo의 cgo 없는 경로를 유지해야 한다. framework별 foreign function binding은 platform interface 뒤에 두며 다른 adapter에 cgo를 강제하지 않는다.
 
+Go callback 소유자는 마지막 native 사용이 끝나 소유자가 해제할 때까지 0이 아닌 정수 token으로 값을 유지한다. 0과 해제된 token은 무효이며, 이중 해제와 무효 token 조회는 panic으로 거부한다. token은 Go pointer가 아니며 해제 뒤 재사용하지 않는다. callback package는 `CGO_ENABLED=0`으로 build되고 실행된다. handle 연산만 사용해도 `runtime/cgo.Handle`은 cgo runtime symbol을 링크하므로, `sync.Map`과 atomic token 할당을 사용한다.
+
 ## 호스트 트리
 
 Language host library:
@@ -284,6 +286,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H56 | `src/diagnostics_cpu_profile_test.go` | 없음 | row E3 의 endpoint method 를 시험한다. 그 method 는 Go language host library 에만 있다 |
 | H57 | 없음 | `tests/support/drawing.rs` | Rust integration test 는 crate 가 따로이므로 image region 의 그리기 상태 시험들은 이 module 로 helper 를 함께 쓴다. 같은 파일들의 Go 시험은 package `host_test` 안에서 helper 를 함께 쓰므로 Go language host library 에는 이 파일이 없다 |
 | H58 | `src/windows_show_test.go` | 없음 | Go framework 는 보이는 window 마다 `ShowWindow` 에 넘기고 `ShowWindow` 는 `platform.Register` 가 등록한 platform 에 묻으므로, show 는 host 의 start 전에도, 등록이 없을 때도 실행될 수 있다. 이 test 는 `platform.Substitute` 로 등록을 바꾼다. Rust language host library 는 platform 을 등록하지 않는다. `platform::current` 는 build 가 그 operating system 용으로 compile 한 구현을 돌려준다 |
+| H59 | `src/callback/handle.go`, `tests/callback/handle_test.go` | 없음 | native callback은 cgo 없는 build에서도 명시적 해제까지 정수 token으로 Go 값을 유지한다. Rust callback은 `Box::into_raw`로 값을 보관하고 `Box::from_raw`로 회수하므로 garbage-collected 값의 registry가 필요 없다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust language host library에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make check-hosts-same`가 그 행을 읽는다 |
 | E2 | `diagnostics.gc.loop` | 없음 | 이 endpoint method는 Go runtime의 `runtime.GC`를 쉬지 않고 돈다. Rust language host library에는 수집할 garbage-collected heap이 없다 |
 | E3 | `diagnostics.cpu.profile` | 없음 | 이 endpoint method는 Go runtime을 profile한다(`runtime/pprof`). `sample`은 goroutine을 호출자 frame 없이 읽지만, Rust language host library의 frame은 모두 읽는다 |

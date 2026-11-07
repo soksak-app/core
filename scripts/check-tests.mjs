@@ -1661,6 +1661,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F686-2",
+    implementation: [
+      { file: "packages/host/go/src/callback/handle.go", symbol: "func NewHandle(value any) Handle {" },
+      { file: "packages/host/go/src/callback/handle.go", symbol: "func (handle Handle) Value() any {" },
+      { file: "packages/host/go/src/callback/handle.go", symbol: "func (handle Handle) Delete() {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/callback/handle_test.go", id: "TestAHandleRetainsItsGoCallbackUntilDeleted" },
+      { file: "packages/host/go/tests/callback/handle_test.go", id: "TestTheZeroCallbackHandleIsInvalid" },
+      { file: "packages/host/go/tests/callback/handle_test.go", id: "TestANilCallbackValueIsDistinctFromAnInvalidHandle" },
+      { file: "packages/host/go/tests/callback/handle_test.go", id: "TestDeletedCallbackHandlesNeverNameANewerCallback" },
+      { file: "packages/host/go/tests/callback/handle_test.go", id: "TestConcurrentCallbackOwnersKeepSeparateHandles" },
+    ],
+    expected: "Native callbacks retain and release Go values through integer handles without requiring cgo; invalid and deleted handles are rejected.",
+    levels: ["unit"],
+  },
+  {
     id: "F532",
     implementation: [
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "crate::event_record::quit_with_cause(\"update\", || host.0.quit());" },

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F686-2: native callback 값은 cgo를 끄면 링크되지 않는 runtime/cgo.Handle 대신 공유 Go callback handle 소유자를 사용한다. 정수 token은 명시적 해제까지 Go 값을 유지하며 0, 해제된 handle의 조회와 이중 해제를 거부한다. cgo 없는 수명 사례와 race 실행, Darwin platform 사례와 두 adapter의 main-thread callback 검사가 통과한다. native binding 생성과 cgo 없는 application 전체 빌드는 아직 남아 있다.
+
 - F674: Wails main-thread stack test는 background 우선순위에서 추적되는 Go 반복 명령으로 연속 12회 모두 통과했다. 각 실행은 7.028–12.946초로 기존 120초 한도 안에 끝났다. 두 host의 주입 heartbeat 검사도 통과해 남은 background 검증을 마쳤다.
 
 - F686-1: 공유 native library가 Go platform 대신 main_thread.h와 main_thread.m을 소유한다. native test는 독립적인 설치 상태, 동기 전달과 반환값, 빠진 함수의 이름을 남기는 종료를 검증한다. Go 시작 검사와 두 adapter의 main-thread stack 및 stall 동작을 유지하며 native 및 audit 사례가 통과한다. mygo의 cgo 없는 binding은 아직 완료되지 않았다.

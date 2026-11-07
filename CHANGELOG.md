@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F686-2: Native callback values use the shared Go callback handle owner instead of runtime/cgo.Handle, whose package cannot link with cgo disabled. Integer tokens retain Go values until explicit deletion and reject zero, deleted and twice-deleted handles. The cgo-free lifecycle cases, race run, Darwin platform cases and both adapters main-thread callback checks pass. Native binding generation and the complete cgo-free application build remain open.
+
 - F674: The Wails main-thread stack test passes 12 of 12 consecutive runs through the tracked Go repeat command under background priority, each in 7.028–12.946 s within the unchanged 120 s limit. Both hosts also pass the injected-heartbeat check; the remaining background validation is complete.
 
 - F686-1: The shared native library owns main_thread.h and main_thread.m instead of the Go platform. Native tests cover independent installation state, synchronous dispatch and return values, and termination with the missing function name. The Go startup check and both adapters retain their main-thread stack and stall behavior; the native and audit cases pass. This does not complete the cgo-free mygo binding.

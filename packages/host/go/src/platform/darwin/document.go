@@ -133,68 +133,69 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"runtime/cgo"
+
 	"unsafe"
 
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // documents are the state receiver handles of each document handle. They are read and changed only in main-thread steps.
-var documents = map[unsafe.Pointer]cgo.Handle{}
-var documentEvents = map[unsafe.Pointer]cgo.Handle{}
-var documentMessages = map[unsafe.Pointer]cgo.Handle{}
+var documents = map[unsafe.Pointer]handles.Handle{}
+var documentEvents = map[unsafe.Pointer]handles.Handle{}
+var documentMessages = map[unsafe.Pointer]handles.Handle{}
 
 // viewMessages holds the receiver of each view document until the document closes, as documentMessages does for regions.
-var viewMessages = map[unsafe.Pointer]cgo.Handle{}
+var viewMessages = map[unsafe.Pointer]handles.Handle{}
 
 // viewEnds holds the receiver of the end of each view until the view closes.
-var viewEnds = map[unsafe.Pointer]cgo.Handle{}
+var viewEnds = map[unsafe.Pointer]handles.Handle{}
 
 // viewResponsivenesses holds the receiver of the responsiveness notices of each view until the view closes.
-var viewResponsivenesses = map[unsafe.Pointer]cgo.Handle{}
-var documentStreams = map[unsafe.Pointer]cgo.Handle{}
+var viewResponsivenesses = map[unsafe.Pointer]handles.Handle{}
+var documentStreams = map[unsafe.Pointer]handles.Handle{}
 
 //export goDocumentChanged
 func goDocumentChanged(context unsafe.Pointer, state *C.char) {
-	changed := cgo.Handle(uintptr(context)).Value().(func(string))
+	changed := handles.Handle(uintptr(context)).Value().(func(string))
 	changed(C.GoString(state))
 }
 
 //export goDocumentMessage
 func goDocumentMessage(context unsafe.Pointer, value *C.char) {
-	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
 //export goViewMessage
 func goViewMessage(context unsafe.Pointer, value *C.char) {
-	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
 //export goViewEnded
 func goViewEnded(context unsafe.Pointer) {
-	cgo.Handle(uintptr(context)).Value().(func())()
+	handles.Handle(uintptr(context)).Value().(func())()
 }
 
 //export goViewResponsiveness
 func goViewResponsiveness(context unsafe.Pointer, responsive C.bool) {
-	cgo.Handle(uintptr(context)).Value().(func(bool))(bool(responsive))
+	handles.Handle(uintptr(context)).Value().(func(bool))(bool(responsive))
 }
 
 //export goDocumentStream
 func goDocumentStream(context unsafe.Pointer, value *C.char) {
-	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
 // coreRootSet and coreRootHandle hold the core root resolver of the application, which is registered once at its start.
 var coreRootSet bool
-var coreRootHandle cgo.Handle
+var coreRootHandle handles.Handle
 
 // goCoreRootServe answers one request of the core root of a view with the resolver that SetCoreRoot registered. It returns false
 // for a path that the resolver does not serve. The file is copied to memory that the native scheme releases.
 //
 //export goCoreRootServe
 func goCoreRootServe(context unsafe.Pointer, plugin, urlPath *C.char, bytes *unsafe.Pointer, length *C.size_t, contentType **C.char) C.bool {
-	resolve := cgo.Handle(uintptr(context)).Value().(platform.CoreRootResolver)
+	resolve := handles.Handle(uintptr(context)).Value().(platform.CoreRootResolver)
 	data, kind, found := resolve(C.GoString(plugin), C.GoString(urlPath))
 	if !found {
 		return false
@@ -209,7 +210,7 @@ func goCoreRootServe(context unsafe.Pointer, plugin, urlPath *C.char, bytes *uns
 //
 //export goDocumentQueried
 func goDocumentQueried(context unsafe.Pointer, value *C.char) {
-	handle := cgo.Handle(uintptr(context))
+	handle := handles.Handle(uintptr(context))
 	reply := handle.Value().(func(string))
 	handle.Delete()
 	reply(C.GoString(value))
@@ -217,7 +218,7 @@ func goDocumentQueried(context unsafe.Pointer, value *C.char) {
 
 //export goDocumentEvent
 func goDocumentEvent(context unsafe.Pointer, value *C.char) {
-	cgo.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
+	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
 // SetCoreRoot registers the resolver of the core root. The application registers one resolver at its start, and a second
@@ -227,7 +228,7 @@ func (implementation) SetCoreRoot(resolve platform.CoreRootResolver) error {
 		return errors.New("the core root resolver is already set")
 	}
 	coreRootSet = true
-	coreRootHandle = cgo.NewHandle(resolve)
+	coreRootHandle = handles.NewHandle(resolve)
 	C.coreRootSet(C.uintptr_t(coreRootHandle))
 	return nil
 }
@@ -255,7 +256,7 @@ func (implementation) CreateDocument(surface unsafe.Pointer, options platform.Do
 		channelText = C.CString(options.Channel)
 		defer C.free(unsafe.Pointer(channelText))
 	}
-	receiver := cgo.NewHandle(changed)
+	receiver := handles.NewHandle(changed)
 	document := C.documentCreate(surface, name, folderText, id, labelText, channelText, C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
@@ -296,21 +297,21 @@ func (implementation) ZoomDocument(document unsafe.Pointer, zoom float64) bool {
 }
 
 func (implementation) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
-	receiver := cgo.NewHandle(message)
+	receiver := handles.NewHandle(message)
 	C.documentSetViewMessage(document, C.uintptr_t(receiver))
 	viewMessages[document] = receiver
 	return nil
 }
 
 func (implementation) SetViewEnded(document unsafe.Pointer, ended func()) error {
-	receiver := cgo.NewHandle(ended)
+	receiver := handles.NewHandle(ended)
 	C.documentSetViewEnded(document, C.uintptr_t(receiver))
 	viewEnds[document] = receiver
 	return nil
 }
 
 func (implementation) SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error {
-	receiver := cgo.NewHandle(responsiveness)
+	receiver := handles.NewHandle(responsiveness)
 	C.documentSetViewResponsiveness(document, C.uintptr_t(receiver))
 	viewResponsivenesses[document] = receiver
 	return nil
@@ -353,21 +354,21 @@ func (implementation) AddDocumentScript(document unsafe.Pointer, source string) 
 }
 
 func (implementation) SetDocumentEvent(document unsafe.Pointer, event func(value string)) error {
-	receiver := cgo.NewHandle(event)
+	receiver := handles.NewHandle(event)
 	C.documentSetEvent(document, C.uintptr_t(receiver))
 	documentEvents[document] = receiver
 	return nil
 }
 
 func (implementation) SetDocumentMessage(document unsafe.Pointer, message func(value string)) error {
-	receiver := cgo.NewHandle(message)
+	receiver := handles.NewHandle(message)
 	C.documentSetMessage(document, C.uintptr_t(receiver))
 	documentMessages[document] = receiver
 	return nil
 }
 
 func (implementation) SetDocumentStream(document unsafe.Pointer, stream func(value string)) error {
-	receiver := cgo.NewHandle(stream)
+	receiver := handles.NewHandle(stream)
 	C.documentSetStream(document, C.uintptr_t(receiver))
 	documentStreams[document] = receiver
 	return nil
@@ -394,7 +395,7 @@ func (implementation) GoDocument(document unsafe.Pointer, action, offset int) bo
 }
 
 func (implementation) QueryDocument(document unsafe.Pointer, reply func(value string)) {
-	C.documentQuery(document, C.uintptr_t(cgo.NewHandle(reply)))
+	C.documentQuery(document, C.uintptr_t(handles.NewHandle(reply)))
 }
 
 func (implementation) DocumentInteractionState(document unsafe.Pointer) (string, bool) {

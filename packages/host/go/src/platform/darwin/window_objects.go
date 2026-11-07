@@ -26,15 +26,14 @@ static void countWhen(const sp_window_objects *expected, double seconds, uintptr
 import "C"
 
 import (
-	"runtime/cgo"
-
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 //export goWindowObjectsCounted
 func goWindowObjectsCounted(handle C.uintptr_t, compositions, hosts, registrations C.long, reached C.bool) {
 	// handle is the value that WindowObjectsWhen created, and the library calls done once.
-	h := cgo.Handle(handle)
+	h := handles.Handle(handle)
 	done := h.Value().(func(platform.WindowObjects, bool))
 	h.Delete()
 	done(platform.WindowObjects{
@@ -56,5 +55,5 @@ func (implementation) WindowObjectsWhen(expected *platform.WindowObjects, second
 			inputRegistrations: C.long(expected.InputRegistrations),
 		}
 	}
-	C.countWhen(wanted, C.double(seconds), C.uintptr_t(cgo.NewHandle(done)))
+	C.countWhen(wanted, C.double(seconds), C.uintptr_t(handles.NewHandle(done)))
 }

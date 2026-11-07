@@ -22,9 +22,11 @@ import "C"
 
 import (
 	"fmt"
-	"runtime/cgo"
+
 	"strings"
 	"time"
+
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
 // InstallMainThread installs the main-thread functions of the framework (main_thread.h), given as the addresses of the C functions.
@@ -50,7 +52,7 @@ func (implementation) RequireMainThread() error {
 }
 
 func (implementation) EnqueueUI(work func()) error {
-	handle := cgo.NewHandle(work)
+	handle := handles.NewHandle(work)
 	C.uiEnqueue(C.uintptr_t(handle))
 	return nil
 }
@@ -59,14 +61,14 @@ func (implementation) EnqueueUIAfter(delay time.Duration, work func()) error {
 	if delay < 0 {
 		return fmt.Errorf("UI queue delay %s is negative", delay)
 	}
-	handle := cgo.NewHandle(work)
+	handle := handles.NewHandle(work)
 	C.uiEnqueueAfter(C.uint64_t(delay.Nanoseconds()), C.uintptr_t(handle))
 	return nil
 }
 
 //export goNativeUIRun
 func goNativeUIRun(context C.uintptr_t) {
-	handle := cgo.Handle(context)
+	handle := handles.Handle(context)
 	work := handle.Value().(func())
 	handle.Delete()
 	work()

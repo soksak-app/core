@@ -23,12 +23,12 @@ static void whenExited(pid_t pid, double seconds, uintptr_t handle) {
 */
 import "C"
 
-import "runtime/cgo"
+import handles "github.com/soksak-app/core/packages/host/go/src/callback"
 
 //export goProcessExitAnswered
 func goProcessExitAnswered(handle C.uintptr_t, exited C.bool) {
 	// handle is the value that WhenProcessExited created, and the library calls done once.
-	h := cgo.Handle(handle)
+	h := handles.Handle(handle)
 	done := h.Value().(func(bool))
 	h.Delete()
 	done(bool(exited))
@@ -36,5 +36,5 @@ func goProcessExitAnswered(handle C.uintptr_t, exited C.bool) {
 
 // WhenProcessExited replies to done when the process pid ends or seconds pass. Call it in a main-thread step.
 func (implementation) WhenProcessExited(pid int32, seconds float64, done func(bool)) {
-	C.whenExited(C.pid_t(pid), C.double(seconds), C.uintptr_t(cgo.NewHandle(done)))
+	C.whenExited(C.pid_t(pid), C.double(seconds), C.uintptr_t(handles.NewHandle(done)))
 }

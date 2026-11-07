@@ -128,9 +128,10 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"runtime/cgo"
+
 	"unsafe"
 
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
@@ -210,7 +211,7 @@ func (implementation) ConfigureMainWindow(window platform.Window, dark bool) err
 
 //export goFileDropped
 func goFileDropped(context unsafe.Pointer, json *C.char) {
-	dropped := cgo.Handle(uintptr(context)).Value().(func(string))
+	dropped := handles.Handle(uintptr(context)).Value().(func(string))
 	dropped(C.GoString(json))
 }
 
@@ -218,11 +219,11 @@ func goFileDropped(context unsafe.Pointer, json *C.char) {
 //
 //export goFileDropReleased
 func goFileDropReleased(context unsafe.Pointer) {
-	cgo.Handle(uintptr(context)).Delete()
+	handles.Handle(uintptr(context)).Delete()
 }
 
 func (implementation) FileDrop(main unsafe.Pointer, dropped func(json string)) error {
-	handle := cgo.NewHandle(dropped)
+	handle := handles.NewHandle(dropped)
 	if !bool(C.windowFileDrop(main, C.uintptr_t(handle))) {
 		handle.Delete()
 		return fmt.Errorf("the main webview has no window composition for file drops")

@@ -1160,7 +1160,7 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 				return identity.RemoveDocumentFrameIdentity(generation, done)
 			})
 		})
-	// Native callbacks own their cgo handles until completion; detach the timed-out channel so a late result
+	// Native callbacks own their handles until completion; detach the timed-out channel so a late result
 	// cannot be mistaken for the next capture session. Native generation fencing rejects its stale producer.
 	pendingDocumentFrameIdentityStart = nil
 	if source != nil && removed {

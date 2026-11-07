@@ -35,15 +35,16 @@ import "C"
 
 import (
 	"errors"
-	"runtime/cgo"
+
 	"sync"
 	"unsafe"
 
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 func (implementation) BeginLayout(window platform.Window, ticket uint64, ready func(bool)) error {
-	handle := cgo.NewHandle(ready)
+	handle := handles.NewHandle(ready)
 	C.nativeWindowLayoutBegin(C.uintptr_t(window), C.uint64_t(ticket), C.uintptr_t(handle))
 	return nil
 }
@@ -69,7 +70,7 @@ func (implementation) CancelLayoutTicket(window platform.Window, ticket uint64) 
 // surfaceLayoutAbandonView assert the main thread, and main-thread steps do not overlap, so ended needs no lock.
 func (implementation) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
 	ended := false
-	handle := cgo.NewHandle(func() {
+	handle := handles.NewHandle(func() {
 		ended = true
 		presented()
 	})
@@ -92,14 +93,14 @@ func (implementation) JoinView(window platform.Window, ticket uint64, view unsaf
 }
 
 func (implementation) StartPageTitlebar(window platform.Window, ticket uint64, height float64, ready func(error)) error {
-	handle := cgo.NewHandle(ready)
+	handle := handles.NewHandle(ready)
 	C.nativeWindowStartPage(C.uintptr_t(window), C.uint64_t(ticket), C.double(height), C.uintptr_t(handle))
 	return nil
 }
 
 //export goNativeStartPageReady
 func goNativeStartPageReady(value C.uintptr_t, failure *C.char) {
-	handle := cgo.Handle(value)
+	handle := handles.Handle(value)
 	ready := handle.Value().(func(error))
 	handle.Delete()
 	if failure == nil {
@@ -111,14 +112,14 @@ func goNativeStartPageReady(value C.uintptr_t, failure *C.char) {
 
 //export goNativeLayoutReady
 func goNativeLayoutReady(value C.uintptr_t, allowed C.bool) {
-	handle := cgo.Handle(value)
+	handle := handles.Handle(value)
 	ready := handle.Value().(func(bool))
 	handle.Delete()
 	ready(bool(allowed))
 }
 
 func (implementation) AfterPresentation(window platform.Window, done func()) error {
-	handle := cgo.NewHandle(done)
+	handle := handles.NewHandle(done)
 	if !bool(C.nativeWindowAfterPresentation(C.uintptr_t(window), C.uintptr_t(handle))) {
 		handle.Delete()
 		return errors.New("native presentation is unavailable")
@@ -128,7 +129,7 @@ func (implementation) AfterPresentation(window platform.Window, done func()) err
 
 //export goNativePresentationDone
 func goNativePresentationDone(value C.uintptr_t) {
-	handle := cgo.Handle(value)
+	handle := handles.Handle(value)
 	done := handle.Value().(func())
 	handle.Delete()
 	done()
@@ -143,17 +144,17 @@ func (implementation) MainPresentation(window platform.Window) (unsafe.Pointer, 
 }
 
 func (implementation) AfterSettled(window platform.Window, present unsafe.Pointer, done func(displayed float64, err error)) error {
-	C.nativeWindowAfterSettled(C.uintptr_t(window), present, C.uintptr_t(cgo.NewHandle(done)))
+	C.nativeWindowAfterSettled(C.uintptr_t(window), present, C.uintptr_t(handles.NewHandle(done)))
 	return nil
 }
 
 func (implementation) FunctionPresentation(present func(func(error)) error) (unsafe.Pointer, error) {
-	return C.nativeFunctionPresentation(C.uintptr_t(cgo.NewHandle(present))), nil
+	return C.nativeFunctionPresentation(C.uintptr_t(handles.NewHandle(present))), nil
 }
 
 //export goNativeSettledPresent
 func goNativeSettledPresent(value C.uintptr_t, presented unsafe.Pointer) {
-	present := cgo.Handle(value).Value().(func(func(error)) error)
+	present := handles.Handle(value).Value().(func(func(error)) error)
 	var once sync.Once
 	finish := func(err error) {
 		once.Do(func() {
@@ -171,7 +172,7 @@ func goNativeSettledPresent(value C.uintptr_t, presented unsafe.Pointer) {
 }
 
 //export goNativeSettledPresentEnded
-func goNativeSettledPresentEnded(value C.uintptr_t) { cgo.Handle(value).Delete() }
+func goNativeSettledPresentEnded(value C.uintptr_t) { handles.Handle(value).Delete() }
 
 // layoutStarted and layoutEnded are the functions of the observer that ObserveLayout registered.
 var layoutStarted, layoutEnded func(window platform.Window)
@@ -195,7 +196,7 @@ func (implementation) InjectSettledFailure(platform.Window) error {
 
 //export goNativeSettledDone
 func goNativeSettledDone(value C.uintptr_t, displayed C.double, message *C.char) {
-	handle := cgo.Handle(value)
+	handle := handles.Handle(value)
 	done := handle.Value().(func(float64, error))
 	handle.Delete()
 	if message == nil {

@@ -22,10 +22,11 @@ import "C"
 import (
 	"encoding/json"
 	"errors"
-	"runtime/cgo"
+
 	"strings"
 	"unsafe"
 
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
@@ -41,12 +42,12 @@ func (implementation) InputReference(window platform.Window, action string, docu
 		expected = C.CString(*document)
 		defer C.free(unsafe.Pointer(expected))
 	}
-	C.inputReference(C.uintptr_t(window), operation, expected, C.uintptr_t(cgo.NewHandle(done)))
+	C.inputReference(C.uintptr_t(window), operation, expected, C.uintptr_t(handles.NewHandle(done)))
 }
 
 //export goInputReferenceReply
 func goInputReferenceReply(context C.uintptr_t, value, failure *C.char) {
-	handle := cgo.Handle(context)
+	handle := handles.Handle(context)
 	done := handle.Value().(func(json.RawMessage, error))
 	handle.Delete()
 	if failure != nil {

@@ -83,10 +83,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime/cgo"
+
 	"strings"
 	"unsafe"
 
+	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
@@ -228,7 +229,7 @@ func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, genera
 	if done == nil {
 		return errors.New("start document frame identity: completion callback is nil")
 	}
-	handle := cgo.NewHandle(done)
+	handle := handles.NewHandle(done)
 	if !bool(C.scheduleDocumentFrameIdentityStart(document, C.uint64_t(generation), C.uintptr_t(handle))) {
 		handle.Delete()
 		return errors.New("start document frame identity was not scheduled")
@@ -252,7 +253,7 @@ func scheduleDocumentFrameIdentity(operation string, generation uint64, done fun
 	if done == nil {
 		return fmt.Errorf("%s document frame identity: completion callback is nil", operation)
 	}
-	handle := cgo.NewHandle(done)
+	handle := handles.NewHandle(done)
 	if !schedule(C.uintptr_t(handle)) {
 		handle.Delete()
 		return fmt.Errorf("%s document frame identity was not scheduled", operation)
@@ -262,7 +263,7 @@ func scheduleDocumentFrameIdentity(operation string, generation uint64, done fun
 
 //export goDocumentFrameIdentityDone
 func goDocumentFrameIdentityDone(context C.uintptr_t, reply *C.char, nativeError *C.char) {
-	handle := cgo.Handle(context)
+	handle := handles.Handle(context)
 	done := handle.Value().(func(json.RawMessage, error))
 	handle.Delete()
 	if nativeError != nil {
