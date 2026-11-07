@@ -17,6 +17,8 @@ import { readStillCapture } from "./still-capture.mjs";
 if (APPS.mygo) test("mygo: reloading under settings leaves successor terminal images and documents unblurred", { timeout: 90000 }, async (t) => {
   const s = await open(t, APPS.mygo);
   await fresh(s);
+  await s.request("diagnostics.window.draw-covered", { draw: true });
+  s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
   s.cleanup(async () => {
     // Capture a failed native state before cleanup can close its dialog.
     if (!t.passed) await readStillCapture(s, t);
