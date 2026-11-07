@@ -220,6 +220,7 @@ func TestTheMainThreadRunsNoCodeOutsideItsOwnStack(t *testing.T) {
 // A watch that sends a heartbeat into a wait of the main run loop fails the stall check through the count of its sends into a wait
 // and through the wake that its send causes, while the judgment of the waits that the heartbeats read alone does not see it: the
 // run loop wakes from the send and waits again, so the next heartbeat reads a later wait.
+// contract: host.main-thread.stall-check-fails-a-send-into-a-wait
 func TestAHeartbeatSentIntoAWaitFailsTheStallCheck(t *testing.T) {
 	system, err := platform.Current()
 	if err != nil {
