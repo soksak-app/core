@@ -52,7 +52,7 @@ export function firstTerminalReferenceContentFrame({ reference, frames, anchorFr
     assert.equal(issuedArtifact[field], value, `reference issued artifact ${field} differs from source`);
   }
   assert.ok(expected && typeof expected.text === "string" && expected.text.trim().length > 0 &&
-    Number.isInteger(expected.row) && expected.row >= 0 && Number.isInteger(expected.startColumn) && expected.startColumn > 0,
+    Number.isInteger(expected.row) && expected.row >= 0 && Number.isInteger(expected.startColumn) && expected.startColumn >= 0,
   "reference expected glyph span is invalid");
   assert.ok(Array.isArray(screen.rows) && screen.rows.length === raster.grid.rows &&
     screen.rows.every(Array.isArray), "reference screen rows are missing");
@@ -82,10 +82,14 @@ export function firstTerminalReferenceContentFrame({ reference, frames, anchorFr
   }
   assert.equal(text, expected.text, "reference screen does not contain the complete expected text");
   assert.ok(glyphs.length > 0, "reference contains no expected glyphs");
-  assert.deepEqual(expected.guards, [{ row: expected.row, column: expected.startColumn - 1 }, { row: expected.row, column: end }],
+  const atLeftEdge = expected.startColumn === 0;
+  const guards = [atLeftEdge ? { row: expected.row, edge: "left", column: 0 } :
+    { row: expected.row, column: expected.startColumn - 1 }, { row: expected.row, column: end }];
+  assert.deepEqual(expected.guards, guards,
     "reference requires complete adjacent guard cells");
   assert.ok(end < raster.grid.cols, "reference trailing guard is outside the grid");
-  cells.push(...expected.guards);
+  // A viewport edge is a geometric guard, never a crop of a nonexistent cell.
+  cells.push(...guards.filter((guard) => guard.edge === undefined));
   validateRenderMetadata(render, screen.frame, cursor, glyphs);
   for (const glyph of glyphs) {
     const cell = positioned.find((entry) => entry.column === glyph.col).cell;
@@ -109,6 +113,16 @@ export function firstTerminalReferenceContentFrame({ reference, frames, anchorFr
     const rect = rectangle(placement.rectPt, "capture region");
     assert.equal(rect.width * raster.scale, raster.width, "capture region width differs from reference geometry");
     assert.equal(rect.height * raster.scale, raster.height, "capture region height differs from reference geometry");
+    if (atLeftEdge) {
+      const clip = rectangle(placement.clipRectPt, "capture native viewport clip");
+      const gridLeft = rect.x + raster.grid.x / raster.scale;
+      const rowTop = rect.y + (raster.grid.y + expected.row * raster.grid.cellHeight) / raster.scale;
+      const rowBottom = rowTop + raster.grid.cellHeight / raster.scale;
+      const guardRight = gridLeft + (end + 1) * raster.grid.cellWidth / raster.scale;
+      assert.equal(clip.x, gridLeft, "reference left edge differs from native viewport clip boundary");
+      assert.ok(clip.y <= rowTop && clip.y + clip.height >= rowBottom &&
+        clip.x + clip.width >= guardRight, "native viewport clip truncates a complete glyph or guard cell");
+    }
     return { frame: source.frame, raster: { ...raster, screenBounds: rect }, state: { frame: source.frame, semantic } };
   };
   const matches = (capture, placement) => compositionFrameCandidates({ targetFrame: source.frame, capture,

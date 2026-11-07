@@ -60,6 +60,59 @@ async function measure(input) {
   return firstTerminalReferenceContentFrame(input);
 }
 
+// The clip is an explicit native viewport observation in content points. An
+// edge guard proves a boundary; it never substitutes invented offscreen pixels.
+function viewportEdgeFixture() {
+  const input = fixture();
+  const { reference, frames } = input;
+  const raster = reference.source.raster;
+  reference.screen.rows[1] = [{ ch: "A", width: 1 }, { ch: "B", width: 1 }, { width: 1 }];
+  const glyph = reference.source.render.glyphs[0];
+  reference.source.render.glyphs = [{ ...structuredClone(glyph), col: 0 }, { ...glyph, col: 1, grapheme: "B" }];
+  for (const y of [7, 8]) for (const x of [1, 2]) raster.data.set([0, 0, 255, 255], (y * 12 + x) * 4);
+  reference.expected = { text: "AB", row: 1, startColumn: 0,
+    guards: [{ row: 1, edge: "left", column: 0 }, { row: 1, column: 2 }] };
+  reference.region.clipRectPt = { ...reference.region.rectPt };
+  const fillCapture = (capture, at) => {
+    capture.data.fill(255);
+    for (let y = 0; y < 12; y++) capture.data.set(raster.data.subarray(y * 48, (y + 1) * 48), (y * 24 + at) * 4);
+  };
+  fillCapture(reference.capture, 0);
+  for (const [index, frame] of frames.entries()) {
+    frame.region.clipRectPt = { ...frame.region.rectPt };
+    if (index > 0) fillCapture(frame.capture, index === 1 ? 0 : 12);
+  }
+  return input;
+}
+
+test("terminal reference preserves the complete column-zero text using an explicit native viewport edge and full right guard", { timeout: 5000 }, async () => {
+  const result = await measure(viewportEdgeFixture());
+  assert.equal(result.frameIndex, 2);
+  assert.equal(result.proof, "verified-terminal-reference-exact-pixels");
+});
+
+const invalidViewportEdges = [
+  ["edge guard away from column zero", (x) => { x.reference.expected.startColumn = 1; x.reference.expected.text = "B"; }],
+  ["missing left edge guard", (x) => { x.reference.expected.guards.shift(); }],
+  ["missing complete right guard", (x) => { x.reference.expected.guards.pop(); }],
+  ["invented negative-column guard", (x) => { x.reference.expected.guards[0] = { row: 1, column: -1 }; }],
+  ["missing native clip observation", (x) => { delete x.reference.region.clipRectPt; }],
+  ["native clip starts inside the first glyph cell", (x) => { x.reference.region.clipRectPt.x = 1; x.reference.region.clipRectPt.width = 11; }],
+  ["native clip starts before the grid boundary", (x) => { x.reference.region.clipRectPt.x = -1; x.reference.region.clipRectPt.width = 13; }],
+  ["native clip truncates the complete right guard", (x) => { x.reference.region.clipRectPt.width = 11; }],
+  ["earlier capture has a different native clip boundary", (x) => { x.frames[2].region.clipRectPt.x += 1; x.frames[2].region.clipRectPt.width -= 1; }],
+  ["QR overlaps a column-zero glyph cell", (x) => { x.reference.issuedArtifact.roi = { x: 0, y: 6, width: 1, height: 1 }; x.reference.identityRow.roi = x.reference.issuedArtifact.roi; }],
+  ["QR overlaps the complete right guard", (x) => { x.reference.issuedArtifact.roi = { x: 8, y: 6, width: 1, height: 1 }; x.reference.identityRow.roi = x.reference.issuedArtifact.roi; }],
+];
+for (const [name, mutate] of invalidViewportEdges) {
+  test(`terminal reference refuses ${name}`, { timeout: 5000 }, async () => {
+    const input = viewportEdgeFixture();
+    mutate(input);
+    await assert.rejects(() => measure(input), (error) => error.code !== "ERR_MODULE_NOT_FOUND" &&
+      /reference|frame|region|glyph|guard|cursor|geometry|anchor|QR|screen|clip|edge/i.test(error.message));
+  });
+}
+
 for (const plugin of ["terminal", "term"]) {
   test(`${plugin}: verified reference selects the earliest exact normal-region pixels without requiring its later tuple`, { timeout: 5000 }, async () => {
     const result = await measure(fixture(plugin));
