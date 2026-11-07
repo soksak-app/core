@@ -11,6 +11,7 @@ import (
 	"github.com/soksak-app/core/packages/host/go/tests/platform/darwin/testlibrary"
 )
 
+// contract: verification.native-test-loader.rejects-invalid-artifacts
 func TestOpenRequiresAnExplicitAbsoluteNativeArtifact(t *testing.T) {
 	const variable = "SOKSAK_TEST_LIBRARY_INVALID_ARTIFACT"
 	// Preserve even an explicitly empty inherited variable, because all artifact
@@ -62,6 +63,7 @@ func TestOpenRequiresAnExplicitAbsoluteNativeArtifact(t *testing.T) {
 	}
 }
 
+// contract: verification.native-test-loader.retains-handle-and-reports-missing-symbols
 func TestOpenRetainsTheDeclaredLibraryAndReportsMissingSymbols(t *testing.T) {
 	// This is the same declared fixture artifact used by the native adapter tests.
 	// Absence is a configuration failure, never a skipped integration check.

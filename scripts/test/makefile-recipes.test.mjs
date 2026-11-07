@@ -12,6 +12,41 @@ const root = resolve(import.meta.dirname, "../..");
 // The PATH of a shell that did not read the profile, which adds the cargo folder of rustup.
 const BARE_PATH = "/usr/bin:/bin";
 
+test("managed mygo verification prepares declared native fixtures and selects CGO0", () => {
+  const text = readFileSync(join(root, "Makefile"), "utf8");
+  const rule = (name) => {
+    const match = text.match(new RegExp(`^${name}:([^\\n]*)\\n((?:\\t[^\\n]*\\n)*)`, "m"));
+    assert.ok(match, `missing ${name} target`);
+    return { prerequisites: match[1].trim().split(/\s+/), recipe: match[2] };
+  };
+  const mygo = rule("test-mygo");
+  assert.ok(mygo.prerequisites.includes("build-native-mygo"));
+  assert.ok(mygo.prerequisites.includes("build-native-tests"));
+  assert.match(mygo.recipe, /CGO_ENABLED=0[^\n]*scripts\/go-tests\.mjs/);
+  assert.doesNotMatch(mygo.recipe, /--(?:cgo-|go-)?ldflags/);
+  const fixtures = rule("build-native-tests");
+  for (const target of ["build-host-test", "build-host-callback-abi", "build-host-callback-worker"]) {
+    assert.ok(fixtures.recipe.includes(target), `missing native fixture ${target}`);
+  }
+  for (const name of ["test-hosts", "test-wailsv3"]) {
+    const selected = rule(name);
+    assert.ok(selected.prerequisites.includes("build-native-tests"), name);
+    assert.match(selected.recipe, /--cgo-ldflags=/);
+  }
+  const repeat = rule("repeat-go");
+  assert.doesNotMatch(repeat.recipe, /go-repeat-inputs\.mjs/);
+  assert.match(repeat.recipe, /--cgo-ldflags=/);
+  const debug = rule("check-host-debug");
+  for (const directory of ["apps/mygo", "packages/host/mygo"]) {
+    const line = debug.recipe.split("\n").find((line) => line.includes(`go vet -C ${directory} `));
+    assert.match(line, /CGO_ENABLED=0/);
+    assert.doesNotMatch(line, /\$\(GO_ENV\)/);
+  }
+  const benchmark = rule("benchmark-empty-window").recipe;
+  assert.match(benchmark, /CGO_ENABLED=0/);
+  assert.doesNotMatch(benchmark, /-ldflags/);
+});
+
 // Runs make with only HOME, the bare PATH and, when given, CARGO_HOME in its environment, so no variable of the environment of
 // the test (CARGO, CARGO_HOME, MAKEFLAGS) reaches it.
 function make({ home, cargoHome }, makefiles, target) {

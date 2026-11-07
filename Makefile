@@ -236,8 +236,7 @@ repeat-rust: check-cargo
 repeat-go:
 	@case "$(PACKAGE)" in '') echo "repeat-go requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-go requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@cgo=$$(node scripts/go-repeat-inputs.mjs '$(PACKAGE)' '$(TAGS)') || exit 1; \
-	  $(call go-env,$$cgo) node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LINK)'
+	@$(call go-env) node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --cgo-ldflags='$(GO_LINK)'
 
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
 # Each repeat is one process of node --test with the limit TEST_TIMEOUT: the runner kills it at the limit and names it when it starts
@@ -292,10 +291,10 @@ check-host-debug: check-cargo build-native copy-core-frontend-wailsv3 copy-core-
 	@echo "PASS: Rust hosts in the debug configuration"
 	@echo "START: Go hosts go vet -tags \"$(WAILS_DEBUG_TAGS)\""
 	@$(GO_ENV) go vet -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...
-	@$(GO_ENV) go vet -C apps/mygo -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@CGO_ENABLED=0 $(call go-env) go vet -C apps/mygo -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@$(GO_ENV) go vet -C packages/host/go -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@$(GO_ENV) go vet -C packages/host/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...
-	@$(GO_ENV) go vet -C packages/host/mygo -tags "$(WAILS_DEBUG_TAGS)" ./src/...
+	@CGO_ENABLED=0 $(call go-env) go vet -C packages/host/mygo -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@$(GO_ENV) go vet -C packages/sok/go -tags "$(WAILS_DEBUG_TAGS)" ./src/...
 	@echo "PASS: Go hosts in the debug configuration"
 
@@ -413,6 +412,10 @@ create-host-api:
 
 build-native-mygo: check-host-callbacks check-host-api
 	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) build-mygo
+
+.PHONY: build-native-tests
+build-native-tests:
+	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) build-host-test build-host-callback-abi build-host-callback-worker
 
 # Fetches and checksum-validates the pinned native dependency without compiling it.
 fetch-native:
@@ -588,20 +591,20 @@ check-rust-format: check-cargo
 # Runs the tests of the hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
 # (docs/spec/host-contract.md) run at the same level.
 # Host contract tests build their fixture plugins and sidecars under test-owned temporary directories.
-test-hosts: check-cargo build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
-	@$(GO_ENV) $(CARGO_ENV) node scripts/test-hosts.mjs --go-ldflags="$(GO_LINK)"
+test-hosts: check-cargo build-native-mygo build-native-tests copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
+	@$(call go-env) $(CARGO_ENV) node scripts/test-hosts.mjs --cgo-ldflags="$(GO_LINK)"
 
 # Per-language CI checks use the same selected host contract without discovering or building the other host.
-test-wailsv3: build-native copy-core-frontend-wailsv3
-	@$(GO_ENV) node scripts/test-hosts.mjs --host wailsv3 --go-ldflags="$(GO_LINK)"
+test-wailsv3: build-native build-native-tests copy-core-frontend-wailsv3
+	@$(call go-env) node scripts/test-hosts.mjs --host wailsv3 --cgo-ldflags="$(GO_LINK)"
 
 test-tauriv2: check-cargo build-native copy-core-frontend-tauriv2
 	@$(CARGO_ENV) node scripts/test-hosts.mjs --host tauriv2
 
 # The contract run of the mygo host, and the unit tests of its workbench and of its application.
-test-mygo: build-native copy-core-frontend-mygo
-	@$(GO_ENV) node scripts/go-tests.mjs --package './packages/workbench-mygo/...' --count 1 --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LINK)'
-	@$(GO_ENV) node scripts/test-hosts.mjs --host mygo --go-ldflags="$(GO_LINK)"
+test-mygo: build-native-mygo build-native-tests copy-core-frontend-mygo
+	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/workbench-mygo/...' --count 1 --timeout $(TEST_TIMEOUT)
+	@$(call go-env) node scripts/test-hosts.mjs --host mygo
 	@pnpm -F @soksak/mygo test
 
 # Release host checks build and audit only the selected application bundle; the release reads no registry (docs/spec/verification.md).
@@ -680,7 +683,7 @@ benchmark-resize-catch-up:
 # The benchmark of an empty mygo window (docs/operations/examples.md#empty-window-benchmark): it opens a window of the framework without
 # the mygo framework adapter. SECONDS is the time over which it reads the CPU.
 benchmark-empty-window:
-	@$(call go-env) go -C packages/host/mygo run -ldflags "$(GO_LINK)" ./benchmark/cmd $(if $(SECONDS),--seconds $(SECONDS))
+	@CGO_ENABLED=0 $(call go-env) go -C packages/host/mygo run ./benchmark/cmd $(if $(SECONDS),--seconds $(SECONDS))
 
 benchmark-idle-tab:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:idle-tab

@@ -267,6 +267,49 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F688",
+    implementation: [
+      { file: "e2e/fixtures/save-close/probe/package.json", symbol: '"name": "@sok-check/probe-close"' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+    ],
+    expected: "The save-close probe fixture declares the workspace release-candidate version and remains included in the unchanged workspace version audit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F689",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: '\n  lane("Darwin host dispatch callbacks"' },
+      { file: "scripts/check-tests.mjs", symbol: '\n  lane("Darwin test native fixture"' },
+      { file: "scripts/check-tests.mjs", symbol: '\n  lane("Host native API binding generation"' },
+      { file: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings_diagnostics.go", symbol: "func BindDiagnostic(callbacks abi.DiagnosticCallbacks)" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests.test.mjs", id: "inventory reports uncovered implementations and tests as separate results" },
+      { file: "scripts/test/check-tests.test.mjs", id: "feature links reject missing evidence fields and workspace files" },
+      { file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" },
+    ],
+    expected: "The inventory attributes canonical native bridges, generated API ownership and test infrastructure to their owning checks and uses current implementation symbols. The unchanged audits reject uncovered files and stale links; these structural links do not claim execution of application checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F690",
+    implementation: [
+      { file: "native/darwin/src/host_api_process_footprint.m", symbol: "bool hostProcessFootprintValues(const int64_t *ledgers" },
+      { file: "native/darwin/src/host_api_process_footprint.m", symbol: "hostProcessFootprintValues(ledgers, values, negativeLedger, negativeValue);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/host_api_process_footprint_test.m", id: "all eight KB values preserve pair sums before rounding and unsigned range" },
+      { file: "native/darwin/tests/host_api_process_footprint_test.m", id: "all thirteen negative SDK ledger positions preserve exact metadata without partial output" },
+      { file: "native/darwin/tests/host_api_process_footprint_test.m", id: "the first negative SDK ledger wins in declared order" },
+      { file: "native/darwin/tests/host_api_process_footprint_test.m", id: "invalid pid reports the actual task-name failure and revision count metadata" },
+      { file: "native/darwin/tests/host_api_process_footprint_test.m", id: "own process produces a nonzero physical footprint through the conversion contract" },
+    ],
+    expected: "The real Mach footprint query uses the tested ledger conversion: all eight KB outputs preserve sum-before-rounding and unsigned pair arithmetic, every negative ledger preserves output values and reports its exact position/value in order, and invalid/self process queries retain real status and revision metadata.",
+    levels: ["native"],
+  },
+  {
     id: "F675",
     implementation: [
       { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_send_key_to_web_view(void *handle, void *event) {" },

@@ -8,6 +8,7 @@ import { dirname, isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { cargoCommand } from '@soksak/window-check/cargo.mjs';
 import { runTests } from './test-runner.mjs';
+import { resolveGoNativeInputs } from './go-repeat-inputs.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -23,16 +24,17 @@ export const BUILD_TIMEOUT_MS = 600_000;
  * its limit, and a test that does not end panics at that limit with the stacks of every goroutine (`stacksAtLimit`). Returns `{tests, failures}`: `tests` are runner items with `testName` (the
  * name `go test -json` gives) and `failures` name the packages whose build failed.
  */
-export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs }) {
+export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs, env = process.env }) {
+  const { env: selectedEnv } = resolveGoNativeInputs({ patterns, tags, cwd, env });
   mkdirSync(buildDir, { recursive: true });
   const tagArgs = tags ? ['-tags', tags] : [];
-  const listed = await execFileAsync('go', ['list', ...tagArgs, '-f', '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}} {{.Dir}}{{end}}', ...patterns], { cwd, maxBuffer: 1 << 24 });
+  const listed = await execFileAsync('go', ['list', ...tagArgs, '-f', '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}} {{.Dir}}{{end}}', ...patterns], { cwd, env: selectedEnv, maxBuffer: 1 << 24 });
   const packages = listed.stdout.split('\n').filter((line) => line !== '').map((line) => {
     const [importPath, dir] = line.split(' ');
     return { importPath, dir };
   });
   const builds = packages.map((pkg, index) => ({
-    name: `build ${id} ${pkg.importPath}`, command: 'go', cwd,
+    name: `build ${id} ${pkg.importPath}`, command: 'go', cwd, env: selectedEnv,
     args: ['test', '-c', '-o', join(buildDir, `${id}-${index}.test`), ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), pkg.importPath],
     timeoutMs: BUILD_TIMEOUT_MS,
   }));
@@ -45,10 +47,10 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
       continue;
     }
     const binary = join(buildDir, `${id}-${index}.test`);
-    const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, maxBuffer: 1 << 24 });
+    const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, env: selectedEnv, maxBuffer: 1 << 24 });
     for (const testName of names.stdout.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
       tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
-        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v', `-test.timeout=${timeoutMs}ms`], cwd: pkg.dir, timeoutMs, stacksAtLimit: true });
+        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v', `-test.timeout=${timeoutMs}ms`], cwd: pkg.dir, env: selectedEnv, timeoutMs, stacksAtLimit: true });
     }
   }
   return { tests, failures };

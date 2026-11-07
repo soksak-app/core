@@ -16,6 +16,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
+import { resolveGoNativeInputs } from './go-repeat-inputs.mjs';
 
 /** The limit of one test when `--timeout` is not given. */
 export const TEST_TIMEOUT_MS = 120_000;
@@ -39,9 +40,12 @@ function go(args, options = {}) {
  * as the test binary of its package with `-test.run ^<name>$`. Resolves with the exit status: 0 when every test of every run passed
  * and ran.
  */
-export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, ldflags = '', write }) {
+export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, ldflags = '', cgoLdflags = '', cwd = process.cwd(), env = process.env, write }) {
+  const inputs = resolveGoNativeInputs({ patterns: [pattern], tags, cwd, env });
+  const selectedEnv = inputs.env;
+  const linkerFlags = [ldflags, ...(inputs.cgoEnabled ? [cgoLdflags] : [])].filter(Boolean).join(' ');
   const tagArgs = tags ? ['-tags', tags] : [];
-  const packages = go(['list', ...tagArgs, '-f', '{{.ImportPath}}\t{{.Dir}}\t{{len .TestGoFiles}}\t{{len .XTestGoFiles}}', pattern])
+  const packages = go(['list', ...tagArgs, '-f', '{{.ImportPath}}\t{{.Dir}}\t{{len .TestGoFiles}}\t{{len .XTestGoFiles}}', pattern], { cwd, env: selectedEnv })
     .trim().split('\n').map((line) => {
       const [importPath, dir, sources, external] = line.split('\t');
       return { importPath, dir, files: Number(sources) + Number(external) };
@@ -53,8 +57,8 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     const listed = [];
     for (const [index, item] of testable.entries()) {
       const binary = join(folder, `test-${index}.binary`);
-      await runBuild('go', ['test', '-c', '-o', binary, ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), item.importPath]);
-      const names = testNames(execFileSync(binary, ['-test.list', '.*'], { cwd: item.dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }));
+      await runBuild('go', ['test', '-c', '-o', binary, ...tagArgs, ...(linkerFlags ? ['-ldflags', linkerFlags] : []), item.importPath], { cwd, env: selectedEnv });
+      const names = testNames(execFileSync(binary, ['-test.list', '.*'], { cwd: item.dir, env: selectedEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }));
       for (const name of test === undefined ? names : names.filter((candidate) => new RegExp(test).test(candidate))) {
         listed.push({ importPath: item.importPath, name, binary, cwd: item.dir });
       }
@@ -66,7 +70,7 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     const tests = listed.map((item) => ({
       name: occurrences.get(item.name) > 1 ? `${item.importPath} ${item.name}` : item.name,
       command: item.binary, args: ['-test.run', `^${item.name}$`, '-test.v', '-test.count=1', `-test.timeout=${timeoutMs}ms`], cwd: item.cwd,
-      passedAs: item.name, timeoutMs, stacksAtLimit: true,
+      passedAs: item.name, timeoutMs, stacksAtLimit: true, env: selectedEnv,
     }));
     for (let run = 1; run <= count; run += 1) {
       write(`START ${pattern}: run ${run} of ${count}, ${tests.length} tests, each limited to ${timeoutMs / 1000}s`);
@@ -100,6 +104,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       count: { type: 'string', default: '1' },
       timeout: { type: 'string' },
       ldflags: { type: 'string' },
+      'cgo-ldflags': { type: 'string' },
     },
   });
   if (values.package === undefined) throw new Error('--package is required');
@@ -110,7 +115,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     throw new Error(`--timeout must be seconds from 0 up to 600, found ${JSON.stringify(values.timeout)}`);
   }
   runGoTests({
-    pattern: values.package, tags: values.tags, test: values.test, count, timeoutMs, ldflags: values.ldflags,
+    pattern: values.package, tags: values.tags, test: values.test, count, timeoutMs, ldflags: values.ldflags, cgoLdflags: values['cgo-ldflags'],
     write: (line) => process.stdout.write(`${line}\n`),
   }).then((code) => { process.exitCode = code; }, (error) => {
     process.stderr.write(`${error.message}\n`);

@@ -91,6 +91,8 @@ PROCESS_IDENTITY_LIBRARY := $(CURDIR)/process-identity/lib/libsoksak-process-ide
 OBJECTS    := $(SOURCES:src/%.m=$(BUILD)/%.o)
 LIBRARY    := $(BUILD)/libsoksak-darwin.a
 MYGO_LIBRARY := $(BUILD)/mygo/libsoksak-darwin.dylib
+HOST_CALLBACK_ABI_LIBRARY := $(BUILD)/libhost_callback_abi.dylib
+HOST_CALLBACK_WORKER_LIBRARY := $(BUILD)/libhost_callback_worker.dylib
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
 FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz -lc++
 ZXING_COMMIT := 287c85df6f961c8efbfb5ffd736cd9457b8b890e
@@ -202,6 +204,8 @@ $(LIBRARY): $(OBJECTS) $(ZXING_LIBRARY)
 # comparison is required.
 $(PKGCONFIG): pkgconfig-current | $(BUILD)
 	@printf '%s\n' \
+	  'static_library=$(LIBRARY)' \
+	  'dynamic_library=$(MYGO_LIBRARY)' \
 	  'Name: soksak-darwin' \
 	  'Description: Shared macOS window, webview, and surface layout code' \
 	  'Version: 0.0.40' \
@@ -218,16 +222,16 @@ $(PROCESS_IDENTITY_LIBRARY):
 	@$(MAKE) -C $(CURDIR)/process-identity MACOS_MINIMUM=$(MACOS_MINIMUM) build
 
 # The worker consumer loads its own native state and uses the real framework lifecycle.
-$(BUILD)/libhost_callback_worker.dylib: tests/host_callback_worker.m src/host_callbacks.m src/main_thread.m src/signals.m $(wildcard src/*.h) Makefile | $(BUILD)
+$(HOST_CALLBACK_WORKER_LIBRARY): tests/host_callback_worker.m src/host_callbacks.m src/main_thread.m src/signals.m $(wildcard src/*.h) Makefile | $(BUILD)
 	@clang $(CFLAGS) -dynamiclib -I$(CURDIR)/src tests/host_callback_worker.m src/host_callbacks.m src/main_thread.m src/signals.m -lobjc -o $@
 
-build-host-callback-worker: $(BUILD)/libhost_callback_worker.dylib
+build-host-callback-worker: $(HOST_CALLBACK_WORKER_LIBRARY)
 
 # Isolated ABI fixture: no application bundle or production library is changed.
-$(BUILD)/libhost_callback_abi.dylib: tests/host_callback_abi.m src/host_callbacks.m src/host_callbacks.h src/input_inject.h Makefile | $(BUILD)
+$(HOST_CALLBACK_ABI_LIBRARY): tests/host_callback_abi.m src/host_callbacks.m src/host_callbacks.h src/input_inject.h Makefile | $(BUILD)
 	@clang $(CFLAGS) -DSOKSAK_DIAGNOSTIC -dynamiclib -I$(CURDIR)/src tests/host_callback_abi.m src/host_callbacks.m -o $@
 
-build-host-callback-abi: $(BUILD)/libhost_callback_abi.dylib
+build-host-callback-abi: $(HOST_CALLBACK_ABI_LIBRARY)
 
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
@@ -618,6 +622,10 @@ $(HOST_TEST_DYNAMIC): $(HOST_TEST_BUILD)/host_test_api.o
 
 $(HOST_TEST_PKGCONFIG): pkgconfig-current Makefile | $(BUILD)
 	@printf '%s\n' \
+	  'static_library=$(HOST_TEST_LIBRARY)' \
+	  'dynamic_library=$(HOST_TEST_DYNAMIC)' \
+	  'callback_abi_library=$(HOST_CALLBACK_ABI_LIBRARY)' \
+	  'callback_worker_library=$(HOST_CALLBACK_WORKER_LIBRARY)' \
 	  'Name: soksak-host-test' \
 	  'Description: Native-only test sampler, recorder, dispatcher and transfer frame support' \
 	  'Version: 0.0.40' \

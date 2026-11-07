@@ -14,7 +14,7 @@ const workspace = fileURLToPath(new URL("../../", import.meta.url));
 // The declared macOS minimum as a regular expression.
 const minimum = macosMinimum(workspace).replaceAll(".", "\\.");
 
-test("generated pkg-config file follows a relocated workspace", { timeout: 10000 }, (t) => {
+function pkgconfigFixture(t) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "soksak-pkgconfig-")));
   t.after(() => rmSync(dir, { recursive: true }));
   const before = join(dir, "before/native/darwin");
@@ -22,7 +22,13 @@ test("generated pkg-config file follows a relocated workspace", { timeout: 10000
   copyFileSync(makefile, join(before, "Makefile"));
   // The native Makefile reads the macOS minimum from the Makefile of the repository.
   copyFileSync(join(workspace, "Makefile"), join(dir, "before/Makefile"));
-  const generate = (dir) => execFileSync("make", ["-C", dir, join(dir, "build/soksak-darwin.pc")], { encoding: "utf8" });
+  const generate = (directory, packages = ["soksak-darwin"]) => execFileSync("make", ["-C", directory,
+    ...packages.map((name) => join(directory, `build/${name}.pc`))], { encoding: "utf8" });
+  return { dir, before, generate };
+}
+
+test("generated pkg-config file follows a relocated workspace", { timeout: 10000 }, (t) => {
+  const { dir, before, generate } = pkgconfigFixture(t);
   generate(before);
 
   renameSync(join(dir, "before"), join(dir, "after"));
@@ -88,12 +94,28 @@ test("the mygo application stages its view root, not a main page", { timeout: 10
     const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", target], { cwd: workspace, encoding: "utf8" });
     assert.match(output, flags, output);
   }
+  const builds = (output) => {
+    const commands = output.split(/\r?\n/).filter((line) => /\bgo build -C (?:apps\/mygo|packages\/sok\/go)\s/.test(line));
+    assert.equal(commands.length, 2, `one application and one bundled CLI build are required:\n${output}`);
+    for (const command of commands) {
+      assert.match(command, new RegExp(`^CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=${minimum} go build `), command);
+      assert.doesNotMatch(command, /-extldflags|CGO_CFLAGS|CGO_LDFLAGS/, command);
+    }
+    return commands;
+  };
   const build = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "build-mygo"], { cwd: workspace, encoding: "utf8" });
-  assert.match(build, /go build -C apps\/mygo -tags "diagnostics dev"/, build);
-  assert.match(build, new RegExp(`go build -C packages/sok/go\\s+-ldflags "-extldflags=-mmacosx-version-min=${minimum}" -tags "diagnostics dev mygo"`), build);
-  const release = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "build-mygo-release"], { cwd: workspace, encoding: "utf8" });
-  assert.match(release, /go build -C apps\/mygo -trimpath/, release);
-  assert.match(release, new RegExp(`go build -C packages/sok/go -trimpath -ldflags "-s -w -extldflags=-mmacosx-version-min=${minimum}" -tags "(?:diagnostics )?mygo"`), release);
+  const debug = builds(build);
+  assert.match(debug[0], /go build -C apps\/mygo -tags "diagnostics dev" -o \S+\/Contents\/MacOS\/sok-mygo \.\/src$/, debug[0]);
+  assert.match(debug[1], /go build -C packages\/sok\/go\s+-tags "diagnostics dev mygo" -o \S+\/Contents\/MacOS\/sok \.\/src\/cmd\/sok$/, debug[1]);
+  for (const diagnostics of ["", "1"]) {
+    const release = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", `DIAGNOSTIC_RELEASE=${diagnostics}`, "build-mygo-release"], { cwd: workspace, encoding: "utf8" });
+    const commands = builds(release);
+    const appTags = diagnostics ? String.raw`-tags diagnostics\s+` : '';
+    const cliTags = diagnostics ? 'diagnostics mygo' : 'mygo';
+    assert.match(commands[0], new RegExp(String.raw`go build -C apps/mygo -trimpath\s+${appTags}-ldflags "-s -w" -o \S+/Contents/MacOS/sok-mygo \./src$`), commands[0]);
+    assert.match(commands[1], new RegExp(String.raw`go build -C packages/sok/go -trimpath -ldflags "-s -w" -tags "${cliTags}" -o \S+/Contents/MacOS/sok \./src/cmd/sok$`), commands[1]);
+    if (!diagnostics) assert.doesNotMatch(commands[0], /-tags/, commands[0]);
+  }
 });
 
 test("Rust clippy stages only the core frontend and avoids the workspace registry", { timeout: 10000 }, () => {
@@ -131,4 +153,46 @@ test("release host checks audit only their own optimized bundle", { timeout: 100
     }
     assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
   }
+});
+
+test("native artifact variables follow relocation and preserve unchanged pkg-config files", { timeout: 10000 }, (t) => {
+  const fixture = pkgconfigFixture(t);
+  const { dir, before } = fixture;
+  const generate = (directory) => fixture.generate(directory, ["soksak-darwin", "soksak-host-test"]);
+  const artifacts = (directory) => {
+    const result = {};
+    for (const [pkg, variables] of [
+      ["soksak-darwin", ["static_library", "dynamic_library"]],
+      ["soksak-host-test", ["static_library", "dynamic_library", "callback_abi_library", "callback_worker_library"]],
+    ]) {
+      result[pkg] = {};
+      for (const variable of variables) result[pkg][variable] = execFileSync("pkg-config", [`--variable=${variable}`, pkg], {
+        encoding: "utf8", env: { ...process.env, PKG_CONFIG_PATH: join(directory, "build") },
+      }).trim();
+    }
+    return result;
+  };
+  const expected = (directory) => ({
+    "soksak-darwin": {
+      static_library: join(directory, "build/libsoksak-darwin.a"),
+      dynamic_library: join(directory, "build/mygo/libsoksak-darwin.dylib"),
+    },
+    "soksak-host-test": {
+      static_library: join(directory, "build/host-tests/libhost_test.a"),
+      dynamic_library: join(directory, "build/host-tests/dynamic/libhost_test.dylib"),
+      callback_abi_library: join(directory, "build/libhost_callback_abi.dylib"),
+      callback_worker_library: join(directory, "build/libhost_callback_worker.dylib"),
+    },
+  });
+  generate(before);
+  assert.deepEqual(artifacts(before), expected(before));
+  renameSync(join(dir, "before"), join(dir, "after"));
+  const after = join(dir, "after/native/darwin");
+  generate(after);
+  assert.deepEqual(artifacts(after), expected(after));
+  const files = ["soksak-darwin", "soksak-host-test"].map((name) => join(after, `build/${name}.pc`));
+  const modified = files.map((file) => statSync(file).mtimeMs);
+  for (const file of files) assert.ok(!readFileSync(file, "utf8").includes(before), `${file} retained the old workspace path`);
+  generate(after);
+  assert.deepEqual(files.map((file) => statSync(file).mtimeMs), modified, "unchanged artifact declarations were rewritten");
 });

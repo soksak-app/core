@@ -9,6 +9,28 @@ import { runTests } from "../test-runner.mjs";
 
 const folder = () => mkdtempSync(join(tmpdir(), "discovery-"));
 
+test("Go discovery preserves the selected CGO0 environment through compilation, binary listing and test execution", async (t) => {
+  const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "go.mod"), "module selectedenvironment\n\ngo 1.21\n");
+  writeFileSync(join(root, "selected_test.go"), [
+    '//go:build !cgo', '', 'package selectedenvironment',
+    'import ("os"; "testing")',
+    'func init() { if os.Getenv("SOKSAK_DISCOVERY_TEST_INPUT") != "selected-profile" { panic("listing lost selected native inputs") } }',
+    'func TestSelectedEnvironment(t *testing.T) { if os.Getenv("CGO_ENABLED") != "0" { t.Fatal("execution lost CGO0") } }',
+  ].join('\n'));
+  writeFileSync(join(root, "wrong_test.go"), '//go:build cgo\n\npackage selectedenvironment\nimport "testing"\nfunc TestWrongProfile(t *testing.T) { t.Fatal("compiled wrong CGO profile") }\n');
+  const env = { ...process.env, CGO_ENABLED: '0', GOWORK: 'off', SOKSAK_DISCOVERY_TEST_INPUT: 'selected-profile' };
+  const { tests, failures } = await discoverGo({ patterns: ['./...'], cwd: root, env,
+    buildDir: join(root, 'bin'), id: 'selected-profile', write() {}, concurrency: 1, timeoutMs: 20000 });
+  assert.deepEqual(failures, []);
+  assert.deepEqual(tests.map((item) => item.testName), ['TestSelectedEnvironment']);
+  assert.equal(tests[0].env.CGO_ENABLED, '0');
+  assert.equal(tests[0].env.SOKSAK_DISCOVERY_TEST_INPUT, 'selected-profile');
+  const { results } = await runTests({ tests, concurrency: 1, write() {} });
+  assert.equal(results.get(tests[0].name).status, 'pass');
+});
+
 test("a Go package lists its tests and each test runs in the folder of its package", async () => {
   const root = folder();
   writeFileSync(join(root, "go.mod"), "module fixture\n\ngo 1.21\n");

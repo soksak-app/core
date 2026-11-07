@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F687-3: Run every managed mygo Go profile with CGO_ENABLED=0. Resolve production and test artifacts from selected public imports and pkg-config declarations, propagate the environment through discovery and execution, hash both cgo static inputs, and separate generic linker flags from cgo-only flags. Callback, worker, sampler and loader owner cases pass without manual artifact paths; Wails retains its cgo profile.
+
 - F689: Reconcile native bridge test ownership and feature symbols with the extracted implementations. Keep real runtime consumers separate from structural thread guards, link the focused footprint test and new fixture owners, and retain unchanged inventory enforcement.
 
 - F690: Give the native process-footprint query one directly tested ledger conversion path. Preserve Go-facing errors and units; owning native cases verify every ledger, overflow-safe pair sums, untouched outputs on negative ledgers and real Mach query metadata.

@@ -382,24 +382,29 @@ function goTestSourceInventory(runs) {
 }
 
 const HOST_SOURCES = {
-  wailsv3: { language: 'go', files: () => goTestSourceInventory(GO_RUNS.wailsv3('')) },
-  mygo: { language: 'go', files: () => goTestSourceInventory(GO_RUNS.mygo('')) },
+  wailsv3: { language: 'go', files: () => goTestSourceInventory(GO_RUNS.wailsv3()) },
+  mygo: { language: 'go', files: () => goTestSourceInventory(GO_RUNS.mygo()) },
 };
 
 /** The limit of one contract test. A test that needs more is reported by the run and gets its own limit with its reason. */
 const TEST_TIMEOUT_MS = 120_000;
 
 /** The Go runs of each Go host: its framework adapter with the Go language host library, and the Go sok. */
-const goRuns = (host, adapter, tag) => (ldflags) => {
+const goRuns = (host, adapter, tag) => (options = {}) => {
+  if (options === null || typeof options !== 'object' || Array.isArray(options)) throw new Error('Go run options must be an object');
+  const { ldflags = '', cgoLdflags = '' } = options;
+  const cgoEnabled = host === 'mygo' ? '0' : '1';
+  const env = { ...process.env, CGO_ENABLED: cgoEnabled };
+  const selectedFlags = [ldflags, ...(cgoEnabled === '1' ? [cgoLdflags] : [])].filter(Boolean).join(' ');
   const tags = (...names) => ({ ...([...names, ...tag].length > 0 ? { tags: [...names, ...tag].join(' ') } : {}) });
   const library = ['./packages/host/go/...', adapter];
   const sok = ['./packages/sok/go/...'];
   return [
-    { id: `${host}-tests`, patterns: library, ...tags(), ldflags },
-    { id: `${host}-diagnostics-tests`, patterns: library, ...tags('diagnostics'), ldflags },
-    { id: `${host}-sok-tests`, patterns: sok, ...tags() },
-    { id: `${host}-sok-diagnostics-tests`, patterns: sok, ...tags('diagnostics') },
-    { id: `${host}-sok-dev-tests`, patterns: sok, ...tags('diagnostics', 'dev') },
+    { id: `${host}-tests`, patterns: library, ...tags(), ldflags: selectedFlags, env },
+    { id: `${host}-diagnostics-tests`, patterns: library, ...tags('diagnostics'), ldflags: selectedFlags, env },
+    { id: `${host}-sok-tests`, patterns: sok, ...tags(), ldflags: selectedFlags, env },
+    { id: `${host}-sok-diagnostics-tests`, patterns: sok, ...tags('diagnostics'), ldflags: selectedFlags, env },
+    { id: `${host}-sok-dev-tests`, patterns: sok, ...tags('diagnostics', 'dev'), ldflags: selectedFlags, env },
   ];
 };
 
@@ -534,7 +539,7 @@ async function main(argv) {
   // The Go link flags start with a dash, so they are given as --go-ldflags=<flags>.
   const { values } = parseArgs({
     args: argv, strict: true,
-    options: { 'go-ldflags': { type: 'string' }, host: { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
+    options: { 'go-ldflags': { type: 'string' }, 'cgo-ldflags': { type: 'string' }, host: { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
   });
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
   if (values.host !== undefined && !HOSTS.includes(values.host)) throw new Error('--host must be wailsv3, tauriv2 or mygo');
@@ -551,7 +556,6 @@ async function main(argv) {
     const rustItems = rustFound.flatMap((entry) => entry.tests);
     return checkDeclarations(cases, rustItems, rustFound.flatMap((entry) => entry.failures));
   }
-  if (values.host !== 'tauriv2' && !values['go-ldflags']) throw new Error('usage: test-hosts.mjs [--host wailsv3|tauriv2|mygo] [--go-ldflags=<flags>] [--run <text>] [--only <text>] | --static');
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
   const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
@@ -571,7 +575,7 @@ async function runContract(values, cases, buildDir, write, concurrency) {
   const runText = values.run ?? '';
   const selectedHosts = values.host === undefined ? HOSTS : [values.host];
   const discoverRuns = (name) => (selectedHosts.includes(name)
-    ? Promise.all(GO_RUNS[name](values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })))
+    ? Promise.all(GO_RUNS[name]({ ldflags: values['go-ldflags'], cgoLdflags: values['cgo-ldflags'] }).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })))
     : Promise.resolve([]));
   const rustDiscovery = (async () => {
     const found = [];

@@ -158,14 +158,33 @@ const libraryTest = (name, ...ids) => parseDeclarations(goTest(name, ...ids), 'g
 const adapterTest = (name, ...ids) => parseDeclarations(goTest(name, ...ids), 'go', 'packages/host/mygo/tests/a_test.go');
 
 test('a host mygo runs the Go language host library, its framework adapter and the Go sok, each tag set with the tag mygo', { timeout: 1000 }, () => {
-  const runs = GO_RUNS.mygo('-flags');
+  const runs = GO_RUNS.mygo({ ldflags: '-flags' });
   const of = (folder) => runs.filter((run) => run.patterns.includes(folder)).map((run) => run.tags).sort();
   assert.deepEqual(of('./packages/host/go/...'), ['diagnostics mygo', 'mygo']);
   assert.deepEqual(of('./packages/host/mygo/...'), ['diagnostics mygo', 'mygo']);
   assert.deepEqual(of('./packages/sok/go/...'), ['diagnostics dev mygo', 'diagnostics mygo', 'mygo']);
   assert.ok(!runs.some((run) => run.patterns.includes('./packages/host/wailsv3/...')), 'the host mygo runs no test of the Wails framework adapter');
-  assert.ok(!GO_RUNS.wailsv3('-flags').some((run) => run.patterns.includes('./packages/host/mygo/...')), 'the host wailsv3 runs no test of the mygo framework adapter');
-  assert.ok(!GO_RUNS.wailsv3('-flags').some((run) => run.tags?.includes('mygo')), 'the host wailsv3 runs without the tag mygo');
+  assert.ok(!GO_RUNS.wailsv3({ ldflags: '-flags' }).some((run) => run.patterns.includes('./packages/host/mygo/...')), 'the host wailsv3 runs no test of the mygo framework adapter');
+  assert.ok(!GO_RUNS.wailsv3({ ldflags: '-flags' }).some((run) => run.tags?.includes('mygo')), 'the host wailsv3 runs without the tag mygo');
+});
+
+test('Go host run profiles preserve shared coverage with CGO0 for every mygo run and separate generic from cgo link flags', () => {
+  const flags = { ldflags: '-s -w', cgoLdflags: '-extldflags=-mmacosx-version-min=14.4' };
+  const mygo = GO_RUNS.mygo(flags), wails = GO_RUNS.wailsv3(flags);
+  assert.equal(mygo.length, 5);
+  assert.ok(mygo.some((run) => run.patterns.includes('./packages/host/go/...')));
+  assert.ok(mygo.some((run) => run.patterns.includes('./packages/host/mygo/...')));
+  for (const run of mygo) {
+    assert.equal(run.env.CGO_ENABLED, '0', run.id);
+    assert.equal(run.ldflags, flags.ldflags, run.id);
+  }
+  for (const run of wails) {
+    assert.equal(run.env.CGO_ENABLED, '1', run.id);
+    assert.equal(run.ldflags, `${flags.ldflags} ${flags.cgoLdflags}`, run.id);
+  }
+  assert.ok(GO_RUNS.mygo().every((run) => run.env.CGO_ENABLED === '0' && !run.ldflags));
+  assert.throws(() => GO_RUNS.mygo('-legacy'), /options.*object/);
+  assert.throws(() => GO_RUNS.wailsv3(null), /options.*object/);
 });
 
 test('the audit of the host mygo counts a case of the scope all that only a test of the Go language host library declares', { timeout: 1000 }, () => {

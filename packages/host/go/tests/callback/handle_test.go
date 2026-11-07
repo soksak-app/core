@@ -18,6 +18,7 @@ func rejects(t *testing.T, operation func()) {
 	operation()
 }
 
+// contract: host.callback-handle.retains-state-until-delete
 func TestAHandleRetainsItsGoCallbackUntilDeleted(t *testing.T) {
 	value := 17
 	handle := callback.NewHandle(func() int { return value })
@@ -37,11 +38,13 @@ func TestAHandleRetainsItsGoCallbackUntilDeleted(t *testing.T) {
 	rejects(t, func() { handle.Delete() })
 }
 
+// contract: host.callback-handle.rejects-zero
 func TestTheZeroCallbackHandleIsInvalid(t *testing.T) {
 	rejects(t, func() { callback.Handle(0).Value() })
 	rejects(t, func() { callback.Handle(0).Delete() })
 }
 
+// contract: host.callback-handle.distinguishes-nil
 func TestANilCallbackValueIsDistinctFromAnInvalidHandle(t *testing.T) {
 	handle := callback.NewHandle(nil)
 	defer handle.Delete()
@@ -50,6 +53,7 @@ func TestANilCallbackValueIsDistinctFromAnInvalidHandle(t *testing.T) {
 	}
 }
 
+// contract: host.callback-handle.never-reuses-deleted-token
 func TestDeletedCallbackHandlesNeverNameANewerCallback(t *testing.T) {
 	old := callback.NewHandle("old")
 	old.Delete()
@@ -64,6 +68,7 @@ func TestDeletedCallbackHandlesNeverNameANewerCallback(t *testing.T) {
 	}
 }
 
+// contract: host.callback-handle.isolates-concurrent-owners
 func TestConcurrentCallbackOwnersKeepSeparateHandles(t *testing.T) {
 	const owners = 64
 	var group sync.WaitGroup

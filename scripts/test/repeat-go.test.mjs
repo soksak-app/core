@@ -21,8 +21,14 @@ function fakeGo(t) {
   const go = join(directory, 'go');
   writeFileSync(go, `#!/bin/sh
 printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
+printf '%s|%s|%s|%s\\n' "$*" "\${CGO_ENABLED-}" "\${SOKSAK_NATIVE_LIBRARY-}" "\${SOKSAK_NATIVE_TEST_LIBRARY-}" >> ${JSON.stringify(join(directory, 'go-env'))}
 case "$*" in
-  "list -deps"*) exit 0 ;;
+  "env CGO_ENABLED") printf '%s\\n' "\${CGO_ENABLED:-1}"; exit 0 ;;
+  "list -deps"*)
+    if [ "$FAKE_GO_MODE" = "native" ]; then
+      printf '%s\\n' '{"ImportPath":"github.com/soksak-app/core/packages/host/mygo/src/platform/darwin/bindings"}' '{"ImportPath":"github.com/soksak-app/core/packages/host/mygo/tests/platform/darwin/bindings"}'
+    fi
+    exit 0 ;;
   "list "*ImportPath*)
     case "$FAKE_GO_MODE" in
       nofiles) printf 'fixture/src\\t%s\\t0\\t0\\n' ${JSON.stringify(directory)}; exit 0 ;;
@@ -33,6 +39,7 @@ case "$*" in
     cat > "$out" <<'BINARY'
 #!/bin/sh
 printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'binary-args'))}
+printf '%s|%s|%s|%s\\n' "$*" "\${CGO_ENABLED-}" "\${SOKSAK_NATIVE_LIBRARY-}" "\${SOKSAK_NATIVE_TEST_LIBRARY-}" >> ${JSON.stringify(join(directory, 'binary-env'))}
 case "$1" in -test.list*) printf 'TestAlpha\\nTestBeta\\nBenchmarkGamma\\n'; exit 0 ;; esac
 name=$(printf '%s' "$2" | tr -d '^$')
 # TestBeta ends itself at its -test.timeout with its stacks, as the testing package of Go does, and records a signal it receives.
@@ -122,4 +129,52 @@ test('make repeat-go fails a run in which no test matched', (t) => {
   const { stdout, stderr, status } = makeGo(t, 'run', ['repeat-go', 'PACKAGE=./fixture', 'COUNT=1', 'TEST=TestMissing']);
   assert.notEqual(status, 0, stdout + stderr);
   assert.match(stderr, /no test matching TestMissing/, stdout + stderr);
+});
+
+
+test('Go test runner preserves the selected native environment through graph, build, listing and execution without cgo-only flags in CGO0', (t) => {
+  const directory = fakeGo(t);
+  const production = join(directory, 'declared-production.dylib');
+  const fixture = join(directory, 'declared-test.dylib');
+  writeFileSync(production, 'production artifact');
+  writeFileSync(fixture, 'test artifact');
+  const result = spawnSync(process.execPath, ['scripts/go-tests.mjs', '--package', './fixture', '--test', 'TestAlpha', '--count', '1', '--timeout', '5', '--ldflags=-X fixture.value=generic', '--cgo-ldflags=-extldflags forbidden-cgo-linker'], {
+    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'native', CGO_ENABLED: '0', SOKSAK_NATIVE_LIBRARY: production, SOKSAK_NATIVE_TEST_LIBRARY: fixture },
+    encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const calls = readFileSync(join(directory, 'args'), 'utf8');
+  assert.match(calls, /list -deps.*-test.*-json/);
+  const build = calls.split('\n').find((line) => line.startsWith('test -c'));
+  assert.ok(build.includes('-X fixture.value=generic'), build);
+  assert.ok(!build.includes('forbidden-cgo-linker'), build);
+  for (const file of ['go-env', 'binary-env']) {
+    const seen = readFileSync(join(directory, file), 'utf8').trim().split('\n');
+    assert.ok(seen.length >= 2, `${file}: ${seen}`);
+    for (const call of seen) assert.ok(call.endsWith(`|0|${production}|${fixture}`), call);
+  }
+});
+
+test('Go test runner keeps generic linker flags and separately applies cgo linker flags only to a CGO1 build', (t) => {
+  const directory = fakeGo(t);
+  const result = spawnSync(process.execPath, ['scripts/go-tests.mjs', '--package', './fixture', '--test', 'TestAlpha', '--count', '1', '--timeout', '5', '--ldflags=-X fixture.value=generic', '--cgo-ldflags=-extldflags selected-cgo-linker'], {
+    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run', CGO_ENABLED: '1' }, encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const build = readFileSync(join(directory, 'args'), 'utf8').split('\n').find((line) => line.startsWith('test -c'));
+  assert.ok(build.includes('-X fixture.value=generic') && build.includes('-extldflags selected-cgo-linker'), build);
+});
+
+test('native input diagnostics print only the native and cgo whitelist', (t) => {
+  const directory = fakeGo(t);
+  const result = spawnSync(process.execPath, ['scripts/go-repeat-inputs.mjs', './fixture'], {
+    cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, FAKE_GO_MODE: 'run', CGO_ENABLED: '0', SOKSAK_UNRELATED_SECRET: 'private-diagnostic-sentinel' },
+    encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout + result.stderr, /private-diagnostic-sentinel|SOKSAK_UNRELATED_SECRET/);
+  const diagnostic = JSON.parse(result.stdout);
+  assert.equal(diagnostic.cgoEnabled, false);
+  const allowed = new Set(['CGO_ENABLED', 'CGO_CFLAGS', 'CGO_CPPFLAGS', 'CGO_CXXFLAGS', 'CGO_LDFLAGS', 'SOKSAK_NATIVE_LIBRARY', 'SOKSAK_NATIVE_TEST_LIBRARY', 'SOKSAK_NATIVE_CALLBACK_ABI_LIBRARY', 'SOKSAK_NATIVE_CALLBACK_WORKER_LIBRARY']);
+  assert.ok(Object.keys(diagnostic.env).every((key) => allowed.has(key)), result.stdout);
 });

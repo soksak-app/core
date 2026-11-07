@@ -29,6 +29,7 @@ func failingUnusedNativeFunctions() testabi.NativeFunctions {
 	return functions
 }
 
+// contract: verification.native-test-facade.validates-provider-and-recordings
 func TestNativeTestFacadeRequiresOneCompleteProviderAndRejectsIncompleteRecordings(t *testing.T) {
 	const childFlag = "SOKSAK_NATIVE_TEST_FACADE_CHILD"
 	if os.Getenv(childFlag) != "1" {
