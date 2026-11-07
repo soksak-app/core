@@ -9,7 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { macosMinimum } from "./macos-minimum.mjs";
 import { tableCells } from "./markdown-table.mjs";
@@ -375,10 +375,16 @@ export function findUndecodedCommandArguments(source, file) {
 }
 
 // The darwin layer of the Go language host library runs no Go code on the main thread (docs/spec/hosts.md, main thread of the
-// Wails host). Its C code is the cgo preamble of each Go file and each Objective-C file of the folder; the native functions are
-// the functions that the headers of native/darwin/src declare.
+// Wails host). Its C code lives in canonical host_api implementations and webview.m, reached through generated Wails bindings.
+// Legacy direct preambles remain audited while they exist; native declarations remain owned by native/darwin/src headers.
 const MAIN_THREAD_LAYER = "packages/host/go/src/platform/darwin/";
-const NATIVE_HEADERS = /^native\/darwin\/src\/[^/]+\.h$/;
+const MAIN_THREAD_BINDINGS = "packages/host/wailsv3/src/platform/darwin/bindings/";
+const NATIVE_HOST_IMPLEMENTATIONS = /^native\/darwin\/src\/(?:host_api_[^/]+|webview)\.m$/;
+const directLayerFile = (path) => path.startsWith(MAIN_THREAD_LAYER) && !path.slice(MAIN_THREAD_LAYER.length).includes("/");
+const bindingFile = (path) => path.startsWith(MAIN_THREAD_BINDINGS) && !path.slice(MAIN_THREAD_BINDINGS.length).includes("/") && path.endsWith(".go");
+const mainThreadImplementation = (path) => directLayerFile(path) || bindingFile(path) || NATIVE_HOST_IMPLEMENTATIONS.test(path);
+const mainThreadSource = (path) => mainThreadImplementation(path) || NATIVE_HEADERS.test(path);
+const NATIVE_HEADERS = /^native\/darwin\/src\/.+\.h$/;
 const WORKER_WRAPPERS = new Set(["hostRunOnWorker", "ON_WORKER"]);
 const MAIN_WRAPPERS = new Set(["hostRunOnMain", "ON_MAIN"]);
 
@@ -391,14 +397,20 @@ const COMMAND_SOURCES = "packages/host/tauriv2/src/";
  */
 export function auditPrefixes(tracked) {
   const audits = [
-    ["the main-thread audit", [MAIN_THREAD_LAYER]],
+    ["the main-thread audit", [MAIN_THREAD_LAYER, MAIN_THREAD_BINDINGS, "native/darwin/src/host_api_"]],
     ["the undecoded command argument audit", [COMMAND_SOURCES]],
     ["the stub check", PRODUCT_DIRS.map((dir) => `${dir}/`)],
   ];
   const errors = [];
   for (const [audit, prefixes] of audits) {
     for (const prefix of prefixes) {
-      if (!tracked.some((path) => path.startsWith(prefix))) errors.push(`${audit} selects no file with the prefix ${prefix}`);
+      const selected = tracked.some((path) => {
+        if (!path.startsWith(prefix)) return false;
+        if (prefix === MAIN_THREAD_BINDINGS) return bindingFile(path);
+        if (prefix === "native/darwin/src/host_api_") return NATIVE_HOST_IMPLEMENTATIONS.test(path);
+        return true;
+      });
+      if (!selected) errors.push(`${audit} selects no file with the prefix ${prefix}`);
     }
   }
   return errors;
@@ -520,7 +532,7 @@ function enclosing(entry) {
 
 /**
  * Returns the errors of the main-thread rule of the darwin layer of the Wails host. sources maps repository paths to their
- * text; the audit reads the Go and Objective-C files of the darwin layer and the headers of native/darwin/src.
+ * text; the audit reads canonical native host_api implementations and webview.m, generated Wails bindings, legacy direct Go/Objective-C sources, and native headers.
  *
  * - A function that a Go file exports to C (//export) is referenced in C only inside hostRunOnWorker or ON_WORKER, so it runs
  *   on the worker while the main thread waits in C.
@@ -542,7 +554,7 @@ export function auditMainThreadCalls(sources) {
   const folder = mkdtempSync(join(tmpdir(), "main-thread-audit-"));
   try {
     for (const [path, text] of Object.entries(sources)) {
-      if (!path.startsWith(MAIN_THREAD_LAYER) && !NATIVE_HEADERS.test(path)) continue;
+      if (!mainThreadSource(path)) continue;
       mkdirSync(dirname(join(folder, path)), { recursive: true });
       writeFileSync(join(folder, path), text);
     }
@@ -554,7 +566,7 @@ export function auditMainThreadCalls(sources) {
 
 /** Audits the files of paths that auditMainThreadCalls wrote into folder. */
 function auditFolder(folder, paths) {
-  const layerFiles = paths.filter((path) => path.startsWith(MAIN_THREAD_LAYER) && !path.slice(MAIN_THREAD_LAYER.length).includes("/"));
+  const layerFiles = paths.filter(mainThreadImplementation);
   const goFiles = layerFiles.filter((path) => path.endsWith(".go"));
   const goSources = goFiles.length === 0 ? [] : JSON.parse(execFileSync("go", ["run", `${ROOT}scripts/cgo-sources.go`],
     { cwd: folder, input: goFiles.join("\n"), encoding: "utf8", maxBuffer: 1 << 26 }));
@@ -583,7 +595,9 @@ function auditFolder(folder, paths) {
     }
     const main = join(folder, unit.file);
     for (const entry of astNodes(JSON.parse(dump))) {
-      const { node, place } = entry;
+      const { node } = entry;
+      // Clang uses relative include paths for native translation units and absolute -I paths for preambles.
+      const place = entry.place && { ...entry.place, file: entry.place.file === undefined ? undefined : resolve(folder, entry.place.file) };
       if (node.kind === "FunctionDecl" && place?.file?.startsWith(nativeFolder)) native.add(node.name);
       if (node.kind === "FunctionDecl" && place?.file === join(nativeFolder, "host_callbacks.h")
           && (node.name?.startsWith("sp_host_callback_") || node.name?.startsWith("sp_host_diagnostic_callback_"))) callbackEntries.add(node.name);
@@ -633,12 +647,11 @@ function auditFolder(folder, paths) {
       if (use.kind === "message") found = `sends an Objective-C message (line ${use.line})`;
       else if (use.kind === "block") found = `calls a block (line ${use.line})`;
       else if (use.kind !== "call") continue;
-      else if (isNative(use.name)) found = `calls the native function ${use.name} (line ${use.line})`;
-      else if (/^NS[A-Z]/.test(use.name)) found = `calls the AppKit function ${use.name} (line ${use.line})`;
       else if (definitions.has(use.name) && use.name !== name && use.name !== "hostRunOnMain" && use.name !== "hostRunOnWorker") {
         const inner = mainUse(use.name, visiting);
         if (inner) found = `calls ${use.name} (line ${use.line}), which ${inner}`;
-      }
+      } else if (isNative(use.name)) found = `calls the native function ${use.name} (line ${use.line})`;
+      else if (/^NS[A-Z]/.test(use.name)) found = `calls the AppKit function ${use.name} (line ${use.line})`;
     }
     reaches.set(name, found);
     return found;
@@ -672,7 +685,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     errors.push(...findUndecodedCommandArguments(readFileSync(`${ROOT}${file}`, "utf8"), file));
   }
   errors.push(...auditMainThreadCalls(Object.fromEntries(tracked
-    .filter((path) => path.startsWith(MAIN_THREAD_LAYER) || NATIVE_HEADERS.test(path))
+    .filter(mainThreadSource)
     .map((path) => [path, readFileSync(`${ROOT}${path}`, "utf8")]))));
   const stubErrors = findStubs(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8"));
   if (stubErrors.length) {

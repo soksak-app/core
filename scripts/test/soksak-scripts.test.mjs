@@ -280,10 +280,18 @@ test("host structure audit rejects a language host library whose code or contrac
 test("a prefix audit of the host structure fails when a prefix selects no file", { timeout: 1000 }, async () => {
   const { auditPrefixes } = await import("../check-host-files.mjs");
   const tracked = ["packages/host/go/src/platform/darwin/window.go", "packages/host/tauriv2/src/host.rs", "packages/host/go/src/host.go",
-    "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "packages/host/mygo/src/host.go", "native/darwin/src/a.m", "packages/workbench-mygo/src/layout/grid.go"];
+    "packages/host/rust/src/host.rs", "packages/host/wailsv3/src/host.go", "packages/host/mygo/src/host.go", "native/darwin/src/a.m", "packages/workbench-mygo/src/layout/grid.go",
+    "packages/host/wailsv3/src/platform/darwin/bindings/native_api.go", "native/darwin/src/host_api_window.m"];
   assert.deepEqual(auditPrefixes(tracked), []);
   assert.deepEqual(auditPrefixes(tracked.filter((path) => !path.includes("/platform/darwin/"))), [
     "the main-thread audit selects no file with the prefix packages/host/go/src/platform/darwin/",
+    "the main-thread audit selects no file with the prefix packages/host/wailsv3/src/platform/darwin/bindings/",
+  ]);
+  assert.deepEqual(auditPrefixes(tracked.filter((path) => !path.startsWith("native/darwin/src/host_api_"))), [
+    "the main-thread audit selects no file with the prefix native/darwin/src/host_api_",
+  ]);
+  assert.deepEqual(auditPrefixes(tracked.map((path) => path === "native/darwin/src/host_api_window.m" ? "native/darwin/src/host_api_window.h" : path)), [
+    "the main-thread audit selects no file with the prefix native/darwin/src/host_api_",
   ]);
   assert.deepEqual(auditPrefixes(tracked.filter((path) => path !== "packages/host/rust/src/host.rs")), [
     "the stub check selects no file with the prefix packages/host/rust/src/",

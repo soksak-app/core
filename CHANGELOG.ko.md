@@ -4,7 +4,9 @@
 
 ## 미배포
 
-- F686-8 (진행 중): 공유 Darwin C/Objective-C를 native library로 옮기고 두 framework adapter의 typed outbound binding과 callback factory를 생성한다. 실제 cgo 없는 application build를 통합 기준으로 삼으며 별도 divider prototype을 선행 조건에서 제외한다. Native static·dynamic build와 callback ABI 검사는 통과했지만 실제 최적화 진단 release는 bundle에서 현재 workspace starter plugin과 함께 시작하며 production G8-S5 판정은 아직 미검증이다.
+- F686-8: Main·worker 감사를 canonical native wrapper와 생성 Wails binding에 연결한다. 실제 private header와 정규화한 Clang 위치가 이동 후 callback 제약을 유지하며 source 선택이 비면 실패한다. 거부 회귀 test와 실제 consumer는 thread 규칙 변경 없이 통과한다.
+
+- F686-8: 공유 Darwin C/Objective-C를 native library로 옮기고 두 framework adapter의 typed outbound binding과 callback factory를 생성한다. 실제 cgo 없는 application build를 통합 기준으로 삼으며 별도 divider prototype을 선행 조건에서 제외한다. Native static·dynamic build와 callback ABI 검사는 통과했지만 실제 최적화 진단 release는 bundle에서 현재 workspace starter plugin과 함께 시작하며 production G8-S5 판정은 아직 미검증이다.
 
 - F686-6-1: 고정된 kit 의존성에 소유 항목 KR26의 검사기 수정을 선언된 pnpm patch와 lockfile hash로 반영한다. 정상 검사기는 실제 runtime 진단을 허용하면서 Markdown·주석 형태를 포함한 발견 경위 서술은 거부한다. 공개 consumer 회귀 test로 확인하며 hook이나 검사를 우회하지 않는다.
 

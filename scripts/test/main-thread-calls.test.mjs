@@ -238,3 +238,50 @@ test("main-thread audit reads the darwin layer of the Go language host library t
     `${layer}/window.go:9: goWindowClosed is exported to C and is referenced outside hostRunOnWorker or ON_WORKER`,
   ]);
 });
+
+const GENERATED_BINDING = "packages/host/wailsv3/src/platform/darwin/bindings/native_api.go";
+const CANONICAL_WRAPPER = "native/darwin/src/host_api_fixture.m";
+function migratedFiles(implementation, body = "func use() { C.main_fixture() }") {
+  return {
+    ...base,
+    "native/darwin/src/host_api_fixture.h": "void main_fixture(void);",
+    [GENERATED_BINDING]: goFile('#include "host_api_fixture.h"', body),
+    [CANONICAL_WRAPPER]: '#include "main_thread.h"\n#include "window_facts.h"\n#include "host_api_fixture.h"\n' + implementation,
+  };
+}
+
+test("main-thread audit rejects unguarded AppKit in a canonical wrapper reached through generated Wails bindings", { timeout: 30000 }, () => {
+  const errors = auditMainThreadCalls(migratedFiles('void main_fixture(void) { [NSApp terminate:nil]; }'));
+  assert.equal(errors.length, 1, errors.join("\n"));
+  assert.match(errors[0], /packages\/host\/wailsv3.*Go calls main_fixture.*Objective-C message.*outside hostRunOnMain or ON_MAIN/);
+});
+
+test("main-thread audit follows guarded canonical wrapper definitions across the generated binding boundary", { timeout: 30000 }, () => {
+  assert.deepEqual(auditMainThreadCalls(migratedFiles('static void perform(void) { [NSApp terminate:nil]; }\nvoid main_fixture(void) { hostRunOnMain(^{ perform(); }); }')), []);
+});
+
+test("main-thread audit rejects direct native calls from generated Wails bindings", { timeout: 30000 }, () => {
+  const files = migratedFiles('void main_fixture(void) {}', 'func use() { C.sp_window_close(nil) }');
+  files[GENERATED_BINDING] = goFile('#include "window_facts.h"', 'func use() { C.sp_window_close(nil) }');
+  const errors = auditMainThreadCalls(files);
+  assert.equal(errors.length, 1, errors.join("\n"));
+  assert.match(errors[0], /Go calls the native function sp_window_close directly/);
+});
+
+test("main-thread audit enforces registered callback worker boundaries in canonical native wrapper sources", { timeout: 30000 }, () => {
+  const files = migratedFiles('void main_fixture(void) { sp_host_callback_ready(17); }');
+  files["native/darwin/src/host_callbacks.h"] = "void sp_host_callback_ready(unsigned long context);";
+  files[CANONICAL_WRAPPER] = '#include "host_callbacks.h"\n' + files[CANONICAL_WRAPPER];
+  let errors = auditMainThreadCalls(files);
+  assert.equal(errors.length, 1, errors.join("\n"));
+  assert.match(errors[0], /host_api_fixture.m.*sp_host_callback_ready.*outside hostRunOnWorker or ON_WORKER/);
+  files[CANONICAL_WRAPPER] = files[CANONICAL_WRAPPER].replace('sp_host_callback_ready(17);', 'hostRunOnWorker(^{ sp_host_callback_ready(17); });');
+  assert.deepEqual(auditMainThreadCalls(files), []);
+});
+
+test("main-thread audit copies canonical private headers without replacing their declarations", { timeout: 30000 }, () => {
+  const files = migratedFiles('void main_fixture(void) { hostRunOnMain(^{ privateClose(); }); }');
+  files["native/darwin/src/private/fixture.h"] = "void privateClose(void);";
+  files[CANONICAL_WRAPPER] = '#include "private/fixture.h"\n' + files[CANONICAL_WRAPPER];
+  assert.deepEqual(auditMainThreadCalls(files), []);
+});
