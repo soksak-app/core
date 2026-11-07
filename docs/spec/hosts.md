@@ -15,6 +15,8 @@ A language host library holds everything that does not name a framework: binding
 
 The applications `apps/wailsv3` and `apps/tauriv2` contain only `src/main.*`, `environment.json`, `runtime/index.js`, tests, manifests, and framework configuration. `apps/wailsv3/src/main.go` reads the command-line flags into `host.Options` of the Go language host library and calls `adapter.Run(assets, options)` of the Wails framework adapter. `apps/tauriv2/src/main.rs` calls `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)` of the Tauri framework adapter, where `BACKGROUND` is the staged `frontend/background.js`.
 
+The mygo application and its Go dependencies must build with `CGO_ENABLED=0`. Purego is an implementation choice, not a requirement. Changes to the shared Go host or the Wails adapter must preserve this cgo-free mygo path; a framework-specific foreign function binding belongs behind the platform interface and must not impose cgo on another adapter.
+
 ## Host tree
 
 The language host libraries:

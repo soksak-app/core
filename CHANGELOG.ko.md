@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F686: mygo 빌드 계약은 purego나 dynamic library를 강제하지 않고 cgo 없는 Go 의존성을 요구한다. 공유 Go host와 Wails adapter의 변경도 그 경로를 유지해야 한다. 현재 cgo 없는 application 빌드는 공유 darwin 구현 타입이 cgo 파일에 정의되어 실패하며, 의존성 목록 조회만으로는 계약을 검증하지 못한다.
+
 - F685: Wails, mygo, tao fork는 release tag `v3.0.0-beta.27-soksak.1`, `v0.7.4-244-g4abb83d-soksak.1`, `tao-v0.37.2-soksak.1`로 고정된다. window handle은 모든 운영체제에서 정수인 `platform.Window`이고, darwin 구현은 native code 안에서만 이를 NSWindow의 주소로 바꾸며, Windows COM helper는 system의 memory를 `RtlMoveMemory`로 복사하므로 어떤 Go source도 정수를 pointer로 바꾸지 않는다.
 - F684-1: `capture_text_test --warm <language>...`는 각 언어의 text recognition model을 별도 process에서 compile한다. window-check setup과 `scripts/test-app.mjs`는 검사 전에 600초 한도로 `en-US`와 `ko-KR`에 대해 이를 실행하고, native runner는 `build:` 항목으로 `capture_text_test` 전에 실행하므로 10초와 120초 한도는 인식과 test만 잰다.
 - F684: `capture_text_test`는 system이 load하지 못한 text recognition model의 `e5rtError`처럼 Vision이 request에 대해 보고한 실패를 status 1의 인식 결과 대신 `error: the system text recognizer failed: <error>`와 exit status 3으로 보고하고, 기본 실행은 주입한 실패로 이 보고를 검사한다.

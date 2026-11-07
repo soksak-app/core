@@ -15,6 +15,8 @@ Language host library는 framework를 이름으로 부르지 않는 모든 것�
 
 애플리케이션 `apps/wailsv3`와 `apps/tauriv2`는 `src/main.*`, `environment.json`, `runtime/index.js`, 테스트, 매니페스트, 프레임워크 설정만 가진다. `apps/wailsv3/src/main.go`는 명령행 플래그를 Go language host library의 `host.Options`로 읽고 Wails framework adapter의 `adapter.Run(assets, options)`를 호출한다. `apps/tauriv2/src/main.rs`는 Tauri framework adapter의 `soksak_host_tauriv2::run(tauri::generate_context!(), BACKGROUND)`를 호출하며, `BACKGROUND`는 스테이징된 `frontend/background.js`다.
 
+mygo application과 그 Go 의존성은 `CGO_ENABLED=0`으로 빌드되어야 한다. purego는 구현 선택이며 필수 조건이 아니다. 공유 Go host나 Wails adapter의 변경은 이 mygo의 cgo 없는 경로를 유지해야 한다. framework별 foreign function binding은 platform interface 뒤에 두며 다른 adapter에 cgo를 강제하지 않는다.
+
 ## 호스트 트리
 
 Language host library:
