@@ -25,4 +25,8 @@ void sp_input_press_origin_clear(void *window, int button, uint64_t token);
 // Whether any pointer of sp_input_pointer holds an open press of the button in the window. An origin outlives the release of its press, so it does not tell this.
 bool sp_input_press_open(void *window, int button);
 
+// The pointer whose input is delivered; outside delivery this is the main
+// pointer, which also stands for physical input. The returned name is borrowed.
+const char *sp_input_pointer_current_name(void);
+
 #endif

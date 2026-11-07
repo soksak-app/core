@@ -288,6 +288,66 @@ static void checkTwoPages(void) {
     [two close]; [two release];
 }
 
+// Same-window WK views share AppKit tracking/crossing state, unlike the
+// two-window case. Record every event, including extra moves, so a crossing
+// cannot silently leak another pointer's buttons into an open gesture.
+static NSString *const POINTER_AUDIT = @"window.audit=[];window.counts=[0,0,0,0];window.pressed=false;"
+    "addEventListener('pointerdown',e=>{counts[0]++;pressed=true;if(e.buttons!==1)counts[3]++;audit.push([e.type,e.clientX,e.clientY,e.buttons,...counts]);});"
+    "addEventListener('pointermove',e=>{if(pressed&&e.buttons===1)counts[1]++;else if(e.buttons!==(pressed?1:0))counts[3]++;audit.push([e.type,e.clientX,e.clientY,e.buttons,...counts]);});"
+    "addEventListener('pointerup',e=>{counts[2]++;pressed=false;if(e.buttons!==0)counts[3]++;audit.push([e.type,e.clientX,e.clientY,e.buttons,...counts]);});null;";
+
+static void checkPageCounts(WKWebView *view, int downs, int drags, int ups, NSString *stage) {
+    NSArray *want = @[@(downs), @(drags), @(ups), @0];
+    until(^BOOL {
+        NSArray *counts = evaluate(view, @"counts");
+        return [counts isKindOfClass:NSArray.class] && counts.count == 4 &&
+            ([counts isEqualToArray:want] || [counts[3] intValue] > 0);
+    });
+    id counts = evaluate(view, @"counts");
+    id transcript = evaluate(view, @"audit");
+    check([counts isEqual:want], [NSString stringWithFormat:@"same-window %@ counts %@ want %@; all page events %@", stage, counts, want, transcript]);
+}
+
+static void checkTwoPagesInOneWindow(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(600, 200), 0)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    NSView *root = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 600, 200)] autorelease];
+    window.contentView = root;
+    WKWebView *left = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    WKWebView *right = [[[WKWebView alloc] initWithFrame:NSMakeRect(300, 0, 300, 200)] autorelease];
+    [root addSubview:left]; [root addSubview:right];
+    check(webviewInputRegister(left) && webviewInputRegister(right), @"same-window pages register pointer input");
+    [left loadHTMLString:PAGE baseURL:nil]; [right loadHTMLString:PAGE baseURL:nil];
+    until(^BOOL { return [evaluate(left, @"Boolean(window.ready)") boolValue] && [evaluate(right, @"Boolean(window.ready)") boolValue]; });
+    [window orderBack:nil];
+    evaluate(right, POINTER_AUDIT);
+    check(input(window, "a", 50, 100, 0, 0) == SP_INPUT_DELIVERED, @"same-window first pointer enters");
+    check(input(window, "a", 50, 100, 1, 0) == SP_INPUT_DELIVERED, @"same-window preflight press");
+    check(input(window, "b", 380, 120, 0, 0) == SP_INPUT_POINTER_HELD && heldBy("a"), @"same-window foreign hover move is refused");
+    check(input(window, "a", 50, 100, 3, 0) == SP_INPUT_DELIVERED, @"same-window preflight release");
+    // The E2E reloads the first page after its held-hover rejection probe.
+    evaluate(left, @"window.ready=false;null;");
+    [left loadHTMLString:PAGE baseURL:nil];
+    until(^BOOL { return [evaluate(left, @"Boolean(window.ready)") boolValue]; });
+    evaluate(left, POINTER_AUDIT);
+    check(input(window, "a", 50, 100, 1, 0) == SP_INPUT_DELIVERED, @"same-window first page press");
+    checkPageCounts(left, 1, 0, 0, @"first press");
+    check(input(window, "b", 380, 120, 1, 0) == SP_INPUT_DELIVERED, @"same-window second page press");
+    checkPageCounts(right, 1, 0, 0, @"second press");
+    for (int step = 1; step <= 2; step++) {
+        check(input(window, "a", 50 + 12 * step, 100 + 6 * step, 2, 0) == SP_INPUT_DELIVERED, @"same-window first page drag");
+        checkPageCounts(left, 1, step, 0, [NSString stringWithFormat:@"first drag %d", step]);
+        check(input(window, "b", 380 - 12 * step, 120 + 6 * step, 2, 0) == SP_INPUT_DELIVERED, @"same-window second page drag");
+        checkPageCounts(right, 1, step, 0, [NSString stringWithFormat:@"second drag %d", step]);
+    }
+    check(input(window, "a", 74, 112, 3, 0) == SP_INPUT_DELIVERED, @"same-window first page release");
+    checkPageCounts(left, 1, 2, 1, @"first release");
+    check(input(window, "b", 356, 132, 3, 0) == SP_INPUT_DELIVERED, @"same-window second page release");
+    checkPageCounts(right, 1, 2, 1, @"second release");
+    [window close]; [window release];
+}
+
 // A pointer name has 1 to SP_INPUT_POINTER_NAME_MAX characters of a-z, 0-9 and -.
 static void checkNames(void) {
     SPRecordingView *left = nil, *right = nil;
@@ -315,6 +375,7 @@ int main(void) { @autoreleasepool {
     checkOneWindow();
     checkWindowEndsItsPress();
     checkTwoPages();
+    checkTwoPagesInOneWindow();
     checkNames();
     if (failures) fprintf(stderr, "FAIL: %d checks of named pointers failed\n", failures);
     else printf("PASS: named pointers\n");

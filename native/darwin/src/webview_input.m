@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 #import "webview_input.h"
 #import "input_inject.h"
+#import "input_press_context.h"
 #import "input_virtual.h"
 #import "application_log.h"
 #import "event_ring.h"
@@ -15,7 +16,9 @@
 static NSHashTable *inputViews;
 static NSMapTable<NSWindow *, WKWebView *> *lastPointerTargets;
 // The web view that does not ignore moves and may hover what is under the pointer. A press leaves it in place until its release.
-static NSMapTable<NSWindow *, WKWebView *> *pointerHolders;
+// Each named pointer owns its previous hovered page inside a window. A
+// second pointer entering another page must not move the first pointer out.
+static NSMapTable<NSWindow *, NSMapTable<NSString *, WKWebView *> *> *pointerHolders;
 
 // The move that turns tracking on may not reach the tracking owner of WebKit.
 // Delivering the first move of the new target lets the page compute the cursor at the current position.
@@ -265,10 +268,16 @@ static NSEvent *routePointer(NSEvent *event) {
     while (target && ![inputViews containsObject:target]) target = target.superview;
     WKWebView *previous = [lastPointerTargets objectForKey:window];
     if (NSEvent.pressedMouseButtons == 0) {
-        WKWebView *holder = [pointerHolders objectForKey:window];
+        NSMapTable<NSString *, WKWebView *> *holders = [pointerHolders objectForKey:window];
+        if (!holders) {
+            holders = [NSMapTable strongToWeakObjectsMapTable];
+            [pointerHolders setObject:holders forKey:window];
+        }
+        NSString *pointer = [NSString stringWithUTF8String:sp_input_pointer_current_name()];
+        WKWebView *holder = [holders objectForKey:pointer];
         if (holder && holder != target) pointerLeft(holder, event);
-        if (target) [pointerHolders setObject:(WKWebView *)target forKey:window];
-        else [pointerHolders removeObjectForKey:window];
+        if (target) [holders setObject:(WKWebView *)target forKey:pointer];
+        else [holders removeObjectForKey:pointer];
     }
     for (WKWebView *view in inputViews) {
         if (view.window == window) [view _setIgnoresMouseMoveEvents:view != target];
@@ -298,7 +307,7 @@ BOOL webviewInputRegister(WKWebView *view) {
     if (!inputViews) {
         inputViews = [[NSHashTable weakObjectsHashTable] retain];
         lastPointerTargets = [[NSMapTable weakToWeakObjectsMapTable] retain];
-        pointerHolders = [[NSMapTable weakToWeakObjectsMapTable] retain];
+        pointerHolders = [[NSMapTable weakToStrongObjectsMapTable] retain];
         sp_observe_notification("webview_input.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
             ^(NSNotification *note) { [lastPointerTargets removeAllObjects]; });
         // A mouse-exit event does not change the tracking target. A wheel event passes unchanged: WebKit applies the

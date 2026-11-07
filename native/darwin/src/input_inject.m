@@ -83,6 +83,11 @@ static SPPointer *pointerNamed(const char *name) {
     return pointer;
 }
 
+const char *sp_input_pointer_current_name(void) {
+    NSCAssert(NSThread.isMainThread, @"pointer routing belongs to the main thread");
+    return deliveringPointer ? deliveringPointer->name.UTF8String : SP_INPUT_POINTER_MAIN;
+}
+
 // The origins of a window are kept by pointer and button. The pointer is the one whose input is delivered; outside a delivery it is
 // SP_INPUT_POINTER_MAIN, the pointer that also stands for a person's press.
 static NSString *originKey(int button) {

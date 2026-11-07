@@ -144,8 +144,10 @@ for (const app of Object.values(APPS)) {
     await s.run("core.project.open", { root, color: "#7db4ff" });
     const windows = await s.windows(2, "the project window did not open");
     const other = s.on(windows.find((w) => w.window !== s.window).window);
-    const grid = await other.until("core.grid", (value) => value?.cards?.length > 0, "the project window shows no card");
-    const { tab: there } = await other.run("core.card.add-tab", { card: grid.cards[0].id, plugin: "browser" });
+    const grid = await other.until("core.grid", (value) => value?.cards?.some((card) =>
+      card.tabs.some((tab) => tab.plugin === "terminal")), "the project window did not create its terminal tab card");
+    const card = grid.cards.find((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
+    const { tab: there } = await other.run("core.card.add-tab", { card: card.id, plugin: "browser" });
     const thereAt = await page(other, there, `${base}/there`);
 
     await s.pointer(hereAt.x, hereAt.y, "move", { pointer: "first" });
