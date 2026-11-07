@@ -1,57 +1,36 @@
 //go:build darwin
 
-// Package darwin holds what the tests of the mygo host cannot write in a test file, which takes no cgo.
+// Package darwin holds native support for the tests of the mygo host.
 package darwin
-
-/*
-#cgo LDFLAGS: -framework CoreFoundation -framework IOSurface
-#include <CoreFoundation/CoreFoundation.h>
-#include <IOSurface/IOSurfaceRef.h>
-
-static CFNumberRef number(int value) { return CFNumberCreate(NULL, kCFNumberIntType, &value); }
-
-// frameCreate creates a BGRA surface that carries the nonce of a transfer image.
-static IOSurfaceRef frameCreate(int width, int height, const unsigned char *nonce) {
-	const void *keys[] = {kIOSurfaceWidth, kIOSurfaceHeight, kIOSurfaceBytesPerElement, kIOSurfacePixelFormat};
-	const void *values[] = {number(width), number(height), number(4), number('BGRA')};
-	CFDictionaryRef properties = CFDictionaryCreate(NULL, keys, values, 4, &kCFTypeDictionaryKeyCallBacks,
-		&kCFTypeDictionaryValueCallBacks);
-	for (int index = 0; index < 4; index++) CFRelease(values[index]);
-	IOSurfaceRef surface = IOSurfaceCreate(properties);
-	CFRelease(properties);
-	if (!surface) return NULL;
-	CFDataRef data = CFDataCreate(NULL, nonce, 16);
-	IOSurfaceSetValue(surface, CFSTR("soksak.frame"), data);
-	CFRelease(data);
-	return surface;
-}
-*/
-import "C"
 
 import (
 	"errors"
 	"unsafe"
 )
 
-// Frame is a transfer image of a supplier: an IOSurface with the nonce of its region.
+// Frame is a supplier's transfer image: an IOSurface carrying its region nonce.
 type Frame struct {
-	surface C.IOSurfaceRef
+	surface unsafe.Pointer
 }
 
-// NewFrame creates a frame of width and height device pixels.
+// NewFrame creates a native frame. Standalone frame consumers initialize test
+// support on demand and receive any artifact or binding error explicitly.
 func NewFrame(width, height int, nonce [16]byte) (*Frame, error) {
-	surface := C.frameCreate(C.int(width), C.int(height), (*C.uchar)(unsafe.Pointer(&nonce[0])))
-	if surface == 0 {
+	if err := InstallTestSupport(); err != nil {
+		return nil, err
+	}
+	surface := supportFunctions.SpHostTestFrameCreate(int32(width), int32(height), &nonce[0])
+	if surface == nil {
 		return nil, errors.New("cannot create an IOSurface")
 	}
 	return &Frame{surface: surface}, nil
 }
 
-// ID is the global identifier of the frame, which a transfer token carries.
-func (f *Frame) ID() uint32 { return uint32(C.IOSurfaceGetID(f.surface)) }
+// ID is the global identifier carried by a transfer token.
+func (frame *Frame) ID() uint32 { return supportFunctions.SpHostTestFrameId(frame.surface) }
 
-// InUse reports the mark of the window server: a layer on screen presents the frame.
-func (f *Frame) InUse() bool { return C.IOSurfaceIsInUse(f.surface) != 0 }
+// InUse reports whether a window-server layer presents the frame.
+func (frame *Frame) InUse() bool { return supportFunctions.SpHostTestFrameInUse(frame.surface) }
 
-// Close releases the reference of the supplier.
-func (f *Frame) Close() { C.CFRelease(C.CFTypeRef(f.surface)) }
+// Close releases the supplier's native reference.
+func (frame *Frame) Close() { supportFunctions.SpHostTestFrameRelease(frame.surface) }

@@ -46,9 +46,9 @@ export function plistString(text, key) {
   return text.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`))?.[1];
 }
 
-/** The `Version:` line of the pkg-config file that a Makefile writes. undefined if absent. */
-export function pkgConfigVersion(text) {
-  return text.match(/'Version: ([^']*)'/)?.[1];
+/** Every `Version:` line of the pkg-config files that one Makefile writes, in declaration order. */
+export function pkgConfigVersions(text) {
+  return [...text.matchAll(/'Version: ([^']*)'/g)].map((match) => match[1]);
 }
 
 /** files is a list of { path, text }. Returns one error for each file whose declared version differs from the release. */
@@ -81,7 +81,10 @@ export function auditVersions(files, release = RELEASE) {
       }
       continue;
     } else if (name === "Makefile") {
-      version = pkgConfigVersion(text);
+      for (const declared of pkgConfigVersions(text)) {
+        if (declared !== release) errors.push(`${path}: version ${JSON.stringify(declared)} must be ${release}`);
+      }
+      continue;
     } else {
       continue;
     }

@@ -16,12 +16,13 @@ test("default callback outputs include the independent shared-host fixture and e
     typesOutput: "packages/host/go/src/platform/darwin/abi/callback_types.go",
     handlersOutput: "packages/host/go/src/platform/darwin/callback_handlers.go",
     fixtureOutput: "packages/host/go/tests/platform/darwin/standalone/bindings/callback_bindings.go",
+    fixturePuregoOutput: "packages/host/go/tests/platform/darwin/standalone/nativecallback/callback_bindings.go",
   })) {
     assert.equal(defaults[key], new URL(`../../${path}`, import.meta.url).pathname);
   }
   const isolated = join(tmpdir(), "fixture_callbacks.go");
   assert.deepEqual(hostCallbackOutputPaths({ output: isolated }), {
-    output: isolated, puregoOutput: undefined, typesOutput: undefined, handlersOutput: undefined, fixtureOutput: undefined,
+    output: isolated, puregoOutput: undefined, typesOutput: undefined, handlersOutput: undefined, fixtureOutput: undefined, fixturePuregoOutput: undefined,
   });
 });
 

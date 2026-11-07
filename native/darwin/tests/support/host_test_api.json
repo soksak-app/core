@@ -1,0 +1,39 @@
+{
+  "core": [
+    "sp_host_test_install_stall_functions",
+    "sp_host_test_read_stall_counts",
+    "sp_host_test_set_send_in_next_wait",
+    "sp_host_test_sampler_capture_main",
+    "sp_host_test_sampler_start",
+    "sp_host_test_sampler_stop",
+    "sp_host_test_sampler_set_phase",
+    "sp_host_test_sampler_phase_samples",
+    "sp_host_test_sampler_phase_outside",
+    "sp_host_test_sampler_phase_first_outside",
+    "sp_host_test_sampler_failure_count",
+    "sp_host_test_sampler_failure_last",
+    "sp_host_test_sampler_stack_low",
+    "sp_host_test_sampler_stack_high",
+    "sp_host_test_recorder_start",
+    "sp_host_test_recorder_stop",
+    "sp_host_test_recorder_dropped",
+    "sp_host_test_recorder_entry_at",
+    "sp_host_test_direct_runner_address",
+    "sp_host_test_frame_create",
+    "sp_host_test_frame_id",
+    "sp_host_test_frame_in_use",
+    "sp_host_test_frame_release"
+  ],
+  "diagnostics": [],
+  "records": [],
+  "constants": [
+    "SP_HOST_TEST_SAMPLER_PHASES",
+    "SP_HOST_TEST_RECORDER_CAPACITY",
+    "SP_HOST_TEST_RUN_LOOP_ENTRY",
+    "SP_HOST_TEST_RUN_LOOP_BEFORE_TIMERS",
+    "SP_HOST_TEST_RUN_LOOP_BEFORE_SOURCES",
+    "SP_HOST_TEST_RUN_LOOP_BEFORE_WAITING",
+    "SP_HOST_TEST_RUN_LOOP_AFTER_WAITING",
+    "SP_HOST_TEST_RUN_LOOP_EXIT"
+  ]
+}

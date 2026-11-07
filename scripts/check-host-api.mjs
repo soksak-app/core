@@ -17,7 +17,7 @@ function clang(header,source){
 function nodes(ast){const all=[];function visit(node){all.push(node);for(const child of node.inner??[])visit(child);}visit(ast);return all;}
 function format(source){return execFileSync('gofmt',{input:source,encoding:'utf8'});}
 
-export function createHostApi(header,manifest){
+export function createHostApi(header,manifest,{abiImport=ABI,pkgConfig="soksak-darwin"}={}){
  const all=nodes(clang(header));
  const declarations=new Map(all.filter(n=>n.kind==='FunctionDecl').map(n=>[n.name,n]));
  const typedefs=new Map(all.filter(n=>n.kind==='TypedefDecl').map(n=>[n.name,n]));
@@ -127,13 +127,13 @@ export function createHostApi(header,manifest){
    if(fn.result.go)expression=fn.result.kind==='record'?`result := ${call}\nreturn ${fromC(fn.result,'result')}`:`return ${fromC(fn.result,call)}`;
    return `${fn.field}: ${signature(fn,true,true)} { ${expression} },`;
   }).join('\n')}\n}\n}`;
-  const imports=[`abi "${ABI}"`,...(body.includes('unsafe.')?['"unsafe"']:[])];
-  return render('bindings',imports,body,diagnostics,`/*\n#cgo pkg-config: soksak-darwin\n${diagnostics ? "#cgo CFLAGS: -DSOKSAK_DIAGNOSTIC\n" : ""}#include "${basename(header)}"\n*/\nimport "C"\n`);
+  const imports=[`abi "${abiImport}"`,...(body.includes('unsafe.')?['"unsafe"']:[])];
+  return render('bindings',imports,body,diagnostics,`/*\n#cgo pkg-config: ${pkgConfig}\n${diagnostics ? "#cgo CFLAGS: -DSOKSAK_DIAGNOSTIC\n" : ""}#include "${basename(header)}"\n*/\nimport "C"\n`);
  }
  function mygo(fns,diagnostics){
   const name=diagnostics?'DiagnosticFunctions':'NativeFunctions',factory=diagnostics?'DiagnosticFunctions':'Functions';
   const body=`func ${factory}(library uintptr) (abi.${name}, error) {\nvar functions abi.${name}\n${fns.map(fn=>`{\naddress, err := purego.Dlsym(library, "${fn.name}")\nif err != nil { return abi.${name}{}, fmt.Errorf("native API ${fn.name}: %w", err) }\nif address == 0 { return abi.${name}{}, fmt.Errorf("native API ${fn.name}: symbol has a null address") }\npurego.RegisterFunc(&functions.${fn.field}, address)\n}`).join('\n')}\nreturn functions, nil\n}`;
-  return render('bindings',[`abi "${ABI}"`,...(fns.length?['"fmt"','"github.com/ebitengine/purego"']:[])],body,diagnostics);
+  return render('bindings',[`abi "${abiImport}"`,...(fns.length?['"fmt"','"github.com/ebitengine/purego"']:[])],body,diagnostics);
  }
  function render(pkg,imports,body,diagnostics,preamble=''){
   return format(`${MARKER}\n//go:build darwin${diagnostics?' && diagnostics':''}\n\npackage ${pkg}\n\n${preamble}${imports.length?`import (\n${imports.join('\n')}\n)\n`:''}\n${body}\n`);
@@ -143,7 +143,13 @@ export function createHostApi(header,manifest){
 
 // The test bootstrap owns its binding; reusable sampler support must not import it.
 export function hostApiOutputPaths(){
- return [['shared','packages/host/go/src/platform/darwin/abi/native_api.go'],['sharedDiagnostics','packages/host/go/src/platform/darwin/abi/native_api_diagnostics.go'],['wails','packages/host/wailsv3/src/platform/darwin/bindings/native_api.go'],['wailsDiagnostics','packages/host/wailsv3/src/platform/darwin/bindings/native_api_diagnostics.go'],['wails','packages/host/go/tests/platform/darwin/standalone/bindings/native_api.go'],['wailsDiagnostics','packages/host/go/tests/platform/darwin/standalone/bindings/native_api_diagnostics.go'],['mygo','packages/host/mygo/src/platform/darwin/bindings/native_api.go'],['mygoDiagnostics','packages/host/mygo/src/platform/darwin/bindings/native_api_diagnostics.go']];
+ return [['shared','packages/host/go/src/platform/darwin/abi/native_api.go'],['sharedDiagnostics','packages/host/go/src/platform/darwin/abi/native_api_diagnostics.go'],['wails','packages/host/wailsv3/src/platform/darwin/bindings/native_api.go'],['wailsDiagnostics','packages/host/wailsv3/src/platform/darwin/bindings/native_api_diagnostics.go'],['wails','packages/host/go/tests/platform/darwin/standalone/bindings/native_api.go'],['wailsDiagnostics','packages/host/go/tests/platform/darwin/standalone/bindings/native_api_diagnostics.go'],['mygo','packages/host/mygo/src/platform/darwin/bindings/native_api.go'],['mygoDiagnostics','packages/host/mygo/src/platform/darwin/bindings/native_api_diagnostics.go'],
+ ['mygo','packages/host/go/tests/platform/darwin/standalone/dynamic/native_api.go'],
+ ['mygoDiagnostics','packages/host/go/tests/platform/darwin/standalone/dynamic/native_api_diagnostics.go'],
+ ['testShared','packages/host/go/tests/platform/darwin/abi/native_api.go'],
+ ['testWails','packages/host/go/tests/platform/darwin/standalone/testbindings/native_api.go'],
+ ['testMygo','packages/host/mygo/tests/platform/darwin/bindings/native_api.go'],
+ ['testMygo','packages/host/go/tests/platform/darwin/standalone/testdynamic/native_api.go']];
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
@@ -152,6 +158,15 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const header=resolve(values.header??`${ROOT}native/darwin/src/host_api.h`);
   const manifest=JSON.parse(readFileSync(resolve(values.manifest??`${ROOT}native/darwin/src/host_api.json`),'utf8'));
   const generated=createHostApi(header,manifest);
+  // The test profile is mandatory: an incomplete checkout must fail instead of silently omitting fixture bindings.
+  const testHeader=resolve(ROOT,"native/darwin/tests/support/host_test_api.h");
+  const testManifest=JSON.parse(readFileSync(resolve(ROOT,"native/darwin/tests/support/host_test_api.json"),'utf8'));
+  const testGenerated=createHostApi(testHeader,testManifest,{
+   abiImport:"github.com/soksak-app/core/packages/host/go/tests/platform/darwin/abi",pkgConfig:"soksak-host-test",
+  });
+  generated.testShared=testGenerated.shared;
+  generated.testWails=testGenerated.wails;
+  generated.testMygo=testGenerated.mygo;
   const files=hostApiOutputPaths();
   // Standalone bootstrap bindings must never remain beside the reusable sampler.
   for (const name of ["native_api.go", "native_api_diagnostics.go"]) {

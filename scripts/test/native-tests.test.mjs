@@ -28,6 +28,14 @@ test("a native test is an executable of the build folder with optional arguments
   assert.throws(() => nativeTests("/b", ["a_test", "a_test"]), /the native test a_test is listed twice/);
 });
 
+test("the default native suite runs the standalone host test API", () => {
+  const darwin = new URL("../../native/darwin/", import.meta.url);
+  const output = execFileSync("make", ["-n", "-C", darwin.pathname, "test"], { encoding: "utf8" });
+  const runs = output.split("\n").filter((line) => line.startsWith("node ") && line.includes("scripts/native-tests.mjs"));
+  assert.equal(runs.length, 1, output);
+  assert.match(runs[0], /(?:^|\s)host_test_api_test(?:\s|$)/, "the default native run omits the standalone test API");
+});
+
 test("a declared build of a native executable runs before each of its tests and no other test", () => {
   const build = { command: "/b/c_test", args: ["--warm", "en-US"], timeoutMs: BUILD_TIMEOUT_MS };
   assert.deepEqual(nativeTests("/b", ["build:c_test,--warm,en-US", "a_test", "c_test", "c_test,--other"]), [

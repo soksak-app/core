@@ -223,6 +223,7 @@ export function hostCallbackOutputPaths(values = {}) {
     typesOutput: values["types-output"] ?? defaultOutput("packages/host/go/src/platform/darwin/abi/callback_types.go"),
     handlersOutput: values["handlers-output"] ?? defaultOutput("packages/host/go/src/platform/darwin/callback_handlers.go"),
     fixtureOutput: defaultOutput("packages/host/go/tests/platform/darwin/standalone/bindings/callback_bindings.go"),
+    fixturePuregoOutput: defaultOutput("packages/host/go/tests/platform/darwin/standalone/nativecallback/callback_bindings.go"),
   };
 }
 
@@ -230,7 +231,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     const { values } = parseArgs({ options: { header: { type: "string" }, output: { type: "string" }, "purego-output": { type: "string" }, "types-output": { type: "string" }, "handlers-output": { type: "string" }, write: { type: "boolean" } } });
     const header = resolve(values.header ?? `${ROOT}native/darwin/src/host_callbacks.h`);
-    const { output, puregoOutput, typesOutput, handlersOutput, fixtureOutput } = hostCallbackOutputPaths(values);
+    const { output, puregoOutput, typesOutput, handlersOutput, fixtureOutput, fixturePuregoOutput } = hostCallbackOutputPaths(values);
     const generated = createHostCallbacks(header);
     // The common Darwin package owns only plain Go types and handlers now.
     // Remove its former generated cgo registration through the same checked workflow.
@@ -249,7 +250,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       }
     }
     const files = [];
-    for (const [baseFile, base, diagnostics] of [[output, generated.base, generated.diagnostics], ...(fixtureOutput ? [[resolve(fixtureOutput), generated.base, generated.diagnostics]] : []), ...(puregoOutput ? [[resolve(puregoOutput), generated.puregoBase, generated.puregoDiagnostics]] : []), ...(typesOutput ? [[resolve(typesOutput), generated.abiBase, generated.abiDiagnostics]] : []), ...(handlersOutput ? [[resolve(handlersOutput), generated.handlersBase, generated.handlersDiagnostics]] : [])]) {
+    for (const [baseFile, base, diagnostics] of [[output, generated.base, generated.diagnostics], ...(fixtureOutput ? [[resolve(fixtureOutput), generated.base, generated.diagnostics]] : []), ...(puregoOutput ? [[resolve(puregoOutput), generated.puregoBase, generated.puregoDiagnostics]] : []), ...(fixturePuregoOutput ? [[resolve(fixturePuregoOutput), generated.puregoBase, generated.puregoDiagnostics]] : []), ...(typesOutput ? [[resolve(typesOutput), generated.abiBase, generated.abiDiagnostics]] : []), ...(handlersOutput ? [[resolve(handlersOutput), generated.handlersBase, generated.handlersDiagnostics]] : [])]) {
       if (!baseFile.endsWith(".go")) throw new Error(`${baseFile}: callback binding output must end in .go`);
       files.push([baseFile, base]);
       const diagnosticFile = baseFile.slice(0, -3) + "_diagnostics.go";

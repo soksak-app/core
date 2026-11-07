@@ -62,3 +62,15 @@ test("version audit rejects an application bundle and a pkg-config Makefile with
   assert.deepEqual(auditVersions([{ path: "apps/d/Info.plist", text: "<plist><dict></dict></plist>" }]),
     ["apps/d/Info.plist: CFBundleShortVersionString is not declared", "apps/d/Info.plist: CFBundleVersion is not declared"]);
 });
+
+test("version audit checks every pkg-config declaration in one Makefile", { timeout: 1000 }, () => {
+  const file = (versions) => ({ path: "native/darwin/Makefile", text: versions.map((version) => `\t  'Version: ${version}' \\\n`).join("") });
+  assert.deepEqual(auditVersions([file([RELEASE, "0.0.0", RELEASE])]), [
+    `native/darwin/Makefile: version "0.0.0" must be ${RELEASE}`,
+  ]);
+  assert.deepEqual(auditVersions([file([RELEASE, RELEASE])]), []);
+  assert.deepEqual(auditVersions([file(["0.0.0", RELEASE, "0.0.1"])]), [
+    `native/darwin/Makefile: version "0.0.0" must be ${RELEASE}`,
+    `native/darwin/Makefile: version "0.0.1" must be ${RELEASE}`,
+  ]);
+});

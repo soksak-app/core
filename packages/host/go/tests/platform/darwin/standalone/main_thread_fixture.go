@@ -1,26 +1,25 @@
-//go:build darwin
+//go:build darwin && cgo
 
 package standalone
 
-/*
-#include <stdint.h>
-#include "host_api_ui_queue.h"
-#cgo pkg-config: soksak-darwin
-#cgo CFLAGS: -fblocks
+import (
+	productionBindings "github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone/bindings"
+	"github.com/soksak-app/core/packages/host/go/tests/platform/darwin/standalone/staticsupport"
+)
 
-// test_only_run_directly runs the block on the calling thread. It stands for a main-thread function of a framework in the tests
-// that run the darwin layer of the library without a framework adapter, and in no build of the host.
-static void test_only_run_directly(void (^block)(void)) { block(); }
-static uintptr_t test_only_run_directly_function(void) { return (uintptr_t)test_only_run_directly; }
-*/
-import "C"
+// InstallTestSupport connects the leaf sampler fixture to static production state.
+func InstallTestSupport() error { return staticsupport.InstallTestSupport() }
 
-// TestOnlyRunDirectly is a main-thread function for tests only: it runs the block on the calling thread instead of the worker or
-// the main thread of a framework (docs/spec/hosts.md, main thread of the Wails host). A test package that runs the darwin layer
-// without a framework adapter installs it through this fixture in its TestMain.
-func TestOnlyRunDirectly() uintptr { return uintptr(C.test_only_run_directly_function()) }
+// TestOnlyRunDirectly supplies the canonical native runner to standalone tests only.
+func TestOnlyRunDirectly() uintptr {
+	address, err := staticsupport.DirectRunnerAddress()
+	if err != nil {
+		panic(err)
+	}
+	return address
+}
 
-// InstallMainThread changes the real native dispatch state, including missing-pointer test cases.
+// InstallMainThread changes actual production dispatch state for standalone tests.
 func InstallMainThread(worker, main uintptr) {
-	C.installMainThread(C.uintptr_t(worker), C.uintptr_t(main))
+	productionBindings.Functions().InstallMainThread(worker, main)
 }

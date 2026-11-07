@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F687-2: Sampler·native run-loop recorder·직접 block runner·IOSurface 공급을 한 test 전용 native API로 옮긴다. 완전한 static·dynamic binding을 생성하고 독립 provider를 compile time에 선택한다. 실제 production stall 함수를 주입해 sampling·소유권 assertion을 유지하고 미완료 record·잘못된 artifact 경로를 거부하며 lifecycle 단위 case는 process마다 격리한다. 실제 mygo stack·주입 오류·image 보유 case가 CGO_ENABLED=0으로 통과한다.
+
 - F688: Save-close probe manifest를 선언된 workspace release candidate와 맞춘다. Fixture manifest를 제외하거나 기준을 바꾸지 않고 기존 version assertion이 통과한다.
 
 - F687-1: Native 연산 전에 adapter test provider를 초기화하고 독립 cgo bootstrap export를 공유 sampler와 분리한다. 개별 menu·시작 오류·main-thread test의 기준을 유지하며 Wails에서 callback export 두 벌을 link하지 않는다. Mygo test 지원은 아직 cgo 없는 sampler 이동이 필요하다.

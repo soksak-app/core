@@ -34,6 +34,9 @@ func TestMain(m *testing.M) {
 		err = system.RequireMainThread()
 	}
 	if err == nil {
+		err = InstallTestSupport()
+	}
+	if err == nil {
 		err = sampler.CaptureMainThread()
 	}
 	// The host blocks the asynchronous signals on the main thread before the application runs.

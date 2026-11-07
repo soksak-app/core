@@ -1,4 +1,4 @@
-//go:build darwin && diagnostics
+//go:build darwin && cgo && diagnostics
 
 package standalone
 

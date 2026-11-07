@@ -355,6 +355,7 @@ NATIVE_TESTS = observe_test \
   main_thread_test \
   signals_test \
   host_callbacks_test \
+  host_test_api_test \
   window_motion_test \
   input_inject_test \
   input_virtual_test \
@@ -591,3 +592,40 @@ repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 
 clean:
 	@rm -rf $(BUILD)
+
+# Test support owns its native state and depends only on system frameworks.
+# Dynamic output stays outside the static -l search directory.
+HOST_TEST_BUILD := $(BUILD)/host-tests
+HOST_TEST_LIBRARY := $(HOST_TEST_BUILD)/libhost_test.a
+HOST_TEST_DYNAMIC := $(HOST_TEST_BUILD)/dynamic/libhost_test.dylib
+HOST_TEST_PKGCONFIG := $(BUILD)/soksak-host-test.pc
+HOST_TEST_FRAMEWORKS := -framework CoreFoundation -framework IOSurface
+
+.PHONY: build-host-test test-host-test
+build-host-test: $(HOST_TEST_LIBRARY) $(HOST_TEST_DYNAMIC) $(HOST_TEST_PKGCONFIG)
+
+$(HOST_TEST_BUILD)/host_test_api.o: tests/support/host_test_api.m tests/support/host_test_api.h Makefile
+	@mkdir -p $(@D)
+	@clang $(CFLAGS) -c $< -o $@
+
+$(HOST_TEST_LIBRARY): $(HOST_TEST_BUILD)/host_test_api.o
+	@libtool -static -o $@ $<
+
+$(HOST_TEST_DYNAMIC): $(HOST_TEST_BUILD)/host_test_api.o
+	@mkdir -p $(@D)
+	@clang $(CFLAGS) -dynamiclib $< $(HOST_TEST_FRAMEWORKS) -Wl,-install_name,@rpath/libhost_test.dylib -o $@
+
+$(HOST_TEST_PKGCONFIG): pkgconfig-current Makefile | $(BUILD)
+	@printf '%s\n' \
+	  'Name: soksak-host-test' \
+	  'Description: Native-only test sampler, recorder, dispatcher and transfer frame support' \
+	  'Version: 0.0.40' \
+	  'Cflags: -I$(CURDIR)/tests/support $(MINIMUM)' \
+	  'Libs: -L$(HOST_TEST_BUILD) -lhost_test $(HOST_TEST_FRAMEWORKS) $(MINIMUM)' > $@.next
+	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
+
+$(BUILD)/host_test_api_test: tests/host_test_api_test.m $(HOST_TEST_LIBRARY) tests/support/host_test_api.h Makefile | $(BUILD)
+	@clang $(CFLAGS) -I$(CURDIR)/tests $< $(HOST_TEST_LIBRARY) $(HOST_TEST_FRAMEWORKS) -o $@
+
+test-host-test: build-host-test $(BUILD)/host_test_api_test
+	@$(BUILD)/host_test_api_test
