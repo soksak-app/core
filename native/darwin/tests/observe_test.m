@@ -5,8 +5,11 @@
 #import "observe.h"
 #import "support/records.h"
 #import "event_ring.h"
+#import "host_api_input.h"
+#import "main_thread.h"
 
 static int failures = 0;
+static void runDirectly(void (^work)(void)) { work(); }
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
@@ -150,6 +153,29 @@ int main(void) { @autoreleasepool {
     });
     check(named(monitor, @"native.observe.registered").count == 1 && [named(monitor, @"native.observe.registered")[0][@"fields"][@"kind"] isEqual:@"local_monitor"]
         && named(monitor, @"native.observe.delivered").count == 1, @"a local monitor is registered and the event it receives is one delivery");
+
+    // The host bridge uses the same registration entrance rather than owning a second NSEvent entrance.
+    hostInstallMainThread(runDirectly, runDirectly);
+    NSWindow *inputWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 32, 32)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    __block uintptr_t inputMonitor = 0;
+    NSArray<NSDictionary *> *inputRegistered = capturedEvents(^{
+        inputMonitor = surfaceWatchMouse((uintptr_t)inputWindow, 0);
+    });
+    NSArray *inputRegistrations = named(inputRegistered, @"native.observe.registered");
+    NSDictionary *inputRegistration = inputRegistrations.count == 1 ? inputRegistrations[0][@"fields"] : @{};
+    check(inputMonitor != 0 && [inputRegistration[@"source"] isEqual:@"host_input.surface"]
+        && [inputRegistration[@"kind"] isEqual:@"local_monitor"] && [inputRegistration[@"mode"] isEqual:@"count"],
+        @"the host input monitor registers through the observer entrance in count mode");
+    // A windowless event reaches the monitor but not this window's Go callback owner.
+    NSEvent *inputEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
+        timestamp:0 windowNumber:0 context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0];
+    [NSApp sendEvent:inputEvent];
+    check(sp_observe_count("host_input.surface") == 1, @"the host input monitor counts one delivered event");
+    surfaceUnwatchMouse(inputMonitor);
+    [NSApp sendEvent:inputEvent];
+    check(sp_observe_count("host_input.surface") == 1, @"removing the host input monitor ends its counted deliveries");
+    [inputWindow close];
 
     // A run loop observer and a dispatch source are registered through the entrance too.
     __block int loops = 0;

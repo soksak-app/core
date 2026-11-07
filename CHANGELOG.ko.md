@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F692: host surface input monitor를 기존 native observer 입구로 등록한다. 등록과 정확한 전달 횟수를 관찰하고 반환 token을 제거하면 전달이 끝난다. Native 소유 검사와 기존 source guard가 통과하며 직접 등록 금지는 유지한다.
+
 - F687-3: 관리되는 모든 mygo Go profile에 CGO_ENABLED=0을 적용한다. 선택된 공개 import와 pkg-config 선언으로 production·test artifact를 해석하고 발견부터 실행까지 같은 환경을 전달한다. 두 cgo static 입력을 cache key에 반영하며 일반 linker flag와 cgo 전용 flag를 구분한다. Artifact 경로를 수동 지정하지 않은 callback·worker·sampler·loader 소유 case가 통과하고 Wails는 cgo profile을 유지한다.
 
 - F689: 이동한 native bridge 구현에 test 소유권과 feature symbol을 맞춘다. 실제 runtime consumer와 구조적 thread guard를 구분하고 집중 footprint test·새 fixture 소유자를 연결하며 inventory 검사 규칙을 유지한다.

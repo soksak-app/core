@@ -7,6 +7,7 @@
 #include "input_inject.h"
 #include "main_thread.h"
 #include "host_callbacks.h"
+#include "observe.h"
 #import <Cocoa/Cocoa.h>
 
 static void activated(void *context, sp_activate_result result, const char *frontmost) {
@@ -67,8 +68,7 @@ static uintptr_t surfaceWatchMouseOnMain(void* nsWindow, uintptr_t owner) {
     NSWindow* window = (NSWindow*)nsWindow;
     NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged
                      | NSEventMaskLeftMouseUp | NSEventMaskKeyDown;
-    return (uintptr_t)[NSEvent addLocalMonitorForEventsMatchingMask:mask
-                                          handler:^NSEvent*(NSEvent* event) {
+    return (uintptr_t)sp_observe_local_monitor("host_input.surface", SP_OBSERVE_COUNT, mask, ^NSEvent*(NSEvent* event) {
         if ([event window] == window) {
             NSView* content = [window contentView];
             NSEventType type = [event type];
@@ -92,7 +92,7 @@ static uintptr_t surfaceWatchMouseOnMain(void* nsWindow, uintptr_t owner) {
             }
         }
         return event;
-    }];
+    });
 }
 
 uintptr_t surfaceWatchMouse(uintptr_t nsWindow, uintptr_t owner) {

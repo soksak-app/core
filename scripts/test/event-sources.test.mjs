@@ -5,12 +5,25 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { emitFindings, eventRules, parseEventSources } from "@soksak/kit/events";
+import { emitFindings, eventRules, eventSourceFindings, parseEventSources } from "@soksak/kit/events";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const CONFIG = "scripts/event-sources.json";
 const CHECK = fileURLToPath(import.meta.resolve("@soksak/kit/check"));
 const run = (...args) => spawnSync(process.execPath, [CHECK, "events", "--config", CONFIG, ...args], { cwd: ROOT, encoding: "utf8" });
+
+test("the extracted host input monitor uses the observer entrance and direct registration stays forbidden there", () => {
+  const config = parseEventSources(CONFIG, readFileSync(join(ROOT, CONFIG), "utf8"));
+  const file = "native/darwin/src/host_api_input.m";
+  const registrations = eventRules().filter((rule) => rule.id === "m.registration");
+  const actual = eventSourceFindings(new Map([[file, readFileSync(join(ROOT, file), "utf8")]]), config, registrations);
+  assert.deepEqual(actual, [], actual.map((finding) => finding.message).join("\n"));
+  const bypass = eventSourceFindings(new Map([[file,
+    'void bypass(void) { [NSEvent addLocalMonitorForEventsMatchingMask:mask handler:handler]; }',
+  ]]), config, registrations);
+  assert.equal(bypass.length, 1, "the extracted bridge must not become an allowed registration entrance");
+  assert.match(bypass[0].message, /m\.registration is outside its entrance files/);
+});
 
 test("the repository passes the event source check of its enabled rules and prints every pending rule with its item and count", () => {
   const output = run();

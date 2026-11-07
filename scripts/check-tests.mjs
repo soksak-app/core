@@ -267,6 +267,20 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F692",
+    implementation: [
+      { file: "native/darwin/src/host_api_input.m", symbol: 'sp_observe_local_monitor("host_input.surface", SP_OBSERVE_COUNT, mask,' },
+    ],
+    tests: [
+      { file: "native/darwin/tests/observe_test.m", id: "the host input monitor registers through the observer entrance in count mode" },
+      { file: "native/darwin/tests/observe_test.m", id: "the host input monitor counts one delivered event" },
+      { file: "native/darwin/tests/observe_test.m", id: "removing the host input monitor ends its counted deliveries" },
+      { file: "scripts/test/event-sources.test.mjs", id: "the extracted host input monitor uses the observer entrance and direct registration stays forbidden there" },
+    ],
+    expected: "The extracted host input monitor registers through the existing observer entrance, records its source in count mode, counts deliveries and ends those deliveries when its token is removed. Direct registration in the host bridge remains rejected by the unchanged event-source rule.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F687-3",
     implementation: [
       { file: "scripts/go-repeat-inputs.mjs", symbol: "export function resolveGoNativeInputs(" },
