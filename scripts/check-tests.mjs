@@ -267,6 +267,42 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F698",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef copyTaggedPresentation(" },
+      { file: "native/darwin/src/image_region.m", symbol: "displayContents = (__bridge id)taggedPresentation;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "identity diagnostics preserve the production IOSurface layer presentation type" },
+      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "presentation never mutates supplier pixels in copy or lease mode" },
+      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "identity tagging changes actual QR pixels and preserves every source pixel outside the declared ROI" },
+      { file: "native/darwin/tests/image_region_capture_presentation_test.m", id: "identity presentation preserves the source sRGB profile" },
+      { file: "e2e/test/terminal-reference-acquisition.test.mjs", id: "actual screen.observe acquisition yields a verified complete reference with global geometry" },
+      { file: "e2e/test/terminal-reference-acquisition.test.mjs", id: "actual term alias screen.observe acquisition yields a verified complete reference" },
+      { file: "e2e/test/terminal-reference-acquisition.test.mjs", id: "actual pre-F698 source-history color corruption cannot become a positive reference" },
+    ],
+    expected: "Tagged diagnostic frames retain the production IOSurface presentation type, sRGB metadata and supplier immutability in copy and lease modes. Native captured pixels outside the QR remain exact; actual terminal/term recordings verify strict acquisition and retain the pre-fix color rejection. This closes the diagnostic presentation defect, not F697 or final G8 acceptance.",
+    levels: ["unit", "native"],
+  },
+  {
+    id: "F696-4-2-2",
+    implementation: [
+      { file: "e2e/terminal-reference-acquisition.mjs", symbol: "export function acquireTerminalReference(" },
+      { file: "e2e/terminal-reference-content.mjs", symbol: "export function verifyTerminalReference(" },
+      { file: "e2e/test/terminal-reference-fixture.mjs", symbol: "export function loadTerminalReferenceFixture(" },
+    ],
+    tests: [
+      { file: "e2e/test/recording-fixture.test.mjs", id: "recording fixtures roundtrip native bytes and pack idempotently" },
+      { file: "e2e/test/recording-fixture.test.mjs", id: "recording fixture rejects native-byte digest tampering" },
+      { file: "e2e/test/terminal-reference-acquisition.test.mjs", id: "actual screen.observe acquisition yields a verified complete reference with global geometry" },
+      { file: "e2e/test/terminal-reference-acquisition.test.mjs", id: "actual term alias screen.observe acquisition yields a verified complete reference" },
+      { file: "e2e/test/terminal-reference-acquisition-integrity.test.mjs", id: "reference acquisition permits distinct region decoder rows for one actual frame" },
+      { file: "e2e/test/terminal-reference-acquisition-integrity.test.mjs", id: "reference acquisition normalizes the HollowBlock wire enum to hollowBlock" },
+    ],
+    expected: "Committed actual recordings replay without external fixture configuration or skips. Canonical identity-manifest and callback/file validators enforce integrity and coverage, allow distinct regions per frame and reject duplicate frame/region observations. Reference proof preserves complete prompt/guards and exact pixels; acquisition establishes no earlier-frame state or completed OCR consumer migration.",
+    levels: ["unit"],
+  },
+  {
     id: "F694",
     implementation: [
       { file: "Makefile", symbol: "GO_INTERNAL_LINK = -macos=$(MACOS_MINIMUM)" },
