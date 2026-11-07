@@ -63,6 +63,11 @@ export function createRenderedDocumentReferenceProvider({ root, provider, view =
       viewport: { width: view.innerWidth, height: view.innerHeight } };
   };
   const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+  // Revisions cross a JSON/native dictionary boundary; property order is not identity.
+  const sameRevision = (left, right) => right !== null && typeof right === "object" && !Array.isArray(right)
+    && Object.keys(right).length === 2
+    && Object.hasOwn(right, "kind") && Object.hasOwn(right, "value")
+    && right.kind === left.kind && right.value === left.value;
   return Object.freeze({
     version: 1,
     async observe(request) {
@@ -96,7 +101,7 @@ export function createRenderedDocumentReferenceProvider({ root, provider, view =
     },
     async validate(request) {
       params(request, ["requestId", "revision"]);
-      if (disposed || !lease || lease.requestId !== request.requestId || !same(lease.revision, request.revision)) return false;
+      if (disposed || !lease || lease.requestId !== request.requestId || !sameRevision(lease.revision, request.revision)) return false;
       const observed = read();
       return lease.revision.value === revision && same(lease.observed, observed);
     },

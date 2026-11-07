@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F696-4: JSON key 순서에 의존하지 않고 renderer revision의 필드를 엄격히 비교한다. 필드 순서를 바꾼 RED 뒤 provider owner 12개가 모두 통과하고 controlled mygo Browser collector와 run audit도 통과했다. Pixel·가장 이른 frame 증명과 나머지 OCR 인수는 열린 상태다.
+
 - F696-4: Native backing scale에서 정확한 원본 공개 image representation을 사용해 소수점 문서 snapshot의 모든 물리 행을 보존한다. PNG geometry·발급 QR·renderer revision 검사는 유지한다. 첫 행과 마지막 행의 정확한 encoded pixel을 포함한 native 24개 사례가 통과하며 실제 application reference 연결은 남아 있다.
 
 - F502-11: 정확히 고정된 mygo source에서 launch·show 활성화와 application 소유 lifecycle 제어를 검증했다. 선언된 default 전체 module·vet 세 profile·tagged runtime-check 두 profile이 통과하며, 앞선 module-cache 실패와 별도의 F502-3 main-stack 실패는 보존한다.

@@ -137,3 +137,24 @@ test("releasing a DOM reference cancels its pending font wait without waiting fo
   await provider.release({ requestId: 7 });
   await rejected;
 });
+
+test("DOM renderer revision validation compares exact fields independently of wire key order", { timeout: 1000 }, async () => {
+  const provider = create(fixture());
+  try {
+    const { revision } = await provider.observe({ requestId: 7 });
+    assert.equal(await provider.validate({ requestId: 7,
+      revision: { value: revision.value, kind: revision.kind } }), true,
+    "a native bridge may reorder the same revision fields");
+    for (const invalid of [
+      { ...revision, extra: true }, { kind: revision.kind }, { value: revision.value },
+      { kind: "other-renderer", value: revision.value }, { kind: revision.kind, value: revision.value + 1 },
+      { kind: revision.kind, value: String(revision.value) }, null, [],
+    ]) {
+      assert.equal(await provider.validate({ requestId: 7, revision: invalid }), false,
+        `an invalid revision must not validate: ${JSON.stringify(invalid)}`);
+    }
+    assert.equal(await provider.validate({ requestId: 7, revision }), true,
+      "rejected wire revisions must not consume or change the lease");
+    await provider.release({ requestId: 7 });
+  } finally { provider.dispose(); }
+});

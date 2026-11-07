@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F696-4: Compare renderer revision fields strictly without depending on JSON key order. All twelve provider owners pass after the reordered-field RED; the controlled mygo Browser collector and run audit pass, while pixel/earliest-frame and remaining OCR acceptance stay open.
+
 - F696-4: Preserve every physical row of fractional document snapshots through the exact original public image representation at native backing scale. Keep strict PNG geometry, issued QR and renderer revision checks. Verify all 24 native cases, including exact encoded first and final rows; actual application reference association remains open.
 
 - F502-11: Verify launch/show activation and application-owned lifecycle controls on the exact pinned mygo source. The declared default-module, three vet and two tagged runtime-check profiles pass; preserve the earlier module-cache failure and separate F502-3 main-stack failure.
