@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F686-3: Native callbacks use one public typed header and separate complete base and diagnostic registration tables. Header-generated cgo bindings replace direct native links to Go exports. Registration rejects missing entries and replacement; the worker audit preserves dispatch boundaries. A public native operation consumes transferred presentation completions. The cgo-free mygo binding remains open.
+
 - F686-2: Native callback values use the shared Go callback handle owner instead of runtime/cgo.Handle, whose package cannot link with cgo disabled. Integer tokens retain Go values until explicit deletion and reject zero, deleted and twice-deleted handles. The cgo-free lifecycle cases, race run, Darwin platform cases and both adapters main-thread callback checks pass. Native binding generation and the complete cgo-free application build remain open.
 
 - F674: The Wails main-thread stack test passes 12 of 12 consecutive runs through the tracked Go repeat command under background priority, each in 7.028–12.946 s within the unchanged 120 s limit. Both hosts also pass the injected-heartbeat check; the remaining background validation is complete.

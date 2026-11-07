@@ -11,14 +11,14 @@ package darwin
 #include <stdlib.h>
 #include "input_source.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callback runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
-extern void goNativeInputSourceAdopted(uintptr_t callback, char *failure);
 
 static void inputSourceSelectAndAwait(const char *identifier, uintptr_t callback) {
     hostRunOnMain(^{
         sp_input_source_select_and_await(identifier, ^(const char *error) {
-            hostRunOnWorker(^{ goNativeInputSourceAdopted(callback, (char *)error); });
+            hostRunOnWorker(^{ sp_host_diagnostic_callback_native_input_source_adopted(callback, (char *)error); });
         });
     });
 }
@@ -59,8 +59,8 @@ func (implementation) SelectInputSource(identifier string, adopted func(error)) 
 	C.inputSourceSelectAndAwait(wanted, C.uintptr_t(handles.NewHandle(adopted)))
 }
 
-//export goNativeInputSourceAdopted
-func goNativeInputSourceAdopted(value C.uintptr_t, failure *C.char) {
+//export goHost_native_input_source_adopted
+func goHost_native_input_source_adopted(value C.uintptr_t, failure *C.char) {
 	handle := handles.Handle(value)
 	adopted := handle.Value().(func(error))
 	handle.Delete()

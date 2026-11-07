@@ -12,12 +12,12 @@ package darwin
 #include <stdint.h>
 #include "window_objects.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
-extern void goWindowObjectsCounted(uintptr_t handle, long compositions, long hosts, long registrations, bool reached);
 static void counted(void *context, const sp_window_objects *counts, bool reached) {
     long compositions = counts->windowCompositions, hosts = counts->surfaceHosts, registrations = counts->inputRegistrations;
-    hostRunOnWorker(^{ goWindowObjectsCounted((uintptr_t)context, compositions, hosts, registrations, reached); });
+    hostRunOnWorker(^{ sp_host_diagnostic_callback_window_objects_counted((uintptr_t)context, compositions, hosts, registrations, reached); });
 }
 static void countWhen(const sp_window_objects *expected, double seconds, uintptr_t handle) {
     hostRunOnMain(^{ sp_window_objects_when(expected, seconds, counted, (void *)handle); });
@@ -30,8 +30,8 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-//export goWindowObjectsCounted
-func goWindowObjectsCounted(handle C.uintptr_t, compositions, hosts, registrations C.long, reached C.bool) {
+//export goHost_window_objects_counted
+func goHost_window_objects_counted(handle C.uintptr_t, compositions, hosts, registrations C.long, reached C.bool) {
 	// handle is the value that WindowObjectsWhen created, and the library calls done once.
 	h := handles.Handle(handle)
 	done := h.Value().(func(platform.WindowObjects, bool))

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F686-3: native callback은 하나의 공개 typed header와 기본·진단용 완전 등록 table을 사용한다. header에서 생성한 cgo binding이 native의 Go export 직접 연결을 대체한다. 등록은 필수 함수 누락과 교체를 거부하며 worker 감사는 전달 경계를 유지한다. 넘겨받은 presentation completion은 공개 native 연산이 실행·해제한다. mygo의 cgo 없는 binding은 아직 남아 있다.
+
 - F686-2: native callback 값은 cgo를 끄면 링크되지 않는 runtime/cgo.Handle 대신 공유 Go callback handle 소유자를 사용한다. 정수 token은 명시적 해제까지 Go 값을 유지하며 0, 해제된 handle의 조회와 이중 해제를 거부한다. cgo 없는 수명 사례와 race 실행, Darwin platform 사례와 두 adapter의 main-thread callback 검사가 통과한다. native binding 생성과 cgo 없는 application 전체 빌드는 아직 남아 있다.
 
 - F674: Wails main-thread stack test는 background 우선순위에서 추적되는 Go 반복 명령으로 연속 12회 모두 통과했다. 각 실행은 7.028–12.946초로 기존 120초 한도 안에 끝났다. 두 host의 주입 heartbeat 검사도 통과해 남은 background 검증을 마쳤다.

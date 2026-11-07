@@ -8,11 +8,11 @@ package darwin
 #include <stdbool.h>
 #include "quit_request.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The request runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
-extern void goQuitRequest(void);
 static bool installQuitRequest(void) {
-    return ON_MAIN(bool, sp_quit_request_install(^{ hostRunOnWorker(^{ goQuitRequest(); }); }));
+    return ON_MAIN(bool, sp_quit_request_install(^{ hostRunOnWorker(^{ sp_host_callback_quit_request(); }); }));
 }
 static void main_sp_quit_request_answer(void) { hostRunOnMain(^{ sp_quit_request_answer(); }); }
 static void main_sp_quit_request_cancel(void) { hostRunOnMain(^{ sp_quit_request_cancel(); }); }
@@ -70,8 +70,8 @@ func (implementation) OnTermination(quit func(signal os.Signal)) error {
 // quitRequest is the function that the termination request of the operating system calls.
 var quitRequest func()
 
-//export goQuitRequest
-func goQuitRequest() { routine.Go("quit-request", quitRequest) }
+//export goHost_quit_request
+func goHost_quit_request() { routine.Go("quit-request", quitRequest) }
 
 func (implementation) OnQuitRequest(quit func()) error {
 	quitRequest = quit

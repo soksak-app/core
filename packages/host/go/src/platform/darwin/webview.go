@@ -9,6 +9,7 @@ package darwin
 #include "webview_geometry.h"
 #include "window_facts.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 extern void *sp_surface_create(void *view);
 extern void sp_surface_close(void *surface);
 extern void sp_surface_set_window_overlays(void *mainWebview, const double *rects, size_t count);
@@ -54,15 +55,13 @@ void nativeWebviewClose(void *view);
 bool nativeWindowConfigureMain(uintptr_t window, bool dark);
 bool nativeWindowSetMainWebview(uintptr_t window);
 
-extern void goFileDropped(void *context, char *json);
-extern void goFileDropReleased(void *context);
 
 static void fileDroppedBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ goFileDropped(context, (char *)json); });
+    hostRunOnWorker(^{ sp_host_callback_file_dropped(context, (char *)json); });
 }
 
 static void fileDropReleasedBridge(void *context) {
-    hostRunOnWorker(^{ goFileDropReleased(context); });
+    hostRunOnWorker(^{ sp_host_callback_file_drop_released(context); });
 }
 
 static bool windowFileDrop(void *main, uintptr_t context) {
@@ -140,23 +139,23 @@ import (
 // passes the same function to all web views.
 var dispatcher platform.Dispatcher
 
-//export goNativeCommitted
-func goNativeCommitted(identifier C.ulonglong) {
+//export goHost_native_committed
+func goHost_native_committed(identifier C.ulonglong) {
 	dispatcher.Commit(uint64(identifier))
 }
 
 // terminated receives the end of the WebContent process of the web views; the host passes the same function to all web views, as the dispatcher does.
 var terminated func(identifier uint64)
 
-//export goNativeTerminated
-func goNativeTerminated(identifier C.ulonglong) {
+//export goHost_native_terminated
+func goHost_native_terminated(identifier C.ulonglong) {
 	if receiver := terminated; receiver != nil {
 		routine.Go("webview-terminated", func() { receiver(uint64(identifier)) })
 	}
 }
 
-//export goNativeMessage
-func goNativeMessage(identifier C.ulonglong, message *C.char) {
+//export goHost_native_message
+func goHost_native_message(identifier C.ulonglong, message *C.char) {
 	dispatcher.Message(uint64(identifier), C.GoString(message))
 }
 
@@ -209,16 +208,16 @@ func (implementation) ConfigureMainWindow(window platform.Window, dark bool) err
 	return nil
 }
 
-//export goFileDropped
-func goFileDropped(context unsafe.Pointer, json *C.char) {
+//export goHost_file_dropped
+func goHost_file_dropped(context unsafe.Pointer, json *C.char) {
 	dropped := handles.Handle(uintptr(context)).Value().(func(string))
 	dropped(C.GoString(json))
 }
 
 // Clears the handle when the drop view no longer uses the receiver.
 //
-//export goFileDropReleased
-func goFileDropReleased(context unsafe.Pointer) {
+//export goHost_file_drop_released
+func goHost_file_drop_released(context unsafe.Pointer) {
 	handles.Handle(uintptr(context)).Delete()
 }
 

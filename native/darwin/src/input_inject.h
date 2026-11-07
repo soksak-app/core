@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdbool.h>
 
 // The value of kCGEventSourceUserData of a key event whose text the caller of sp_input_key stated: that text is what the key

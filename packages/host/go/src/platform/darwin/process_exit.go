@@ -11,11 +11,11 @@ package darwin
 #include <stdint.h>
 #include "process_exit.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
-extern void goProcessExitAnswered(uintptr_t handle, bool exited);
 static void answered(void *context, bool exited) {
-    hostRunOnWorker(^{ goProcessExitAnswered((uintptr_t)context, exited); });
+    hostRunOnWorker(^{ sp_host_diagnostic_callback_process_exit_answered((uintptr_t)context, exited); });
 }
 static void whenExited(pid_t pid, double seconds, uintptr_t handle) {
     hostRunOnMain(^{ sp_process_when_exited(pid, seconds, answered, (void *)handle); });
@@ -25,8 +25,8 @@ import "C"
 
 import handles "github.com/soksak-app/core/packages/host/go/src/callback"
 
-//export goProcessExitAnswered
-func goProcessExitAnswered(handle C.uintptr_t, exited C.bool) {
+//export goHost_process_exit_answered
+func goHost_process_exit_answered(handle C.uintptr_t, exited C.bool) {
 	// handle is the value that WhenProcessExited created, and the library calls done once.
 	h := handles.Handle(handle)
 	done := h.Value().(func(bool))

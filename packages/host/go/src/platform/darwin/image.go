@@ -10,18 +10,17 @@ package darwin
 #include <stdlib.h>
 #include "image_region.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callback runs its Go function on the worker, and the native calls of this file run on the main thread (main_thread.h).
-extern void goImageChanged(void *context, char *json);
 
 static void imageChangedBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ goImageChanged(context, (char *)json); });
+    hostRunOnWorker(^{ sp_host_callback_image_changed(context, (char *)json); });
 }
 
-extern void goImageReleased(void *context, uint64_t generation, uint64_t raster, int sequence);
 
 static void imageReleasedBridge(void *context, uint64_t generation, uint64_t raster, int sequence) {
-    hostRunOnWorker(^{ goImageReleased(context, generation, raster, sequence); });
+    hostRunOnWorker(^{ sp_host_callback_image_released(context, generation, raster, sequence); });
 }
 
 // A nonzero lease puts the region in the lease mode with that receiver of its released surfaces.
@@ -66,14 +65,14 @@ import (
 var images = map[unsafe.Pointer]handles.Handle{}
 var leases = map[unsafe.Pointer]handles.Handle{}
 
-//export goImageReleased
-func goImageReleased(context unsafe.Pointer, generation, raster C.uint64_t, sequence C.int) {
+//export goHost_image_released
+func goHost_image_released(context unsafe.Pointer, generation, raster C.uint64_t, sequence C.int) {
 	released := handles.Handle(uintptr(context)).Value().(func(uint64, uint64, int))
 	released(uint64(generation), uint64(raster), int(sequence))
 }
 
-//export goImageChanged
-func goImageChanged(context unsafe.Pointer, json *C.char) {
+//export goHost_image_changed
+func goHost_image_changed(context unsafe.Pointer, json *C.char) {
 	changed := handles.Handle(uintptr(context)).Value().(func(string))
 	changed(C.GoString(json))
 }

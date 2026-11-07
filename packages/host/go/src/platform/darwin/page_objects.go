@@ -12,11 +12,11 @@ package darwin
 #include <stdint.h>
 #include "webview_geometry.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callback runs its Go function on the worker, and the native call runs on the main thread (main_thread.h).
-extern void goPageObjectsCounted(uintptr_t handle, long elements, long documents, char *failure);
 static void pageCounted(void *context, long elements, long documents, const char *failure) {
-    hostRunOnWorker(^{ goPageObjectsCounted((uintptr_t)context, elements, documents, (char *)failure); });
+    hostRunOnWorker(^{ sp_host_diagnostic_callback_page_objects_counted((uintptr_t)context, elements, documents, (char *)failure); });
 }
 static void countPageObjects(void *view, bool document, uintptr_t handle) {
     hostRunOnMain(^{ sp_webview_count_objects(view, document, pageCounted, (void *)handle); });
@@ -32,8 +32,8 @@ import (
 	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
-//export goPageObjectsCounted
-func goPageObjectsCounted(handle C.uintptr_t, elements, documents C.long, failure *C.char) {
+//export goHost_page_objects_counted
+func goHost_page_objects_counted(handle C.uintptr_t, elements, documents C.long, failure *C.char) {
 	// handle is the value that CountPageObjects created, and the library calls done once.
 	h := handles.Handle(handle)
 	done := h.Value().(func(int64, int64, error))

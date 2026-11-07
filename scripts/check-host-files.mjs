@@ -421,6 +421,8 @@ export const MAIN_THREAD_FREE = {
   sp_facts_free: "the function frees a string that a native function returned",
   sp_ui_enqueue: "the function adds a C function to the main queue of libdispatch, which any thread may do",
   sp_ui_enqueue_after: "the function adds a C function to the main queue of libdispatch after a delay, which any thread may do",
+  sp_host_callbacks_install: "startup copies the complete host callback table before native work begins, without invoking a callback or accessing AppKit",
+  sp_host_diagnostic_callbacks_install: "diagnostic startup copies its complete callback table before diagnostic work begins, without invoking a callback or accessing AppKit",
   sp_stall_heartbeat: "the stall watch calls it on its own thread, because a stalled main thread could not run it, and it uses atomics and CFRunLoopPerformBlock, which any thread may call",
   sp_stall_await_awake: "the stall watch blocks its own thread on a semaphore until the main run loop wakes; on the main thread the function would wait for itself",
 };
@@ -569,6 +571,7 @@ function auditFolder(folder, paths) {
   const definitions = new Map();
   const uses = [];
   const exports = new Set(goSources.flatMap((source) => source.exports));
+  const callbackEntries = new Set();
   for (const unit of units) {
     let dump;
     try {
@@ -581,6 +584,8 @@ function auditFolder(folder, paths) {
     for (const entry of astNodes(JSON.parse(dump))) {
       const { node, place } = entry;
       if (node.kind === "FunctionDecl" && place?.file?.startsWith(nativeFolder)) native.add(node.name);
+      if (node.kind === "FunctionDecl" && place?.file === join(nativeFolder, "host_callbacks.h")
+          && (node.name?.startsWith("sp_host_callback_") || node.name?.startsWith("sp_host_diagnostic_callback_"))) callbackEntries.add(node.name);
       if (place?.file !== main && place?.file !== unit.file) continue;
       const line = unit.line(place.line);
       if (node.kind === "FunctionDecl" && node.inner?.some((child) => child.kind === "CompoundStmt")) {
@@ -595,12 +600,13 @@ function auditFolder(folder, paths) {
       if (use) uses.push({ ...use, ...enclosing(entry), path: unit.path, line });
     }
   }
-  const isNative = (name) => native.has(name) && !mainThreadFree(name)
+  const isNative = (name) => native.has(name) && !callbackEntries.has(name) && !mainThreadFree(name)
     && !WORKER_WRAPPERS.has(name) && !MAIN_WRAPPERS.has(name);
   const errors = [];
   for (const use of uses) {
-    if (use.kind === "reference" && exports.has(use.name) && use.wrapper !== "hostRunOnWorker") {
-      errors.push({ path: use.path, line: use.line, text: `${use.name} is exported to C and is referenced outside hostRunOnWorker or ON_WORKER` });
+    if (use.kind === "reference" && (exports.has(use.name) || callbackEntries.has(use.name)) && use.wrapper !== "hostRunOnWorker") {
+      const kind = callbackEntries.has(use.name) ? "a registered host callback" : "exported to C";
+      errors.push({ path: use.path, line: use.line, text: `${use.name} is ${kind} and is referenced outside hostRunOnWorker or ON_WORKER` });
     }
     if (use.wrapper !== "hostRunOnWorker") continue;
     if (use.kind === "call" && isNative(use.name)) {
@@ -638,7 +644,9 @@ function auditFolder(folder, paths) {
   };
   for (const source of goSources) {
     for (const call of source.calls) {
-      if (isNative(call.name) && !definitions.has(call.name)) {
+      if (exports.has(call.name) || callbackEntries.has(call.name)) {
+        errors.push({ path: source.file, line: call.line, text: `Go calls callback ${call.name} directly; run native callbacks through hostRunOnWorker or ON_WORKER` });
+      } else if (isNative(call.name) && !definitions.has(call.name)) {
         errors.push({ path: source.file, line: call.line, text: `Go calls the native function ${call.name} directly; call a main_ wrapper that runs it through hostRunOnMain or ON_MAIN` });
       } else if (definitions.has(call.name)) {
         const use = mainUse(call.name);

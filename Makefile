@@ -8,6 +8,13 @@ check-docs:
 	@node scripts/check-private-apis.mjs
 	@pnpm exec sok-check docs
 
+.PHONY: check-host-callbacks create-host-callbacks
+check-host-callbacks:
+	@node scripts/check-host-callbacks.mjs
+
+create-host-callbacks:
+	@node scripts/check-host-callbacks.mjs --write
+
 # Checks the names of the executables and make targets of this repository (AGENTS.md Implementation).
 check-commands:
 	@pnpm exec sok-check commands
@@ -384,7 +391,7 @@ sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$
 sok-mygo = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
-build-native:
+build-native: check-host-callbacks
 	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM)
 
 # Fetches and checksum-validates the pinned native dependency without compiling it.

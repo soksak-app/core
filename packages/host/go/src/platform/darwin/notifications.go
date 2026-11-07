@@ -9,11 +9,11 @@ package darwin
 #include <stdlib.h>
 #include "notifications.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callback runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
-extern void goNotificationEvent(void *context, char *json);
 static void notificationEventBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ goNotificationEvent(context, (char *)json); });
+    hostRunOnWorker(^{ sp_host_callback_notification_event(context, (char *)json); });
 }
 static const char *startNotifications(void) {
     return ON_MAIN(const char *, sp_notifications_start(notificationEventBridge, NULL));
@@ -33,8 +33,8 @@ import (
 // notificationReceiver is the function that receives the notification center events. There is one notification center per process, so only one is kept.
 var notificationReceiver func(string)
 
-//export goNotificationEvent
-func goNotificationEvent(_ unsafe.Pointer, json *C.char) {
+//export goHost_notification_event
+func goHost_notification_event(_ unsafe.Pointer, json *C.char) {
 	notificationReceiver(C.GoString(json))
 }
 

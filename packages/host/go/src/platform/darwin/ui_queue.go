@@ -5,11 +5,11 @@ package darwin
 /*
 #include "ui_queue.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The main queue runs the step in C: the work runs on the worker while the main thread waits (main_thread.h).
-extern void goNativeUIRun(uintptr_t context);
 static void nativeUIRun(uintptr_t context) {
-    hostRunOnWorker(^{ goNativeUIRun(context); });
+    hostRunOnWorker(^{ sp_host_callback_native_ui_run(context); });
 }
 static void uiEnqueue(uintptr_t context) { sp_ui_enqueue(nativeUIRun, context); }
 static void uiEnqueueAfter(uint64_t delay, uintptr_t context) { sp_ui_enqueue_after(delay, nativeUIRun, context); }
@@ -66,8 +66,8 @@ func (implementation) EnqueueUIAfter(delay time.Duration, work func()) error {
 	return nil
 }
 
-//export goNativeUIRun
-func goNativeUIRun(context C.uintptr_t) {
+//export goHost_native_ui_run
+func goHost_native_ui_run(context C.uintptr_t) {
 	handle := handles.Handle(context)
 	work := handle.Value().(func())
 	handle.Delete()

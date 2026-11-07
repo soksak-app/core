@@ -46,6 +46,23 @@ function goFile(preamble, body) {
 
 const exported = "//export goWindowClosed\nfunc goWindowClosed() {}\n";
 
+test("main-thread audit protects registered native callback entries with the same worker boundary", { timeout: 30000 }, () => {
+  const files = {
+    ...base,
+    "native/darwin/src/host_callbacks.h": "void sp_host_callback_ready(unsigned long context);",
+    [`${LAYER}/callbacks.go`]: goFile([
+      '#include "main_thread.h"',
+      '#include "host_callbacks.h"',
+      'static void valid(void) { hostRunOnWorker(^{ sp_host_callback_ready(17); }); }',
+      'static void invalid(void) { sp_host_callback_ready(17); }',
+    ].join("\n"), "func drive() { C.valid(); C.invalid(); C.sp_host_callback_ready(17) }"),
+  };
+  const errors = auditMainThreadCalls(files);
+  assert.equal(errors.length, 2, errors.join("\n"));
+  assert.match(errors[0], /sp_host_callback_ready.*outside hostRunOnWorker or ON_WORKER/);
+  assert.match(errors[1], /Go calls callback sp_host_callback_ready directly/);
+});
+
 test("main-thread audit accepts exported callbacks that run through the worker", { timeout: 30000 }, () => {
   const files = {
     ...base,

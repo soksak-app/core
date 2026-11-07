@@ -99,13 +99,13 @@ func (implementation) EndResponderObservation(observation unsafe.Pointer) {
 	}
 }
 
-//export goNativeResponderChanged
-func goNativeResponderChanged(value C.uintptr_t) {
+//export goHost_native_responder_changed
+func goHost_native_responder_changed(value C.uintptr_t) {
 	handles.Handle(value).Value().(func())()
 }
 
-//export goNativeFullscreenDone
-func goNativeFullscreenDone(value C.uintptr_t) {
+//export goHost_native_fullscreen_done
+func goHost_native_fullscreen_done(value C.uintptr_t) {
 	handle := handles.Handle(value)
 	done := handle.Value().(func())
 	handle.Delete()

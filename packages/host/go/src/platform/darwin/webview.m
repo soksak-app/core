@@ -10,10 +10,8 @@
 #import "window_fullscreen.h"
 #import "window_facts.h"
 #import "main_thread.h"
+#include "host_callbacks.h"
 
-extern void goNativeMessage(unsigned long long identifier, char *message);
-extern void goNativeCommitted(unsigned long long identifier);
-extern void goNativeTerminated(unsigned long long identifier);
 
 @interface SPNativeBridge : NSObject <WKScriptMessageHandler>
 @property unsigned long long identifier;
@@ -29,7 +27,7 @@ extern void goNativeTerminated(unsigned long long identifier);
         || ![origin.host isEqualToString:self.host] || ![message.body isKindOfClass:NSString.class]) return;
     unsigned long long identifier = self.identifier;
     char *body = (char *)[message.body UTF8String];
-    hostRunOnWorker(^{ goNativeMessage(identifier, body); });
+    hostRunOnWorker(^{ sp_host_callback_native_message(identifier, body); });
 }
 - (void)dealloc {
     [_scheme release]; [_host release];
@@ -47,7 +45,7 @@ extern void goNativeTerminated(unsigned long long identifier);
 @implementation SPNativeWebview
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
     unsigned long long identifier = self.messageIdentifier;
-    hostRunOnWorker(^{ goNativeCommitted(identifier); });
+    hostRunOnWorker(^{ sp_host_callback_native_committed(identifier); });
     [self evaluateJavaScript:self.backgroundEnabled ? @"window.__soksakBackground = true" : @"window.__soksakBackground = false" completionHandler:^(id result, NSError *error) {
         if (error) sp_log_error("surface background", error.localizedDescription.UTF8String);
     }];
@@ -56,7 +54,7 @@ extern void goNativeTerminated(unsigned long long identifier);
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_webview_log_process_end((__bridge void *)view, "surface webview");
     unsigned long long identifier = self.messageIdentifier;
-    hostRunOnWorker(^{ goNativeTerminated(identifier); });
+    hostRunOnWorker(^{ sp_host_callback_native_terminated(identifier); });
 }
 - (void)dealloc {
     [_baseURL release];
@@ -75,20 +73,18 @@ static WKWebView *mainWebview(NSView *parent) {
     return nil;
 }
 
-extern void goNativePresentationDone(uintptr_t callback);
 static bool nativeWindowAfterPresentationOnMain(void *handle, uintptr_t callback) {
     WKWebView *view = sp_window_main_webview(handle);
     if (!view) return false;
-    surfaceLayoutAfterPresentation(view, ^{ hostRunOnWorker(^{ goNativePresentationDone(callback); }); });
+    surfaceLayoutAfterPresentation(view, ^{ hostRunOnWorker(^{ sp_host_callback_native_presentation_done(callback); }); });
     return true;
 }
 
 // nativeWindowJoinView joins the view webview to the layout transaction of window. callback runs when the view presents.
 static bool nativeWindowJoinViewOnMain(void *window, uint64_t ticket, void *view, uintptr_t callback) {
-    return surfaceLayoutJoinView(window, ticket, view, ^{ hostRunOnWorker(^{ goNativePresentationDone(callback); }); });
+    return surfaceLayoutJoinView(window, ticket, view, ^{ hostRunOnWorker(^{ sp_host_callback_native_presentation_done(callback); }); });
 }
 
-extern void goNativeSettledDone(uintptr_t callback, double displayed, char *error);
 // The block crosses main-thread steps in the hands of Go, so it is a copy that nativeWindowAfterSettled releases.
 static void *nativeWindowMainPresentationOnMain(void *handle) {
     WKWebView *view = sp_window_main_webview(handle);
@@ -98,13 +94,11 @@ static void *nativeWindowMainPresentationOnMain(void *handle) {
 static void nativeWindowAfterSettledOnMain(void *handle, void *present, uintptr_t callback) {
     surfaceLayoutAfterSettled(handle, (surfaceLayoutPresent)present, ^(double displayed, const char *error) {
         char *copy = error ? strdup(error) : NULL;
-        hostRunOnWorker(^{ goNativeSettledDone(callback, displayed, copy); });
+        hostRunOnWorker(^{ sp_host_callback_native_settled_done(callback, displayed, copy); });
     });
     Block_release(present);
 }
 
-extern void goNativeSettledPresent(uintptr_t present, void *presented);
-extern void goNativeSettledPresentEnded(uintptr_t present);
 
 // Holds the Go function of a presentation block: the block retains this object, so the function ends with the last copy of the block.
 @interface SPFunctionPresentation : NSObject
@@ -114,7 +108,7 @@ extern void goNativeSettledPresentEnded(uintptr_t present);
 @implementation SPFunctionPresentation
 - (void)dealloc {
     uintptr_t present = self.present;
-    hostRunOnWorker(^{ goNativeSettledPresentEnded(present); });
+    hostRunOnWorker(^{ sp_host_callback_native_settled_present_ended(present); });
     [super dealloc];
 }
 @end
@@ -126,15 +120,13 @@ static void *nativeFunctionPresentationOnMain(uintptr_t present) {
     surfaceLayoutPresent block = ^(void (^presented)(const char *error)) {
         void *kept = Block_copy(presented);
         uintptr_t value = function.present;
-        hostRunOnWorker(^{ goNativeSettledPresent(value, kept); });
+        hostRunOnWorker(^{ sp_host_callback_native_settled_present(value, kept); });
     };
     void *copy = Block_copy(block);
     [function release];
     return copy;
 }
 
-extern void goNativeLayoutStarted(uintptr_t window);
-extern void goNativeLayoutEnded(uintptr_t window);
 
 static void nativeWindowPrepareOnMain(void *handle) {
     NSWindow *window = (NSWindow *)handle;
@@ -249,24 +241,20 @@ static void nativeWebviewCloseOnMain(void *handle) {
     [view release];
 }
 
-extern void goNativeLayoutReady(uintptr_t callback, bool allowed);
 static void nativeWindowLayoutBeginOnMain(void *window, uint64_t ticket, uintptr_t callback) {
-    surfaceLayoutBegin(window, ticket, ^(int allowed) { hostRunOnWorker(^{ goNativeLayoutReady(callback, allowed); }); });
+    surfaceLayoutBegin(window, ticket, ^(int allowed) { hostRunOnWorker(^{ sp_host_callback_native_layout_ready(callback, allowed); }); });
 }
 
-extern void goNativeStartPageReady(uintptr_t callback, const char *failure);
 static void nativeWindowStartPageOnMain(void *window, uint64_t ticket, double height, uintptr_t callback) {
-    surfaceLayoutStartPage(window, ticket, height, ^(const char *failure) { hostRunOnWorker(^{ goNativeStartPageReady(callback, failure); }); });
+    surfaceLayoutStartPage(window, ticket, height, ^(const char *failure) { hostRunOnWorker(^{ sp_host_callback_native_start_page_ready(callback, (char *)failure); }); });
 }
 
-extern void goNativeFullscreenDone(uintptr_t callback);
 static bool nativeWindowFullscreenOnMain(void *handle, bool on, uintptr_t callback) {
-    return sp_window_fullscreen(handle, on, ^{ hostRunOnWorker(^{ goNativeFullscreenDone(callback); }); });
+    return sp_window_fullscreen(handle, on, ^{ hostRunOnWorker(^{ sp_host_callback_native_fullscreen_done(callback); }); });
 }
 
-extern void goNativeResponderChanged(uintptr_t callback);
 static void *nativeWindowObserveResponderOnMain(void *handle, uintptr_t callback) {
-    return sp_window_observe_responder(handle, ^{ hostRunOnWorker(^{ goNativeResponderChanged(callback); }); });
+    return sp_window_observe_responder(handle, ^{ hostRunOnWorker(^{ sp_host_callback_native_responder_changed(callback); }); });
 }
 
 // The functions that Go code calls. Go code runs on the worker of the framework, and each function runs its body on the main
@@ -286,17 +274,10 @@ void nativeWindowAfterSettled(uintptr_t handle, void *present, uintptr_t callbac
 void *nativeFunctionPresentation(uintptr_t present) {
     return ON_MAIN(void *, nativeFunctionPresentationOnMain(present));
 }
-void nativeWindowPresented(void *presented, const char *error) {
-    hostRunOnMain(^{
-        void (^completion)(const char *) = presented;
-        completion(error);
-        Block_release(completion);
-    });
-}
 void nativeLayoutObserve(void) {
     hostRunOnMain(^{
-        surfaceLayoutObserve(^(void *window) { hostRunOnWorker(^{ goNativeLayoutStarted((uintptr_t)window); }); },
-            ^(void *window) { hostRunOnWorker(^{ goNativeLayoutEnded((uintptr_t)window); }); });
+        surfaceLayoutObserve(^(void *window) { hostRunOnWorker(^{ sp_host_callback_native_layout_started((uintptr_t)window); }); },
+            ^(void *window) { hostRunOnWorker(^{ sp_host_callback_native_layout_ended((uintptr_t)window); }); });
     });
 }
 void nativeWindowPrepare(uintptr_t handle) {

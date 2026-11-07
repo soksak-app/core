@@ -10,20 +10,12 @@ package darwin
 #include <stdlib.h>
 #include "document_view.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callbacks run their Go functions on the worker, and the native calls of this file run on the main thread (main_thread.h).
-extern void goDocumentChanged(void *context, char *state);
-extern void goDocumentEvent(void *context, char *event);
-extern void goDocumentMessage(void *context, char *message);
-extern void goViewMessage(void *context, char *message);
-extern void goViewEnded(void *context);
-extern void goViewResponsiveness(void *context, bool responsive);
-extern void goDocumentStream(void *context, char *message);
-extern void goDocumentQueried(void *context, char *reply);
-extern bool goCoreRootServe(void *context, char *plugin, char *path, void **bytes, size_t *length, char **contentType);
 
 static bool coreRootBridge(void *context, const char *plugin, const char *path, void **bytes, size_t *length, char **type) {
-    return ON_WORKER(bool, goCoreRootServe(context, (char *)plugin, (char *)path, bytes, length, type));
+    return ON_WORKER(bool, sp_host_callback_core_root_serve(context, (char *)plugin, (char *)path, bytes, length, type));
 }
 
 static void coreRootSet(uintptr_t context) {
@@ -31,30 +23,30 @@ static void coreRootSet(uintptr_t context) {
 }
 
 static void documentChangedBridge(void *context, const char *state) {
-    hostRunOnWorker(^{ goDocumentChanged(context, (char *)state); });
+    hostRunOnWorker(^{ sp_host_callback_document_changed(context, (char *)state); });
 }
 static void documentEventBridge(void *context, const char *event) {
-    hostRunOnWorker(^{ goDocumentEvent(context, (char *)event); });
+    hostRunOnWorker(^{ sp_host_callback_document_event(context, (char *)event); });
 }
 
 static void documentMessageBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ goDocumentMessage(context, (char *)message); });
+    hostRunOnWorker(^{ sp_host_callback_document_message(context, (char *)message); });
 }
 
 static void viewMessageBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ goViewMessage(context, (char *)message); });
+    hostRunOnWorker(^{ sp_host_callback_view_message(context, (char *)message); });
 }
 
 static void viewEndedBridge(void *context) {
-    hostRunOnWorker(^{ goViewEnded(context); });
+    hostRunOnWorker(^{ sp_host_callback_view_ended(context); });
 }
 
 static void documentStreamBridge(void *context, const char *message) {
-    hostRunOnWorker(^{ goDocumentStream(context, (char *)message); });
+    hostRunOnWorker(^{ sp_host_callback_document_stream(context, (char *)message); });
 }
 
 static void documentQueriedBridge(void *context, const char *reply) {
-    hostRunOnWorker(^{ goDocumentQueried(context, (char *)reply); });
+    hostRunOnWorker(^{ sp_host_callback_document_queried(context, (char *)reply); });
 }
 
 static void documentQuery(void *document, uintptr_t context) {
@@ -74,7 +66,7 @@ static void documentSetViewEnded(void *document, uintptr_t context) {
     hostRunOnMain(^{ sp_document_set_view_ended(document, viewEndedBridge, (void *)context); });
 }
 static void viewResponsivenessBridge(void *context, bool responsive) {
-    hostRunOnWorker(^{ goViewResponsiveness(context, responsive); });
+    hostRunOnWorker(^{ sp_host_callback_view_responsiveness(context, responsive); });
 }
 static const char *documentBinaryTake(void *document, const char *id, void **bytes, size_t *length) {
     return ON_MAIN(const char *, sp_document_binary_take(document, id, bytes, length));
@@ -155,34 +147,34 @@ var viewEnds = map[unsafe.Pointer]handles.Handle{}
 var viewResponsivenesses = map[unsafe.Pointer]handles.Handle{}
 var documentStreams = map[unsafe.Pointer]handles.Handle{}
 
-//export goDocumentChanged
-func goDocumentChanged(context unsafe.Pointer, state *C.char) {
+//export goHost_document_changed
+func goHost_document_changed(context unsafe.Pointer, state *C.char) {
 	changed := handles.Handle(uintptr(context)).Value().(func(string))
 	changed(C.GoString(state))
 }
 
-//export goDocumentMessage
-func goDocumentMessage(context unsafe.Pointer, value *C.char) {
+//export goHost_document_message
+func goHost_document_message(context unsafe.Pointer, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
-//export goViewMessage
-func goViewMessage(context unsafe.Pointer, value *C.char) {
+//export goHost_view_message
+func goHost_view_message(context unsafe.Pointer, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
-//export goViewEnded
-func goViewEnded(context unsafe.Pointer) {
+//export goHost_view_ended
+func goHost_view_ended(context unsafe.Pointer) {
 	handles.Handle(uintptr(context)).Value().(func())()
 }
 
-//export goViewResponsiveness
-func goViewResponsiveness(context unsafe.Pointer, responsive C.bool) {
+//export goHost_view_responsiveness
+func goHost_view_responsiveness(context unsafe.Pointer, responsive C.bool) {
 	handles.Handle(uintptr(context)).Value().(func(bool))(bool(responsive))
 }
 
-//export goDocumentStream
-func goDocumentStream(context unsafe.Pointer, value *C.char) {
+//export goHost_document_stream
+func goHost_document_stream(context unsafe.Pointer, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 
@@ -190,11 +182,11 @@ func goDocumentStream(context unsafe.Pointer, value *C.char) {
 var coreRootSet bool
 var coreRootHandle handles.Handle
 
-// goCoreRootServe answers one request of the core root of a view with the resolver that SetCoreRoot registered. It returns false
+// goHost_core_root_serve answers one request of the core root of a view with the resolver that SetCoreRoot registered. It returns false
 // for a path that the resolver does not serve. The file is copied to memory that the native scheme releases.
 //
-//export goCoreRootServe
-func goCoreRootServe(context unsafe.Pointer, plugin, urlPath *C.char, bytes *unsafe.Pointer, length *C.size_t, contentType **C.char) C.bool {
+//export goHost_core_root_serve
+func goHost_core_root_serve(context unsafe.Pointer, plugin, urlPath *C.char, bytes *unsafe.Pointer, length *C.size_t, contentType **C.char) C.bool {
 	resolve := handles.Handle(uintptr(context)).Value().(platform.CoreRootResolver)
 	data, kind, found := resolve(C.GoString(plugin), C.GoString(urlPath))
 	if !found {
@@ -206,18 +198,18 @@ func goCoreRootServe(context unsafe.Pointer, plugin, urlPath *C.char, bytes *uns
 	return true
 }
 
-// goDocumentQueried receives the one reply of a query and releases its receiver.
+// goHost_document_queried receives the one reply of a query and releases its receiver.
 //
-//export goDocumentQueried
-func goDocumentQueried(context unsafe.Pointer, value *C.char) {
+//export goHost_document_queried
+func goHost_document_queried(context unsafe.Pointer, value *C.char) {
 	handle := handles.Handle(uintptr(context))
 	reply := handle.Value().(func(string))
 	handle.Delete()
 	reply(C.GoString(value))
 }
 
-//export goDocumentEvent
-func goDocumentEvent(context unsafe.Pointer, value *C.char) {
+//export goHost_document_event
+func goHost_document_event(context unsafe.Pointer, value *C.char) {
 	handles.Handle(uintptr(context)).Value().(func(string))(C.GoString(value))
 }
 

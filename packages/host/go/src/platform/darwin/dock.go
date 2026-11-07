@@ -8,11 +8,11 @@ package darwin
 #include "dock_menu.h"
 #include "window_facts.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The menu action runs its Go function on the worker, and the native calls run on the main thread (main_thread.h).
-extern void goDockNewWindow(void);
 static bool installDockMenu(void) {
-    return ON_MAIN(bool, appInstallDockMenu(^{ hostRunOnWorker(^{ goDockNewWindow(); }); }));
+    return ON_MAIN(bool, appInstallDockMenu(^{ hostRunOnWorker(^{ sp_host_callback_dock_new_window(); }); }));
 }
 static char *main_sp_dock_items(void) { return ON_MAIN(char *, sp_dock_items()); }
 static char *main_sp_menu_items(void) { return ON_MAIN(char *, sp_menu_items()); }
@@ -35,8 +35,8 @@ import (
 // dockNewWindow is the function that the new window item of the Dock menu calls.
 var dockNewWindow func()
 
-//export goDockNewWindow
-func goDockNewWindow() { routine.Go("dock-new-window", dockNewWindow) }
+//export goHost_dock_new_window
+func goHost_dock_new_window() { routine.Go("dock-new-window", dockNewWindow) }
 
 func (implementation) InstallDock(newWindow func()) error {
 	dockNewWindow = newWindow

@@ -15,12 +15,12 @@ package darwin
 #include "notifications.h"
 #include "document_view.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 // The callbacks run their Go functions on the worker, and the native calls of this file that use AppKit, WebKit or the capture
 // state run on the main thread (main_thread.h). The capture clock and the capture error need no thread.
-extern void goDocumentFrameIdentityDone(uintptr_t context, char *json, char *error);
 static void documentFrameIdentityDoneBridge(void *context, const char *json, const char *error) {
-	hostRunOnWorker(^{ goDocumentFrameIdentityDone((uintptr_t)context, (char *)json, (char *)error); });
+	hostRunOnWorker(^{ sp_host_diagnostic_callback_document_frame_identity_done((uintptr_t)context, (char *)json, (char *)error); });
 }
 static bool scheduleDocumentFrameIdentityStart(void *document, uint64_t generation, uintptr_t context) {
 	return ON_MAIN(bool, sp_document_frame_identity_start(document, generation, documentFrameIdentityDoneBridge, (void *)context));
@@ -32,9 +32,8 @@ static bool scheduleDocumentFrameIdentityRemove(uint64_t generation, uintptr_t c
 	return ON_MAIN(bool, sp_document_frame_identity_remove(generation, documentFrameIdentityDoneBridge, (void *)context));
 }
 
-extern void goDeliveredNotifications(void *context, char *json);
 static void deliveredNotificationsBridge(void *context, const char *json) {
-    hostRunOnWorker(^{ goDeliveredNotifications(context, (char *)json); });
+    hostRunOnWorker(^{ sp_host_diagnostic_callback_delivered_notifications(context, (char *)json); });
 }
 static void listDeliveredNotifications(void) {
     hostRunOnMain(^{ sp_notifications_delivered(deliveredNotificationsBridge, NULL); });
@@ -175,8 +174,8 @@ func (implementation) CaptureClock() float64 { return float64(C.sp_capture_clock
 // deliveredDone receives the result of the notification query in progress.
 var deliveredDone func(string)
 
-//export goDeliveredNotifications
-func goDeliveredNotifications(_ unsafe.Pointer, json *C.char) {
+//export goHost_delivered_notifications
+func goHost_delivered_notifications(_ unsafe.Pointer, json *C.char) {
 	deliveredDone(C.GoString(json))
 }
 
@@ -261,8 +260,8 @@ func scheduleDocumentFrameIdentity(operation string, generation uint64, done fun
 	return nil
 }
 
-//export goDocumentFrameIdentityDone
-func goDocumentFrameIdentityDone(context C.uintptr_t, reply *C.char, nativeError *C.char) {
+//export goHost_document_frame_identity_done
+func goHost_document_frame_identity_done(context C.uintptr_t, reply *C.char, nativeError *C.char) {
 	handle := handles.Handle(context)
 	done := handle.Value().(func(json.RawMessage, error))
 	handle.Delete()

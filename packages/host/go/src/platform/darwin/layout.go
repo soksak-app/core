@@ -9,6 +9,7 @@ package darwin
 #include <string.h>
 #include "surface_layout.h"
 #include "main_thread.h"
+#include "host_callbacks.h"
 
 void nativeWindowLayoutBegin(uintptr_t window, uint64_t ticket, uintptr_t callback);
 void nativeWindowStartPage(uintptr_t window, uint64_t ticket, double height, uintptr_t callback);
@@ -17,8 +18,11 @@ bool nativeWindowJoinView(uintptr_t window, uint64_t ticket, void *view, uintptr
 void *nativeWindowMainPresentation(uintptr_t window);
 void nativeWindowAfterSettled(uintptr_t window, void *present, uintptr_t callback);
 void *nativeFunctionPresentation(uintptr_t present);
-void nativeWindowPresented(void *presented, const char *error);
 void nativeLayoutObserve(void);
+
+static void main_sp_host_presentation_complete(void *completion, const char *failure) {
+    hostRunOnMain(^{ sp_host_presentation_complete(completion, failure); });
+}
 
 // The native calls of this file run on the main thread (main_thread.h).
 static bool main_surfaceLayoutCommit(uintptr_t window, uint64_t ticket) { return ON_MAIN(bool, surfaceLayoutCommit((void *)window, ticket)); }
@@ -98,8 +102,8 @@ func (implementation) StartPageTitlebar(window platform.Window, ticket uint64, h
 	return nil
 }
 
-//export goNativeStartPageReady
-func goNativeStartPageReady(value C.uintptr_t, failure *C.char) {
+//export goHost_native_start_page_ready
+func goHost_native_start_page_ready(value C.uintptr_t, failure *C.char) {
 	handle := handles.Handle(value)
 	ready := handle.Value().(func(error))
 	handle.Delete()
@@ -110,8 +114,8 @@ func goNativeStartPageReady(value C.uintptr_t, failure *C.char) {
 	ready(errors.New(C.GoString(failure)))
 }
 
-//export goNativeLayoutReady
-func goNativeLayoutReady(value C.uintptr_t, allowed C.bool) {
+//export goHost_native_layout_ready
+func goHost_native_layout_ready(value C.uintptr_t, allowed C.bool) {
 	handle := handles.Handle(value)
 	ready := handle.Value().(func(bool))
 	handle.Delete()
@@ -127,8 +131,8 @@ func (implementation) AfterPresentation(window platform.Window, done func()) err
 	return nil
 }
 
-//export goNativePresentationDone
-func goNativePresentationDone(value C.uintptr_t) {
+//export goHost_native_presentation_done
+func goHost_native_presentation_done(value C.uintptr_t) {
 	handle := handles.Handle(value)
 	done := handle.Value().(func())
 	handle.Delete()
@@ -152,8 +156,8 @@ func (implementation) FunctionPresentation(present func(func(error)) error) (uns
 	return C.nativeFunctionPresentation(C.uintptr_t(handles.NewHandle(present))), nil
 }
 
-//export goNativeSettledPresent
-func goNativeSettledPresent(value C.uintptr_t, presented unsafe.Pointer) {
+//export goHost_native_settled_present
+func goHost_native_settled_present(value C.uintptr_t, presented unsafe.Pointer) {
 	present := handles.Handle(value).Value().(func(func(error)) error)
 	var once sync.Once
 	finish := func(err error) {
@@ -163,7 +167,7 @@ func goNativeSettledPresent(value C.uintptr_t, presented unsafe.Pointer) {
 				text = C.CString(err.Error())
 				defer C.free(unsafe.Pointer(text))
 			}
-			C.nativeWindowPresented(presented, text)
+			C.main_sp_host_presentation_complete(presented, text)
 		})
 	}
 	if err := present(finish); err != nil {
@@ -171,8 +175,8 @@ func goNativeSettledPresent(value C.uintptr_t, presented unsafe.Pointer) {
 	}
 }
 
-//export goNativeSettledPresentEnded
-func goNativeSettledPresentEnded(value C.uintptr_t) { handles.Handle(value).Delete() }
+//export goHost_native_settled_present_ended
+func goHost_native_settled_present_ended(value C.uintptr_t) { handles.Handle(value).Delete() }
 
 // layoutStarted and layoutEnded are the functions of the observer that ObserveLayout registered.
 var layoutStarted, layoutEnded func(window platform.Window)
@@ -183,19 +187,19 @@ func (implementation) ObserveLayout(started, ended func(platform.Window)) error 
 	return nil
 }
 
-//export goNativeLayoutStarted
-func goNativeLayoutStarted(window C.uintptr_t) { layoutStarted(platform.Window(window)) }
+//export goHost_native_layout_started
+func goHost_native_layout_started(window C.uintptr_t) { layoutStarted(platform.Window(window)) }
 
-//export goNativeLayoutEnded
-func goNativeLayoutEnded(window C.uintptr_t) { layoutEnded(platform.Window(window)) }
+//export goHost_native_layout_ended
+func goHost_native_layout_ended(window C.uintptr_t) { layoutEnded(platform.Window(window)) }
 
 func (implementation) InjectSettledFailure(platform.Window) error {
 	C.main_surfaceLayoutInjectSettledFailure()
 	return nil
 }
 
-//export goNativeSettledDone
-func goNativeSettledDone(value C.uintptr_t, displayed C.double, message *C.char) {
+//export goHost_native_settled_done
+func goHost_native_settled_done(value C.uintptr_t, displayed C.double, message *C.char) {
 	handle := handles.Handle(value)
 	done := handle.Value().(func(float64, error))
 	handle.Delete()
