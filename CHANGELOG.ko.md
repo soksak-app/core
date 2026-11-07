@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F502-11: 정확히 고정된 mygo source에서 launch·show 활성화와 application 소유 lifecycle 제어를 검증했다. 선언된 default 전체 module·vet 세 profile·tagged runtime-check 두 profile이 통과하며, 앞선 module-cache 실패와 별도의 F502-3 main-stack 실패는 보존한다.
+
 - F502-13-2: Clean host 앱 세 개에서 기존 1 pt 기준과 run audit로 workbench geometry를 검증했다. Add picker·rename·card sidebar 상태 안에서 정리 전 원본 PNG를 보존하고 15개를 모두 직접 확인했다. 소유권·바이트 보존 검사 3개가 통과하며 F502-4·F685·G8은 별도로 남는다.
 
 - F584-5: 다시 빌드한 Wails·Tauri·mygo에서 기본 virtual-input tier를 검증했다. Input·HWP 사례 71개가 skip 없이 모두 통과했고 같은 boot·동일 activation count를 확인한 비활성 session 증명 62개를 보존했다. System이 필요한 activation check 8개와 각각의 이유는 유지하며 startup activation과 G8 성능 인수는 별도다.
