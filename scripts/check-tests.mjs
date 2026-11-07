@@ -150,7 +150,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/platform/darwin/darwin.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/cmd/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
@@ -206,6 +206,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin window", "objective-c", ["native/darwin/src/window_*.m"], ["native/darwin/tests/window_*_test.m"], { sharedTests: true }),
   lane("Darwin host callbacks", "objective-c", ["native/darwin/src/host_callbacks.m"], ["native/darwin/tests/host_callbacks_test.m"], { sharedTests: true }),
   lane("Host callback binding generation", "js-ts", ["scripts/check-host-callbacks.mjs"], ["scripts/test/host-callbacks.test.mjs"]),
+  lane("Host native API binding generation", "js-ts", ["scripts/check-host-api.mjs"], ["scripts/test/host-api.test.mjs"]),
   lane("Darwin signal masks", "objective-c", ["native/darwin/src/signals.m"], ["native/darwin/tests/signals_test.m"], { sharedTests: true }),
   lane("Darwin main-thread dispatch", "objective-c", ["native/darwin/src/main_thread.m"], ["native/darwin/tests/main_thread_test.m"], { sharedTests: true }),
   lane("Darwin UI queue", "objective-c", ["native/darwin/src/ui_queue.m"], ["native/darwin/tests/ui_queue_test.m"], { sharedTests: true }),
@@ -230,7 +231,24 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Wails environment declaration", "declaration", ["apps/wailsv3/environment.json"], ["apps/wailsv3/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("mygo environment declaration", "declaration", ["apps/mygo/environment.json"], ["apps/mygo/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Go host bridge", "js-ts", ["packages/host/go/src/bridge.js"], ["apps/wailsv3/test/runtime-contract.test.mjs"], { sharedTests: true }),
-  lane("Go host native webview bridge", "objective-c", ["packages/host/go/src/platform/darwin/webview.m"], ["packages/host/go/tests/documents_test.go"], { testLanguage: "go", sharedTests: true }),
+
+  // These are ownership links: native-operation tests and real host consumers retain their distinct scopes.
+  // The host-structure audit lane separately owns the AST thread-boundary guard; it is not runtime evidence.
+  lane("Darwin host dispatch callbacks", "objective-c", ["native/darwin/src/host_api_ui_queue.m", "native/darwin/src/host_api_dock.m", "native/darwin/src/host_api_memory_pressure.m", "native/darwin/src/host_api_termination.m"], ["packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go", "packages/host/mygo/tests/platform/darwin/main_thread_stack_test.go", "packages/host/go/tests/main_thread_test.go", "packages/host/go/tests/termination_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Darwin host event bridge", "objective-c", ["native/darwin/src/host_api_events.m"], ["packages/host/go/tests/event_native_platform_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("Darwin host document bridge", "objective-c", ["native/darwin/src/host_api_document.m"], ["packages/host/go/src/platform/darwin/document_test.go", "e2e/document-typing.test.mjs", "e2e/save-close.test.mjs"], { testLanguage: "go", testExtensions: new Set([".go", ".mjs"]), sharedTests: true }),
+  lane("Darwin host document diagnostic bridges", "objective-c", ["native/darwin/src/host_api_document_draw_covered.m", "native/darwin/src/host_api_document_viewport_marker.m"], ["native/darwin/tests/document_draw_covered_test.m", "native/darwin/tests/document_viewport_marker_test.m", "e2e/design-hosts.test.mjs", "e2e/view-display.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
+  lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs", "e2e/terminal-keyboard.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/terminal-view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs", "e2e/capture-frame-identity.test.mjs", "e2e/capture-document-frame-identity.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m", "e2e/real/terminal.test.mjs", "e2e/terminal-protocols.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
+  lane("Darwin host link bridge", "objective-c", ["native/darwin/src/host_api_link.m"], ["native/darwin/tests/link_test.m"], { testLanguage: "objective-c", sharedTests: true }),
+  lane("Darwin host notification bridge", "objective-c", ["native/darwin/src/host_api_notifications.m"], ["native/darwin/tests/notifications_test.m"], { testLanguage: "objective-c", sharedTests: true }),
+  lane("Darwin host object and exit bridges", "objective-c", ["native/darwin/src/host_api_page_objects.m", "native/darwin/src/host_api_window_objects.m", "native/darwin/src/host_api_process_exit.m"], ["e2e/modal-release.test.mjs", "e2e/reload-memory.test.mjs", "e2e/benchmark/main-page-footprint.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host process footprint bridge", "objective-c", ["native/darwin/src/host_api_process_footprint.m"], ["native/darwin/tests/host_api_process_footprint_test.m"], { testLanguage: "objective-c", sharedTests: true }),
+  lane("Darwin test native fixture", "objective-c", ["native/darwin/tests/support/host_test_api.m"], ["native/darwin/tests/host_test_api_test.m"], { sharedTests: true }),
+  lane("Darwin test native facade", "go", ["packages/host/go/tests/platform/darwin/stack_sampler.go"], ["packages/host/go/tests/platform/darwin/stack_sampler_test.go", "packages/host/mygo/tests/platform/darwin/main_thread_stack_test.go", "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { sharedTests: true }),
   lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("mygo workbench declarations", "declaration", ["packages/workbench-mygo/src/exposure.json"], ["scripts/test/check-exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -1691,8 +1709,8 @@ const FEATURE_LINKS = [
     id: "F686-6",
     implementation: [
       { file: "native/darwin/src/host_callbacks.h", symbol: "Contexts are integer handle tokens, never Go pointers" },
-      { file: "packages/host/go/src/platform/darwin/image.go", symbol: "func goHost_image_changed(context C.uintptr_t" },
-      { file: "packages/host/go/src/platform/darwin/document.go", symbol: "func goHost_core_root_serve(context C.uintptr_t" },
+      { file: "packages/host/go/src/platform/darwin/image.go", symbol: "func goHost_image_changed(context uintptr" },
+      { file: "packages/host/go/src/platform/darwin/document.go", symbol: "func goHost_core_root_serve(context uintptr" },
     ],
     tests: [
       { file: "packages/host/mygo/tests/platform/darwin/nativecallback/callbacks_test.go", id: "TestNativeCallbacksPreserveTheDeclaredABI" },
@@ -1707,7 +1725,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/signals.m", symbol: "int sp_block_async_signals(void)" },
       { file: "native/darwin/tests/host_callback_worker.m", symbol: "int sp_test_worker_probe(" },
       { file: "native/darwin/tests/host_callback_worker.m", symbol: "void sp_test_worker_present(" },
-      { file: "packages/host/go/src/platform/darwin/termination.go", symbol: "C.sp_block_async_signals()" },
+      { file: "packages/host/go/src/platform/darwin/termination.go", symbol: "native.SpBlockAsyncSignals()" },
     ],
     tests: [
       { file: "native/darwin/tests/signals_test.m", id: "main-thread asynchronous signals are blocked without changing fault masks" },
@@ -1722,8 +1740,8 @@ const FEATURE_LINKS = [
     id: "F686-4",
     implementation: [
       { file: "scripts/check-host-callbacks.mjs", symbol: "function renderPuregoCallbacks" },
-      { file: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go", symbol: "func (callbacks Callbacks) Bind()" },
-      { file: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings_diagnostics.go", symbol: "func (callbacks DiagnosticCallbacks) Bind()" },
+      { file: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings.go", symbol: "func Bind(callbacks abi.Callbacks)" },
+      { file: "packages/host/mygo/src/platform/darwin/nativecallback/callback_bindings_diagnostics.go", symbol: "func BindDiagnostic(callbacks abi.DiagnosticCallbacks)" },
       { file: "native/darwin/tests/host_callback_abi.m", symbol: "int sp_test_callback_run(void)" },
     ],
     tests: [
@@ -3094,7 +3112,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/window_facts.m", symbol: "char *sp_window_hit(void *handle, void *surfaceView, double x, double y) {" },
       { file: "native/darwin/src/surface_layout.m", symbol: "void surfaceLayoutObserve(void (^started)(void *), void (^ended)(void *)) {" },
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutPresent surfaceLayoutMainPresentation(void *handle) {" },
-      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "surfaceLayoutAfterSettled(handle, (surfaceLayoutPresent)present, " },
+      { file: "native/darwin/src/webview.m", symbol: "surfaceLayoutAfterSettled(handle, (surfaceLayoutPresent)present, " },
       { file: "packages/host/rust/src/platform/darwin/layout.rs", symbol: "surfaceLayoutAfterSettled(window as *mut c_void, present as *mut c_void, &done)" },
     ],
     tests: [
@@ -6160,7 +6178,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/tauriv2/src/bindings.rs", symbol: "project_open" },
       { file: "packages/host/go/src/projects.go", symbol: "ProjectOpen" },
-      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "nativeWindowPrepare" },
+      { file: "native/darwin/src/webview.m", symbol: "nativeWindowPrepare" },
     ],
     tests: [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
@@ -7070,7 +7088,7 @@ const FEATURE_LINKS = [
     id: "F145.10.2",
     implementation: [
       { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_webview_log_process_end" },
-      { file: "packages/host/go/src/platform/darwin/webview.m", symbol: "webViewWebContentProcessDidTerminate" },
+      { file: "native/darwin/src/webview.m", symbol: "webViewWebContentProcessDidTerminate" },
     ],
     tests: [
       { file: "native/darwin/tests/webview_process_test.m", id: "the end of the WebContent process is recorded with the address" },
