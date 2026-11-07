@@ -173,7 +173,7 @@ func (s *Surfaces) showModal(win Frontend, req OverlayRequest) (Rect, error) {
 			s.modal = nil
 		}
 		s.mu.Unlock()
-		s.setBackground(false)
+		s.setBackground()
 		return Rect{}, fmt.Errorf("create modal webview: %w", err)
 	}
 	mainThreadStep(func() {
@@ -274,13 +274,13 @@ func (s *Surfaces) hideModal(id string, release bool) error {
 	if view != nil {
 		view.Close()
 	}
-	s.setBackground(false)
+	s.setBackground()
 	s.windowChanged()
 	return nil
 }
 
-// discardOverlay removes the modal of the previous main document when a navigation commits. Its DOM and reply
-// callbacks are gone, so the native view has no owner.
+// discardOverlay ends the background claims and modal of the previous
+// workbench. Its callbacks are gone, so neither claim has a live owner.
 func (s *Surfaces) discardOverlay() {
 	s.mu.Lock()
 	var view *nativeWebview
@@ -288,12 +288,13 @@ func (s *Surfaces) discardOverlay() {
 		view = s.modal.view
 	}
 	s.modal = nil
+	s.workbenchDialog = false
 	s.mu.Unlock()
 	s.invoke(s.endModalHold)
 	if view != nil {
 		view.Close()
 	}
-	s.setBackground(false)
+	s.setBackground()
 }
 
 // OverlayUpdate changes the content of an open modal without recreating the view. A modal whose controls change the page state
@@ -387,7 +388,6 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 	live := s.modal
 	first := live != nil && live.id == id && live.instance == instance && !live.shown
 	current := live != nil && live.id == id && live.instance == instance
-	dialog := first && live.content.Mode == "dialog"
 	view := (*nativeWebview)(nil)
 	if first {
 		view = live.view
@@ -409,7 +409,7 @@ func (s *Surfaces) ModalReady(id string, instance uint64) error {
 	if view == nil {
 		return fmt.Errorf("modal ready without a native webview: %s", id)
 	}
-	s.setBackground(dialog)
+	s.setBackground()
 	mainThreadStep(func() {
 		system.ConfigureModal(view.handle, live.content.Title, live.radius)
 		system.SetWebviewHidden(view.handle, false)
@@ -466,16 +466,19 @@ func (s *Surfaces) setWorkbenchDialog(enabled bool) {
 	s.workbenchDialog = enabled
 	s.mu.Unlock()
 	s.invoke(func() {
-		s.setDocumentsBackground(enabled)
+		// Read the combined owners in the UI step that updates native state.
+		s.setDocumentsBackground(s.dialog())
 	})
 }
 
-// setBackground tells the main document and the surface documents whether a dialog is open.
-func (s *Surfaces) setBackground(enabled bool) {
-	if win, ok := s.window, s.window != nil; ok {
-		win.CallWorkbench(fmt.Sprintf("window.__soksakBackground = %t", enabled))
-	}
+// setBackground publishes current combined dialog ownership on the UI thread.
+// Ending one claim must not clear another owner's background.
+func (s *Surfaces) setBackground() {
 	s.invoke(func() {
+		enabled := s.dialog()
+		if win, ok := s.window, s.window != nil; ok {
+			win.CallWorkbench(fmt.Sprintf("window.__soksakBackground = %t", enabled))
+		}
 		s.setDocumentsBackground(enabled)
 	})
 }

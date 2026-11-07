@@ -69,7 +69,7 @@ for (const app of Object.values(APPS)) {
   for (const [name, key, options] of [["Escape", "Escape", {}], ["a character", "q", { text: "q" }]]) {
     test(`${app.name}: ${name} pressed as the add picker opens does not reach the terminal`, async (t) => {
       const s = await open(t, app);
-      await fresh(s, { log: { input: "info" }, reads: ["native.record.info"] });
+      await fresh(s, { log: { input: "info", lifecycle: "info" }, reads: ["native.record.info"] });
       const [{ surface }] = await ensureTerminals(s, 1);
       await s.presented();
       await focusTerminal(s, surface);

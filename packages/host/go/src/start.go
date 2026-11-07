@@ -144,6 +144,8 @@ func (h *Host) pageStarting(s *Surfaces) error {
 	s.imageDetachPageStarting()
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
 	s.pageStarted()
+	// Dialog claims belong to the ended workbench, even if its surface reload fails.
+	s.discardOverlay()
 	routine.Go("windows-changed", h.windowsChanged)
 	var detachments []imageDetachTarget
 	var reloadErr error
@@ -156,6 +158,5 @@ func (h *Host) pageStarting(s *Surfaces) error {
 	if err := s.beginImageDetaches(detachments); err != nil {
 		return fmt.Errorf("page reload image detach: %w", err)
 	}
-	s.discardOverlay()
 	return nil
 }
