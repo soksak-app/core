@@ -2284,6 +2284,20 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F584-2",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "*equivalent = [window performKeyEquivalent:event] || [NSApp.mainMenu performKeyEquivalent:event];" },
+      { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_send_key_to_web_view(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+C runs copy: once through the Copy item" },
+      { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+V runs paste: once through the Paste item" },
+      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+    ],
+    expected: "Virtual-key Command+C and Command+V take the menu/responder equivalent path once while another application remains active, with actual copy/paste verified on mygo, Wails and Tauri.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F584-4",
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "sp_document_draw_covered" },
