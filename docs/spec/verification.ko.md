@@ -8,6 +8,8 @@ View display acceptance는 설치되고 활성화된 view plugin을 열거하고
 
 macOS에서는 검사 전용 executable의 공개 Vision text recognizer로 녹화된 view content를 확인한다. 설치된 각 view에는 선언 readiness와 고정된 예상 text가 있다. Browser empty-state 안내문, editor text fixture, HWP fixture 문단 및 terminal 출력 marker를 사용한다. 전체 녹화를 decode하고 확정 frame count를 확인하며 마지막 frame crop에 예상 text가 있어야 한다. Crop은 적용된 view rectangle과 capture content origin 및 scale을 정확히 한 번 적용한다. Recognition은 application이나 rendering 경로에서 실행하지 않는다. Captured-pixel verifier 없이 readiness만 제공하는 case는 거부한다.
 
+capture recognizer는 같은 Accurate 요청 factory의 인식 level·언어 설정·correction·revision·지원 stage/device map을 관찰하는 --compute-devices 진단을 노출한다. 추론 실행·device 지정·실제 인식 경로 변경은 수행하지 않는다. Device 지원이 인식 성공이나 백그라운드 권한의 근거는 아니다. 사전 CPU 지정 후보는 지정·readback 검사를 통과했지만 실제 warm-up에서 64.718초 뒤 E5RT code 13으로 실패해 실행 정책 변경을 제거했다. 미해결 recognizer 실패와 production 성능 acceptance는 구분한다. 참조: [Apple supported compute stages](https://developer.apple.com/documentation/vision/vnrequest/supportedcomputestagedevices).
+
 Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. 멈춘 capture folder는 session finalization까지 성공한 뒤에만 제거하며 decoding, geometry 또는 finalization이 실패하면 보존한다.
 
 작업 상태 정본은 [기능 상태](../features.ko.md)다. 소스 파일 목록은 구조적 증거일 뿐 기능 동등성이나 애플리케이션의 정상 동작을 판정하지 않는다.

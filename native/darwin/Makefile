@@ -241,7 +241,7 @@ $(BUILD)/site_cost_test: tests/site_cost_test.m tests/support/site_cost.m tests/
 
 # Vision reads captured pixels only in this check executable, outside application rendering.
 $(BUILD)/capture_text_test: tests/capture_text_test.m tests/support/no_activation.m | $(BUILD)
-	@clang $(CFLAGS) $< tests/support/no_activation.m -framework Foundation -framework AppKit -framework Vision -framework CoreText -o $@
+	@clang $(CFLAGS) $< tests/support/no_activation.m -framework Foundation -framework AppKit -framework Vision -framework CoreText -framework CoreML -o $@
 
 build-capture-text-path: $(BUILD)/capture_text_test
 	@printf '%s\n' '$(abspath $(BUILD)/capture_text_test)'

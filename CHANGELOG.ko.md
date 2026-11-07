@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F691-1: capture recognizer의 관찰 전용 --compute-devices 명령으로 Accurate Vision 요청 설정과 지원 compute stage·device를 노출한다. 실제 인식 동작은 유지한다. 명시적 CPU 후보도 실제 warm-up에서 E5RT code 13으로 실패해 제거했으며 capability 보고는 OCR·G8-S5 통과 근거가 아니다.
+
 - F692: host surface input monitor를 기존 native observer 입구로 등록한다. 등록과 정확한 전달 횟수를 관찰하고 반환 token을 제거하면 전달이 끝난다. Native 소유 검사와 기존 source guard가 통과하며 직접 등록 금지는 유지한다.
 
 - F687-3: 관리되는 모든 mygo Go profile에 CGO_ENABLED=0을 적용한다. 선택된 공개 import와 pkg-config 선언으로 production·test artifact를 해석하고 발견부터 실행까지 같은 환경을 전달한다. 두 cgo static 입력을 cache key에 반영하며 일반 linker flag와 cgo 전용 flag를 구분한다. Artifact 경로를 수동 지정하지 않은 callback·worker·sampler·loader 소유 case가 통과하고 Wails는 cgo profile을 유지한다.

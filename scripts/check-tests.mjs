@@ -267,6 +267,19 @@ const CAPTURE_REQUIREMENT_PLATFORMS = {
 };
 const FEATURE_LINKS = [
   {
+    id: "F691-1",
+    implementation: [
+      { file: "native/darwin/tests/capture_text_test.m", symbol: "static VNRecognizeTextRequest *textRequest(void) {" },
+      { file: "native/darwin/tests/capture_text_test.m", symbol: "static int computeDevices(void) {" },
+      { file: "native/darwin/tests/capture_text_test.m", symbol: 'if (argc == 2 && strcmp(argv[1], "--compute-devices") == 0) return computeDevices();' },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/capture-text-target.test.mjs", id: "the accurate capture recognizer reports its public supported compute devices" },
+    ],
+    expected: "The native --compute-devices query reports public supported Vision compute stages and device kinds from the same accurate, language-correction-disabled request factory as recognition. It performs no inference and assigns no compute device; recognition device-selection semantics are unchanged. This capability report does not establish OCR success or S5 measurements.",
+    levels: ["unit", "native"],
+  },
+  {
     id: "F692",
     implementation: [
       { file: "native/darwin/src/host_api_input.m", symbol: 'sp_observe_local_monitor("host_input.surface", SP_OBSERVE_COUNT, mask,' },

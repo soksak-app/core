@@ -2,6 +2,7 @@
 #import <Foundation/Foundation.h>
 #import <Vision/Vision.h>
 #import <CoreText/CoreText.h>
+#import <CoreML/CoreML.h>
 #include <errno.h>
 #include <string.h>
 
@@ -28,10 +29,52 @@ static BOOL isRecognizerFailure(NSError *error) {
     return [error.domain isEqualToString:@"capture.text"] && error.code == RecognizerFailed;
 }
 
-static NSArray<NSString *> *recognize(CGImageRef image, NSString *language, PerformRequests perform, NSError **error) {
+static VNRecognizeTextRequest *textRequest(void) {
     VNRecognizeTextRequest *request = [[VNRecognizeTextRequest alloc] init];
     request.recognitionLevel = VNRequestTextRecognitionLevelAccurate;
     request.usesLanguageCorrection = NO;
+    return request;
+}
+
+// Observe public capabilities without performing inference or assigning a compute device.
+// Real captured-pixel requests use this same factory with the original Vision device-selection semantics.
+static int computeDevices(void) {
+    VNRecognizeTextRequest *request = textRequest();
+    NSError *error = nil;
+    NSDictionary *supported = [request supportedComputeStageDevicesAndReturnError:&error];
+    if (!supported || supported.count == 0) {
+        fprintf(stderr, "error: no supported Vision compute stages: %s\n", error ? error.description.UTF8String : "empty device map");
+        return RecognizerFailed;
+    }
+    NSMutableDictionary *stages = [NSMutableDictionary dictionary];
+    for (VNComputeStage stage in supported) {
+        NSMutableArray *devices = [NSMutableArray array];
+        for (id<MLComputeDeviceProtocol> device in supported[stage]) {
+            if ([device isKindOfClass:MLCPUComputeDevice.class]) [devices addObject:@"cpu"];
+            else if ([device isKindOfClass:MLGPUComputeDevice.class]) [devices addObject:@"gpu"];
+            else if ([device isKindOfClass:MLNeuralEngineComputeDevice.class]) [devices addObject:@"neuralEngine"];
+            else {
+                fprintf(stderr, "error: unsupported Vision compute device %s\n", NSStringFromClass([device class]).UTF8String);
+                return RecognizerFailed;
+            }
+        }
+        stages[stage] = devices;
+    }
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{
+        @"recognitionLevel": request.recognitionLevel == VNRequestTextRecognitionLevelAccurate ? @"accurate" : @"fast",
+        @"recognitionLanguages": request.recognitionLanguages, @"usesLanguageCorrection": @(request.usesLanguageCorrection),
+        @"revision": @(request.revision), @"stages": stages
+    } options:NSJSONWritingSortedKeys error:&error];
+    if (!data) {
+        fprintf(stderr, "error: compute device report: %s\n", error.description.UTF8String);
+        return RecognizerFailed;
+    }
+    printf("%s\n", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
+    return 0;
+}
+
+static NSArray<NSString *> *recognize(CGImageRef image, NSString *language, PerformRequests perform, NSError **error) {
+    VNRecognizeTextRequest *request = textRequest();
     NSError *cause = nil;
     NSArray *languages = [request supportedRecognitionLanguagesAndReturnError:&cause];
     if (!languages) {
@@ -176,6 +219,7 @@ static int warm(int argc, const char **argv) {
 
 int main(int argc, const char **argv) {
     @autoreleasepool {
+        if (argc == 2 && strcmp(argv[1], "--compute-devices") == 0) return computeDevices();
         if (argc >= 2 && strcmp(argv[1], "--warm") == 0) return warm(argc, argv);
         if (argc != 1) return readCapture(argc, argv);
         CGContextRef context = whiteContext();
