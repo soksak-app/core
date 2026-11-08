@@ -6,14 +6,14 @@
 // Rust tests without executing test bodies. Neither check uses file names or counts to infer coverage.
 import { parseArgs } from 'node:util';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statfsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, readdirSync, realpathSync, statfsSync } from 'node:fs';
 import { isAbsolute, join, posix, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cpus } from 'node:os';
 import { tableCells } from './markdown-table.mjs';
 import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
 import { runTests } from './test-runner.mjs';
+import { temporaryFolder } from './temporary-folder.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SPEC = 'docs/spec/host-contract.md';
@@ -558,11 +558,11 @@ async function main(argv) {
   }
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
-  const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
+  const build = temporaryFolder('host-contract-');
   try {
-    return await runContract(values, cases, buildDir, write, concurrency);
+    return await runContract(values, cases, build.path, write, concurrency);
   } finally {
-    rmSync(buildDir, { recursive: true, force: true });
+    build.remove();
   }
 }
 

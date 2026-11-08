@@ -124,6 +124,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Node repeat tests", "js-ts", ["scripts/repeat-node.mjs"], ["scripts/test/repeat-node.test.mjs"]),
   lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
+  lane("Temporary folders of runs", "js-ts", ["scripts/temporary-folder.mjs"], ["scripts/test/temporary-folder.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platform-files.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
@@ -447,6 +448,16 @@ const FEATURE_LINKS = [
     ],
     expected: "A named key and a key with a stated text of the virtual key window reach a web view without its input context, so Backspace runs deleteBackward: and no key down reaches the input method.",
     levels: ["native"],
+  },
+  {
+    id: "F710",
+    implementation: [{ file: "scripts/temporary-folder.mjs", symbol: "export function temporaryFolder(prefix)" }],
+    tests: [
+      { file: "scripts/test/temporary-folder.test.mjs", id: "a run ended by SIGTERM removes its temporary folder and ends by SIGTERM" },
+      { file: "scripts/test/temporary-folder.test.mjs", id: "the Go test runner and the host contract run take their build folder from temporaryFolder" },
+    ],
+    expected: "The build folders of the Go test runner and of the host contract run are removed when a signal ends the run, and the signal still ends the process.",
+    levels: ["unit"],
   },
   {
     id: "F709",

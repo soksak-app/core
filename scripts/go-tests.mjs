@@ -9,13 +9,13 @@
 // Usage: node scripts/go-tests.mjs --package <pattern> [--tags <tags>] [--test <regexp>] [--count <n>] [--timeout <seconds>]
 //   [--ldflags <flags>]
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { loadavg, tmpdir } from 'node:os';
+import { loadavg } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
+import { temporaryFolder } from './temporary-folder.mjs';
 import { resolveGoNativeInputs } from './go-repeat-inputs.mjs';
 
 /** The limit of one test when `--timeout` is not given. */
@@ -52,7 +52,8 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     });
   const testable = packages.filter((item) => item.files > 0);
   if (testable.length === 0) throw new Error(`${pattern} has no test files built with tags '${tags}'`);
-  const folder = mkdtempSync(join(tmpdir(), 'soksak-go-tests-'));
+  const run = temporaryFolder('soksak-go-tests-');
+  const folder = run.path;
   try {
     const listed = [];
     for (const [index, item] of testable.entries()) {
@@ -90,7 +91,7 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     write(`${pattern}${test === undefined ? '' : ` ${test}`}: ${count} of ${count} runs pass`);
     return 0;
   } finally {
-    rmSync(folder, { recursive: true, force: true });
+    run.remove();
   }
 }
 
