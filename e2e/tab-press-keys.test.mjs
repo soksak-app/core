@@ -9,7 +9,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { assertReceivedUnchanged, lastTransaction, rasterProbeTab, readyRasterProbe, receivedAfter, typedText } from "./input-probe.mjs";
+import { assertReceivedUnchanged, lastTransaction, rasterProbeTab, readyRasterProbe, receivedAfter, tabElementIndex, typedText } from "./input-probe.mjs";
 
 const TYPED = "echo tabpress\n";
 // The keys of the hold and of the keyboard, so that a failure names where the keys stopped.
@@ -27,8 +27,9 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (now) => now.cards.find((item) => item.id === card)?.active === first,
       "the first tab did not become active");
     const start = await lastTransaction(s, second);
-    const index = (await s.get("core.grid")).cards.find((item) => item.id === card).tabs.findIndex((tab) => tab.id === second);
-    const rect = await s.rect("core.card.tab", index);
+    // The tab elements are numbered across every card, and the raster probes are in the focused card, after the tabs of the cards
+    // before it.
+    const rect = await s.rect("core.card.tab", tabElementIndex(await s.get("core.grid"), second));
     const x = (rect.document?.x ?? 0) + rect.x + rect.width / 2, y = (rect.document?.y ?? 0) + rect.y + rect.height / 2;
     // A pointer move that presses nothing makes the window the virtual key window.
     await s.pointer(x, y, "move");
