@@ -1,6 +1,8 @@
-// Starting layout of the core window checks. The default layout of diagnostics.fixture has a terminal tab, so the preparation opens
-// the layout through prepareFixture of the harness and waits until that terminal is ready (this module knows the terminal until
-// F25.2 replaces the core checks with a fixture plugin).
+// Starting layout of the core window checks. The checks run on the core fixtures only (docs/spec/plugin-processes.md#verification-boundaries):
+// each application has every plugin of the fixture registry pack `fixtures` installed, and no real plugin. diagnostics.fixture opens
+// the new-space layout that environment.json of the application declares (workspace.grid); its tabs name the plugins of the
+// published starter, which a fixture configuration does not load, so they open as placeholders. The preparation replaces each such
+// placeholder by a tab of the layout probe fixture `layoutprobe` in the same card and returns the tab of the focused card.
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,33 +10,81 @@ import { keepCommonSettings, prepareFixture, TRACE } from "@soksak/window-check/
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { catalogOf } from "../scripts/check-events.mjs";
 
-/** The shell of the window-check terminal. It avoids a prompt that depends on the profile of the login shell. */
-const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
-const CHECK_ZSH = fileURLToPath(new URL("./check-zsh", import.meta.url));
+/**
+ * The fixture plugin of the start tab: the layout probe (e2e/fixtures/layout-probe/layoutprobe). It reports its start values,
+ * surface size and document region, and declares the sections and sets that a card sidebar of a check shows. The plain-view probe
+ * reports none of these, so it is not the start tab.
+ */
+export const START_PLUGIN = "layoutprobe";
+
+/** The entries that a start tab has registered when it is ready for a check. */
+export const START_ENTRIES = Object.freeze(["status layoutprobe.view", "status layoutprobe.surface"]);
 
 /**
- * Puts an inner left sidebar on the terminal card. The default layout has no card sidebar, so a check of the card sidebar
- * adds the set set-files (files.tree, files.bookmarks, list) and the card-left link of the terminal to the common settings. When the check ends,
- * keepCommonSettings restores the set and the link together, so the caller does not reset sets separately.
+ * The tabs of the layout `grid` (core.grid) that `surfaces` (core.surfaces) report as placeholders, the tabs of plugins that are not
+ * loaded, as `{card, tab, plugin}` in the order of the cards and their tabs.
  */
-export async function terminalCardSidebar(s, { sections = ["files.tree", "files.bookmarks"] } = {}) {
+export function placeholderTabs(grid, surfaces) {
+  const placeholders = new Set(surfaces.filter((row) => row.kind === "tab" && row.placeholder != null).map((row) => row.surface));
+  return (grid?.cards ?? []).flatMap((card) => (card.tabs ?? []).filter((tab) => placeholders.has(tab.id))
+    .map((tab) => ({ card: card.id, tab: tab.id, plugin: tab.plugin })));
+}
+
+/**
+ * Replaces every placeholder tab of the start layout by a tab of START_PLUGIN in its card: the new tab is added and activated first,
+ * so the card never loses its last tab, and the placeholder tab is closed. Returns the new tabs as `{card, tab}`.
+ */
+export async function replacePlaceholders(s) {
+  const added = [];
+  for (const { card, tab } of placeholderTabs(await s.get("core.grid"), await s.get("core.surfaces"))) {
+    const { tab: opened } = await s.run("core.card.add-tab", { card, plugin: START_PLUGIN });
+    await s.run("core.tab.close", { tab });
+    added.push({ card, tab: opened });
+  }
+  return added;
+}
+
+/**
+ * Waits until the active tab of the focused card is a ready START_PLUGIN tab that registered START_ENTRIES, and returns it as
+ * `{surface, plugin}`. A start layout whose focused card holds no START_PLUGIN tab fails with the grid.
+ */
+export async function startTab(s) {
+  const grid = await s.get("core.grid");
+  const focused = grid?.cards.find((card) => card.focused);
+  const active = focused?.tabs?.find((tab) => tab.id === focused.active);
+  if (active?.plugin !== START_PLUGIN) {
+    throw new Error(`the focused card of the start layout holds no active ${START_PLUGIN} tab: ${JSON.stringify(grid?.cards ?? null)}`);
+  }
+  await s.until("core.surfaces", (surfaces) => surfaces.some((row) => row.surface === active.id && row.visible && row.status?.phase === "ready"),
+    `the start tab ${active.id} did not become ready`);
+  await s.registered(active.id, START_ENTRIES);
+  return { surface: active.id, plugin: START_PLUGIN };
+}
+
+/**
+ * Puts a card-left sidebar on each card whose active tab is a tab of `plugin` (START_PLUGIN by default). Without `sections` it links
+ * the set `set` that the plugin declares (the layout probe declares `layoutprobe.list`, list layout, and `layoutprobe.tabs`, tabs
+ * layout); with `sections` it first stores a common list set with the id `set` (by default `check-sections`) that holds those
+ * sections. keepCommonSettings restores the sets and the links when the check ends. Returns the ids of the card sidebars.
+ */
+export async function cardSidebar(s, { plugin = START_PLUGIN, set, sections } = {}) {
+  const id = set ?? (sections === undefined ? `${plugin}.list` : "check-sections");
   await keepCommonSettings(s);
-  const sets = (await s.get("core.settings")).values.sets;
-  await s.run("core.settings.set", { patch: { sets: [...sets,
-    { id: "set-files", title: "파일", sections, layout: "list" }] }, scope: "common" });
-  await s.run("core.settings.link", { place: "card-left", plugin: "terminal", set: "set-files", scope: "common" });
-  await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "terminal:left"),
-    "the terminal card sidebar did not appear");
+  if (sections !== undefined) {
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: [...sets, { id, title: "검사", sections, layout: "list" }] }, scope: "common" });
+  }
+  await s.run("core.settings.link", { place: "card-left", plugin, set: id, scope: "common" });
+  const cards = (await s.get("core.grid")).cards
+    .filter((card) => card.tabs?.find((tab) => tab.id === card.active)?.plugin === plugin).map((card) => `${card.id}:left`);
+  if (cards.length === 0) throw new Error(`no card shows an active ${plugin} tab for its card sidebar`);
+  await s.until("core.sidebars", (value) => cards.every((sidebar) => value.some((item) => item.sidebar === sidebar && item.set === id)),
+    `the card sidebars ${cards.join(", ")} did not show the set ${id}`);
+  return cards;
 }
 
 /** The event catalog of this repository (docs/spec/logging.md#catalog). */
 const CATALOG = fileURLToPath(new URL("../docs/spec/events.json", import.meta.url));
-
-export function terminalCheckShell(shell = "check") {
-  if (shell === "check") return CHECK_SHELL;
-  if (shell === "zsh") return CHECK_ZSH;
-  throw new Error(`unsupported terminal check shell ${JSON.stringify(shell)}`);
-}
 
 /**
  * The declarations of the records that a check reads: the catalog of this repository joined with the catalogs of the sidecars
@@ -51,12 +101,6 @@ async function registrationTimeline(s, offsets) {
   return traceRows(readEvents(s.app.configDir, offsets).events).filter((row) => row.event === "surface.registration");
 }
 
-/**
- * Puts the window in the start state of a check, waits until the terminal of the window check is ready with its fixed shell
- * fixture, and returns that terminal. `shell` is `check` by default or `zsh` for the tracked ZLE case. `log` is the log policy
- * that the check declares and `reads` the records below `error` that it reads (prepareFixture); with the performance trace the
- * registration timeline of a failed start is read too.
- */
 /** The file of the disposable configuration that holds the registry of the application while a check uses its own registry. */
 const heldRegistryFile = (s) => join(s.app.configDir, "check-registry.json");
 
@@ -78,55 +122,28 @@ export async function restoreRegistry(s) {
   rmSync(held);
 }
 
-export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = {}, reads = [], shell = "check" } = {}) {
+/**
+ * Puts the window in the start state of a check and returns the start tab `{surface, plugin}`: diagnostics.fixture opens the
+ * new-space layout, every placeholder tab of it is replaced by a START_PLUGIN tab (replacePlaceholders), and the active tab of the
+ * focused card is ready (startTab). `log` is the log policy that the check declares and `reads` the records below `error` that it
+ * reads (prepareFixture); with the performance trace the registration timeline of a failed start is read too.
+ */
+export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = {}, reads = [] } = {}) {
   const traceOffsets = currentEventOffsets(s.app.configDir);
   const declared = performanceTrace ? [...reads, "workbench.trace.surface.registration"] : reads;
-  const shellPath = terminalCheckShell(shell);
-  // Window checks use fixed shell fixtures; the activation ZLE case never reads user shell startup files.
-  await prepareFixture(s, { settings: { ...settings, "terminal.shell": shellPath }, performanceTrace, log, reads: declared,
-    catalog: declared.length ? recordCatalog(s.app) : undefined });
+  await prepareFixture(s, { settings, performanceTrace, log, reads: declared, catalog: declared.length ? recordCatalog(s.app) : undefined });
   // A record that remains belongs to an earlier run whose restore failed.
   await restoreRegistry(s);
-  let terminal;
+  let tab;
   try {
-    [terminal] = await terminalReady(s);
+    await replacePlaceholders(s);
+    tab = await startTab(s);
   } catch (error) {
     if (!performanceTrace) throw error;
     throw new Error(`${error.message}; registration timeline: ${JSON.stringify(await registrationTimeline(s, traceOffsets))}`, { cause: error });
   }
   await s.presented();
-  try {
-    await s.get("terminal.session", terminal.surface);
-  } catch (error) {
-    throw new Error(`terminal readiness returned stale surface ${terminal.surface}: ${error.message}; ` +
-      `current surfaces: ${JSON.stringify(await s.get("core.surfaces"))}`);
-  }
-  return terminal;
-}
-
-/** Waits until the visible terminal surfaces are registered and apply their theme, then returns those surfaces. */
-export async function terminalReady(s) {
-  await s.until("core.surfaces",
-    (all) => all.some((x) => x.visible && x.plugin === "terminal" &&
-      x.exposes.includes("status core.surface.document") &&
-      x.exposes.includes("status terminal.session") &&
-      x.exposes.includes("element terminal.view")),
-    "no visible terminal surface registered its document, session, and view");
-  // A notification that satisfies the predicate can describe the surface just before a reload replaces it.
-  // The function reads the current registry before it returns the id. It does not
-  // proceed with a stale surface id.
-  const active = new Set((await s.get("core.grid")).cards
-    .map((card) => card.active)
-    .filter(Boolean));
-  const terminals = (await s.surfaces("terminal")).filter((x) => active.has(x.surface) &&
-    x.exposes.includes("status core.surface.document") &&
-    x.exposes.includes("status terminal.session") &&
-    x.exposes.includes("element terminal.view"));
-  for (const terminal of terminals) {
-    await s.until("core.surface.document", (doc) => doc !== null && doc.readyState === "complete" && doc.themed,
-      `terminal ${terminal.surface} did not apply its theme`, { surface: terminal.surface });
-  }
-  return terminals;
+  return tab;
 }
 
 /**

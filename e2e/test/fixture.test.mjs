@@ -1,30 +1,10 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { restoreRegistry, terminalCheckShell, useRegistry } from "../fixture.mjs";
-
-test("the zsh activation fixture selects a fixed executable without user startup files", () => {
-  const path = terminalCheckShell("zsh");
-  const mode = statSync(path).mode;
-
-  assert.equal(path, fileURLToPath(new URL("../check-zsh", import.meta.url)));
-  assert.notEqual(mode & 0o111, 0, "the zsh fixture must be executable");
-  const result = spawnSync(path, [], { input: 'print -P -- "$PS1"\nexit\n', encoding: "utf8", timeout: 2000 });
-  assert.equal(result.error, undefined, result.error?.message);
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.replace(/\r?\n$/, ""), "zle-check% ",
-    "the zsh fixture must render the literal percent prompt marker");
-});
-
-test("the default window-check shell stays fixed and unsupported shell fixtures fail", () => {
-  assert.equal(terminalCheckShell(), fileURLToPath(new URL("../check-shell", import.meta.url)));
-  assert.throws(() => terminalCheckShell("login"), /unsupported terminal check shell "login"/);
-});
+import { cardSidebar, placeholderTabs, replacePlaceholders, restoreRegistry, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -61,4 +41,142 @@ test("a registry that a failed restore left is restored from the record of the f
   await useRegistry(s, "file:///third/index.json");
   await restoreRegistry(s);
   assert.equal(registry, "https://registry.example/index.json", "the record of an ended run was used again");
+});
+
+/**
+ * A fake session over a workbench state: core.grid, core.surfaces, core.settings and core.sidebars are read from `state`, the
+ * commands that fresh and cardSidebar run change it, `until` and `registered` check the current state once, and every call is
+ * recorded.
+ */
+function workbench(state) {
+  const calls = [];
+  let next = 0;
+  const s = {
+    calls, state, cleanups: [],
+    cleanup: (work) => s.cleanups.push(work),
+    get: async (name) => {
+      calls.push(["get", name]);
+      if (name === "core.grid") return structuredClone(state.grid);
+      if (name === "core.surfaces") return structuredClone(state.surfaces);
+      if (name === "core.settings") return structuredClone(state.settings);
+      if (name === "core.sidebars") return structuredClone(state.sidebars);
+      throw new Error(`unexpected status ${name}`);
+    },
+    run: async (name, params) => {
+      calls.push(["run", name, params]);
+      if (name === "core.card.add-tab") {
+        const tab = `added-${++next}`;
+        const card = state.grid.cards.find((item) => item.id === params.card);
+        card.tabs.push({ id: tab, plugin: params.plugin });
+        card.active = tab;
+        state.surfaces.push({ kind: "tab", surface: tab, plugin: params.plugin, visible: true, placeholder: null,
+          status: { phase: "ready" }, exposes: [...START_ENTRIES] });
+        return { tab };
+      }
+      if (name === "core.tab.close") {
+        for (const card of state.grid.cards) if (card.tabs) card.tabs = card.tabs.filter((tab) => tab.id !== params.tab);
+        state.surfaces = state.surfaces.filter((row) => row.surface !== params.tab);
+        return null;
+      }
+      if (name === "core.settings.set") { state.settings.values.sets = params.patch.sets; return null; }
+      if (name === "core.settings.link") {
+        for (const card of state.grid.cards) {
+          if (card.tabs?.find((tab) => tab.id === card.active)?.plugin === params.plugin) {
+            state.sidebars.push({ sidebar: `${card.id}:left`, set: params.set });
+          }
+        }
+        return null;
+      }
+      throw new Error(`unexpected command ${name}`);
+    },
+    until: async (name, predicate, message) => {
+      calls.push(["until", name]);
+      if (!predicate(await s.get(name))) throw new Error(message);
+    },
+    registered: async (surface, entries) => {
+      calls.push(["registered", surface, entries]);
+      const row = state.surfaces.find((item) => item.surface === surface);
+      if (!entries.every((entry) => row?.exposes.includes(entry))) throw new Error(`surface ${surface} did not register ${entries.join(", ")}`);
+    },
+  };
+  return s;
+}
+
+/** A new-space layout whose environment names plugins that the fixture pack does not install, so its tabs are placeholders. */
+function starterLayout() {
+  return {
+    grid: { cards: [
+      { id: "left", fixed: true, focused: false, active: null },
+      { id: "upper", focused: true, active: "t1", tabs: [{ id: "t1", plugin: "starter-a" }] },
+      { id: "lower", focused: false, active: "b1", tabs: [{ id: "b1", plugin: "starter-b" }] },
+    ] },
+    surfaces: [
+      { kind: "tab", surface: "t1", plugin: "starter-a", visible: true, placeholder: "missing", status: { phase: "loading" }, exposes: [] },
+      { kind: "tab", surface: "b1", plugin: "starter-b", visible: true, placeholder: "missing", status: { phase: "loading" }, exposes: [] },
+      { kind: "section", surface: "s1", plugin: "layoutprobe", visible: true, placeholder: null, status: { phase: "ready" }, exposes: [] },
+    ],
+    settings: { common: {}, values: { sets: [] } },
+    sidebars: [],
+  };
+}
+
+test("the placeholder tabs of a layout are the tabs that core.surfaces reports with a placeholder, in card order", () => {
+  const { grid, surfaces } = starterLayout();
+  assert.deepEqual(placeholderTabs(grid, surfaces), [
+    { card: "upper", tab: "t1", plugin: "starter-a" }, { card: "lower", tab: "b1", plugin: "starter-b" }]);
+  assert.deepEqual(placeholderTabs(grid, surfaces.map((row) => ({ ...row, placeholder: null }))), []);
+  assert.deepEqual(placeholderTabs(null, surfaces), []);
+});
+
+test("the start layout replaces each placeholder by a layout probe tab of its card and returns the ready tab of the focused card", async () => {
+  const s = workbench(starterLayout());
+  assert.deepEqual(await replacePlaceholders(s), [{ card: "upper", tab: "added-1" }, { card: "lower", tab: "added-2" }]);
+  // The new tab is added before the placeholder closes, so a card never loses its last tab.
+  assert.deepEqual(s.calls.filter(([kind]) => kind === "run").map(([, name, params]) => [name, params]), [
+    ["core.card.add-tab", { card: "upper", plugin: START_PLUGIN }], ["core.tab.close", { tab: "t1" }],
+    ["core.card.add-tab", { card: "lower", plugin: START_PLUGIN }], ["core.tab.close", { tab: "b1" }]]);
+  assert.deepEqual(s.state.grid.cards.map((card) => card.tabs?.map((tab) => tab.plugin)), [undefined, [START_PLUGIN], [START_PLUGIN]]);
+  assert.deepEqual(await startTab(s), { surface: "added-1", plugin: START_PLUGIN });
+  assert.deepEqual(s.calls.at(-1), ["registered", "added-1", START_ENTRIES]);
+  assert.equal(START_PLUGIN, "layoutprobe");
+});
+
+test("a start layout whose focused card holds no ready layout probe tab fails", async () => {
+  await assert.rejects(startTab(workbench(starterLayout())), /focused card of the start layout holds no active layoutprobe tab/);
+  const layout = starterLayout();
+  const s = workbench(layout);
+  await replacePlaceholders(s);
+  layout.surfaces.find((row) => row.surface === "added-1").status.phase = "loading";
+  await assert.rejects(startTab(s), /start tab added-1 did not become ready/);
+  layout.surfaces.find((row) => row.surface === "added-1").status.phase = "ready";
+  layout.surfaces.find((row) => row.surface === "added-1").exposes = ["status layoutprobe.view"];
+  await assert.rejects(startTab(s), /did not register status layoutprobe.view, status layoutprobe.surface/);
+});
+
+test("a card sidebar links a declared layout probe set or a stored set of the given sections to the cards of the plugin", async () => {
+  const s = workbench(starterLayout());
+  await replacePlaceholders(s);
+  assert.deepEqual(await cardSidebar(s), ["upper:left", "lower:left"]);
+  assert.deepEqual(s.calls.filter(([kind]) => kind === "run").at(-1),
+    ["run", "core.settings.link", { place: "card-left", plugin: START_PLUGIN, set: "layoutprobe.list", scope: "common" }]);
+  assert.equal(s.cleanups.length, 1, "the sets and links are restored when the check ends");
+
+  const tabs = workbench(starterLayout());
+  await replacePlaceholders(tabs);
+  await cardSidebar(tabs, { set: "layoutprobe.tabs" });
+  assert.ok(tabs.state.sidebars.every((item) => item.set === "layoutprobe.tabs"));
+  assert.equal(tabs.calls.some(([, name]) => name === "core.settings.set"), false, "a declared set is linked, not stored");
+
+  const own = workbench(starterLayout());
+  await replacePlaceholders(own);
+  await cardSidebar(own, { sections: ["layoutprobe.alpha", "layoutprobe.fill"] });
+  assert.deepEqual(own.state.settings.values.sets, [{ id: "check-sections", title: "검사", sections: ["layoutprobe.alpha", "layoutprobe.fill"], layout: "list" }]);
+  assert.ok(own.state.sidebars.every((item) => item.set === "check-sections"));
+  await assert.rejects(cardSidebar(workbench(starterLayout())), /no card shows an active layoutprobe tab/);
+});
+
+test("the start layout module names no real plugin and imports no terminal helper", () => {
+  const source = readFileSync(new URL("../fixture.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /terminal-screen|prepare-terminal|check-shell|check-zsh/);
+  assert.doesNotMatch(source, /["'](terminal|term|browser|files|editor|hwp)["'.]/);
 });

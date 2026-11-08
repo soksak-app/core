@@ -237,11 +237,6 @@
       "reason": "the files sections of the left sidebar mount as section surfaces and run the files commands on their surface: plugin:files; a files tree section mounts in a card sidebar beside the left sidebar: core (card sidebar section placement, fixture with a section view); a file that no plugin opens from the files tree section stays out of the error display: core (open-by-extension and error display, core.file.open with a probe); a double click on a file row of the files tree opens the file in an editor tab: plugin:files; two bookmarks that two views add at the same moment both stay: plugin:files; a bookmark that one window wrote reaches the window that opens the project after it: plugin:files."
     },
     {
-      "file": "e2e/fixture.mjs",
-      "owner": "tool",
-      "reason": "Core harness starting layout that hard-wires a terminal tab and waits for it to be ready; reduce it to a plain-view probe default layout (its own comment notes the F25.2 replacement)."
-    },
-    {
       "file": "e2e/footer.test.mjs",
       "owner": "core",
       "reason": "Checks the footer border under vertical drag and the active tab's footer text, using a terminal tab; plain-view probe that declares footer text."
