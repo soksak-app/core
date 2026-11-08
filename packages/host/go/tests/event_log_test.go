@@ -174,7 +174,7 @@ func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefu
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
-	if len(events) != 5 {
+	if len(events) < 5 {
 		t.Fatalf("events %v", events)
 	}
 	cids, ok := events[2]["cids"].([]any)
@@ -184,9 +184,17 @@ func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefu
 	if _, present := events[3]["cids"]; present {
 		t.Fatalf("an event without identifiers has cids: %v", events[3])
 	}
-	dropped := events[4]
-	if dropped["event"] != "log.dropped" || dropped["fields"].(map[string]any)["count"] != float64(4) {
-		t.Fatalf("the four refused events were not counted: %v", dropped)
+	// The writer turns the loss counters into log.dropped each time it writes what is queued, so the four refusals may be split
+	// over several log.dropped events whose counts add up to them (docs/spec/logging.md#writers).
+	var counted float64
+	for _, dropped := range events[4:] {
+		if dropped["event"] != "log.dropped" {
+			t.Fatalf("an event after the stored ones is not log.dropped: %v", dropped)
+		}
+		counted += dropped["fields"].(map[string]any)["count"].(float64)
+	}
+	if counted != 4 {
+		t.Fatalf("the four refused events were counted as %v: %v", counted, events[4:])
 	}
 }
 

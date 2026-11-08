@@ -20,6 +20,7 @@
 - F292-70-3: `flock`에서 기다리는 page process의 stall record는 기다리는 파일과 그 lock을 가진 process를 적거나, 둘 중 하나를 읽을 수 없는 이유를 적는다.
 - F702: `make check-breaks`의 복사본은 F669 이후 bounded command가 import하는 `scripts/test-command.mjs`를 갖고, `workspace-copy.test`는 복사한 part 밖의 workspace 파일을 import하는 복사 module을 거부한다. Red: test가 `scripts/bounded.mjs imports scripts/test-command.mjs`로 실패했다. Green: test가 통과하고 `pnpm check-breaks`가 break 143개를 모두 잡는다.
 - F606-1: darwin 전용 Go test 는 `tests/platform/darwin/system/` 아래 test package 이고 함께 쓰는 fixture 는 `tests/support` 에 있으며, mygo 빈 window benchmark 는 `benchmark/platform/darwin` 이다. 그래서 `GOOS=windows go vet ./...` 가 `packages/host/go` 와 `packages/host/mygo` 에서 모든 tag 조합으로 통과한다. boundary check 는 fixtures 폴더 안의 package manifest 를 그 폴더를 가진 package 의 test payload 로 본다.
+- F712: 저장된 correlation identifier 의 Go test 는 Rust test 처럼, 거부를 기록한 모든 `log.dropped` 의 count 를 더한다. writer 가 한 burst 의 거부를 나눌 수 있기 때문이다.
 - F711: mygo host 는 surface layout transaction 을 window 에 알리고, mygo fork line 은 release 2 에서 열린 transaction 이 잡은 drawable 을 main thread 에서 기다릴 frame 을 build 해 두었다가 commit 뒤에 그린다.
 - F710: Go test runner 와 host contract run 은 SIGINT, SIGTERM, SIGHUP 이 run 을 끝낼 때 test executable 의 build folder 를 지우므로, 멈춘 run 이 임시 folder 에 수백 MB 를 남기지 않는다.
 - F709: mygo workbench 의 card side 크기 test 는, set 이 안쪽 border 와 grip 앞에서 멈추므로, 그 크기를 status line 이 걸치는 column 의 폭과 비교한다.

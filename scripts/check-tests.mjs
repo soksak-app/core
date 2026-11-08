@@ -450,6 +450,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F712",
+    implementation: [{ file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any) bool" }],
+    tests: [{ file: "packages/host/go/tests/event_log_test.go", id: "TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefused" }],
+    expected: "The refusals of invalid identifiers are counted in log.dropped events whose counts add up to them, however many the writer splits them into.",
+    levels: ["unit"],
+  },
+  {
     id: "F710",
     implementation: [{ file: "scripts/temporary-folder.mjs", symbol: "export function temporaryFolder(prefix)" }],
     tests: [
