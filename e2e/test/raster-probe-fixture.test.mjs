@@ -1,0 +1,199 @@
+// The raster probe and its fake persistent sidecar replace the terminal and its sidecars as the vehicles of the core checks of
+// image regions, frames and persistent sidecar services (docs/spec/plugin-processes.md#verification-boundaries). These tests hold
+// the declarations that the applications read and the view logic of the probe without a window; the frames and the service run in
+// the window checks.
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { validateManifest, validateSidecar } from "@soksak/plugin-api";
+
+import { catalogOf, auditLogDirectories } from "../../scripts/check-events.mjs";
+import { REGION, SIDECAR, startRasterProbe } from "../fixtures/raster-probe/probe/ui/raster-probe.js";
+
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const PROBE = join(ROOT, "e2e/fixtures/raster-probe/probe");
+const SERVICE = join(ROOT, "e2e/fixtures/sidecars/rasterprobe");
+const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+const BASE = read(join(ROOT, "docs/spec/events.json"));
+
+test("the raster probe declares an image region that its sidecar dependency supplies, and the sidecar is a persistent service", { timeout: 5000 }, () => {
+  const manifest = validateManifest(read(join(PROBE, "plugin.json")));
+  const [region] = manifest.surface.composition.regions;
+  assert.deepEqual(region, { name: REGION, kind: "image", sidecar: SIDECAR, present: "lease", input: "dom" });
+  assert.deepEqual(Object.keys(manifest.dependencies), [SIDECAR]);
+  assert.deepEqual(manifest.background, { sidecar: SIDECAR, operation: "open" });
+
+  const sidecar = validateSidecar(read(join(SERVICE, "sidecar.json")));
+  assert.equal(sidecar.transport, "persistent");
+  assert.equal(sidecar.displayName, "soksak://sidecar/rasterprobe");
+  assert.deepEqual(sidecar.message, { form: "json-object", operationField: "operation" });
+  const pkg = read(join(SERVICE, "package.json"));
+  assert.equal(pkg.name, SIDECAR);
+  for (const file of ["sidecar.json", sidecar.events, sidecar.executable.split("/")[0]]) assert.ok(pkg.files.includes(file), `the release packs ${file}`);
+  assert.equal(pkg.version, read(join(PROBE, "package.json")).version, "the probe and its sidecar share the workspace version");
+});
+
+test("the sidecar crate is its own workspace with the version of its package", { timeout: 5000 }, () => {
+  const cargo = readFileSync(join(SERVICE, "Cargo.toml"), "utf8");
+  assert.match(cargo, /^\[workspace\]$/m, "the crate is not a member of the core workspace");
+  assert.equal(/^version = "([^"]+)"$/m.exec(cargo)?.[1], read(join(SERVICE, "package.json")).version);
+  const members = /^members = \[(.*)\]$/m.exec(readFileSync(join(ROOT, "Cargo.toml"), "utf8"))?.[1];
+  assert.ok(members !== undefined && !members.includes("e2e/"), "the core workspace lists no fixture crate");
+});
+
+/** A configuration folder that installed the probe and its sidecar at their fixture folders. */
+function installedFolder() {
+  const folder = mkdtempSync(join(tmpdir(), "rasterprobe-"));
+  mkdirSync(join(folder, "plugins"));
+  mkdirSync(join(folder, "logs"));
+  writeFileSync(join(folder, "plugins", "installed.json"), JSON.stringify({
+    format: 3,
+    plugins: { rasterprobe: { path: relative(folder, PROBE) } },
+    sidecars: { [SIDECAR]: { path: relative(folder, SERVICE) } },
+  }));
+  return folder;
+}
+
+test("the sidecar catalog composes with the core catalog and declares the lines that the service writes", { timeout: 5000 }, () => {
+  const folder = installedFolder();
+  try {
+    const catalog = catalogOf(BASE, folder);
+    for (const name of ["request", "session", "surface_mode", "frame", "connection", "kill", "exit", "start"]) {
+      assert.equal(catalog.events[`sidecar.rasterprobe.${name}`]?.layer, "sidecar", name);
+    }
+    // The lines in the form of the writer of the service (src/events.rs): a host file names the run, and the files of the service
+    // follow the name form <role>-<seconds>-<pid> with seq across its main and debug file.
+    const clocks = (seq) => ({ ts_us: 1791500000000000 + seq, mono_ns: 1000 + seq, seq });
+    const line = (seq, level, klass, event, fields, more = {}) => JSON.stringify({ ...clocks(seq), level, class: klass, layer: "sidecar", event, ...more, fields });
+    const policy = { lifecycle: "debug", input: "debug", call: "debug", io: "debug", frame: "debug" };
+    writeFileSync(join(folder, "logs", "host-1791500000-10.jsonl"), `${JSON.stringify({ ...clocks(1), level: "info", class: "lifecycle", layer: "host", event: "log.open", fields: { schema: 3, pid: 10, role: "host", boot: "1791500000-10" } })}\n`);
+    writeFileSync(join(folder, "logs", "rasterprobe-1791500000-20.jsonl"), [
+      line(1, "info", "lifecycle", "log.open", { schema: 3, pid: 20, role: "rasterprobe", boot: "1791500000-20" }),
+      line(2, "info", "lifecycle", "log.policy", { source: "file", classes: policy }),
+      line(3, "info", "lifecycle", "sidecar.rasterprobe.start", { pid: 20, version: "0.0.40", boot: "1791500000-20" }),
+      line(4, "info", "lifecycle", "sidecar.rasterprobe.connection", { client: "/config", connected: true }),
+      line(7, "info", "lifecycle", "sidecar.rasterprobe.session", { action: "open", cause: "open", child: 21 }, { surface: "tab-1", session: "s1", cids: ["b.1"] }),
+      line(8, "info", "lifecycle", "sidecar.rasterprobe.surface_mode", { mode: "image", cause: "open" }, { surface: "tab-1", session: "s1" }),
+      line(10, "info", "lifecycle", "sidecar.rasterprobe.session", { action: "close", cause: "closed", child: 21, error: null }, { surface: "tab-1", session: "s1" }),
+      line(11, "warn", "lifecycle", "sidecar.rasterprobe.kill", { pid: 20 }, { surface: "tab-1" }),
+      line(12, "info", "lifecycle", "sidecar.rasterprobe.exit", { cause: "SIGTERM", failures: [] }),
+    ].join("\n") + "\n");
+    writeFileSync(join(folder, "logs", "rasterprobe-1791500000-20.debug.jsonl"), [
+      line(5, "info", "lifecycle", "log.open", { schema: 3, pid: 20, role: "rasterprobe", boot: "1791500000-20" }),
+      line(6, "debug", "io", "sidecar.rasterprobe.request", { operation: "open", bytes: 80 }, { surface: "tab-1", cids: ["b.1"] }),
+      line(9, "debug", "frame", "sidecar.rasterprobe.frame", { event: "frame", name: REGION, generation: 2, raster: 5, sequence: 1, width: 160, height: 96,
+        scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3, color: "#0050b4", marker: "#020001", surface: 7 }, { surface: "tab-1", session: "s1" }),
+    ].join("\n") + "\n");
+    assert.deepEqual(auditLogDirectories(BASE, [folder]), []);
+    writeFileSync(join(folder, "logs", "rasterprobe-1791500000-20.debug.jsonl"),
+      `${line(13, "info", "lifecycle", "log.open", { schema: 3, pid: 20, role: "rasterprobe", boot: "1791500000-20" })}\n${line(14, "debug", "frame", "sidecar.rasterprobe.painted", {})}\n`);
+    assert.equal(auditLogDirectories(BASE, [folder]).filter((message) => message.includes("sidecar.rasterprobe.painted")).length, 1, "an undeclared line fails the audit");
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+/** A fake view bridge and exposure that record what the probe registers and sends. */
+function fakeView({ textSize = 1.25 } = {}) {
+  const sent = [];
+  const errors = [];
+  const commands = new Map();
+  const statuses = new Map();
+  const imageHandlers = new Map();
+  let answer;
+  let failure;
+  let onTextSize;
+  let observed;
+  const element = { getBoundingClientRect: () => ({ width: 400, height: 300, left: 0, top: 24 }) };
+  const bridge = {
+    runtime: {
+      sidecar: (name) => {
+        assert.equal(name, SIDECAR);
+        return {
+          on: async (surface, listener) => { assert.equal(surface, "tab-9"); answer = listener; },
+          onFailure: async (surface, listener) => { failure = listener; },
+          send: async (surface, body, cids = []) => {
+            assert.ok(answer && failure, "the view subscribes before its first request");
+            sent.push({ surface, body, cids });
+          },
+        };
+      },
+      textSize: { read: async () => textSize, on: async (listener) => { onTextSize = listener; } },
+      error: (where, text) => errors.push(`${where}: ${text}`),
+    },
+    composition: {
+      create: async ({ regions }) => {
+        assert.deepEqual(Object.keys(regions), [REGION]);
+        return { region: () => ({ on: (type, fn) => imageHandlers.set(type, fn), focus: async () => sent.push({ focus: true }) }) };
+      },
+    },
+    commands: { register: async (name, run) => { commands.set(name, run); } },
+  };
+  const expose = { status: async (name, read, subscribe) => { statuses.set(name, { read, subscribe }); } };
+  const view = {
+    sokSurface: { surface: "tab-9" },
+    devicePixelRatio: 2,
+    ResizeObserver: class { constructor(callback) { observed = callback; } observe() {} },
+  };
+  const document = { getElementById: (id) => { assert.equal(id, REGION); return element; } };
+  return { bridge, expose, view, document, sent, errors, commands, statuses, imageHandlers,
+    answer: (body) => answer(body), fail: (reason) => failure(reason), textSize: (value) => onTextSize(value), resized: () => observed() };
+}
+
+test("the probe opens its session with its image and reports the view, the session and the frames", { timeout: 1000 }, async () => {
+  const fake = fakeView();
+  await startRasterProbe(fake);
+  const manifest = read(join(PROBE, "plugin.json"));
+  assert.deepEqual([...fake.statuses.keys()], manifest.exposes.status.map(({ name }) => name));
+  assert.deepEqual([...fake.commands.keys()], manifest.exposes.commands.map(({ name }) => name));
+  assert.deepEqual(fake.sent, [{ surface: "tab-9", body: { operation: "open", image: REGION, textSize: 1.25 }, cids: [] }]);
+  const status = (name) => fake.statuses.get(name).read();
+  assert.deepEqual(status("rasterprobe.view"), { width: 400, height: 300, left: 0, top: 24, deviceWidth: 800, deviceHeight: 600, devicePixelRatio: 2, textSize: 1.25 });
+  assert.equal(status("rasterprobe.session").connected, false);
+
+  const values = [];
+  fake.statuses.get("rasterprobe.frame").subscribe((value) => values.push(value));
+  fake.answer({ event: "session", session: "s1", created: true, mode: "image", rows: 0 });
+  fake.answer({ event: "frame", generation: 2, raster: 5, sequence: 1, rows: 0 });
+  assert.deepEqual(status("rasterprobe.session"), { event: "session", session: "s1", created: true, mode: "image", rows: 0, connected: true, failure: null, error: null });
+  assert.deepEqual(values, [{ event: "frame", generation: 2, raster: 5, sequence: 1, rows: 0 }]);
+
+  await fake.commands.get("rasterprobe.rows")({ count: 4 });
+  await fake.commands.get("rasterprobe.kill")({});
+  assert.deepEqual(fake.sent.slice(1).map(({ body }) => body), [{ operation: "rows", count: 4 }, { operation: "kill" }]);
+  fake.answer({ event: "rows", count: 4 });
+  assert.equal(status("rasterprobe.session").rows, 4);
+});
+
+test("the probe forwards region input with its cids, follows the text size and opens again on a connection notice", { timeout: 1000 }, async () => {
+  const fake = fakeView({ textSize: null });
+  await startRasterProbe(fake);
+  assert.equal(fake.sent[0].body.textSize, 1, "an unknown text size is factor 1");
+  fake.imageHandlers.get("focus")({ type: "focus", focused: true });
+  fake.imageHandlers.get("input")({ type: "input", actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], cids: ["n.7"] });
+  assert.deepEqual(fake.sent[1], { surface: "tab-9", body: { operation: "input", actions: [{ type: "insert", text: "a" }], preedit: { text: "" } }, cids: ["n.7"] });
+  assert.deepEqual(fake.statuses.get("rasterprobe.input").read(), { focused: true, transactions: 1, preedit: { text: "" }, actions: [{ type: "insert", text: "a" }], errors: [] });
+
+  fake.textSize(1.5);
+  assert.deepEqual(fake.sent[2].body, { operation: "textSize", factor: 1.5 });
+  assert.equal(fake.statuses.get("rasterprobe.view").read().textSize, 1.5);
+
+  fake.answer({ event: "connection", connected: false, reason: "restart limit" });
+  assert.deepEqual(fake.statuses.get("rasterprobe.session").read(), { session: null, connected: false, failure: "restart limit", error: null });
+  fake.answer({ event: "connection", connected: true });
+  assert.deepEqual(fake.sent[3].body, { operation: "open", image: REGION, textSize: 1.5 });
+  fake.fail("output closed: signal 9");
+  assert.equal(fake.statuses.get("rasterprobe.session").read().failure, "output closed: signal 9");
+});
+
+test("the probe shows a refused request of the sidecar and records it as an error of the view", { timeout: 1000 }, async () => {
+  const fake = fakeView();
+  await startRasterProbe(fake);
+  fake.answer({ error: "imageAttached", reason: "surface tab-9 holds image raster" });
+  assert.equal(fake.statuses.get("rasterprobe.session").read().error, "imageAttached: surface tab-9 holds image raster");
+  fake.imageHandlers.get("error")({ type: "error", reason: "size" });
+  assert.deepEqual(fake.errors, ["rasterprobe: imageAttached: surface tab-9 holds image raster", "rasterprobe: image raster: size"]);
+});

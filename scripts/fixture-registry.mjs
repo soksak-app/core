@@ -8,7 +8,7 @@
 //   node scripts/fixture-registry.mjs --sok <sok executable> --out <registry folder>
 import { parseArgs } from "node:util";
 import { createHash } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { constants, accessSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -19,6 +19,8 @@ import { runCommand } from "./test-command.mjs";
 export const FIXTURES = fileURLToPath(new URL("../e2e/fixtures/", import.meta.url));
 // The folder of the fake sidecars under the fixtures.
 const SIDECARS = "sidecars";
+// The folders that fixtureSources does not search: installed packages and the build output of a fake sidecar.
+const SKIPPED_FOLDERS = new Set(["node_modules", "target"]);
 // The one pack of the fixture registry.
 const PACK = "fixtures";
 /** The limit of each command of a registry build: a pack or `sok registry build`. */
@@ -103,6 +105,10 @@ export async function pnpmPack(dir, out, { signal, timeoutMs } = {}) {
  * platform. signal and timeoutMs bound the pack.
  */
 export async function npmSidecarRelease(dir, out, { platform = releasePlatform(), signal, timeoutMs } = {}) {
+  const { executable } = read(join(dir, "sidecar.json"));
+  if (!isExecutableFile(join(dir, executable))) {
+    throw new Error(`pack sidecar ${dir}: sidecar.json executable ${executable} is not an executable file; build the sidecar first`);
+  }
   mkdirSync(out, { recursive: true });
   const [{ filename }] = JSON.parse(await runStep(`pack sidecar ${dir}`, "npm", ["pack", "--json", "--pack-destination", resolve(out)],
     { cwd: dir, signal, timeoutMs }));
@@ -112,6 +118,16 @@ export async function npmSidecarRelease(dir, out, { platform = releasePlatform()
   return { release, sha256: sha256(release), platform };
 }
 
+/** Whether path is a regular file that the current user may execute. */
+function isExecutableFile(path) {
+  try {
+    accessSync(path, constants.X_OK);
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /** Runs `sok registry build` of the folder under signal and timeoutMs and resolves with its JSON result. */
 export async function registryBuild(binary, folder, { signal, timeoutMs } = {}) {
   return JSON.parse(await runStep(`registry build ${folder}`, binary, ["registry", "build", folder], { signal, timeoutMs }));
@@ -119,7 +135,8 @@ export async function registryBuild(binary, folder, { signal, timeoutMs } = {}) 
 
 /**
  * The sources of the fixture registry under root: plugins, every folder that holds plugin.json, and sidecars, every folder under
- * root/sidecars that holds sidecar.json; each sorted. A node_modules folder is not searched.
+ * root/sidecars that holds sidecar.json; each sorted. A node_modules folder and a target folder, the build output of a fake
+ * sidecar, are not searched.
  */
 export function fixtureSources(root = FIXTURES) {
   const plugins = [];
@@ -131,7 +148,7 @@ export function fixtureSources(root = FIXTURES) {
     if (names.has("plugin.json")) plugins.push(dir);
     const fromSidecars = relative(sidecarRoot, dir);
     if (names.has("sidecar.json") && fromSidecars !== "" && !fromSidecars.startsWith("..") && !isAbsolute(fromSidecars)) sidecars.push(dir);
-    for (const entry of entries) if (entry.isDirectory() && entry.name !== "node_modules") visit(join(dir, entry.name));
+    for (const entry of entries) if (entry.isDirectory() && !SKIPPED_FOLDERS.has(entry.name)) visit(join(dir, entry.name));
   };
   visit(resolve(root));
   return { plugins: plugins.sort(), sidecars: sidecars.sort() };
