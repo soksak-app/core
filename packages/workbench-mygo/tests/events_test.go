@@ -678,6 +678,25 @@ func TestASidecarSendCarriesTheIdentifiersOfItsArguments(t *testing.T) {
 	}
 }
 
+// A view sends its sidecar requests through the workbench, which calls viewSidecarSend with the identifiers of the input that the
+// view continues, so the page hop of that input names them as sidecarSend does (docs/spec/logging.md#catalog).
+func TestAViewSidecarSendCarriesTheIdentifiersOfItsArguments(t *testing.T) {
+	f := newWriter(t, map[string]workbench.HostCall{
+		"viewSidecarSend": func(context.Context, json.RawMessage) (any, error) { return nil, nil },
+	})
+	f.calls.Observe(f.events.Call)
+	f.follow("debug")
+	f.call("viewSidecarSend", map[string]any{"source": "tab-1", "generation": 3, "sidecar": "vt", "surface": "tab-1", "cids": []string{"op-2"}})
+	f.call("viewSidecarSend", map[string]any{"source": "tab-1", "generation": 3, "sidecar": "vt", "surface": "tab-1"})
+	written := f.host.written()[1:]
+	if len(written) != 2 || !reflect.DeepEqual(written[0]["cids"], []any{"op-2"}) {
+		t.Fatalf("the calls are %v", written)
+	}
+	if _, carries := written[1]["cids"]; carries {
+		t.Fatalf("a call without identifiers carries them: %v", written[1])
+	}
+}
+
 func TestACommandRequestIsRecorded(t *testing.T) {
 	cases := []struct {
 		name, params, level, failure string

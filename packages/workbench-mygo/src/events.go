@@ -253,9 +253,12 @@ func callText(arguments []any) (string, bool) {
 	return headOf(text, callArgumentsBytes), produced > 0
 }
 
+// sidecarSends are the calls that send a request to a sidecar: the send of the workbench and the send that it makes for a view.
+var sidecarSends = map[string]bool{"sidecarSend": true, "viewSidecarSend": true}
+
 // callCids are the correlation identifiers that a host call continues: only the send of a request to a sidecar carries them.
 func callCids(name string, argument any) []string {
-	if name != "sidecarSend" {
+	if !sidecarSends[name] {
 		return nil
 	}
 	// silent: arguments that are not an object carry no identifiers, and the host refuses the call itself.

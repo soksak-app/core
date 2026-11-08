@@ -11666,6 +11666,7 @@ const FEATURE_LINKS = [
       { file: "e2e/activation/native-input-trace.mjs", symbol: "export function nativeInputTransactions(" },
       { file: "e2e/raster-probe.mjs", symbol: "async function drawCovered(s) {" },
       { file: "packages/workbench/host-calls.js", symbol: 'const SIDECAR_SENDS = new Set(["sidecarSend", "viewSidecarSend"]);' },
+      { file: "packages/workbench-mygo/src/events.go", symbol: "var sidecarSends = map[string]bool{\"sidecarSend\": true, \"viewSidecarSend\": true}" },
     ],
     tests: [
       { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", id: "each_input_makes_a_frame_whose_event_names_the_inputs_it_presents" },
@@ -11684,6 +11685,7 @@ const FEATURE_LINKS = [
       { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" },
       { file: "e2e/test/raster-probe-fixture.test.mjs", id: "a raster probe waits for its first frame while its window draws its image regions covered, until the check ends" },
       { file: "packages/workbench/test/host-calls.test.mjs", id: "the event of the send that the page relays for a view carries the correlation identifiers of the request" },
+      { file: "packages/workbench-mygo/tests/events_test.go", id: "TestAViewSidecarSendCarriesTheIdentifiersOfItsArguments" },
     ],
     expected: "The raster probe sidecar draws a frame after each input that it handles and names the inputs in that frame event, reads the refusal of a frame by its member error, so a stale frame ends its wait and the due frame of the newer raster is drawn, a check counts one view web view for each loaded view surface, shown or retained, a layout whose seats no longer name the tab and the dimming that each card shows does not draw and hands its preparation to the next layout, the view keeps the identity of that frame with each logged transaction, and each IME stage waits until the image region presents that frame. Each native.input.report input transaction of an IME check is complete, sent and error free, and matches one to one in order the raster probe input log entry with the same cids, whose actions, preedit, sidecar echo and answer cids are unchanged, with one later host.sidecar.request of the sidecar under those cids. A check that waits for the first frame of a raster probe makes the image regions of its window draw while the window is covered, because a check window opens behind the windows of other applications and of the other check applications, and turns that off when the check ends. The page records the viewSidecarSend that it makes for the request of a view as workbench.call with the correlation identifiers of the request, as it records sidecarSend.",
     levels: ["unit", "application"],
