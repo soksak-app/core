@@ -11,8 +11,9 @@ import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
-import { assertReceivedUnchanged, focusImageActive, inputDocument, lastTransaction, rasterProbeTab, receivedAfter,
+import { assertReceivedUnchanged, inputDocument, lastTransaction, rasterProbeTab, receivedAfter,
   untilDocument } from "../input-probe.mjs";
+import { focusImageActive } from "./image-focus.mjs";
 
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";

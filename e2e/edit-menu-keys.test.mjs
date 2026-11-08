@@ -13,16 +13,6 @@ import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard
 
 const LINE = "EDITMENU";
 
-// Waits up to timeout ms until the general pasteboard holds text. The copy event of the field comes before the Edit menu writes
-// the pasteboard, so the pasteboard is read after the event, until it holds the text.
-async function pasteboardHolds(text, message, timeout = 5000) {
-  const until = performance.now() + timeout;
-  while (pasteboardText() !== text) {
-    if (performance.now() > until) throw new Error(`${message} (the pasteboard holds ${JSON.stringify(pasteboardText())})`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
-
 for (const app of Object.values(APPS)) {
   test(`${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app, { clipboard: true, inactive: true });
@@ -74,7 +64,8 @@ for (const app of Object.values(APPS)) {
     await s.press("c", { modifiers: ["command"] });
     await s.until("probeinput.document", (state) => state.copies.some((copy) => copy.text === LINE),
       "an injected Command+C did not run Copy on the selection", { surface });
-    await pasteboardHolds(LINE, "an injected Command+C did not copy the selection");
+    // The copy event of the field comes before the Edit menu writes the pasteboard, so the pasteboard is read until it holds the text.
+    await s.until("probeinput.document", () => pasteboardText() === LINE, "an injected Command+C did not copy the selection", { surface });
 
     const marker = `INJECTED${process.pid}`;
     writePasteboard([{ "public.utf8-plain-text": Buffer.from(marker).toString("base64") }]);

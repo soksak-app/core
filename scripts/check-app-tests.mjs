@@ -37,8 +37,9 @@ const RULES = [
   // The cleanup of a window check goes into session.cleanup. When the cleanup of open fails, a t.after registered after it does not run,
   // so a server or process remains and the check process does not end. The cleanup of a session runs every step even when one fails.
   { what: "t.after for cleanup; register it with session.cleanup", pattern: /\bt\.after\s*\(/, sessionCleanup: true },
-  // A window check does not read source paths of other components and receives values through declared status entries.
-  { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(packages|plugins|sidecars|native|apps)\//, sourcePath: true },
+  // A window check does not read source paths of other components and receives values through declared status entries. The
+  // fixtures of core under e2e/fixtures, its fake sidecars included, belong to the checks themselves.
+  { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(?<!e2e\/fixtures\/)(packages|plugins|sidecars|native|apps)\//, sourcePath: true },
 ];
 
 // The checks of e2e/activation and e2e/real run only in runs the user approved and may activate the app.

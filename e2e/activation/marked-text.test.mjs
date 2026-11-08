@@ -14,7 +14,8 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { assertReceivedUnchanged, focusImageActive, insertedText, lastTransaction, rasterProbeTab, receivedAfter } from "../input-probe.mjs";
+import { assertReceivedUnchanged, insertedText, lastTransaction, rasterProbeTab, receivedAfter } from "../input-probe.mjs";
+import { focusImageActive } from "./image-focus.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: marked text that the input method ends is committed to the sidecar once`,

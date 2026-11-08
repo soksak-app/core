@@ -10,8 +10,9 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
-import { assertReceivedUnchanged, focusImageActive, inputDocument, insertedText, lastTransaction, rasterProbeTab,
+import { assertReceivedUnchanged, inputDocument, insertedText, lastTransaction, rasterProbeTab,
   receivedAfter, transactionMatchesKey, typedText, untilDocument } from "../input-probe.mjs";
+import { focusImageActive } from "./image-focus.mjs";
 
 const JAMO = /[ㄱ-ㅣ]/;
 

@@ -4,7 +4,7 @@
 // tier (`verify`, `test-app:activation`, `test-app:real`, `test-app:person`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
 // registry of the core fixtures (`make build-fixture-registry`, target/fixture-registry; a candidate or prebuilt run builds it from its
-// checkout into the root with `make fixture-registry` and the `sok` of a bundle under test) into the configuration of each application
+// checkout into the root with `make fixture-registry` and the `sok` of an application artifact under test) into the configuration of each application
 // with the `sok` of that application, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
 // applications through the quit item of the application menu and the last one through the quit key, and fails when an application
 // ends with another status than 0 or when a process of the root or of an application artifact remains. The application artifacts,
@@ -89,7 +89,7 @@ export async function e2ePlan({ root, configRoot, script, native, whenIdle, cand
   const appBinary = (app) => executables.get(app).application;
   // The debug run installs the fixture registry that `make build-fixture-registry` of E2E_BUILD wrote. A candidate or prebuilt run
   // builds the fixture registry of this checkout, its fake sidecars first, into the configuration root with the sok of the first
-  // bundle, so it installs the fixtures of the candidate checkout with the installers of the candidate bundles and reads no other
+  // application artifact, so it installs the fixtures of the candidate checkout with the installers of the candidate artifacts and reads no other
   // registry.
   const registryFolder = inputs ? join(configRoot, 'fixture-registry') : join(root, 'target', 'fixture-registry');
   const registry = join(registryFolder, 'index.json');

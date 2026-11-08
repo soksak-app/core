@@ -11,8 +11,9 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
-import { assertReceivedUnchanged, focusImageActive, focusedCard, imageRegion, inputDocument, insertedText, lastTransaction,
+import { assertReceivedUnchanged, focusedCard, imageRegion, inputDocument, insertedText, lastTransaction,
   rasterProbeTab, receivedAfter, transactionMatchesKey, untilDocument } from "../../input-probe.mjs";
+import { focusImageActive } from "../image-focus.mjs";
 
 
 async function preserveInputSource(s) {
