@@ -1,6 +1,8 @@
-// A window close request asks about each modified tab before the window closes (docs/spec/plugins.md#tab-reports).
+// A window close request asks about each modified tab before the window closes (docs/spec/plugins.md#tab-reports). The modified tab
+// is a tab of the save close probe `probeclose`, which reports itself modified through the tab report and counts the saves that the
+// workbench asks of it.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,13 +12,27 @@ import { fresh } from "./fixture.mjs";
 
 const QUESTION = ["저장하고 닫기", "저장하지 않고 닫기", "닫지 않기"];
 
+/**
+ * Adds a save close probe tab to the focused card of the window of session `w`, reports it modified, and returns its tab id. Its
+ * next save would keep it modified, so only a choice that discards the change ends it.
+ */
+async function modifiedTab(w) {
+  const card = (await w.get("core.grid")).cards.find((item) => item.focused);
+  assert.ok(card, "the window has no focused card for the modified tab");
+  const { tab } = await w.run("core.card.add-tab", { card: card.id, plugin: "probeclose" });
+  await w.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
+    "the save close probe tab did not open");
+  await w.registered(tab, ["command probeclose.prepare", "status probeclose.state"]);
+  await w.run("probeclose.prepare", { keepModified: true }, tab);
+  await w.until("probeclose.state", (value) => value.modified && value.saves === 0, "probeclose.prepare did not modify the tab", { surface: tab });
+  return tab;
+}
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: closing a window asks about a modified tab and 닫지 않기 keeps the window`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-close-")));
-    const file = join(root, "note.txt");
-    writeFileSync(file, "alpha\n");
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const window of await s.get("host.windows")) {
@@ -33,14 +49,7 @@ for (const app of Object.values(APPS)) {
     const windows = await s.windows(2, "the project window did not open");
     const child = s.on(windows.find((item) => item.window !== s.window).window);
     await child.until("core.project", (project) => project?.id === opened.id, "the project did not become active");
-    const { tab } = await child.run("core.file.open", { path: "note.txt" });
-    await child.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
-      "the editor tab did not open");
-    await child.registered(tab, ["command editor.edit"]);
-    await child.until("editor.document", (value) => value.path === "note.txt" && value.version !== null,
-      "the editor did not read the file", { surface: tab });
-    await child.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
-    await child.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
+    const tab = await modifiedTab(child);
 
     const ask = async () => (await child.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
       "closing the window did not ask about the modified tab")).items.map((item) => item.name);
@@ -50,26 +59,22 @@ for (const app of Object.values(APPS)) {
     await child.run("core.picker.pick", { index: 2 });
     await child.until("core.picker", (picker) => !picker.open, "닫지 않기 did not close the question");
     assert.equal((await s.get("host.windows")).length, 2, "닫지 않기 closed the window");
-    assert.equal((await child.get("editor.document", tab)).modified, true);
+    assert.equal((await child.get("probeclose.state", tab)).modified, true);
 
-    // The choice to close without saving closes the window without writing the file.
+    // The choice to close without saving closes the window without asking the tab to save: the tab keeps itself modified after a
+    // save, so a save would leave the tab modified and refuse the close (e2e/save-close.test.mjs), and the window closes only when
+    // the change is discarded.
     await child.run("host.window.close");
     assert.deepEqual(await ask(), QUESTION);
+    assert.equal((await child.get("probeclose.state", tab)).saves, 0, "the question asked the tab to save");
     await child.run("core.picker.pick", { index: 1 });
     await s.windows(1, "저장하지 않고 닫기 did not close the window");
-    assert.equal(readFileSync(file, "utf8"), "alpha\n");
   });
 
   test(`${app.name}: a quit that a kept modified tab cancels ends the quit state`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const project = await s.get("core.project");
-    const folder = `quit-cancel-check-${process.pid}`;
-    const path = `${folder}/note.txt`;
-    mkdirSync(join(project.root, folder));
-    writeFileSync(join(project.root, path), "alpha\n");
-    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
-    const { tab } = await s.run("core.file.open", { path });
+    const tab = await modifiedTab(s);
     s.cleanup(async () => {
       const grid = await s.get("core.grid");
       if (!grid.cards.some((card) => (card.tabs ?? []).some((entry) => entry.id === tab))) return;
@@ -78,13 +83,6 @@ for (const app of Object.values(APPS)) {
       const picker = await s.until("core.picker", (value) => value.open, "the close question did not open");
       await s.run("core.picker.pick", { index: picker.items.findIndex((item) => item.name === "저장하지 않고 닫기") });
     });
-    await s.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
-      "the editor tab did not open");
-    await s.registered(tab, ["command editor.edit"]);
-    await s.until("editor.document", (value) => value.path === path && value.version !== null,
-      "the editor did not read the file", { surface: tab });
-    await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
-    await s.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
 
     assert.equal((await s.get("host.window")).quitting, false);
     const quitting = s.run("host.quit");
@@ -99,12 +97,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: removing the active space asks about a modified tab`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const project = await s.get("core.project");
-    const folder = `space-close-check-${process.pid}`;
-    const path = `${folder}/note.txt`;
-    mkdirSync(join(project.root, folder));
-    writeFileSync(join(project.root, path), "alpha\n");
-    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
     const spaces = async () => (await s.get("core.project")).spaces.map((space) => space.id);
     const first = (await spaces())[0];
     const space = await s.run("core.space.add");
@@ -124,14 +116,7 @@ for (const app of Object.values(APPS)) {
       }
       if ((await spaces()).includes(space.id)) await s.run("core.space.close", { id: space.id });
     });
-    const { tab } = await s.run("core.file.open", { path });
-    await s.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
-      "the editor tab did not open");
-    await s.registered(tab, ["command editor.edit"]);
-    await s.until("editor.document", (value) => value.path === path && value.version !== null,
-      "the editor did not read the file", { surface: tab });
-    await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
-    await s.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
+    const tab = await modifiedTab(s);
 
     const ask = async () => (await s.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
       "removing the space did not ask about the modified tab")).items.map((item) => item.name);
@@ -152,7 +137,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-remove-")));
-    writeFileSync(join(root, "note.txt"), "alpha\n");
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const window of await s.get("host.windows")) {
@@ -169,14 +153,7 @@ for (const app of Object.values(APPS)) {
     const windows = await s.windows(2, "the project window did not open");
     const child = s.on(windows.find((item) => item.window !== s.window).window);
     await child.until("core.project", (project) => project?.id === opened.id, "the project did not become active");
-    const { tab } = await child.run("core.file.open", { path: "note.txt" });
-    await child.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
-      "the editor tab did not open");
-    await child.registered(tab, ["command editor.edit"]);
-    await child.until("editor.document", (value) => value.path === "note.txt" && value.version !== null,
-      "the editor did not read the file", { surface: tab });
-    await child.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
-    await child.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
+    const tab = await modifiedTab(child);
 
     const ask = async () => (await child.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
       "removing the project did not ask about the modified tab")).items.map((item) => item.name);
@@ -199,7 +176,6 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-remote-remove-")));
-    writeFileSync(join(root, "note.txt"), "alpha\n");
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const window of await s.get("host.windows")) {
@@ -216,14 +192,7 @@ for (const app of Object.values(APPS)) {
     const windows = await s.windows(2, "the project window did not open");
     const child = s.on(windows.find((item) => item.window !== s.window).window);
     await child.until("core.project", (project) => project?.id === opened.id, "the project did not become active");
-    const { tab } = await child.run("core.file.open", { path: "note.txt" });
-    await child.until("core.surfaces", (all) => all.some((x) => x.surface === tab && x.status.phase === "ready"),
-      "the editor tab did not open");
-    await child.registered(tab, ["command editor.edit"]);
-    await child.until("editor.document", (value) => value.path === "note.txt" && value.version !== null,
-      "the editor did not read the file", { surface: tab });
-    await child.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, tab);
-    await child.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface: tab });
+    const tab = await modifiedTab(child);
 
     const ask = async () => (await child.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
       "removing the project did not ask about the modified tab")).items.map((item) => item.name);

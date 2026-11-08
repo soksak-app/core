@@ -48,12 +48,12 @@
       },
       {
         "name": "rasterprobe.frame",
-        "description": "The last frame that the sidecar sent: its identity (generation, raster, sequence), its raster in device pixels and scale, its grid (rows, columns and cell size), the row bands it paints, its color and the color of its identity marker; null before the first frame.",
+        "description": "The last frame that the sidecar sent: its identity (generation, raster, sequence), its raster in device pixels and scale, its grid (rows, columns and cell size), the row bands it paints, its color, the color of its identity marker and the time in microseconds that painting it took (draw_us); null before the first frame.",
         "schema": { "type": ["object", "null"] }
       },
       {
         "name": "rasterprobe.input",
-        "description": "The image region input: whether it holds focus, its last preedit, the number of input transactions and the actions and errors of the last one.",
+        "description": "The image region input: whether it holds focus, its last preedit, the number of input transactions and the actions and errors of the last one; log holds in order the last 256 transactions {sequence, cids, actions, preedit, errors, received}, where received is the body that the sidecar echoed for it (null until it arrives); pointer holds the last 64 pointerdown and pointerup events of the region {type, button, trusted}. A primary press on the region gives it the keyboard focus.",
         "schema": {
           "type": "object",
           "properties": {
@@ -61,7 +61,25 @@
             "transactions": { "type": "number" },
             "preedit": {},
             "actions": { "type": "array" },
-            "errors": { "type": "array" }
+            "errors": { "type": "array" },
+            "log": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sequence": { "type": "number" },
+                  "cids": { "type": "array", "items": { "type": "string" } },
+                  "actions": { "type": "array" },
+                  "preedit": {},
+                  "errors": { "type": "array" },
+                  "received": { "type": ["object", "null"] }
+                }
+              }
+            },
+            "pointer": {
+              "type": "array",
+              "items": { "type": "object", "properties": { "type": { "type": "string" }, "button": { "type": "number" }, "trusted": { "type": "boolean" } } }
+            }
           }
         }
       }
@@ -88,6 +106,12 @@
       {
         "name": "rasterprobe.focus",
         "description": "Gives the image region the keyboard focus.",
+        "params": { "type": "object" },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "rasterprobe.input.clear",
+        "description": "Empties the log and the pointer list of rasterprobe.input; the count of transactions continues.",
         "params": { "type": "object" },
         "result": { "type": "null" }
       },

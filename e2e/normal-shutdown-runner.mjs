@@ -6,7 +6,7 @@ import { currentEventOffsets, sessionEventBoot } from "@soksak/window-check/even
 import { APPS } from "@soksak/window-check/app.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { untilShutdown } from "@soksak/window-check/shutdown-wait.mjs";
-import { prepareTerminal } from "./prepare-terminal.mjs";
+import { prepareRasterSession } from "./raster-probe.mjs";
 import { auditShutdownErrors } from "./shutdown-audit.mjs";
 
 const STARTUP_LIMIT = 15_000;
@@ -66,7 +66,7 @@ function serviceEndpointFiles(configDir, { allowMissing = false } = {}) {
 function serviceDirectory(configDir) {
   const directory = join(configDir, "services");
   const services = serviceEndpointFiles(configDir).map((endpoint) => dirname(endpoint));
-  if (services.length !== 1) throw new Error(`${directory} has ${services.length} services with an endpoint, expected the terminal service`);
+  if (services.length !== 1) throw new Error(`${directory} has ${services.length} services with an endpoint, expected the raster probe service`);
   return services[0];
 }
 
@@ -169,7 +169,7 @@ export async function runNormalShutdown({
   waitForReady: waitReady = waitForReady,
   waitForShutdown = untilShutdown,
   waitForServiceProcess: waitServiceProcess = runSokProcessWait,
-  prepareTerminal: prepare = prepareTerminal,
+  prepareService: prepare = prepareRasterSession,
   env = process.env,
   write = (line) => console.log(line),
 } = {}) {
@@ -192,21 +192,21 @@ export async function runNormalShutdown({
       boot: sessionEventBoot(app.configDir, pid),
     };
     await waitReady(client);
-    const terminal = env.SOKSAK_SHUTDOWN_TERMINAL === "1"
+    const raster = env.SOKSAK_SHUTDOWN_SERVICE === "1"
       ? await prepare(client, request, { startupLimit: STARTUP_LIMIT }) : null;
     const by = env.SOKSAK_SHUTDOWN_BY ?? "command";
     if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
-    service = terminal ? serviceEndpoint(app.configDir) : null;
-    if (!terminal) {
+    service = raster ? serviceEndpoint(app.configDir) : null;
+    if (!raster) {
       const objects = await request(client, "diagnostics.objects", { window: "main" });
       if (!objects || !Array.isArray(objects.sessions)) {
-        throw new Error("diagnostics.objects returned no sidecar session list for the no-terminal shutdown precondition");
+        throw new Error("diagnostics.objects returned no sidecar session list for the no-service shutdown precondition");
       }
       const serviceEndpoints = serviceEndpointFiles(app.configDir, { allowMissing: true });
       if (objects.sessions.length !== 0 || serviceEndpoints.length !== 0) {
-        throw new Error(`no-terminal shutdown precondition failed: sidecar sessions=${JSON.stringify(objects.sessions)} service endpoints=${JSON.stringify(serviceEndpoints)}`);
+        throw new Error(`no-service shutdown precondition failed: sidecar sessions=${JSON.stringify(objects.sessions)} service endpoints=${JSON.stringify(serviceEndpoints)}`);
       }
-      write(`PRECONDITION normal-shutdown app=${app.name} mode=no-terminal sidecar_sessions=0 service_endpoints=0`);
+      write(`PRECONDITION normal-shutdown app=${app.name} mode=no-service sidecar_sessions=0 service_endpoints=0`);
     }
 
     const from = Date.now();
@@ -228,7 +228,7 @@ export async function runNormalShutdown({
       if (existsSync(service.file)) throw new Error(`${service.file} remains after service PID ${service.pid} ended`);
       serviceObservationMs = Date.now() - observationFrom;
     }
-    result = { appName: app.name, pid, terminal, closedMs, serviceObservationMs, by };
+    result = { appName: app.name, pid, raster, closedMs, serviceObservationMs, by };
   } catch (error) {
     failures.push(error);
   }
@@ -255,7 +255,7 @@ export async function runNormalShutdown({
     throw new AggregateError(failures, `${app.name}: shutdown reported ${failures.length} errors; primary failure: ${failures[0]?.message ?? String(failures[0])}`);
   }
 
-  write(`PASS normal-shutdown app=${app.name} by=${result.by} pid=${result.pid} terminal=${result.terminal?.sessionId ?? "none"} endpoint_absent_at_close=true endpoint_closed_ms=${result.closedMs} service_exit_observation_ms=${result.serviceObservationMs}`);
-  return { appName: result.appName, pid: result.pid, terminal: result.terminal, closedMs: result.closedMs, serviceObservationMs: result.serviceObservationMs };
+  write(`PASS normal-shutdown app=${app.name} by=${result.by} pid=${result.pid} raster=${result.raster?.session ?? "none"} endpoint_absent_at_close=true endpoint_closed_ms=${result.closedMs} service_exit_observation_ms=${result.serviceObservationMs}`);
+  return { appName: result.appName, pid: result.pid, raster: result.raster, closedMs: result.closedMs, serviceObservationMs: result.serviceObservationMs };
 }
 

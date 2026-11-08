@@ -10,6 +10,7 @@ import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
 import { unlessCovered } from "@soksak/window-check/frontmost.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh, reading } from "./fixture.mjs";
+import { ensureRasters } from "./raster-probe.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the host writes its event log from the start of the process`, { timeout: 30000 }, async (t) => {
@@ -125,19 +126,17 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the trace stores the surface geometry, the memory of the sidecar and the start of each page document`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    const { ensureTerminals } = await import("./terminal-screen.mjs");
     const offsets = currentEventOffsets(app.configDir);
     await fresh(s, { performanceTrace: true });
-    const [terminal] = await ensureTerminals(s, 1);
-    await s.until("terminal.session", (state) => Boolean(state.sessionId), `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });
+    const [raster] = await ensureRasters(s, 1);
     await s.flushLog();
     // The surface is placed hidden first and visible with its geometry after the layout of the window.
     const placed = await untilEventLine(app.configDir, offsets, (line) => {
-      if (!line.includes("host.trace.surface") || !line.includes(terminal.surface)) return false;
+      if (!line.includes("host.trace.surface") || !line.includes(raster.surface)) return false;
       const fields = JSON.parse(line.slice(line.indexOf("{")));
       return fields.phase === "placed" && fields.visible === true && fields.w > 0 && fields.h > 0;
     }, 30000, reading(app, ["host.trace.surface"]));
-    assert.ok(placed.includes(terminal.surface), `the placed surface event names no surface: ${placed}`);
+    assert.ok(placed.includes(raster.surface), `the placed surface event names no surface: ${placed}`);
     const memory = await untilEventLine(app.configDir, offsets,
       (line) => line.includes("host.sampler.memory") && line.includes('"role":"sidecar"') && line.includes('"rss_kb"'), 60000,
       reading(app, ["host.sampler.memory"]));

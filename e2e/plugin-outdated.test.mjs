@@ -1,9 +1,11 @@
 // The plugin page shows a persistent service that runs another version than the installed one, and its action
 // replaces the service (docs/spec/installation.md, Plugin screen; docs/spec/persistent-services.md#updates).
 //
-// No declared entry installs another version of a sidecar, so the check writes the installed version of the terminal
-// service into the installed.json of its own disposable configuration directory, with a copy of the installed
-// folder under the new version, and restores both in its cleanup.
+// The vehicle is the fake persistent sidecar of the raster probe, which reports the version of its package in its hello. No
+// declared entry installs another version of a sidecar, so the check writes another installed version of that service into
+// the installed.json of its own disposable configuration directory, with a copy of the installed folder under the new
+// version, and restores both in its cleanup. The running service keeps reporting the version it was built with, which is
+// the running version that differs from the installed one.
 import assert from "node:assert/strict";
 import { cpSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,8 +14,10 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh, reading } from "./fixture.mjs";
+import { addRasterTab, RASTER, RASTER_SIDECAR as SIDECAR } from "./raster-probe.mjs";
 
-const SIDECAR = ["@soksak", "sidecar-vt-alacritty"].join("/");
+/** A fixture plugin that does not name the sidecar: disabling and enabling it makes the host read installed.json again. */
+const OTHER = "layoutprobe2";
 
 /** Replaces the file in one step, as `sok` does, so the host never reads half of it. */
 function replaceFile(file, text) {
@@ -25,17 +29,19 @@ function replaceFile(file, text) {
 /** Runs a plugin change, which starts the workbench of the window again, and waits until the new start is ready. */
 async function change(s, action) {
   const before = (await s.get("core.window.workbench")).start;
-  await s.run(`core.plugins.${action}`, { plugin: "hwp" });
+  await s.run(`core.plugins.${action}`, { plugin: OTHER });
   await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", `${action} did not reload the window`);
   await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `the workbench did not report ready after ${action}`);
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the plugin page shows an outdated terminal service and replaces it`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: the plugin page shows an outdated persistent service and replaces it`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     // The replacement of the service is a record of the host at the level info.
     await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info"] });
     await keepCommonSettings(s);
+    // The host starts the service when a page first sends to it: a raster probe tab opens its session.
+    await addRasterTab(s);
     const file = join(app.configDir, "plugins", "installed.json");
     const original = readFileSync(file, "utf8");
     const installed = JSON.parse(original);
@@ -53,10 +59,10 @@ for (const app of Object.values(APPS)) {
     });
     cpSync(join(app.configDir, running.path), join(app.configDir, folder), { recursive: true });
     installed.sidecars[SIDECAR] = { version: newer, path: folder };
-    // The terminal plugin names the range that it was installed with, which the other version must satisfy.
-    installed.plugins.terminal.sidecars[SIDECAR] = `>=${running.version}`;
+    // The raster probe names the range that it was installed with, which the other version must satisfy.
+    installed.plugins[RASTER].sidecars[SIDECAR] = `>=${running.version}`;
     replaceFile(file, JSON.stringify(installed));
-    // A plugin change makes the host read installed.json again; hwp is not the plugin of the service.
+    // A plugin change makes the host read installed.json again; OTHER is not the plugin of the service.
     await change(s, "disable");
     const outdated = await s.until("core.plugins", (value) => value.outdated.length === 1,
       "the host did not report the service of another version as outdated");

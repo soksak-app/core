@@ -1,15 +1,13 @@
 // Checks project-window close on each selected host and the Wails-specific close warning.
 // The check connects to an already running host; it never launches one.
 import assert from "node:assert/strict";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-
-const HWP_FIXTURE = new URL("./fixtures/two-paragraphs.hwp", import.meta.url);
 
 function stderrPath(configDir, pid) {
   const logs = join(configDir, "logs");
@@ -27,9 +25,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-close-warning-")));
-    const file = join(root, "note.txt");
-    writeFileSync(file, "alpha\n");
-    copyFileSync(HWP_FIXTURE, join(root, "two-paragraphs.hwp"));
+    // Two files of the type that the layout probe opens give the project window two document views.
+    writeFileSync(join(root, "alpha.lprobe"), "alpha\n");
+    writeFileSync(join(root, "beta.lprobe"), "beta\n");
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const window of await s.get("host.windows")) {
@@ -50,17 +48,15 @@ for (const app of Object.values(APPS)) {
     const child = s.on(projectWindow.window);
     await child.until("core.project", (project) => project?.id === opened.id,
       "the disposable project did not become active in its window");
-    const { tab } = await child.run("core.file.open", { path: "note.txt" });
-    await child.until("core.surfaces", (all) => all.some((surface) => surface.surface === tab &&
-      surface.status.phase === "ready" && surface.exposes.includes("status editor.document")),
-    "the editor surface did not register its document status");
-    await child.until("editor.document", (document) => document.path === "note.txt" && document.version !== null,
-      "the editor did not read the disposable project file", { surface: tab });
-    const hwp = await child.run("core.file.open", { path: "two-paragraphs.hwp" });
-    await child.until("core.surfaces", (all) => all.some((surface) => surface.surface === hwp.tab &&
-      surface.exposes.includes("status hwp.document")), "the HWP surface did not register its document status");
-    await child.until("hwp.document", (document) => document.path === "two-paragraphs.hwp" &&
-      document.phase === "ready" && document.pages > 0, "the HWP document did not finish loading", { surface: hwp.tab });
+    for (const path of ["alpha.lprobe", "beta.lprobe"]) {
+      const { tab } = await child.run("core.file.open", { path });
+      await child.until("core.surfaces", (all) => all.some((surface) => surface.surface === tab &&
+        surface.status.phase === "ready" && surface.exposes.includes("status layoutprobe.document")),
+      `the tab of ${path} did not register its document status`);
+      await child.until("layoutprobe.view", (view) => view.path === path, `the tab of ${path} did not start with its path`, { surface: tab });
+      await child.until("layoutprobe.document", (document) => document.reported === true,
+        `the document region of ${path} did not load`, { surface: tab });
+    }
 
     const pid = s.client.endpoint.pid;
     const endpointPath = join(app.configDir, "endpoint.json");

@@ -1,6 +1,6 @@
 // Functional root-chrome evidence under the benchmark default policy.
 // Preserves the benchmark's fresh -> preparation -> native first drag -> captured
-// second drag order. It makes no performance acceptance claim.
+// second drag order on the floor page view of the view drag benchmark. It makes no performance acceptance claim.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -10,7 +10,7 @@ import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
-import { prepareTerminalDrag, TERMINAL_DRAG_PLAN } from "./benchmark/cases/terminal.mjs";
+import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN } from "./benchmark/cases/floor-page.mjs";
 import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
 import { execute, windowApplicationRows } from "../scripts/measure-app-usage.mjs";
 import { colours } from "./view-display.mjs";
@@ -19,9 +19,10 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: project-tab add control retains sampled contrast in every complete second-drag frame`,
     { timeout: 180000 }, async (t) => {
       const s = await open(t, app);
-      const terminal = await fresh(s);
+      await fresh(s);
+      const floor = await openFloorPage(s);
       // Keep the benchmark default policy throughout the measured drags.
-      await prepareTerminalDrag(t, s, terminal, app.configDir);
+      await prepareFloorDrag(t, s, floor, app.configDir);
       const control = "core.project-tab.add";
       const rect = await s.rect(control);
       assert.ok(rect.width > 0 && rect.height > 0, `${control} has no visible area`);
@@ -31,7 +32,7 @@ for (const app of Object.values(APPS)) {
       const directory = mkdtempSync(join(logs, "workbench-capture-"));
       const offsets = currentEventOffsets(app.configDir);
       const evidence = { diagnostic: true, performanceAcceptance: false, control, rect,
-        order: ["fresh", "prepareTerminalDrag", "default policy", "process snapshot before", "native first drag", "process snapshot after", "captured second drag"],
+        order: ["fresh", "prepareFloorDrag", "default policy", "process snapshot before", "native first drag", "process snapshot after", "captured second drag"],
         capture: null, callbacks: [], samples: [], events: [] };
       let failure;
       const processes = () => dragProcesses({ run: execute, rows: async () => windowApplicationRows({
@@ -40,7 +41,7 @@ for (const app of Object.values(APPS)) {
         evidence.processesBefore = await processes();
         await drag(s, NATIVE_DRAG_PLAN);
         evidence.processesAfter = await processes();
-        const captured = await drag(s, TERMINAL_DRAG_PLAN, { capture: true });
+        const captured = await drag(s, VIEW_DRAG_PLAN, { capture: true });
         evidence.capture = captured;
         evidence.callbacks = readFileSync(captured.callbackStatus, "utf8").trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
         const files = frames(captured.frames);
@@ -49,7 +50,7 @@ for (const app of Object.values(APPS)) {
         assert.deepEqual(await s.rect(control), rect, "the observed root control moved during the drag");
         // This diagnostic detects loss of sampled contrast at one public control.
         // It does not establish correct painting of the complete root chrome.
-        // Decode every complete frame without filtering terminal geometry failures.
+        // Decode every complete frame without filtering view geometry failures.
         for (const file of files) {
           const frame = readFrame(file);
           const callback = evidence.callbacks.find(row => row.frame === basename(file));

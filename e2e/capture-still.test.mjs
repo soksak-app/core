@@ -14,15 +14,15 @@ for (const app of Object.values(APPS))
     const started = performance.now();
     const s = await open(t, app);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-    await fresh(s);
+    const start = await fresh(s);
     // An inactive application shows its window behind the frontmost window, where its image regions do not draw. The still
     // reads the pixels of the window wherever it is in the window order (docs/spec/native-surfaces.md#image-regions).
     await s.request("diagnostics.window.draw-covered", { draw: true });
     s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
-    assert.ok(card, "terminal card absent");
-    const tab = card.tabs.find((tab) => tab.plugin === "terminal");
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === start.surface));
+    assert.ok(card, "start card absent");
+    const tab = card.tabs.find((tab) => tab.id === start.surface);
     await s.run("core.tab.select", { tab: tab.id });
     const set = (await s.get("core.settings")).values.sets.find((item) => item.sections.length);
     assert.ok(set, "section set absent");
