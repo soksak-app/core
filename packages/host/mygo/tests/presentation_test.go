@@ -19,20 +19,22 @@ import (
 	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
+// The window goes on the screen only after its first frame. The check reads whether the window is ordered in, not the event
+// WindowShow: that event reports a change of the occlusion of the window, and a window of an application that is not active opens
+// behind every window (docs/spec/hosts.md#launch-activation), where windows of other applications may cover all of it and its
+// occlusion never changes (docs/spec/native-surfaces.md#image-regions). TestE2EAWindowHearsWhenAnotherCoversIt checks the event.
 func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
 	_, workbench, window := support.Open(t, "show")
-	shown := make(chan struct{}, 1)
-	window.OnWindowEvent(host.WindowShow, func() { shown <- struct{}{} })
 	window.Show()
 	support.Wait(t, "the show", window.Window().IsVisible)
-	<-shown
 	if !slices.Contains(workbench.Received(), "draw show") {
 		t.Fatalf("the window showed before it drew: %v", workbench.Received())
 	}
 }
 
 // A status read of whether the window is occluded is worth nothing to a watcher that hears of no change, so a window hears when
-// another covers all of it and when some of it shows again.
+// some of it shows, when another covers all of it and when some of it shows again. Only a window that the screen shows hears
+// these changes, and the check orders no window in front of the windows of other applications (docs/spec/hosts.md#launch-activation).
 func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
 	framework, _, below := support.Open(t, "below")
 	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
@@ -43,6 +45,7 @@ func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
 	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
 	below.Show()
 	support.Wait(t, "the window below", below.Window().IsVisible)
+	receiveOnScreen(t, "the show of the window below", uncovered, below)
 	above.Show()
 	support.Wait(t, "the window above", above.Window().IsVisible)
 	x, y := below.Position()
@@ -63,6 +66,34 @@ func receive(t *testing.T, what string, events <-chan struct{}) {
 	case <-events:
 	case <-time.After(10 * time.Second):
 		t.Fatalf("%s did not arrive within 10 s", what)
+	}
+}
+
+// receiveOnScreen waits for a value of events that only a window that the screen shows produces. When none arrives, it reads from
+// AppKit whether the screen shows some of window, and a window that the screen does not show is stated as the reason: nothing was
+// measured, as unlessCovered of @soksak/window-check/frontmost.mjs states for the window checks.
+func receiveOnScreen(t *testing.T, what string, events <-chan struct{}, window *adapter.Frontend) {
+	t.Helper()
+	select {
+	case <-events:
+		return
+	case <-time.After(10 * time.Second):
+	}
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatalf("%s did not arrive within 10 s, and the platform cannot be read: %v", what, err)
+	}
+	var onScreen bool
+	mygo.RunOnMain(func() { onScreen, err = system.WindowOnScreen(window.NativeWindow()) })
+	switch {
+	case err != nil:
+		t.Fatalf("%s did not arrive within 10 s, and whether the screen shows the window cannot be read: %v", what, err)
+	case !onScreen:
+		t.Fatalf("%s did not arrive within 10 s: the window is ordered in and the screen shows none of it, so its occlusion state "+
+			"stays not visible, because windows of other applications cover all of it. Nothing was measured: uncover the window, "+
+			"without activating the application, and run the check again", what)
+	default:
+		t.Fatalf("%s did not arrive within 10 s, though the screen shows some of the window", what)
 	}
 }
 

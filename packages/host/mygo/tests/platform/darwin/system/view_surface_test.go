@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
+	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo"
@@ -41,14 +42,19 @@ type elementWorkbench struct {
 	host    atomic.Pointer[host.Host]
 	context atomic.Pointer[context.Context]
 	shown   atomic.Pointer[[]string]
+	// started receives the result of the ready report of the first start of the workbench.
+	started   chan error
+	startOnce sync.Once
 }
 
 // Shown answers as the workbench of the application does: it reports that the workbench of the window is ready.
 func (w *elementWorkbench) Shown(window host.Frontend) {
 	w.Record("shown %s", window.Name())
-	if err := w.host.Load().WindowReady(*w.context.Load()); err != nil {
+	err := w.host.Load().WindowReady(*w.context.Load())
+	if err != nil {
 		w.Record("ready failed: %v", err)
 	}
+	w.startOnce.Do(func() { w.started <- err })
 }
 
 // Emit answers each request of the host with an empty result, as a workbench that has nothing to save.
@@ -137,7 +143,7 @@ func startViewSession() (*viewSession, error) {
 		"frontend/view-imports.json":                        {Data: []byte(`{"imports":{}}`)},
 		"frontend/modules/@soksak/plugin-api/view-start.js": {Data: []byte("")},
 	}
-	workbench := &elementWorkbench{}
+	workbench := &elementWorkbench{started: make(chan error, 1)}
 	framework := adapter.NewFramework(workbench)
 	// The host prepares on the main thread, as Run does before the application runs.
 	var opened *host.Session
@@ -159,6 +165,17 @@ func startViewSession() (*viewSession, error) {
 	}
 	window := windows[0].(*adapter.Frontend)
 	window.Show()
+	// The workbench starts once the window drew its first frame and showed, and the start of a page ends the composition
+	// declarations and the surface preparations of the page before it. The workbench of the application makes its host calls only
+	// after its start, so the session waits for it before a test makes host calls.
+	select {
+	case err := <-workbench.started:
+		if err != nil {
+			return nil, fmt.Errorf("the workbench did not report that it is ready: %w", err)
+		}
+	case <-time.After(10 * time.Second):
+		return nil, fmt.Errorf("the workbench did not start within 10 s: %v", workbench.Received())
+	}
 	return &viewSession{host: opened.Host(), workbench: workbench, window: window, system: system}, nil
 }
 
@@ -271,13 +288,16 @@ func (s *viewSession) rows(t *testing.T) []viewRow {
 	return facts.Webviews
 }
 
-// A view page shows in its surface host, in the frame of the card that shows it.
+// A view page shows in its surface host, which the native view element of its card places in the frame of the card.
 func TestE2EAViewPageShowsInASurfaceHostOfTheNativeView(t *testing.T) {
 	session := viewHost(t)
 	t.Cleanup(func() { session.layout(t) })
 	placed := session.layout(t, viewSurface("shown", true))
 	if len(placed) != 1 || placed[0].Rect != host.Rect(box) {
 		t.Fatalf("the surface is placed at %+v", placed)
+	}
+	if got := session.window.Frames().NativeViews(); got != 1 {
+		t.Fatalf("the window holds %d native view elements, want the 1 that it placed", got)
 	}
 	row := session.row(t, "shown")
 	if row.Hidden || row.X != box.X || row.Y != box.Y || row.Width != box.W || row.Height != box.H {

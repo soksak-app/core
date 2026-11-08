@@ -450,6 +450,20 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F703",
+    implementation: [
+      { file: "packages/host/mygo/tests/presentation_test.go", symbol: "func receiveOnScreen(t *testing.T, what string, events <-chan struct{}, window *adapter.Frontend) {" },
+      { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", symbol: "w.startOnce.Do(func() { w.started <- err })" },
+    ],
+    tests: [
+      { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EShowWaitsForTheFirstFrame" },
+      { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowHearsWhenAnotherCoversIt" },
+      { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", id: "TestE2EAViewPageShowsInASurfaceHostOfTheNativeView" },
+    ],
+    expected: "A Go window check of the mygo adapter judges a shown window by a state that windows of other applications do not change, a check whose subject is an occlusion event fails with the cover as its reason when the screen shows none of its window, and a view session makes host calls only after its workbench reported ready.",
+    levels: ["application"],
+  },
+  {
     id: "F713",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) CountLoss(channel Channel, reason LossReason, events, bytes uint64) {" },
