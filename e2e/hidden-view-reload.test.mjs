@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
-import { allRows, tailOf } from "./chains.mjs";
+import { allRows, tailOf } from "@soksak/window-check/chains.mjs";
 import { fresh, START_PLUGIN } from "./fixture.mjs";
 import { ensureRasters, REGION } from "./raster-probe.mjs";
 

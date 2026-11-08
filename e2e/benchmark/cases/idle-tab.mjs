@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 
 import { within } from "@soksak/window-check/app.mjs";
-import { allRows, tailOf } from "../../chains.mjs";
+import { allRows, tailOf } from "@soksak/window-check/chains.mjs";
 import { fresh, START_PLUGIN } from "../../fixture.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";

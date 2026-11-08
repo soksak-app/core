@@ -1,4 +1,4 @@
-import { allRows } from "../../chains.mjs";
+import { allRows } from "@soksak/window-check/chains.mjs";
 
 const newer = (candidate, current) => candidate.mono_ns > current.mono_ns ||
   candidate.mono_ns === current.mono_ns && candidate.seq > current.seq;

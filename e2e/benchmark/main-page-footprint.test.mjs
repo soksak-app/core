@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { tailOf } from "../chains.mjs";
+import { tailOf } from "@soksak/window-check/chains.mjs";
 import { closeAddedMainPageWindows, mainPageProcess, readMainPageFootprint } from "./cases/main-page-footprint.mjs";
 
 async function mainPageFact(session) {
