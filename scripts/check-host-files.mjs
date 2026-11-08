@@ -426,6 +426,8 @@ export const MAIN_THREAD_FREE = {
   hostMainThreadInstalled: "startup reads the installed dispatch pointers without calling a block or accessing AppKit",
   "sp_event_*": "the event ring and its policy are atomic state that any thread writes and the host drains",
   sp_mono_ns: "the clock reads mach_continuous_time, which any thread reads",
+  sp_input_source_role_identifier: "the role lookup reads a constant table of role and input source identifier strings without accessing AppKit or Text Input Sources",
+  sp_input_source_identifier_role: "the identifier lookup reads a constant table of role and input source identifier strings without accessing AppKit or Text Input Sources",
   sp_observe_flush: "the observation counters are atomic, and the flush writes them to the event ring",
   sp_phys_footprint: "the footprint reads task_info of the own task, a Mach call of any thread",
   sp_diagnostic_reports_directory: "the directory is a path of the file system that NSFileManager resolves on any thread",
