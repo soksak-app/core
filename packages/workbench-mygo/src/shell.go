@@ -597,13 +597,18 @@ func (s *Shell) adopt(value any) error {
 		Projects      []json.RawMessage `json:"projects"`
 		Open          []string          `json:"open"`
 		ProjectsError *string           `json:"projectsError"`
+		SettingsError *string           `json:"settingsError"`
 		Common        map[string]any    `json:"common"`
 	}](value)
 	if err != nil {
 		return err
 	}
-	if snapshot.ProjectsError != nil {
-		return fmt.Errorf("%s", *snapshot.ProjectsError)
+	// A refused projects.json or settings.json is left out of the snapshot with its error, so the error is shown and the
+	// workbench starts without the file (docs/spec/projects.md#settings), as storedFileErrors of packages/workbench/host-store.js.
+	for _, refused := range []*string{snapshot.ProjectsError, snapshot.SettingsError} {
+		if refused != nil {
+			s.fail(errors.New(*refused))
+		}
 	}
 	projects := make([]projectRecord, 0, len(snapshot.Projects))
 	for _, raw := range snapshot.Projects {
