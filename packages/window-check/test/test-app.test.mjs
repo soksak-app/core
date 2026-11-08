@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 import { APP_NAMES } from "../app.mjs";
 import { START_PROBE } from "../start.mjs";
 import { applicationZip, buildRegistry, bundleExecutables, cachedBundle, checkEnv, checkFiles, coreVersion, DEFAULT_PACK, download,
-  packArgv, packFileName, parseTestAppOptions, PUBLIC_INDEX, remainingProcesses, run, sidecarEntries, step } from "../test-app.mjs";
+  installRegistry, packArgv, packFileName, parseTestAppOptions, PUBLIC_INDEX, remainingProcesses, run, sidecarEntries, step } from "../test-app.mjs";
 
 const folder = (t, prefix = "window-check-test-app-") => {
   const path = mkdtempSync(join(tmpdir(), prefix));
@@ -35,16 +35,30 @@ test("the run uses the published application zip of the core release of this pac
 });
 
 test("the options select the applications, the pack command, the checks and their time limit", () => {
-  assert.deepEqual(parseTestAppOptions([], {}), { apps: [...APP_NAMES], pack: DEFAULT_PACK, checkTimeout: 3_600_000, real: false, checks: undefined });
+  assert.deepEqual(parseTestAppOptions([], {}),
+    { apps: [...APP_NAMES], pack: DEFAULT_PACK, index: undefined, checkTimeout: 3_600_000, real: false, checks: undefined });
   assert.deepEqual(parseTestAppOptions(["--app", "mygo", "--real"], {}).apps, ["mygo"]);
   assert.deepEqual(parseTestAppOptions([], { SOKSAK_APP: "wailsv3" }).apps, ["wailsv3"]);
   assert.deepEqual(parseTestAppOptions(["--pack", "pnpm pack --pack-destination {out}", "--check-timeout", "60", "e2e/a.test.mjs"], {}),
-    { apps: [...APP_NAMES], pack: "pnpm pack --pack-destination {out}", checkTimeout: 60_000, real: false, checks: ["e2e/a.test.mjs"] });
+    { apps: [...APP_NAMES], pack: "pnpm pack --pack-destination {out}", index: undefined, checkTimeout: 60_000, real: false, checks: ["e2e/a.test.mjs"] });
   assert.throws(() => parseTestAppOptions(["--app", "other"], {}), /unknown SOKSAK_APP: other/);
   assert.throws(() => parseTestAppOptions(["--real", "e2e/a.test.mjs"], {}), /--real selects the checks under e2e\/real\/; it takes no paths/);
   assert.throws(() => parseTestAppOptions(["--check-timeout", "0"], {}), /--check-timeout 0 is not a positive number of seconds/);
   assert.throws(() => parseTestAppOptions(["--pack", "make pack"], {}), /names no \{out\}/);
   assert.deepEqual(packArgv(DEFAULT_PACK, "/r"), ["make", "pack", "OUT=/r"]);
+});
+
+test("--index names the registry index of the run, as a file URL or a path, and takes neither --pack nor --real", () => {
+  assert.deepEqual(parseTestAppOptions(["--index", "file:///r/build/index.json", "environment/a.test.mjs"], {}),
+    { apps: [...APP_NAMES], pack: undefined, index: "/r/build/index.json", checkTimeout: 3_600_000, real: false, checks: ["environment/a.test.mjs"] });
+  assert.equal(parseTestAppOptions(["--index", "build/index.json"], {}).index, "build/index.json");
+  assert.throws(() => parseTestAppOptions(["--index", "https://example.invalid/index.json"], {}),
+    /--index https:\/\/example\.invalid\/index\.json is no file URL and no path/);
+  assert.throws(() => parseTestAppOptions(["--index", ""], {}), /--index names no index/);
+  assert.throws(() => parseTestAppOptions(["--index", "build/index.json", "--pack", DEFAULT_PACK], {}),
+    /--index installs from a built registry index; it takes no --pack/);
+  assert.throws(() => parseTestAppOptions(["--index", "build/index.json", "--real"], {}),
+    /--index installs from a built registry index; it takes no --real/);
 });
 
 test("the checks are the test files under e2e/ outside e2e/real/ and e2e/fixtures/, or with --real those under e2e/real/", (t) => {
@@ -66,6 +80,7 @@ test("the checks get the configuration root, the run folder and the executable o
     SOKSAK_BINARY_MYGO: "/c/mygo/soksak.app/Contents/MacOS/sok-mygo" });
   const one = new Map([["mygo", bundleExecutables("/c/soksak.app", "mygo")]]);
   assert.equal(checkEnv("/root", one).SOKSAK_APP, "mygo");
+  assert.equal(checkEnv("/root", one, "file:///root/registry/index.json").SOKSAK_REGISTRY_INDEX, "file:///root/registry/index.json");
 });
 
 test("the sidecar entries of the run are copied from the public index; a dependency found nowhere is an error", () => {
@@ -131,7 +146,10 @@ function repository(t, manifest = {}) {
   return root;
 }
 
-/** A fake pack and `sok`: the pack writes the release file that `pnpm pack` names into the destination, `sok` answers its index. */
+/**
+ * A fake pack and `sok`: the pack writes the release file that `pnpm pack` names into the destination; `sok` records its arguments
+ * in sok.log beside it, `registry build` answers the index it writes, `registry use` the file URL of its index.
+ */
 function tools(dir) {
   const pack = `const { readFileSync, writeFileSync } = require("node:fs");
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
@@ -140,8 +158,17 @@ writeFileSync(out + "/" + pkg.name.replace(/^@/, "").replace("/", "-") + "-" + p
   return {
     pack: `${script(join(dir, "pack"), pack)} {out}`,
     pnpm: script(join(dir, "pnpm"), pack),
-    sok: script(join(dir, "sok"), `require("node:fs").writeFileSync(process.argv[4] + "/index.json", "{}");
-process.stdout.write(JSON.stringify({ index: process.argv[4] + "/index.json", args: process.argv.slice(2) }));`),
+    sok: script(join(dir, "sok"), `const { appendFileSync, writeFileSync } = require("node:fs");
+const args = process.argv.slice(2);
+appendFileSync(__filename + ".log", JSON.stringify(args) + "\\n");
+if (args[0] === "registry" && args[1] === "build") {
+  writeFileSync(args[2] + "/index.json", "{}");
+  process.stdout.write(JSON.stringify({ index: args[2] + "/index.json", args }));
+} else if (args[0] === "registry" && args[1] === "use") {
+  process.stdout.write(JSON.stringify({ index: require("node:url").pathToFileURL(args[2]).href }));
+} else {
+  process.stdout.write("{}");
+}`),
   };
 }
 
@@ -176,6 +203,47 @@ test("a check registry fails at the step that fails, and a plugin id of the repo
   await assert.rejects(buildRegistry({ root: repository(t, { id: START_PROBE, dependencies: {} }), folder: join(folder(t), "r"), sok, pack, pnpm }),
     /the plugin id startprobe of the start probe of @soksak\/window-check is also the id of \./);
   await assert.rejects(buildRegistry({ root: folder(t), folder: join(folder(t), "r"), sok, pack, pnpm }), /holds no plugin\.json/);
+});
+
+test("with --index the run builds no registry and sets that index in each application, whose first run installs its starter pack", async (t) => {
+  const root = folder(t);
+  const tooling = folder(t);
+  const { sok } = tools(tooling);
+  const config = folder(t);
+  const executables = new Map(["mygo", "wailsv3"].map((host) => [host, { application: join(tooling, `sok-${host}`), sok }]));
+  const configDir = (host) => join(config, host);
+  const index = join(folder(t), "build", "index.json");
+  writeJson(index, { format: 1, plugins: [], sidecars: [], packs: [] });
+  const failing = `${process.execPath} -e process.exit(4) {out}`;
+  const unreachable = async () => { throw new Error("the run fetched the public index"); };
+  const recorded = await installRegistry({ root, folder: join(config, "registry"), executables, configDir, index, pack: failing,
+    fetchImpl: unreachable });
+  assert.equal(recorded, pathToFileURL(index).href);
+  assert.equal(existsSync(join(config, "registry")), false);
+  const calls = readFileSync(`${sok}.log`, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(calls, ["mygo", "wailsv3"].map((host) => ["registry", "use", index, "--config-dir", configDir(host)]));
+  const missing = join(root, "none.json");
+  await assert.rejects(installRegistry({ root, folder: join(config, "registry"), executables, configDir, index: missing }),
+    new RegExp(`^Error: registry index ${missing.replaceAll(".", "\\.")}: cannot read it: .*ENOENT`));
+  const broken = join(root, "broken.json");
+  writeFileSync(broken, "{");
+  await assert.rejects(installRegistry({ root, folder: join(config, "registry"), executables, configDir, index: broken }),
+    new RegExp(`^Error: registry index ${broken.replaceAll(".", "\\.")}: cannot read it: `));
+});
+
+test("without --index the run installs every plugin of the check registry into each application", async (t) => {
+  const root = repository(t, { dependencies: {} });
+  const tooling = folder(t);
+  const { pack, pnpm, sok } = tools(tooling);
+  const config = folder(t);
+  const executables = new Map([["mygo", { application: join(tooling, "sok-mygo"), sok }]]);
+  const configDir = (host) => join(config, host);
+  const registry = join(config, "registry");
+  const recorded = await installRegistry({ root, folder: registry, executables, configDir, pack, pnpm });
+  assert.equal(recorded, pathToFileURL(join(registry, "index.json")).href);
+  const calls = readFileSync(`${sok}.log`, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(calls.slice(1), [["registry", "use", join(registry, "index.json"), "--config-dir", configDir("mygo")],
+    ...["checked", "fixture", START_PROBE].map((id) => ["plugin", "install", id, "--config-dir", configDir("mygo")])]);
 });
 
 test("the remaining processes are those whose command line names a path of the run, except this one", () => {
