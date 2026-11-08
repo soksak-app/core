@@ -1203,7 +1203,6 @@ static bool setCaptureErrorForStream(SCStream *stream, NSString *message, SPCapt
     return recordCaptureError(message, stream, YES, sinkOut, error);
 }
 
-#ifdef SOKSAK_DIAGNOSTIC
 void sp_capture_test_report_error(const char *message) {
     if (message == NULL) {
         sp_log_error("capture", "a failure message is required");
@@ -1221,7 +1220,6 @@ void sp_capture_test_report_startup_failure(const char *message) {
     endCaptureSourceArtifacts();
     sp_capture_test_report_error(message);
 }
-#endif
 
 // Errors of the previous stream are also reported but do not change the result of the current recording.
 static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSError *error) {

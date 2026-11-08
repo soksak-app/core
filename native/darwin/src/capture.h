@@ -44,9 +44,7 @@ double sp_capture_clock(void);
 // required.
 bool sp_capture_still(const long *windowNumbers, int count, const char *path, char **error);
 
-#ifdef SOKSAK_DIAGNOSTIC
 // Injects a capture failure on the calling thread for lifecycle cleanup tests.
 void sp_capture_test_report_error(const char *message);
 // Simulates a startup failure that ends matcher state before reporting an error.
 void sp_capture_test_report_startup_failure(const char *message);
-#endif
