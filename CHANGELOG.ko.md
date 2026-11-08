@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F715-3: `make build-fixture-registry` 는 core fixture 만으로 registry 를 만든다: `e2e/fixtures` 의 모든 plugin folder 와 `e2e/fixtures/sidecars` 의 모든 fake sidecar 를 pack `fixtures` 하나로 담는다. workspace registry 옆에 probe 를 설치하던 window check 는 새 fixture registry 에서 그것을 설치하며, 이 registry 는 plugin 저장소도 registry index 도 읽지 않는다.
 - F696-7: CI 는 `linux-node` job 에서 검증 pipeline 의 headless owner test 를 Linux 로 실행하고, 이 job 은 `os` field 가 Linux 를 제외하는 workspace project 없이 잠긴 dependency 를 설치한다. 실제 macOS 기능이 필요한 owner 는 macOS job 의 system owner 로 실행되고, `make check-windows-rust` 는 Windows host 에서 Rust host 를 Windows 용으로 검사한다.
 - F696-4-5: 인식을 대체하려고만 있던 reference-pixel 장치를 제거한다. native/darwin, Go·Rust host, plugin API의 document reference producer와 capture(`diagnostics.capture.document-reference`, 그 contract 행, 명세, provider), terminal reference acquisition과 그 recorded content·recorded fixture, capture callback fixture, 그리고 reference만 쓰던 composition pixel proof와 card frame geometry가 대상이다. 호출자 감사에서 다른 쓰임은 없었다. document frame identity entry, QR atlas, `serveContentPage`는 identity·IME·layout 쓰임으로 남고, root-only frame identity entry는 붙은 document가 plugin-root capability를 얻지 않는다는 검사를 유지한다.
 - F502-4: sidecar로 보내는 view call은 그 page의 send와 같은 admission을 거친다. 그래서 place가 도는 동안의 send는 그 place의 결과를 기다리고, place가 view를 놓은 뒤의 send는 보내지 않는다. send가 private sidecar bridge로 place를 건너뛰지 않는다. sidecar root와 선택적 correlation identifier의 fallback 이유를 적고, Tauri send command를 다른 command와 같은 형태로 쓰며, workbench host는 report default의 이유를 되살린다.

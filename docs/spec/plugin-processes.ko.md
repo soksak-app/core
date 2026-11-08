@@ -210,6 +210,8 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `p
 - 환경: 공개된 core 와 plugin release 의 설치 cohort 는 양쪽이 공개된 뒤 registry 가 check 한다. 이 check 는 어떤 release 도 막지 않는다.
 
 [verification-boundaries.json](verification-boundaries.json) 은 실제 plugin 이나 sidecar 를 설치, build 하거나 이름 짓는 core 의 모든 파일을 그 소유자에게 배정한다: `core`(check 가 plugin 을 거쳐 core 경계에 닿으며 core fixture 로 옮긴다), `plugin:<id>`(check 를 그 plugin 저장소로 옮긴다), `environment`, `tool`(실제 plugin 을 설치, build 하거나 이름 짓는 helper 로, 제거하거나 core fixture 로 줄인다), `mixed`(이유가 test 마다 배정한다). 파일이 더 이상 실제 plugin 이나 sidecar 를 이름 짓지 않으면 목록에서 빠진다.
+
+core check 의 fixture registry 는 `scripts/fixture-registry.mjs` 가 `e2e/fixtures` 만으로 build 한다: `plugin.json` 이 있는 모든 folder 는 plugin 이고, `sidecar.json` 이 있는 `e2e/fixtures/sidecars` 의 모든 folder 는 현재 platform 용으로 release 되는 fake sidecar 이며, pack `fixtures` 하나가 모든 fixture plugin 을 이름 짓는다. `make build-fixture-registry` 는 그것을 `target/fixture-registry` 에 쓰고, window check 는 `fixtureRegistry` 로 자기 folder 를 build 한다.
 ## 탭과 프로세스
 
 - view는 탭마다 하나다. 프로세스 배정을 정하는 공개 API는 없다.
