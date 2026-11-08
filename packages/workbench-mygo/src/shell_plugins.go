@@ -245,8 +245,8 @@ type pluginStarter struct {
 // drawPluginPlaceholder draws the tab tab of a plugin that the window did not load: the reason, and the install or enable button
 // when that is what the tab waits for.
 func (s *Shell) drawPluginPlaceholder(c *ui.Context, tab layout.Tab) {
-	reason, installable := s.placeholderReason(tab.Plugin)
-	line, action, label := placeholderOf(tab.Plugin, reason, installable)
+	reason := s.placeholderReason(tab.Plugin)
+	line, action, label := placeholderOf(tab.Plugin, reason, reason == "missing" && s.registryListsPlugin(tab.Plugin))
 	// The line is a paragraph of the page, whose margin of one line stands under it as well as the gap of the placeholder.
 	gap := s.options.Declared.ChromeNumber("placeholder-gap", "px")
 	ui.Column(c).Fill().Gap(float32(gap) + s.textBody()).Center().Children(func() {
@@ -278,31 +278,37 @@ func (s *Shell) placeholderRows() ([]placeholderStatus, error) {
 		if active == nil || s.units[active.Plugin] != nil {
 			continue
 		}
-		reason, _ := s.placeholderReason(active.Plugin)
-		rows = append(rows, placeholderStatus{Surface: active.ID, Plugin: active.Plugin, Visible: true, Placeholder: reason, Kind: "tab"})
+		rows = append(rows, placeholderStatus{Surface: active.ID, Plugin: active.Plugin, Visible: true, Placeholder: s.placeholderReason(active.Plugin),
+			Kind: "tab"})
 	}
 	return rows, nil
 }
 
 // placeholderReason returns the reason of the placeholder of a tab of plugin (docs/spec/plugins.md): unread when the install state
 // was not read, missing when the plugin is not installed, refused when its installed version was refused, reload when it is
-// enabled and loads with the next window, and disabled otherwise. installable tells that the registry lists a version of a missing
-// plugin.
-func (s *Shell) placeholderReason(plugin string) (reason string, installable bool) {
+// enabled and loads with the next window, and disabled otherwise.
+func (s *Shell) placeholderReason(plugin string) string {
 	if failure := s.pluginOperations.Failure(); failure != nil && failure.Kind == "state" {
-		return "unread", false
+		return "unread"
 	}
 	rows := s.pluginOperations.Status().Plugins
 	index := slices.IndexFunc(rows, func(row PluginRow) bool { return row.ID == plugin })
 	switch {
 	case index < 0 || rows[index].Installed == nil:
-		return "missing", index >= 0 && rows[index].Latest != nil
+		return "missing"
 	case rows[index].State == "refused":
-		return "refused", false
+		return "refused"
 	case rows[index].Installed.Enabled:
-		return "reload", false
+		return "reload"
 	}
-	return "disabled", false
+	return "disabled"
+}
+
+// registryListsPlugin tells that the registry lists a version of plugin, so a missing plugin can be installed from its placeholder.
+func (s *Shell) registryListsPlugin(plugin string) bool {
+	rows := s.pluginOperations.Status().Plugins
+	index := slices.IndexFunc(rows, func(row PluginRow) bool { return row.ID == plugin })
+	return index >= 0 && rows[index].Latest != nil
 }
 
 // placeholderOf returns the line of the placeholder of plugin for reason, and its action and the label of the action when it has one:
