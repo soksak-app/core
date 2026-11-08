@@ -11004,9 +11004,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-75",
-    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = terminalCards[0];" }],
-    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented terminal image" }],
-    expected: "The opt-in capture identity consumer binds the selected terminal card before creating the captured terminal.",
+    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = (await s.get(\"core.grid\")).cards.find((item) => item.focused);" }],
+    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented image of an image region" }],
+    expected: "The opt-in capture identity consumer binds the selected card before creating the captured image region.",
     levels: ["application"],
   },
   {

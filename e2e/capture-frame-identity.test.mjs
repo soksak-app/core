@@ -1,4 +1,5 @@
-// Checks that opt-in captured-frame identity matches the current presented terminal image.
+// Checks that opt-in captured-frame identity matches the current presented image of an image region. The image region is the raster
+// probe, whose fake sidecar presents frames with their identity (generation, raster, sequence).
 import assert from "node:assert/strict";
 import { cpSync, existsSync, readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -7,27 +8,19 @@ import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { readScreenUntil } from "./terminal-screen.mjs";
+import { addRasterTab, presentedFrame, RASTER, REGION } from "./raster-probe.mjs";
 
 const tuple = (value) => ({ generation: String(value.generation), raster: String(value.raster), sequence: value.sequence });
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: opt-in capture identity matches the presented terminal image`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: opt-in capture identity matches the presented image of an image region`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { settings: { memorySaver: false, "terminal.cursor.blink": "Never" } });
-    const grid = await s.get("core.grid");
-    const terminalCards = grid.cards.filter((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
-    assert.ok(terminalCards.length > 0, "the fixture has no terminal card");
-    const targetCard = terminalCards[0];
-    const originalTerminals = terminalCards.flatMap((card) => card.tabs.filter((tab) => tab.plugin === "terminal")
-      .map((tab) => tab.id));
-    for (const card of terminalCards) await s.run("core.card.add-tab", { card: card.id, plugin: "browser" });
-    await s.until("core.surfaces", (items) => items.some((item) => item.visible && item.plugin === "browser")
-      && originalTerminals.every((surface) => !items.some((item) => item.surface === surface && item.visible)),
-    "existing terminal surfaces remained visible after selecting browser tabs");
-    await s.until("host.window", (host) => originalTerminals.every((surface) => host.regions
-      .every((region) => region.surface !== surface || region.name !== "view" || !region.visible)),
-    "an existing terminal image region remained visible before capture");
+    await fresh(s, { settings: { memorySaver: false } });
+    const targetCard = (await s.get("core.grid")).cards.find((item) => item.focused);
+    assert.ok(targetCard, "the start layout has no focused card");
+    // The capture starts with no visible image region, so the first image region that it sees is the one the check opens.
+    await s.until("host.window", (host) => host.regions.every((region) => !region.visible),
+      "an image region was visible before capture");
     await s.presented();
 
     const recording = await s.record({ frameIdentity: true });
@@ -37,29 +30,28 @@ for (const app of Object.values(APPS)) {
     let preservationError;
     let preserved;
     try {
-      const { tab: surface } = await s.run("core.card.add-tab", { card: targetCard.id, plugin: "terminal" });
+      const { tab: surface } = await s.run("core.card.add-tab", { card: targetCard.id, plugin: RASTER });
       await s.until("core.grid", (value) => value.cards.some((item) => item.id === targetCard.id && item.active === surface),
-        `new terminal ${surface} did not become the active card tab`);
+        `new raster probe ${surface} did not become the active card tab`);
       const visible = await s.until("core.surfaces", (items) => items.find((item) => item.surface === surface
-        && item.plugin === "terminal" && item.visible
-        && item.exposes.includes("status terminal.session")),
-      `new terminal ${surface} did not become a visible declared surface`);
-      assert.ok(visible, `new terminal ${surface} is not visible`);
-      await s.until("terminal.session", (state) => Boolean(state?.sessionId),
-        `new terminal ${surface} did not open its session`, { surface });
+        && item.plugin === RASTER && item.visible
+        && item.exposes.includes("status rasterprobe.session")),
+      `new raster probe ${surface} did not become a visible declared surface`);
+      assert.ok(visible, `new raster probe ${surface} is not visible`);
+      await s.until("rasterprobe.session", (state) => Boolean(state?.session),
+        `new raster probe ${surface} did not open its session`, { surface });
       const firstImage = await s.until("host.window", (host) => host.regions.some((item) => item.surface === surface
-        && item.name === "view" && item.visible && item.presented),
-      `new terminal ${surface} did not present an image region`);
-      assert.ok(firstImage.regions.some((item) => item.surface === surface && item.name === "view"
-        && item.visible && item.presented), `new terminal ${surface} image was not presented`);
-      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.startsWith("sh-")),
-        `new terminal ${surface} did not display the shell prompt`);
+        && item.name === REGION && item.visible && item.presented),
+      `new raster probe ${surface} did not present an image region`);
+      assert.ok(firstImage.regions.some((item) => item.surface === surface && item.name === REGION
+        && item.visible && item.presented), `new raster probe ${surface} image was not presented`);
+      await presentedFrame(s, surface);
       const presentation = await s.presented();
       const host = await s.until("host.window", (value) => value.regions.some((item) => item.surface === surface
-        && item.name === "view" && item.visible && item.presented),
-      `new terminal ${surface} lost its presented image before capture stopped`);
-      const region = host.regions.find((item) => item.surface === surface && item.name === "view" && item.visible);
-      assert.ok(region?.presented, `new terminal ${surface} has no presented image region: ${JSON.stringify(region)}`);
+        && item.name === REGION && item.visible && item.presented),
+      `new raster probe ${surface} lost its presented image before capture stopped`);
+      const region = host.regions.find((item) => item.surface === surface && item.name === REGION && item.visible);
+      assert.ok(region?.presented, `new raster probe ${surface} has no presented image region: ${JSON.stringify(region)}`);
       const current = tuple(region.presented);
 
       stopAttempted = true;
@@ -120,13 +112,13 @@ for (const app of Object.values(APPS)) {
         && Number.isSafeInteger(row.identity.sequence));
       assert.ok(matched.length > 0, `capture decoded no issued source identity: ${rawDecoded}`);
       assert.ok(matched.some((row) => JSON.stringify(tuple(row.identity)) === JSON.stringify(current)),
-        `no decoded sample matches the current presented terminal tuple ${JSON.stringify(current)}; `
+        `no decoded sample matches the current presented image tuple ${JSON.stringify(current)}; `
           + `decoded identities: ${JSON.stringify(matched.map((row) => row.identity))}`);
       const artifacts = manifest.artifacts.map((artifact) => ({
         generation: artifact.generation, raster: artifact.raster, sequence: artifact.sequence,
       }));
       assert.ok(artifacts.some((identity) => JSON.stringify(identity) === JSON.stringify(current)),
-        `no issued source artifact matches the current presented terminal tuple ${JSON.stringify(current)}; `
+        `no issued source artifact matches the current presented image tuple ${JSON.stringify(current)}; `
           + `artifact identities: ${JSON.stringify(artifacts)}`);
       assert.ok(matched.some((row) => JSON.stringify(tuple(row.identity)) === JSON.stringify(current)
         && artifacts.some((identity) => JSON.stringify(identity) === JSON.stringify(tuple(row.identity)))),
@@ -165,7 +157,9 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: diagnostic drag retains opt-in frame identity artifacts`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { settings: { memorySaver: false, "terminal.cursor.blink": "Never" } });
+    await fresh(s, { settings: { memorySaver: false } });
+    // A raster probe in the focused card gives the capture an image region whose frames carry their identity during the drag.
+    await addRasterTab(s);
     const result = await drag(s,
       { axis: "x", line: 1, dx: 40, dy: 0, ms: 200, times: 1 },
       { capture: true, frameIdentity: true });

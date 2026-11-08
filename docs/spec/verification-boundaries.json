@@ -177,11 +177,6 @@
       "reason": "Checks capture frame identity of a live WebKit root document (capture) and uses the editor only to open a file; replace with a plain-view probe root document."
     },
     {
-      "file": "e2e/capture-frame-identity.test.mjs",
-      "owner": "core",
-      "reason": "Checks opt-in capture identity against the presented image and during drag (capture) and uses the terminal as the image; replace with a fixture view that presents identity-marked frames (floor-page plus identity)."
-    },
-    {
       "file": "e2e/card-fullscreen.test.mjs",
       "owner": "core",
       "reason": "Checks card fullscreen geometry, tab switch and refused layout tools, with terminal or browser tabs as vehicles; plain-view probe tabs."
@@ -317,11 +312,6 @@
       "reason": "Checks card, native-content and rail alignment, and that a divider drag leaves no white frame (drag and placement measurement). `view-drag` with a known paint color would replace the terminal."
     },
     {
-      "file": "e2e/plugin-outdated.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the plugin page shows a persistent service running another version than the installed one and replaces it (core installation and persistent-service updates). A new versioned fake sidecar-service fixture would replace sidecar-vt-alacritty."
-    },
-    {
       "file": "e2e/plugin-screen.test.mjs",
       "owner": "core",
       "reason": "Checks the library plugin page (descriptions, versions, sidecars, search, disable/enable, the modified-tab prompt). It uses the real cohort only as list content; fixture plugins with a fake sidecar and `save-close` (for the modified tab) would replace it."
@@ -402,11 +392,6 @@
       "reason": "\"an inset sidebar stands inside its card and folds or resizes without changing the card\": core; \"a combined set mounts every section in list layout and switches sections in tabs layout\": core (fixture sections); \"the browser sections mount as section views beside the card's browser navigation\": plugin:browser; \"a sidebar starts with its sections and lines up its header and status rules with the neighbouring cards\": core; \"the browser DOM and network sections list the document's elements and requests\": plugin:browser; \"a browser tab shows the document title or the address and the tabs section mounts\": plugin:browser; \"tabs-layout tabs keep their full names on one line at the strip height\": core; \"a section header's name stays in place when sections fold and sits alike in every header\": core; \"a fill section takes the sidebar height the other sections leave and gives it up when folded\": core; \"sections that follow a core status mount without an error after a reload\": core (fixture section following a status); \"the fold control at the bottom of a window sidebar turns it off and the header turns it on\": core."
     },
     {
-      "file": "e2e/sidecar-recovery.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a surface reattaches without an app restart when its persistent sidecar service dies (core sidecar supervision). A new killable fake persistent-sidecar fixture would replace sidecar-vt-alacritty."
-    },
-    {
       "file": "e2e/space-apps.test.mjs",
       "owner": "core",
       "reason": "Checks that a full-screen card lists the space's apps by card and switches to a picked one. `plain-view` tabs would replace terminal and browser."
@@ -425,11 +410,6 @@
       "file": "e2e/terminal-font.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks the terminal's font.family fallback and wide-glyph centering."
-    },
-    {
-      "file": "e2e/terminal-hidden-reload.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a hidden view's sidecar session detaches and reattaches its image across a main-page reload (view lifetime). A fake sidecar-backed raster fixture would replace the terminal."
     },
     {
       "file": "e2e/terminal-hidden-tab.test.mjs",
@@ -605,11 +585,6 @@
       "file": "e2e/view-display.mjs",
       "owner": "core",
       "reason": "View-display harness that looks for a card holding \"the fixture terminal\". Replace with plain-view as the displayed view."
-    },
-    {
-      "file": "e2e/view-edges.test.mjs",
-      "owner": "core",
-      "reason": "Tests that a native view touches its card lines at each slot, using terminal surfaces as the native view. Replace with a native-view fixture (plain-view or view-drag with a native raster)."
     },
     {
       "file": "e2e/view-input.test.mjs",
