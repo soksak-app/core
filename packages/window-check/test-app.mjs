@@ -1,5 +1,5 @@
 // The window-check run of a plugin repository against the published core application (docs/spec/plugins.md#window-checks-of-a-plugin):
-//   soksak-test-app [--app <host>] [--real] [--pack <command>] [--check-timeout <seconds>] [<file, folder or glob>...]
+//   soksak-test-app [--app <host>] [--real] [--pack <command> | --index <index>] [--check-timeout <seconds>] [<file, folder or glob>...]
 // run from the root of the plugin repository (`pnpm exec soksak-test-app`). The core version is the version of this installed
 // @soksak/window-check, the core release that the plugin repository names. For each application of the run (`--app`, or requiredApps
 // of app.mjs, so SOKSAK_APP selects one) the run downloads the published application zip `soksak-<version>-darwin-arm64-<host>.zip`
@@ -9,8 +9,12 @@
 // ships (fixtures/start-probe) and of each fixture plugin under e2e/fixtures (a folder that holds plugin.json), and the entry of each
 // sidecar that these plugins name, copied from the public registry index; `sok registry build` of the first bundle writes its
 // index.json. The `sok` of each bundle sets that index and installs every plugin of the folder into the configuration of its
-// application; the run starts the applications, runs the checks with node:test, one file at a time, and quits each application
-// through the quit item of its application menu, the last one through the quit key, as a person does. The checks are the given
+// application. With `--index`, a file URL or a path of a built registry index such as the one that `make build` of the registry
+// writes, the run builds no registry folder and installs no plugin: the `sok` of each bundle sets that index, and the first run of
+// each application installs the starter pack that its environment.json names from it; `--index` takes no `--pack` and no `--real`.
+// The run starts the applications, runs the checks with node:test, one file at a time, with SOKSAK_REGISTRY_INDEX set to the file
+// URL that `registry use` recorded, and quits each application through the quit item of its application menu, the last one
+// through the quit key, as a person does. The checks are the given
 // paths, or with `--real` the test files under e2e/real/, or else the test files under e2e/ outside e2e/real/ and e2e/fixtures/.
 // It fails when a step fails, when an application ends with another status than 0 or when a process of the root or of a bundle
 // remains; each failure names its step. Every download and command is bounded by a time limit and ends at an interrupt. A passed
@@ -177,23 +181,28 @@ export function packArgv(command, out) {
 }
 
 /**
- * The environment of the checks: the configuration root, the run folder, the application executable of each host and, for a run of
- * one application, SOKSAK_APP, so requiredApps of the checks names the same applications.
+ * The environment of the checks: the configuration root, the run folder, the application executable of each host, the file URL of
+ * the registry index `index` that the configurations use and, for a run of one application, SOKSAK_APP, so requiredApps of the
+ * checks names the same applications.
  */
-export function checkEnv(root, executables) {
+export function checkEnv(root, executables, index) {
   const hosts = [...executables.keys()];
   return {
     ...(hosts.length < APP_NAMES.length ? { SOKSAK_APP: hosts.join(",") } : {}),
     SOKSAK_CONFIG_ROOT: root,
     SOKSAK_RUN_FOLDER: join(root, "run"),
+    ...(index === undefined ? {} : { SOKSAK_REGISTRY_INDEX: index }),
     ...Object.fromEntries([...executables].map(([host, { application }]) => [`SOKSAK_BINARY_${host.toUpperCase()}`, application])),
   };
 }
 
-/** The options of `soksak-test-app`: `{ apps, pack, checkTimeout, real, checks }`; `checks` is undefined when no path is given. */
+/**
+ * The options of `soksak-test-app`: `{ apps, pack, index, checkTimeout, real, checks }`; `checks` is undefined when no path is given.
+ * `index` is the path of the registry index that `--index` names as a file URL or a path, or undefined; with it `pack` is undefined.
+ */
 export function parseTestAppOptions(argv, env = process.env) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: true, options: {
-    pack: { type: "string", default: DEFAULT_PACK }, "check-timeout": { type: "string" }, real: { type: "boolean", default: false },
+    pack: { type: "string" }, index: { type: "string" }, "check-timeout": { type: "string" }, real: { type: "boolean", default: false },
     app: { type: "string" } } });
   let checkTimeout = LIMITS.checks;
   if (values["check-timeout"] !== undefined) {
@@ -201,9 +210,19 @@ export function parseTestAppOptions(argv, env = process.env) {
     checkTimeout = Number(values["check-timeout"]) * 1000;
   }
   if (values.real && positionals.length > 0) throw new Error("--real selects the checks under e2e/real/; it takes no paths");
-  packArgv(values.pack, "{out}");
+  let index;
+  if (values.index !== undefined) {
+    if (values.index === "") throw new Error("--index names no index");
+    if (values.pack !== undefined) throw new Error("--index installs from a built registry index; it takes no --pack");
+    if (values.real) throw new Error("--index installs from a built registry index; it takes no --real");
+    if (values.index.startsWith("file:")) index = fileURLToPath(values.index);
+    else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(values.index)) throw new Error(`--index ${values.index} is no file URL and no path`);
+    else index = values.index;
+  }
+  const pack = index === undefined ? values.pack ?? DEFAULT_PACK : undefined;
+  if (pack !== undefined) packArgv(pack, "{out}");
   const apps = values.app === undefined ? requiredApps(env) : requiredApps({ SOKSAK_APP: values.app });
-  return { apps, pack: values.pack, checkTimeout, real: values.real, checks: positionals.length ? positionals : undefined };
+  return { apps, pack, index, checkTimeout, real: values.real, checks: positionals.length ? positionals : undefined };
 }
 
 /** Prefixes the error of `work` with the name of its step. */
@@ -372,6 +391,43 @@ export async function buildRegistry({ root, folder, sok, pack = DEFAULT_PACK, pn
   return { index: built.index, ids: plugins.map(({ manifest }) => manifest.id) };
 }
 
+/**
+ * Sets the registry of the run in the configuration of each application with the `sok` of its bundle (`executables`) and resolves
+ * with the file URL that `registry use` recorded. Without `index` the registry is the check registry that buildRegistry writes into
+ * `folder`, and every plugin of it is installed. With `index`, the path of a built registry index, the run builds nothing and
+ * installs nothing: the first run of each application installs the starter pack that its environment.json names from that index
+ * (docs/spec/installation.md#first-run). A missing or unreadable index fails the step that names it.
+ */
+export async function installRegistry({ root, folder, executables, configDir, index, pack = DEFAULT_PACK, pnpm, signal, fetchImpl }) {
+  const hosts = [...executables.keys()];
+  let registry;
+  if (index === undefined) {
+    registry = await buildRegistry({ root, folder, sok: executables.get(hosts[0]).sok, pack, pnpm, signal, fetchImpl });
+  } else {
+    const path = resolve(root, index);
+    await step(`registry index ${path}`, () => {
+      try {
+        JSON.parse(readFileSync(path, "utf8"));
+      } catch (error) {
+        throw new Error(`cannot read it: ${error.message}`);
+      }
+    });
+    registry = { index: path, ids: [] };
+  }
+  let recorded;
+  for (const host of hosts) {
+    const { sok } = executables.get(host);
+    const config = ["--config-dir", configDir(host)];
+    const used = await step(`registry ${host}`, async () => JSON.parse(await run(sok, ["registry", "use", registry.index, ...config],
+      { cwd: root, signal, timeout: LIMITS.command, capture: true })).index);
+    recorded ??= used;
+    for (const id of registry.ids) {
+      await step(`install ${id} ${host}`, () => run(sok, ["plugin", "install", id, ...config], { cwd: root, signal, timeout: LIMITS.install }));
+    }
+  }
+  return recorded;
+}
+
 /** Starts the application and resolves with its process once its configuration folder holds endpoint.json. */
 async function start(application, configDir, out, root) {
   mkdirSync(configDir, { recursive: true });
@@ -430,7 +486,7 @@ export function remainingProcesses(listing, paths, self = process.pid) {
  * Runs the window checks of the plugin repository `root` (`soksak-test-app`). Resolves with the failures, each
  * `<step>: <reason>`; an empty list is a passed run.
  */
-export async function testApp({ root, apps = requiredApps(process.env), pack = DEFAULT_PACK, real = false, checks,
+export async function testApp({ root, apps = requiredApps(process.env), pack = DEFAULT_PACK, index, real = false, checks,
   checkTimeout = LIMITS.checks, signal, write = (line) => process.stdout.write(`test-app: ${line}\n`) }) {
   const version = coreVersion();
   const hosts = apps;
@@ -452,15 +508,7 @@ export async function testApp({ root, apps = requiredApps(process.env), pack = D
   try {
     for (const host of hosts) bundles.set(host, await step(`application ${host}`, () => cachedBundle(cache, version, host, { signal, write })));
     const executables = new Map(hosts.map((host) => [host, bundleExecutables(bundles.get(host), host)]));
-    const { index, ids } = await buildRegistry({ root, folder: join(configRoot, "registry"), sok: executables.get(hosts[0]).sok, pack, signal });
-    for (const host of hosts) {
-      const { sok } = executables.get(host);
-      const config = ["--config-dir", configDir(host)];
-      await step(`registry ${host}`, () => run(sok, ["registry", "use", index, ...config], { cwd: root, signal, timeout: LIMITS.command }));
-      for (const id of ids) {
-        await step(`install ${id} ${host}`, () => run(sok, ["plugin", "install", id, ...config], { cwd: root, signal, timeout: LIMITS.install }));
-      }
-    }
+    const registry = await installRegistry({ root, folder: join(configRoot, "registry"), executables, configDir, index, pack, signal });
     for (const host of hosts) {
       write(`starting ${host}`);
       children.set(host, await step(`start ${host}`, () => start(executables.get(host).application, configDir(host), join(configRoot, `${host}.out`), root)));
@@ -468,7 +516,7 @@ export async function testApp({ root, apps = requiredApps(process.env), pack = D
     try {
       await step("window checks", () => run(process.execPath,
         ["--test", "--test-concurrency=1", `--test-timeout=${LIMITS.test}`, ...selected],
-        { cwd: root, signal, timeout: checkTimeout, env: checkEnv(configRoot, executables) }));
+        { cwd: root, signal, timeout: checkTimeout, env: checkEnv(configRoot, executables, registry) }));
     } catch (error) {
       failures.push(error.message);
     }
