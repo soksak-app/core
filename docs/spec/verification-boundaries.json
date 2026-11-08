@@ -12,16 +12,6 @@
       "reason": "Checks that the official CLI upgrade of browser keeps the starter cohort (including sidecar-files and sidecar-vt-alacritty) ready."
     },
     {
-      "file": "e2e/terminal-screen.mjs",
-      "owner": "tool",
-      "reason": "Helper that opens terminals and reads terminal screen glyphs and pixels, and is used by many core tests. It must be reduced to fixture helpers (open `plain-view`, read the fixture color or echo log)."
-    },
-    {
-      "file": "e2e/test/terminal-screen.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Tests how the terminal's cell screen and backgrounds are read and sampled (wrapped command output, cell rows), which is terminal screen content."
-    },
-    {
       "file": "scripts/test/benchmark-b3.test.mjs",
       "owner": "mixed",
       "reason": "\"the surface plugins are the installed plugins whose manifest declares a surface\" -> core (fake manifests, but it reads plugins/term and plugins/files and should use e2e/fixtures manifests); \"the targets of a scenario come from the goals…\", \"the runs interleave the five applications…\", \"the sessions of B3 live beside the baseline record…\", \"the session folder holds the session and the baseline record…\", \"the run reads the declarations of the e2e benchmarks…\", \"the run conditions are read from injected readings…\" -> core (measurement harness; fixture data names term/browser and should use view-drag/plain-view ids)"
