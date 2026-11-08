@@ -7,7 +7,6 @@ import test from "node:test";
 
 import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare } from "./fixture.mjs";
-import { parseState } from "../packages/workbench/debug-state.js";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals } from "./terminal-screen.mjs";
 import { readStillCapture } from "./still-capture.mjs";
@@ -415,8 +414,10 @@ for (const app of Object.values(APPS)) {
     const card = await s.rect("core.debug.card");
     assert.ok(card.width > 0 && card.height > 0, "the actual named debug card was not rendered");
     // The state file holds the host, the versions, the windows and the page statuses.
-    const state = parseState(opened.recorded, readFileSync(join(s.app.configDir, opened.recorded), "utf8"), false);
+    const state = JSON.parse(readFileSync(join(s.app.configDir, opened.recorded), "utf8"));
+    assert.equal(typeof state.time, "string", "the state file has no time");
     assert.equal(state.host, app.name);
+    assert.ok(Array.isArray(state.windows), `the state file windows are not a list: ${JSON.stringify(state.windows)}`);
     assert.ok(state.versions.core && state.versions.macos && state.windows.length > 0 && Object.keys(state.workbench).length > 0,
       `the state file is incomplete: ${Object.keys(state)}`);
     // Viewing shows the whole content of a text file; the state file does not change while the view is open.
