@@ -5,7 +5,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
-import { fieldPoint, inputProbeTab } from "./input-probe.mjs";
+import { fieldPoint, inputProbeTab, pressInKeyWindow } from "./input-probe.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an inactive view retains input across main focus and handles picker Escape`, { timeout: 60000 }, async (t) => {
@@ -23,8 +23,9 @@ for (const app of Object.values(APPS)) {
     const initialWindow = await s.get("host.window");
     assert.equal(initialWindow.active, false, "the inactive input check requires a background application");
     const clickField = async () => {
-      const field = await fieldPoint(s, probe.surface);
-      await s.click(field.x, field.y);
+      // A press alone does not give page focus in an inactive application: the move before it makes the window the virtual key
+      // window, as a person's pointer over the window does (docs/spec/exposure.md#virtual-key-window).
+      await pressInKeyWindow(s, await fieldPoint(s, probe.surface));
       await s.until("host.window", window => window.responder?.surface === probe.surface,
         "the native field press did not focus its view");
       await s.until("probeinput.field", value => value.focused,
