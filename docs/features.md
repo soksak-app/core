@@ -4,7 +4,7 @@
 
 ### Active execution inventory (2026-11-08 snapshot)
 
-Core-only canonical row counts at this audit snapshot: **21 active, 4 waiting, 86 held**. `scripts/check-tests.mjs` reads only core `docs/features.md`; `scripts/checklist.mjs` maps `[ ]` to waiting, `[~]` to active, `[!]` to held and `[-]` to closed. Parent/child rows are counted separately. These are status counts, not 25 independently executable tasks. This inventory includes scoped F698, F696-4-2-2 and observation API closures; OCR/benchmark parents remain open.
+Core-only canonical row counts at this audit snapshot: **18 active, 4 waiting, 86 held**. `scripts/check-tests.mjs` reads only core `docs/features.md`; `scripts/checklist.mjs` maps `[ ]` to waiting, `[~]` to active, `[!]` to held and `[-]` to closed. Parent/child rows are counted separately. These are status counts, not 22 independently executable tasks. This inventory includes scoped F698, F696-4-2-2 and observation API closures; OCR/benchmark parents remain open.
 
 #### Core IDs
 
@@ -4273,3 +4273,5 @@ Clean source 9080aabf9 is committed through the normal hooks; unfinished referen
 F502-12 actual teardown exposed a Tauri native-menu deadlock: the pinned Tao callback holds its mutex while the selected native action synchronously sends a termination notification that reenters the same callback. Preserve the sample and exact executable. Normal menu shutdown timed out; SIGTERM cleanup also timed out, and only the task-owned process was then killed. Neither cleanup is lifecycle acceptance. The existing native enqueue_ui executor avoids the callback boundary; its three owning cases now pass, preserving the actual selected action and scheduler/native errors. Actual rebuilt Tauri quit and the full three-host owner remain open.
 
 The debug text-tail reproduction is now GREEN together with 17 adjacent debug/settings owners. New content requests the public end-of-element scroll once; the completed layout publishes the actual scroll state, while later user scrolling is preserved. The settings override array reproduction and all three native-menu executor owners also pass. Rebuilt application commands/modal checks and actual Tauri normal quit are still pending; no checklist state changes follow from these source-only results.
+
+F502-12 parent teardown now applies its existing 60-second deadline before connection establishment and the normal Quit RPC, instead of starting it only after the RPC replies. Two deterministic clock-controlled owners first reproduced the unbounded connection/request paths; all 42 runner and artifact owners now pass. Timeout closes the current client, closes a late connection without dispatching another Quit, reports failure and continues the remaining normal cleanup and process audit. Exact null replies, child exit 0 and lock-release checks are retained. The execution-inventory header is corrected to the actual 18 active rows; no checklist item changed state.

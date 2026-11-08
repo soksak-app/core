@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F502-12: 기존 quit 제한을 연결·정상 메뉴/키 요청·자식 종료에 적용한다. 늦거나 만료된 client를 닫고 요청 시간 초과 뒤에도 후속 정리를 계속하며 정상 응답과 종료 기준은 바꾸지 않는다. Runner와 artifact owner 42개가 모두 통과했으며 실제 세 host 인수는 남아 있다.
+
 - F502-4: 빈 setting override를 배열로 유지하고 debug 텍스트를 렌더링된 끝으로 한 번 이동하되 이후 사용자 스크롤을 고정하지 않는다. Native menu action은 framework callback이 끝난 뒤 기존 queue에서 실행한다. Debug/settings owner 18개와 menu executor owner 3개가 통과했으며 재빌드한 UI와 Tauri 정상 종료 인수는 남아 있다.
 
 - F502-4: Private view-sidecar 요청을 원래 source generation과 commit된 프로젝트에 귀속하고 retire 시 대기 작업을 취소하며 최종 허용을 retirement와 동기화한다. Service 시작 뒤 프로젝트 root 충돌을 거부하고 enqueue 성공 뒤에만 session 기록을 생성한다. 이전 current-generation 획득 경로를 제거했다. 요청별 background 소유권으로 mount 후 retire된 요청의 부활도 방지하며 다른 surface를 무효화하거나 과거 기록을 유지하지 않는다. Rust owner 13개, 인접 Go host owner 30개, native workbench owner 164개가 통과했으며 재빌드한 앱의 parity 검증은 남아 있다.

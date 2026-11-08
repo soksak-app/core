@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startFakeEndpoint } from "@soksak/client/testing";
-import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan, validateOrdinaryArtifacts } from "../test-app.mjs";
+import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan, validateOrdinaryArtifacts, quitApplication } from "../test-app.mjs";
 
 const node = (code) => [process.execPath, "-e", code];
 // The limit of a test of a start step is the limit of the step (START_LIMIT_MS, 60 s) and some more: at a high load of the file system
@@ -348,6 +348,55 @@ const MENUS = { language: "en", menus: [
   { title: "soksak", items: [{ title: "About soksak", key: "" }, { title: "Quit soksak", key: "cmd+q" }] },
   { title: "File", items: [{ title: "Close Window", key: "cmd+w" }] },
 ] };
+
+test("quit deadline covers connection and closes a client that arrives after expiry", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const configDir = workspace(t), child = { exitCode: 0, signalCode: null };
+  let arrive, calls = 0, closed = 0, settled = false;
+  const client = { request: async (method) => { calls++; return method === "status.get" ? MENUS : null; }, close() { closed++; } };
+  const pending = quitApplication({ app: "fixture", by: "menu", configDir }, new Map([["fixture", child]]), 0, () => {}, () => new Promise((resolve) => { arrive = resolve; }));
+  const observed = pending.then(() => ({ ok: true }), (error) => ({ error }));
+  observed.then(() => { settled = true; });
+  t.after(async () => { arrive(client); await observed; });
+  t.mock.timers.tick(60_000);
+  await new Promise(setImmediate);
+  assert.equal(settled, true, "connection bypassed the existing 60-second quit deadline");
+  assert.match((await observed).error.message, /quit.*60s/i);
+  arrive(client);
+  await new Promise(setImmediate);
+  assert.equal(calls, 0, "a late connection dispatched a quit after the step had expired");
+  assert.equal(closed, 1, "the late client remained connected");
+});
+
+test("quit deadline closes a pending RPC and runs the remaining quit and process audit", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const firstDir = workspace(t), nextDir = workspace(t);
+  let release, entered;
+  const requested = new Promise((resolve) => { entered = resolve; });
+  let firstClosed = 0, nextClosed = 0, settled = false;
+  const first = { request: async (method) => {
+    if (method === "status.get") return MENUS;
+    entered(); return new Promise((resolve) => { release = resolve; });
+  }, close() { firstClosed++; } };
+  const next = { request: async (method) => method === "status.get" ? MENUS : null, close() { nextClosed++; } };
+  const { lines, write } = recorder();
+  const item = (app, configDir) => ({ name: `quit ${app}`, phase: "cleanup", kind: "quit", by: "menu", app, configDir });
+  const pending = runPlan([item("first", firstDir), item("next", nextDir), { name: "remaining processes", phase: "cleanup", kind: "remaining", paths: [] }],
+    { write, children: new Map([["first", { exitCode: 0, signalCode: null }], ["next", { exitCode: 0, signalCode: null }]]), connectClient: async ({ configDir }) => configDir === firstDir ? first : next });
+  pending.then(() => { settled = true; });
+  t.after(async () => { release(null); await pending; });
+  await requested;
+  t.mock.timers.tick(60_000);
+  await new Promise(setImmediate);
+  assert.equal(settled, true, "pending Quit RPC blocked every later cleanup beyond the declared deadline");
+  const failures = await pending;
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /quit first:.*60s/);
+  assert.equal(firstClosed, 1);
+  assert.equal(nextClosed, 1);
+  assert.ok(lines.some((line) => line.startsWith("passed quit next")), lines.join("\n"));
+  assert.ok(lines.some((line) => line.startsWith("passed remaining processes")), lines.join("\n"));
+});
 
 /** A started application that exits with status 0 on SIGTERM, as a host ends after its quit, once it handles the signal. */
 async function quittingApplication(t) {

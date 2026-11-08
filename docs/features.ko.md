@@ -4,7 +4,7 @@
 
 ### 실행 가능 작업 목록 (2026-11-08 snapshot)
 
-이 감사 snapshot의 core 정본 row 수는 **진행 21, 대기 4, 보류 86**이다. `scripts/check-tests.mjs`는 core `docs/features.md`만 읽는다. `scripts/checklist.mjs`의 `[ ]`는 waiting, `[~]`는 active, `[!]`는 held, `[-]`는 closed다. 부모·자식 row를 각각 세므로 독립적으로 실행 가능한 작업 25개라는 뜻이 아니다. 이 목록은 F698·F696-4-2-2·관찰 API의 한정된 완료를 반영하며 OCR·benchmark parent는 미완료다.
+이 감사 snapshot의 core 정본 row 수는 **진행 18, 대기 4, 보류 86**이다. `scripts/check-tests.mjs`는 core `docs/features.md`만 읽는다. `scripts/checklist.mjs`의 `[ ]`는 waiting, `[~]`는 active, `[!]`는 held, `[-]`는 closed다. 부모·자식 row를 각각 세므로 독립적으로 실행 가능한 작업 22개라는 뜻이 아니다. 이 목록은 F698·F696-4-2-2·관찰 API의 한정된 완료를 반영하며 OCR·benchmark parent는 미완료다.
 
 #### Core ID
 
@@ -4269,3 +4269,5 @@ Clean source 9080aabf9를 정상 hook을 거쳐 커밋했으며 미완료 refere
 F502-12 실제 정리에서 Tauri native menu deadlock을 발견했다. 고정된 Tao callback이 mutex를 잡은 채 선택한 native action을 실행하고, 동기 종료 알림이 같은 callback에 재진입한다. Sample과 정확한 실행 파일을 보존했다. 정상 메뉴 종료가 시간 초과됐고 SIGTERM 정리도 시간 초과돼 작업 소유 process만 강제 종료했다. 두 정리 모두 lifecycle 인수가 아니다. 기존 native enqueue_ui executor로 callback 경계를 피하는 수정의 owning case 3개가 실제 선택 action과 scheduler/native 오류를 유지하며 통과했다. 재빌드한 Tauri의 실제 종료와 전체 세 host owner는 남아 있다.
 
 Debug 텍스트 tail 재현은 인접 debug/settings owner 17개와 함께 GREEN이다. 새 content가 공개 element-end scroll을 한 번 요청하고 완료된 layout의 실제 scroll 상태를 발행하며 이후 사용자 스크롤은 보존한다. Settings override 배열 재현과 native menu executor owner 3개도 통과했다. 재빌드한 앱의 commands/modal 검사와 Tauri 실제 정상 종료는 남아 있으며 이 source 결과로 체크리스트 상태를 변경하지 않는다.
+
+F502-12 부모 정리는 기존 60초 제한을 Quit RPC 응답 뒤가 아니라 연결 수립과 정상 Quit RPC 전에 적용한다. 결정적 clock 제어 owner 두 개로 제한 없는 연결·요청 경로를 먼저 재현했으며 runner와 artifact owner 42개가 모두 통과했다. 시간 초과 시 현재 client를 닫고 늦게 연결된 client는 추가 Quit 없이 닫으며 실패를 보고한 뒤 나머지 정상 정리와 process audit를 계속한다. 정확한 null 응답, 자식 exit 0, lock 해제 검사는 유지한다. 실행 목록 상단 수치를 실제 활성 row 18개로 정정했으며 체크리스트 상태를 바꾼 항목은 없다.

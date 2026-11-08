@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F502-12: Apply the existing quit deadline to connection, the normal menu/key request and child exit. Close late or expired clients and continue later cleanup after a timed-out request without changing normal-reply or exit criteria. All 42 runner and artifact owners pass; actual three-host acceptance remains open.
+
 - F502-4: Keep empty setting overrides as arrays and open debug text at its rendered tail once without pinning later scrolling. Move native menu actions to the existing queue after the framework callback ends. The 18 debug/settings and three menu executor owners pass; rebuilt UI and normal Tauri quit acceptance remain open.
 
 - F502-4: Bind private view-sidecar requests to their original source generation and committed project, cancel queued work on retirement, and synchronize final admission with retirement. Reject conflicting project roots after service startup and create session records only after successful enqueue. Remove obsolete capture-current paths. Per-call background ownership also prevents mount-then-retire resurrection without invalidating unrelated surfaces or retaining history. The 13 Rust owners, 30 adjacent Go host owners and 164 native workbench owners pass; rebuilt application parity remains open.

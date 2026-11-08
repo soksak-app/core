@@ -237,26 +237,44 @@ async function requestQuit(client, by) {
   throw new Error(`unknown quit path ${JSON.stringify(by)}`);
 }
 
-async function quitApplication(item, children, since, write) {
+export async function quitApplication(item, children, since, write, connectClient = connect) {
   const child = children.get(item.app);
-  const client = await connect({ configDir: item.configDir });
+  let client;
+  let expired = false;
+  const bound = limit(QUIT_LIMIT_MS, `the normal quit did not complete in ${QUIT_LIMIT_MS / 1000}s`);
   let action;
   try {
-    action = await requestQuit(client, item.by);
+    action = await Promise.race([
+      (async () => {
+        const connected = await connectClient({ configDir: item.configDir });
+        if (expired) {
+          // Connection establishment is not cancellable. A late connection
+          // belongs to the expired step and must never dispatch a new Quit.
+          connected.close();
+          throw new Error('the normal quit deadline expired before connection');
+        }
+        client = connected;
+        const selected = await requestQuit(connected, item.by);
+        if (expired) throw new Error('the normal quit deadline expired before its response');
+        connected.close();
+        client = undefined;
+        const end = await exited(child);
+        if (end.code !== 0) {
+          for (const line of crashReports(item.app, since)) write(`crash ${line}`);
+          throw new Error(`the application ended with ${describeExit(end)}`);
+        }
+        return selected;
+      })(),
+      bound.promise,
+    ]);
   } finally {
-    client.close();
-  }
-  const bound = limit(QUIT_LIMIT_MS, `the application did not exit in ${QUIT_LIMIT_MS / 1000}s after ${action}`);
-  let end;
-  try {
-    end = await Promise.race([exited(child), bound.promise]);
-  } finally {
+    expired = true;
+    client?.close();
+    client = undefined;
     bound.clear();
   }
-  if (end.code !== 0) {
-    for (const line of crashReports(item.app, since)) write(`crash ${line}`);
-    throw new Error(`the application ended with ${describeExit(end)}`);
-  }
+  // Retain the existing lock-holder proof, including a replacement process
+  // after relaunch. A timeout above is a failed Quit, never a forced shutdown.
   await lockReleased(item.configDir, action);
 }
 
@@ -288,7 +306,7 @@ function checkRemaining(item) {
  * step reaches the application of an earlier start step. An abort of `interrupted`, whose reason is the name of the signal, ends the
  * running command, skips the later steps that are not cleanup steps and runs the cleanup steps, so the applications and their services end.
  */
-export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {} }) {
+export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {}, connectClient = connect }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
@@ -314,7 +332,7 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
       // A cleanup step runs to its end after an interrupt, because it ends what the earlier steps started.
       if (item.kind === 'run') await runCommand(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'start') await startApplication(item, children);
-      else if (item.kind === 'quit') await quitApplication(item, children, since, write);
+      else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient);
       else if (item.kind === 'remaining') checkRemaining(item);
       else if (item.kind === 'capture') await capture(item.capture);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);
