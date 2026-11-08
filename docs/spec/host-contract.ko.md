@@ -151,6 +151,8 @@ fn invalid_json_closes_connection() {
 | `diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result` | command는 UI dispatcher를 통해 marker 작업을 실행하고 native enabled 상태, kind, color, border width를 그대로 반환한다. | all |
 | `diagnostics.document.viewport-marker.reports-native-errors` | native marker 실패는 원래 text와 internal-error code로 반환하며 성공으로 보고하지 않는다. | all |
 | `diagnostics.capture.document-identity.start.is-declared` | 진단 build는 `diagnostics.capture.document-identity.start`를 선언한다. | all |
+| `diagnostics.capture.document-reference.is-declared` | 진단 build는 `diagnostics.capture.document-reference`를 선언한다. | all |
+| `diagnostics.capture.document-reference.rejects-invalid-request-before-platform-dispatch` | 비어 있지 않은 surface, root를 뜻하는 `""` 또는 유효한 document region 이름인 document, 양의 JavaScript safe integer `requestId` 중 하나라도 없거나 선언되지 않은 field가 있는 document reference 요청은 host가 window를 찾거나 platform을 호출하기 전에 document reference를 이름에 담은 오류로 거부된다. | all |
 | `diagnostics.window.draw-covered.is-declared` | 진단 build는 `diagnostics.window.draw-covered`를 선언한다. | all |
 | `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | 선택된 document identity source가 없는 중지는 source freeze와 제거를 건너뛰고 capture를 한 번 중지하며 `frameIdentity` option의 두 값을 모두 보존한다. | all |
 | `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | 선택된 source가 있으면 중지는 source를 freeze하고 capture를 중지한 뒤 같은 generation을 제거한다. `issuedSlots`는 성공한 freeze reply에서 온다. | all |

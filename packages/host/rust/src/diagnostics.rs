@@ -30,6 +30,9 @@ use crate::platform::{DocumentViewportMarker, Handle};
 use crate::recording::{Capture, Recording, Target, layout_trace};
 use crate::workspace::Workspace;
 
+#[path = "document_reference.rs"]
+mod document_reference;
+
 /// The interval of one drag step. The page calculates the number of steps with the same value.
 const FRAME: Duration = Duration::from_millis(16);
 
@@ -192,7 +195,7 @@ pub(crate) fn call(
                 .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
         }
         "diagnostics.capture.still" => capture_still(window),
-        "diagnostics.capture.document-reference" => capture_document_reference(window, &params),
+        "diagnostics.capture.document-reference" => document_reference::capture(window, &params),
         "diagnostics.notifications" => delivered_notifications(window),
         "diagnostics.page.collect" => page_collect(window),
         "diagnostics.host.events" => host_events(window, &params),
@@ -589,18 +592,27 @@ fn log_late_document_frame_identity_result(result: Result<String, String>) {
 fn late_document_frame_identity_entry(
     result: Result<String, String>,
 ) -> crate::application_log::Entry {
+    late_document_observation_entry("document frame identity", result)
+}
+
+/// The log entry of a document observation callback of owner that completes after its request ended: an error is logged
+/// at error level, and a late success at info level.
+fn late_document_observation_entry(
+    owner: &str,
+    result: Result<String, String>,
+) -> crate::application_log::Entry {
     match result {
         Ok(_) => crate::application_log::Entry::new(
             "info",
             "host",
             "diagnostics",
-            "document frame identity callback arrived after its request ended",
+            format!("{owner} callback arrived after its request ended"),
         ),
         Err(error) => crate::application_log::Entry::new(
             "error",
             "host",
             "diagnostics",
-            format!("document frame identity callback failed after its request ended: {error}"),
+            format!("{owner} callback failed after its request ended: {error}"),
         ),
     }
 }
@@ -884,120 +896,6 @@ fn process_exit(window: &Window, params: &Map<String, Value>) -> Result<Value, F
 /// Takes one still image of the window without giving it focus, writes it to `<config-dir>/captures/still-*/window.png`
 /// and returns the path. It is observation material that a person checks visually during development, and the requester
 /// deletes the directory after checking.
-fn capture_document_reference(
-    window: &Window,
-    params: &Map<String, Value>,
-) -> Result<Value, Failure> {
-    if params
-        .keys()
-        .any(|key| !["window", "surface", "document", "requestId"].contains(&key.as_str()))
-    {
-        return Err(Failure::params(
-            "document reference parameters contain an undeclared field",
-        ));
-    }
-    let surface = params
-        .get("surface")
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| Failure::params("document reference requires a surface"))?
-        .to_string();
-    let document = params
-        .get("document")
-        .and_then(Value::as_str)
-        .ok_or_else(|| Failure::params("document reference requires an exact document name"))?
-        .to_string();
-    let request_id = params
-        .get("requestId")
-        .and_then(Value::as_u64)
-        .filter(|value| *value > 0 && *value <= 9_007_199_254_740_991)
-        .ok_or_else(|| {
-            Failure::params(
-                "document reference requestId must be a positive JavaScript safe integer",
-            )
-        })?;
-    let held = window.clone();
-    let key = (surface.clone(), document.clone());
-    let (generation, expected_handle) = on_main(window, move || {
-        let data = crate::windows::window_data(&held)?;
-        let generation = data
-            .view_source_origins
-            .current_view(&key.0)
-            .ok_or("document reference surface has no current renderer view")?;
-        let handle = data.documents.get(&key)?;
-        Ok((generation, handle))
-    })
-    .map_err(internal)?;
-    let identity_start = start_document_identity(
-        window,
-        CaptureDocumentIdentityRequest {
-            surface: surface.clone(),
-            generation,
-        },
-        Some((document.clone(), expected_handle)),
-    )?;
-    let platform = platform::current().map_err(internal)?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(internal)?
-        .as_nanos();
-    let directory = window
-        .state::<Workspace>()
-        .directory()
-        .join("logs")
-        .join("captures")
-        .join(format!("document-reference-{request_id}-{stamp}"));
-    platform.private_directory(&directory).map_err(internal)?;
-    let captured_directory = directory.to_string_lossy().to_string();
-    let held = window.clone();
-    let key = (surface.clone(), document.clone());
-    let (sender, receiver) = std::sync::mpsc::channel();
-    on_main(window, move || {
-        let data = crate::windows::window_data(&held)?;
-        if data.view_source_origins.current_view(&key.0) != Some(generation) {
-            return Err("document reference renderer incarnation changed".into());
-        }
-        let handle = data.documents.get(&key)?;
-        if handle != expected_handle { return Err("document reference native target was replaced".into()); }
-        platform.document_reference_observe(handle, request_id, &captured_directory, Box::new(move |result| {
-            if let Err(error) = sender.send(result) {
-                let (level, text) = match error.0 {
-                    Ok(_) => ("info", "document reference callback arrived after its request ended".to_string()),
-                    Err(error) => ("error", format!("document reference callback failed after its request ended: {error}")),
-                };
-                crate::application_log::Entry::new(level, "host", "diagnostics", text).log();
-            }
-        }))
-    }).map_err(internal)?;
-    let raw = receiver
-        .recv_timeout(TIMEOUT)
-        .map_err(|_| {
-            internal(format!(
-                "document reference timed out; artifacts retained at {}",
-                directory.display()
-            ))
-        })?
-        .map_err(internal)?;
-    let mut value: Value = serde_json::from_str(&raw)
-        .map_err(|error| internal(format!("document reference returned invalid JSON: {error}")))?;
-    let fields = value
-        .as_object_mut()
-        .ok_or_else(|| internal("document reference result is not an object"))?;
-    if fields.get("requestId").and_then(Value::as_u64) != Some(request_id) {
-        return Err(internal(
-            "document reference result belongs to another request",
-        ));
-    }
-    fields.insert(
-        "target".into(),
-        json!({"surface":surface,"document":document}),
-    );
-    fields.insert("directory".into(), json!(directory.to_string_lossy()));
-    fields.insert("identityStart".into(), identity_start);
-    fields.insert("generation".into(), json!(generation));
-    Ok(value)
-}
-
 fn capture_still(window: &Window) -> Result<Value, Failure> {
     let platform = platform::current().map_err(internal)?;
     let held = window.clone();
@@ -1808,18 +1706,33 @@ fn await_document_frame_identity(
     + Send
     + 'static,
 ) -> Result<String, String> {
+    await_document_observation(window, "document frame identity", schedule)
+}
+
+/// Schedules one native document observation of owner on the main thread and waits for its callback within TIMEOUT. A
+/// callback that arrives after the wait ended is logged under owner.
+fn await_document_observation(
+    window: &Window,
+    owner: &'static str,
+    schedule: impl FnOnce(Box<dyn FnOnce(Result<String, String>) + Send>) -> Result<(), String>
+    + Send
+    + 'static,
+) -> Result<String, String> {
     let (sender, receiver) = std::sync::mpsc::channel();
     let scheduled = on_main(window, move || {
         schedule(Box::new(move |result| {
             if let Err(error) = sender.send(result) {
-                log_late_document_frame_identity_result(error.0);
+                late_document_observation_entry(owner, error.0).log();
             }
         }))
     });
-    await_document_frame_identity_schedule_result(scheduled, receiver, TIMEOUT)
+    await_document_observation_schedule_result(owner, scheduled, receiver, TIMEOUT)
 }
 
-fn await_document_frame_identity_schedule_result(
+/// Returns the scheduling error of owner, joined with the error of a callback that already completed synchronously, or
+/// else waits for the callback reply.
+fn await_document_observation_schedule_result(
+    owner: &str,
     scheduled: Result<(), String>,
     receiver: std::sync::mpsc::Receiver<Result<String, String>>,
     timeout: Duration,
@@ -1827,7 +1740,7 @@ fn await_document_frame_identity_schedule_result(
     if let Err(schedule_error) = scheduled {
         return match receiver.try_recv() {
             Ok(Err(callback_error)) => Err(format!(
-                "document frame identity scheduling failed: {schedule_error}; callback failed: {callback_error}"
+                "{owner} scheduling failed: {schedule_error}; callback failed: {callback_error}"
             )),
             Ok(Ok(_))
             | Err(
@@ -1835,20 +1748,21 @@ fn await_document_frame_identity_schedule_result(
             ) => Err(schedule_error),
         };
     }
-    await_document_frame_identity_reply(receiver, timeout)
+    await_document_observation_reply(owner, receiver, timeout)
 }
 
-fn await_document_frame_identity_reply(
+fn await_document_observation_reply(
+    owner: &str,
     receiver: std::sync::mpsc::Receiver<Result<String, String>>,
     timeout: Duration,
 ) -> Result<String, String> {
     match receiver.recv_timeout(timeout) {
         Ok(result) => result,
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(format!(
-            "document frame identity callback timed out after {timeout:?}"
-        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            Err(format!("{owner} callback timed out after {timeout:?}"))
+        }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            Err("document frame identity callback ended before replying".into())
+            Err(format!("{owner} callback ended before replying"))
         }
     }
 }

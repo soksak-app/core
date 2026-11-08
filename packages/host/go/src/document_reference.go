@@ -41,7 +41,7 @@ func parseDocumentReferenceRequest(params json.RawMessage) (documentReferenceReq
 	if err := decode(params, &request); err != nil {
 		return documentReferenceRequest{}, fmt.Errorf("document reference: %w", err)
 	}
-	if request.Surface == nil || *request.Surface == "" || request.Document == nil || !documentName.MatchString(*request.Document) {
+	if request.Surface == nil || *request.Surface == "" || request.Document == nil || (*request.Document != "" && !documentName.MatchString(*request.Document)) {
 		return documentReferenceRequest{}, rpcError(codeInvalidParams, "document reference requires an exact surface and document name (empty for the root)")
 	}
 	if request.RequestID == nil || *request.RequestID == 0 || *request.RequestID > maxSourceGeneration {

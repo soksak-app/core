@@ -353,7 +353,11 @@ fn document_frame_identity_callback_wait_is_bounded() {
         std::thread::sleep(Duration::from_millis(25));
         sender.send(Ok("late reply".to_string()))
     });
-    let result = super::await_document_frame_identity_reply(receiver, Duration::from_millis(1));
+    let result = super::await_document_observation_reply(
+        "document frame identity",
+        receiver,
+        Duration::from_millis(1),
+    );
     assert!(
         matches!(&result, Err(error) if error.contains("timed out")),
         "late identity callback result = {result:?}"
@@ -372,7 +376,8 @@ fn document_frame_identity_preserves_synchronous_callback_error_when_scheduling_
         .send(Err("native callback failed".to_string()))
         .unwrap();
 
-    let result = super::await_document_frame_identity_schedule_result(
+    let result = super::await_document_observation_schedule_result(
+        "document frame identity",
         Err("native operation was not scheduled".into()),
         receiver,
         Duration::from_millis(1),
@@ -393,7 +398,8 @@ fn document_frame_identity_preserves_synchronous_success_reply() {
     let (sender, receiver) = mpsc::channel();
     sender.send(Ok("native reply".to_string())).unwrap();
 
-    let result = super::await_document_frame_identity_schedule_result(
+    let result = super::await_document_observation_schedule_result(
+        "document frame identity",
         Ok(()),
         receiver,
         Duration::from_millis(1),

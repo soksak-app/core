@@ -207,14 +207,19 @@ pub fn check(caller: Option<&str>, request: &Request) -> Result<Key, String> {
             request.surface
         ));
     }
-    let mut chars = request.document.chars();
-    let valid = matches!(chars.next(), Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit())
-        && request.document.len() <= 64
-        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
-    if !valid {
+    if !valid_name(&request.document) {
         return Err(format!("invalid document name {:?}", request.document));
     }
     Ok((request.surface.clone(), request.document.clone()))
+}
+
+/// Reports whether name is a document region name: a lowercase letter or digit, then up to 63 lowercase letters, digits
+/// or hyphens. The root document of a surface has the empty name, which is not a document region name.
+pub fn valid_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_lowercase() || c.is_ascii_digit())
+        && name.len() <= 64
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// The stream names of a document region (docs/spec/native-surfaces.md#document-streams).

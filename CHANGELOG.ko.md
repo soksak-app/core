@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F696-4: 두 host 모두 document reference 요청에서 빈 이름으로 root document를 가리키며, Rust host는 platform 호출 전에 document 이름을 검사한다. Rust capture는 공유 observation 대기를 거치므로 그 오류가 document reference를 가리킨다. Rust와 Go의 요청·lifetime test는 파일 단위로 짝을 이룬다.
+
 - F502-12: 요청이 일으킨 quit을 그 요청의 응답 뒤에 실행한다. 대상은 `host.quit`과, `host.menu.select`·`host.dock.select`의 native 작업이 일으킨 시스템 종료 요청이다. Go와 Rust endpoint는 실제 쓰기 뒤에 완료되는 요청별 응답 문맥을 전달한다. 두 owner test는 quit이 바로 실행되면 실패하고 응답 test 일곱 개와 함께 통과한다. 재빌드한 세 host의 quit run은 남아 있다.
 
 - F502-12: 기존 quit 제한을 연결·정상 메뉴/키 요청·자식 종료에 적용한다. 늦거나 만료된 client를 닫고 요청 시간 초과 뒤에도 후속 정리를 계속하며 정상 응답과 종료 기준은 바꾸지 않는다. Runner와 artifact owner 42개가 모두 통과했으며 실제 세 host 인수는 남아 있다.
