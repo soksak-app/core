@@ -9,6 +9,7 @@ import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { processTable } from "@soksak/window-check/process-table.mjs";
+import { previewGaps, startPreviewPanes } from "./library-preview.mjs";
 import { RASTER, rasterReady } from "./raster-probe.mjs";
 
 /** One window of the window list that is not in known. */
@@ -174,15 +175,11 @@ for (const app of Object.values(APPS)) {
         if (a.y + a.h <= b.y) assert.ok(pa.y + pa.h < pb.y, `${a.id} must remain above ${b.id}`);
       }
     }
-    // The start layout holds the fixed sidebars left and right and between them two content cards, the card of the start tab above
-    // the other.
-    const upperId = grid.cards.find((card) => card.tabs?.some((tab) => tab.id === startTab)).id;
-    const lowerId = grid.cards.find((card) => card.id !== upperId && card.tabs?.length > 0).id;
-    const [left, upper, lower, right] = ["left", upperId, lowerId, "right"]
-      .map((id) => preview.find((c) => c.id === id));
+    const panes = startPreviewPanes(grid, preview);
+    const { left, upper, lower, right } = panes;
     assert.ok(Math.abs(left.w - right.w) <= 1 / 64, "sidebar widths must be uniform");
     assert.ok(Math.abs(upper.h - lower.h) <= 1 / 64, "split rows must have equal heights");
-    const gaps = [upper.x - left.x - left.w, right.x - upper.x - upper.w, lower.y - upper.y - upper.h];
+    const gaps = previewGaps(panes);
     assert.ok(gaps.every((gap) => gap > 0 && Math.abs(gap - gaps[0]) <= 1 / 64), "pane gaps must be uniform on both axes");
     const saved = await project(s, first.id);
     const space = saved.spaces.find((x) => x.id === saved.activeSpaceId);
@@ -195,7 +192,7 @@ for (const app of Object.values(APPS)) {
     // If the return command restores only the DOM and displays the native image raster late, this check fails.
     let rasterCount = (await s.surfaces(RASTER)).filter((surface) => surface.visible).length;
     if (rasterCount === 0) {
-      const source = grid.cards.find((card) => card.id === upperId && card.tabs.length > 0);
+      const source = grid.cards.find((card) => card.tabs?.some((tab) => tab.id === startTab));
       assert.ok(source, "raster source card not found");
       await s.run("core.card.split", { card: source.id, side: "right", plugin: RASTER });
       await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
