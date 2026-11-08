@@ -66,6 +66,7 @@ func mustPanic(t *testing.T, operation func()) {
 	operation()
 }
 
+// contract: platform.native-memory.cstring-is-a-nul-terminated-copy-the-caller-frees
 func TestCStringOwnsANulTerminatedNativeCopyUntilCallerFree(t *testing.T) {
 	fixture := newAllocationFixture()
 	text := "한글/native"
@@ -92,6 +93,7 @@ func TestCStringOwnsANulTerminatedNativeCopyUntilCallerFree(t *testing.T) {
 	fixture.functions.Free(unsafe.Pointer(empty))
 }
 
+// contract: platform.native-memory.gostring-copies-to-the-first-nul
 func TestGoStringCopiesNativeBytesAndAcceptsNil(t *testing.T) {
 	fixture := newAllocationFixture()
 	if got := fixture.functions.GoString(nil); got != "" {
@@ -109,6 +111,7 @@ func TestGoStringCopiesNativeBytesAndAcceptsNil(t *testing.T) {
 	}
 }
 
+// contract: platform.native-memory.cbytes-is-a-binary-copy-the-caller-frees
 func TestCBytesCopiesBinaryDataAndLeavesCallerOwnership(t *testing.T) {
 	fixture := newAllocationFixture()
 	input := []byte{0, 2, 0xff, 0, 7}
@@ -133,6 +136,7 @@ func TestCBytesCopiesBinaryDataAndLeavesCallerOwnership(t *testing.T) {
 	fixture.functions.Free(empty)
 }
 
+// contract: platform.native-memory.gobytes-copies-the-requested-range
 func TestGoBytesCopiesTheRequestedNativeRange(t *testing.T) {
 	fixture := newAllocationFixture()
 	pointer := fixture.functions.CBytes([]byte{0, 2, 0xff, 7})
@@ -154,6 +158,7 @@ func TestGoBytesCopiesTheRequestedNativeRange(t *testing.T) {
 	}
 }
 
+// contract: platform.native-memory.invalid-range-or-failed-allocation-panics
 func TestNativeMemoryHelpersRejectInvalidRangesAndFailedAllocations(t *testing.T) {
 	fixture := newAllocationFixture()
 	mustPanic(t, func() { fixture.functions.GoBytes(nil, -1) })

@@ -24,6 +24,7 @@ func complete(value any, handler func(string, []reflect.Value) []reflect.Value) 
 	}
 }
 
+// contract: mygo.native-callbacks.incomplete-profile-allocates-no-address
 func TestMissingCallbacksAllocateNoAddresses(t *testing.T) {
 	var callbacks abi.Callbacks
 	complete(&callbacks, func(string, []reflect.Value) []reflect.Value { return nil })
@@ -58,6 +59,7 @@ func TestMissingCallbacksAllocateNoAddresses(t *testing.T) {
 	}
 }
 
+// contract: mygo.native-callbacks.preserve-the-declared-abi
 func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 	library := os.Getenv("SOKSAK_NATIVE_CALLBACK_ABI_LIBRARY")
 	if library == "" {

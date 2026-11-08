@@ -78,6 +78,7 @@ func TestMain(m *testing.M) {
 	}
 }
 
+// contract: mygo.native-callbacks.run-on-the-framework-worker
 func TestNativeCallbacksUseTheFrameworkWorker(t *testing.T) {
 	if os.Getenv(childFlag) != "1" {
 		executable, err := os.Executable()
