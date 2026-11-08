@@ -1739,3 +1739,31 @@ func TestSurfaceDeclarationsShareOneWindowObservationPerView(t *testing.T) {
 		}
 	}
 }
+
+// core.library.open answers once the window shows the project again and the host presented its surfaces: the opening reads the
+// geometry store first, so a command that answered at the end of its run would answer while the window still shows the library.
+// A check that reads host.window after the answer finds the views of the project where the frame stands them.
+func TestAProjectReturnAnswersWhenItsSurfacesArePresented(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := anySurface(t, stored)
+	f.run("core.projects.browse", struct{}{})
+	if stored.lastSurfaces(t)[surface]["visible"] != false {
+		t.Fatalf("the library shows the surface: %v", stored.lastSurfaces(t)[surface])
+	}
+	raw, err := json.Marshal(map[string]string{"id": f.host.projects[0]["id"].(string)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answered, visible, presented := false, any(nil), false
+	f.shell.Registry().RunLater("core.library.open", raw, func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.library.open: %v", err)
+		}
+		answered, visible = true, stored.lastSurfaces(t)[surface]["visible"]
+		presented = stored.placed == len(stored.requests)
+	})
+	f.settle()
+	if !answered || visible != true || !presented {
+		t.Fatalf("core.library.open answered %t with the surface visible %v and its placement presented %t", answered, visible, presented)
+	}
+}
