@@ -373,6 +373,35 @@ func TestPluginsApplyStartsTheWorkbenchAgain(t *testing.T) {
 	}
 }
 
+// A plugin change starts the workbench again only after the host took the reply of each request that was running, so the command
+// that made the change answers (docs/spec/installation.md#applying-a-change).
+func TestAPluginChangeStartsAfterTheReplyOfARunningCommand(t *testing.T) {
+	stored := &storedHost{}
+	release := make(chan struct{})
+	stored.extra = map[string]workbench.HostCall{
+		"pluginsRun": func(context.Context, json.RawMessage) (any, error) { <-release; return nil, nil },
+	}
+	app, window, queue, replies := fixtureApp(t, stored)
+	tester := ui.NewTester(app.Build(window), 1200, 800)
+	app.Shown(window)
+	window.settle(t, queue, tester)
+	app.Emit(window, "exposure-request", map[string]any{"id": 8, "method": "command.run",
+		"params": map[string]any{"name": "core.plugins.enable", "params": map[string]any{"plugin": "probe"}}})
+	window.settle(t, queue, tester)
+	app.Emit(window, "plugins-changed", map[string]any{"action": "enable", "plugin": "probe"})
+	window.settle(t, queue, tester)
+	if len(window.starts) != 0 {
+		t.Fatal("the workbench started again before the command that changed the plugins answered")
+	}
+	close(release)
+	window.settle(t, queue, tester)
+	window.started(t, stored)
+	answered := slices.IndexFunc(*replies, func(reply map[string]any) bool { return reply["id"] == float64(8) })
+	if answered < 0 || (*replies)[answered]["error"] != nil {
+		t.Fatalf("core.plugins.enable did not answer before the new start: the replies are %v", *replies)
+	}
+}
+
 // installedSession is the document of the installed plugins with a plugin that keeps a background session.
 const installedSession = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
 	"id": "session", "name": "세션", "description": "session", "mark": "s", "icon": "<path d=\"M1 1h14\"/>", "dependencies": {"@scope/sidecar-session": "^1.0.0"},

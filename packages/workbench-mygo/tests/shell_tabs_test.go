@@ -161,6 +161,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Invalidate:  func() {},
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
+		Reload:      func() { stored.reloads++ },
 		Tabs: func(*workbench.Shell) workbench.TabPorts {
 			return workbench.TabPorts{Plugins: func() []workbench.ShellPlugin {
 				return []workbench.ShellPlugin{

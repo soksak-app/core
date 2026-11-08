@@ -100,9 +100,15 @@ func (s *Shell) register() {
 	// The project list shows the library and selects its page of the projects (docs/spec/installation.md#plugin-screen).
 	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return s.showLibraryPage("projects") })
 	later(s, "core.projects.flush", func(_ struct{}, answer func(any, error)) { s.flushProjects(answerNull(answer)) })
-	command(s, "core.plugins.apply", func(struct{}) (any, error) {
-		s.pluginsChanged()
-		return map[string]bool{"reloaded": true}, nil
+	// core.plugins.apply answers {reloaded} before the new start (docs/spec/installation.md#applying-a-change).
+	later(s, "core.plugins.apply", func(_ struct{}, answer func(any, error)) {
+		s.applyPlugins(func(reloaded bool, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(map[string]bool{"reloaded": reloaded}, nil)
+		})
 	})
 	s.registerProjectOpen()
 	s.registerFixture()
@@ -154,7 +160,7 @@ func (s *Shell) register() {
 			answer(closed(true), nil)
 		}
 		if value.ID == project.ActiveSpaceID {
-			s.settleModified(closeIt)
+			s.settleModified(closeAnswers, closeIt)
 			return
 		}
 		closeIt(true)

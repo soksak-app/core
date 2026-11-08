@@ -228,7 +228,7 @@ func (s *Shell) registerProjectClose() {
 			remove()
 			return
 		}
-		s.settleModified(func(settled bool) {
+		s.settleModified(closeAnswers, func(settled bool) {
 			if !settled {
 				answer(closed(false), nil)
 				return
@@ -678,7 +678,7 @@ func (s *Shell) removalAsked(data []any) {
 		answer(true)
 		return
 	}
-	s.settleModified(answer)
+	s.settleModified(closeAnswers, answer)
 }
 
 // dropProject takes the removed project out of the window. The window shows the next project, or the library without one.
