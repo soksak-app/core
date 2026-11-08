@@ -48,8 +48,15 @@ async function press(s, surface, point) {
 }
 
 /**
+ * The distance in points from the top of the surface of the press that measures the pointer precision: inside the margin of 8
+ * points that the layout probe keeps around its document region (e2e/fixtures/layout-probe/layoutprobe/ui/page.html), so the
+ * view itself and not its region receives the press, with a quarter point that the precision measures.
+ */
+const PRECISION_DEPTH = 4.25;
+
+/**
  * Presses the last device pixel row of the surface with native input and checks the coordinates that the document received. A press
- * at 10.25 points inside the surface measures the pointer precision of the WebKit of the run first.
+ * at PRECISION_DEPTH points inside the surface measures the pointer precision of the WebKit of the run first.
  */
 async function clickLastPixel(s, surface, scale) {
   const { state, frame } = await geometry(s, surface, scale);
@@ -58,8 +65,11 @@ async function clickLastPixel(s, surface, scale) {
   // The surface is a view, so the root document of the surface owns that point.
   assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface, document: "" },
     "the last device pixel row does not belong to the view of the surface");
-  const inside = await press(s, surface, { x: point.x, y: frame.y + 10.25 });
-  const precision = { pressed: 10.25, reported: inside.pointerdown.y };
+  const precisionPoint = { x: point.x, y: frame.y + PRECISION_DEPTH };
+  assert.deepEqual(await s.run("host.hit", precisionPoint), { kind: "document", surface, document: "" },
+    "the point of the precision press does not belong to the view of the surface");
+  const inside = await press(s, surface, precisionPoint);
+  const precision = { pressed: PRECISION_DEPTH, reported: inside.pointerdown.y };
   const expected = { x: pointerAtPrecision(precision, x), y: pointerAtPrecision(precision, y) };
   const events = await press(s, surface, point);
   for (const [type, tolerance] of [["pointerdown", 0.001], ["click", 1]]) {

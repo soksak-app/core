@@ -215,10 +215,12 @@ if (requiresAll(process.env)) test("every host lays out the same page the same w
 
 /** A stable public state owns its own native frames and hits, without page transcripts. */
 async function readPublicState(s, normalize) {
+  // host.window.presented waits until the open surface layout transactions committed, so the declarations read after it are those
+  // of the native frames; read before it, the declarations of the previous layout can still equal what was applied to them.
+  await s.presented();
   const surfaces=await s.until("core.surfaces",rows=>rows.some(row=>row.visible) && rows.filter(row=>row.visible).every(row=>
     row.declared && row.applied && ["x","y","w","h"].every(key=>row.declared[key]===row.applied[key])),
   "the public surface declarations were not applied exactly");
-  await s.presented();
   const [layout,grid,modal]=await Promise.all([layoutState(s),s.get("core.grid"),s.get("core.settings-modal")]);
   const hits={};
   for(const row of surfaces.filter(row=>row.visible)) {

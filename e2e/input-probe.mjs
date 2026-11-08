@@ -61,6 +61,17 @@ export const fieldPoint = (s, surface) => centre(s, "probeinput.field", surface)
 /** The centre of the native document region of the probe `surface` in window coordinates; its text field fills the region. */
 export const documentPoint = (s, surface) => centre(s, "probeinput.text", surface);
 
+/**
+ * Presses `point` as a person presses the window of an application that is not active: a pointer move that presses nothing first
+ * makes the window the virtual key window, which answers as the key window, so WebKit gives the pressed page its focus
+ * (docs/spec/exposure.md#virtual-key-window); a press alone leaves the page without focus.
+ */
+export async function pressInKeyWindow(s, point) {
+  await s.pointer(point.x, point.y, "move");
+  await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
+  await s.click(point.x, point.y);
+}
+
 /** Whether `host.window` reports the document region of `surface` as holding the native keyboard. */
 export const documentFocused = (window, surface) => window.documents.some((item) => item.surface === surface && item.focused);
 

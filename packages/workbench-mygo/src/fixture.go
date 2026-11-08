@@ -45,6 +45,8 @@ func fixtureDebugEntries(raw json.RawMessage) ([]DebugEntry, bool, error) {
 func (s *Shell) registerFixture() {
 	s.registry.Method("diagnostics.fixture", s.prepareFixture)
 	s.registerDrag()
+	s.registerTranscript()
+	s.registerSurfaceHold()
 	s.registry.Method("diagnostics.layout.fail", func(_ json.RawMessage, answer func(any, error)) {
 		s.surfaces.layoutFault = true
 		answer(nil, nil)

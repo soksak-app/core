@@ -103,6 +103,10 @@ export async function recordIdleTab(s) {
   const card = grid.cards.find((c) => c.active);
   assert.ok(card, "the grid has no active card");
 
+  // The check windows overlap, and the document region of a covered window hides its document (docs/spec/native-surfaces.md#document-regions),
+  // so the window keeps its documents shown while covered and the tab is measured as a shown tab.
+  await s.request("diagnostics.window.draw-covered", { draw: true });
+  s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
   const growthOf = idleTabGrowth({ window: s.window, pageProcess: (await s.get("host.window")).pageProcess });
   const growthBefore = await readings(s, await tailOf(s), growthOf.settled, `the settled ${growthOf.of} before the tab`);
   const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: IDLE_TAB_PLUGIN });

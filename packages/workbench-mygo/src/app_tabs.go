@@ -177,7 +177,11 @@ func (f shellSurfaces) Keeps(tab string) []string {
 	if report == nil {
 		return nil
 	}
-	keeps := make([]string, 0, len(report.Keeps))
+	// A modified tab keeps its changes, as tabKeeps of packages/workbench/tab-reports.js gives keep:modified for it.
+	keeps := make([]string, 0, len(report.Keeps)+1)
+	if report.Modified {
+		keeps = append(keeps, "keep:modified")
+	}
 	for reason := range report.Keeps {
 		keeps = append(keeps, "keep:"+reason)
 	}
