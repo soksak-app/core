@@ -107,6 +107,48 @@ func TestAnElementReleasesItsViewsWhenNoFrameCanFollow(t *testing.T) {
 	}
 }
 
+// closingWindow is an element window that holds the hook that its close runs.
+type closingWindow struct {
+	elementWindow
+	closing func() bool
+}
+
+func (w *closingWindow) OnClosing(hook func() bool) { w.closing = hook }
+
+// closingPlatform answers the calls of a window that opens and closes.
+type closingPlatform struct{ elementPlatform }
+
+func (p *closingPlatform) EnqueueUI(func()) error                 { return nil }
+func (p *closingPlatform) EndResponderObservation(unsafe.Pointer) {}
+
+// A closed window draws no frame that could still name the views of its elements, so its close hands them back after the frame
+// that the window can no longer present.
+// contract: surface-layout.element-holds-its-views-until-the-next-frame
+func TestAClosedWindowReleasesTheViewsOfItsElements(t *testing.T) {
+	window := &closingWindow{elementWindow: elementWindow{pagelessWindow: pagelessWindow{native: platform.Window(1)}}}
+	fake := &closingPlatform{}
+	previousFramework, previousSystem := framework, system
+	framework, system = pagelessFramework{window: window}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: &Sidecars{}, quit: &Quit{}, relay: NewRelay[relayTarget]()}
+	s := host.newWindow("main", "")
+	s.views = map[string]*nativeWebview{"a": {owner: s}}
+	s.setElement("a", SurfaceElement{Surface: unsafe.Pointer(new(byte)), Key: unsafe.Pointer(new(byte))})
+	if window.closing() {
+		t.Fatal("a window that is not ready kept its close")
+	}
+	if _, ok := s.element("a"); ok {
+		t.Fatal("a frame still reads the element of a closed window")
+	}
+	if fake.settled == nil {
+		t.Fatalf("the close waits for no frame, and %d views are held", len(fake.held))
+	}
+	fake.settled(0, errors.New("the window closed"))
+	if len(fake.held) != 0 {
+		t.Fatalf("%d views of a closed window are held", len(fake.held))
+	}
+}
+
 // contract: surface-layout.element-holds-its-views-until-the-next-frame
 func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	surfaces, _ := elements(t, &elementWindow{})

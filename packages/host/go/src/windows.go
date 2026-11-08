@@ -719,6 +719,11 @@ func (s *Surfaces) close() {
 			views[view.handle] = view
 			// A view of the surface ends with its window (docs/spec/logging.md#principles).
 			s.viewRecords().recordEnd(id)
+			// An element retains the surface host and the web view of the view page, so it leaves before they close and hands
+			// them back after the frame that the closed window can no longer present.
+			if s.elements.drawn {
+				s.publishElement(id, SurfaceElement{})
+			}
 		}
 		err := CloseWindowSurfaces(handles, s.documents, s.streams, s.images, func(native WindowNative) error {
 			switch native.Kind {
