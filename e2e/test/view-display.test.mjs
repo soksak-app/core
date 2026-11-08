@@ -80,7 +80,21 @@ test("the view display checker measures content at a nonzero capture offset", { 
 
 test("the view display checker rejects a missing plugin content case with its opened tab", { timeout: 5000 }, async (t) => {
   const f = fixture();
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /layoutprobe.*probe-tab-1.*content case/);
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map(), ["layoutprobe"]), /layoutprobe.*probe-tab-1.*content case/);
+});
+
+test("the view display check opens only the view plugins of its content cases", { timeout: 5000 }, async (t) => {
+  const f = fixture();
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async () => {} }]]));
+  assert.deepEqual(f.opened, ["layoutprobe"], "the check opened an installed view that has no content case");
+});
+
+test("the view display check refuses a vehicle that is not an installed enabled view and a check without a vehicle", { timeout: 5000 }, async (t) => {
+  const f = fixture();
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map([["probe-missing", { ready: async () => async () => {} }]])),
+    /probe-missing is not an installed enabled view plugin/);
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /names no view plugin to open/);
+  assert.deepEqual(f.opened, [], "a refused check opened a view");
 });
 
 test("view content readiness is verified before the recording stops", { timeout: 5000 }, async (t) => {
@@ -108,7 +122,7 @@ test("a failed view readiness check closes the opened tab", { timeout: 5000 }, a
     }
     return until(...args);
   };
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /forced surface readiness failure/);
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map(), ["layoutprobe"]), /forced surface readiness failure/);
   assert.deepEqual((await f.s.get("core.surfaces")).map(item => item.surface), ["probe-original"],
     "failed view preparation left its opened tab in the next check");
 });
