@@ -99,7 +99,22 @@ test('a case whose build reports an object newer than the link fails with the ob
   const warning = "ld: warning: object file (/target/ring/libring_core.a(curve25519.o)) was built for newer 'macOS' version (27.0) than being linked (11.0)";
   const cases = discoverLanguageCases({ cases: [{ id: 'linked', language: 'go', ...command("console.log(JSON.stringify({ Action: 'pass', Test: 'TestLinked' }))"),
     build: { command: process.execPath, args: ['-e', `console.error(${JSON.stringify(warning)})`], timeoutMs: 30_000 } }] });
-  const result = await runLanguageCases(cases);
+  // The command forwards the build output; the test holds it, because the warning is the fixture of this case and not a link of the suite.
+  const forwarded = [];
+  const write = process.stderr.write;
+  process.stderr.write = (chunk, ...rest) => {
+    forwarded.push(String(chunk));
+    const done = rest.find((item) => typeof item === 'function');
+    if (done) done();
+    return true;
+  };
+  let result;
+  try {
+    result = await runLanguageCases(cases);
+  } finally {
+    process.stderr.write = write;
+  }
+  assert.ok(forwarded.join('').includes(warning), `the build output was not forwarded: ${JSON.stringify(forwarded)}`);
   assert.equal(result.status, 'fail', JSON.stringify(result));
   assert.equal(result.cases[0].build.status, 'fail');
   assert.ok(result.cases[0].errors.includes('ld built /target/ring/libring_core.a(curve25519.o) for macOS 27.0, newer than the macOS 11.0 of the link'), JSON.stringify(result.cases[0].errors));
