@@ -45,7 +45,8 @@ func (s *Shell) focusCard(card string) {
 
 // followCommand holds the answer of a command whose run asked for a frame until the placement of that frame ran and the host
 // answered the keyboard call that follows it, so a request after the answer finds what the frame shows; a move of the ring is
-// one such change. A run that asked for no frame, or that failed, answers at once (docs/spec/exposure.md#registration).
+// one such change. A run that asked for no frame, or that failed, answers at once. A placement or a keyboard call that fails has
+// shown its failure in its own line, and the command answers with the result of its run (docs/spec/exposure.md#registration).
 func (s *Shell) followCommand(answer func(value any, err error)) func(value any, err error) {
 	requests := s.frameRequests.Load()
 	return func(value any, err error) {
@@ -53,7 +54,7 @@ func (s *Shell) followCommand(answer func(value any, err error)) func(value any,
 			answer(value, err)
 			return
 		}
-		s.afterPlacement(func(err error) { answer(value, err) })
+		s.afterPlacement(func(error) { answer(value, nil) })
 	}
 }
 

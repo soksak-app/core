@@ -640,7 +640,7 @@ func (s *Shell) placeSurfaces() {
 		s.surfaces.layoutFault = false
 		s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
 		s.surfaces.placed = nil
-		s.placed(errors.New("surface presentation failed: " + layoutFaultText))
+		s.placed(errors.New(layoutFaultText))
 		s.options.Invalidate()
 		return
 	}
@@ -723,12 +723,13 @@ func (s *Shell) followRun(going bool) {
 	}
 }
 
-// placed ends a placement.
+// placed ends a placement. A failure shows as the layout queue of the main page shows it, `surface presentation failed: <text>`,
+// which is the one record of that failure (docs/spec/hosts.md#application-log).
 func (s *Shell) placed(err error) {
 	s.surfaces.running = false
 	var failure *string
 	if err != nil {
-		s.errors.ShowFrom(workbenchErrorPlace, placementSource, err.Error(), "")
+		s.errors.ShowFrom(workbenchErrorPlace, placementSource, "surface presentation failed: "+err.Error(), "")
 		s.options.Invalidate()
 		text := err.Error()
 		failure = &text

@@ -1223,6 +1223,35 @@ func TestARecoveredPlacementLeavesAnotherError(t *testing.T) {
 	}
 }
 
+// A command whose placement fails answers with the result of its handler, and the placement shows its failure in one line as the
+// layout queue of the main page shows it (docs/spec/exposure.md#registration, docs/spec/hosts.md#application-log).
+func TestACommandWhosePlacementFailsAnswersItsResult(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.presentFailure = errors.New("the current image raster did not present within 10s")
+	raw, err := json.Marshal(map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "textprobe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answered := false
+	var value any
+	var failure error
+	f.shell.Registry().RunLater("core.card.split", raw, func(answer any, err error) { answered, value, failure = true, answer, err })
+	shown := f.shownErrors()
+	if !answered || failure != nil {
+		t.Fatalf("the split answered %t with %v", answered, failure)
+	}
+	var made struct {
+		Tab string `json:"tab"`
+	}
+	if encoded, err := json.Marshal(value); err != nil || json.Unmarshal(encoded, &made) != nil || made.Tab == "" {
+		t.Fatalf("the split answered %v, not its tab", value)
+	}
+	want := "surface presentation failed: " + stored.presentFailure.Error()
+	if len(shown) != 1 || shown[0] != want {
+		t.Fatalf("the failure showed %q, want one %q", shown, want)
+	}
+}
+
 // textScope returns the scope of the status core.text.
 func textScope(t *testing.T, f *shellFixture) workbench.TextScope {
 	t.Helper()
