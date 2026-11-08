@@ -90,6 +90,37 @@ static BOOL completionTokenDeallocated = NO;
 }
 @end
 
+// A text input client whose input context the test chooses: a web view without an editable focus has none.
+@interface SPChosenContextTextResponder : NSView <NSTextInputClient>
+@property BOOL hasContext;
+@end
+
+@implementation SPChosenContextTextResponder {
+    NSTextInputContext *_ownContext;
+}
+- (NSTextInputContext *)inputContext {
+    if (!self.hasContext) return nil;
+    if (!_ownContext) _ownContext = [[NSTextInputContext alloc] initWithClient:self];
+    return _ownContext;
+}
+- (void)insertText:(id)string replacementRange:(NSRange)replacementRange {}
+- (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {}
+- (void)unmarkText {}
+- (NSRange)selectedRange { return NSMakeRange(0, 0); }
+- (NSRange)markedRange { return NSMakeRange(NSNotFound, 0); }
+- (BOOL)hasMarkedText { return NO; }
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
+    return nil;
+}
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText { return @[]; }
+- (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange { return NSZeroRect; }
+- (NSUInteger)characterIndexForPoint:(NSPoint)point { return NSNotFound; }
+- (void)dealloc {
+    [_ownContext release];
+    [super dealloc];
+}
+@end
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     check(strcmp(sp_input_source_role_identifier("latin") ?: "", "com.apple.keylayout.ABC") == 0
@@ -111,6 +142,23 @@ int main(void) { @autoreleasepool {
     });
     check(noClientCalls == 1 && noClientError == nil,
         @"an idempotent global source request without an active text client completes once");
+
+    SPChosenContextTextResponder *contextless = [[[SPChosenContextTextResponder alloc] initWithFrame:NSZeroRect] autorelease];
+    check(![sp_input_source_live_driver(nil, contextless) hasActiveTextClient],
+        @"a text input client without an input context is not an active text client");
+    __block NSUInteger contextlessCalls = 0;
+    __block NSString *contextlessError = nil;
+    sp_input_source_select_and_await_with_driver(current, sp_input_source_live_driver(nil, contextless),
+        ^(const char *error) {
+            contextlessCalls++;
+            contextlessError = error ? @(error) : nil;
+        });
+    check(contextlessCalls == 1 && contextlessError == nil,
+        @"a key responder without an input context takes the global selection path and completes once");
+    SPChosenContextTextResponder *withContext = [[[SPChosenContextTextResponder alloc] initWithFrame:NSZeroRect] autorelease];
+    withContext.hasContext = YES;
+    check([sp_input_source_live_driver(nil, withContext) hasActiveTextClient],
+        @"a text input client with an input context is an active text client");
     free(current);
 
     SPControlledInputSourceDriver *driver = [[[SPControlledInputSourceDriver alloc] init] autorelease];
