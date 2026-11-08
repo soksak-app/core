@@ -193,8 +193,10 @@ func (s *Shell) surfaceRecord(lines []surfaceLine, settled bool) *VerifyRecord {
 }
 
 // seatRecord fills the record with the answer of the host. A visible surface that the answer does not name stays at the empty
-// rectangle, which the rows report as a surface that the host did not apply where it was declared.
-func (s *Shell) seatRecord(record *VerifyRecord, answer any) error {
+// rectangle, which the rows report as a surface that the host did not apply where it was declared. declared tells that the frame
+// that the answer presented drew the lines of the record; an answer of other lines keeps where the host applied the surfaces and
+// seats no record, so the rows wait for the placement that the next frame starts.
+func (s *Shell) seatRecord(record *VerifyRecord, answer any, declared bool) error {
 	placements, err := decode[[]struct {
 		ID      string  `json:"id"`
 		X       float64 `json:"x"`
@@ -225,7 +227,9 @@ func (s *Shell) seatRecord(record *VerifyRecord, answer any) error {
 			}
 		}
 	}
-	s.surfaces.answered = record
+	if declared {
+		s.surfaces.answered = record
+	}
 	return nil
 }
 

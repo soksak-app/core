@@ -230,6 +230,10 @@ type surfaceState struct {
 	// placedAt is when the last placement started.
 	placedAt time.Time
 	sequence int
+	// moved tells that a frame drew other lines than the running placement. The host presents a frame after the one that asked for
+	// the placement, and the elements of that frame place the views (docs/spec/hosts.md#native-views), so its answer states where
+	// lines stand that the placement did not declare, and the frame after the answer places what the window draws.
+	moved bool
 	// applied holds where the host applied each visible surface, in window coordinates.
 	applied map[string]layout.Rect
 	// controls is the area of the window buttons that the host answered, and failure the error of the last placement.
@@ -623,10 +627,11 @@ func (s *Shell) withdrawWhenPresented() {
 // placeSurfaces places the surfaces when the frame moved one of them. One placement runs at a time, and the frame that
 // follows it places what changed meanwhile.
 func (s *Shell) placeSurfaces() {
+	lines := s.surfaceLines()
 	if s.surfaces.running {
+		s.surfaces.moved = s.surfaces.moved || !slices.Equal(lines, s.surfaces.placed)
 		return
 	}
-	lines := s.surfaceLines()
 	// The host ends a run on a settled placement, so the end of a run places also when its last move placed these lines.
 	runEnds := s.surfaces.going && s.held == nil
 	if slices.Equal(lines, s.surfaces.placed) && !runEnds {
@@ -692,8 +697,13 @@ func (s *Shell) placeSurfaces() {
 		}
 		s.calls.CallInOrder(surfaceOrder, "presentSurfaces", map[string]any{"ticket": prepared.Ticket, "placements": prepared.Placements, "settled": settled},
 			func(answer any, err error) {
+				moved := s.surfaces.moved
+				s.surfaces.moved = false
+				if moved {
+					s.surfaces.placed = nil
+				}
 				if err == nil {
-					err = s.seatRecord(record, answer)
+					err = s.seatRecord(record, answer, !moved)
 				}
 				if err == nil {
 					for _, id := range requested {
