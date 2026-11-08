@@ -66,7 +66,9 @@ function getSourceFolders(base = root) {
 
 /** Checks whether a file is included in the publish list. */
 function isInPublishedFiles(publishedPath, filesArray, packageDir) {
-  for (const fileEntry of filesArray) {
+  for (const listed of filesArray) {
+    // A folder entry may end with a slash, as `files` of package.json allows.
+    const fileEntry = listed.replace(/\/+$/, "");
     const fullPath = join(packageDir, fileEntry);
 
     // If the entry is a directory, all files below it are included. An entry that does not exist is not a directory.
@@ -319,6 +321,20 @@ test("every import of a published file is listed in its package files", () => {
 
   if (errors.length > 0) {
     assert.fail(errors.join("\n"));
+  }
+});
+
+test("a files entry of a folder written with a trailing slash covers the files below it", () => {
+  const tmpDir = join(tmpdir(), `fixture-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  mkdirSync(join(tmpDir, "fixtures", "probe"), { recursive: true });
+  try {
+    writeFileSync(join(tmpDir, "fixtures", "probe", "page.html"), `<script type="module" src="./app.js"></script>\n`);
+    writeFileSync(join(tmpDir, "fixtures", "probe", "app.js"), "export {};\n");
+    assert.equal(isInPublishedFiles("fixtures/probe/app.js", ["fixtures/"], tmpDir), true);
+    assert.equal(isInPublishedFiles("fixtures/probe/app.js", ["fixtures"], tmpDir), true);
+    assert.equal(isInPublishedFiles("other/app.js", ["fixtures/"], tmpDir), false);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 });
 
