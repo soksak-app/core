@@ -346,8 +346,6 @@ type Shell struct {
 	appUpdates       *AppUpdates
 	starter          pluginStarter
 
-	page string
-
 	text *TextSize
 	// planeSpace is the id of the space that the plane was last made of.
 	planeSpace string
@@ -446,7 +444,6 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Status("core.notifications", func() any {
 		return notificationStatus{Authorization: s.notices.authorization, Error: s.notices.failure, Posted: slices.Clone(s.notices.accepted)}
 	})
-	s.page = issueID("wbn-", func(string) bool { return false })
 	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
 	s.linkSurfaces()
 	s.registry.Status("core.workbench.error", func() any {

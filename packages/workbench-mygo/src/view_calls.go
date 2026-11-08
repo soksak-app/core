@@ -12,6 +12,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -156,6 +157,9 @@ func (s *Shell) viewCall(data []any) {
 	// Closing a surface ends its in-flight calls: the host closes the view at the next placement, so a call that crossed the close gets
 	// no reply and no state (docs/spec/native-surfaces.md).
 	if s.surfaces.held[call.Surface] == nil {
+		if !call.Cancel {
+			s.recordViewCall("workbench.view.call.cancel", call, map[string]any{"command": call.Command})
+		}
 		return
 	}
 	view := s.view(call.Surface)
@@ -179,6 +183,7 @@ func (s *Shell) viewCall(data []any) {
 		return
 	}
 	view.generation = call.Generation
+	s.recordViewCall("workbench.view.call", call, map[string]any{"command": call.Command})
 	if view.cancel == nil {
 		view.ctx, view.cancel = context.WithCancel(host.WithViewSource(s.calls.ctx, call.Surface, call.Generation))
 	}
@@ -197,20 +202,38 @@ func (s *Shell) viewCall(data []any) {
 	}
 }
 
-// viewReply sends the reply of a call.
+// viewReply sends the reply of a call. The reply names the start of the workbench as its page, as the main page names its page
+// identity, and the workbench records it once the host took it; a reply that the host refused because the view ended is recorded as
+// cancelled (docs/spec/native-surfaces.md, call records).
 func (s *Shell) viewReply(call viewCallEvent, result any, err error) {
-	reply := map[string]any{"page": s.page, "surface": call.Surface, "generation": call.Generation, "id": call.ID}
+	reply := map[string]any{"page": s.events.Start(), "surface": call.Surface, "generation": call.Generation, "id": call.ID}
+	outcome := "result"
 	if err != nil {
 		reply["error"] = map[string]any{"code": viewCallFailed, "message": err.Error()}
+		outcome = "error"
 	} else {
 		reply["result"] = result
 	}
 	s.calls.CallInOrder("reply:"+call.Surface, "viewReply", reply, func(_ any, err error) {
-		// A reply to a view that ended is refused, and the end of the view is its own event.
-		if err != nil && s.surfaces.held[call.Surface] != nil {
+		switch {
+		case err == nil:
+			s.recordViewCall("workbench.view.reply", call, map[string]any{"outcome": outcome})
+		case s.surfaces.held[call.Surface] == nil:
+			// A reply to a view that ended is refused, and the end of the view is its own event.
+			s.recordViewCall("workbench.view.call.cancel", call, map[string]any{"command": call.Command})
+		default:
 			s.options.Report(fmt.Sprintf("view call %s reply: %v", call.Command, err))
 		}
 	})
+}
+
+// recordViewCall writes the record event of a view call with the plugin, surface, generation and id of the call and fields.
+func (s *Shell) recordViewCall(event string, call viewCallEvent, fields map[string]any) {
+	fields["plugin"], fields["surface"], fields["id"] = call.Plugin, call.Surface, call.ID
+	if call.Generation > 0 {
+		fields["generation"] = call.Generation
+	}
+	s.events.Emit(sok.LevelDebug, event, func() map[string]any { return fields }, nil)
 }
 
 // viewFields reads the params of a call that takes named fields.
