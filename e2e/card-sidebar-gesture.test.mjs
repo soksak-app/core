@@ -36,11 +36,11 @@ for (const app of Object.values(APPS)) {
       console.info(`START ${app.name}: sidebar gesture`);
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-      await fresh(s);
+      const { plugin } = await fresh(s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-      const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
-      assert.ok(card, "no terminal card");
-      await s.run("core.tab.select", { tab: card.tabs.find((tab) => tab.plugin === "terminal").id });
+      const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === plugin));
+      assert.ok(card, `no ${plugin} card`);
+      await s.run("core.tab.select", { tab: card.tabs.find((tab) => tab.plugin === plugin).id });
       await s.run("core.card.fullscreen", { card: card.id });
       const set = (await s.get("core.settings")).values.sets[0].id;
       for (const side of sides) {

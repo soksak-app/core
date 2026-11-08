@@ -13,7 +13,7 @@
     "repeat": "sok-repeat --setup ./setup.mjs",
     "test": "node --test test/",
     "test-app:section-design": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/section-design.test.mjs",
-    "test-app:terminal-sidebar-current": "node ./run.mjs --test --test-global-setup=./setup.mjs observation/terminal-sidebar-current.test.mjs",
+    "test-app:card-sidebar-current": "node ./run.mjs --test --test-global-setup=./setup.mjs observation/card-sidebar-current.test.mjs",
     "test-app:shutdown": "node normal-shutdown.mjs",
     "test-app:terminal-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs",
     "benchmark:view-drag": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/view-drag.test.mjs",

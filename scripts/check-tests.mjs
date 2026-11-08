@@ -1877,7 +1877,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestAWorkbenchStartingEndsItsPredecessorsDialogBackground" },
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground" },
-      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor terminal images and documents unblurred" },
+      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor raster images and documents unblurred" },
     ],
     expected: "Reload retires the previous workbench dialog background claim while preserving an independent current native dialog; successor images and documents are unblurred when no effective dialog remains.",
     levels: ["unit", "application"],
@@ -4014,13 +4014,6 @@ const FEATURE_LINKS = [
       { file: "e2e/document-region.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
     ],
     expected: "The placement check reads the applied placements from host.trace.surface.",
-    levels: ["application"],
-  },
-  {
-    id: "F239-294",
-    implementation: [{ file: "e2e/library.test.mjs", symbol: "const removed = folder.replace(" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" }],
-    expected: "The library check declares the three texts of the files tree failure that its folder removal causes and passes on both hosts.",
     levels: ["application"],
   },
   {
@@ -12192,7 +12185,7 @@ const FEATURE_LINKS = [
   {
     id: "F424",
     implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "a skipped test; assert its precondition" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "terminal source card not found" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "raster source card not found" }],
     expected: "A window check whose precondition fails reports a failure.",
     levels: ["application"],
   },
@@ -14464,12 +14457,14 @@ const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "
 // into the image region of the raster probe, and the glyph proof of a terminal belongs to the terminal plugin.
 // F239-47-10, F239-47-12, F239-47-13 and F239-47-14 wrote the measure of the glyphs, the underline and the cursor that a terminal
 // renders, which F715-2 removes with that proof.
+// F239-294 declared in the library check the files tree errors that its folder removal causes, which F715-2 removes: the core
+// window checks show no files section.
 const REMOVED_COMPLETIONS = new Set(["F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
-  "F239-201", "F239-229", "F608", "F684"]);
+  "F239-201", "F239-229", "F608", "F684", "F239-294"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

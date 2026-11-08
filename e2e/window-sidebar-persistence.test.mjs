@@ -71,29 +71,32 @@ for (const app of Object.values(APPS))
       console.info(`START ${app.name}: window sidebar persistence`);
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-      await fresh(s);
+      const { plugin } = await fresh(s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
       await s.run("core.settings.set", { patch: { focusInd: "corner" }, scope: "common" });
       const initial = await s.get("core.grid");
       const configured = initial.cards.filter((card) => card.tabs.length === 0).map((card) => card.id);
-      const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === "terminal"));
-      assert.ok(target, "terminal fixture absent");
-      const terminal = target.tabs.find((tab) => tab.plugin === "terminal");
-      // The right override of the terminal binds the fixed sidebar to the terminal card.
+      const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === plugin));
+      assert.ok(target, `${plugin} fixture absent`);
+      const probe = target.tabs.find((tab) => tab.plugin === plugin);
+      // Stored list sets of the layout probe sections: the general left link shows one, and the right override of the probe, which
+      // binds the fixed sidebar to the card of the probe tab, the other.
       await keepCommonSettings(s);
-      await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
+      const rightSet = { id: "window-reload-right", title: "Reload right", sections: ["layoutprobe.alpha", "layoutprobe.fill"], layout: "list" };
+      const leftSet = { id: "window-reload-left", title: "Reload left", sections: ["layoutprobe.beta", "layoutprobe.follow"], layout: "list" };
+      await s.run("core.settings.set", { patch: { sets: [...(await s.get("core.settings")).values.sets, rightSet, leftSet] }, scope: "common" });
+      await s.run("core.settings.link", { place: "left", plugin: null, set: leftSet.id, scope: "common" });
+      await s.run("core.settings.link", { place: "window-right", plugin, set: rightSet.id, scope: "common" });
       const windowBar = (await s.until("core.sidebars", (bars) => bars.some(
         (bar) => bar.placement === "window" && bar.card === target.id), "associated external sidebar absent")).find(
         (bar) => bar.placement === "window" && bar.card === target.id,
       );
       assert.ok(windowBar, "associated external sidebar absent");
       await turnOffCardSidebars(s, target.id);
-      await s.run("core.tab.select", { tab: terminal.id });
+      await s.run("core.tab.select", { tab: probe.id });
       const settings = (await s.get("core.settings")).values;
-      const source = settings.sets.find(
-        (set) => set.sections.includes("files.tree") && set.sections.includes("files.bookmarks"),
-      );
-      assert.ok(source, "file section fixture absent");
+      const source = settings.sets.find((set) => set.id === rightSet.id);
+      assert.ok(source, "the stored probe section set is absent");
       const cardSet = { ...source, id: "window-reload-card", title: "Reload card", layout: "list" };
       let savedRecords, savedSettings, savedSides, restoredGeometry;
       async function measure(label, hidden) {
@@ -146,8 +149,8 @@ for (const app of Object.values(APPS))
           `${label}: internal section views not ready`,
         );
         assert.ok(
-          inside.sections.find((section) => section.id === "files.tree")?.mounted === true,
-          `${label}: file tree section view absent`,
+          inside.sections.find((section) => section.id === "layoutprobe.alpha")?.mounted === true,
+          `${label}: probe section view absent`,
         );
         for (const column of columns) {
           near(column.w, savedRecords[column.id].width, `${label}: ${column.id} width`);
@@ -169,7 +172,7 @@ for (const app of Object.values(APPS))
             `${label}: ${column.id} section views not ready`,
           );
           if (column.id === windowBar.sidebar) {
-            assert.equal(bar.surface, terminal.id);
+            assert.equal(bar.surface, probe.id);
             assert.equal(bar.card, target.id);
           }
           for (const [key, value] of Object.entries({
@@ -180,7 +183,7 @@ for (const app of Object.values(APPS))
           }))
             near(bar.rect[key], value, `${label}: ${column.id} DOM ${key}`);
         }
-        const surface = (await s.surfaces()).find((item) => item.surface === terminal.id);
+        const surface = (await s.surfaces()).find((item) => item.surface === probe.id);
         assert.ok(surface?.applied, `${label}: native surface absent`);
         const expected = {
           x: grid.plane.x + current.x + 145,
@@ -194,7 +197,7 @@ for (const app of Object.values(APPS))
         }
         const host = await s.get("host.window");
         assert.equal(host.occluded, false);
-        const native = host.surfaces.find((item) => item.id === terminal.id)?.frame;
+        const native = host.surfaces.find((item) => item.id === probe.id)?.frame;
         assert.ok(native, `${label}: host frame absent`);
         for (const [key, value] of Object.entries({
           x: expected.x,
@@ -262,13 +265,13 @@ for (const app of Object.values(APPS))
         await s.run("core.settings.set", { patch: { sets: [...settings.sets, cardSet] }, scope: "common" });
         await s.run("core.settings.link", {
           place: `window-${windowBar.side}`,
-          plugin: terminal.plugin,
+          plugin: probe.plugin,
           set: source.id,
           scope: "common",
         });
         await s.run("core.settings.link", {
           place: "card-left",
-          plugin: terminal.plugin,
+          plugin: probe.plugin,
           set: cardSet.id,
           scope: "common",
         });

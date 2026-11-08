@@ -7,7 +7,14 @@ import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
-import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { cardSidebar, fresh } from "./fixture.mjs";
+
+/** The second layout probe: a plugin without settings, sections or sidebar defaults beside the start plugin. */
+const SECOND = "layoutprobe2";
+/** The sections of the inset card sidebar that the checks put on the start card. */
+const CARD_SECTIONS = ["layoutprobe.alpha", "layoutprobe.beta"];
+/** The card of the grid that holds the tab surface. */
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
 
 /** Current controls of the settings window. */
 const controls = async (s) => (await s.get("core.settings-modal")).controls;
@@ -36,23 +43,23 @@ async function section(s, id) {
 const settingsValue = async (s, key) => (await s.get("core.settings")).values[key];
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: terminal card sidebar choices persist through declared controls and reload`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: card sidebar choices of a plugin persist through declared controls and reload`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { plugin } = await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await section(s, "plugins");
-    await press(s, "core.settings-modal.plugin", "plugin:terminal");
+    await press(s, "core.settings-modal.plugin", `plugin:${plugin}`);
     const set = (await settingsValue(s, "sets"))[0].id;
     const places = ["card-left", "card-right", "card-top", "card-bottom"];
     for (const place of places) {
-      await press(s, "core.settings-modal.set", `link:${place}:terminal`, set, "set");
+      await press(s, "core.settings-modal.set", `link:${place}:${plugin}`, set, "set");
       await s.until("core.settings", (state) => !state.saving && state.values.links.some((link) =>
-        link.place === place && link.plugin === "terminal" && link.set === set), `${place} was not saved`);
+        link.place === place && link.plugin === plugin && link.set === set), `${place} was not saved`);
     }
     const persisted = JSON.parse(readFileSync(join(app.configDir, "settings.json"), "utf8"));
-    assert.deepEqual(persisted.links.filter((link) => link.plugin === "terminal" && places.includes(link.place))
+    assert.deepEqual(persisted.links.filter((link) => link.plugin === plugin && places.includes(link.place))
       .map((link) => [link.place, link.set]), places.map((place) => [place, set]));
     await s.run("core.settings.close");
     const before = (await s.get("core.window.workbench")).start;
@@ -60,13 +67,13 @@ for (const app of Object.values(APPS)) {
     await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
       "the workbench did not start again");
     const restored = await s.until("core.settings", (state) => places.every((place) => state.values.links.some((link) =>
-      link.place === place && link.plugin === "terminal" && link.set === set)), "reload lost terminal card sidebar choices");
+      link.place === place && link.plugin === plugin && link.set === set)), `reload lost the ${plugin} card sidebar choices`);
     assert.equal(restored.saving, false);
   });
 
   test(`${app.name}: settings keep sidebar appearance in general and list plugins with search and pages`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { plugin } = await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
@@ -108,42 +115,43 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(rows.map((c) => c.label), list.listed.map((id) => names[id]));
     assert.deepEqual(list.controls.filter((c) => c.name === "core.settings-modal.manage").map((c) => c.command),
       [{ name: "core.plugins.browse", params: {} }]);
-    await press(s, "core.settings-modal.search", "plugin-search", "TERMINAL", "query");
-    await s.until("core.settings-modal", (modal) => modal.query === "TERMINAL" && modal.listed.join() === "terminal",
-      "the search did not keep only terminal");
+    // The search ignores case: the term matches the id of the second probe and no other id, name or description.
+    await press(s, "core.settings-modal.search", "plugin-search", SECOND.toUpperCase(), "query");
+    await s.until("core.settings-modal", (modal) => modal.query === SECOND.toUpperCase() && modal.listed.join() === SECOND,
+      `the search did not keep only ${SECOND}`);
     await press(s, "core.settings-modal.search", "plugin-search", "없는플러그인", "query");
     await s.until("core.settings-modal", (modal) => modal.listed.length === 0, "a query without a match still lists plugins");
     await press(s, "core.settings-modal.search", "plugin-search", "", "query");
     await s.until("core.settings-modal", (modal) => modal.listed.join() === list.listed.join(), "an empty query did not list every plugin");
 
-    await press(s, "core.settings-modal.plugin", "plugin:terminal");
-    const terminal = await s.until("core.settings-modal", (modal) => modal.plugin === "terminal", "terminal page did not open");
-    assert.deepEqual(terminal.listed, [], "the page still shows the plugin list");
+    await press(s, "core.settings-modal.plugin", `plugin:${plugin}`);
+    const page = await s.until("core.settings-modal", (modal) => modal.plugin === plugin, `the ${plugin} page did not open`);
+    assert.deepEqual(page.listed, [], "the page still shows the plugin list");
     // There is one row per setting that the manifest declares, in the declaration order. The default values of the plugin settings are registered in that order.
-    const declared = Object.keys((await s.get("core.settings")).values).filter((key) => key.startsWith("terminal."));
-    assert.deepEqual(terminal.rows.map((row) => row.key), declared, `terminal rows: ${JSON.stringify(terminal.rows)}`);
-    assert.deepEqual(terminal.rows.find((row) => row.key === "terminal.cursor.shape"), {
-      key: "terminal.cursor.shape", name: "커서 모양",
-      description: "block은 칸 전체, underline은 밑줄, beam은 세로 막대로 그린다. 프로그램이 모양을 정하면 그 모양을 쓴다.",
+    const declared = Object.keys((await s.get("core.settings")).values).filter((key) => key.startsWith(`${plugin}.`));
+    assert.deepEqual(page.rows.map((row) => row.key), declared, `${plugin} rows: ${JSON.stringify(page.rows)}`);
+    const shadeKey = `${plugin}.shade`;
+    assert.deepEqual(page.rows.find((row) => row.key === shadeKey), {
+      key: shadeKey, name: "Shade", description: "A choice that the probe reports.",
     });
-    await control(s, "core.settings-modal.set", "link:window-right:terminal");
+    await control(s, "core.settings-modal.set", `link:window-right:${plugin}`);
     for (const side of ["left", "right", "top", "bottom"]) {
-      assert.equal((await control(s, "core.settings-modal.set", `link:card-${side}:terminal`)).value, "off",
+      assert.equal((await control(s, "core.settings-modal.set", `link:card-${side}:${plugin}`)).value, "off",
         `the missing card-${side} link did not display off`);
     }
     // A choice is a select box regardless of the number of values (Controls in docs/spec/settings.md).
-    const shape = await control(s, "core.settings-modal.set", "terminal.cursor.shape");
-    assert.deepEqual(shape.options, ["block", "underline", "beam"]);
-    await press(s, "core.settings-modal.set", "terminal.cursor.shape", "beam");
-    await s.until("core.settings", (value) => value.values["terminal.cursor.shape"] === "beam" && !value.saving,
-      "the plugin page did not change terminal.cursor.shape");
+    const shade = await control(s, "core.settings-modal.set", shadeKey);
+    assert.deepEqual(shade.options, ["plain", "strong"]);
+    await press(s, "core.settings-modal.set", shadeKey, "strong");
+    await s.until("core.settings", (value) => value.values[shadeKey] === "strong" && !value.saving,
+      `the plugin page did not change ${shadeKey}`);
     await press(s, "core.settings-modal.back", "plugins:list");
     await s.until("core.settings-modal", (modal) => modal.plugin === null && modal.listed.join() === list.listed.join(), "목록 did not return to the list");
   });
 
   test(`${app.name}: the settings plugin page has no plugin operation and 플러그인 관리 shows the plugin screen`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { plugin } = await fresh(s);
     await keepCommonSettings(s);
     await s.run("core.settings.open");
     s.cleanup(async () => {
@@ -154,15 +162,15 @@ for (const app of Object.values(APPS)) {
       }
     });
     await section(s, "plugins");
-    await press(s, "core.settings-modal.plugin", "plugin:files");
-    const page = await s.until("core.settings-modal", (modal) => modal.plugin === "files", "files page did not open");
+    await press(s, "core.settings-modal.plugin", `plugin:${plugin}`);
+    const page = await s.until("core.settings-modal", (modal) => modal.plugin === plugin, `the ${plugin} page did not open`);
     assert.deepEqual(page.controls.filter((c) => c.command?.name.startsWith("core.plugins.")), [],
       "the settings plugin page still runs plugin operations");
     await press(s, "core.settings-modal.back", "plugins:list");
     await press(s, "core.settings-modal.manage", "plugins:manage");
     await s.until("core.settings-modal", (modal) => !modal.open, "플러그인 관리 did not close the settings window");
     await s.until("core.screen", (screen) => screen.screen === "library", "플러그인 관리 did not show the library");
-    await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.includes("files"),
+    await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.includes(plugin),
       "플러그인 관리 did not show the plugin page");
   });
 
@@ -217,20 +225,21 @@ for (const app of Object.values(APPS)) {
     }
     const three = await sectionsOf();
     assert.equal(new Set(three).size, 3);
-    const editor = await s.until("core.settings-modal", (modal) =>
+    const rowsShown = await s.until("core.settings-modal", (modal) =>
       modal.controls.filter((c) => c.name === "core.settings-modal.row").length === 3, "the editor did not draw three rows");
     // The editor has no control for each registered section. Each row has one select box and ▲▼−, and there is one +.
-    assert.equal(editor.controls.filter((c) => c.name === "core.settings-modal.section").length, 0);
-    assert.equal(editor.controls.filter((c) => c.name === "core.settings-modal.add").length, 1);
-    assert.deepEqual(editor.controls.filter((c) => c.name === "core.settings-modal.row-act").map((c) => c.key), [
+    assert.equal(rowsShown.controls.filter((c) => c.name === "core.settings-modal.section").length, 0);
+    assert.equal(rowsShown.controls.filter((c) => c.name === "core.settings-modal.add").length, 1);
+    assert.deepEqual(rowsShown.controls.filter((c) => c.name === "core.settings-modal.row-act").map((c) => c.key), [
       `down:${made.id}:0`, `remove:${made.id}:0`,
       `up:${made.id}:1`, `down:${made.id}:1`, `remove:${made.id}:1`,
       `up:${made.id}:2`, `remove:${made.id}:2`,
     ]);
-    const select = editor.controls.find((c) => c.key === `row:${made.id}:0`);
+    const select = rowsShown.controls.find((c) => c.key === `row:${made.id}:0`);
     assert.equal(select.value, three[0]);
-    assert.deepEqual(select.groups.map((g) => g.label), ["브라우저", "파일"]);
-    assert.equal(select.groups.flatMap((g) => g.values).length, 6);
+    // The layout probe is the only loaded plugin that declares sections: four of them.
+    assert.deepEqual(select.groups.map((g) => g.label), ["Layout probe"]);
+    assert.equal(select.groups.flatMap((g) => g.values).length, 4);
 
     await press(s, "core.settings-modal.row-act", `down:${made.id}:0`);
     await saved([three[1], three[0], three[2]], "▼ did not move row 0 down");
@@ -238,11 +247,13 @@ for (const app of Object.values(APPS)) {
     await saved([three[1], three[2], three[0]], "▲ did not move row 2 up");
     await press(s, "core.settings-modal.row-act", `remove:${made.id}:1`);
     await saved([three[1], three[0]], "− did not remove row 1");
-    await press(s, "core.settings-modal.row", `row:${made.id}:0`, "files.bookmarks", "section");
-    await saved(["files.bookmarks", three[0]], "the select box did not replace row 0");
-    await assert.rejects(press(s, "core.settings-modal.row", `row:${made.id}:1`, "files.bookmarks", "section"),
-      new RegExp(`section files.bookmarks is already in set ${made.id}`));
-    assert.deepEqual(await sectionsOf(), ["files.bookmarks", three[0]], "a rejected repeat changed the set");
+    // The fourth section of the probe is the one that + did not add.
+    const spare = select.groups.flatMap((g) => g.values).find((id) => !three.includes(id));
+    await press(s, "core.settings-modal.row", `row:${made.id}:0`, spare, "section");
+    await saved([spare, three[0]], "the select box did not replace row 0");
+    await assert.rejects(press(s, "core.settings-modal.row", `row:${made.id}:1`, spare, "section"),
+      new RegExp(`section ${spare.replaceAll(".", "\\.")} is already in set ${made.id}`));
+    assert.deepEqual(await sectionsOf(), [spare, three[0]], "a rejected repeat changed the set");
 
     await press(s, "core.settings-modal.edit", "edit:");
     await s.until("core.settings-modal", (modal) => modal.editing === null, "완료 did not close the editor");
@@ -258,7 +269,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: layout value settings change the inset sidebar widths`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await terminalCardSidebar(s);
+    await cardSidebar(s, { sections: CARD_SECTIONS });
     await s.run("core.settings.set", { patch: { sidebarWidth: 150, sidebarMinWidth: 140 }, scope: "common" });
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left?.size === 150),
       "an internal card sidebar did not open at sidebarWidth");
@@ -273,10 +284,10 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await keepCommonSettings(s);
     const sets = await settingsValue(s, "sets");
-    // A section that the loaded files plugin does not declare is rejected.
-    const broken = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "files.gone"] } : item));
+    // A section that the loaded layout probe does not declare is rejected.
+    const broken = sets.map((item, index) => (index === 0 ? { ...item, sections: [...item.sections, "layoutprobe.gone"] } : item));
     await assert.rejects(s.run("core.settings.set", { patch: { sets: broken }, scope: "common" }),
-      /names unknown section files.gone/);
+      /names unknown section layoutprobe\.gone/);
     await assert.rejects(s.run("core.settings.set", { patch: { links: [{ place: "left", plugin: null, set: "set-none" }] }, scope: "common" }),
       /known set/);
     assert.deepEqual(await settingsValue(s, "sets"), sets, "a rejected change altered the sets");
@@ -293,7 +304,7 @@ for (const app of Object.values(APPS)) {
     mkdirSync(join(root, ".soksak"), { recursive: true });
     writeFileSync(join(root, ".soksak/settings.json"), JSON.stringify({ format: 1, sets: broken }));
     // The invalid set that this check saved is also reported as a page error every time the settings of that project are reloaded.
-    s.expectError(/settings: set .* names unknown section files\.gone/);
+    s.expectError(/settings: set .* names unknown section layoutprobe\.gone/);
     await s.run("core.settings.set", { patch: { projectOpening: "tabs" }, scope: "common" });
     const opened = s.run("core.project.open", { root, color: "#7fe3b0" }).catch((error) => error);
     s.cleanup(async () => {
@@ -303,38 +314,52 @@ for (const app of Object.values(APPS)) {
     });
     const refused = await opened;
     assert.ok(refused instanceof Error, "opening a project with an invalid stored set did not fail");
-    assert.match(refused.message, /settings: set .* names unknown section files\.gone/);
+    assert.match(refused.message, /settings: set .* names unknown section layoutprobe\.gone/);
   });
 
   test(`${app.name}: a plugin's right sidebar choice takes precedence over the general choice`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface, plugin } = await fresh(s);
     await keepCommonSettings(s);
+    // The start card shows the start plugin and the other card of the start layout a tab of the second probe.
+    const grid = await s.get("core.grid");
+    const own = cardOf(grid, surface);
+    const other = grid.cards.find((card) => card.id !== own && card.tabs?.length > 0)?.id;
+    assert.ok(other, "the start layout has no second card with tabs");
+    const { tab: second } = await s.run("core.card.add-tab", { card: other, plugin: SECOND });
+    s.cleanup(() => s.run("core.tab.close", { tab: second }));
+    // Three stored sets of probe sections: the override of each plugin and the general choice.
+    const stored = await settingsValue(s, "sets");
+    const ownSet = { id: "check-own", title: "Own", sections: ["layoutprobe.alpha"], layout: "list" };
+    const generalSet = { id: "check-general", title: "General", sections: ["layoutprobe.beta"], layout: "list" };
+    const secondSet = { id: "check-second", title: "Second", sections: ["layoutprobe.fill"], layout: "list" };
+    await s.run("core.settings.set", { patch: { sets: [...stored, ownSet, generalSet, secondSet] }, scope: "common" });
     const right = async (card, want, message) => {
       await s.run("core.card.focus", { card });
       await s.until("core.sidebars", (bars) => (bars.find((bar) => bar.sidebar === "right")?.set ?? null) === want, message);
     };
     // A general choice is place right and a plugin override is place window-right. off removes that connection.
     const general = (set) => s.run("core.settings.link", { place: "right", plugin: null, set, scope: "common" });
-    const override = (plugin, set) => s.run("core.settings.link", { place: "window-right", plugin, set, scope: "common" });
-    // The default has no general choice. An override set-install is placed on the terminal.
-    await override("terminal", "set-install");
-    await right("terminal", "set-install", "the terminal override did not show while no general choice exists");
+    const override = (owner, set) => s.run("core.settings.link", { place: "window-right", plugin: owner, set, scope: "common" });
+    // The default has no general choice. An override is placed on the start plugin.
+    await override(plugin, ownSet.id);
+    await right(own, ownSet.id, `the ${plugin} override did not show while no general choice exists`);
     // Even if a general set exists, the override of the focused plugin takes precedence.
-    await general("set-page");
-    await right("terminal", "set-install", "the general set replaced the terminal override");
+    await general(generalSet.id);
+    await right(own, ownSet.id, `the general set replaced the ${plugin} override`);
     // Removing the override reveals the general set.
-    await override("terminal", "off");
-    await right("terminal", "set-page", "removing the terminal override did not show the general set");
-    await right("browser", "set-browser", "the browser override did not take precedence over the general set");
+    await override(plugin, "off");
+    await right(own, generalSet.id, `removing the ${plugin} override did not show the general set`);
+    await override(SECOND, secondSet.id);
+    await right(other, secondSet.id, `the ${SECOND} override did not take precedence over the general set`);
     await assert.rejects(general("inherit"), /inherit/);
-    await assert.rejects(override("browser", "inherit"), /inherit/);
+    await assert.rejects(override(SECOND, "inherit"), /inherit/);
   });
 
   test(`${app.name}: a card-left link draws an internal card sidebar and no rail column`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await terminalCardSidebar(s);
+    await cardSidebar(s, { sections: CARD_SECTIONS });
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
       "no card holds an internal sidebar after a card-left link");
     assert.equal(grid.cards.some((card) => card.id.startsWith("rail-")), false, "a rail column stands in a fresh configuration");
@@ -398,7 +423,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a new inset sidebar opens at 190 points`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await terminalCardSidebar(s);
+    await cardSidebar(s, { sections: CARD_SECTIONS });
     const grid = await s.until("core.grid", (value) => value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar");
     const card = grid.cards.find((item) => item.sidebars?.left);

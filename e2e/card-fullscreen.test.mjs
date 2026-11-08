@@ -8,6 +8,9 @@ import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
+/** The card of the grid that holds the tab surface. */
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+
 async function clickFullscreen(t, s, card, expected) {
   const control = await s.rect("core.card.fullscreen", card.pane);
   const { frames: directory } = await s.request("diagnostics.capture.start", {});
@@ -44,11 +47,11 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: card fullscreen fills the work area and restores live surfaces`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-    await fresh(s);
+    const { plugin } = await fresh(s);
     const initial = await s.get("core.grid");
-    const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === "terminal"));
-    assert.ok(target, "no terminal card for native fullscreen observation");
-    const tab = target.tabs.find((tab) => tab.plugin === "terminal");
+    const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === plugin));
+    assert.ok(target, `no ${plugin} card for native fullscreen observation`);
+    const tab = target.tabs.find((tab) => tab.plugin === plugin);
     await s.run("core.tab.select", { tab: tab.id });
     for (const side of ["top", "bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: target.id, side, set: "off" });
@@ -146,14 +149,14 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: sidebar settings apply to fullscreen and restored cards`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { plugin } = await fresh(s);
     await keepCommonSettings(s);
     const originalLinks = (await s.get("core.settings")).values.links;
     const observations = await s.collect("core.verify");
     s.cleanup(() => observations.stop());
-    const target = (await s.get("core.grid")).cards.find(card => card.tabs.some(tab => tab.plugin === "terminal"));
+    const target = (await s.get("core.grid")).cards.find(card => card.tabs.some(tab => tab.plugin === plugin));
     assert.ok(target);
-    const tab = target.tabs.find(tab => tab.plugin === "terminal");
+    const tab = target.tabs.find(tab => tab.plugin === plugin);
     await s.run("core.tab.select", { tab: tab.id });
     for (const side of ["top", "bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: target.id, side, set: "inherit" });
@@ -163,14 +166,14 @@ for (const app of Object.values(APPS)) {
     await s.run("core.card.fullscreen", { card: target.id });
     for (const [mode, set] of [["fullscreen", sets[0]], ["restored", sets[1]]]) {
       if (mode === "restored") await s.run("core.card.fullscreen", { card: target.id });
-      await s.run("core.settings.link", { place: "card-left", plugin: "terminal", set: set.id, scope: "common" });
+      await s.run("core.settings.link", { place: "card-left", plugin, set: set.id, scope: "common" });
       await s.presented();
       const settings = await s.get("core.settings");
       const grid = await s.get("core.grid");
       const card = grid.cards.find(card => card.id === target.id);
       const region = (await s.get("core.sidebars")).find(sidebar => sidebar.sidebar === `${target.id}:left`);
       const native = (await s.get("core.surfaces")).find(surface => surface.surface === tab.id);
-      assert.ok(settings.values.links.some(link => link.place === "card-left" && link.plugin === "terminal" && link.set === set.id), `${mode}: setting was not saved`);
+      assert.ok(settings.values.links.some(link => link.place === "card-left" && link.plugin === plugin && link.set === set.id), `${mode}: setting was not saved`);
       assert.equal(grid.fullscreen, mode === "fullscreen" ? target.id : null);
       assert.equal(card.sidebars.left?.set, set.id, `${mode}: card did not adopt its settings`);
       assert.equal(region?.set, set.id, `${mode}: sections did not redraw`);
@@ -191,14 +194,15 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a native click on another tab of a fullscreen card switches the tab and keeps fullscreen`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
-    const added = await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal")?.tabs.length === 2,
+    const { surface, plugin } = await fresh(s);
+    const own = cardOf(await s.get("core.grid"), surface);
+    await s.run("core.card.add-tab", { card: own, plugin });
+    const added = await s.until("core.grid", grid => grid.cards.find(item => item.id === own)?.tabs.length === 2,
       "the second tab did not appear");
-    const card = added.cards.find(item => item.id === "terminal");
+    const card = added.cards.find(item => item.id === own);
     const other = card.tabs.find(tab => tab.id !== card.active);
-    await s.run("core.card.fullscreen", { card: "terminal" });
-    await s.until("core.grid", grid => grid.fullscreen === "terminal", "the card did not become fullscreen");
+    await s.run("core.card.fullscreen", { card: own });
+    await s.until("core.grid", grid => grid.fullscreen === own, "the card did not become fullscreen");
     const recording = await s.record();
     let displayed = 0;
     let stopped;
@@ -208,11 +212,11 @@ for (const app of Object.values(APPS)) {
         const rect = await s.rect("core.card.tab", index);
         await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2,
           (rect.document?.y ?? 0) + rect.y + rect.height / 2);
-        await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal").active === selected,
+        await s.until("core.grid", grid => grid.cards.find(item => item.id === own).active === selected,
           "the click did not switch the tab");
         ({ displayed } = await s.presented());
         const after = await s.get("core.grid");
-        assert.equal(after.fullscreen, "terminal", "the tab click left fullscreen");
+        assert.equal(after.fullscreen, own, "the tab click left fullscreen");
         const visible = (await s.get("host.window")).surfaces.filter(surface => surface.visible);
         assert.deepEqual(visible.map(surface => surface.id), [selected],
           "presentation completed without the selected native view");
@@ -226,7 +230,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(stopped.limited, false, "tab recording reached its bounded buffer");
     assert.ok(stopped.longestGap <= 100, `tab recording gap ${stopped.longestGap}ms`);
     t.diagnostic(`two tab presentation waits completed: ${captured.length} decoded frames`);
-    await s.run("core.card.fullscreen", { card: "terminal" });
+    await s.run("core.card.fullscreen", { card: own });
     await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");
   });
 }
@@ -234,20 +238,21 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a fullscreen card disables the tools that change the layout and refuses their commands`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    await s.run("core.card.fullscreen", { card: "terminal" });
+    const { surface, plugin } = await fresh(s);
+    const own = cardOf(await s.get("core.grid"), surface);
+    await s.run("core.card.fullscreen", { card: own });
     s.cleanup(async () => {
-      if ((await s.get("core.grid")).fullscreen !== null) await s.run("core.card.fullscreen", { card: "terminal" });
+      if ((await s.get("core.grid")).fullscreen !== null) await s.run("core.card.fullscreen", { card: own });
     });
-    const grid = await s.until("core.grid", (value) => value.fullscreen === "terminal", "the card did not become fullscreen");
-    const acts = grid.cards.find((item) => item.id === "terminal").acts;
+    const grid = await s.until("core.grid", (value) => value.fullscreen === own, "the card did not become fullscreen");
+    const acts = grid.cards.find((item) => item.id === own).acts;
     const enabled = Object.fromEntries(Object.entries(acts).filter(([, value]) => typeof value === "object").map(([key, value]) => [key, value.enabled]));
     assert.deepEqual(enabled, { add: false, "split-x": false, "split-y": false, fullscreen: true, close: false },
       `the tools of the fullscreen card: ${JSON.stringify(acts)}`);
-    const refusal = /card terminal: the layout does not change while card terminal is fullscreen; restore the arrangement first/;
-    await assert.rejects(s.run("core.card.split", { card: "terminal", side: "right", plugin: "browser" }), refusal);
-    await assert.rejects(s.run("core.card.add-tab", { card: "terminal", plugin: "browser" }), refusal);
-    await assert.rejects(s.run("core.card.close", { card: "terminal" }), refusal);
-    assert.equal((await s.get("core.grid")).fullscreen, "terminal", "a refused command left fullscreen");
+    const refusal = new RegExp(`card ${own}: the layout does not change while card ${own} is fullscreen; restore the arrangement first`);
+    await assert.rejects(s.run("core.card.split", { card: own, side: "right", plugin }), refusal);
+    await assert.rejects(s.run("core.card.add-tab", { card: own, plugin }), refusal);
+    await assert.rejects(s.run("core.card.close", { card: own }), refusal);
+    assert.equal((await s.get("core.grid")).fullscreen, own, "a refused command left fullscreen");
   });
 }

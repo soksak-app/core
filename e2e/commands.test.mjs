@@ -20,56 +20,67 @@ const panes = (grid) => grid.cards.filter((c) => c.pane !== null);
 
 const ids = (grid) => panes(grid).map((c) => c.id).sort();
 
+/** The plugin of the tabs that the checks add: the second layout probe, apart from the layout probe of the start tabs. */
+const ADDED = "layoutprobe2";
+
+/** The card of the start tab `surface` and the other card of the start layout that holds tabs, as card ids. */
+function startCards(grid, surface) {
+  const own = holder(grid, surface)?.id;
+  const other = panes(grid).find((c) => c.id !== own && c.tabs.length > 0)?.id;
+  return { own, other };
+}
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: card, tab, and menu commands change the grid`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface } = await fresh(s);
     const start = await s.get("core.grid");
-    const terminal = cardOf(start, "terminal");
-    const browser = cardOf(start, "browser");
-    assert.ok(terminal && browser, `the start layout must have terminal and browser cards: ${ids(start)}`);
-    assert.equal(terminal.acts.add.enabled, true, "the terminal card must be able to add a tab");
+    const { own, other } = startCards(start, surface);
+    const first = cardOf(start, own);
+    const second = cardOf(start, other);
+    assert.ok(first && second, `the start layout must have two cards with tabs: ${ids(start)}`);
+    assert.equal(first.acts.add.enabled, true, "the start card must be able to add a tab");
 
-    await s.run("core.card.focus", { card: "browser" });
-    await s.until("core.grid", (grid) => cardOf(grid, "browser").focused, "core.card.focus did not focus the card");
+    await s.run("core.card.focus", { card: other });
+    await s.until("core.grid", (grid) => cardOf(grid, other).focused, "core.card.focus did not focus the card");
 
     // Opens and closes the add menu, then opens it again and chooses an item.
-    await s.run("core.card.menu", { card: "terminal", menu: "add" });
+    await s.run("core.card.menu", { card: own, menu: "add" });
     const menu = await s.until("core.picker", (picker) => picker.open && picker.items.length > 0,
       "core.card.menu did not open the add menu");
     await s.until("core.modal", (modal) => modal?.id === "picker", "the add menu did not show its modal");
     await s.run("core.picker.close");
     await s.until("core.picker", (picker) => !picker.open, "core.picker.close did not close the menu");
-    const browserItem = menu.items.findIndex((item) => item.key === "browser");
-    assert.ok(browserItem >= 0, `the add menu must list the browser: ${JSON.stringify(menu.items)}`);
-    await s.run("core.card.menu", { card: "terminal", menu: "add" });
+    const addedItem = menu.items.findIndex((item) => item.key === ADDED);
+    assert.ok(addedItem >= 0, `the add menu must list ${ADDED}: ${JSON.stringify(menu.items)}`);
+    await s.run("core.card.menu", { card: own, menu: "add" });
     await s.until("core.picker", (picker) => picker.open, "the add menu did not open again");
-    await s.run("core.picker.pick", { index: browserItem });
-    const picked = await s.until("core.grid", (grid) => cardOf(grid, "terminal").tabs.length === terminal.tabs.length + 1,
+    await s.run("core.picker.pick", { index: addedItem });
+    const picked = await s.until("core.grid", (grid) => cardOf(grid, own).tabs.length === first.tabs.length + 1,
       "core.picker.pick did not add a tab");
     assert.equal((await s.get("core.picker")).open, false, "picking must close the menu");
-    const added = cardOf(picked, "terminal");
-    assert.equal(added.tabs.at(-1).plugin, "browser");
+    const added = cardOf(picked, own);
+    assert.equal(added.tabs.at(-1).plugin, ADDED);
     assert.equal(added.active, added.tabs.at(-1).id, "the added tab must be active");
 
-    await s.run("core.tab.select", { tab: terminal.tabs[0].id });
-    await s.until("core.grid", (grid) => cardOf(grid, "terminal").active === terminal.tabs[0].id,
+    await s.run("core.tab.select", { tab: first.tabs[0].id });
+    await s.until("core.grid", (grid) => cardOf(grid, own).active === first.tabs[0].id,
       "core.tab.select did not activate the tab");
     await s.run("core.tab.close", { tab: added.tabs.at(-1).id });
-    await s.until("core.grid", (grid) => cardOf(grid, "terminal").tabs.length === terminal.tabs.length,
+    await s.until("core.grid", (grid) => cardOf(grid, own).tabs.length === first.tabs.length,
       "core.tab.close did not close the tab");
 
     // Moves the tab to the center of another card, and then to the next side.
-    const { tab } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
-    await s.until("core.grid", (grid) => holder(grid, tab)?.id === "terminal", "core.card.add-tab did not add the tab");
-    await s.run("core.tab.move", { tab, card: "browser", zone: "centre" });
-    await s.until("core.grid", (grid) => holder(grid, tab)?.id === "browser", "core.tab.move did not move the tab to the centre");
-    await s.run("core.tab.move", { tab, card: "browser", zone: "right" });
+    const { tab } = await s.run("core.card.add-tab", { card: own, plugin: ADDED });
+    await s.until("core.grid", (grid) => holder(grid, tab)?.id === own, "core.card.add-tab did not add the tab");
+    await s.run("core.tab.move", { tab, card: other, zone: "centre" });
+    await s.until("core.grid", (grid) => holder(grid, tab)?.id === other, "core.tab.move did not move the tab to the centre");
+    await s.run("core.tab.move", { tab, card: other, zone: "right" });
     const split = await s.until("core.grid", (grid) => panes(grid).length === panes(start).length + 1,
       "core.tab.move did not make a card on the right");
     const made = holder(split, tab);
     assert.ok(made && !start.cards.some((c) => c.id === made.id), "the moved tab must be in a new card");
-    assert.ok(made.x > cardOf(split, "browser").x, "the new card must be right of the browser card");
+    assert.ok(made.x > cardOf(split, other).x, "the new card must be right of the card it was moved beside");
     assert.equal((await s.get("core.drag")), null, "no drag must remain after a command move");
     await s.run("core.card.close", { card: made.id });
     await s.until("core.grid", (grid) => panes(grid).length === panes(start).length, "core.card.close did not close the card");
@@ -80,25 +91,25 @@ for (const app of Object.values(APPS)) {
       top: (born, base) => born.y + born.h <= base.y, bottom: (born, base) => born.y >= base.y + base.h,
     };
     for (const side of ["left", "right", "top", "bottom"]) {
-      const result = await s.run("core.card.split", { card: "terminal", side, plugin: "browser" });
+      const result = await s.run("core.card.split", { card: own, side, plugin: ADDED });
       const split = await s.until("core.grid", (grid) => cardOf(grid, result.card), `core.card.split ${side} did not add a card`);
       const born = cardOf(split, result.card);
-      assert.equal(born.tabs[0].plugin, "browser");
-      assert.ok(beside[side](born, cardOf(split, "terminal")), `the ${side} split put the new card at ${JSON.stringify(born)}`);
+      assert.equal(born.tabs[0].plugin, ADDED);
+      assert.ok(beside[side](born, cardOf(split, own)), `the ${side} split put the new card at ${JSON.stringify(born)}`);
       await s.run("core.card.close", { card: result.card });
       await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), `closing the ${side} split did not restore the layout`);
     }
-    await assert.rejects(s.run("core.card.split", { card: "terminal", axis: "x", plugin: "browser" }), /unknown side undefined/);
+    await assert.rejects(s.run("core.card.split", { card: own, axis: "x", plugin: ADDED }), /unknown side undefined/);
 
-    await s.run("core.card.tab-list", { card: "terminal" });
+    await s.run("core.card.tab-list", { card: own });
     const list = await s.until("core.picker", (picker) => picker.open, "core.card.tab-list did not open the tab list");
-    assert.equal(list.items.length, terminal.tabs.length);
+    assert.equal(list.items.length, first.tabs.length);
     await s.run("core.picker.close");
     await s.until("core.picker", (picker) => !picker.open, "the tab list did not close");
 
-    const second = await s.run("core.card.split", { card: "terminal", side: "bottom", plugin: "browser" });
+    const again = await s.run("core.card.split", { card: own, side: "bottom", plugin: ADDED });
     await s.until("core.grid", (grid) => panes(grid).length === panes(start).length + 1, "the second split did not add a card");
-    await s.run("core.card.close", { card: second.card });
+    await s.run("core.card.close", { card: again.card });
     await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), "closing the second split did not restore the layout");
   });
 
@@ -403,7 +414,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: layout commands return after the new layout is drawn`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface } = await fresh(s);
     /** The widths of the card elements drawn in the document. */
     const drawnWidths = async () => {
       const widths = [];
@@ -414,12 +425,13 @@ for (const app of Object.values(APPS)) {
       }
     };
     const start = await s.get("core.grid");
-    const browser = cardOf(start, "browser");
+    const { other } = startCards(start, surface);
+    const shown = cardOf(start, other);
     await s.run("core.boundary.move", { axis: "x", line: 2, position: start.lines.x[2] - 60 });
-    const moved = cardOf(await s.get("core.grid"), "browser");
-    assert.notEqual(moved.w, browser.w, "the boundary move did not change the card");
+    const moved = cardOf(await s.get("core.grid"), other);
+    assert.notEqual(moved.w, shown.w, "the boundary move did not change the card");
     const afterMove = await drawnWidths();
-    assert.ok(afterMove.includes(moved.w) && !afterMove.includes(browser.w),
+    assert.ok(afterMove.includes(moved.w) && !afterMove.includes(shown.w),
       `core.boundary.move returned before the card was drawn at ${moved.w}: ${afterMove}`);
 
     await s.run("core.grid.size", { card: "right", axis: "x", size: cardOf(await s.get("core.grid"), "right").w + 40 });
