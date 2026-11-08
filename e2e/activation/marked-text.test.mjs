@@ -1,6 +1,8 @@
 // Confirms that, when the composition of a macOS Japanese input method that uses marked text ends, the native input client of an
-// image region commits that string exactly once and its sidecar receives it once (F8-7). The image region is that of the raster
-// probe, whose `rasterprobe.input` logs each input transaction with the echo of its sidecar.
+// image region commits that string exactly once and its sidecar receives it once (F8-7), that the region presents the frame that the
+// sidecar drew after the marked text and after the commit, and that each native input transaction that the event log records
+// reaches the sidecar unchanged under its correlation identifiers. The image region is that of the raster probe, whose
+// `rasterprobe.input` logs each input transaction with the echo of its sidecar and the frame that presents it.
 //
 // The Japanese (romaji) input method keeps the typed kana as marked text (and converts it to kanji when live conversion is on),
 // and ends the composition when the input source changes. The expected committed string is the marked text that the input method
@@ -14,19 +16,21 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { assertReceivedUnchanged, insertedText, lastTransaction, rasterProbeTab, receivedAfter } from "../input-probe.mjs";
+import { assertReceivedUnchanged, insertedText, lastTransaction, presentedStage, rasterProbeTab, receivedAfter } from "../input-probe.mjs";
 import { focusImageActive } from "./image-focus.mjs";
+import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "./native-input-trace.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: marked text that the input method ends is committed to the sidecar once`,
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
+      await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: ["native.input.key_down", "native.input.callback", ...NATIVE_INPUT_READS] });
       const { surface } = await rasterProbeTab(s);
 
       const original = (await s.request("diagnostics.input.source")).source;
       s.cleanup(() => s.request("diagnostics.input.source", { restore: original }));
       await focusImageActive(s, surface);
+      const offsets = nativeInputStart(s);
       const start = await lastTransaction(s, surface);
 
       assert.equal((await s.request("diagnostics.input.source", { select: "japanese" })).current, "japanese",
@@ -35,6 +39,7 @@ for (const app of Object.values(APPS)) {
       // No romaji remains in the marked text after the last n.
       const marked = (await s.until("rasterprobe.input", (input) => input.preedit !== null && input.preedit.text.length > 0
         && !/[a-z]/.test(input.preedit.text), "the input method did not show marked text for nihonn", { surface })).preedit.text;
+      await presentedStage(s, surface, "the marked text for nihonn");
       const composing = await receivedAfter(s, surface, start, "the sidecar did not echo the composing transactions");
       assert.equal(insertedText(composing), "", `marked text ${JSON.stringify(marked)} was committed before the composition ended`);
 
@@ -47,7 +52,9 @@ for (const app of Object.values(APPS)) {
       const log = await s.until("rasterprobe.input", (input) => insertedText(input.log.filter((entry) => entry.sequence > start)) === expected,
         `the ended composition did not commit ${expected}`, { surface }).then(() => receivedAfter(s, surface, start,
         "the sidecar did not echo the commit"));
+      await presentedStage(s, surface, `the commit of ${expected}`);
       assertReceivedUnchanged(log, `${app.name} marked text`);
+      await nativeInputDelivered(s, surface, offsets, start, `${app.name} marked text`);
       const inserts = log.filter((entry) => entry.actions.some((action) => action.type === "insert"));
       const committed = inserts.flatMap((entry) => entry.actions.filter((action) => action.type === "insert").map((action) => action.text));
       t.diagnostic(`${app.name}: marked ${JSON.stringify(log.map((entry) => entry.preedit.text).filter((text) => text !== ""))}, inserts ${JSON.stringify(committed)}`);

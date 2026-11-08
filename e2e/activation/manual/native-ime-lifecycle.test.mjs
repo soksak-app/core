@@ -1,5 +1,7 @@
 // Approval-gated activation checks for the native input client lifecycle. The image region of the raster probe carries the native
-// input client of core, and `rasterprobe.input` logs each input transaction with the echo of its sidecar.
+// input client of core, and `rasterprobe.input` logs each input transaction with the echo of its sidecar and the frame that the
+// sidecar drew after it: each check waits until the region presents the frame of each stage that it waits for, and checks that each
+// native input transaction that the event log records reaches the sidecar unchanged under its correlation identifiers.
 // This file is selected explicitly; it is not part of the default window checks.
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -12,8 +14,12 @@ import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
 import { assertReceivedUnchanged, focusedCard, imageRegion, inputDocument, insertedText, lastTransaction,
-  rasterProbeTab, receivedAfter, transactionMatchesKey, untilDocument } from "../../input-probe.mjs";
+  presentedStage, rasterProbeTab, receivedAfter, transactionMatchesKey, untilDocument } from "../../input-probe.mjs";
 import { focusImageActive } from "../image-focus.mjs";
+import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "../native-input-trace.mjs";
+
+/** The log policy and the records of the checks of this file: the input records of the native library and the sidecar requests. */
+const READS = ["native.input.key_down", "native.input.callback", ...NATIVE_INPUT_READS];
 
 
 async function preserveInputSource(s) {
@@ -58,7 +64,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: F8-9 ddd and Korean 2-Set sequence commits 한글 once`,
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
+      await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: READS });
       const { surface } = await rasterProbeTab(s);
       await preserveInputSource(s);
       await focusImageActive(s, surface);
@@ -67,17 +73,21 @@ for (const app of Object.values(APPS)) {
         { key: "g" }, { key: "k" }, { key: "s" }, { key: "r" }, { key: "m" }, { key: "f" }, { key: "Space" },
       ], "ddd한글 ", ["", "d", "dd", "ddd", "ddd", "dddㅎ", "ddd하", "ddd한", "ddd한ㄱ", "ddd한그", "ddd한글", "ddd한글 "]);
       await focusImageActive(s, surface);
+      const offsets = nativeInputStart(s);
       const start = await lastTransaction(s, surface);
 
       assert.equal((await s.request("diagnostics.input.source", { select: "latin" })).current, "latin");
       for (const key of ["d", "d", "d"]) await s.press(key);
       await untilDocument(s, surface, start, "ddd", "latin input did not reach the region before Korean input");
+      await presentedStage(s, surface, "the latin input ddd");
       assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
       for (const key of ["g", "k", "s", "r", "m", "f", "Space"]) await s.press(key);
       await s.until("rasterprobe.input", (input) => input.preedit?.text === "", "Space did not end the Korean composition", { surface });
       await untilDocument(s, surface, start, "ddd한글 ", "the committed ddd한글 text did not reach the region");
+      await presentedStage(s, surface, "the committed ddd한글 text");
       const entries = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
       assertReceivedUnchanged(entries, `${app.name} F8-9`);
+      await nativeInputDelivered(s, surface, offsets, start, `${app.name} F8-9`);
       assert.ok(!/[ㄱ-ㅣ]/.test(insertedText(entries)), "uncommitted jamo was committed");
       assert.equal(insertedText(entries), "ddd한글 ", "native inserts did not commit ddd한글 once in order");
       t.diagnostic(`${app.name}: F8-9 expected document ddd한글 and one committed trailing space`);
@@ -85,7 +95,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: F143 gksk resyllabifies to 하나`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
+    await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: READS });
     const { surface } = await rasterProbeTab(s);
     await preserveInputSource(s);
     await focusImageActive(s, surface);
@@ -93,14 +103,18 @@ for (const app of Object.values(APPS)) {
     await compareAppKitReference(s, ["g", "k", "s", "k", "Space", "Enter"], "하나 \n", ["ㅎ", "하", "한", "하나", "하나 ", "하나 \n"]);
     await focusImageActive(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
+    const offsets = nativeInputStart(s);
     const start = await lastTransaction(s, surface);
     for (const key of ["g", "k", "s", "k", "Space"]) await s.press(key);
     await s.until("rasterprobe.input", (input) => input.preedit?.text === "", "Space did not end the Korean resyllabification", { surface });
     await untilDocument(s, surface, start, "하나 ", "the Korean 2-Set sequence gksk did not produce 하나");
+    await presentedStage(s, surface, "the committed syllables 하나");
     await s.press("Enter");
     await untilDocument(s, surface, start, "하나 \n", "the region did not receive Enter after the committed syllables 하나");
+    await presentedStage(s, surface, "Enter after 하나");
     const entries = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
     assertReceivedUnchanged(entries, `${app.name} F143`);
+    await nativeInputDelivered(s, surface, offsets, start, `${app.name} F143`);
     assert.ok(!/[ㄱ-ㅣ]/.test(insertedText(entries)), "uncommitted jamo was committed");
     assert.equal(insertedText(entries), "하나 ", "native inserts did not commit 하나 once in order");
     t.diagnostic(`${app.name}: F143 expected document 하나 and one committed trailing space`);
@@ -111,7 +125,7 @@ for (const app of Object.values(APPS)) {
     test(`${app.name}: F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture`,
       { timeout: 120000 }, async (t) => {
         const s = await open(t, app);
-        await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
+        await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: READS });
         const projectRoot = mkdtempSync(join(tmpdir(), "soksak-ime-lifecycle-"));
         const canonicalProjectRoot = realpathSync(projectRoot);
         s.cleanup(() => rmSync(projectRoot, { recursive: true, force: true }));
@@ -156,14 +170,17 @@ for (const app of Object.values(APPS)) {
         t.diagnostic(`lifecycle observations: ${artifactDir}`);
         const stopCapture = await preserveGestureCapture(lifecycle, artifactDir, "approved-eight-vowels-backspace-space");
         assert.equal((await lifecycle.request("diagnostics.input.source", { select: "korean" })).current, "korean");
+        const offsets = nativeInputStart(lifecycle);
         const start = await lastTransaction(lifecycle, surface);
         for (const key of keys) await lifecycle.press(key);
         const expectedDocument = documents.at(-1);
         await untilDocument(lifecycle, surface, start, expectedDocument,
           `cycle ${cycleLabel}: the committed text plus the current marked text differs from AppKit`);
+        await presentedStage(lifecycle, surface, `cycle ${cycleLabel}: the completed document`);
         const entries = await receivedAfter(lifecycle, surface, start, `cycle ${cycleLabel}: the sidecar did not echo the input`);
         writeFileSync(join(artifactDir, "native-input-transactions.json"), JSON.stringify(entries, null, 2));
         assertReceivedUnchanged(entries, `cycle ${cycleLabel}`);
+        await nativeInputDelivered(lifecycle, surface, offsets, start, `cycle ${cycleLabel}`);
         assert.equal(inputDocument(entries), expectedDocument, `cycle ${cycleLabel}: the region document differs from AppKit`);
         for (const [key, expectedCount] of [["k", 8], ["Backspace", 1], ["Space", 1]]) {
           const receipts = entries.filter((transaction) => transactionMatchesKey(transaction, key));

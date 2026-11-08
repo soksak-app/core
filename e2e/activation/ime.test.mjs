@@ -1,7 +1,8 @@
 // Types Hangul into an image region through the real macOS Korean input method and checks its preedit, its commits and its
-// selected end as the native input client of core reports them, and that the sidecar of the region receives each input transaction
-// once and unchanged. The image region is that of the raster probe, whose `rasterprobe.input` logs each transaction with the echo
-// of its sidecar. The subject is the composition of the OS input method, which serves only the key window of the active application
+// selected end as the native input client of core reports them, that the image region presents the frame that the sidecar drew after
+// each stage of a composition, and that the sidecar of the region receives each native input transaction that the event log records
+// once and unchanged under its correlation identifiers. The image region is that of the raster probe, whose `rasterprobe.input` logs
+// each transaction with the echo of its sidecar and the frame that presents it. The subject is the composition of the OS input method, which serves only the key window of the active application
 // and composes nothing for the virtual key window (docs/spec/exposure.md#virtual-key-window), so this check activates the application
 // and switches the input source through diagnostics.input.source of the diagnostic build, restoring the previous source at the end.
 import assert from "node:assert/strict";
@@ -10,9 +11,10 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
-import { assertReceivedUnchanged, inputDocument, insertedText, lastTransaction, rasterProbeTab,
+import { assertReceivedUnchanged, inputDocument, insertedText, lastTransaction, presentedStage, rasterProbeTab,
   receivedAfter, transactionMatchesKey, typedText, untilDocument } from "../input-probe.mjs";
 import { focusImageActive } from "./image-focus.mjs";
+import { NATIVE_INPUT_LOG, NATIVE_INPUT_READS, nativeInputDelivered, nativeInputStart } from "./native-input-trace.mjs";
 
 const JAMO = /[ㄱ-ㅣ]/;
 
@@ -25,23 +27,39 @@ async function focusedRegion(s) {
   return surface;
 }
 
-/** Waits until the preedit of the image region of `surface` satisfies the predicate, and returns it. */
+/**
+ * Waits until the preedit of the image region of `surface` satisfies the predicate and the region presents the frame of that stage
+ * (presentedStage), and returns the preedit.
+ */
 async function preeditUntil(s, surface, predicate, message) {
-  return (await s.until("rasterprobe.input", (input) => input.preedit !== null && predicate(input.preedit), message, { surface })).preedit;
+  const { preedit } = await s.until("rasterprobe.input", (input) => input.preedit !== null && predicate(input.preedit), message, { surface });
+  await presentedStage(s, surface, message);
+  return preedit;
 }
 
-/** Waits until the transactions after `after` typed `text` at their end (typedText). */
+/** Waits until the transactions after `after` typed `text` at their end (typedText) and the region presents that stage. */
 async function typedUntil(s, surface, after, text, message) {
   await s.until("rasterprobe.input", (input) => typedText(input.log.filter((entry) => entry.sequence > after)).endsWith(text),
     message, { surface });
+  await presentedStage(s, surface, message);
 }
+
+/** Waits until the transactions after `after` leave `expected` as their document (untilDocument) and the region presents that stage. */
+async function documentUntil(s, surface, after, expected, message) {
+  await untilDocument(s, surface, after, expected, message);
+  await presentedStage(s, surface, message);
+}
+
+/** The log policy and the records of a check of this file: the input records of the native library and the sidecar requests. */
+const READS = ["native.input.key_down", "native.input.callback", ...NATIVE_INPUT_READS];
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a Korean syllable typed right after an input-source switch reaches the sidecar once`,
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
+      await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: READS });
       const surface = await focusedRegion(s);
+      const offsets = nativeInputStart(s);
       const start = await lastTransaction(s, surface);
 
       // Order from the user report: ddd with the English layout, then Hangul with the Korean 2-set layout (g k s r m f), Space, Enter.
@@ -65,7 +83,7 @@ for (const app of Object.values(APPS)) {
       // F8-16: Space is a key that the input method does not handle, so the text and the space reach the sidecar without a following key.
       await s.press("Space");
       await preeditUntil(s, surface, (value) => value.text === "", "the Space key left a preedit");
-      await untilDocument(s, surface, start, "ddd한글 ", "the committed syllables and the space did not reach the region before Enter");
+      await documentUntil(s, surface, start, "ddd한글 ", "the committed syllables and the space did not reach the region before Enter");
 
       await s.press("Enter");
       await typedUntil(s, surface, start, "ddd한글 \n", "Enter did not follow the committed command");
@@ -92,6 +110,7 @@ for (const app of Object.values(APPS)) {
 
       const log = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
       assertReceivedUnchanged(log, `${app.name} Korean input`);
+      await nativeInputDelivered(s, surface, offsets, start, `${app.name} Korean input`);
       const inserts = insertedText(log);
       const preeditStates = log.map((entry) => entry.preedit.text);
       const composed = preeditStates.filter((text, index) => index === 0 || text !== preeditStates[index - 1]).filter((text) => text !== "");
@@ -116,8 +135,9 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the preedit reports the selected end of Korean preedit`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
+    await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: READS });
     const surface = await focusedRegion(s);
+    const offsets = nativeInputStart(s);
     const start = await lastTransaction(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: "latin" })).current, "latin");
     for (const key of "ddd") await s.press(key);
@@ -129,17 +149,18 @@ for (const app of Object.values(APPS)) {
     assert.match(compose.text, /^[가-힣]+$/, "the preedit contains input other than Hangul syllables");
     await s.press("Space");
     await preeditUntil(s, surface, (value) => value.text === "", "Space did not commit the preedit");
-    await untilDocument(s, surface, start, "ddd한글은 ", "committed Korean text did not reach the region before another key");
+    await documentUntil(s, surface, start, "ddd한글은 ", "committed Korean text did not reach the region before another key");
     const log = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
     assertReceivedUnchanged(log, `${app.name} selected end`);
+    await nativeInputDelivered(s, surface, offsets, start, `${app.name} selected end`);
     assert.equal(insertedText(log), "ddd한글은 ", "the native client did not commit the text once in order");
     t.diagnostic(`${app.name}: preedit ${compose.text} selected end ${JSON.stringify(compose.selectedRange)}`);
   });
 
   test(`${app.name}: eight Korean vowels and one Backspace retain an exact input trace`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { performanceTrace: true, log: { input: "info", call: "debug", lifecycle: "info" },
-      reads: ["native.input.key_down", "native.input.callback", "native.record.info"] });
+    await fresh(s, { performanceTrace: true, log: { ...NATIVE_INPUT_LOG, call: "debug", lifecycle: "info" },
+      reads: [...READS, "native.record.info"] });
     const surface = await focusedRegion(s);
     assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean", "the korean input source is not enabled");
     const keys = [...Array(8).fill("k"), "Backspace", "Space"];
@@ -147,15 +168,17 @@ for (const app of Object.values(APPS)) {
     await compareAppKitReference(s, keys, documents.at(-1), documents);
     await focusImageActive(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
+    const offsets = nativeInputStart(s);
     const start = await lastTransaction(s, surface);
-    // Each key leaves the document that the same-window AppKit reference held after the same key.
+    // Each key leaves the document that the same-window AppKit reference held after the same key, and the region presents it.
     for (const [index, key] of keys.entries()) {
       await s.press(key);
-      await untilDocument(s, surface, start, documents[index],
+      await documentUntil(s, surface, start, documents[index],
         `${key} (key ${index + 1}): the image region did not reach the same-window AppKit document ${JSON.stringify(documents[index])}`);
     }
     const log = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
     assertReceivedUnchanged(log, `${app.name} eight vowels`);
+    await nativeInputDelivered(s, surface, offsets, start, `${app.name} eight vowels`);
     assert.equal(inputDocument(log), documents.at(-1));
     for (const [key, expected] of [["k", 8], ["Backspace", 1], ["Space", 1]]) {
       const receipts = log.filter((entry) => transactionMatchesKey(entry, key));
