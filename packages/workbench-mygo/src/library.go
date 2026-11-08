@@ -123,16 +123,18 @@ func (s *Shell) registerLibrary() {
 	// The opening reads the geometry store before it shows the project, so the command answers when the project is shown, and the
 	// answer of a command that asked for a frame waits for its placement (followCommand).
 	later(s, "core.library.open", func(value idParam, answer func(any, error)) {
-		// The library shows a failure of the opening, as the page reports it in the library (perform of packages/workbench/library.js).
-		s.activateThen(value.ID, func(err error) {
-			s.failed(err)
-			answer(nil, nil)
-		})
+		s.performLibrary(func(done func(error)) { s.activateThen(value.ID, done) }, func() { answer(nil, nil) })
 	})
 	later(s, "core.library.pin", func(value pinParam, answer func(any, error)) {
-		s.pinProject(value.ID, value.Pinned, answerNull(answer))
+		s.performLibrary(func(done func(error)) { s.pinProject(value.ID, value.Pinned, done) }, func() { answer(nil, nil) })
 	})
-	act(s, "core.library.remove", func(value idParam) error { s.removeProject(value.ID); return nil })
+	// The removal is the one of a project tab: it removes the record and its spaces and leaves the folder.
+	act(s, "core.library.remove", func(value idParam) error {
+		s.performLibrary(func(done func(error)) {
+			s.removeProjectThen(value.ID, func(_ bool, err error) { done(err) })
+		}, func() {})
+		return nil
+	})
 	act(s, "core.library.return", func(struct{}) error {
 		if s.opened() == nil {
 			return fmt.Errorf("there is no workspace to return to")
@@ -142,11 +144,7 @@ func (s *Shell) registerLibrary() {
 		return nil
 	})
 	act(s, "core.library.window", func(struct{}) error {
-		s.newWindow(func(err error) {
-			if err != nil {
-				s.fail(err)
-			}
-		})
+		s.performLibrary(s.newWindow, func() {})
 		return nil
 	})
 	act(s, "core.library.form.open", func(value struct {
@@ -181,17 +179,37 @@ func (s *Shell) registerLibrary() {
 	})
 	act(s, "core.library.form.submit", func(struct{}) error { return s.submitForm() })
 	act(s, "core.library.choose-folder", func(struct{}) error {
-		s.calls.Call("folderChoose", nil, func(value any, err error) {
-			if err != nil {
-				s.fail(err)
-				return
-			}
-			if chosen, err := decode[string](value); err == nil && chosen != "" {
-				s.library.parent = chosen
-				s.options.Invalidate()
-			}
-		})
+		s.performLibrary(func(done func(error)) {
+			s.calls.Call("folderChoose", nil, func(value any, err error) {
+				if err != nil {
+					done(err)
+					return
+				}
+				if chosen, err := decode[string](value); err == nil && chosen != "" {
+					s.library.parent = chosen
+					s.options.Invalidate()
+				}
+				done(nil)
+			})
+		}, func() {})
 		return nil
+	})
+}
+
+// performLibrary runs an action of the library as perform of packages/workbench/library.js does: it withdraws the error of the
+// library, shows the failure of the action in the error line of the library, and then runs ended. It asks for a frame only when the
+// error line changes, so an action that changes nothing that the window draws answers at once.
+func (s *Shell) performLibrary(action func(done func(error)), ended func()) {
+	if _, shown := s.errors.Text(libraryErrorPlace); shown {
+		s.errors.Hide(libraryErrorPlace)
+		s.options.Invalidate()
+	}
+	action(func(err error) {
+		if err != nil {
+			s.errors.Show(libraryErrorPlace, err.Error(), "")
+			s.options.Invalidate()
+		}
+		ended()
 	})
 }
 
@@ -200,27 +218,25 @@ func (s *Shell) submitForm() error {
 	if s.library.formMode == "" {
 		return fmt.Errorf("the form is not open")
 	}
-	opened := func(value any, err error) {
-		if err != nil {
-			s.fail(err)
-			return
-		}
-		folder, err := decode[ProjectFolderValue](value)
-		if err != nil {
-			s.fail(err)
-			return
-		}
-		s.library.formMode, s.library.name, s.library.parent = "", "", ""
-		s.openFolder(folder, s.freeTint(), func(_ json.RawMessage, err error) {
+	s.performLibrary(func(done func(error)) {
+		opened := func(value any, err error) {
 			if err != nil {
-				s.fail(err)
+				done(err)
+				return
 			}
-		})
-	}
-	if s.library.formMode == "create" {
-		s.calls.Call("projectCreate", map[string]string{"parent": s.library.parent, "name": s.library.name}, opened)
-		return nil
-	}
-	s.calls.Call("projectFolder", s.library.parent, opened)
+			folder, err := decode[ProjectFolderValue](value)
+			if err != nil {
+				done(err)
+				return
+			}
+			s.library.formMode, s.library.name, s.library.parent = "", "", ""
+			s.openFolder(folder, s.freeTint(), func(_ json.RawMessage, err error) { done(err) })
+		}
+		if s.library.formMode == "create" {
+			s.calls.Call("projectCreate", map[string]string{"parent": s.library.parent, "name": s.library.name}, opened)
+			return
+		}
+		s.calls.Call("projectFolder", s.library.parent, opened)
+	}, func() {})
 	return nil
 }

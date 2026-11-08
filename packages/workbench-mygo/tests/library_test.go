@@ -1,6 +1,8 @@
 package workbench_test
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -439,5 +441,44 @@ func TestAFocusedSortHasTheBorderOfThePage(t *testing.T) {
 	}
 	if got := f.pixelOf(node.Bounds.X+1.5, y); got != inside {
 		t.Fatalf("inside the border of the focused sort lies %v, not %v", got, inside)
+	}
+}
+
+// A window that shows a project answers the removal that another window asks for through the host, so the removal goes on
+// (docs/spec/projects.md#settings).
+func TestTheWindowOfAProjectAnswersItsRemoval(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	f.shell.Event("project-remove-request", []any{id})
+	f.settle()
+	equal(t, f.host.removalAnswers, []string{fmt.Sprintf(`{"allowed":true,"id":%q}`, id)})
+}
+
+// A library command that fails shows its failure in the error line of the library and records it at the place library, as
+// perform of packages/workbench/library.js does, and the workbench banner stays empty.
+func TestAFailedOpenOfTheLibraryShowsInTheLibrary(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	f.run("core.projects.browse", nil)
+	missing := "project directory does not exist: /work/alpha"
+	f.host.failing = map[string]error{"projectFolder": errors.New(missing)}
+	var failure error
+	f.shell.Registry().RunLater("core.library.open", json.RawMessage(fmt.Sprintf(`{"id":%q}`, id)), func(_ any, err error) { failure = err })
+	records := f.shownRecords()
+	if failure != nil {
+		t.Fatalf("core.library.open answered %v", failure)
+	}
+	if !slices.Contains(records, shownRecord{"library", missing}) ||
+		slices.ContainsFunc(records, func(record shownRecord) bool { return record.where == "workbench" }) {
+		t.Fatalf("the shell recorded %+v", records)
+	}
+	library := status[struct {
+		Error *string `json:"error"`
+	}](t, f, "core.library")
+	if library.Error == nil || *library.Error != missing {
+		t.Fatalf("core.library reports the error %v", library.Error)
+	}
+	if banner := f.status("core.workbench.error"); banner != "null" {
+		t.Fatalf("the workbench banner shows %s", banner)
 	}
 }

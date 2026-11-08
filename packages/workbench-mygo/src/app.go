@@ -286,6 +286,8 @@ func (s *Shell) event(name string, data []any) {
 		s.appUpdates.Refresh()
 	case "project-close-request":
 		s.closeWindowAsked()
+	case "project-remove-request":
+		s.removalAsked(data)
 	case "menu-command":
 		s.menuCommand(data)
 	case "debug-save-progress", "debug-save-done", "debug-log-changed":
@@ -350,8 +352,7 @@ var eventsLeft = map[string]bool{"diagnostics-tick": true, "diagnostics-unlisten
 	"document-message": true, "document-state": true, "document-stream": true, "exit-request": true, "exposure-registered": true,
 	"image-event": true, "log-policy": true, "memory-pressure": true, "modal-content": true,
 	"modal-position": true, "modal-rendered": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,
-	"project-remove-request": true,
-	"run-began":              true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
+	"run-began": true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
 	"surface-pressed": true, "theme": true, "view-call": true, "view-process-ended": true,
 	"view-reply": true, "view-source-ended": true, "view-source-registered": true, "view-stopped": true,
 	"window-active": true}

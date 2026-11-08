@@ -5,6 +5,9 @@ import "github.com/egoist/mygo/ui"
 // workbenchErrorPlace is the place of the error banner, as createErrorDisplay of packages/workbench/page-layout.js names it.
 const workbenchErrorPlace = "workbench"
 
+// libraryErrorPlace is the place of the error line of the library, as perform of packages/workbench/library.js names it.
+const libraryErrorPlace = "library"
+
 // ShownErrors is the only path that shows an error to the person, as packages/workbench/shown-errors.js is. The next drawing
 // erases an error from the screen, so the record written at the moment it is shown is the trace of that error
 // (docs/spec/hosts.md#application-log). The error color is used only for what this path shows.

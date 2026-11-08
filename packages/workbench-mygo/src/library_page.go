@@ -98,6 +98,7 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 		ui.Scroll(c).FillWidth().Grow(1).Column().Padding(m.space3).Children(func() {
 			s.drawLibraryHead(c, width-2*m.space3)
 			DrawErrorBanner(c, s.errors)
+			DrawError(c, s.errors, libraryErrorPlace)
 			if s.library.page == pluginsPage {
 				s.drawPlugins(c, width-2*m.space3)
 				return

@@ -624,16 +624,8 @@ func (s *Shell) browse() {
 	s.options.Invalidate()
 }
 
-// removeProject removes the project id, as projects.close does.
-func (s *Shell) removeProject(id string) {
-	s.removeProjectThen(id, func(_ bool, err error) {
-		if err != nil {
-			s.fail(err)
-		}
-	})
-}
-
-// removeProjectThen is removeProject that tells whether the project was removed: a kept tab of the project keeps it.
+// removeProjectThen removes the project id, as projects.close does, and tells whether the project was removed: a kept tab of the
+// project keeps it.
 func (s *Shell) removeProjectThen(id string, done func(removed bool, err error)) {
 	operation := s.calls.Caused(s.events.BeginOperation("workbench.project.operation", map[string]any{"action": "remove", "project": id}))
 	operation.Call("projectRemoveAsk", id, func(value any, err error) {
@@ -668,6 +660,25 @@ func (s *Shell) removeProjectThen(id string, done func(removed bool, err error))
 			})
 		})
 	})
+}
+
+// removalAsked answers the request of the host that another window sends before it removes a project, as answerRemoval of
+// packages/workbench/projects.js does: a window that shows the project in its plane asks for each modified tab first, and the
+// removal waits for the answer (docs/spec/projects.md#settings).
+func (s *Shell) removalAsked(data []any) {
+	id, err := eventBody[string]("project-remove-request", data)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	answer := func(allowed bool) {
+		s.calls.Call("projectRemoveAnswer", map[string]any{"id": id, "allowed": allowed}, func(_ any, err error) { s.failed(err) })
+	}
+	if id != s.active || s.browsing {
+		answer(true)
+		return
+	}
+	s.settleModified(answer)
 }
 
 // dropProject takes the removed project out of the window. The window shows the next project, or the library without one.
