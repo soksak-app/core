@@ -485,11 +485,14 @@ build-registry: check-cargo
 
 # The fixture registry (docs/spec/plugin-processes.md#verification-boundaries). Packs every fake plugin of e2e/fixtures and releases
 # every fake sidecar of e2e/fixtures/sidecars for the current platform, and then creates index.json in target/fixture-registry with
-# one pack fixtures of every fixture plugin. It reads no plugin or sidecar repository and no registry index.
+# one pack fixtures of every fixture plugin. It reads no plugin or sidecar repository and no registry index. Each fake sidecar is
+# built first with its own build script, because its release holds the executable that its sidecar.json declares.
 FIXTURE_REGISTRY = target/fixture-registry
+FIXTURE_SIDECARS = $(patsubst %/sidecar.json,%,$(wildcard e2e/fixtures/sidecars/*/sidecar.json))
 
 build-fixture-registry: check-cargo
 	@$(CARGO_ENV) $(CARGO) build --locked -p soksak-sok
+	@for dir in $(FIXTURE_SIDECARS); do $(CARGO_ENV) pnpm --dir "$$dir" run build || exit 1; done
 	@node scripts/fixture-registry.mjs --sok target/debug/sok --out $(FIXTURE_REGISTRY)
 
 # The installation stage of the workspace: `make install` of every plugin and sidecar repository that scripts/workspace-registry.json
