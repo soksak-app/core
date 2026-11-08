@@ -17,11 +17,6 @@
       "reason": "Checks OS IME composition reaching the focused view (preedit, a single commit, cursor) and uses the terminal PTY only as the place text arrives; replace with a plain-view probe text input that reports its composition, commits and caret through a status."
     },
     {
-      "file": "e2e/activation/key-window-refusal.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a key to a non-key window is refused (keyboard routing and key window) and uses the terminal only as the target; replace with a plain-view probe that counts the keys it receives."
-    },
-    {
       "file": "e2e/activation/manual/native-ime-lifecycle.test.mjs",
       "owner": "core",
       "reason": "Checks the native input client lifecycle across project close and reopen and 2-Set commits; replace the terminal with a plain-view probe that reports commits."
@@ -217,11 +212,6 @@
       "reason": "Checks card, tab, menu, settings, library, layout and rename commands, with browser or terminal as tab plugins and library entries; plain-view probe plus a fixture registry entry."
     },
     {
-      "file": "e2e/document-typing.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the virtual key window delivers typed text into a document region (keyboard routing) and drives browser.navigate only to load a page; replace with a plain-view probe document region with a text field and a typed-text status."
-    },
-    {
       "file": "e2e/editor.test.mjs",
       "owner": "plugin:editor",
       "reason": "Editor opening, saving, save error and ask-before-close of its documents (its save-close core part is already covered by the save-close probe)."
@@ -285,11 +275,6 @@
       "file": "e2e/library.test.mjs",
       "owner": "core",
       "reason": "Checks how the library window creates, opens and restores projects and names a missing folder. The terminal is only the default card (plus a process snapshot); `plain-view` can serve as the default view."
-    },
-    {
-      "file": "e2e/modal-escape-terminal.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the keyboard returns after Escape closes the add picker and that keys pressed while it opens are dropped (modal and focus routing). A new keyboard-echo capability for `plain-view` would replace the terminal."
     },
     {
       "file": "e2e/modal.test.mjs",
@@ -640,11 +625,6 @@
       "file": "e2e/view-input.test.mjs",
       "owner": "core",
       "reason": "Tests that an inactive view keeps input across main focus and handles picker Escape, using the browser address field as the vehicle. Replace with extension-probe/plain-view with a focusable text field element and a focused status."
-    },
-    {
-      "file": "e2e/view-keyboard-routing.test.mjs",
-      "owner": "core",
-      "reason": "Tests keyboard routing between a terminal view and the browser address field. Replace with plain-view text-field/key-echo capabilities (two fixture views)."
     },
     {
       "file": "e2e/view-restart.test.mjs",
