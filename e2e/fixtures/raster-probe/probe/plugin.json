@@ -1,0 +1,109 @@
+{
+  "id": "rasterprobe",
+  "name": "Raster probe",
+  "description": "Window check fixture: a view whose image region shows the frames of the fake persistent sidecar rasterprobe, which reports the view, its session, its frames and its input as statuses.",
+  "surface": {
+    "composition": {
+      "kind": "view",
+      "page": "ui/page.html",
+      "regions": [{ "name": "raster", "kind": "image", "sidecar": "@sok-check/sidecar-rasterprobe", "present": "lease", "input": "dom" }],
+      "overlays": []
+    }
+  },
+  "dependencies": { "@sok-check/sidecar-rasterprobe": "*" },
+  "background": { "sidecar": "@sok-check/sidecar-rasterprobe", "operation": "open" },
+  "mark": "R",
+  "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
+  "exposes": {
+    "status": [
+      {
+        "name": "rasterprobe.view",
+        "description": "The view: the size and position of the image region in CSS pixels, its size in device pixels, the device pixel ratio and the text size factor of the surface.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "width": { "type": "number" },
+            "height": { "type": "number" },
+            "left": { "type": "number" },
+            "top": { "type": "number" },
+            "deviceWidth": { "type": "number" },
+            "deviceHeight": { "type": "number" },
+            "devicePixelRatio": { "type": "number" },
+            "textSize": { "type": "number" }
+          }
+        }
+      },
+      {
+        "name": "rasterprobe.session",
+        "description": "The session of the surface as the sidecar reported it (session, created, child process, service pid, version and folder, mode image or headless, color, rows, text size factor), whether the sidecar is connected, and the last failure or refused request.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "session": { "type": ["string", "null"] },
+            "connected": { "type": "boolean" },
+            "failure": { "type": ["string", "null"] },
+            "error": { "type": ["string", "null"] }
+          }
+        }
+      },
+      {
+        "name": "rasterprobe.frame",
+        "description": "The last frame that the sidecar sent: its identity (generation, raster, sequence), its raster in device pixels and scale, its grid (rows, columns and cell size), the row bands it paints, its color and the color of its identity marker; null before the first frame.",
+        "schema": { "type": ["object", "null"] }
+      },
+      {
+        "name": "rasterprobe.input",
+        "description": "The image region input: whether it holds focus, its last preedit, the number of input transactions and the actions and errors of the last one.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "focused": { "type": "boolean" },
+            "transactions": { "type": "number" },
+            "preedit": {},
+            "actions": { "type": "array" },
+            "errors": { "type": "array" }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "rasterprobe.rows",
+        "description": "Asks the sidecar to paint count row bands in the next frames.",
+        "params": { "type": "object", "properties": { "count": { "type": "number" } } },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "rasterprobe.color",
+        "description": "Asks the sidecar to paint the frames in the color #rrggbb.",
+        "params": { "type": "object", "properties": { "color": { "type": "string" } } },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "rasterprobe.state",
+        "description": "Asks the sidecar for the state of the session, which updates rasterprobe.session.",
+        "params": { "type": "object" },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "rasterprobe.focus",
+        "description": "Gives the image region the keyboard focus.",
+        "params": { "type": "object" },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "rasterprobe.close",
+        "description": "Closes the session of the surface and its child process.",
+        "params": { "type": "object" },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "rasterprobe.kill",
+        "description": "Asks the sidecar service to end at once with SIGKILL, as a crash of the service would.",
+        "params": { "type": "object" },
+        "result": { "type": "null" }
+      }
+    ],
+    "element": []
+  }
+}

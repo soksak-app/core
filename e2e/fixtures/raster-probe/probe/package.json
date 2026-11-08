@@ -1,0 +1,11 @@
+{
+  "name": "@sok-check/probe-raster",
+  "version": "0.0.40",
+  "private": true,
+  "type": "module",
+  "description": "Window check fixture: a view with one image region that the fake persistent sidecar rasterprobe draws.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}
