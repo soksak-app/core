@@ -10,7 +10,7 @@ import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window
 import { supplierDrawDurations } from "./supplier-draw.mjs";
 import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { outside, rasterMarks, whitePixels } from "./outside.mjs";
-import { addRasterTab, RASTER } from "./raster-probe.mjs";
+import { addRasterTabAt, RASTER } from "./raster-probe.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
 import { measureDragPerformance, shownTimes, assertFinalContentSize, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
 
@@ -21,15 +21,8 @@ const PLAN = { axis: "x", line: 1, dx: 250, dy: 0, ms: 400, times: 2 };
 const READ = 0.5;
 
 
-/**
- * Adds a raster probe tab to the first card of the middle column, the card whose left edge is line 1 and whose top is the top of the
- * grid, and returns `{card, surface}`.
- */
-async function rasterInFirstCard(s) {
-  const card = (await s.get("core.layout")).state.cards.find((item) => item.c0 === 1 && item.r0 === 0);
-  assert.ok(card, "the start layout has no card to the right of line 1 at the top");
-  return addRasterTab(s, card.id);
-}
+/** Adds a raster probe tab to the first card of the middle column, whose left edge is line 1, and returns `{card, surface}`. */
+const rasterInFirstCard = (s) => addRasterTabAt(s, 1, 0);
 
 function assertAligned(run, marks, refreshRate) {
   const files = frames(run.frames);

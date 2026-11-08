@@ -49,6 +49,16 @@ export async function addRasterTab(s, card) {
 }
 
 /**
+ * Adds a raster probe tab (addRasterTab) to the card of the stored layout whose left grid line is `c0` and whose top grid line is `r0`;
+ * the start layout has the card at c0 1, r0 0 to the right of the left fixed sidebar at the top. Returns `{card, surface}`.
+ */
+export async function addRasterTabAt(s, c0, r0) {
+  const card = (await s.get("core.layout")).state.cards.find((item) => item.c0 === c0 && item.r0 === r0);
+  assert.ok(card, `the layout has no card at the grid lines c0 ${c0}, r0 ${r0}`);
+  return addRasterTab(s, card.id);
+}
+
+/**
  * Makes `count` raster probe tabs visible: the first is added to the focused card when no visible raster probe exists, and the
  * largest visible raster probe card is split along its longer side with a new raster probe until `count` are visible. Returns the
  * visible raster probe surfaces (core.surfaces entries).
