@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F716: Both hosts install the native activity observers after their writer applied the first policy, so a policy that stores the class `lifecycle` at `info` stores the `native.observe.registered` record of each activity observer from the start of the host.
 - F715-4: `@soksak/window-check` exports the generic window-check modules of core (view content, view frame geometry, view process footprints, view metrics collection, the marker view, drag measurement, operation chains, project resources, the process table, the region raster and the HID input tool), and its start state names a placeholder plugin apart from the start plugin, so a plugin that the new-space layout names is the start plugin of its own checks.
 - F715-4: The core release publishes `@soksak/window-check`, `@soksak/client` and `@soksak/log-contract` beside `@soksak/plugin-api`; each workspace dependency of a packed package is the release file of that package in the same core release, so a plugin repository installs `@soksak/window-check` from the release alone, and the plugin specification states what a window check of a plugin may use.
 - F715-3: The window checks of core run on the core fixtures: `make test-app` and the candidate run install only the pack `fixtures` of the fixture registry into each application, the candidate context and the acceptance report name no registry, and each check starts on a `layoutprobe` tab in place of each tab of the new-space layout whose plugin the fixtures do not install.
