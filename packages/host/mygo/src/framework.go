@@ -127,6 +127,7 @@ func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
 		f.mu.Unlock()
 		// The Core Animation transaction of the main thread holds every frame that presents with it, the frame of a new window among them.
 		if f.transaction {
+			frontend.window.TransactionOpened()
 			frontend.hold()
 		}
 	})
@@ -145,9 +146,14 @@ func (f *Framework) ObserveLayout() error {
 
 // layoutStarted holds the frames of every other window from the start of a preparation of window, and releases the hold of window
 // before the preparation asks for its frame.
+//
+// The transaction stays open across passes of the run loop, and a frame of any window presents with it, so every window learns
+// of it: a frame presented meanwhile keeps its drawable until the commit, and a later frame waits for the commit instead of
+// waiting on the main thread for a drawable that only the commit returns.
 func (f *Framework) layoutStarted(window platform.Window) {
 	f.transaction = true
 	for _, frontend := range f.windows() {
+		frontend.window.TransactionOpened()
 		if frontend.NativeWindow() == window {
 			frontend.release()
 		} else {
@@ -160,6 +166,7 @@ func (f *Framework) layoutStarted(window platform.Window) {
 func (f *Framework) layoutEnded(platform.Window) {
 	f.transaction = false
 	for _, frontend := range f.windows() {
+		frontend.window.TransactionCommitted()
 		frontend.release()
 	}
 }
