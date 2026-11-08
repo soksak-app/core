@@ -108,6 +108,18 @@ type surfaceStatus struct {
 	State       string       `json:"state"`
 }
 
+// placeholderStatus is an entry of the status core.surfaces for a tab of a plugin that the window did not load: it has no surface,
+// so it reports only its plugin, that it is visible and the reason of its placeholder.
+type placeholderStatus struct {
+	Surface     string  `json:"surface"`
+	Plugin      string  `json:"plugin"`
+	Visible     bool    `json:"visible"`
+	Placeholder string  `json:"placeholder"`
+	Composition *string `json:"composition"`
+	Kind        string  `json:"kind"`
+	Sidebar     *string `json:"sidebar"`
+}
+
 // optionalText returns the status member of a text that a surface may not have reported.
 func optionalText(value string) *string {
 	if value == "" {
@@ -371,9 +383,10 @@ func (s *Shell) railState() any {
 	return status
 }
 
-// surfacesState returns the value of core.surfaces: each surface that the host holds, in the order the host took them.
-func (s *Shell) surfacesState() []surfaceStatus {
-	status := make([]surfaceStatus, 0, len(s.surfaces.order))
+// surfacesState returns the value of core.surfaces: each surface that the host holds, in the order the host took them, then the
+// unloaded sections and the placeholder tabs of the current frame.
+func (s *Shell) surfacesState() []any {
+	status := make([]any, 0, len(s.surfaces.order)+len(s.surfaces.placeholders))
 	for _, id := range s.surfaces.order {
 		held := s.surfaces.held[id]
 		unit := s.units[held.tab.Plugin]
@@ -395,7 +408,13 @@ func (s *Shell) surfacesState() []surfaceStatus {
 		}
 		status = append(status, entry)
 	}
-	return append(status, s.unloadedSections()...)
+	for _, row := range s.unloadedSections() {
+		status = append(status, row)
+	}
+	for _, row := range s.surfaces.placeholders {
+		status = append(status, row)
+	}
+	return status
 }
 
 // unloadedSections returns the rows of the sections whose surfaces the memory saver unloaded: a section keeps its seat, so it stays in the

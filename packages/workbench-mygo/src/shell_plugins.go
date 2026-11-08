@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The plugin screen in a window: the commands and statuses of the plugin operations and the events of the host that change them.
@@ -241,37 +242,59 @@ type pluginStarter struct {
 	Registry *string `json:"registry"`
 }
 
-// drawPluginPlaceholder draws a tab of a plugin that the window did not load: the reason, and the install or enable button when
-// that is what the tab waits for.
-func (s *Shell) drawPluginPlaceholder(c *ui.Context, plugin string) {
-	line, action, label := s.placeholderOf(plugin)
+// drawPluginPlaceholder draws the tab tab of a plugin that the window did not load: the reason, and the install or enable button
+// when that is what the tab waits for. The frame lists the tab in core.surfaces with the reason of its placeholder.
+func (s *Shell) drawPluginPlaceholder(c *ui.Context, tab layout.Tab) {
+	reason, installable := s.placeholderReason(tab.Plugin)
+	s.surfaces.placeholders = append(s.surfaces.placeholders, placeholderStatus{Surface: tab.ID, Plugin: tab.Plugin, Visible: true,
+		Placeholder: reason, Kind: "tab"})
+	line, action, label := placeholderOf(tab.Plugin, reason, installable)
 	// The line is a paragraph of the page, whose margin of one line stands under it as well as the gap of the placeholder.
 	gap := s.options.Declared.ChromeNumber("placeholder-gap", "px")
 	ui.Column(c).Fill().Gap(float32(gap) + s.textBody()).Center().Children(func() {
 		ui.Text(c, line).LineHeight(s.metrics.lineHeight).FontSize(s.textBody()).TextColor(s.palette.Muted)
 		if action != "" {
 			command := "core.plugins." + action
-			s.uiButton(c, s.binder.Press(c, "core.card.placeholder-action", command, plugin, pluginParam{plugin}), label, false)
+			s.uiButton(c, s.binder.Press(c, "core.card.placeholder-action", command, tab.Plugin, pluginParam{tab.Plugin}), label, false)
 		}
 	})
 }
 
-// placeholderOf returns the line of the placeholder of plugin, and its action and the label of the action when it has one.
-func (s *Shell) placeholderOf(plugin string) (line, action, label string) {
+// placeholderReason returns the reason of the placeholder of a tab of plugin (docs/spec/plugins.md): unread when the install state
+// was not read, missing when the plugin is not installed, refused when its installed version was refused, reload when it is
+// enabled and loads with the next window, and disabled otherwise. installable tells that the registry lists a version of a missing
+// plugin.
+func (s *Shell) placeholderReason(plugin string) (reason string, installable bool) {
 	if failure := s.pluginOperations.Failure(); failure != nil && failure.Kind == "state" {
-		return plugin + " 플러그인의 설치 상태를 읽지 못했습니다.", "", ""
+		return "unread", false
 	}
 	rows := s.pluginOperations.Status().Plugins
 	index := slices.IndexFunc(rows, func(row PluginRow) bool { return row.ID == plugin })
 	switch {
 	case index < 0 || rows[index].Installed == nil:
-		if index >= 0 && rows[index].Latest != nil {
+		return "missing", index >= 0 && rows[index].Latest != nil
+	case rows[index].State == "refused":
+		return "refused", false
+	case rows[index].Installed.Enabled:
+		return "reload", false
+	}
+	return "disabled", false
+}
+
+// placeholderOf returns the line of the placeholder of plugin for reason, and its action and the label of the action when it has one:
+// install for a missing plugin that is installable, and enable for a disabled one.
+func placeholderOf(plugin, reason string, installable bool) (line, action, label string) {
+	switch reason {
+	case "unread":
+		return plugin + " 플러그인의 설치 상태를 읽지 못했습니다.", "", ""
+	case "missing":
+		if installable {
 			return plugin + " 플러그인이 설치되어 있지 않습니다.", "install", "설치"
 		}
 		return plugin + " 플러그인이 설치되어 있지 않습니다.", "", ""
-	case rows[index].State == "refused":
+	case "refused":
 		return plugin + " 플러그인의 설치된 버전을 불러오지 못했습니다.", "", ""
-	case rows[index].Installed.Enabled:
+	case "reload":
 		return "창을 다시 불러오면 " + plugin + " 플러그인이 열립니다.", "", ""
 	}
 	return plugin + " 플러그인을 사용하지 않습니다.", "enable", "사용"

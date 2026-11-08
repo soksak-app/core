@@ -510,3 +510,45 @@ func TestThePlaceholderStandsAsThePageStandsIt(t *testing.T) {
 		t.Fatalf("the line is %v high, want %v", line.Bounds.H, want)
 	}
 }
+
+// A tab of a plugin that the window did not load is listed in core.surfaces with its plugin, visible and the reason of its placeholder,
+// and a placeholder row has no frames, entries or page status (docs/spec/plugins.md).
+func TestSurfacesListATabOfAPluginThatIsNotLoadedWithItsPlaceholderReason(t *testing.T) {
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"terminal": {"1.0.0"}})}
+	stored := &storedHost{plugins: plugins}
+	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
+	f := newShell(t, stored)
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	// The new-space layout holds a terminal tab and a browser tab, and the window loaded neither plugin.
+	placeholders := func() map[string]map[string]any {
+		rows := map[string]map[string]any{}
+		for _, row := range status[[]map[string]any](t, f, "core.surfaces") {
+			if row["placeholder"] != nil {
+				rows[row["plugin"].(string)] = row
+			}
+		}
+		return rows
+	}
+	rows := placeholders()
+	if len(rows) != 2 || rows["browser"]["placeholder"] != "missing" {
+		t.Fatalf("the placeholder rows of core.surfaces are %v", rows)
+	}
+	terminal := rows["terminal"]
+	if terminal["placeholder"] != "missing" || terminal["visible"] != true || terminal["kind"] != "tab" || terminal["surface"] == "" {
+		t.Fatalf("the placeholder row of the terminal tab is %v", terminal)
+	}
+	for _, field := range []string{"declared", "applied", "exposes", "status", "state", "dim"} {
+		if _, ok := terminal[field]; ok {
+			t.Fatalf("the placeholder row holds %s: %v", field, terminal)
+		}
+	}
+	f.click("core.card.placeholder-action", "")
+	plugins.plugins["terminal"]["enabled"] = false
+	f.shell.Event("window-active", nil)
+	f.settle()
+	if rows := placeholders(); rows["terminal"]["placeholder"] != "disabled" || rows["browser"]["placeholder"] != "missing" {
+		t.Fatalf("the placeholder rows of a disabled plugin are %v", rows)
+	}
+}
