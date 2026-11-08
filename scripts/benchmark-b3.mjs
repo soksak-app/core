@@ -350,7 +350,7 @@ export function unitPlan({ application, configRoot, configDir, pluginIds }) {
       { name: `start ${name}`, phase: 'prepare', kind: 'start', app: name, configDir, output: join(configRoot, `${name}.out`), argv: [application.executable, '--config-dir', configDir] },
     ],
     cleanup: [
-      { name: `quit ${name}`, phase: 'cleanup', kind: 'quit', app: name, configDir },
+      { name: `quit ${name}`, phase: 'cleanup', kind: 'quit', by: 'menu', app: name, configDir },
       { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, application.bundle] },
     ],
   };

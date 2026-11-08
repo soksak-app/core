@@ -184,6 +184,8 @@ impl ReplyScope {
     /// Registration after completion runs immediately with the retained transport outcome.
     pub fn after_response(&self, callback: impl FnOnce(ReplyOutcome) + Send + 'static) {
         let outcome = {
+            // default: a lock that a panicking thread poisoned still holds the outcome and callbacks of the reply, which
+            // the registration reads or extends; the panic hook records the panic.
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             match &state.outcome {
                 Some(outcome) => outcome.clone(),
@@ -210,6 +212,8 @@ impl ReplyCompletion {
         }
         self.finished = true;
         let callbacks = {
+            // default: a lock that a panicking thread poisoned still holds the callbacks of the reply, which the completion
+            // takes once; the panic hook records the panic.
             let mut state = self.scope.0.lock().unwrap_or_else(PoisonError::into_inner);
             state.outcome = Some(outcome.clone());
             std::mem::take(&mut state.callbacks)
@@ -375,9 +379,9 @@ impl Answer {
             self.completion.finish(ReplyOutcome::NoResponse);
             return;
         };
-        // default: a lock that a panicking thread poisoned still holds the connection of the client, which the reply
-        // is written to; the panic hook records the panic.
         let written = {
+            // default: a lock that a panicking thread poisoned still holds the connection of the client, which the reply
+            // is written to; the panic hook records the panic.
             let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
             match outcome {
                 Ok(result) => write_to_peer(

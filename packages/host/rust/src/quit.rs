@@ -63,10 +63,10 @@ static RESPONSE_OWNER: Mutex<ResponseOwner> = Mutex::new(ResponseOwner {
 });
 
 fn set_owner(owned: bool, reply: Option<ReplyScope>) {
-    // default: a lock that a panicking thread poisoned still holds the owner, which each change replaces whole; the panic
-    // hook records the panic.
     let mut owner = RESPONSE_OWNER
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner, which each change replaces whole; the
+        // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner);
     owner.owned = owned;
     owner.reply = reply;
@@ -95,9 +95,9 @@ pub fn with_response_owner<T>(reply: Option<&ReplyScope>, work: impl FnOnce() ->
 /// its request has no response.
 pub fn after_owner_response(quit: impl FnOnce() + Send + 'static) {
     let reply = {
-        // default: a lock that a panicking thread poisoned still holds the owner; the panic hook records the panic.
         let owner = RESPONSE_OWNER
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the owner; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         if owner.owned {
             owner.reply.clone()

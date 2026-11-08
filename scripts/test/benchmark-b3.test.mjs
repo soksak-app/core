@@ -203,9 +203,9 @@ test("a run installs the index of its application into a new configuration folde
     ["prepare", "start", ["/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3", "--config-dir", configDir]],
   ]);
   assert.equal(plan.prepare[3].app, "baseline-wailsv3");
-  assert.deepEqual(plan.cleanup.map((step) => [step.phase, step.kind, step.app ?? step.paths]), [
-    ["cleanup", "quit", "baseline-wailsv3"],
-    ["cleanup", "remaining", [configRoot, "/baseline/target/release/wailsv3/soksak.app"]],
+  assert.deepEqual(plan.cleanup.map((step) => [step.phase, step.kind, step.by, step.app ?? step.paths]), [
+    ["cleanup", "quit", "menu", "baseline-wailsv3"],
+    ["cleanup", "remaining", undefined, [configRoot, "/baseline/target/release/wailsv3/soksak.app"]],
   ]);
 });
 
