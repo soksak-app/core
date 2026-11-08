@@ -91,3 +91,11 @@ test("grip ink measures the run that differs from the strip background along the
   assert.deepEqual(gripInk(dots, { x: 0, y: 0, width: 6, height: 100 }, 1), { longest: 2, total: 6, runs: 3, span: 14, length: 100 });
 });
 
+test("grip ink takes the background of the band, not the boundary line that the band holds at its edge", () => {
+  // Measured on mygo: the folded bottom side of a card has its grip at y 396.4, 6 points high, at 2x. Its boundary line with the content
+  // is the top 1 point of the band, device rows 792.8 to 794.8, drawn on rows 793 and 794. The three 3-point dots lie at the center of
+  // the band, rows 796 to 801, 6 points apart around x 590 (device 1180).
+  const dot = (x) => [1165, 1177, 1189].some((left) => x >= left && x < left + 6);
+  const image = { pixel: (x, y) => (y === 793 || y === 794 ? [70, 70, 70] : y >= 796 && y < 802 && dot(x) ? [150, 150, 150] : [30, 30, 30]) };
+  assert.deepEqual(gripInk(image, { x: 216, y: 396.4, width: 748, height: 6 }, 2), { longest: 6, total: 18, runs: 3, span: 30, length: 1496 });
+});
