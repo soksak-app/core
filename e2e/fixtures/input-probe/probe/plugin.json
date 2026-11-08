@@ -1,7 +1,7 @@
 {
   "id": "probeinput",
   "name": "Input probe",
-  "description": "Core input fixture: a view text field and a native document region field report keys, preedit, commits, caret, copy and paste, and the Escape the view forwards.",
+  "description": "Core input fixture: a view text field and a native document region field report keys, preedit, commits, caret, copy and paste, wheels and pointer gestures, and the Escape the view forwards.",
   "surface": {
     "composition": { "kind": "view", "page": "ui/page.html", "regions": [{ "name": "text", "kind": "document", "input": "native" }], "overlays": [] }
   },
@@ -11,7 +11,7 @@
     "status": [
       {
         "name": "probeinput.field",
-        "description": "The text field of the view: whether it has focus, its value and caret, the preedit and its range, and in order the keys, commits, copies and pastes it received.",
+        "description": "The text field of the view: whether it has focus, its value and caret, the preedit and its range, in order the keys, commits, copies and pastes it received, the wheel events of its document, and the presses, drags with the primary button, releases and foreign-button events of the pointer gesture on its document.",
         "schema": {
           "type": "object",
           "properties": {
@@ -30,7 +30,13 @@
             "copies": { "type": "array", "items": { "type": "object", "properties": {
               "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } },
             "pastes": { "type": "array", "items": { "type": "object", "properties": {
-              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } }
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } },
+            "wheels": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "deltaX": { "type": "number" }, "deltaY": { "type": "number" },
+              "modifiers": { "type": "array", "items": { "type": "string", "enum": ["shift", "alt", "control", "command"] } },
+              "atMs": { "type": "number" } } } },
+            "pointer": { "type": "object", "properties": {
+              "downs": { "type": "integer" }, "drags": { "type": "integer" }, "ups": { "type": "integer" }, "foreign": { "type": "integer" } } }
           }
         }
       },
@@ -56,7 +62,13 @@
             "copies": { "type": "array", "items": { "type": "object", "properties": {
               "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } },
             "pastes": { "type": "array", "items": { "type": "object", "properties": {
-              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } }
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } },
+            "wheels": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "deltaX": { "type": "number" }, "deltaY": { "type": "number" },
+              "modifiers": { "type": "array", "items": { "type": "string", "enum": ["shift", "alt", "control", "command"] } },
+              "atMs": { "type": "number" } } } },
+            "pointer": { "type": "object", "properties": {
+              "downs": { "type": "integer" }, "drags": { "type": "integer" }, "ups": { "type": "integer" }, "foreign": { "type": "integer" } } }
           }
         }
       },
@@ -77,7 +89,7 @@
     "commands": [
       {
         "name": "probeinput.clear",
-        "description": "Empties both fields, their key, commit, copy and paste lists and their preedit, and the forwarded commands.",
+        "description": "Empties both fields, their key, commit, copy, paste and wheel lists, their pointer counts and their preedit, and the forwarded commands.",
         "params": { "type": "object", "properties": {} },
         "result": { "type": "null" }
       },

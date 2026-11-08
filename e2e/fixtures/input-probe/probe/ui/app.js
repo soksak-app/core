@@ -42,7 +42,7 @@ const fieldElement = document.getElementById("field");
 const field = createInputLog(fieldElement, window);
 // The state of the region document is the state of its last message; ready is false until the document sent one.
 const regionState = statusValue({ ready: false, documentTimeOriginMs: 0, focused: false, value: "", caret: { start: 0, end: 0, direction: "none" },
-  preedit: null, keys: [], commits: [], copies: [], pastes: [] });
+  preedit: null, keys: [], commits: [], copies: [], pastes: [], wheels: [], pointer: { downs: 0, drags: 0, ups: 0, foreign: 0 } });
 const routing = statusValue({ pickerOpen: false, forwarded: [] });
 
 // Escape forwarding: a key down of Escape that is not part of a composition runs core.picker.close while a picker is open. Each
