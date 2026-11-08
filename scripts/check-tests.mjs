@@ -3987,13 +3987,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-299-4",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "markedRange: { location: 0, length: 2 }" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "diagnostic terminal entries inject preedit and record terminal input" }],
-    expected: "The compose check sends the markedRange that the terminal plugin requires and reads the preedit of the recorded input operation.",
-    levels: ["application"],
-  },
-  {
     id: "F239-298",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) unsent(" },
@@ -6162,9 +6155,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/surface-modules.js", symbol: "authorizeSurface" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
     ],
     expected: "Prepared native surfaces authorize their modules after host creation, including late registration replay, and rebuilt Tauri/Wails split-terminal checks reach a presented raster without an authorization or presentation timeout.",
     levels: ["unit", "application"],
@@ -6188,7 +6181,7 @@ const FEATURE_LINKS = [
   {
     id: "F0.5.8",
     implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "sync" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" }],
     expected: "Split-surface synchronization reads the AppKit scale factor on the main thread; a rebuilt Tauri host presents four split terminals without a foreign-exception crash.",
     levels: ["native", "application"],
   },
@@ -6200,8 +6193,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/surfaces.rs", symbol: "sync" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
     expected: "Endpoint and asynchronous split-path WebView and native window-handle lookups run through the AppKit main-thread executor; repeated split requests preserve native presentation and process survival on rebuilt Tauri.",
@@ -6211,8 +6204,8 @@ const FEATURE_LINKS = [
     id: "F0.5.9-2",
     implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "reload_surface_documents" }],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
     ],
     expected: "Main-document reload cleanup finishes before replacement surface images attach; repeated split tests do not leave a new image generation loading after old native image teardown.",
     levels: ["native", "application"],
@@ -6222,10 +6215,10 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "acquireWindowCheckSlot" }],
     tests: [
       { file: "e2e/test/app-contract.test.mjs", id: "window checks reject overlapping sessions that target the same application" },
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
     ],
     expected: "Same-application window checks cannot concurrently reset one app's native image generations; rebuilt Tauri and Wails split presentation cases pass with bounded output and no raster timeout.",
     levels: ["unit", "application"],
@@ -6234,12 +6227,12 @@ const FEATURE_LINKS = [
     id: "F0.5.9-4",
     implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
-      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
-      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "closing image region tabs reaps every session child without killing the shared service" },
     ],
     expected: "The Wails stale-page runtime response race is closed at WebViewDidCommitNavigation; the isolated sequential cases pass and the preserved application log contains no stopped runtime response.",
     levels: ["native", "application"],
@@ -6248,12 +6241,12 @@ const FEATURE_LINKS = [
     id: "F0.5.9-5",
     implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
-      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
-      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "closing image region tabs reaps every session child without killing the shared service" },
     ],
     expected: "Wails main-document reload cleanup finishes before replacement surface images attach; the sequential split and cleanup cases pass without a raster presentation timeout.",
     levels: ["native", "application"],
@@ -6340,7 +6333,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "pointer" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "three terminal" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions" },
       { file: "native/darwin/tests/input_inject_test.m", id: "keys reach the focused field" },
     ],
     expected: "Native input reaches each of three terminal surfaces with exact focus, text, Enter, and isolation behavior.",
@@ -6664,7 +6657,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "detachAll" }],
     tests: [
       { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "disposal waits for an in-flight placement before detaching regions" },
-      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a newly split image region presents its first native raster" },
     ],
     expected: "Closing a surface waits for its in-flight composition placement before detaching native regions; rebuilt Tauri and Wails split-terminal checks pass without composition-declaration errors.",
     levels: ["unit", "application"],
@@ -6725,7 +6718,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
-      { file: "e2e/terminal.test.mjs", id: "the terminal font follows the pressed card's text size" },
       { file: "e2e/browser.test.mjs", id: "the browser document zoom follows the pressed card's text size" },
     ],
     expected: "Command =, -, and 0 change the text size of the last pressed card or of the frame and every card: DOM content by CSS zoom, terminal cells by font size, and browser documents by page zoom, while the plane stays inside the window.",
@@ -9479,7 +9471,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closeAnswered" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "closing image region tabs reaps every session child without killing the shared service" },
     ],
     expected: "A terminal close answers only after the terminal service has reaped the PTY child, on both hosts.",
     levels: ["application"],
@@ -9990,10 +9982,10 @@ const FEATURE_LINKS = [
   {
     id: "F27",
     implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "the notification authorization of this application is not decided" },
+      { file: "e2e/view-surfaces.test.mjs", symbol: "the notification authorization of this application is not decided" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a notification from a view out of view follows the system policy and then the tab policy" },
     ],
     expected: "The OSC 9 policy check of a bundled application names an undecided authorization and checks that the tab policy posts nothing new.",
     levels: ["application"],
@@ -10001,10 +9993,10 @@ const FEATURE_LINKS = [
   {
     id: "F24",
     implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "region.presented !== null" },
+      { file: "e2e/view-surfaces.test.mjs", symbol: "region.presented !== null" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a presentation that fails while the sidecar service is stopped leaves the next fixture and splits usable" },
     ],
     expected: "The window check of a failed terminal presentation waits while a region has not presented yet.",
     levels: ["application"],
@@ -10086,7 +10078,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/platform/darwin/system/host-structure.test.mjs", id: "host structure audit reports a clean paired-host graph" },
-      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a newly split image region presents its first native raster" },
     ],
     expected: "Audit infrastructure and bounded basic surface presentation are complete for both adapters, while uncovered restoration and IME scopes remain open rather than nominally active.",
     levels: ["unit", "application"],
@@ -10112,19 +10104,19 @@ const FEATURE_LINKS = [
   {
     id: "F1",
     implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
+      { file: "e2e/view-surfaces.test.mjs", symbol: "three image regions survive repeated divider drags and project returns" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" },
-      { file: "e2e/terminal.test.mjs", id: "terminal image follows a window resize" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" },
+      { file: "e2e/view-surfaces.test.mjs", id: "an image region follows a window resize" },
     ],
-    expected: "Current rebuilt Tauri and Wails windows preserve DOM/native containment and shell pixels through divider drags, while terminal resize preserves text, fixed cell metrics, and raster geometry.",
+    expected: "Current rebuilt Tauri and Wails windows preserve DOM/native containment and raster pixels through divider drags, while a window resize presents an image region raster that follows its grid and covers its region.",
     levels: ["unit", "application"],
   },
   {
     id: "F1.3",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" }],
     expected: "Three visible terminals complete six narrow-to-wide-and-back divider round trips in each of three project-return sets, with complete captures, no border intrusion, no white pixels, and no composition failure.",
     levels: ["application"],
   },
@@ -10262,15 +10254,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F1.2",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "ensureTerminals" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "ensureRasters" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" }],
     expected: "Three terminals retain sessions and presented native regions through repeated divider moves and project returns.",
     levels: ["application"],
   },
   {
     id: "F1.3-1",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" }],
     expected: "Rapid divider acceptance preserves complete draw transactions, native containment, text, and the declared return matrix.",
     levels: ["application"],
   },
@@ -10294,35 +10286,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "terminal cursor policy uses declared settings, persistence, and pixels" },
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
     ],
     expected: "Both rebuilt macOS hosts persist declared terminal cursor settings, reject invalid updates, render the effective policy in native pixels, and complete the first raster after a split without a presentation timeout.",
-    levels: ["unit", "native", "application"],
-  },
-  {
-    id: "F6",
-    implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "terminal file drop pastes quoted paths without executing" },
-    ],
-    tests: [
-      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
-      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
-      { file: "e2e/terminal.test.mjs", id: "inline image pixels follow scroll, resize, replacement, deletion, and cleanup" },
-    ],
-    expected: "The terminal selection, paste, file-drop, and inline-image contracts are implemented and verified through their unit and rebuilt native-host scenarios without input loss or unintended execution.",
-    levels: ["unit", "native", "application"],
-  },
-  {
-    id: "F6.4",
-    implementation: [
-      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub(crate) fn read" },
-      { file: "packages/host/go/src/clipboard.go", symbol: "func (h *Host) ClipboardRead" },
-    ],
-    tests: [
-      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
-    ],
-    expected: "Explicit terminal paste preserves text, inserts validated quoted file paths and owned PNG paths exactly once without a newline or automatic execution, and both native hosts preserve typed absent clipboard responses.",
     levels: ["unit", "native", "application"],
   },
   {
@@ -10333,9 +10299,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/exposure.go", symbol: "func (s *Surfaces) presented" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
-      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" },
     ],
     expected: "A native settle failure is returned as an explicit callback error instead of being converted into a generic 1005 timeout, and fresh Tauri/Wails split regressions remain usable afterward.",
     levels: ["native", "application"],
@@ -10347,7 +10313,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutCancel" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
     ],
     expected: "A Tauri presentation failure cancels the open native layout transaction and the next split remains usable; the bounded regression reports START/PASS and exits cleanly.",
     levels: ["native", "application"],
@@ -10361,10 +10327,10 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/rust/tests/images_test.rs", id: "missing_native_surface_requests_a_fresh_raster_configuration" },
       { file: "packages/host/rust/tests/images_test.rs", id: "frame_detached_before_main_thread_presentation_is_reported_as_stale" },
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
     ],
     expected: "A missing IOSurface requests a fresh raster configuration, a detached frame is reported as explicit stale invalidation, and a rebuilt single-process Tauri host passes new, four, repeated, and failure-recovery split cases without a presentation error.",
     levels: ["unit", "application"],
@@ -10392,7 +10358,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "a surface drop names a command declared in the manifest's exposes" },
-      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
       { file: "e2e/real/terminal.test.mjs", id: "a real Finder drag of a file and of an image pastes their quoted paths without executing" },
     ],
     expected: "A file dropped on a window reaches the native file drop view, which sends path URLs and the drop point; the page runs the drop command that the plugin of the surface under the point declares, and the terminal validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
@@ -12322,8 +12287,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-299",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "three terminals and two browsers keep one view web view each and one terminal service" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "three image regions and two document views keep one view web view each and one sidecar service" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" }],
     expected: "The terminal window checks follow the view contracts.",
     levels: ["application"],
   },
@@ -14607,7 +14572,9 @@ const NON_CAPABILITY_COMPLETIONS = new Set(["F676", "F673", "F510", "F664-1", "F
 // kit; the kit holds their implementation and tests. F239-170, F239-197, F239-247, F273 and F273-1 wrote rules of
 // the event source check, which F355-3-5 moves to the kit.
 // F596 is a change of the mygo fork: its tests are there, and no host draws through that plugin.
-const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
+// F6 is the selection, paste, file drop and inline image contract of the terminal plugin. F715-2 removes its window checks from
+// core, whose checks reach views only through fixtures; the terminal plugin repository checks it.
+const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.

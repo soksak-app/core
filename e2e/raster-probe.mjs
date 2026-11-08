@@ -4,6 +4,9 @@
 // (docs/spec/plugin-processes.md#verification-boundaries). The checks reach the core boundary of image regions, frames and
 // persistent sidecar services through it, never through a real plugin.
 import assert from "node:assert/strict";
+import { readFileSync, realpathSync } from "node:fs";
+import { join } from "node:path";
+import { processTable } from "./process-table.mjs";
 
 /** The plugin id of the raster probe. */
 export const RASTER = "rasterprobe";
@@ -124,4 +127,38 @@ export async function prepareRasterSession(client, request, { startupLimit = 15_
   const session = await client.watch("main", "rasterprobe.session",
     (value) => typeof value?.session === "string" && value.connected === true && !value.error, { surface, timeout: startupLimit });
   return { surface, session: session.session };
+}
+
+/**
+ * The processes of the persistent raster probe service of the configuration `configDir`: the one service process that the host
+ * started with `--service-dir <configDir>/services/rasterprobe-service` (docs/spec/persistent-services.md), whose PID its endpoint
+ * publishes, and the child processes of its sessions, one per open session. Processes of other configurations are not counted.
+ * Returns `{service, children}` with the child PIDs sorted.
+ */
+export function rasterServiceSnapshot(configDir) {
+  const serviceDir = join(realpathSync(configDir), "services", "rasterprobe-service");
+  const endpoint = JSON.parse(readFileSync(join(serviceDir, "endpoint.json"), "utf8"));
+  assert.equal(endpoint.protocol, 1, "the raster probe service protocol does not match");
+  assert.ok(Number.isInteger(endpoint.pid) && endpoint.pid > 0, "the raster probe service PID is missing");
+  const rows = processTable("pid=,ppid=,stat=,command=").trim().split("\n").filter(Boolean).map((line) => {
+    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
+    assert.ok(match, `invalid process row: ${line}`);
+    return { pid: Number(match[1]), parent: Number(match[2]), state: match[3], command: match[4] };
+  });
+  // The host passes the service folder as one argument of the command, wherever it stands.
+  const services = rows.filter((row) => ` ${row.command} `.includes(` --service-dir ${serviceDir} `));
+  assert.equal(services.length, 1, "the configuration must own exactly one raster probe service");
+  assert.equal(services[0].pid, endpoint.pid, "the published service PID differs from the running process");
+  assert.equal(services[0].state.includes("Z"), false, "the raster probe service is a zombie");
+  const children = rows.filter((row) => row.parent === endpoint.pid);
+  for (const child of children) assert.equal(child.state.includes("Z"), false, `the session child ${child.pid} is a zombie`);
+  return { service: endpoint.pid, children: children.map(({ pid }) => pid).sort((a, b) => a - b) };
+}
+
+/** Closes every raster probe tab of the grid. */
+export async function closeRasterTabs(s) {
+  const grid = await s.get("core.grid");
+  for (const tab of grid.cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === RASTER)) {
+    await s.run("core.tab.close", { tab: tab.id });
+  }
 }

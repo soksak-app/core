@@ -201,9 +201,7 @@ Terminal theme과 cell 배경 sampling은 `s.record()`를 사용하고 종료한
 
 `titlebar-recording.test.mjs`는 `core.text.larger`와 `core.text.smaller`로 프레임 배율이 1에서 3까지 오르고 1까지 내려오는 동안, 그리고 다른 창이 `core.settings.change`로 공통 `textSize`를 바꾼 뒤 main window가 다시 읽는 동안 창을 녹화한다. 녹화된 모든 프레임에서 첫 행의 아래 끝과 창 단추의 가운데를 픽셀로 잰다. 첫 행의 아래 끝은 창 단추 오른쪽의 빈 열에서 행의 아래 테두리가 끝나는 곳이고, 단추의 가운데는 각 단추 열의 가운데 절반에서 행 바탕과 다른 첫 픽셀 행과 마지막 픽셀 행의 가운데다(`e2e/titlebar-measurement.mjs`). 단추 가운데가 첫 행 가운데와 0.5px 넘게 다른 프레임, 둘 중 하나를 잴 수 없는 프레임, 그리고 표시된 행이 창의 refresh rate로 표시 뒤 화면 두 프레임 안에 녹화되지 않으면 실패한다. `textSize`를 1로 되돌리고 녹화를 지운다.
 
-`terminal.test.mjs`는 한 프로젝트에 터미널 표면을 세 개 이상 만들고 각 PTY에 표시할 표식을 보낸 뒤, 가로 디바이더를 빠르게 다섯 번 드래그한다. 녹화된 모든 프레임에서 입력 속도, 프레임 간격, 터미널 셀 크기 불변, 네이티브 영역의 완전한 덮음, 터미널 영역의 세로 흰색 줄 부재를 측정한다. 네이티브 `image_region_test`의 Red 검사는 표시 중인 그림 영역이 새 배치를 즉시 적용하는지도 요구한다. 표시된 스냅샷이 이전 배치에 네이티브 프레임을 남겨서는 안 된다.
-
-`terminal-protocols.test.mjs`는 구현한 CSI와 OSC 시퀀스를 셸로 PTY에 쓰고, 그 결과를 화면 칸, `terminal.cursor`, `terminal.session`, `core.grid`, 페이스트보드, 또는 셸 `read`가 16진수로 찍은 응답에서 읽는다. 벤더 OSC 시퀀스는 `terminal.test.mjs`와 `e2e/real/terminal.test.mjs`에 각자의 검사가 있다.
+`view-surfaces.test.mjs`는 한 프로젝트에 raster probe fixture의 image region을 세 개 만들고 frame을 측정용 색 하나로 칠한 뒤, 가로 디바이더를 빠르게 드래그하고 프로젝트로 돌아온다. 녹화된 모든 프레임에서 유지된 배치, 카드 안의 포함, 네이티브 영역의 완전한 덮음, image region의 흰색 픽셀 부재를 측정한다. 네이티브 `image_region_test`의 Red 검사는 표시 중인 그림 영역이 새 배치를 즉시 적용하는지도 요구한다. 표시된 스냅샷이 이전 배치에 네이티브 프레임을 남겨서는 안 된다.
 
 `terminal-hidden-tab.test.mjs`는 terminal tab을 같은 card의 browser tab 뒤로 가렸다가 다시 선택해 Enter를 보내고, Enter 뒤 마지막 `sidecar.vt.pty_read`의 sequence에 닿는 `sidecar.vt.frame`을 `host.log` 알림으로 기다린다. 화면 읽기와 cursor blink는 각자 frame을 그리므로, Enter 뒤에는 화면을 읽지 않고 cursor blink를 끈다. mount된 terminal에 대한 `workbench.background.session` `open`과 그 surface의 headless `sidecar.vt.surface_mode`가 없기를 요구한다.
 
