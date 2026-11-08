@@ -4018,13 +4018,6 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
-    id: "F239-294",
-    implementation: [{ file: "e2e/library.test.mjs", symbol: "const removed = folder.replace(" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" }],
-    expected: "The library check declares the three texts of the files tree failure that its folder removal causes and passes on both hosts.",
-    levels: ["application"],
-  },
-  {
     id: "F239-293",
     implementation: [
       { file: "packages/workbench/document-regions.js", symbol: "leave(tab) {" },
@@ -12316,7 +12309,7 @@ const FEATURE_LINKS = [
   {
     id: "F424",
     implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "a skipped test; assert its precondition" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "terminal source card not found" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "raster source card not found" }],
     expected: "A window check whose precondition fails reports a failure.",
     levels: ["application"],
   },
@@ -14635,11 +14628,13 @@ const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "
 // F239-201, F239-229, F608 and F684 wrote the build target of the captured-text recognizer, the crop of a frame that it read and the
 // statement of its failure, which F696-4-4 removes with the recognizer: a window check reads the content of a view from the public
 // value that holds it.
+// F239-294 declared in the library check the files tree errors that its folder removal causes, which F715-2 removes: the core
+// window checks show no files section.
 const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
-  "F239-201", "F239-229", "F608", "F684"]);
+  "F239-201", "F239-229", "F608", "F684", "F239-294"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

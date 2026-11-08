@@ -242,11 +242,6 @@
       "reason": "Checks that the host discards a surface reply that arrives after its surface closed (exposure relay). It only opens a browser tab to have a surface; `plain-view` can replace it."
     },
     {
-      "file": "e2e/library.test.mjs",
-      "owner": "core",
-      "reason": "Checks how the library window creates, opens and restores projects and names a missing folder. The terminal is only the default card (plus a process snapshot); `plain-view` can serve as the default view."
-    },
-    {
       "file": "e2e/modal-escape-terminal.test.mjs",
       "owner": "core",
       "reason": "Checks that the keyboard returns after Escape closes the add picker and that keys pressed while it opens are dropped (modal and focus routing). A new keyboard-echo capability for `plain-view` would replace the terminal."
