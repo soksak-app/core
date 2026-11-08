@@ -1,0 +1,354 @@
+{
+  "schema": 3,
+  "sidecar": "rasterprobe",
+  "layers": [
+    "sidecar"
+  ],
+  "events": {
+    "log.open": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "number"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "role": {
+            "type": "string"
+          },
+          "boot": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "pid",
+          "role",
+          "boot"
+        ]
+      },
+      "description": "The first line of every event file."
+    },
+    "log.policy": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "classes": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "source",
+          "classes"
+        ]
+      },
+      "description": "The policy of the event log that is now in force: source is default when no policy file exists and file when the policy file holds it; classes holds the least severe level that is stored for each class. The first policy of a writer and every change of it are stored; the same policy again is not. A policy that the action policy of the call log wrote carries the cids of the settings change that sent it."
+    },
+    "log.dropped": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "from_seq": {
+            "type": "number"
+          },
+          "to_seq": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "queued": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "from_seq",
+          "to_seq",
+          "count",
+          "bytes",
+          "reason",
+          "channel"
+        ]
+      },
+      "description": "A range of seq that the writer refused; it explains the gap. channel is other for the events of the levels error, warn and info and debug for the events of the levels debug and trace; it is stored in the main file. queued is the largest number of events that waited in the writer queue at a refusal that the record counts; it is absent for a loss that a source reports through the pull."
+    },
+    "log.rotated": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "number"
+          },
+          "generation": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bytes",
+          "generation"
+        ]
+      },
+      "description": "A file was closed as the generation with this number and a new file started; no generation is removed."
+    },
+    "sidecar.rasterprobe.start": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pid": {
+            "type": "number"
+          },
+          "version": {
+            "type": "string"
+          },
+          "boot": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pid",
+          "version",
+          "boot"
+        ]
+      },
+      "description": "The service started: its process, the version of its package and the boot of its event files."
+    },
+    "sidecar.rasterprobe.connection": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "client": {
+            "type": "string"
+          },
+          "connected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "client",
+          "connected"
+        ]
+      },
+      "description": "A client (the configuration directory of an application) authenticated its connection, or its connection ended; the sessions outlive the end."
+    },
+    "sidecar.rasterprobe.request": {
+      "layer": "sidecar",
+      "class": "io",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "operation",
+          "bytes"
+        ]
+      },
+      "description": "The service received a surface message: operation is the operation of a page request, image.<member> for a message of the host about an image, or closed; it carries the cids of the request."
+    },
+    "sidecar.rasterprobe.session": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "child": {
+            "type": "number"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action",
+          "cause",
+          "child"
+        ]
+      },
+      "description": "A session opened (open), was attached again (reattach) or closed (close) with its child process; cause names the request, and error a close that failed."
+    },
+    "sidecar.rasterprobe.surface_mode": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "cause": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "cause"
+        ]
+      },
+      "description": "The drawing mode that an open, a configure, a detach or the end of a connection leaves on the surface: image or headless (docs/spec/persistent-services.md#closing-and-recovery)."
+    },
+    "sidecar.rasterprobe.frame": {
+      "layer": "sidecar",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "raster": {
+            "type": "number"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "scale": {
+            "type": "number"
+          },
+          "grid": {
+            "type": "object"
+          },
+          "rows": {
+            "type": "number"
+          },
+          "color": {
+            "type": "string"
+          },
+          "marker": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "event",
+          "name",
+          "generation",
+          "raster",
+          "sequence",
+          "width",
+          "height",
+          "scale",
+          "grid",
+          "rows",
+          "color",
+          "marker",
+          "surface"
+        ]
+      },
+      "description": "The service sent a frame: its identity, its raster, its grid, the row bands it paints, its color, its identity marker and the id of its transfer image."
+    },
+    "sidecar.rasterprobe.kill": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pid": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "pid"
+        ]
+      },
+      "description": "A page asked the service to end at once; the process sends itself SIGKILL after this event."
+    },
+    "sidecar.rasterprobe.exit": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cause": {
+            "type": "string"
+          },
+          "failures": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "cause",
+          "failures"
+        ]
+      },
+      "description": "The service exits after its cleanup: cause is shutdown, SIGTERM, SIGINT or the change of its service folder, and failures lists the sessions that did not close."
+    }
+  }
+}

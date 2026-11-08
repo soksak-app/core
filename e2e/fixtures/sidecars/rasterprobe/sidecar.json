@@ -1,0 +1,8 @@
+{
+  "executable": "bin/rasterprobe-service",
+  "displayName": "soksak://sidecar/rasterprobe",
+  "protocol": 1,
+  "transport": "persistent",
+  "events": "events.json",
+  "message": { "form": "json-object", "operationField": "operation" }
+}

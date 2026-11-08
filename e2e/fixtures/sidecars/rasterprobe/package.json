@@ -1,0 +1,13 @@
+{
+  "name": "@sok-check/sidecar-rasterprobe",
+  "version": "0.0.40",
+  "private": true,
+  "description": "Window check fixture: a persistent, versioned sidecar service with sessions that draws solid frames into the image region of its surface.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "os": ["darwin"],
+  "files": ["sidecar.json", "events.json", "bin"],
+  "scripts": {
+    "build": "cargo build --release --locked && mkdir -p bin && cp target/release/rasterprobe-service bin/rasterprobe-service"
+  }
+}
