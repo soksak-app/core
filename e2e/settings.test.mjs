@@ -178,7 +178,11 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     // A set line names the sections of the set that are shown: the sets of the configuration take the sections of the loaded probe.
-    await probeSidebarSets(s);
+    // Nothing keeps a long line on one line (docs/spec/settings.md#사이드바), and the line of three probe sections is longer than
+    // the width beside the buttons, so each set names the two sections of CARD_SECTIONS: a line wider than the 124 px name column
+    // that the set line once stood in, and narrower than the width that the buttons leave.
+    const stored = await probeSidebarSets(s);
+    await s.run("core.settings.set", { patch: { sets: stored.map((set) => ({ ...set, sections: CARD_SECTIONS })) }, scope: "common" });
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
