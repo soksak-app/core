@@ -52,7 +52,7 @@ const page = createPageLayout({
 });
 await connectExposure({ settled: page.drawn, report });
 /** The plane schedules a layout. The preparation of that layout fails. */
-const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40); };
+const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40, () => true); };
 
 /** Finishes all microtasks and the reporting of unhandled rejections up to the next macrotask. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -109,7 +109,7 @@ test("the wait of a drag ends after the layout that waited behind the running la
     }, textSize: () => 1, rendered: async () => {},
     waitSurfaceCompositionDeclared: async () => {},
   });
-  const layout = () => page.onLayout(new Map(), () => {}, new Map(), 40);
+  const layout = () => page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   layout();
   await settle();
   layout();

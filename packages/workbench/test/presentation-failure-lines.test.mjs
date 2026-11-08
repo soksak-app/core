@@ -63,7 +63,7 @@ test("one presentation timeout writes one workbench error line", async () => {
     name: "core.fixture.split", description: "Splits.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
   registry.command("core.fixture.split", () => {
-    page.onLayout(new Map(), () => { rendered = surfaces.place({ ...record, drawn: true }); }, new Map(), 40);
+    page.onLayout(new Map(), () => { rendered = surfaces.place({ ...record, drawn: true }); }, new Map(), 40, () => true);
     return null;
   });
 

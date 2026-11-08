@@ -36,13 +36,13 @@ function layoutWith(state) {
 test("a presentation after a failed presentation ends the failure of the page layout", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   assert.equal(await page.presented(), false, "the failed layout must not be presented");
   assert.equal(page.failure()?.message, TIMEOUT, "the failed layout must be the failure of the page layout");
 
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   assert.equal(await page.presented(), true, "the layout after the failure must be presented");
   page.clearFailure();
@@ -52,12 +52,12 @@ test("a presentation after a failed presentation ends the failure of the page la
 test("a presentation after a failed presentation withdraws the error of that failure from the banner", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   assert.match(document.getElementById("applicationError")?.textContent ?? "", /surface presentation failed/);
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   page.clearFailure();
@@ -68,13 +68,13 @@ test("a presentation after a failed presentation withdraws the error of that fai
 test("a presentation after a failed presentation leaves another error in the banner", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   const showError = createErrorDisplay({ document, changed: () => {} });
   showError("another failure");
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   page.clearFailure();
@@ -87,11 +87,11 @@ test("while a surface has not presented, the presentation of another render leav
   let presentedNow;
   const state = { fail: true, presented: () => new Promise((resolve) => { presentedNow = resolve; }) };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   page.clearFailure();
   await settle();
@@ -106,7 +106,7 @@ test("a wait for the surfaces that times out asks again and leaves the failure u
   let asked = 0;
   const state = { fail: true, presented: () => (++asked === 1 ? Promise.reject(new Error(TIMEOUT)) : Promise.resolve()) };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   state.fail = false;
@@ -122,12 +122,12 @@ test("a layout that fails during the wait keeps its failure", async () => {
   let presentedNow;
   const state = { fail: true, presented: () => new Promise((resolve) => { presentedNow = resolve; }) };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   page.clearFailure();
   await settle();
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   presentedNow();
   await settle();
@@ -139,7 +139,7 @@ test("a failure that repeats stays in the banner", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
   for (let round = 0; round < 2; round++) {
-    page.onLayout(new Map(), () => {}, new Map(), 40);
+    page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
     await settle();
     await page.presented();
   }
@@ -150,7 +150,7 @@ test("a failure that repeats stays in the banner", async () => {
 test("an error of another source with the text of the failure stays in the banner", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   const text = document.getElementById("applicationError").textContent;
@@ -164,11 +164,11 @@ test("an error of another source with the text of the failure stays in the banne
 test("with no plane shown, a cleared failure leaves no failed row in the verification rows", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   page.clearFailure();
@@ -180,7 +180,7 @@ test("with no plane shown, a cleared failure leaves no failed row in the verific
 test("with no plane shown, a failure that is still current is the only row", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
   await settle();
   await page.presented();
   const rows = verificationRows({ drawn: false, rows: () => { throw new Error("rows must not be read without a plane"); }, failure: page.failure() });
