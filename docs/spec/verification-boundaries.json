@@ -327,11 +327,6 @@
       "reason": "Checks that the plugin page shows a persistent service running another version than the installed one and replaces it (core installation and persistent-service updates). A new versioned fake sidecar-service fixture would replace sidecar-vt-alacritty."
     },
     {
-      "file": "e2e/plugin-screen.test.mjs",
-      "owner": "core",
-      "reason": "Checks the library plugin page (descriptions, versions, sidecars, search, disable/enable, the modified-tab prompt). It uses the real cohort only as list content; fixture plugins with a fake sidecar and `save-close` (for the modified tab) would replace it."
-    },
-    {
       "file": "e2e/prepare-terminal.mjs",
       "owner": "tool",
       "reason": "Helper that prepares the default terminal surface and waits for its session. Remove it or reduce it to preparing a fake-session fixture."

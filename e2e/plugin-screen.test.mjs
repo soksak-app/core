@@ -1,11 +1,19 @@
 // The plugin page of the library: checks the description, the version, the sidecars, the search and the plugin actions (Plugin screen in docs/spec/installation.md).
+// The page lists the fixture plugins of the check application (scripts/fixture-registry.mjs): the raster probe uses the fake sidecar
+// rasterprobe, the plain-view probe is the plugin that the checks disable and enable, and the save-close probe gives the modified tab.
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { fixturePluginIds } from "../scripts/fixture-registry.mjs";
 import { fresh } from "./fixture.mjs";
+
+/** The fixture plugin that uses a fake sidecar. */
+const SIDECAR_PLUGIN = "rasterprobe";
+/** The fixture plugin that the checks disable and enable; no start tab shows it. */
+const PLUGIN = "probeplain";
+/** The fixture plugin whose tab reports itself modified and declares a save command. */
+const MODIFIED_PLUGIN = "probeclose";
 
 /** Shows the plugin page and, when the check ends, returns to the project page and the work screen. */
 async function showPlugins(s) {
@@ -32,22 +40,22 @@ for (const app of Object.values(APPS)) {
     const library = await showPlugins(s);
     const plugins = await s.get("core.plugins");
     assert.deepEqual(library.plugins.shown, plugins.plugins.map((row) => row.id));
-    assert.deepEqual(library.plugins.shown, ["browser", "editor", "files", "hwp", "term", "terminal"]);
+    assert.deepEqual(library.plugins.shown, fixturePluginIds().toSorted());
     for (const row of plugins.plugins) {
       assert.ok(row.description.length > 0, `${row.id} shows no description`);
       assert.ok(row.installed?.version, `${row.id} shows no installed version: ${JSON.stringify(row)}`);
     }
-    const terminal = plugins.plugins.find((row) => row.id === "terminal");
-    assert.ok(terminal.sidecars.length > 0, `terminal lists no sidecar: ${JSON.stringify(terminal)}`);
-    assert.ok(terminal.sidecars.every((sidecar) => typeof sidecar.version === "string"),
-      `a terminal sidecar has no installed version: ${JSON.stringify(terminal.sidecars)}`);
+    const user = plugins.plugins.find((row) => row.id === SIDECAR_PLUGIN);
+    assert.ok(user.sidecars.length > 0, `${SIDECAR_PLUGIN} lists no sidecar: ${JSON.stringify(user)}`);
+    assert.ok(user.sidecars.every((sidecar) => typeof sidecar.version === "string"),
+      `a ${SIDECAR_PLUGIN} sidecar has no installed version: ${JSON.stringify(user.sidecars)}`);
     // The card offers the update action only when the registry lists a version newer than the installed one.
-    const update = plugins.updates.some((item) => item.id === "files") ? ["update"] : [];
-    assert.deepEqual(actionsOf(library, "files"), [...update, "disable", "remove"]);
+    const update = plugins.updates.some((item) => item.id === PLUGIN) ? ["update"] : [];
+    assert.deepEqual(actionsOf(library, PLUGIN), [...update, "disable", "remove"]);
 
-    await s.run("core.library.plugins.search", { query: "TERMINAL" });
-    await s.until("core.library", (value) => value.plugins.query === "TERMINAL" && value.plugins.shown.join() === "terminal",
-      "the plugin search did not keep only terminal");
+    await s.run("core.library.plugins.search", { query: "RASTER" });
+    await s.until("core.library", (value) => value.plugins.query === "RASTER" && value.plugins.shown.join() === SIDECAR_PLUGIN,
+      `the plugin search did not keep only ${SIDECAR_PLUGIN}`);
     await s.run("core.library.plugins.search", { query: "없는플러그인" });
     await s.until("core.library", (value) => value.plugins.shown.length === 0, "a query without a match still lists plugins");
     await s.run("core.library.plugins.search", { query: "" });
@@ -66,15 +74,15 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);
-    // Turns files on again so that the next check starts from the same installation even if a check fails midway.
+    // Turns the plugin on again so that the next check starts from the same installation even if a check fails midway.
     s.cleanup(async () => {
-      const now = (await s.get("core.plugins")).plugins.find((row) => row.id === "files");
-      if (!now.installed.enabled) await s.run("core.plugins.enable", { plugin: "files" });
+      const now = (await s.get("core.plugins")).plugins.find((row) => row.id === PLUGIN);
+      if (!now.installed.enabled) await s.run("core.plugins.enable", { plugin: PLUGIN });
     });
     await showPlugins(s);
-    const listed = await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "files"),
-      "core.plugins did not list files");
-    assert.equal(listed.plugins.find((row) => row.id === "files").state, "loaded");
+    const listed = await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === PLUGIN),
+      `core.plugins did not list ${PLUGIN}`);
+    assert.equal(listed.plugins.find((row) => row.id === PLUGIN).state, "loaded");
     assert.equal(listed.reload, false);
 
     // A plugin operation starts the workbench of the window again, which then reports the change without an application restart
@@ -84,21 +92,21 @@ for (const app of Object.values(APPS)) {
       await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new workbench did not report ready`);
       return workbench;
     };
-    assert.ok(actionsOf(await s.get("core.library"), "files").includes("disable"), "the files card has no 사용 안 함");
+    assert.ok(actionsOf(await s.get("core.library"), PLUGIN).includes("disable"), `the ${PLUGIN} card has no 사용 안 함`);
     let start = (await s.get("core.window.workbench")).start;
-    await s.run("core.plugins.disable", { plugin: "files" });
-    start = (await reloaded(start, "disabling files did not reload the window")).start;
-    const disabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "files")?.state === "disabled",
-      "the reloaded window did not report files disabled");
+    await s.run("core.plugins.disable", { plugin: PLUGIN });
+    start = (await reloaded(start, `disabling ${PLUGIN} did not reload the window`)).start;
+    const disabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN)?.state === "disabled",
+      `the reloaded window did not report ${PLUGIN} disabled`);
     assert.equal(disabled.reload, false);
-    assert.equal(disabled.plugins.find((row) => row.id === "files").installed.enabled, false);
+    assert.equal(disabled.plugins.find((row) => row.id === PLUGIN).installed.enabled, false);
 
     await showPlugins(s);
-    await s.until("core.library", (value) => actionsOf(value, "files").includes("enable"), "the files card did not offer 사용");
-    await s.run("core.plugins.enable", { plugin: "files" });
-    await reloaded(start, "enabling files did not reload the window");
-    const enabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "files")?.state === "loaded",
-      "the reloaded window did not load files");
+    await s.until("core.library", (value) => actionsOf(value, PLUGIN).includes("enable"), `the ${PLUGIN} card did not offer 사용`);
+    await s.run("core.plugins.enable", { plugin: PLUGIN });
+    await reloaded(start, `enabling ${PLUGIN} did not reload the window`);
+    const enabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN)?.state === "loaded",
+      `the reloaded window did not load ${PLUGIN}`);
     assert.equal(enabled.reload, false);
     await assert.rejects(s.run("core.plugins.enable", { plugin: "" }), /plugin must be a non-empty string/);
   });
@@ -106,62 +114,59 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a plugin change asks about a modified tab before it reloads the window`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const project = await s.get("core.project");
-    const folder = `plugin-apply-check-${process.pid}`;
-    const path = `${folder}/note.txt`;
-    const file = join(project.root, path);
-    mkdirSync(join(project.root, folder));
-    writeFileSync(file, "alpha\n");
-    s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
     const start = async () => (await s.get("core.window.workbench")).start;
     const reloaded = async (before, message) => {
       await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", message);
       await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new workbench did not report ready`);
     };
+    const tabOf = (grid, id) => grid.cards.flatMap((card) => card.tabs ?? []).find((tab) => tab.id === id);
 
-    const { tab: surface } = await s.run("core.file.open", { path });
+    // The save-close probe reports its tab modified and counts each call of its save command, across a new start of the workbench.
+    const card = (await s.get("core.grid")).cards.find((item) => item.focused);
+    const { tab: surface } = await s.run("core.card.add-tab", { card: card.id, plugin: MODIFIED_PLUGIN });
     s.cleanup(async () => {
-      const grid = await s.get("core.grid");
-      if (!grid.cards.some((card) => (card.tabs ?? []).some((tab) => tab.id === surface))) return;
+      if (!tabOf(await s.get("core.grid"), surface)) return;
       const { closed } = await s.run("core.tab.close", { tab: surface });
       if (closed) return;
       const picker = await s.until("core.picker", (value) => value.open, "the close question did not open");
       await s.run("core.picker.pick", { index: picker.items.findIndex((item) => item.name === "저장하지 않고 닫기") });
     });
-    await s.until("core.surfaces", (all) => all.some((x) => x.surface === surface && x.status.phase === "ready"), "the editor tab did not open");
-    await s.registered(surface, ["command editor.edit"]);
-    await s.until("editor.document", (value) => value.path === path && value.version !== null, "the editor did not read the file", { surface });
-    await s.run("editor.edit", { changes: [{ from: 0, to: 0, insert: "z" }] }, surface);
-    await s.until("editor.document", (value) => value.modified, "editor.edit did not modify the text", { surface });
+    await s.until("core.surfaces", (all) => all.some((x) => x.surface === surface && x.status.phase === "ready"), `the ${MODIFIED_PLUGIN} tab did not open`);
+    await s.registered(surface, [`command ${MODIFIED_PLUGIN}.prepare`, `command ${MODIFIED_PLUGIN}.save`, `status ${MODIFIED_PLUGIN}.state`]);
+    await s.run(`${MODIFIED_PLUGIN}.prepare`, { keepModified: true }, surface);
+    await s.until("core.grid", (grid) => tabOf(grid, surface)?.modified === true, `${MODIFIED_PLUGIN}.prepare did not make the tab modified`);
+    assert.deepEqual(await s.get(`${MODIFIED_PLUGIN}.state`, surface), { saves: 0, modified: true });
 
-    // The browser plugin is enabled again after the check, which reloads the window once more.
+    // The plain-view probe is enabled again after the check, which reloads the window once more.
     s.cleanup(async () => {
-      if ((await s.get("core.plugins")).plugins.find((row) => row.id === "browser").installed.enabled) return;
+      if ((await s.get("core.plugins")).plugins.find((row) => row.id === PLUGIN).installed.enabled) return;
       const before = await start();
-      await s.run("core.plugins.enable", { plugin: "browser" });
-      await reloaded(before, "enabling browser did not reload the window");
+      await s.run("core.plugins.enable", { plugin: PLUGIN });
+      await reloaded(before, `enabling ${PLUGIN} did not reload the window`);
     });
     const before = await start();
-    await s.run("core.plugins.disable", { plugin: "browser" });
+    await s.run("core.plugins.disable", { plugin: PLUGIN });
     const ask = async () => (await s.until("core.picker", (picker) => picker.open && picker.title.includes("저장하지 않은 변경이 있습니다"),
       "the plugin change did not ask about the modified tab")).items.map((item) => item.name);
     assert.deepEqual(await ask(), ["저장하고 적용", "저장하지 않고 적용", "적용하지 않기"]);
     // The action that declines to apply keeps the page, and the card offers to apply the change.
     await s.run("core.picker.pick", { index: 2 });
-    const kept = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "browser").state === "reload",
-      "적용하지 않기 did not leave the browser change waiting for a reload");
+    const kept = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN).state === "reload",
+      `적용하지 않기 did not leave the ${PLUGIN} change waiting for a reload`);
     assert.equal(kept.reload, true);
     assert.equal(await start(), before, "적용하지 않기 reloaded the window");
+    assert.deepEqual(await s.get(`${MODIFIED_PLUGIN}.state`, surface), { saves: 0, modified: true }, "적용하지 않기 ran the save command");
 
-    // core.plugins.apply asks again, and the action that applies without saving reloads the window without writing the file.
+    // core.plugins.apply asks again, and the action that applies without saving reloads the window without running the save command.
     const applying = s.run("core.plugins.apply", {});
     assert.deepEqual(await ask(), ["저장하고 적용", "저장하지 않고 적용", "적용하지 않기"]);
     await s.run("core.picker.pick", { index: 1 });
     assert.deepEqual(await applying, { reloaded: true });
     await reloaded(before, "저장하지 않고 적용 did not reload the window");
-    const applied = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === "browser").state === "disabled",
-      "the reloaded window did not report browser disabled");
+    const applied = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN).state === "disabled",
+      `the reloaded window did not report ${PLUGIN} disabled`);
     assert.equal(applied.reload, false);
-    assert.equal(readFileSync(file, "utf8"), "alpha\n");
+    await s.registered(surface, [`status ${MODIFIED_PLUGIN}.state`]);
+    assert.equal((await s.get(`${MODIFIED_PLUGIN}.state`, surface)).saves, 0, "저장하지 않고 적용 ran the save command");
   });
 }
