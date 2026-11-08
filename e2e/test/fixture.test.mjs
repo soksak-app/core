@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, placeholderTabs, probeListSections, replacePlaceholders, restoreRegistry, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, placeholderTabs, probeListSections, probeSets, replacePlaceholders, restoreRegistry, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -186,4 +186,12 @@ test("the start layout module names no real plugin and imports no terminal helpe
   const source = readFileSync(new URL("../fixture.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(source, /terminal-screen|terminal-processes|terminal-ime-document|prepare-terminal|check-shell|check-zsh/);
   assert.doesNotMatch(source, /["'](terminal|term|browser|files|editor|hwp)["'.]/);
+});
+
+test("the sets of the layout probe are stored as check sets of their sections", () => {
+  const declared = JSON.parse(readFileSync(new URL("../fixtures/layout-probe/layoutprobe/plugin.json", import.meta.url), "utf8")).sidebars.sets;
+  assert.deepEqual(probeSets(), declared.map(({ id, title, layout, sections }) => ({ id: `check-${id}`, title, layout, sections })));
+  assert.ok(probeSets().length >= 2, "two distinct sets of the layout probe");
+  assert.notDeepEqual(probeSets()[0].sections, probeSets()[1].sections);
+  assert.ok(probeSets().every((set) => set.sections.every((section) => section.startsWith(`${START_PLUGIN}.`))));
 });

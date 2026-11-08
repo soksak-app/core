@@ -259,6 +259,17 @@ func (s *SettingsStore) kept(key string) bool {
 
 // Begin takes the stored values of the common settings and of the overrides of project.
 func (s *SettingsStore) Begin(common, overrides map[string]any, project string) error {
+	if err := s.Check(common, overrides); err != nil {
+		return err
+	}
+	s.common, s.overrides, s.project = orEmpty(common), orEmpty(overrides), project
+	s.begun = true
+	return nil
+}
+
+// Check refuses the stored values of the common settings and of the overrides of a project that Begin would refuse, and takes
+// nothing: a window checks the settings of a project before it opens it, as the page does (selectProject of packages/workbench/settings.js).
+func (s *SettingsStore) Check(common, overrides map[string]any) error {
 	for where, values := range map[string]map[string]any{"settings.json": common, "project settings": overrides} {
 		for key, value := range values {
 			if s.kept(key) {
@@ -277,12 +288,7 @@ func (s *SettingsStore) Begin(common, overrides map[string]any, project string) 
 			return fmt.Errorf("project settings: %s is common-only", key)
 		}
 	}
-	if err := s.check(s.effective(common, overrides)); err != nil {
-		return err
-	}
-	s.common, s.overrides, s.project = orEmpty(common), orEmpty(overrides), project
-	s.begun = true
-	return nil
+	return s.check(s.effective(common, overrides))
 }
 
 func orEmpty(values map[string]any) map[string]any {

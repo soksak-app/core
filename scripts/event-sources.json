@@ -29,6 +29,14 @@
         "event": 1,
         "fields": 2,
         "only": "^packages/(sok|workbench-mygo)/"
+      },
+      {
+        "call": "Trace",
+        "fixed": "debug",
+        "prefix": "workbench.trace.",
+        "event": 0,
+        "fields": 1,
+        "only": "^packages/workbench-mygo/"
       }
     ],
     "js": [

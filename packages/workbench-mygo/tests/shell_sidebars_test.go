@@ -182,3 +182,24 @@ func TestTheLibraryLeavesTheSectionsOfTheSidebars(t *testing.T) {
 		t.Fatalf("the return places the sections %q, want %q", back, shown)
 	}
 }
+
+// A project whose settings file holds a set that names a section its loaded plugin does not declare does not open: the command that
+// opens it fails with that error, as the page refuses the project before it shows it (docs/spec/settings.md#stored-sets-and-links), and
+// the window keeps the project that it showed.
+func TestAProjectWithAnUnknownSectionInItsSetsDoesNotOpen(t *testing.T) {
+	// The sets of the environment, the first of which names a section that the loaded fieldprobe does not declare.
+	broken := []any{
+		map[string]any{"id": "set-install", "title": "탐색기", "sections": []any{"fieldprobe.tree", "fieldprobe.gone"}, "layout": "list"},
+		map[string]any{"id": "set-boxprobe", "title": "브라우저", "sections": []any{"boxprobe.tabs"}, "layout": "tabs"},
+	}
+	stored := &surfaceHost{storedHost: storedHost{folderSettings: map[string]map[string]any{"/work/broken": {"sets": broken}}}}
+	f := surfaceShellOn(t, sidebarsInstalled, stored)
+	before := status[map[string]any](t, f, "core.project")
+	err := f.finish("core.project.open", map[string]string{"root": "/work/broken"})
+	if err == nil || !strings.Contains(err.Error(), "settings: set set-install names unknown section fieldprobe.gone") {
+		t.Fatalf("opening the project answered %v", err)
+	}
+	if after := status[map[string]any](t, f, "core.project"); after["id"] != before["id"] {
+		t.Fatalf("the window shows %v after the refusal, %v before", after["id"], before["id"])
+	}
+}

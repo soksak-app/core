@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open, requiresAll, windowPosition } from "@soksak/window-check/app.mjs";
-import { fresh, prepareOcclusionFixture } from "./fixture.mjs";
+import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 
 // The check places the window of every application, so it is registered only when the required set holds all of them.
 if (requiresAll(process.env)) test("fresh places every check window at its own frame", async (t) => {
@@ -54,13 +54,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a check window that another window covers reports occluded to its watchers`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app, { inactive: true });
     await fresh(s);
-    const otherWindows = [];
-    for (const other of Object.values(APPS)) {
-      if (other.name === app.name) continue;
-      const peer = await open(t, other, { inactive: true });
-      for (const window of await peer.get("host.windows")) otherWindows.push(peer.on(window.window));
-    }
-    const prepared = await prepareOcclusionFixture(s, otherWindows);
+    const prepared = await uncoverFromCheckWindows(t, s);
     t.diagnostic(`inactive occlusion preparation ${JSON.stringify({ before: {
       frame: prepared.before.frame, occluded: prepared.before.occluded,
       activationObservation: prepared.before.activationObservation }, baseline: {

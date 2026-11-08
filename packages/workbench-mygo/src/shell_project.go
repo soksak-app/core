@@ -100,7 +100,13 @@ func (s *Shell) openFolder(folder ProjectFolderValue, color string, done func(pr
 				done(nil, err)
 				return
 			}
-			s.activateThen(added.ID, func() { done(raw, nil) })
+			s.activateThen(added.ID, func(err error) {
+				if err != nil {
+					done(nil, err)
+					return
+				}
+				done(raw, nil)
+			})
 		})
 	})
 }
@@ -168,6 +174,8 @@ func (s *Shell) registerProjectOpen() {
 		if color == "" {
 			color = projectOpenColor
 		}
+		// The action marker of opening a project (docs/spec/performance-trace.md#producers).
+		s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "project.open", "root": value.Root} })
 		s.openRoot(value.Root, color, func(project json.RawMessage, err error) {
 			if err != nil {
 				answer(nil, err)
@@ -257,33 +265,40 @@ func (s *Shell) freeTint() string {
 }
 
 // activate shows the project id in the window, as projects.activate does.
-func (s *Shell) activate(id string) { s.activateThen(id, func() {}) }
+func (s *Shell) activate(id string) { s.activateThen(id, s.failed) }
 
-// activateThen is activate that runs done after the project is shown or after it failed.
-func (s *Shell) activateThen(id string, done func()) {
+// activateThen is activate that runs done after the project is shown, or with the error that refused or failed it.
+func (s *Shell) activateThen(id string, done func(err error)) {
 	project := s.project(id)
 	if project == nil {
-		s.fail(fmt.Errorf("Unknown project: %s", id))
-		done()
+		done(fmt.Errorf("Unknown project: %s", id))
 		return
 	}
 	var refused string
 	if err := member(project.Rest, "settingsError", &refused); err != nil {
-		s.fail(err)
-		done()
+		done(err)
 		return
 	}
 	// The host refused the settings file of the project, so the window does not open it (docs/spec/projects.md#settings).
 	if refused != "" {
-		s.fail(errors.New(refused))
-		done()
+		done(errors.New(refused))
+		return
+	}
+	// The settings of the project are checked before the window opens it, so a refused project leaves the window as it was
+	// (checkProject and selectProject of packages/workbench/projects.js and packages/workbench/settings.js).
+	var overrides map[string]any
+	if err := member(project.Rest, "settings", &overrides); err != nil {
+		done(err)
+		return
+	}
+	if err := s.settings.Check(s.settings.Common(), overrides); err != nil {
+		done(err)
 		return
 	}
 	s.keep()
 	s.saveGeometry(func(err error) {
 		if err != nil {
-			s.fail(err)
-			done()
+			done(err)
 			return
 		}
 		s.openStored(id, project, done)
@@ -292,38 +307,33 @@ func (s *Shell) activateThen(id string, done func()) {
 
 // openStored asks the host for the window of the stored project, as the rest of projects.activate does, and shows the project when
 // the window is this one.
-func (s *Shell) openStored(id string, project *projectRecord, done func()) {
+func (s *Shell) openStored(id string, project *projectRecord, done func(err error)) {
 	root, identity, geometry := project.Root, project.Identity, project.Rest["geometry"]
 	s.calls.Call("projectFolder", root, func(value any, err error) {
 		if err != nil {
-			s.fail(err)
-			done()
+			done(err)
 			return
 		}
 		folder, err := decode[ProjectFolderValue](value)
 		if err != nil {
-			s.fail(err)
-			done()
+			done(err)
 			return
 		}
 		if folder.Identity != identity {
-			s.fail(fmt.Errorf("Project directory has changed: %s", root))
-			done()
+			done(fmt.Errorf("Project directory has changed: %s", root))
 			return
 		}
 		cids := s.events.BeginOperation("workbench.project.operation", map[string]any{"action": "open", "project": id})
 		s.calls.Caused(cids).Call("projectOpen", map[string]any{"id": id, "root": root, "separate": s.settings.Value("projectOpening") == "windows", "geometry": geometry}, func(value any, err error) {
 			if err != nil {
-				s.fail(err)
-				done()
+				done(err)
 				return
 			}
 			opened, err := decode[struct {
 				Local bool `json:"local"`
 			}](value)
 			if err != nil {
-				s.fail(err)
-				done()
+				done(err)
 				return
 			}
 			now := time.Now().UnixMilli()
@@ -381,34 +391,28 @@ func (s *Shell) saveGeometry(done func(err error)) {
 }
 
 // show puts the project id on the screen.
-func (s *Shell) show(id string) { s.showThen(id, func() {}) }
+func (s *Shell) show(id string) { s.showThen(id, s.failed) }
 
-// showThen is show that runs done after the host took the project, or after it failed.
-func (s *Shell) showThen(id string, done func()) {
+// showThen is show that runs done after the host took the project, or with the error that failed it.
+func (s *Shell) showThen(id string, done func(err error)) {
 	project := s.project(id)
 	if project == nil {
-		done()
+		done(nil)
 		return
 	}
 	if err := s.loadSpace(project); err != nil {
-		s.fail(err)
-		done()
+		done(err)
 		return
 	}
 	s.active, s.browsing = id, false
 	s.windowProjects[id] = true
 	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
-	if err := s.beginSettings(s.settings.Common()); err != nil {
-		s.fail(err)
-	}
+	settingsErr := s.beginSettings(s.settings.Common())
 	s.calls.Call("projectShown", map[string]any{"project": map[string]string{"id": id, "root": project.Root, "title": project.Title}},
 		func(_ any, err error) {
-			if err != nil {
-				s.fail(err)
-			}
 			s.shownProject(err)
-			done()
+			done(errors.Join(settingsErr, err))
 		})
 	s.tabsSettled()
 	s.options.Invalidate()

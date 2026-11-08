@@ -6,7 +6,8 @@ import { dirname } from "node:path";
 import { readPng } from "@soksak/window-check/png.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, probeSets } from "./fixture.mjs";
+import { tabElementIndex } from "./input-probe.mjs";
 
 /** The card of the grid that holds the tab surface. */
 const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
@@ -161,8 +162,12 @@ for (const app of Object.values(APPS)) {
     for (const side of ["top", "bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: target.id, side, set: "inherit" });
     }
-    const sets = (await s.get("core.settings")).values.sets;
-    assert.ok(sets.length >= 2, "two distinct section sets are required");
+    // The sets of the configuration name sections of plugins that a fixture configuration does not load, which a sidebar keeps
+    // and does not show, so the check stores the sets of the layout probe and compares the shown sections with them.
+    const sets = probeSets();
+    const stored = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: [...stored.filter(item => !sets.some(set => set.id === item.id)), ...sets] },
+      scope: "common" });
     await s.run("core.card.fullscreen", { card: target.id });
     for (const [mode, set] of [["fullscreen", sets[0]], ["restored", sets[1]]]) {
       if (mode === "restored") await s.run("core.card.fullscreen", { card: target.id });
@@ -208,8 +213,8 @@ for (const app of Object.values(APPS)) {
     let stopped;
     try {
       for (const selected of [other.id, card.active]) {
-        const index = card.tabs.findIndex(tab => tab.id === selected);
-        const rect = await s.rect("core.card.tab", index);
+        // The tab elements are numbered across every card in the order of core.grid, the hidden cards of fullscreen too.
+        const rect = await s.rect("core.card.tab", tabElementIndex(added, selected));
         await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2,
           (rect.document?.y ?? 0) + rect.y + rect.height / 2);
         await s.until("core.grid", grid => grid.cards.find(item => item.id === own).active === selected,
