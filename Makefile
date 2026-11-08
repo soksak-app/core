@@ -324,12 +324,11 @@ install: check-tools
 build: install
 	@pnpm build
 
-# Runs the headless owner tests of the verification pipeline: the Node tests of scripts/test, e2e/test and
-# packages/window-check/test, which start no application and need no display. The owners of one operating system live under
-# platform/<os>/ of their test folder and run on that system only, so this platform-neutral selection excludes them; CI runs it
-# on Linux.
+# Runs the headless owner tests of the verification pipeline: every Node test of scripts/test, e2e/test and
+# packages/window-check/test, which start no application and need no display. The owners of a platform implementation take
+# its facilities by injection, so they run on any system; CI runs this selection on Linux.
 test-headless-owners:
-	@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/ --exclude scripts/test/platform/darwin
+	@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/
 
 test-all: install check-docs check-exposure check-tests check-hosts-same
 	@pnpm test
