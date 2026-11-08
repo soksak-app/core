@@ -48,10 +48,10 @@ test("panels left after clearing are rejected, including default ones", () => {
 });
 
 test("a tab switch fixture requires a tab of a different plugin", () => {
-  const cards = [{ id: "a", active: "t1", tabs: [{ id: "t1", plugin: "terminal" }] },
-    { id: "b", active: "t2", tabs: [{ id: "t2", plugin: "browser" }] }];
+  const cards = [{ id: "a", active: "t1", tabs: [{ id: "t1", plugin: "layoutprobe" }] },
+    { id: "b", active: "t2", tabs: [{ id: "t2", plugin: "probeplain" }] }];
   assert.deepEqual(tabSwitchPair(cards[0], cards), { original: cards[0].tabs[0], other: cards[1].tabs[0], from: "b" });
-  assert.throws(() => tabSwitchPair(cards[0], [cards[0]]), /no tab of a plugin other than terminal/);
+  assert.throws(() => tabSwitchPair(cards[0], [cards[0]]), /no tab of a plugin other than layoutprobe/);
 });
 
 test("a top or bottom panel must span the card's content column", () => {

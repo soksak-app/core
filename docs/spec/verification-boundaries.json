@@ -477,19 +477,9 @@
       "reason": "Unit test of the capture harness for document frame identity. Editor and terminal appear only as tab names in data; a fixture tab name would replace them."
     },
     {
-      "file": "e2e/test/card-panel-checks.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of card-panel measurement helpers. Terminal and browser are only plugin ids in synthetic data; fixture ids (`plain-view`, `extension-probe`) would replace them."
-    },
-    {
       "file": "e2e/test/editor-view-metrics-case.test.mjs",
       "owner": "plugin:editor",
       "reason": "Unit tests of the editor benchmark case (editor process footprint, editor geometry)."
-    },
-    {
-      "file": "e2e/test/host-public-parity.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of public host parity checking. Terminal and browser are only plugin ids in synthetic data; replace them with fixture ids."
     },
     {
       "file": "e2e/test/hwp-startup.test.mjs",
@@ -515,11 +505,6 @@
       "file": "e2e/test/normal-shutdown.test.mjs",
       "owner": "core",
       "reason": "Unit test that shutdown preparation waits for surface and session notifications. It uses prepare-terminal; replace it with fake-session fixture preparation."
-    },
-    {
-      "file": "e2e/test/reload-phases.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of reload phase parsing. \"terminal\" and \"browser\" are only card ids in synthetic command args; fixture ids would replace them."
     },
     {
       "file": "e2e/test/reload-view-reply.test.mjs",
@@ -650,11 +635,6 @@
       "file": "scripts/test/candidate-acceptance.test.mjs",
       "owner": "environment",
       "reason": "Tests candidate acceptance and publication of release components (`kind: 'plugin', id: 'terminal'` release digests), which is cohort release evidence."
-    },
-    {
-      "file": "scripts/test/check-tests.test.mjs",
-      "owner": "core",
-      "reason": "Tests the test-ownership audit with made-up ids (\"sidecar-y\", \"sidecar-probe\", \"hwp\" as sample strings). Replace \"hwp\" with a fixture id."
     },
     {
       "file": "scripts/test/fixtures/b3/baseline.json",
