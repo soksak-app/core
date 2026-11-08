@@ -81,6 +81,20 @@ export async function addRasterTab(s, card) {
 }
 
 /**
+ * Adds a raster probe tab to the card `card` while a check watches the window, and waits until its image region presents an image.
+ * The tab is ready through addRasterTab, so the window draws its image regions while it is covered (rasterReady): a check window
+ * opens behind the windows of other applications, and a covered window would present no image at all. Returns the surface.
+ */
+export async function presentRasterTab(s, card) {
+  const { surface } = await addRasterTab(s, card);
+  await s.until("core.surfaces", (items) => items.find((item) => item.surface === surface && item.plugin === RASTER && item.visible
+    && item.exposes.includes("status rasterprobe.session")), `new raster probe ${surface} did not become a visible declared surface`);
+  await s.until("host.window", (host) => host.regions.some((item) => item.surface === surface && item.name === REGION && item.visible
+    && item.presented), `new raster probe ${surface} did not present an image region`);
+  return surface;
+}
+
+/**
  * Adds a raster probe tab (addRasterTab) to the card of the stored layout whose left grid line is `c0` and whose top grid line is `r0`;
  * the start layout has the card at c0 1, r0 0 to the right of the left fixed sidebar at the top. Returns `{card, surface}`.
  */
