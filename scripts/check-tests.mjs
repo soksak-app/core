@@ -2041,7 +2041,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function runViewDrag(" },
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function completeViewDrag(" },
-      { file: "e2e/drag-measurement.mjs", symbol: "export function assertDragPerformance(" },
+      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertDragPerformance(" },
     ],
     tests: [
       { file: "e2e/test/view-drag-case.test.mjs", id: "valid view drags publish third-stage B3 values before a captured threshold failure" },
@@ -5316,11 +5316,11 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-1",
     implementation: [
-      { file: "e2e/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
+      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
       { file: "e2e/benchmark/view-drag.test.mjs", symbol: "writeFileSync(path," },
     ],
     tests: [
-      { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
+      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
       { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
     ],
     expected: "The dedicated benchmark validates untraced application settings, preserves complete measured frames and writes results before enforcing unchanged cadence and latency limits.",
@@ -5354,12 +5354,12 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-3",
     implementation: [
-      { file: "e2e/drag-measurement.mjs", symbol: "committing: spread(" },
+      { file: "packages/window-check/drag-measurement.mjs", symbol: "committing: spread(" },
       { file: "e2e/benchmark/cases/floor-page.mjs", symbol: "transactionCadence: transactionCadence(run.layouts)" },
     ],
     tests: [
-      { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },
-      { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence rejects invalid or reversed stage timestamps" },
+      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },
+      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "transaction cadence rejects invalid or reversed stage timestamps" },
       { file: "e2e/benchmark/view-drag.test.mjs", id: "the view drag runs the drags of B3 in order, and its captured drag meets the performance targets with the traces off" },
     ],
     expected: "Native transaction metrics include commit wait and total duration, reject invalid timing and preserve raw rows before unchanged performance judgments.",
@@ -9896,7 +9896,7 @@ const FEATURE_LINKS = [
     id: "F1.1",
     implementation: [
       { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn aligned" },
-      { file: "e2e/drag-measurement.mjs", symbol: "assertRoundTrips" },
+      { file: "packages/window-check/drag-measurement.mjs", symbol: "assertRoundTrips" },
     ],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
@@ -12832,13 +12832,13 @@ const FEATURE_LINKS = [
   {
     id: "F212.12-3-1",
     implementation: [
-      { file: "e2e/drag-measurement.mjs", symbol: "export function assertFinalContentSize(" },
-      { file: "e2e/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
+      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertFinalContentSize(" },
+      { file: "packages/window-check/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
       { file: "e2e/alignment.mjs", symbol: "export function alignmentDelta(" },
     ],
     tests: [
-      { file: "e2e/test/drag-measurement.test.mjs", id: "final content size rejects a late correction and a later regression" },
-      { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
+      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "final content size rejects a late correction and a later regression" },
+      { file: "packages/window-check/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
       { file: "e2e/test/alignment.test.mjs", id: "a terminal raster that leaves a growing right inset is misaligned" },
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
     ],
@@ -12847,15 +12847,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-159",
-    implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" }],
-    tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within 35 milliseconds" }],
+    implementation: [{ file: "packages/window-check/drag-measurement.mjs", symbol: "export function assertDragFrameCadence(" }],
+    tests: [{ file: "packages/window-check/test/drag-measurement.test.mjs", id: "view drag cadence requires every frame within 35 milliseconds" }],
     expected: "The dedicated view-drag performance check includes every decoded frame and rejects gaps above 33 milliseconds.",
     levels: ["unit"],
   },
   {
     id: "F239-153",
-    implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function pointerLag(" }],
-    tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "pointer lag rejects only frames before input" }],
+    implementation: [{ file: "packages/window-check/drag-measurement.mjs", symbol: "export function pointerLag(" }],
+    tests: [{ file: "packages/window-check/test/drag-measurement.test.mjs", id: "pointer lag rejects only frames before input" }],
     expected: "Unavailable drag measurements fail instead of reporting zero latency.",
     levels: ["unit"],
   },

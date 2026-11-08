@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { processTable } from "./process-table.mjs";
+import { processTable } from "@soksak/window-check/process-table.mjs";
 
 /** The plugin id of the raster probe. */
 export const RASTER = "rasterprobe";

@@ -12,7 +12,7 @@ import { frameChange, frames, pixel, readFrame } from "@soksak/window-check/fram
 import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "@soksak/window-check/view-metrics-collection.mjs";
 import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./cases/plain-view.mjs";
 import { outside } from "../outside.mjs";
-import { assertRoundTrips, measureDragPerformance, pointerLag, shownTimes, transactionCadence } from "../drag-measurement.mjs";
+import { assertRoundTrips, measureDragPerformance, pointerLag, shownTimes, transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 
 const descriptor = Object.freeze({
   plugin: "probeplain",

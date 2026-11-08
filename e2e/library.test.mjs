@@ -8,7 +8,7 @@ import test from "node:test";
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { processTable } from "./process-table.mjs";
+import { processTable } from "@soksak/window-check/process-table.mjs";
 
 /**
  * The plugin of the views with a native image region: the raster probe, whose fake persistent sidecar keeps one session with one
