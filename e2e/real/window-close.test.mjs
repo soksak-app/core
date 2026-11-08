@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { appPid, click, frontWindowAt, requireTrusted } from "./hid.mjs";
+import { appPid, click, frontWindowAt, requireTrusted } from "@soksak/window-check/hid.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real press of the close button ends a window and leaves the application open`, { timeout: 90000 }, async (t) => {

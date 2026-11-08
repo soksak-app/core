@@ -9,7 +9,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { fieldPoint, imageFocused, imageRect, inputProbeTab, rasterProbeTab } from "../input-probe.mjs";
 import { readPasteboard, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
-import { bringFront, click, post, requireTrusted } from "./hid.mjs";
+import { bringFront, click, post, requireTrusted } from "@soksak/window-check/hid.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a posted HID click reaches an image region through the window server`, { timeout: 60000 }, async (t) => {

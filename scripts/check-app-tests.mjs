@@ -44,9 +44,10 @@ const RULES = [
 
 // The checks of e2e/activation and e2e/real run only in runs the user approved and may activate the app.
 const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
-// The real input tool leaves an interval between HID events at the speed of a human movement. It is not a wait for state, and
+// The real input tool of the harness, which only the checks of the real-input tier use: it activates the app before it sends HID
+// events, and it leaves an interval between HID events at the speed of a human movement. The interval is not a wait for state, and
 // the window server coalesces drag events sent without an interval. A fixed wait is not allowed outside this file.
-const INPUT_PACING_FILE = "e2e/real/hid.mjs";
+const REAL_INPUT_TOOL = "packages/window-check/hid.mjs";
 // app.mjs of the harness, which creates sessions, and unit checks that are not window checks use t.after.
 const SESSION_CLEANUP_EXEMPT = ["packages/window-check/app.mjs", "packages/window-check/test/", "e2e/test/"];
 
@@ -406,8 +407,8 @@ export function auditE2ESource(text, file) {
   let lineStart = 0;
   text.split("\n").forEach((line, index) => {
     for (const rule of RULES) {
-      if (rule.activationTier && ACTIVATION_DIRS.some((dir) => file.startsWith(dir))) continue;
-      if (rule.inputPacing && file === INPUT_PACING_FILE) continue;
+      if (rule.activationTier && (ACTIVATION_DIRS.some((dir) => file.startsWith(dir)) || file === REAL_INPUT_TOOL)) continue;
+      if (rule.inputPacing && file === REAL_INPUT_TOOL) continue;
       if (rule.sessionCleanup && SESSION_CLEANUP_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;
       if (rule.sourcePath) {
         const pattern = new RegExp(rule.pattern.source, "g");

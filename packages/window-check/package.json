@@ -39,6 +39,7 @@
     "./process-table.mjs": "./process-table.mjs",
     "./region-raster.mjs": "./region-raster.mjs",
     "./chains.mjs": "./chains.mjs",
+    "./hid.mjs": "./hid.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -78,6 +79,7 @@
     "process-table.mjs",
     "region-raster.mjs",
     "chains.mjs",
+    "hid.mjs",
     "fixtures/"
   ],
   "bin": {

@@ -17,7 +17,7 @@ import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { execute, untilFramesQuiet, windowApplicationRows } from "../../scripts/measure-app-usage.mjs";
 import { applyTrace, FRAME_RECORDS } from "../../scripts/measure-trace.mjs";
 import { fresh } from "../fixture.mjs";
-import { readWindowElements } from "../real/hid.mjs";
+import { readWindowElements } from "@soksak/window-check/hid.mjs";
 import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "./cases/b3-run.mjs";
 import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN } from "./cases/floor-page.mjs";
 import { recordGesture } from "./cases/gesture-records.mjs";

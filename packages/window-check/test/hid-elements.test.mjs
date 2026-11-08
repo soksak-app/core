@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { windowElementsOf } from "../real/hid.mjs";
+import { windowElementsOf } from "../hid.mjs";
 
 test("the elements of the windows of an application are counted by their accessibility role", { timeout: 5000 }, () => {
   assert.deepEqual(windowElementsOf({ windows: 1, roles: ["AXWindow", "AXGroup", "AXButton", "AXGroup"] }, "mygo"),

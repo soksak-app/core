@@ -11,7 +11,7 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { imageRect, readyInputProbe, rasterProbeTab } from "../input-probe.mjs";
-import { bringFront, click, requireTrusted, screenCenter } from "./hid.mjs";
+import { bringFront, click, requireTrusted, screenCenter } from "@soksak/window-check/hid.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a real image region press never moves focus to a view text field`, { timeout: 120000 }, async (t) => {
