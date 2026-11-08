@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { addTabOfPlugin, cardSidebar, placeholderTabs, reading, replacePlaceholders, restoreRegistry, START_PROBE, START_PROBE_ENTRIES, startTab,
+import { addTabOfPlugin, cardSidebar, placeholderTabs, reading, replacePlaceholders, restoreRegistry, START_PROBE, START_PROBE_ENTRIES, startLayout, startTab,
   useRegistry } from "../start.mjs";
 
 const PLUGIN = "startplugin";
@@ -92,6 +92,25 @@ test("the placeholder tabs of a layout are the tabs that core.surfaces reports w
     { card: "upper", tab: "t1", plugin: "starter-a" }, { card: "lower", tab: "b1", plugin: "starter-b" }]);
   assert.deepEqual(placeholderTabs(grid, surfaces.map((row) => ({ ...row, placeholder: null }))), []);
   assert.deepEqual(placeholderTabs(null, surfaces), []);
+});
+
+test("a start plugin that the start layout names itself keeps its tab, and the placeholders become tabs of the placeholder plugin", async () => {
+  // The focused card holds an installed tab of the start plugin, so it opens as no placeholder; the other card is a placeholder.
+  const layout = starterLayout();
+  layout.grid.cards[1].tabs = [{ id: "t1", plugin: "named" }];
+  layout.surfaces[0] = { kind: "tab", surface: "t1", plugin: "named", visible: true, placeholder: null, status: { phase: "ready" },
+    exposes: ["status named.view"] };
+  const s = workbench(layout);
+  assert.deepEqual(await startLayout(s, { startPlugin: "named", startEntries: ["status named.view"], placeholderPlugin: PLUGIN }),
+    { surface: "t1", plugin: "named" });
+  assert.deepEqual(layout.grid.cards.slice(1).map((card) => card.tabs.map((tab) => tab.plugin)), [["named"], [PLUGIN]]);
+
+  // Without a placeholder plugin the placeholders become tabs of the start plugin.
+  const same = starterLayout();
+  same.grid.cards[1].tabs = [{ id: "t1", plugin: "named" }];
+  same.surfaces[0] = { ...layout.surfaces[0] };
+  await startLayout(workbench(same), { startPlugin: "named", startEntries: ["status named.view"] });
+  assert.deepEqual(same.grid.cards.slice(1).map((card) => card.tabs.map((tab) => tab.plugin)), [["named"], ["named"]]);
 });
 
 test("the start state replaces each placeholder by a tab of the given plugin and returns the ready tab of the focused card", async () => {

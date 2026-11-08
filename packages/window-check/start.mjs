@@ -143,16 +143,27 @@ export async function addTabOfPlugin(s, { plugin, ready } = {}) {
 }
 
 /**
+ * Replaces every placeholder tab of the start layout by a tab of `placeholderPlugin` (`startPlugin` by default) and returns the
+ * active tab of the focused card, a ready tab of `startPlugin` that registered `startEntries` (startTab).
+ */
+export async function startLayout(s, { startPlugin = START_PROBE, startEntries = entriesOf(startPlugin), placeholderPlugin = startPlugin } = {}) {
+  await replacePlaceholders(s, placeholderPlugin);
+  return startTab(s, { startPlugin, startEntries });
+}
+
+/**
  * Puts the window in the start state of a check and returns the start tab `{surface, plugin}`: diagnostics.fixture opens the
  * new-space layout with `settings`, a registry that an earlier run left is restored, every placeholder tab is replaced by a tab of
- * `startPlugin` (replacePlaceholders) and the active tab of the focused card is ready with `startEntries` (startTab). With
+ * `placeholderPlugin` (replacePlaceholders; `startPlugin` by default) and the active tab of the focused card is a ready tab of
+ * `startPlugin` with `startEntries` (startTab). A plugin that the start layout names itself, which is installed and so opens as no
+ * placeholder, is the `startPlugin` of its checks, and the other cards hold tabs of `placeholderPlugin`, for example START_PROBE. With
  * `addPluginTab: {plugin, ready}` a tab of `plugin` is then added to the focused card and the start state waits for
  * `ready(s, tab)`; the result holds what it resolves with as `pluginTab`. Without it no tab of the plugin under check exists.
  * `log` is the log policy that the check declares and `reads` the records below `error` that it reads (prepareFixture); with the
  * performance trace the registration timeline of a failed start is read too.
  */
-export async function fresh(s, { startPlugin = START_PROBE, startEntries = entriesOf(startPlugin), addPluginTab, performanceTrace = TRACE,
-  settings = {}, log = {}, reads = [] } = {}) {
+export async function fresh(s, { startPlugin = START_PROBE, startEntries = entriesOf(startPlugin), placeholderPlugin = startPlugin, addPluginTab,
+  performanceTrace = TRACE, settings = {}, log = {}, reads = [] } = {}) {
   requirePlugin(startPlugin, "the start state names no plugin for its start tab");
   const traceOffsets = currentEventOffsets(s.app.configDir);
   const declared = performanceTrace ? [...reads, "workbench.trace.surface.registration"] : reads;
@@ -162,8 +173,7 @@ export async function fresh(s, { startPlugin = START_PROBE, startEntries = entri
   await restoreRegistry(s);
   let tab;
   try {
-    await replacePlaceholders(s, startPlugin);
-    tab = await startTab(s, { startPlugin, startEntries });
+    tab = await startLayout(s, { startPlugin, startEntries, placeholderPlugin });
     if (addPluginTab !== undefined) tab = { ...tab, pluginTab: await addTabOfPlugin(s, addPluginTab) };
   } catch (error) {
     if (!performanceTrace) throw error;
