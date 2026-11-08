@@ -290,6 +290,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Detaching:   func() []string { return nil },
 		Located:     func(string) {},
 		Backdrop:    func(string) error { return nil },
+		FirstScreen: func() {},
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.surfaceTable(), f.pending.post),
 		Environment: environment(t),
