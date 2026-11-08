@@ -13,7 +13,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, replacePlaceholders, startTab } from "./fixture.mjs";
 
 const CYCLES = 4;
 
@@ -46,8 +46,12 @@ for (const app of Object.values(APPS)) {
       const windows = await s.windows(2, `${label}: the project window did not open`);
       const child = s.on(windows.find((w) => w.window !== s.window).window);
       await child.until("core.project", (project) => project?.id === opened.id, `${label}: the project did not become active`);
-      await child.until("core.surfaces", (surfaces) => surfaces.some((surface) => surface.visible),
-        `${label}: the project window showed no surface`);
+      await child.until("core.grid", (grid) => grid?.cards?.some((card) => card.focused), `${label}: the project window showed no layout`);
+      // The new-space layout names plugins that the check application does not load, and a placeholder tab is drawn by the
+      // workbench without a surface host or a surface web view, so layout probe tabs replace the placeholders and the window holds
+      // the objects whose release the check measures.
+      await replacePlaceholders(child);
+      await startTab(child);
       await child.presented();
       // A window whose host.window reports pageProcess null has no main page (the window of the mygo host), so it leaves no
       // page process to end; every other value names the page process of the window.
