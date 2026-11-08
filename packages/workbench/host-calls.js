@@ -53,14 +53,17 @@ function callArguments(args) {
   }
 }
 
+/** The calls that send a request to a sidecar: the send of the page and of a surface, and the send that the page relays for a view. */
+const SIDECAR_SENDS = new Set(["sidecarSend", "viewSidecarSend"]);
+
 /**
  * The correlation identifiers that a call continues (docs/spec/logging.md#correlation-identifier). Only the send of a request
- * to a sidecar carries them: the main page passes one object `{sidecar, surface, body, cids}`, and the runtime of a surface
- * passes `(sidecar, surface, body, cids)`. A call without a non-empty list has none; a value that is not a list is returned as
- * it is, so the batcher of the events reports it.
+ * to a sidecar carries them: the main page passes one object `{sidecar, surface, body, cids}` (with `source` and `generation`
+ * for a view), and the runtime of a surface passes `(sidecar, surface, body, cids)`. A call without a non-empty list has none;
+ * a value that is not a list is returned as it is, so the batcher of the events reports it.
  */
 function callCids(name, args) {
-  if (name !== "sidecarSend") return undefined;
+  if (!SIDECAR_SENDS.has(name)) return undefined;
   const cids = args.length === 1 && args[0] !== null && typeof args[0] === "object" ? args[0].cids : args[3];
   return Array.isArray(cids) && cids.length === 0 ? undefined : cids;
 }

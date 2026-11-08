@@ -114,6 +114,15 @@ test("the event of a sidecar send carries the correlation identifiers of the req
   assert.equal(callEvent({ name: "sidecarSend", args: [{ cids: "b1.7" }], micros: 1, ok: true }).cids, "b1.7");
 });
 
+test("the event of the send that the page relays for a view carries the correlation identifiers of the request", () => {
+  // A view sends its sidecar requests through the main page, which calls viewSidecarSend with the identifiers of the input
+  // that the view continues (docs/spec/logging.md#operation-chains), so the page hop of that input names them as sidecarSend does.
+  const body = { operation: "input", sequence: 2 };
+  const relayed = { source: "tab-1", generation: 3, sidecar: "x", surface: "tab-1", body, cids: ["b1.6"] };
+  assert.deepEqual(callEvent({ name: "viewSidecarSend", args: [relayed], micros: 1, ok: true }).cids, ["b1.6"]);
+  assert.equal(callEvent({ name: "viewSidecarSend", args: [{ ...relayed, cids: [] }], micros: 1, ok: true }).cids, undefined);
+});
+
 test("a refused call states its error as <code>: <text>, with the code of the error or the internal code", () => {
   const refused = callEvent({ name: "bad", args: [], micros: 1, ok: false, error: "refused" });
   assert.equal(refused.fields.error, "-32603: refused");
