@@ -5,7 +5,8 @@ import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
 import { APPS, drag, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh, reading } from "./fixture.mjs";
+import { fresh, probeListSections, reading } from "./fixture.mjs";
+import { CHECK_SET } from "@soksak/window-check/start.mjs";
 import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { supplierDrawDurations } from "./supplier-draw.mjs";
 import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
@@ -117,10 +118,14 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s, { log: { frame: "debug" }, reads: ["sidecar.rasterprobe.frame"] });
     const raster = await rasterInFirstCard(s);
-    // The right override of the raster probe ties the fixed sidebar and the rail to the raster probe card; the set is the list set
-    // of the layout probe.
+    // The right override of the raster probe ties the fixed sidebar and the rail to the raster probe card. The environment of an
+    // application declares the sidebar sets in place of the sets of the plugins, so the check stores a common set of the list
+    // sections of the layout probe and links it; keepCommonSettings restores both when the check ends.
     await keepCommonSettings(s);
-    await s.run("core.settings.link", { place: "window-right", plugin: RASTER, set: "layoutprobe.list", scope: "common" });
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: [...sets.filter((item) => item.id !== CHECK_SET),
+      { id: CHECK_SET, title: "검사", sections: probeListSections(), layout: "list" }] }, scope: "common" });
+    await s.run("core.settings.link", { place: "window-right", plugin: RASTER, set: CHECK_SET, scope: "common" });
     await s.until("core.rail", (rail) => rail.groups.length === 1, "the raster probe override drew no rail");
     const marks = await rasterMarks(s, raster.surface, { measured: true });
     const offsets = currentEventOffsets(app.configDir);
