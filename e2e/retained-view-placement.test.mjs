@@ -1,4 +1,5 @@
-// Checks startup placement for a stored, inactive unloadable view under both memory-saver settings.
+// Checks startup placement for a stored, inactive unloadable view under both memory-saver settings. The stored card holds an active
+// layout probe tab and an inactive tab of the unload probe `probeunload`, which declares surface.unload.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,14 +7,15 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, replacePlaceholders, START_PLUGIN } from "./fixture.mjs";
 
+/** The fixture plugin of the inactive unloadable tab. */
+const UNLOADABLE = "probeunload";
 const added = (list, known) => list.find((window) => !known.includes(window.window)).window;
-const terminalCard = (grid) => grid.cards.find((card) => card.tabs.some((tab) => tab.plugin === "terminal"));
 const memoryTab = (memory, tab) => memory.tabs.find((entry) => entry.tab === tab);
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a cold hidden browser view follows the memory-saver setting`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: a cold hidden unloadable view follows the memory-saver setting`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 } });
     await keepCommonSettings(s);
@@ -42,19 +44,25 @@ for (const app of Object.values(APPS)) {
     "the saved-project opening settings did not settle");
     const project = await s.run("core.project.open", { root, color: "#7fe3b0" });
     let child = s.on(added(await s.windows(2, "the stored project window did not open"), [s.window]));
-    const initialGrid = await child.until("core.grid", (grid) => grid.cards.some((card) =>
-      card.tabs.some((tab) => tab.plugin === "terminal")), "the project did not create its terminal card");
-    const initialCard = terminalCard(initialGrid);
+    await child.until("core.grid", (grid) => grid.cards.some((card) => card.focused), "the project did not create its focused card");
+    // The new-space layout names plugins that a fixture configuration does not load; each of its tabs becomes a layout probe tab.
+    await replacePlaceholders(child);
+    const initialGrid = await child.until("core.grid", (grid) => grid.cards.some((card) => card.focused
+      && card.tabs.find((tab) => tab.id === card.active)?.plugin === START_PLUGIN), "the focused card did not show a layout probe tab");
+    const cardId = initialGrid.cards.find((card) => card.focused).id;
+    const probeCard = (grid) => grid.cards.find((card) => card.id === cardId);
+    const initialCard = probeCard(initialGrid);
+    assert.equal(initialCard.tabs.length, 1, "the focused card of the new project must start with one tab");
     const activeTab = initialCard.active;
-    const { tab: hiddenTab } = await child.run("core.card.add-tab", { card: initialCard.id, plugin: "browser" });
-    await child.until("core.grid", (grid) => terminalCard(grid)?.active === hiddenTab,
-      "the browser tab did not become active");
+    const { tab: hiddenTab } = await child.run("core.card.add-tab", { card: initialCard.id, plugin: UNLOADABLE });
+    await child.until("core.grid", (grid) => probeCard(grid)?.active === hiddenTab,
+      "the unloadable tab did not become active");
     await child.run("core.tab.select", { tab: activeTab });
     const storedGrid = await child.until("core.grid", (grid) => {
-      const card = terminalCard(grid);
-      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === "browser");
-    }, "the browser tab was not saved as inactive");
-    assert.equal(terminalCard(storedGrid).tabs.length, 2, "the stored terminal card must contain exactly two tabs");
+      const card = probeCard(grid);
+      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === UNLOADABLE);
+    }, "the unloadable tab was not saved as inactive");
+    assert.equal(probeCard(storedGrid).tabs.length, 2, "the stored probe card must contain exactly two tabs");
     await child.run("core.projects.flush");
     await child.close();
     await s.windows(1, "the project window did not close before its cold reopen");
@@ -65,20 +73,20 @@ for (const app of Object.values(APPS)) {
       return s.on(added(await s.windows(2, `${label}: the saved project window did not open`), known));
     };
     const activePlacement = async (window, label) => {
-      const grid = await window.until("core.grid", (value) => terminalCard(value)?.active,
-        `${label}: the terminal card did not become available`);
-      const active = terminalCard(grid)?.active;
-      assert.ok(active, `${label}: the terminal card has no active tab`);
+      const grid = await window.until("core.grid", (value) => probeCard(value)?.active,
+        `${label}: the probe card did not become available`);
+      const active = probeCard(grid)?.active;
+      assert.ok(active, `${label}: the probe card has no active tab`);
       const surfaces = await window.until("core.surfaces", (items) => items.some((item) =>
-        item.surface === active && item.plugin === "terminal" && item.visible && item.composition === "view"
-        && item.status.phase === "ready" && item.applied), `${label}: active terminal view did not mount and apply`);
-      const surface = surfaces.find((item) => item.surface === active && item.plugin === "terminal" && item.visible
+        item.surface === active && item.plugin === START_PLUGIN && item.visible && item.composition === "view"
+        && item.status.phase === "ready" && item.applied), `${label}: active probe view did not mount and apply`);
+      const surface = surfaces.find((item) => item.surface === active && item.plugin === START_PLUGIN && item.visible
         && item.composition === "view" && item.status.phase === "ready" && item.applied);
-      assert.ok(surface, `${label}: active terminal surface was absent from the satisfied status`);
+      assert.ok(surface, `${label}: active probe surface was absent from the satisfied status`);
       await window.until("host.window", (state) => state.surfaces.some((item) => item.id === active
         && item.visible && item.frame.width > 0 && item.frame.height > 0), `${label}: active native view was not placed`);
       await window.until("core.surface.document", (document) => document?.readyState === "complete" && document.themed,
-        `${label}: active terminal document did not become ready`, { surface: surface.surface });
+        `${label}: active probe document did not become ready`, { surface: surface.surface });
       return active;
     };
 
@@ -86,15 +94,15 @@ for (const app of Object.values(APPS)) {
     assert.equal(await activePlacement(child, "memory saver enabled"), activeTab,
       "the saved active tab changed when memory saver was enabled");
     const unloaded = await child.until("core.tab.memory", (memory) => memory.enabled
-      && memoryTab(memory, hiddenTab)?.state === "unloaded", "the cold hidden browser did not start unloaded");
+      && memoryTab(memory, hiddenTab)?.state === "unloaded", "the cold hidden unloadable tab did not start unloaded");
     assert.ok(unloaded.tabs.some((entry) => entry.tab === hiddenTab && entry.state === "unloaded"),
       "core.tab.memory did not retain the cold hidden tab as unloaded");
-    assert.equal(memoryTab(unloaded, hiddenTab).plugin, "browser");
+    assert.equal(memoryTab(unloaded, hiddenTab).plugin, UNLOADABLE);
     const coldGrid = await child.until("core.grid", (grid) => {
-      const card = terminalCard(grid);
-      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === "browser");
-    }, "the unloaded browser was not retained as an inactive saved tab");
-    assert.equal(terminalCard(coldGrid).tabs.length, 2, "the cold terminal card must retain both saved tabs");
+      const card = probeCard(grid);
+      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === UNLOADABLE);
+    }, "the unloaded tab was not retained as an inactive saved tab");
+    assert.equal(probeCard(coldGrid).tabs.length, 2, "the cold probe card must retain both saved tabs");
     assert.equal((await child.get("host.window")).surfaces.some((item) => item.id === hiddenTab), false,
       "an unloaded tab retained a native surface");
     assert.equal(await child.get("core.workbench.error"), null, "enabled memory saver reported an application error");
@@ -109,18 +117,18 @@ for (const app of Object.values(APPS)) {
     assert.equal(await activePlacement(child, "memory saver disabled"), activeTab,
       "the saved active tab changed when memory saver was disabled");
     const loaded = await child.until("core.tab.memory", (memory) => !memory.enabled
-      && memoryTab(memory, hiddenTab)?.state === "loaded", "the cold hidden browser did not start loaded");
+      && memoryTab(memory, hiddenTab)?.state === "loaded", "the cold hidden unloadable tab did not start loaded");
     assert.ok(memoryTab(loaded, hiddenTab).reasons.includes("off"),
       "the loaded hidden tab did not report the off protection");
     const loadedGrid = await child.until("core.grid", (grid) => {
-      const card = terminalCard(grid);
-      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === "browser");
-    }, "the loaded browser was not retained as an inactive saved tab");
-    assert.equal(terminalCard(loadedGrid).tabs.length, 2, "the loaded terminal card must retain both saved tabs");
+      const card = probeCard(grid);
+      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === UNLOADABLE);
+    }, "the loaded tab was not retained as an inactive saved tab");
+    assert.equal(probeCard(loadedGrid).tabs.length, 2, "the loaded probe card must retain both saved tabs");
     await child.until("core.surface.document", (document) => document?.readyState === "complete" && document.themed,
-      "the hidden browser document did not become ready", { surface: hiddenTab });
+      "the hidden unloadable document did not become ready", { surface: hiddenTab });
     await child.until("host.window", (state) => state.surfaces.some((item) => item.id === hiddenTab && !item.visible),
-      "the loaded hidden browser was not submitted as an invisible native surface");
+      "the loaded hidden tab was not submitted as an invisible native surface");
     assert.equal(await child.get("core.workbench.error"), null, "disabled memory saver reported an application error");
   });
 }

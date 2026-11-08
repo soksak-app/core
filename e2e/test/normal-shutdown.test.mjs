@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { prepareTerminal } from "../prepare-terminal.mjs";
+import { prepareRasterSession, RASTER } from "../raster-probe.mjs";
 
 function deferred() {
   let resolve;
@@ -8,28 +8,22 @@ function deferred() {
   return { promise, resolve };
 }
 
-test("terminal shutdown preparation waits for surface and session notifications", async () => {
+test("service shutdown preparation waits for surface and session notifications", async () => {
   const watches = [];
   const requests = [];
   const watchEntered = [deferred(), deferred()];
-  let inputSent = false;
-  let surfaceReads = 0;
+  let tabAdded = false;
   const client = {
     request: async (method, params) => {
       requests.push({ method, params });
-      if (method === "status.get" && params.name === "core.surfaces") {
-        surfaceReads += 1;
-        return surfaceReads === 1 ? [] : [{ plugin: "terminal", visible: true, surface: "tab-terminal" }];
-      }
-      if (method === "status.get" && params.name === "core.grid") {
-        return { cards: [{ tabs: [{ id: "tab-terminal", plugin: "terminal" }] }] };
-      }
-      if (method === "status.get" && params.name === "terminal.session") return { sessionId: "session-1" };
       if (method === "diagnostics.fixture") return null;
-      if (method === "command.run" && params.name === "core.tab.select") return null;
-      if (method === "command.run" && params.name === "terminal.input") {
-        inputSent = true;
-        return null;
+      if (method === "status.get" && params.name === "core.grid") {
+        return { cards: [{ id: "card-a", focused: false, tabs: [] }, { id: "card-b", focused: true, tabs: [] }] };
+      }
+      if (method === "command.run" && params.name === "core.card.add-tab") {
+        assert.deepEqual(params.params, { card: "card-b", plugin: RASTER }, "the raster probe tab was not added to the focused card");
+        tabAdded = true;
+        return { tab: "tab-raster" };
       }
       throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
     },
@@ -41,32 +35,50 @@ test("terminal shutdown preparation waits for surface and session notifications"
     },
   };
 
-  const prepared = prepareTerminal(client, (connection, method, params) => connection.request(method, params), { startupLimit: 15_000 });
+  const prepared = prepareRasterSession(client, (connection, method, params) => connection.request(method, params), { startupLimit: 15_000 });
   const outcome = prepared.then((value) => ({ value }), (error) => ({ error }));
   const first = await Promise.race([watchEntered[0].promise.then(() => "watch"), outcome.then(() => "finished")]);
   assert.equal(first, "watch", "preparation finished without waiting for a status notification");
-  assert.equal(inputSent, false, "terminal input was sent before a visible surface notification");
+  assert.equal(tabAdded, true, "the surface watch started before the raster probe tab was added");
   assert.equal(watches[0].window, "main");
   assert.equal(watches[0].name, "core.surfaces");
   assert.equal(watches[0].options.timeout, 15_000);
-  const visible = [{ plugin: "terminal", visible: true, surface: "tab-terminal" }];
+  assert.equal(watches[0].predicate([{ plugin: RASTER, visible: false, surface: "tab-raster" }]), false);
+  assert.equal(watches[0].predicate([{ plugin: RASTER, visible: true, surface: "tab-other" }]), false);
+  const visible = [{ plugin: RASTER, visible: true, surface: "tab-raster" }];
   assert.equal(watches[0].predicate(visible), true);
+  assert.equal(watches.length, 1, "the session watch started before a visible surface notification");
   watches[0].ready.resolve(visible);
 
   const second = await Promise.race([watchEntered[1].promise.then(() => "watch"), outcome.then(() => "finished")]);
   assert.equal(second, "watch", "preparation polled session readiness instead of waiting for its notification");
-  assert.equal(inputSent, true, "terminal input was not sent after surface registration");
   assert.equal(watches[1].window, "main");
-  assert.equal(watches[1].name, "terminal.session");
-  assert.equal(watches[1].options.surface, "tab-terminal");
+  assert.equal(watches[1].name, "rasterprobe.session");
+  assert.equal(watches[1].options.surface, "tab-raster");
   assert.equal(watches[1].options.timeout, 15_000);
-  const readySession = { sessionId: "session-1" };
+  assert.equal(watches[1].predicate({ session: null, connected: false, failure: null, error: null }), false);
+  assert.equal(watches[1].predicate({ session: "session-1", connected: false, failure: "closed", error: null }), false);
+  assert.equal(watches[1].predicate({ session: "session-1", connected: true, failure: null, error: "open failed" }), false);
+  const readySession = { session: "session-1", connected: true, failure: null, error: null };
   assert.equal(watches[1].predicate(readySession), true);
   watches[1].ready.resolve(readySession);
 
-  assert.deepEqual(await outcome, { value: { surface: "tab-terminal", sessionId: "session-1" } });
-  assert.equal(requests.filter(({ method, params }) => method === "status.get" && params.name === "core.surfaces").length, 1,
+  assert.deepEqual(await outcome, { value: { surface: "tab-raster", session: "session-1" } });
+  assert.equal(requests.some(({ method, params }) => method === "status.get" && params.name === "core.surfaces"), false,
     "surface readiness was polled");
-  assert.equal(requests.some(({ method, params }) => method === "status.get" && params.name === "terminal.session"), false,
+  assert.equal(requests.some(({ method, params }) => method === "status.get" && params.name === "rasterprobe.session"), false,
     "session readiness was polled");
+});
+
+test("service shutdown preparation refuses a fixture without a focused card", async () => {
+  const client = {
+    request: async (method, params) => {
+      if (method === "diagnostics.fixture") return null;
+      if (method === "status.get" && params.name === "core.grid") return { cards: [{ id: "card-a", focused: false, tabs: [] }] };
+      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
+    },
+    watch: () => { throw new Error("no watch is expected without a focused card"); },
+  };
+  await assert.rejects(prepareRasterSession(client, (connection, method, params) => connection.request(method, params)),
+    /no focused card for a raster probe tab/);
 });

@@ -290,6 +290,9 @@
           },
           "surface": {
             "type": "number"
+          },
+          "draw_us": {
+            "type": "number"
           }
         },
         "required": [
@@ -305,10 +308,11 @@
           "rows",
           "color",
           "marker",
-          "surface"
+          "surface",
+          "draw_us"
         ]
       },
-      "description": "The service sent a frame: its identity, its raster, its grid, the row bands it paints, its color, its identity marker and the id of its transfer image."
+      "description": "The service sent a frame: its identity, its raster, its grid, the row bands it paints, its color, its identity marker, the id of its transfer image and the time in microseconds that painting the image took (draw_us)."
     },
     "sidecar.rasterprobe.kill": {
       "layer": "sidecar",

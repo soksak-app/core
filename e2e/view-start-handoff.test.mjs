@@ -1,25 +1,23 @@
+// Checks that the start parameters of core.file.open reach the page view of the opened file (core.surface.document and the start
+// values of the page), on the layout probe, which opens .lprobe files.
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
-
-const HWP_FIXTURE = new URL("./fixtures/two-paragraphs.hwp", import.meta.url);
+import { fresh, START_PLUGIN } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: file-open parameters reach editor and HWP pages`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: file-open parameters reach the pages of the opened files`, { timeout: 60000 }, async (t) => {
     const main = await open(t, app);
     await fresh(main);
     await main.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
 
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-view-start-")));
-    const editorBytes = "alpha\n";
-    writeFileSync(join(root, "sample.txt"), editorBytes);
-    copyFileSync(HWP_FIXTURE, join(root, "two-paragraphs.hwp"));
+    writeFileSync(join(root, "alpha.lprobe"), "alpha\n");
+    writeFileSync(join(root, "beta.lprobe"), "beta\n");
     main.cleanup(() => rmSync(root, { recursive: true, force: true }));
 
     const opened = await main.run("core.project.open", { root, color: "#7fe3b0" });
@@ -41,35 +39,22 @@ for (const app of Object.values(APPS)) {
       await main.run("core.projects.flush");
     });
 
-    const editor = await project.run("core.file.open", { path: "sample.txt" });
-    assert.equal(typeof editor.tab, "string", "core.file.open returned no editor tab");
-    const editorSurface = await project.until("core.surfaces", (all) =>
-      all.find((item) => item.surface === editor.tab && item.plugin === "editor" && item.exposes.includes("status core.surface.document")),
-    "the opened editor tab did not register its surface");
-    const editorStart = await project.until("core.surface.document", (value) => value?.params?.path === "sample.txt",
-      "the editor surface did not receive the file-open path", { surface: editor.tab });
-    assert.deepEqual(editorStart.params, { path: "sample.txt" });
-    const editorDocument = await project.until("editor.document", (value) =>
-      value?.path === "sample.txt" && value.version === createHash("sha256").update(editorBytes).digest("hex")
-        && value.length === editorBytes.length,
-    "the editor did not read the file after receiving its start parameters", { surface: editor.tab });
-    assert.equal(editorDocument.path, "sample.txt");
-    assert.equal(editorDocument.length, 6);
-
-    const hwp = await project.run("core.file.open", { path: "two-paragraphs.hwp" });
-    assert.equal(typeof hwp.tab, "string", "core.file.open returned no HWP tab");
-    const hwpSurface = await project.until("core.surfaces", (all) =>
-      all.find((item) => item.surface === hwp.tab && item.plugin === "hwp" && item.exposes.includes("status core.surface.document")),
-    "the opened HWP tab did not register its surface");
-    const hwpStart = await project.until("core.surface.document", (value) => value?.params?.path === "two-paragraphs.hwp",
-      "the HWP surface did not receive the file-open path", { surface: hwp.tab });
-    assert.deepEqual(hwpStart.params, { path: "two-paragraphs.hwp" });
-    const hwpBytes = readFileSync(HWP_FIXTURE);
-    const hwpDocument = await project.until("hwp.document", (value) =>
-      value?.path === "two-paragraphs.hwp" && value.version === createHash("sha256").update(hwpBytes).digest("hex")
-        && value.pages > 0 && value.phase === "ready",
-    "the HWP reader did not finish with a document version and pages", { surface: hwp.tab });
-    assert.equal(hwpDocument.path, "two-paragraphs.hwp");
-    assert.ok(editorSurface && hwpSurface);
+    // Two files of the type that the layout probe opens each reach their own tab with their own path.
+    for (const path of ["alpha.lprobe", "beta.lprobe"]) {
+      const opened = await project.run("core.file.open", { path });
+      assert.equal(typeof opened.tab, "string", `core.file.open returned no tab for ${path}`);
+      const surface = await project.until("core.surfaces", (all) =>
+        all.find((item) => item.surface === opened.tab && item.plugin === START_PLUGIN && item.exposes.includes("status core.surface.document")),
+      `the opened tab of ${path} did not register its surface`);
+      assert.ok(surface, `the opened tab of ${path} has no surface`);
+      const start = await project.until("core.surface.document", (value) => value?.params?.path === path,
+        `the surface of ${path} did not receive the file-open path`, { surface: opened.tab });
+      assert.deepEqual(start.params, { path });
+      // The page reads the start parameters of its surface at its start and reports them.
+      const view = await project.until("layoutprobe.view", (value) => value?.path === path,
+        `the page of ${path} did not read the file-open path from its start values`, { surface: opened.tab });
+      assert.deepEqual(view.params, { path });
+      assert.equal(view.surface, opened.tab);
+    }
   });
 }

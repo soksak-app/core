@@ -13,11 +13,11 @@
 // The card is read in the head row, which the surface does not reach. The head is a row that the document draws, so the card
 // in that row is at the position where the page draws it now. The surface is read as the horizontal
 // span that its own background color occupies. Both come from one frame, so no clock interferes.
-// The default background of a terminal surface has the same color as the card (--card), so the background does not separate it from the card. The check changes the default background of the terminal with OSC 11
-// to the measurement color (MEASURED_BACKGROUND of terminal-screen.mjs). The horizontal span of that color is the horizontal span of
-// the terminal raster composed into that frame.
+// The surface is a raster probe (e2e/raster-probe.mjs), whose fake sidecar paints its image region in one color. The check paints
+// it in the measurement color MEASURED, which no card, lane or border has, so the horizontal span of that color is the horizontal span
+// of the raster composed into that frame.
 import { pixel } from "@soksak/window-check/frame.mjs";
-import { MEASURED_BACKGROUND, readScreenUntil, setMeasuredBackground } from "./terminal-screen.mjs";
+import { MEASURED, setMeasuredColor } from "./raster-probe.mjs";
 
 /** The background of a card. The head and the foot have this color. The --card of the midnight theme (#191b24). */
 const CARD = [25, 27, 36];
@@ -38,8 +38,8 @@ const any = (p, list) => list.some((q) => near(p, q));
 
 /**
  * Walks the rows from from toward to (to is excluded) and returns the first row where colour continues for at least LINE, with the longest
- * span of colour in that row. While the size changes, the terminal shows the raster of the previous size attached to one side, so the function does not read a fixed column.
- * The empty row below the prompt has the background over the whole width of the raster, so the caller walks upward from the bottom edge of the surface. Coordinates are pixels.
+ * span of colour in that row. While the size changes, an image region shows the raster of the previous size attached to one side, so the function does not read a fixed column.
+ * The bottom row of a raster has the background over its whole width, so the caller walks upward from the bottom edge of the surface. Coordinates are pixels.
  */
 export function rasterRow(f, colour, { from, to }) {
   const step = to >= from ? 1 : -1;
@@ -58,24 +58,26 @@ export function rasterRow(f, colour, { from, to }) {
 }
 
 /**
- * The reference to find the surface of a terminal card. It is read from the declared position of the surface (host.window). head is
- * one row of the card head directly above the surface, top and bottom are the top and the bottom of the surface, and cx is the column 24pt inside the right edge of the surface. All are in points.
- * The check drags the left or the bottom boundary of the terminal card, so the head row, the top of the surface and the right edge do not move.
- * If measured is set, the function changes the default background of the terminal to MEASURED_BACKGROUND after the prompt appears.
+ * The reference to find the raster probe surface `surface` in its card. It is read from the declared position of the surface
+ * (host.window). head is one row of the card head directly above the surface, top and bottom are the top and the bottom of the
+ * surface, and cx is the column 24pt inside the right edge of the surface. All are in points. The check drags the left or the bottom
+ * boundary of the card, so the head row, the top of the surface and the right edge do not move. scan is the row from which `outside`
+ * walks upward: the bottom of the surface less the identity marker of the frame, a square one cell tall at the bottom right, so the
+ * measured row spans the whole width of the raster. If measured is set, the function first paints the frames of the raster probe in
+ * MEASURED and waits until its image region presents them.
  */
-export async function terminalMarks(s, { measured = false } = {}) {
-  const card = (await s.get("core.grid")).cards.find((item) => item.id === "terminal");
-  if (!card?.active) throw new Error("the fixture has no terminal card with an active surface");
+export async function rasterMarks(s, surface, { measured = false } = {}) {
   if (measured) {
-    await readScreenUntil(s, card.active, (lines) => lines.some((line) => line.includes("$")),
-      `${card.active} did not show a shell prompt`);
-    await setMeasuredBackground(s, card.active);
+    await setMeasuredColor(s, surface);
     await s.presented();
   }
-  const surface = (await s.get("host.window")).surfaces.find((item) => item.id === card.active);
-  if (!surface?.frame?.width) throw new Error(`the terminal surface ${card.active} has no declared frame`);
-  const { x, y, width, height } = surface.frame;
-  return { head: y - 2, top: y, bottom: y + height, cx: x + width - 24, colour: MEASURED_BACKGROUND };
+  const frame = await s.get("rasterprobe.frame", surface);
+  if (!frame?.grid?.cellHeight || !frame.scale) throw new Error(`the raster probe surface ${surface} has no frame grid: ${JSON.stringify(frame)}`);
+  const placed = (await s.get("host.window")).surfaces.find((item) => item.id === surface);
+  if (!placed?.frame?.width) throw new Error(`the raster probe surface ${surface} has no declared frame`);
+  const { x, y, width, height } = placed.frame;
+  const marker = Math.ceil(frame.grid.cellHeight / frame.scale);
+  return { head: y - 2, top: y, bottom: y + height, scan: y + height - marker - 1, cx: x + width - 24, colour: MEASURED };
 }
 
 /**
@@ -129,7 +131,8 @@ function perPoint(f, y, card) {
  */
 export function outside(f, marks) {
   const px = (value) => Math.round(value * f.scale);
-  const run = rasterRow(f, marks.colour, { from: px(marks.bottom) - 2, to: px(marks.top) });
+  // default: marks without a scan row walk from the bottom of the surface.
+  const run = rasterRow(f, marks.colour, { from: px(marks.scan ?? marks.bottom) - 2, to: px(marks.top) });
   if (!run) return null;
   const y = px(marks.head);
   const cx = Math.round((run.l + run.r) / 2);
@@ -183,13 +186,13 @@ export function surfaceBoxes(f, colour, { expectedRow, rowTolerance = 40 } = {})
     .sort((a, b) => (b.r - b.l) * b.rows - (a.r - a.l) * a.rows);
   const boxes = [];
   for (const r of candidates) {
-    // Other rows that use the same background color, such as a browser document, are outside the
-    // terminal row measurement range that the caller declared. Candidates inside the range are still verified, and the failure is not hidden.
+    // Other rows that use the same background color, such as a page document, are outside the
+    // surface row measurement range that the caller declared. Candidates inside the range are still verified, and the failure is not hidden.
     if (boxes.some((b) => r.l < b.r && r.r > b.l && r.t < b.b && r.b > b.t)) continue;
     const row = headRow(f, { ...r, y: r.t });
     if (row === null) throw new Error(`content at ${r.l},${r.t} has no DOM header`);
-    // Text can cover the first rows of the terminal, so the first row of continuous background is
-    // not the top edge of the terminal. Instead, the function filters by the measured card header, which is stable
+    // Content can cover the first rows of the surface, so the first row of continuous background is
+    // not the top edge of the surface. Instead, the function filters by the measured card header, which is stable
     // over the whole surface.
     if (expectedRow !== undefined && Math.abs(row / f.scale - expectedRow) > rowTolerance) continue;
     const card = span(f, row, Math.floor((r.l + r.r) / 2));

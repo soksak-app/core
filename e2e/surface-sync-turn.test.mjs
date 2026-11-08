@@ -10,10 +10,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a surface layout enters the main thread once and its ready callback once`,
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s, { performanceTrace: false, log: { frame: "trace" }, reads: ["host.frame.surface.dispatch"] });
-      const grid = await s.get("core.grid");
-      const card = grid.cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
-      assert.ok(card, "no terminal card");
+      const { surface } = await fresh(s, { performanceTrace: false, log: { frame: "trace" }, reads: ["host.frame.surface.dispatch"] });
+      const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.id === surface));
+      assert.ok(card, `no card holds the start tab ${surface}`);
       await s.presented();
       const offsets = currentEventOffsets(app.configDir);
       await s.run("core.card.fullscreen", { card: card.id });

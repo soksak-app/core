@@ -2,11 +2,15 @@
 // (docs/spec/native-surfaces.md#image-regions, docs/spec/persistent-services.md). The view opens the session of its surface with its
 // image, forwards the text size factor of the surface and the input of the region to the sidecar, opens the session again on each
 // connection notice of the sidecar, and reports the view, the session, the last frame and the input of the region as statuses. A
-// hide, a show and a reload of the view are the host's: the host detaches the image of a reloaded page and the new page opens the
-// same session again, so the view keeps no state of its own.
+// primary press on the region gives it the keyboard focus, as a view whose region takes text does (a press passes through the
+// region to the page, docs/spec/native-surfaces.md#image-regions). A hide, a show and a reload of the view are the host's: the host
+// detaches the image of a reloaded page and the new page opens the same session again, so the view keeps no state of its own.
 
 export const SIDECAR = "@sok-check/sidecar-rasterprobe";
 export const REGION = "raster";
+/** The number of input transactions that rasterprobe.input keeps in its log, and of pointer events in its pointer list. */
+export const INPUT_LOG_LIMIT = 256;
+export const POINTER_LIMIT = 64;
 
 /** The exposure port of the probe view: registrations, replies and watched status values go through the view bridge. */
 export function probeExposurePort(bridge) {
@@ -53,7 +57,8 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   const viewStatus = statusCell(null);
   const sessionStatus = statusCell(NO_SESSION);
   const frameStatus = statusCell(null);
-  const inputStatus = statusCell({ focused: false, transactions: 0, preedit: null, actions: [], errors: [] });
+  const inputStatus = statusCell({ focused: false, transactions: 0, preedit: null, actions: [], errors: [], log: [], pointer: [] });
+  const changeInput = (change) => inputStatus.set({ ...inputStatus.read(), ...change(inputStatus.read()) });
 
   const measure = () => {
     const rect = element.getBoundingClientRect();
@@ -101,8 +106,22 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
       case "closed":
         sessionStatus.set({ ...NO_SESSION, connected: true });
         return;
-      case "input":
+      case "input": {
+        // The sidecar answers each input request once with the body it received, which names the sequence of the transaction.
+        const sequence = body.received?.sequence;
+        const entry = inputStatus.read().log.find((item) => item.sequence === sequence);
+        if (entry === undefined) {
+          // default: an answer whose transaction left the log (or never existed) is reported, not dropped silently.
+          report(`the sidecar answered input ${JSON.stringify(sequence)}, which the log does not hold`);
+          return;
+        }
+        if (entry.received !== null) {
+          report(`the sidecar answered input ${sequence} twice`);
+          return;
+        }
+        changeInput(({ log }) => ({ log: log.map((item) => (item === entry ? { ...item, received: body.received } : item)) }));
         return;
+      }
       case "connection":
         // The sidecar connected again: a preserved session answers the open as it is, and a new service opens a new one
         // (docs/spec/persistent-services.md#service-transport).
@@ -119,20 +138,31 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   const composition = await bridge.composition.create({ regions: { [REGION]: element }, overlays: {} });
   const image = composition.region(REGION);
   image.on("input", (event) => {
-    const previous = inputStatus.read();
-    inputStatus.set({
-      focused: previous.focused,
-      transactions: previous.transactions + 1,
-      preedit: event.preedit ?? null,
-      actions: event.actions ?? [],
-      errors: event.errors ?? [],
-    });
     // default: an input event that names no correlation identifier continues no input of the native layer.
-    send({ operation: "input", actions: event.actions ?? [], preedit: event.preedit ?? null }, event.cids ?? [])
-      .catch((error) => report(`input: ${error.message}`));
+    const cids = event.cids ?? [];
+    const actions = event.actions ?? [];
+    const preedit = event.preedit ?? null;
+    const errors = event.errors ?? [];
+    const sequence = inputStatus.read().transactions + 1;
+    changeInput(({ log }) => ({
+      transactions: sequence,
+      preedit,
+      actions,
+      errors,
+      log: [...log, { sequence, cids, actions, preedit, errors, received: null }].slice(-INPUT_LOG_LIMIT),
+    }));
+    send({ operation: "input", sequence, actions, preedit }, cids).catch((error) => report(`input: ${error.message}`));
   });
-  image.on("focus", (event) => inputStatus.set({ ...inputStatus.read(), focused: event.focused === true }));
-  image.on("compose", (event) => inputStatus.set({ ...inputStatus.read(), preedit: event }));
+  image.on("focus", (event) => changeInput(() => ({ focused: event.focused === true })));
+  image.on("compose", (event) => changeInput(() => ({ preedit: event })));
+  const pointer = (event) => {
+    changeInput(({ pointer: list }) => ({
+      pointer: [...list, { type: event.type, button: event.button, trusted: event.isTrusted === true }].slice(-POINTER_LIMIT),
+    }));
+    if (event.type === "pointerdown" && event.button === 0) image.focus().catch((error) => report(`focus on press: ${error.message}`));
+  };
+  element.addEventListener("pointerdown", pointer);
+  element.addEventListener("pointerup", pointer);
   image.on("action", () => {});
   image.on("error", (event) => report(`image ${REGION}: ${event.reason}`));
 
@@ -144,6 +174,7 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   await command("rasterprobe.color", ({ color }) => send({ operation: "color", color }));
   await command("rasterprobe.state", () => send({ operation: "state" }));
   await command("rasterprobe.focus", () => image.focus());
+  await command("rasterprobe.input.clear", () => changeInput(() => ({ log: [], pointer: [] })));
   await command("rasterprobe.close", () => send({ operation: "close" }));
   await command("rasterprobe.kill", () => send({ operation: "kill" }));
   const status = (name, cell) => expose.status(name, cell.read, cell.subscribe);

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test-app": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'",
-    "test-app:capture-input-close": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs '--test-name-pattern=consecutive captures preserve finalized recordings|the terminal background equals the card color of every theme and mode|a terminal draws its screen after the window is resized from outside|a click gives native focus to the clicked terminal and its card|a file opens from the tree in the editor, saves, shows a save error and asks before it closes|save replies that retain modified state keep the native tab open' capture-lifecycle.test.mjs terminal.test.mjs editor.test.mjs save-close.test.mjs",
+    "test-app:capture-input-close": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs '--test-name-pattern=consecutive captures preserve finalized recordings|an image region draws its frame after the window is resized from outside|a click gives native focus to the clicked image region and its card|a file opens from the tree in the editor, saves, shows a save error and asks before it closes|save replies that retain modified state keep the native tab open' capture-lifecycle.test.mjs view-surfaces.test.mjs editor.test.mjs save-close.test.mjs",
     "test-app:activation": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'",
     "test-app:person": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'person/*.test.mjs'",
     "test-app:real": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",
@@ -15,7 +15,7 @@
     "test-app:section-design": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/section-design.test.mjs",
     "test-app:card-sidebar-current": "node ./run.mjs --test --test-global-setup=./setup.mjs observation/card-sidebar-current.test.mjs",
     "test-app:shutdown": "node normal-shutdown.mjs",
-    "test-app:terminal-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs",
+    "test-app:view-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/view-focus-current.test.mjs",
     "benchmark:view-drag": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/view-drag.test.mjs",
     "benchmark:resize-catch-up": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/resize-catch-up.test.mjs",
     "benchmark:idle-tab": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/idle-tab.test.mjs",
