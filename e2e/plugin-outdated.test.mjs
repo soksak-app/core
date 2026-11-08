@@ -5,7 +5,8 @@
 // declared entry installs another version of a sidecar, so the check writes another installed version of that service into
 // the installed.json of its own disposable configuration directory, with a copy of the installed folder under the new
 // version, and restores both in its cleanup. The running service keeps reporting the version it was built with, which is
-// the running version that differs from the installed one.
+// the running version that differs from the installed one. The replacement starts the executable of the copy, so the
+// cleanup ends that service before it removes the copy: a service whose executable is gone starts no session process.
 import assert from "node:assert/strict";
 import { cpSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -27,9 +28,9 @@ function replaceFile(file, text) {
 }
 
 /** Runs a plugin change, which starts the workbench of the window again, and waits until the new start is ready. */
-async function change(s, action) {
+async function change(s, action, plugin = OTHER) {
   const before = (await s.get("core.window.workbench")).start;
-  await s.run(`core.plugins.${action}`, { plugin: OTHER });
+  await s.run(`core.plugins.${action}`, { plugin });
   await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", `${action} did not reload the window`);
   await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `the workbench did not report ready after ${action}`);
 }
@@ -50,12 +51,27 @@ for (const app of Object.values(APPS)) {
     const folder = running.path.replace(`/${running.version}/`, `/${newer}/`);
     assert.notEqual(folder, running.path, `the path of ${SIDECAR} does not hold its version: ${running.path}`);
     // The cleanup returns the installed version, applies it, and removes the copy only after the host stopped declaring
-    // it: a host that still declares a folder that is gone fails to start its service.
+    // it and the service that runs its executable ended: a host that still declares a folder that is gone fails to start
+    // its service, and a service whose executable is gone fails to start the process of each new session.
     s.cleanup(async () => {
       replaceFile(file, original);
       await change(s, "enable");
       await s.until("core.plugins", (value) => value.outdated.length === 0, "the restored version still shows an outdated service");
+      // The running service reports the installed version, so only a sidecar that no plugin declares makes the host end
+      // it; with no surface holding the sidecar, the host ends it after the list of the layouts.
+      for (const card of (await s.get("core.grid")).cards) {
+        for (const tab of card.tabs) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.id });
+      }
+      const ending = currentEventOffsets(app.configDir);
+      await change(s, "disable", RASTER);
+      await untilEventLine(app.configDir, ending, (line) => line.includes(`service ${running.version} ended; the sidecar is not declared`),
+        10000, reading(app, ["host.record.info"]));
+      await change(s, "enable", RASTER);
+      await s.until("core.plugins", (value) => value.outdated.length === 0, "the enabled raster probe shows an outdated service");
       rmSync(join(app.configDir, folder, ".."), { recursive: true, force: true });
+      // The next raster probe starts the service of the installed folder, which opens sessions.
+      const { surface } = await addRasterTab(s);
+      await s.run("core.tab.close", { tab: surface });
     });
     cpSync(join(app.configDir, running.path), join(app.configDir, folder), { recursive: true });
     installed.sidecars[SIDECAR] = { version: newer, path: folder };

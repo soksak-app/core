@@ -452,6 +452,22 @@ int main(void) { @autoreleasepool {
     check([unheld isEqual:@"x"], "a key after the release of a press on a surface reaches the region at once");
     sp_window_focus_workbench(holding);
 
+    // A press on a modal web view holds nothing either: the modal takes the keyboard itself, and its document owes no decision of
+    // the workbench (docs/spec/native-modals.md#keyboard). The modal stands over the workbench half, above the main web view.
+    WKWebView *modal = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    [holding.contentView addSubview:modal positioned:NSWindowAbove relativeTo:nil];
+    NSString *unheldModal = regionKeys(^{
+        check(sp_input_pointer(holding, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the modal web view is delivered");
+        check(sp_input_pointer(holding, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "its release is delivered");
+        [holding makeFirstResponder:(NSResponder *)heldRegion];
+        typeKeys(holding, "m");
+        runQueuedEvents();
+    });
+    check([unheldModal isEqual:@"m"],
+        [NSString stringWithFormat:@"a key after the release of a press on a modal web view reaches the region at once, got \"%@\"", unheldModal].UTF8String);
+    [modal removeFromSuperview];
+    sp_window_focus_workbench(holding);
+
     // R1: the keys after the release of a press on the workbench wait for the decided call and reach its target in order.
     NSString *waiting = regionKeys(^{
         check(sp_input_pointer(holding, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the workbench is delivered");

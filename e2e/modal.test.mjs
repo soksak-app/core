@@ -191,6 +191,13 @@ for (const app of Object.values(APPS)) {
       await s.run("core.settings.open");
       s.cleanup(() => s.run("core.settings.close"));
       await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
+      // host.window.presented covers the shown modal (docs/spec/exposure.md). A host that creates modal web views shows the
+      // settings web view only after its document rendered (docs/spec/native-modals.md#keyboard), later than the card of the
+      // main page that core.settings-modal reads, so the check waits until that web view is shown.
+      if (MAIN_PAGE_APPS.includes(app)) {
+        await s.until("host.window", (state) => state.modal?.id === "settings" && state.modal.shown,
+          "the settings web view was not shown");
+      }
       ({ displayed } = await s.presented());
       const card = await s.rect("core.settings-modal.card");
       assert.ok(card.width > 0 && card.height > 0, "the actual named settings card was not rendered");
