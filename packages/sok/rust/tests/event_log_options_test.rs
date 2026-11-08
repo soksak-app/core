@@ -113,6 +113,7 @@ impl serde::Serialize for Unserializable {
     }
 }
 
+// contract: cli.log.writer-options.records-an-invalid-correlation-identifier-as-its-own-loss
 #[test]
 fn an_invalid_correlation_identifier_is_recorded_as_its_own_loss_and_not_as_a_full_queue() {
     let fields = refused_loss("options-cids-loss", |log| {
@@ -121,6 +122,7 @@ fn an_invalid_correlation_identifier_is_recorded_as_its_own_loss_and_not_as_a_fu
     check_loss_reason(&fields, "a correlation identifier was not valid");
 }
 
+// contract: cli.log.writer-options.records-unserializable-fields-as-their-own-loss
 #[test]
 fn fields_that_cannot_be_serialized_are_recorded_as_their_own_loss_and_not_as_a_full_queue() {
     let fields = refused_loss("options-fields-loss", |log| {

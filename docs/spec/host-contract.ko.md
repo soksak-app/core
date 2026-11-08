@@ -1113,6 +1113,9 @@ fn invalid_json_closes_connection() {
 | `cli.log.writer.poisoned-observer-lock-is-recovered` | panic한 thread가 poison한 write observer의 lock은 복구된다. observer는 여전히 설정되고 다음에 쓴 batch 뒤에 호출된다. panic hook이 panic을 기록한다. | tauriv2 only: Go mutex는 poison되지 않는다 |
 | `cli.log.writer-options.stores-the-events-and-the-loss-of-its-pull-source` | writer는 pull source가 돌려주는 event와 source가 보고한 손실을 저장한다. | all |
 | `cli.log.writer-options.records-refused-events-as-loss-before-the-next-accepted-event` | queue가 가득 찬 writer는 placed write의 event를 `its queue was full` 원인으로 거부하고, 다음 accepted event 앞에 개수, reason, queue 깊이를 담은 `log.dropped`를 저장한다. | all |
+| `cli.log.writer-options.records-an-invalid-correlation-identifier-as-its-own-loss` | correlation identifier가 유효하지 않은 event는 거부되고, reason `a correlation identifier was not valid`와 queue 깊이 없이 `log.dropped`로 저장된다. | all |
+| `cli.log.writer-options.records-a-level-outside-the-contract-as-its-own-loss` | level이 contract에 없는 event는 거부되고, reason `the level was not in the contract`와 queue 깊이 없이 `log.dropped`로 저장된다. | wailsv3, mygo only: Rust writer의 level은 enum이어서 contract 밖일 수 없다 |
+| `cli.log.writer-options.records-unserializable-fields-as-their-own-loss` | fields를 serialize할 수 없는 event는 거부되고, reason `the fields could not be serialized`와 queue 깊이 없이 `log.dropped`로 저장된다. | all |
 | `cli.log.writer-options.refuses-a-placed-event-by-its-cause` | 정책이 거부한 placed event는 `the policy does not store it` 원인으로 실패하며, gated event로 저장되고 손실이 아니다. | all |
 | `buffers.sidecar-replies.order-is-bounded` | sidecar reply를 기다리는 요청의 순서는 응답한 요청이 몇 개든 대기 요청 한도의 두 배를 넘지 않는다. | all |
 | `buffers.sidecar-replies.forgotten-request-is-counted` | 대기 요청의 한도에서 잊는 요청은 세며, 잊는 것은 가장 오래된 요청이다. | all |

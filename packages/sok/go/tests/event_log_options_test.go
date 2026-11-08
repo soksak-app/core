@@ -126,6 +126,7 @@ func checkLossReason(t *testing.T, fields map[string]any, reason string) {
 	}
 }
 
+// contract: cli.log.writer-options.records-an-invalid-correlation-identifier-as-its-own-loss
 func TestAnInvalidCorrelationIdentifierIsRecordedAsItsOwnLossAndNotAsAFullQueue(t *testing.T) {
 	fields := refusedLoss(t, "cids-loss", func(log *sok.EventLog) bool {
 		return log.EmitCids(sok.LevelInfo, "host.probe.bad", []string{`a"b`}, nil)
@@ -133,6 +134,7 @@ func TestAnInvalidCorrelationIdentifierIsRecordedAsItsOwnLossAndNotAsAFullQueue(
 	checkLossReason(t, fields, "a correlation identifier was not valid")
 }
 
+// contract: cli.log.writer-options.records-a-level-outside-the-contract-as-its-own-loss
 func TestALevelOutsideTheContractIsRecordedAsItsOwnLossAndNotAsAFullQueue(t *testing.T) {
 	fields := refusedLoss(t, "level-loss", func(log *sok.EventLog) bool {
 		return log.Emit(sok.Level("notice"), "host.probe.level", nil)
@@ -140,6 +142,7 @@ func TestALevelOutsideTheContractIsRecordedAsItsOwnLossAndNotAsAFullQueue(t *tes
 	checkLossReason(t, fields, "the level was not in the contract")
 }
 
+// contract: cli.log.writer-options.records-unserializable-fields-as-their-own-loss
 func TestFieldsThatCannotBeSerializedAreRecordedAsTheirOwnLossAndNotAsAFullQueue(t *testing.T) {
 	fields := refusedLoss(t, "fields-loss", func(log *sok.EventLog) bool {
 		return log.Emit(sok.LevelInfo, "host.probe.fields", map[string]any{"value": func() {}})
