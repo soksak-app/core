@@ -7,7 +7,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { checkLinkedPanels } from "./linked-panels.mjs";
-import { gripInk, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
+import { gripInk, panelSurfaceRect, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
 import { readPng } from "@soksak/window-check/png.mjs";
 /** The card of the grid that holds the tab surface. */
 const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface));
@@ -88,13 +88,16 @@ for (const app of Object.values(APPS)) {
     const measured = grid.cards.find((item) => item.id === card.id);
     const surface = (await s.surfaces()).find((item) => item.surface === measured.active);
     assert.ok(surface?.applied, `no applied native surface for ${JSON.stringify(measured)}`);
-    const band = (side) => (measured.sidebars[side] ? (measured.sidebars[side].collapsed ? 6 : measured.sidebars[side].size) : 0);
-    const expected = {
-      x: grid.plane.x + measured.x + 1 + band("left"),
-      y: grid.plane.y + measured.y + 1 + 32 + band("top"),
-      w: measured.w - 2 - band("left") - band("right"),
-      h: measured.h - 2 - 32 - 22 - band("top") - band("bottom"),
-    };
+    // A card too low for a stored size and the content minimum shows the side smaller (docs/spec/example-model.md), so the surface
+    // leaves the shown size.
+    const expected = panelSurfaceRect(grid.plane, measured, { border: 1, head: 32, foot: 22, divider: 6 });
+    // A side is shown smaller than its stored size only when the content on its axis is down to the 96-point layout minimum.
+    for (const side of ["left", "right", "top"]) {
+      const { size, shownSize } = measured.sidebars[side];
+      const content = side === "top" ? expected.h : expected.w;
+      assert.ok(shownSize === size || (shownSize < size && Math.abs(content - 96) <= 1),
+        `the ${side} side is shown at ${shownSize} of ${size} while the content has ${content} points`);
+    }
     const off = Object.keys(expected).filter((key) => Math.abs(surface.applied[key] - expected[key]) > 1);
     assert.deepEqual(off, [], `the native surface does not leave the panel space: ${JSON.stringify({ expected,
       applied: surface.applied, card: measured, sidebars: measured.sidebars })}`);
