@@ -449,6 +449,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F707",
+    implementation: [{ file: "e2e/setup.mjs", symbol: "export function targetDirectory(" }],
+    tests: [{ file: "e2e/test/setup.test.mjs", id: "the target directory comes from the cargo of the toolchain when the PATH holds no cargo folder" }],
+    expected: "The tests of the target directory place their own cargo in a toolchain folder, so they pass where no Rust toolchain is installed and the reported directory names the cargo that ran.",
+    levels: ["unit"],
+  },
+  {
     id: "F705",
     implementation: [{ file: "Makefile", symbol: "check-host-debug: check-cargo build-native build-native-tests copy-core-frontend-wailsv3" }],
     tests: [{ file: "scripts/test/host-debug-check.test.mjs", id: "the debug check builds the native test library that the compiled tests link" }],

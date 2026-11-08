@@ -1,8 +1,9 @@
 // The core window check finds the application executable in the build output folder that cargo sets and declares it to the harness (F25.1).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
-import { isAbsolute } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { debugBinaries, targetDirectory } from "../setup.mjs";
@@ -21,14 +22,19 @@ test("the target directory is the one cargo metadata reports", () => {
   assert.deepEqual(calls, [[CARGO, "metadata", "--format-version", "1", "--no-deps"]]);
 });
 
-test("the target directory comes from the cargo of the toolchain when the PATH holds no cargo folder", { timeout: 60000 }, () => {
-  // The PATH of a shell that did not read the profile, which adds the cargo folder of rustup; cargo metadata builds nothing.
-  const env = { HOME: homedir(), PATH: "/usr/bin:/bin", ...(process.env.CARGO_HOME ? { CARGO_HOME: process.env.CARGO_HOME } : {}) };
+test("the target directory comes from the cargo of the toolchain when the PATH holds no cargo folder", { timeout: 60000 }, (t) => {
+  // The PATH of a shell that did not read the profile, which adds the cargo folder of rustup. The cargo of the toolchain folder
+  // reports its own target directory, so the directory names the cargo that ran.
+  const home = mkdtempSync(join(tmpdir(), "setup-cargo-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(join(home, "bin"));
+  writeFileSync(join(home, "bin", "cargo"), `#!/bin/sh\nprintf '{"target_directory":"${home}/target"}'\n`, { mode: 0o755 });
+  const env = { HOME: homedir(), PATH: "/usr/bin:/bin", CARGO_HOME: home };
   const result = spawnSync(process.execPath, ["--input-type=module", "-e",
     `import { targetDirectory } from ${JSON.stringify(new URL("../setup.mjs", import.meta.url).href)}; process.stdout.write(targetDirectory());`,
   ], { cwd: fileURLToPath(new URL("../../", import.meta.url)), env, encoding: "utf8", timeout: 60000 });
   assert.equal(result.status, 0, result.stderr);
-  assert.ok(isAbsolute(result.stdout), result.stdout);
+  assert.equal(result.stdout, join(home, "target"));
 });
 
 test("a failed cargo metadata names its exit and output", () => {
@@ -44,7 +50,12 @@ test("each application's executable is the one inside its debug bundle", () => {
   });
 });
 
-test("common setup declares binaries without building anything", { timeout: 10000 }, () => {
+test("common setup declares binaries without building anything", { timeout: 10000 }, (t) => {
+  // The cargo of the toolchain folder exists but never runs: the replaced spawnSync answers its metadata.
+  const home = mkdtempSync(join(tmpdir(), "setup-cargo-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(join(home, "bin"));
+  writeFileSync(join(home, "bin", "cargo"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
     import childProcess from "node:child_process";
     import { syncBuiltinESMExports } from "node:module";
@@ -56,8 +67,8 @@ test("common setup declares binaries without building anything", { timeout: 1000
     const { globalSetup } = await import(${JSON.stringify(new URL("../setup.mjs", import.meta.url).href)});
     await globalSetup();
     process.stdout.write(JSON.stringify({ binary: process.env.SOKSAK_BINARY_MYGO }));
-  `], { encoding: "utf8", timeout: 10000, env: Object.fromEntries(Object.entries(process.env)
-    .filter(([key]) => !key.startsWith("SOKSAK_BINARY_"))) });
+  `], { encoding: "utf8", timeout: 10000, env: { ...Object.fromEntries(Object.entries(process.env)
+    .filter(([key]) => !key.startsWith("SOKSAK_BINARY_") && key !== "CARGO")), CARGO_HOME: home } });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), { binary: "/declared/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo" });
 });
