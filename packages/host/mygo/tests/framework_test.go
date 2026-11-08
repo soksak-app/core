@@ -185,6 +185,7 @@ func TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint(t *testing.T) {
 // The test application owns the same explicit provider startup boundary as the
 // production host. A selected pure framework test must not bypass a broken
 // native installation merely because its body does not invoke native code.
+// contract: mygo.test-application.native-startup-failure-precedes-the-tests
 func TestTheTestApplicationReportsNativeStartupFailureBeforeRunningSelectedTests(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {

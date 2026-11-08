@@ -22,6 +22,7 @@ const earlyShowChild = "SOKSAK_DARWIN_EARLY_SHOW_CHILD"
 // Each child starts with untouched provider state. All functions come from the
 // real native fixture; only window presentation is intercepted, so no AppKit
 // window is needed to exercise the documented pre-host framework show path.
+// contract: platform.native-provider.first-operation-initializes-it-once
 func TestShowWindowInitializesNativeProviderBeforeHostStartup(t *testing.T) {
 	mode := os.Getenv(earlyShowChild)
 	if mode == "" {
