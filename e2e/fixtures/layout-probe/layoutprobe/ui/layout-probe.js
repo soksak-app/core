@@ -3,7 +3,7 @@
 // reports, its size and theme, the document region and the settings of the plugin) through the statuses layoutprobe.view,
 // layoutprobe.surface and layoutprobe.document, and runs the tab reports and the document changes as commands. A section view
 // reports its section and size as layoutprobe.section; the follow section follows the surface that core.sidebars reports for it
-// (docs/spec/plugins.md#sections). The module imports nothing, so the owner test runs it with a fake bridge.
+// (docs/spec/plugins.md#sections). Both views run core.file.open from themselves as layoutprobe.open. The module imports nothing, so the owner test runs it with a fake bridge.
 
 /** The footer text that the tab view declares at its start (docs/spec/plugins.md#tab-reports). */
 export const FOOTER = "Layout probe";
@@ -38,6 +38,21 @@ export function followedSurface(sidebars, sectionSurface) {
     if (section.surfaceId === sectionSurface) return section.surface ?? null;
   }
   return null;
+}
+
+/**
+ * Runs core.file.open {path} from a view through its bridge and answers `{tab, error}`: the tab that the command opened or
+ * activated, or the message of its failure, which the view receives itself instead of rethrowing it.
+ */
+export async function openFile(bridge, { path }) {
+  if (typeof path !== "string" || path === "") throw new TypeError("layoutprobe.open requires a path");
+  try {
+    const result = await bridge.runtime.command("core.file.open", { path });
+    // default: a reply without a tab names no opened tab.
+    return { tab: result?.tab ?? null, error: null };
+  } catch (error) {
+    return { tab: null, error: error?.message ?? String(error) };
+  }
 }
 
 /** A status value with its listeners: read, subscribe for createExpose, and set, which merges a change and notifies. */
@@ -138,6 +153,7 @@ export async function startLayoutProbe({ bridge, expose, view }) {
     await page.post({ to: TO_DOCUMENT, color });
     return null;
   });
+  await bridge.commands.register("layoutprobe.open", (params) => openFile(bridge, params));
   await bridge.commands.register("layoutprobe.document.store", async ({ value }) => {
     if (typeof value !== "string") throw new TypeError("layoutprobe.document.store requires a string value");
     await page.post({ to: TO_DOCUMENT, store: value });
@@ -157,6 +173,7 @@ export async function startProbeSection({ bridge, expose, view }) {
   });
   view.addEventListener("resize", () => state.set({ width: view.innerWidth, height: view.innerHeight }));
   await expose.status("layoutprobe.section", state.read, state.subscribe);
+  await bridge.commands.register("layoutprobe.open", (params) => openFile(bridge, params));
   if (!follows) return;
   // A view watches a status on a surface of its own plugin only, so the section watches layoutprobe.view only on a followed surface
   // that core.surfaces names as a layoutprobe surface; for another plugin's tab it reports the surface with no view.

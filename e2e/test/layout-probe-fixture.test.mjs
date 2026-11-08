@@ -52,6 +52,7 @@ function fakeBridge({ settings = { shade: "plain", rows: 4, caption: "probe" } }
   const calls = [];
   const commands = new Map();
   const watches = new Map();
+  const ran = [];
   const region = { posts: [], loads: [], onMessage: null };
   let theme = null;
   let settingsListener = null;
@@ -73,6 +74,13 @@ function fakeBridge({ settings = { shade: "plain", rows: 4, caption: "probe" } }
     },
     runtime: {
       theme: (listener) => { theme = listener; },
+      // core.file.open answers the tab of a .lprobe path and fails as core does for a path that no loaded plugin opens.
+      command: async (name, params) => {
+        ran.push([name, params]);
+        if (name !== "core.file.open") throw new Error(`unknown command ${name}`);
+        if (!params.path.endsWith(".lprobe")) throw new Error(`no plugin opens ${params.path}`);
+        return { tab: "tab-8" };
+      },
       settings: { read: async () => settings, on: async (listener) => { settingsListener = listener; return () => {}; } },
       status: {
         watch: (name, listener, { surface } = {}) => {
@@ -83,7 +91,7 @@ function fakeBridge({ settings = { shade: "plain", rows: 4, caption: "probe" } }
       },
     },
   };
-  return { bridge, calls, commands, watches, region, theme: (value) => theme(value), settings: (value) => settingsListener(value) };
+  return { bridge, calls, commands, watches, region, ran, theme: (value) => theme(value), settings: (value) => settingsListener(value) };
 }
 
 /** A fake exposure that keeps each served status. */
@@ -131,11 +139,13 @@ test("the layout probe manifests satisfy the installation contract and only the 
 test("the tab view and a section view together serve every declared status and register every declared command", { timeout: 1000 }, async () => {
   const { fake, served } = await startTab();
   const section = fakeExpose();
-  await startProbeSection({ bridge: fakeBridge().bridge, expose: section.expose,
+  const sectionBridge = fakeBridge();
+  await startProbeSection({ bridge: sectionBridge.bridge, expose: section.expose,
     view: fakeView({ surface: "spc-1/right/layoutprobe.alpha", params: null, origin: { directory: null }, project: null,
       section: { id: "layoutprobe.alpha", sidebar: "right", card: null } }) });
   assert.deepEqual([...served.keys(), ...section.served.keys()].sort(), probe.exposes.status.map((status) => status.name).sort());
   assert.deepEqual([...fake.commands.keys()].sort(), probe.exposes.commands.map((command) => command.name).sort());
+  assert.deepEqual([...sectionBridge.commands.keys()], ["layoutprobe.open"]);
   for (const [name, entry] of [...served, ...section.served]) {
     assert.ok(matchesSchema(schemaOf(probe, name), entry.read()), `${name}: ${JSON.stringify(entry.read())}`);
   }
@@ -348,4 +358,22 @@ test("the second probe draws its text at the text size of its surface and report
   textSize(1.5);
   assert.equal(text.style.fontSize, `${TEXT_SIZE * 1.5}px`);
   assert.deepEqual(values, [{ factor: 1.5, height: TEXT_SIZE * 1.5 * 1.25 }]);
+});
+
+test("the open command of a tab or section view runs core.file.open and answers the tab or the failure", { timeout: 1000 }, async () => {
+  const { fake } = await startTab();
+  const section = fakeBridge();
+  await startProbeSection({ bridge: section.bridge, expose: fakeExpose().expose,
+    view: fakeView({ surface: "spc-1/left/layoutprobe.beta", params: null, origin: { directory: null }, project: null,
+      section: { id: "layoutprobe.beta", sidebar: "left", card: null } }) });
+  const declared = probe.exposes.commands.find((command) => command.name === "layoutprobe.open");
+  for (const { commands, ran } of [fake, section]) {
+    const opened = await commands.get("layoutprobe.open")({ path: "notes/b.lprobe" });
+    const refused = await commands.get("layoutprobe.open")({ path: "notes/b.unknown" });
+    assert.deepEqual(opened, { tab: "tab-8", error: null });
+    assert.deepEqual(refused, { tab: null, error: "no plugin opens notes/b.unknown" });
+    assert.deepEqual(ran, [["core.file.open", { path: "notes/b.lprobe" }], ["core.file.open", { path: "notes/b.unknown" }]]);
+    for (const value of [opened, refused]) assert.ok(matchesSchema(declared.result, value), JSON.stringify(value));
+    await assert.rejects(commands.get("layoutprobe.open")({ path: "" }), /requires a path/);
+  }
 });
