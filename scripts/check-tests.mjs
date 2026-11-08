@@ -12878,11 +12878,11 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-47-2",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function visibleInputBeforeCursor(" }],
+    implementation: [{ file: "e2e/input-probe.mjs", symbol: "export function inputDocument(" }],
     tests: [
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
     ],
-    expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
+    expected: "Each Hangul and Backspace input leaves the document of its same-window AppKit reference in the image region, and the sidecar receives every input transaction once and unchanged.",
     levels: ["unit", "application"],
   },
   {

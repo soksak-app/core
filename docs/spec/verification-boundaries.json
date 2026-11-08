@@ -2,11 +2,6 @@
   "schema": 1,
   "files": [
     {
-      "file": "e2e/activation/terminal-ime-document.mjs",
-      "owner": "tool",
-      "reason": "Helper that pulls terminal compose and cursor state for IME checks; it is terminal-specific and must be reduced to a fixture probe status shape."
-    },
-    {
       "file": "e2e/browser-cohort-upgrade.test.mjs",
       "owner": "environment",
       "reason": "Checks that the official CLI upgrade of browser keeps the starter cohort (including sidecar-files and sidecar-vt-alacritty) ready."
