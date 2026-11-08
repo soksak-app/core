@@ -55,6 +55,14 @@ test("the sources of the fixture registry are exactly the plugin folders and fak
   assert.deepEqual(fixtureSources(), { plugins, sidecars: folders("sidecars/**/sidecar.json") });
 });
 
+test("the package.json of each fixture plugin has the description of 1 to 200 characters that a registry entry requires", { timeout: 5000 }, () => {
+  // docs/spec/installation.md#registry-index: the registry entry takes its description from package.json, and sok registry build
+  // rejects one outside 1 to 200 Unicode code points.
+  const outside = fixtureSources().plugins.map((dir) => [relative(FIXTURES, dir), JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).description])
+    .filter(([, description]) => typeof description !== "string" || [...description].length < 1 || [...description].length > 200);
+  assert.deepEqual(outside, []);
+});
+
 test("the fixture registry packs every fixture plugin into the pack fixtures and reads no path outside e2e/fixtures and no index", { timeout: 5000 }, async (t) => {
   const { plugins, sidecars } = fixtureSources();
   const out = mkdtempSync(join(tmpdir(), "fixture-registry-"));

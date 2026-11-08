@@ -3,7 +3,7 @@
   "version": "0.0.40",
   "private": true,
   "type": "module",
-  "description": "Benchmark fixture: a view whose document region shows one text line and whose page observes its document size, the floor of a view drag, and a section view that serves the section-view contract in a diagnostic build.",
+  "description": "Benchmark fixture: a view whose document region shows one text line and whose page observes its size, the floor of a view drag, and a section view of the section-view contract.",
   "license": "MIT",
   "repository": "git+https://github.com/soksak-app/core.git",
   "engines": { "soksak": "*" },
