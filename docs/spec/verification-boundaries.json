@@ -182,16 +182,6 @@
       "reason": "Checks a still PNG's native bounds and the settings modal in stills, with the terminal only as default content; plain-view probe."
     },
     {
-      "file": "e2e/card-sidebar-gesture.test.mjs",
-      "owner": "core",
-      "reason": "Checks native pointer input on card sidebar handles, with the terminal only as default tab; plain-view probe."
-    },
-    {
-      "file": "e2e/card-sidebar-space.test.mjs",
-      "owner": "core",
-      "reason": "Checks card sidebar space conditions, collapse and storage, with the terminal as default tab; plain-view probe."
-    },
-    {
       "file": "e2e/commands.test.mjs",
       "owner": "core",
       "reason": "Checks card, tab, menu, settings, library, layout and rename commands, with browser or terminal as tab plugins and library entries; plain-view probe plus a fixture registry entry."
@@ -215,11 +205,6 @@
       "file": "e2e/files.test.mjs",
       "owner": "mixed",
       "reason": "the files sections of the left sidebar mount as section surfaces and run the files commands on their surface: plugin:files; a files tree section mounts in a card sidebar beside the left sidebar: core (card sidebar section placement, fixture with a section view); a file that no plugin opens from the files tree section stays out of the error display: core (open-by-extension and error display, core.file.open with a probe); a double click on a file row of the files tree opens the file in an editor tab: plugin:files; two bookmarks that two views add at the same moment both stay: plugin:files; a bookmark that one window wrote reaches the window that opens the project after it: plugin:files."
-    },
-    {
-      "file": "e2e/footer.test.mjs",
-      "owner": "core",
-      "reason": "Checks the footer border under vertical drag and the active tab's footer text, using a terminal tab; plain-view probe that declares footer text."
     },
     {
       "file": "e2e/hwp-startup.mjs",
@@ -342,11 +327,6 @@
       "reason": "All seven tests check project windows, persistence, settings inheritance, the placeholder for an unloaded plugin, and presentation of a covered window. The terminal is only the usable surface; `plain-view` with a status exposure would replace it."
     },
     {
-      "file": "e2e/rail-groups.test.mjs",
-      "owner": "core",
-      "reason": "Checks the drawing of sidebar rails when adjacent or apart and in card full screen. A fixture plugin with a sidebar override would replace the terminal."
-    },
-    {
       "file": "e2e/real/focus.test.mjs",
       "owner": "core",
       "reason": "Checks that a real press on a native region never moves focus to another tab's text field (focus routing). Two fixtures would replace terminal and browser: `plain-view` and `extension-probe` with a webview text field."
@@ -385,11 +365,6 @@
       "file": "e2e/settings.test.mjs",
       "owner": "mixed",
       "reason": "\"terminal card sidebar choices persist through declared controls and reload\": core (fixture declaring sidebar controls); \"settings keep sidebar appearance in general and list plugins with search and pages\": core (fixture plugins); \"the settings plugin page has no plugin operation and 플러그인 관리 shows the plugin screen\": core; \"each sidebar set line fits beside its buttons on one line\": core; \"settings create, edit with section rows, and delete a sidebar set\": core (fixture sidebar sections); \"layout value settings change the inset sidebar widths\": core; \"an invalid stored set or link is rejected when it is changed and when it is loaded\": core; \"a plugin's right sidebar choice takes precedence over the general choice\": core; \"a card-left link draws an internal card sidebar and no rail column\": core; \"performance tracing records enabled card focus and stops while disabled\": core; \"a new inset sidebar opens at 190 points\": core; \"a settings change keeps the scroll position of the window\": core."
-    },
-    {
-      "file": "e2e/sidebar-choices.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a sidebar's selected tab and folded sections persist with the space through reload. A fixture plugin with sidebar sections would replace the files and terminal sections."
     },
     {
       "file": "e2e/sidebar.test.mjs",

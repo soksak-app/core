@@ -10,11 +10,12 @@ import { railPixels } from "./rail.mjs";
 
 for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adjacent, detached, fullscreen and restored cards`, { timeout: 90000 }, async (t) => {
   const s = await open(t, app);
-  await fresh(s);
+  const { surface, plugin } = await fresh(s);
+  const own = (await s.get("core.grid")).cards.find((card) => card.tabs?.some((item) => item.id === surface)).id;
   await keepCommonSettings(s);
   await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-  // The right override of the terminal plugin ties the right fixed sidebar to the terminal card.
-  await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
+  // The right override of the layout probe ties the right fixed sidebar to the card of the start tab.
+  await s.run("core.settings.link", { place: "window-right", plugin, set: `${plugin}.list`, scope: "common" });
 
   // Records while the state changes, and measures whether the recording is complete and the rail color of the last frame.
   const record = async (label, change, loops) => {
@@ -44,22 +45,22 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
     }
   };
 
-  // In the default layout, the terminal card adjoins the right fixed sidebar.
-  await record("adjacent", () => s.run("core.card.focus", { card: "terminal" }), 1);
-  const { tab } = await s.run("core.card.split", { card: "terminal", side: "right", plugin: "terminal" });
+  // In the default layout, the card of the start tab adjoins the right fixed sidebar.
+  await record("adjacent", () => s.run("core.card.focus", { card: own }), 1);
+  const { tab } = await s.run("core.card.split", { card: own, side: "right", plugin });
   const split = (await s.get("core.grid")).cards.find((card) => card.tabs.some((item) => item.id === tab));
   assert.ok(split, "the split card is missing");
   s.cleanup(async () => {
-    if ((await s.get("core.grid")).fullscreen !== null) await s.run("core.card.fullscreen", { card: "terminal" });
+    if ((await s.get("core.grid")).fullscreen !== null) await s.run("core.card.fullscreen", { card: own });
     await s.run("core.tab.close", { tab });
     await s.presented();
   });
-  // The split right card stands between them, so the left terminal card is apart from the sidebar.
-  await record("detached", () => s.run("core.card.focus", { card: "terminal" }), 2);
+  // The split right card stands between them, so the left card of the start tab is apart from the sidebar.
+  await record("detached", () => s.run("core.card.focus", { card: own }), 2);
   await record("adjacent split", () => s.run("core.card.focus", { card: split.id }), 1);
   await record("fullscreen", async () => {
-    await s.run("core.card.focus", { card: "terminal" });
-    await s.run("core.card.fullscreen", { card: "terminal" });
+    await s.run("core.card.focus", { card: own });
+    await s.run("core.card.fullscreen", { card: own });
   }, 0);
-  await record("restored", () => s.run("core.card.fullscreen", { card: "terminal" }), 2);
+  await record("restored", () => s.run("core.card.fullscreen", { card: own }), 2);
 });
