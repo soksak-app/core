@@ -5,10 +5,16 @@
 // `sok registry build` (docs/spec/cli.md). The core window checks install plugins from this registry. It reads no path outside
 // e2e/fixtures and no registry index, and it builds no plugin or sidecar repository.
 //
+// A registry check builds its own fixture registry with the same function: `versions` lists a fixture plugin in several versions,
+// each packed from a copy of the fixture whose package.json names that version. withWrongHash, withRevoked and servedIndex derive the
+// index variants that the check serves, serveRegistry serves them over https, and readIndex reads the fixture registry that a check
+// application uses.
+//
 //   node scripts/fixture-registry.mjs --sok <sok executable> --out <registry folder>
 import { parseArgs } from "node:util";
 import { createHash } from "node:crypto";
-import { constants, accessSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { constants, accessSync, cpSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createServer as createHttpsServer } from "node:https";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -23,6 +29,10 @@ const SIDECARS = "sidecars";
 const SKIPPED_FOLDERS = new Set(["node_modules", "target"]);
 // The one pack of the fixture registry.
 const PACK = "fixtures";
+// The folder of a registry that holds the copies of the fixture plugins that `versions` lists.
+const COPIES = "copies";
+/** The sha256 that no release has. */
+export const WRONG_SHA256 = "0".repeat(64);
 /** The limit of each command of a registry build: a pack or `sok registry build`. */
 export const STEP_TIMEOUT_MS = 30000;
 
@@ -52,17 +62,129 @@ export function sidecarFileName(name) {
  * plugin.json of the release (contract case `cli.registry.checks-plugin-dependencies` of docs/spec/host-contract.md).
  */
 export function pluginEntry(manifest, pkg, pack, sidecars) {
+  return pluginEntryOf(manifest, pkg, [pluginVersion(manifest, pkg, pack, sidecars)]);
+}
+
+/** The registry entry of one plugin with the version entries versions; pkg gives the package fields. */
+function pluginEntryOf(manifest, pkg, versions) {
   return {
     id: manifest.id, package: pkg.name, name: manifest.name, description: pkg.description, license: pkg.license,
-    repository: repositoryText(pkg.repository),
-    versions: [{
-      version: pkg.version, release: { url: pathToFileURL(pack.release).href, sha256: pack.sha256 },
-      // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
-      engines: { soksak: pkg.engines?.soksak },
-      // default: the plugin.json of a plugin without dependencies has no dependencies.
-      sidecars: Object.fromEntries(Object.entries(manifest.dependencies ?? {}).filter(([name]) => sidecars.has(name))),
-    }],
+    repository: repositoryText(pkg.repository), versions,
   };
+}
+
+/** One version entry of a plugin: the version and engines of pkg, the release of pack and the sidecar dependencies of manifest. */
+function pluginVersion(manifest, pkg, pack, sidecars) {
+  return {
+    version: pkg.version, release: { url: pathToFileURL(pack.release).href, sha256: pack.sha256 },
+    // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
+    engines: { soksak: pkg.engines?.soksak },
+    // default: the plugin.json of a plugin without dependencies has no dependencies.
+    sidecars: Object.fromEntries(Object.entries(manifest.dependencies ?? {}).filter(([name]) => sidecars.has(name))),
+  };
+}
+
+/** The version after version: its patch number raised by one, so `0.0.40` gives `0.0.41`. */
+export function nextPatch(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  if (!match) throw new Error(`${JSON.stringify(version)} is not a version major.minor.patch`);
+  return `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+}
+
+/**
+ * Copies the fixture plugin folder dir to copy with the package.json version `version` and, when engines is given, the package.json
+ * engines.soksak `engines`; returns the package.json of the copy. A node_modules folder is not copied.
+ */
+export function versionedCopy(dir, copy, { version, engines }) {
+  rmSync(copy, { recursive: true, force: true });
+  cpSync(dir, copy, { recursive: true, filter: (source) => !SKIPPED_FOLDERS.has(relative(dir, source).split(/[\\/]/)[0]) });
+  const pkg = read(join(copy, "package.json"));
+  pkg.version = version;
+  if (engines !== undefined) pkg.engines = { ...pkg.engines, soksak: engines };
+  writeJson(join(copy, "package.json"), pkg);
+  return pkg;
+}
+
+/** The version entry of version of the plugin id in index, or an error that names it. */
+function indexVersion(index, id, version) {
+  const plugin = index.plugins.find((item) => item.id === id);
+  if (!plugin) throw new Error(`the registry index lists no plugin ${id}`);
+  const entry = plugin.versions.find((item) => item.version === version);
+  if (!entry) throw new Error(`the registry index lists no version ${version} of ${id}`);
+  return entry;
+}
+
+/** A copy of the registry index whose release of version of the plugin id has WRONG_SHA256, a hash that no release has. */
+export function withWrongHash(index, id, version) {
+  const copy = structuredClone(index);
+  indexVersion(copy, id, version).release.sha256 = WRONG_SHA256;
+  return copy;
+}
+
+/** A copy of the registry index that revokes version of the plugin id for reason. */
+export function withRevoked(index, id, version, reason) {
+  const copy = structuredClone(index);
+  indexVersion(copy, id, version);
+  copy.revoked = { plugins: [...(copy.revoked?.plugins ?? []), { id, version, reason }], sidecars: copy.revoked?.sidecars ?? [] };
+  return copy;
+}
+
+/**
+ * A copy of the registry index whose release addresses inside the registry folder are served from base: the file address of
+ * `<folder>/<path>` becomes `<base>/<path>`. Each sha256 stays, because the served file is the same.
+ */
+export function servedIndex(index, folder, base) {
+  const prefix = pathToFileURL(join(resolve(folder), "/")).href;
+  return JSON.parse(JSON.stringify(index).replaceAll(`"${prefix}`, `"${base}/`));
+}
+
+/**
+ * The registry that a check application uses: the index at the file address `address`, as core.plugins reports it, and its folder,
+ * as `{ folder, index }`. An address that is not a file address is an error.
+ */
+export function readIndex(address) {
+  if (typeof address !== "string" || !address.startsWith("file:")) throw new Error(`the registry ${JSON.stringify(address)} is no file address`);
+  const file = fileURLToPath(address);
+  return { folder: join(file, ".."), index: read(file) };
+}
+
+/** The decoded path of a request target without its query. */
+const requestPath = (target) => decodeURIComponent(target.split("?")[0]);
+
+/**
+ * Serves a registry folder over https on 127.0.0.1 with the certificate { cert, key }: each path of documents answers its JSON
+ * document, and any other path answers the file of that path inside folder, or 404. Resolves with { base, close }; close stops the
+ * server, and a second close waits for the same stop. createServer and protocol select another server, such as node:http.
+ */
+export async function serveRegistry(folder, documents, { cert, key, createServer = createHttpsServer, protocol = "https:" } = {}) {
+  const root = resolve(folder);
+  const server = createServer({ cert, key }, (request, response) => {
+    const path = requestPath(request.url);
+    if (Object.hasOwn(documents, path)) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(documents[path]));
+      return;
+    }
+    const file = resolve(root, `.${path}`);
+    const rest = relative(root, file);
+    let body = null;
+    if (rest !== "" && !rest.startsWith("..") && !isAbsolute(rest)) {
+      try {
+        if (statSync(file).isFile()) body = readFileSync(file);
+      } catch {
+        body = null;
+      }
+    }
+    response.writeHead(body === null ? 404 : 200);
+    response.end(body ?? undefined);
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  let stopped = null;
+  const close = () => stopped ??= new Promise((done) => {
+    server.close(() => done());
+    server.closeAllConnections();
+  });
+  return { base: `${protocol}//127.0.0.1:${server.address().port}`, close };
 }
 
 /** The registry entry of one sidecar. declaration is its sidecar.json, and release is { platform, release, sha256 }. */
@@ -162,12 +284,17 @@ export function fixturePluginIds(root = FIXTURES) {
 /**
  * Writes the fixture registry folder out anew from the fixtures under root and creates index.json; resolves with the result of the
  * registry build. pack writes a plugin release, release writes a sidecar release, and build runs `sok registry build`; each receives
- * { signal, timeoutMs }, so a cancelled signal or a step over the limit ends the build.
+ * { signal, timeoutMs }, so a cancelled signal or a step over the limit ends the build. versions maps a fixture plugin id to the
+ * version entries `{ version, engines }` that its registry entry lists in place of the version of the fixture: each is packed from
+ * a copy of the fixture in out/copies whose package.json names version and, when engines is given, engines.soksak `engines`.
  */
 export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack = pnpmPack, release = npmSidecarRelease, build = registryBuild,
-  signal, timeoutMs } = {}) {
+  signal, timeoutMs, versions = {} } = {}) {
   const bound = { signal, timeoutMs };
-  for (const name of ["plugins", "sidecars", "packs", "releases", "revoked.json", "index.json"]) rmSync(join(out, name), { recursive: true, force: true });
+  for (const [id, listed] of Object.entries(versions)) {
+    if (!Array.isArray(listed) || listed.length === 0) throw new Error(`versions of ${id} list no version`);
+  }
+  for (const name of ["plugins", "sidecars", "packs", "releases", COPIES, "revoked.json", "index.json"]) rmSync(join(out, name), { recursive: true, force: true });
   for (const name of ["plugins", "sidecars", "packs"]) mkdirSync(join(out, name), { recursive: true });
   const releases = join(out, "releases");
   const sources = fixtureSources(root);
@@ -180,10 +307,25 @@ export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack 
   const ids = [];
   for (const dir of sources.plugins) {
     const manifest = read(join(dir, "plugin.json"));
-    const entry = pluginEntry(manifest, read(join(dir, "package.json")), await pack(dir, releases, bound), sidecars);
+    const pkg = read(join(dir, "package.json"));
+    const listed = versions[manifest.id];
+    let entry;
+    if (listed === undefined) {
+      entry = pluginEntry(manifest, pkg, await pack(dir, releases, bound), sidecars);
+    } else {
+      const entries = [];
+      for (const item of listed) {
+        const copy = join(out, COPIES, `${manifest.id}-${item.version}`);
+        const copied = versionedCopy(dir, copy, item);
+        entries.push(pluginVersion(manifest, copied, await pack(copy, releases, bound), sidecars));
+      }
+      entry = pluginEntryOf(manifest, pkg, entries);
+    }
     writeJson(join(out, "plugins", `${manifest.id}.json`), entry);
     ids.push(manifest.id);
   }
+  const unknown = Object.keys(versions).filter((id) => !ids.includes(id));
+  if (unknown.length > 0) throw new Error(`versions name no fixture plugin: ${unknown.join(", ")}`);
   writeJson(join(out, "packs", `${PACK}.json`), { name: PACK, description: "Every fake plugin of the core fixtures.", plugins: ids });
   writeJson(join(out, "revoked.json"), { plugins: [], sidecars: [] });
   return build(binary, out, bound);
@@ -207,7 +349,7 @@ export async function main(argv, { signals = process, build = buildFixtureRegist
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = await main(process.argv.slice(2));
   console.log(`Fixture registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
 }

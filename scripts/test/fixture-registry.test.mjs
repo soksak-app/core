@@ -6,10 +6,11 @@ import fs, { chmodSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSyn
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createServer as createHttpServer } from "node:http";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { FIXTURES, STEP_TIMEOUT_MS, buildFixtureRegistry, fixturePluginIds, fixtureSources, main, npmSidecarRelease, pluginEntry, pnpmPack, repositoryText,
-  sidecarEntry, sidecarFileName } from "../fixture-registry.mjs";
+import { FIXTURES, STEP_TIMEOUT_MS, WRONG_SHA256, buildFixtureRegistry, fixturePluginIds, fixtureSources, main, nextPatch, npmSidecarRelease, pluginEntry,
+  pnpmPack, readIndex, repositoryText, servedIndex, serveRegistry, sidecarEntry, sidecarFileName, withRevoked, withWrongHash } from "../fixture-registry.mjs";
 
 const SHA = "a".repeat(64);
 const MODULE = fileURLToPath(new URL("../fixture-registry.mjs", import.meta.url));
@@ -215,4 +216,103 @@ test("the command line ends its build when the process receives SIGTERM and remo
   assert.deepEqual(seen, ["/bin/sok", "/run/fixture-registry"]);
   assert.deepEqual(["SIGTERM", "SIGINT", "SIGHUP"].map((name) => signals.listenerCount(name)), [0, 0, 0]);
   await assert.rejects(main(["--sok", "/bin/sok"], { signals, build: async () => {} }), /--out is required/);
+});
+
+test("the index variants of a registry check break a hash, revoke a version and serve the releases from an address", { timeout: 1000 }, () => {
+  assert.equal(nextPatch("0.0.40"), "0.0.41");
+  assert.equal(nextPatch("1.9.9"), "1.9.10");
+  assert.throws(() => nextPatch("0.1"), /"0.1" is not a version major.minor.patch/);
+  const index = {
+    plugins: [{ id: "probe", versions: [
+      { version: "0.0.40", release: { url: "file:///registry/a%20b/releases/probe-0.0.40.tgz", sha256: SHA } },
+      { version: "0.0.41", release: { url: "file:///registry/a%20b/releases/probe-0.0.41.tgz", sha256: SHA } }] }],
+    sidecars: [{ name: "@sok-check/worker", versions: [{ version: "0.0.1",
+      releases: { "darwin-arm64": { url: "file:///registry/a%20b/releases/w.tgz", sha256: SHA } } }] }],
+    packs: [], revoked: { plugins: [], sidecars: [] },
+  };
+  const original = structuredClone(index);
+  assert.equal(WRONG_SHA256, "0".repeat(64));
+  assert.deepEqual(withWrongHash(index, "probe", "0.0.41").plugins[0].versions.map((item) => item.release.sha256), [SHA, WRONG_SHA256]);
+  assert.deepEqual(withRevoked(index, "probe", "0.0.40", "check").revoked,
+    { plugins: [{ id: "probe", version: "0.0.40", reason: "check" }], sidecars: [] });
+  assert.throws(() => withWrongHash(index, "other", "0.0.40"), /the registry index lists no plugin other/);
+  assert.throws(() => withRevoked(index, "probe", "9.9.9", "check"), /the registry index lists no version 9.9.9 of probe/);
+  const served = servedIndex(index, "/registry/a b", "base:");
+  assert.deepEqual([served.plugins[0].versions[1].release, served.sidecars[0].versions[0].releases["darwin-arm64"]],
+    [{ url: "base:/releases/probe-0.0.41.tgz", sha256: SHA }, { url: "base:/releases/w.tgz", sha256: SHA }]);
+  assert.deepEqual(index, original, "a variant changed the index it was derived from");
+});
+
+test("readIndex reads the registry index of a file address and its folder", { timeout: 1000 }, (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "fixture-registry-index-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  writeFileSync(join(folder, "index.json"), JSON.stringify({ plugins: [] }));
+  assert.deepEqual(readIndex(pathToFileURL(join(folder, "index.json")).href), { folder, index: { plugins: [] } });
+  assert.throws(() => readIndex(null), /the registry null is no file address/);
+  assert.throws(() => readIndex("base:/index.json"), /the registry "base:\/index.json" is no file address/);
+});
+
+test("a registry build lists a fixture plugin in the versions that a check names, each packed from a copy that names its version", { timeout: 60000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "fixture-registry-versions-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const fixtures = join(root, "fixtures");
+  const plugin = join(fixtures, "probe");
+  mkdirSync(join(plugin, "ui"), { recursive: true });
+  mkdirSync(join(plugin, "node_modules", "skipped"), { recursive: true });
+  const pkg = { name: "@sok-check/probe", version: "0.0.40", description: "Probe.", license: "MIT",
+    repository: "git+https://example.invalid/core.git", engines: { soksak: "*" }, files: ["plugin.json", "ui"] };
+  writeFileSync(join(plugin, "package.json"), JSON.stringify(pkg));
+  writeFileSync(join(plugin, "plugin.json"), JSON.stringify({ id: "probe", name: "Probe" }));
+  writeFileSync(join(plugin, "ui", "page.html"), "<p>probe</p>\n");
+  const other = join(fixtures, "other");
+  mkdirSync(other);
+  writeFileSync(join(other, "package.json"), JSON.stringify({ ...pkg, name: "@sok-check/other" }));
+  writeFileSync(join(other, "plugin.json"), JSON.stringify({ id: "other", name: "Other" }));
+  const out = join(root, "registry");
+  const packed = [];
+  const pack = async (dir, releases, options) => {
+    packed.push(dir);
+    return pnpmPack(dir, releases, options);
+  };
+  const build = async () => null;
+  await buildFixtureRegistry("/bin/sok", out, { root: fixtures, pack, build,
+    versions: { probe: [{ version: "0.0.40", engines: ">=0.0.1 <99.0.0" }, { version: "0.0.41", engines: ">=99.0.0" }] } });
+  assert.deepEqual(packed, [other, join(out, "copies", "probe-0.0.40"), join(out, "copies", "probe-0.0.41")]);
+  const entry = JSON.parse(readFileSync(join(out, "plugins", "probe.json"), "utf8"));
+  assert.equal(entry.package, "@sok-check/probe");
+  assert.deepEqual(entry.versions.map((item) => [item.version, item.engines.soksak]), [["0.0.40", ">=0.0.1 <99.0.0"], ["0.0.41", ">=99.0.0"]]);
+  assert.deepEqual(entry.versions.map((item) => fileURLToPath(item.release.url)),
+    ["0.0.40", "0.0.41"].map((version) => join(resolve(out), "releases", `sok-check-probe-${version}.tgz`)));
+  assert.ok(existsSync(join(out, "copies", "probe-0.0.41", "ui", "page.html")), "the copy has no page");
+  assert.ok(!existsSync(join(out, "copies", "probe-0.0.41", "node_modules")), "the copy holds node_modules");
+  assert.deepEqual(JSON.parse(readFileSync(join(out, "copies", "probe-0.0.41", "package.json"), "utf8")),
+    { ...pkg, version: "0.0.41", engines: { soksak: ">=99.0.0" } });
+  assert.deepEqual(JSON.parse(readFileSync(join(plugin, "package.json"), "utf8")), pkg, "the fixture itself changed");
+  assert.deepEqual(JSON.parse(readFileSync(join(out, "plugins", "other.json"), "utf8")).versions.map((item) => item.version), ["0.0.40"]);
+  await assert.rejects(buildFixtureRegistry("/bin/sok", out, { root: fixtures, pack, build, versions: { missing: [{ version: "0.0.1" }] } }),
+    /versions name no fixture plugin: missing/);
+  await assert.rejects(buildFixtureRegistry("/bin/sok", out, { root: fixtures, pack, build, versions: { probe: [] } }), /versions of probe list no version/);
+});
+
+test("serveRegistry answers its documents and the files inside the registry folder and nothing else", { timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "fixture-registry-serve-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const folder = join(root, "registry");
+  mkdirSync(join(folder, "releases"), { recursive: true });
+  writeFileSync(join(folder, "releases", "a b.tgz"), "release");
+  writeFileSync(join(root, "outside.txt"), "outside");
+  const server = await serveRegistry(folder, { "/good/index.json": { plugins: [] } }, { createServer: createHttpServer, protocol: "http:" });
+  t.after(server.close);
+  assert.match(server.base, /^http:\/\/127\.0\.0\.1:\d+$/);
+  const get = async (path) => {
+    const response = await fetch(`${server.base}${path}`);
+    return [response.status, await response.text()];
+  };
+  assert.deepEqual(await get("/good/index.json"), [200, "{\"plugins\":[]}"]);
+  assert.deepEqual(await get("/releases/a%20b.tgz"), [200, "release"]);
+  assert.equal((await get("/releases/none.tgz"))[0], 404);
+  assert.equal((await get("/releases"))[0], 404);
+  assert.equal((await get("/%2E%2E/outside.txt"))[0], 404);
+  await Promise.all([server.close(), server.close()]);
+  await assert.rejects(fetch(`${server.base}/good/index.json`));
 });
