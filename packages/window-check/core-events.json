@@ -1,0 +1,5273 @@
+{
+  "schema": 3,
+  "layers": [
+    "native",
+    "host",
+    "workbench",
+    "page",
+    "sidecar",
+    "sok"
+  ],
+  "events": {
+    "log.open": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "schema": {
+            "type": "number"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "role": {
+            "type": "string"
+          },
+          "boot": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "pid",
+          "role",
+          "boot"
+        ]
+      },
+      "description": "The first line of every event file."
+    },
+    "log.closed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cause": {
+            "type": "string"
+          },
+          "signal": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "cause"
+        ]
+      },
+      "description": "The host process is ending. cause is signal for the first termination signal before quit, quit-command for host.quit, quit-request for a termination request of the operating system, last-window-closed for the close of the last window and update for the start of an update, each stored before the process is asked to end; exit-request is the request that reaches the event loop, alone when the application menu or the framework asked for it, and exit is the end of the process; signal is the number of the termination signal when cause is signal. The writer stores it through its own path, so it passes every gate."
+    },
+    "log.dropped": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "from_seq": {
+            "type": "number"
+          },
+          "to_seq": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "queued": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "from_seq",
+          "to_seq",
+          "count",
+          "bytes",
+          "reason",
+          "channel"
+        ]
+      },
+      "description": "A range of seq that the writer refused; it explains the gap. channel is other for the events of the levels error, warn and info and debug for the events of the levels debug and trace; it is stored in the main file. queued is the largest number of events that waited in the writer queue at a refusal that the record counts; it is absent for a loss that a source reports through the pull."
+    },
+    "log.plugins": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "plugin": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "plugin",
+                "version"
+              ]
+            }
+          }
+        },
+        "required": [
+          "plugins"
+        ]
+      },
+      "description": "The plugin catalogs that the writer holds after one application of the catalogs of the installed plugins: plugins lists the plugin and version of each catalog it holds, sorted by plugin. The host applies the catalogs at its start and at each change of the installed plugins, so each application stores one record. A catalog that the writer applied stays held until the process ends, so a plugin that a change removed or disabled is still listed."
+    },
+    "log.policy": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "classes": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "source",
+          "classes"
+        ]
+      },
+      "description": "The policy of the event log that is now in force: source is default when no policy file exists and file when the policy file holds it; classes holds the least severe level that is stored for each class. The first policy of a writer and every change of it are stored; the same policy again is not. A policy that the action policy of the call log wrote carries the cids of the settings change that sent it."
+    },
+    "log.pruned": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": [
+        "info",
+        "warn"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "logs": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "runs": {
+            "type": "array"
+          },
+          "from_us": {
+            "type": "number"
+          },
+          "to_us": {
+            "type": "number"
+          },
+          "remaining": {
+            "type": "number"
+          },
+          "bound": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "logs",
+          "bytes",
+          "runs",
+          "from_us",
+          "to_us",
+          "remaining",
+          "bound"
+        ]
+      },
+      "description": "The retention removed the files of the oldest runs because the files of the runs passed the bound: files and bytes are what it removed, runs are the names of the runs (`<role>-<boot>`), from_us and to_us are the range of the time of their events, remaining is the size of the files that are left and bound is the bound. The level is warn when remaining is still over bound because only the run of the writer and pinned runs are left."
+    },
+    "log.gated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "class",
+          "level",
+          "count"
+        ]
+      },
+      "description": "The number of events of the class and the level that the gate of the host refused since the earlier report, so no event is lost without a count."
+    },
+    "log.rotated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "number"
+          },
+          "generation": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "bytes",
+          "generation"
+        ]
+      },
+      "description": "A file was closed as the generation with this number and a new file started; no generation is removed."
+    },
+    "host.record.<level>": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "warn",
+        "info"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "site": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "where",
+          "text"
+        ]
+      },
+      "description": "A record of the host."
+    },
+    "native.record.<level>": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "info"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "where",
+          "text"
+        ]
+      },
+      "description": "A record of the native library."
+    },
+    "workbench.record.<level>": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "info"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "where",
+          "text"
+        ]
+      },
+      "description": "A record of the workbench, including the errors that a person sees."
+    },
+    "sidecar.record.<level>": {
+      "layer": "sidecar",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "where",
+          "text"
+        ]
+      },
+      "description": "A line that a sidecar wrote to its standard error, stored by the host with the name of the sidecar as the place."
+    },
+    "sok.command": {
+      "layer": "sok",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {
+            "type": "string"
+          },
+          "micros": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "number"
+          },
+          "error": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "args",
+          "micros",
+          "ok",
+          "status"
+        ]
+      },
+      "description": "One run of the command line tool: the command word, the arguments and the error text cut to 1024 bytes (`truncated` is true when either was cut), the microseconds, the exit status, and the first line of its standard error for a status other than 0."
+    },
+    "sok.replay.divergence": {
+      "layer": "sok",
+      "class": "frame",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "segment": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "layer": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "found": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session",
+          "segment",
+          "sequence",
+          "layer",
+          "expected",
+          "found"
+        ]
+      },
+      "description": "The first stored screen hash of a session that differs from the replayed hash: the segment (the boot of the run of the sidecar), the sequence, the layer of the stored hash (`sidecar` or `plugin`), the replayed hash (`none` for a page frame without a sidecar frame) and the stored hash."
+    },
+    "sok.panic": {
+      "layer": "sok",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "text",
+          "stack"
+        ]
+      },
+      "description": "A panic of the command line tool: the goroutine or thread that panicked (`main` for the command), the panic text and the stack at the panic."
+    },
+    "sok.record.<level>": {
+      "layer": "sok",
+      "class": "lifecycle",
+      "level": [
+        "error",
+        "info"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "where",
+          "text"
+        ]
+      },
+      "description": "A record of the command line tool, such as a refused policy file of the place log policy."
+    },
+    "workbench.console.<method>": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": [
+        "debug",
+        "info",
+        "warn"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "description": "What a document of the workbench writes to its console; the text is cut to 8192 bytes while it is built and `truncated` is true when it was cut."
+    },
+    "workbench.trace.<event>": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "description": "The performance trace of the workbench, while it is on."
+    },
+    "workbench.trace.layout": {
+      "layer": "workbench",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "phase": {
+            "enum": [
+              "queued",
+              "prepare",
+              "prepared",
+              "draw",
+              "drawn",
+              "frame",
+              "presented",
+              "cancelled"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "t": {
+            "type": "number",
+            "minimum": 0
+          },
+          "jsHeapMB": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "phase",
+          "id",
+          "t"
+        ]
+      },
+      "description": "A phase of the workbench layout pipeline, while the frame log gate stores it: `phase` is one of `queued`, `prepare`, `prepared`, `draw`, `drawn`, `frame`, or `presented`; `id` identifies the layout; and `t` is the `performance.now()` reading of the workbench document in milliseconds. `jsHeapMB` is present when the engine exposes the heap reading. This event uses class `frame` and is independent of the performance trace switch."
+    },
+    "workbench.trace.surface.sync": {
+      "layer": "workbench",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "surface": {
+                  "type": "string"
+                },
+                "attempt": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "surface",
+                "attempt"
+              ]
+            }
+          },
+          "outcome": {
+            "enum": [
+              "accepted",
+              "rejected"
+            ]
+          },
+          "declarationInlineBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "declarationTableBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "jsHeapMB": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "page",
+          "requestId",
+          "views",
+          "outcome",
+          "declarationInlineBytes",
+          "declarationTableBytes"
+        ]
+      },
+      "description": "The outcome of a complete surface synchronization request, recorded only if the frame log gate is open when the host call settles, independently of the performance trace switch. The declaration byte counters compare only the UTF-8 JSON values of declarations repeated inline across view starts with the UTF-8 JSON encoding of the request-local declaration table; they exclude the rest of the request and transport overhead. Normalization retains each serialized value and its request-local reference count; byte lengths are computed once per distinct value at completion only when the gate is open. A closed completion gate creates no fields, reads no mount metadata, and computes no byte lengths. `views` names the exact view surfaces and their page-local mount attempts."
+    },
+    "workbench.trace.surface.resend": {
+      "layer": "workbench",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "paths": { "type": "array", "items": { "type": "string" } },
+          "jsHeapMB": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["paths"]
+      },
+      "description": "The drawn commit of a layout sent a second surface synchronization request instead of presenting its preparation. The field paths lists the values of the request that differ from the request of that preparation as `path: before -> after`, up to 16 values."
+    },
+    "workbench.trace.modal.answer": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ]
+      },
+      "description": "An answer of the open native modal that the workbench receives, while the trace is on: key is the answered key, and the event is written at the receipt of the answer by the page, because the overlay document has no trace switch. A state report of the modal document is not an answer and writes no event."
+    },
+    "workbench.trace.picker.close": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "description": "The close of the native picker layer, while the trace is on: reason is the reason of the close, one of `replaced` (another layer opened), `settled` (the layout settled), `fullscreen` (a card entered or left fullscreen), `toggle` (its button closed it), `pick` (an item was picked), `dismiss` (core.modal.dismiss), and `command` (core.picker.close, which the workbench runs for Escape and for a press outside the layer)."
+    },
+    "workbench.keyboard.follow": {
+      "layer": "workbench",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cause": { "enum": ["ring", "press", "placed", "responder", "modal", "focusin", "focusout"] },
+          "target": { "type": ["string", "null"] },
+          "sent": { "type": ["string", "null"] },
+          "owed": { "type": "boolean" },
+          "decided": { "type": "boolean" },
+          "decision": { "enum": ["send", "same", "wait", "modal"] }
+        },
+        "required": ["cause", "target", "sent", "owed", "decided", "decision"]
+      },
+      "description": "One decision of the keyboard of the page workbench: `cause` is what asked for it (`ring` a move of the focus ring, `press` the release of a left press of the page, `placed` the answer of a drawn placement, `responder` a first responder that reached the workbench, `modal` a change of the modal state, `focusin` and `focusout` the element focus), `target` the surface it chose or null for the workbench, `sent` and `owed` the state before it, `decided` whether a released press waits for this decision, and `decision` whether it sent the call `surfaceFocus` (`send`), sent it for the same target (`same`), waited for a placement that holds the target (`wait`), or kept the keyboard in an open modal (`modal`)."
+    },
+    "host.call.timeout": {
+      "layer": "host",
+      "class": "call",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "command"
+        ]
+      },
+      "description": "A command that the exposure relay forwarded to a surface page got no reply within its declared time limit: plugin is the plugin of the surface and command is the forwarded method (docs/spec/exposure.md#errors)."
+    },
+    "host.trace.call.late-reply": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "delay": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "plugin",
+          "command",
+          "delay"
+        ]
+      },
+      "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
+    },
+    "host.trace.exposure.request": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "id": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "surface",
+          "method",
+          "id"
+        ]
+      },
+      "description": "The host sent an exposure request to a surface page: id is the relay identifier that the reply names, and surface and method name the request (docs/spec/exposure.md#relay)."
+    },
+    "host.trace.exposure.reply": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "from": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "from"
+        ]
+      },
+      "description": "The host received an exposure reply: id is the relay identifier that the reply names, and from is the surface that sent it, or main for the main page."
+    },
+    "host.trace.exposure.unmatched": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "held": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "held"
+        ]
+      },
+      "description": "An exposure reply matched no waiting request, and the host refused it: held says where the relay keeps the id, as other-target (a request of another document waits under it), expired, ended, or none (the relay holds no request under it)."
+    },
+    "host.call.peer-lost": {
+      "layer": "host",
+      "class": "call",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "command",
+          "reason"
+        ]
+      },
+      "description": "A call that a view had open when its view process ended was ended by the host with the reason process-ended: plugin and command name the call (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.presentation-abandoned": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "reason"
+        ]
+      },
+      "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of process-ended, hidden or unresponsive (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.presentation-join": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "phase": {
+            "enum": [
+              "requested",
+              "result",
+              "presented",
+              "abandoned"
+            ]
+          },
+          "surface": {
+            "type": "string",
+            "minLength": 1
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ticket": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "joined": {
+            "type": "boolean"
+          },
+          "reason": {
+            "enum": [
+              "process-ended",
+              "hidden",
+              "unresponsive"
+            ]
+          }
+        },
+        "required": [
+          "phase",
+          "surface",
+          "generation",
+          "ticket"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "phase": {
+                  "const": "result"
+                }
+              },
+              "required": [
+                "phase"
+              ]
+            },
+            "then": {
+              "required": [
+                "joined"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "phase": {
+                  "const": "abandoned"
+                }
+              },
+              "required": [
+                "phase"
+              ]
+            },
+            "then": {
+              "required": [
+                "reason"
+              ]
+            }
+          }
+        ],
+        "additionalProperties": false
+      },
+      "description": "The host records the request and result of joining a changed root view to a layout ticket, the view's native presentation callback, and a wait that ended without presentation. The ticket and generation identify the exact wait. A presented phase records callback observation, not layout commit; it can follow an abandoned phase when a late callback arrives."
+    },
+    "host.trace.surface.dispatch": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "surface": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ticket": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "operation": {
+            "enum": [
+              "sync",
+              "present",
+              "composition"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1
+          },
+          "queued_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "entered_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "returned_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        },
+        "required": [
+          "window",
+          "operation",
+          "stage",
+          "queued_ns",
+          "entered_ns",
+          "returned_ns"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The operation composition records the placement of the regions and overlays of one surface, which surface names; the records of the window layout have no surface. The record does not include the caller's resume time after a synchronous dispatch."
+    },
+    "host.frame.commit": {
+      "layer": "host",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "stashed",
+              "offscreen",
+              "pixels"
+            ]
+          },
+          "commit_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        },
+        "required": [
+          "window",
+          "kind",
+          "commit_ns"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The U7 record of a command buffer of a mygo window committed outside a frame."
+    },
+    "host.frame.record": {
+      "layer": "host",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "start_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "request_ns": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "end_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "damage": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nodes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "drawable_wait_ns": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "outcome": {
+            "enum": [
+              "transaction",
+              "immediate",
+              "stashed",
+              "skipped",
+              "undamaged",
+              "held"
+            ]
+          },
+          "command_buffer": {
+            "type": "boolean"
+          },
+          "asks_frame": {
+            "type": "boolean"
+          },
+          "animates": {
+            "type": "boolean"
+          },
+          "repaints": {
+            "type": "boolean"
+          },
+          "timer": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "window",
+          "start_ns",
+          "request_ns",
+          "end_ns",
+          "damage",
+          "nodes",
+          "drawable_wait_ns",
+          "outcome",
+          "command_buffer",
+          "asks_frame",
+          "animates",
+          "repaints",
+          "timer"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The U7 record of one frame of a mygo window: its times on the host event clock, the pixels it changed, the nodes of the last build pass, how it presented, whether it committed a command buffer, and what the window still asks for after it."
+    },
+    "host.frame.step": {
+      "layer": "host",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "selector",
+              "block",
+              "callback"
+            ]
+          },
+          "callback": {
+            "type": "string",
+            "minLength": 1
+          },
+          "entry_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "return_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "forwarded": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "wait_ns": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        },
+        "required": [
+          "window",
+          "kind",
+          "callback",
+          "entry_ns",
+          "return_ns",
+          "forwarded",
+          "wait_ns"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The U7 record of a step of the main thread: the window with the keyboard focus when the record is written, without one the only open window, otherwise null, what the step entered, when it entered and returned, the calls it forwarded and the time the main thread slept waiting for the worker."
+    },
+    "host.frame.surface.dispatch": {
+      "layer": "host",
+      "class": "frame",
+      "level": "trace",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "minLength": 1
+          },
+          "surface": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ticket": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "operation": {
+            "enum": [
+              "sync",
+              "present",
+              "composition"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "minLength": 1
+          },
+          "queued_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "entered_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "returned_ns": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        },
+        "required": [
+          "window",
+          "operation",
+          "stage",
+          "queued_ns",
+          "entered_ns",
+          "returned_ns"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The frame trace of an existing surface-layout UI admission or native callback when the performance trace's call/debug path is not eligible. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The operation composition records the placement of the regions and overlays of one surface, which surface names; the records of the window layout have no surface. The record does not include the caller's resume time after a synchronous dispatch."
+    },
+    "host.trace.view.callback-cancelled": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "reason"
+        ]
+      },
+      "description": "A native callback from a retired view document was canceled before it reached the current view channel or main page; reason is retired-origin or window-closed (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.process-request": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface"
+        ]
+      },
+      "description": "The host created the web view of a view surface, so its WebContent process is requested (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.process-ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface"
+        ]
+      },
+      "description": "The first ready message of a view arrived after the host created it, so its page runtime started (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.responsive": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface"
+        ]
+      },
+      "description": "The WebContent process of a view answered its responsiveness check again, so the host sent the view-responsiveness notice with the view generation and responsive true to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.view.unresponsive": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface"
+        ]
+      },
+      "description": "The WebContent process of a view stopped answering its responsiveness check, so the host sent the view-responsiveness notice with the view generation and responsive false to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
+    },
+    "host.trace.modal.stale-ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "modal": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "modal",
+          "instance"
+        ]
+      },
+      "description": "A ready request of a modal document named a modal that is not open, so the request changed nothing and was answered ok: modal is the id and instance the number of the request (docs/spec/host-contract.md#contract-cases)."
+    },
+    "host.trace.status.notify": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "window",
+          "decision"
+        ]
+      },
+      "description": "The decision of a host.window notification of a window: decision is sent when the value was sent to the watching connections, unchanged when it equals the value sent last, and unwatched when no connection watches host.window of the window (docs/spec/host-contract.md#contract-cases)."
+    },
+    "host.trace.sidecar.ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "sidecar": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "ms": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sidecar",
+          "pid",
+          "ms"
+        ]
+      },
+      "description": "The first message line that a sidecar sent after its spawn by the host: sidecar is the name, pid the process and ms the time in milliseconds from the spawn to that line; it is written once for each spawn (docs/spec/host-contract.md#contract-cases)."
+    },
+    "host.trace.<event>": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "description": "The performance trace of the host, while it is on."
+    },
+    "host.sampler.<event>": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "rss_host_kb": {
+                "type": "number"
+              },
+              "footprint_kb": {
+                "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "rss_host_kb",
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "role"
+                  ]
+                },
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "window"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "pid"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "error"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "role"
+                  ]
+                },
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "window"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "pid"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "footprint_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "not": {
+                  "enum": [
+                    "page",
+                    "document"
+                  ]
+                }
+              },
+              "name": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "rss_kb": {
+                "type": "number"
+              },
+              "footprint_kb": {
+                "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "role",
+              "name",
+              "pid",
+              "rss_kb",
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "window"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "error"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "not": {
+                  "enum": [
+                    "page",
+                    "document"
+                  ]
+                }
+              },
+              "name": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "name",
+              "pid",
+              "error"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "window"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "footprint_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "page"
+              },
+              "window": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "rss_kb": {
+                "type": "number"
+              },
+              "footprint_kb": {
+                "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "role",
+              "window",
+              "pid",
+              "rss_kb",
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "error"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "page"
+              },
+              "window": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "window",
+              "error"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "pid"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "footprint_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "page"
+              },
+              "window": {
+                "type": "string"
+              },
+              "pid": {
+                "const": 0
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "window",
+              "pid",
+              "error"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "surface"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "footprint_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "document"
+              },
+              "window": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "document": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "rss_kb": {
+                "type": "number"
+              },
+              "footprint_kb": {
+                "type": "number"
+              },
+              "internal_kb": {
+                "type": "number"
+              },
+              "compressed_kb": {
+                "type": "number"
+              },
+              "purgeable_kb": {
+                "type": "number"
+              },
+              "graphics_kb": {
+                "type": "number"
+              },
+              "media_kb": {
+                "type": "number"
+              },
+              "network_kb": {
+                "type": "number"
+              },
+              "neural_kb": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "role",
+              "window",
+              "surface",
+              "document",
+              "pid",
+              "rss_kb",
+              "footprint_kb",
+              "internal_kb",
+              "compressed_kb",
+              "purgeable_kb",
+              "graphics_kb",
+              "media_kb",
+              "network_kb",
+              "neural_kb"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "error"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "const": "document"
+              },
+              "window": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "document": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "window",
+              "surface",
+              "document",
+              "pid",
+              "error"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "name"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_host_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "rss_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "footprint_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "internal_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "compressed_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "purgeable_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "graphics_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "media_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "network_kb"
+                  ]
+                },
+                {
+                  "required": [
+                    "neural_kb"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`). The host reading and each process reading hold footprint_kb with its parts internal_kb, compressed_kb, purgeable_kb, graphics_kb, media_kb, network_kb and neural_kb (docs/spec/performance-trace.md), and each process reading holds pid and rss_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
+    },
+    "host.buffer.dropped": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "buffer": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "buffer",
+          "count",
+          "bytes",
+          "reason"
+        ]
+      },
+      "description": "A bounded buffer of the host refused a message because it was full; `buffer` names it, `count` is the number of messages (1 for each refusal), `bytes` their size and `reason` the bound that was reached. Not a queue of events, whose loss is `log.dropped`."
+    },
+    "page.log.dropped": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "bytes",
+          "reason"
+        ]
+      },
+      "description": "The page queue was full or reached its byte bound and refused events; the page stores the count and the bytes in front of the events that follow."
+    },
+    "workbench.log.dropped": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "bytes",
+          "reason"
+        ]
+      },
+      "description": "The workbench queue was full or reached its byte bound and refused events; the workbench stores the count and the bytes in front of the events that follow."
+    },
+    "page.log.clock": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "trip_us": {
+            "type": "number"
+          },
+          "resolution_us": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "trip_us",
+          "resolution_us"
+        ]
+      },
+      "description": "The round trip in microseconds of the clock request that anchors the clock of the page to the clocks of the host and the resolution in microseconds of the clock of the page; a time of the page differs from the clock of the host by at most half of the round trip plus the resolution. The first batch of a page holds them."
+    },
+    "workbench.log.clock": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "trip_us": {
+            "type": "number"
+          },
+          "resolution_us": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "trip_us",
+          "resolution_us"
+        ]
+      },
+      "description": "The round trip in microseconds of the clock request that anchors the clock of the workbench to the clocks of the host and the resolution in microseconds of the clock of the workbench; a time of the workbench differs from the clock of the host by at most half of the round trip plus the resolution. The first batch of a start of the workbench holds them."
+    },
+    "page.log.gated": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "class",
+          "level",
+          "count"
+        ]
+      },
+      "description": "The number of events of the class and the level that the gate of the page refused since the earlier report."
+    },
+    "workbench.log.gated": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "class",
+          "level",
+          "count"
+        ]
+      },
+      "description": "The number of events of the class and the level that the gate of the workbench refused since the earlier report."
+    },
+    "page.start": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "time_origin": {
+            "type": "number"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "time_origin",
+          "url"
+        ]
+      },
+      "description": "A view page started; a reload starts a new document with a new clock."
+    },
+    "workbench.start": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "started_at": {
+            "type": "number"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "started_at",
+          "url"
+        ]
+      },
+      "description": "The workbench started: on the Wails and Tauri hosts a document of the main page, so a reload starts it again with a new clock; started_at is its start time in milliseconds since the epoch, the time origin of the document."
+    },
+    "workbench.fixture.step": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "start",
+              "end"
+            ]
+          },
+          "ms": {
+            "type": "number"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "step",
+          "phase"
+        ]
+      },
+      "description": "A step of the workbench that diagnostics.fixture awaits, at its start and at its end; the end has the elapsed milliseconds of the step and its error text, or null when the step succeeded."
+    },
+    "workbench.call": {
+      "layer": "workbench",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {
+            "type": "string"
+          },
+          "micros": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "args",
+          "micros",
+          "ok",
+          "truncated"
+        ]
+      },
+      "description": "A host call of a document of the workbench; `error` names a refused call."
+    },
+    "host.endpoint.call": {
+      "layer": "host",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {
+            "type": "string"
+          },
+          "micros": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "args",
+          "micros",
+          "ok",
+          "truncated"
+        ]
+      },
+      "description": "A method that a client of the endpoint called; `args` is the params as received (`null` when absent) cut to 1024 bytes, `error` is the code and the message that the client received."
+    },
+    "host.binding.call": {
+      "layer": "host",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "args": {
+            "type": "string"
+          },
+          "micros": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "args",
+          "micros",
+          "ok",
+          "truncated"
+        ]
+      },
+      "description": "A host call that the main page or a document of a surface sent; `name` is the snake case name of the call, `args` is the JSON array of the arguments in call order cut to 1024 bytes, `error` is the text that the page received or `the call ended without a result`."
+    },
+    "workbench.command": {
+      "layer": "workbench",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "micros": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "micros",
+          "ok"
+        ]
+      },
+      "description": "A command request that the workbench answered; `error` names a failed command."
+    },
+    "workbench.background.session": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "sidecar": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab",
+          "plugin",
+          "sidecar",
+          "action",
+          "surface"
+        ]
+      },
+      "description": "A decision of the background session of a tab: open and reopen send the declared operation, skip sends nothing for a tab whose surface is mounted, stop ends the session of a tab that is shown or whose surface mounted. surface is mounted or absent."
+    },
+    "workbench.plugin.operation": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "plugin"
+        ]
+      },
+      "description": "The workbench started an install, update, remove, enable or disable of a plugin; its host call carries the same cids."
+    },
+    "workbench.window.active": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "description": "The workbench received the host event window-active, so it reads the plugin state and the application update again (docs/spec/installation.md)."
+    },
+    "workbench.plugins.reread": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "updates": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "updates"
+        ]
+      },
+      "description": "The workbench read the plugin state again after window-active; updates is the number of installed plugins that the registry lists in a newer version (docs/spec/installation.md)."
+    },
+    "workbench.project.operation": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "project"
+        ]
+      },
+      "description": "The workbench started the open or the removal of a project; its host calls carry the same cids."
+    },
+    "workbench.tab.state.stored": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "tab",
+          "bytes"
+        ]
+      },
+      "description": "The tab state store wrote the entry of a tab, its state, mark and label included; bytes is the size of the written store."
+    },
+    "workbench.tab.state.orphan": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab"
+        ]
+      },
+      "description": "The reconciliation at load removed the entry of a tab that no layout of projects.json holds."
+    },
+    "workbench.tab.session.read": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "cause": {
+            "type": "string",
+            "enum": [
+              "navigation",
+              "flush",
+              "unload"
+            ]
+          }
+        },
+        "required": [
+          "tab",
+          "cause"
+        ]
+      }
+    },
+    "workbench.tab.session.stored": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "tab",
+          "bytes"
+        ]
+      },
+      "description": "Core wrote the session history of the document regions of a tab to tab-sessions/<tab>.json; bytes is the size of the written file."
+    },
+    "workbench.tab.session.dropped": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "tab",
+          "region",
+          "bytes"
+        ]
+      },
+      "description": "The session history of a document region exceeded 1 MiB decoded and was not stored; bytes is its decoded size."
+    },
+    "workbench.tab.session.orphan": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab"
+        ]
+      },
+      "description": "The reconciliation at load removed the session file of a tab that no layout of projects.json holds."
+    },
+    "workbench.surface.mount.failed": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "number"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "attempt",
+          "phase",
+          "reason"
+        ]
+      },
+      "description": "A new surface mount entry failed. attempt increases in the main-page document for each new entry. phase is mount when failure prevents composition readiness, including a listener-registration failure before readiness, and listener-registration when native listener registration fails after readiness. reason is the original failure text. The workbench records this event before releasing the entry; it does not display the event."
+    },
+    "workbench.tab.keep.changed": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "keep": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tab",
+          "keep"
+        ]
+      },
+      "description": "core.tab.keep set or cleared the mark kept of a tab."
+    },
+    "workbench.tab.unloaded": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab",
+          "plugin",
+          "trigger"
+        ]
+      },
+      "description": "The memory saver unloaded a hidden tab after host.place replied; trigger is delay, pressure or command."
+    },
+    "workbench.tab.restored": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "history": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tab",
+          "plugin",
+          "history"
+        ]
+      },
+      "description": "The memory saver restored an unloaded tab that was shown; history is false when no session history was captured."
+    },
+    "workbench.tab.restore.failed": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab",
+          "plugin",
+          "reason"
+        ]
+      },
+      "description": "The restore of a shown unloaded tab failed, or a document region refused its session history at that restore or at the first show of the tab after a restart; the error display of the workbench shows it."
+    },
+    "workbench.tab.unload.failed": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tab",
+          "plugin",
+          "trigger",
+          "reason"
+        ]
+      },
+      "description": "An unload attempt ended because a read of the document regions of the tab failed; the tab stays loaded and the error display of the workbench shows it."
+    },
+    "workbench.tab.unload.skipped": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "trigger": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "number"
+          },
+          "reasons": {
+            "type": "array"
+          }
+        },
+        "required": [
+          "trigger",
+          "seq",
+          "reasons"
+        ]
+      },
+      "description": "A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; seq is the number of the last pressure report, 0 before the first."
+    },
+    "workbench.view.call": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "id": {
+            "type": "number"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "generation",
+          "id",
+          "command"
+        ]
+      },
+      "description": "The workbench received a call request of a view (docs/spec/native-surfaces.md#view-surfaces, view call). generation is the accepted native view source incarnation. A call with this record and no workbench.view.reply or workbench.view.call.cancel of the same start, plugin, surface, generation and id has not replied."
+    },
+    "workbench.view.reply": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "id": {
+            "type": "number"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "generation",
+          "id",
+          "outcome"
+        ]
+      },
+      "description": "The workbench sent the reply of a view call to the view; generation is the source incarnation and outcome is result or error. The reply carries the same start, plugin, surface, generation and id as its workbench.view.call."
+    },
+    "workbench.view.call.cancel": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "id": {
+            "type": "number"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "id",
+          "command"
+        ]
+      },
+      "description": "The workbench canceled this view call without sending a reply. generation is the captured source incarnation when the canceled event carried a valid generation; an invalid or absent generation remains absent."
+    },
+    "workbench.view.event.cancel": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "event"
+        ]
+      },
+      "description": "Closing the surface canceled delivery of this view event after the host refused it because the view had ended."
+    },
+    "workbench.input.shortcut.failed": {
+      "layer": "workbench",
+      "class": "input",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "command"
+        ]
+      },
+      "description": "A command that a view ran through runtime.command failed, and the command is the command of a workbench shortcut row (packages/workbench/shortcuts.json); the view ran it for its own forwarded key."
+    },
+    "workbench.window.operation": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "description": "The workbench started a new window, the close of its window, or the report that the window stays open; its host call carries the same cids."
+    },
+    "workbench.overlay.dropped": {
+      "layer": "workbench",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shown": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shown",
+          "key"
+        ]
+      },
+      "description": "The workbench dropped the reply of a modal that the host relayed: `id` names the modal of the reply, `key` its control, and `shown` the id of the modal that the page shows or the empty text when it shows none or has no receiver for it."
+    },
+    "workbench.settings.change": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "keys": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "actor",
+          "keys"
+        ]
+      },
+      "description": "A change of the settings by the command or the surface named in actor; keys lists the changed keys and never their values; the write to the host carries the same cids."
+    },
+    "workbench.update.operation": {
+      "layer": "workbench",
+      "class": "call",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "version"
+        ]
+      },
+      "description": "The workbench started the application update to the version; its stage and apply calls carry the same cids."
+    },
+    "host.input.relay": {
+      "layer": "host",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "name",
+          "type"
+        ]
+      },
+      "description": "The host relayed an image region event that carries correlation identifiers to the page; `name` is the region and `type` the type of the event."
+    },
+    "host.sidecar.request": {
+      "layer": "host",
+      "class": "io",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "surface",
+          "bytes"
+        ]
+      },
+      "description": "The host queued a page request that continues inputs for a sidecar; the request line carries the same identifiers, and `bytes` is the size of the body."
+    },
+    "host.sidecar.write_wait": {
+      "layer": "host",
+      "class": "io",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "queued_us": {
+            "type": "number"
+          },
+          "write_us": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "bytes",
+          "queued_us",
+          "write_us"
+        ]
+      },
+      "description": "A line for a sidecar waited a second or more in the write queue of the host, or its write took 10 ms or more."
+    },
+    "host.sidecar.reply": {
+      "layer": "host",
+      "class": "io",
+      "level": [
+        "info",
+        "warn"
+      ],
+      "result": true,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "micros": {
+            "type": "number"
+          },
+          "error": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "surface",
+          "bytes",
+          "ok"
+        ]
+      },
+      "description": "A message of a sidecar that names the correlation identifiers of a request or states an error, or the failure of a sidecar that ends the requests it did not answer."
+    },
+    "host.window.event": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": [
+        "debug",
+        "info"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "kind"
+        ]
+      },
+      "description": "A window event that the host registered."
+    },
+    "host.overlay.dropped": {
+      "layer": "host",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "number"
+          },
+          "key": {
+            "type": "string"
+          },
+          "open": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "instance",
+          "key",
+          "open"
+        ]
+      },
+      "description": "The host dropped the reply of a modal document because that modal is not the open one: `id` and `instance` name the modal of the reply, `key` its control, and `open` the id of the open modal or the empty text when none is open. A closing modal still sends its last state report, so a drop is not an error."
+    },
+    "host.app.event": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "description": "An application event that the host registered."
+    },
+    "host.sidecar.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "pid"
+        ]
+      },
+      "description": "A sidecar process of standard input and output started."
+    },
+    "host.sidecar.exit": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          },
+          "stopping": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "pid",
+          "status",
+          "stopping"
+        ]
+      },
+      "description": "A sidecar process ended."
+    },
+    "host.sidecar.connect": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "spawned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "pid",
+          "spawned"
+        ]
+      },
+      "description": "The host connected to a persistent service."
+    },
+    "host.sidecar.disconnect": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "stopping": {
+            "type": "boolean"
+          },
+          "violation": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "waiting": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "pid",
+          "stopping",
+          "violation",
+          "end",
+          "waiting"
+        ]
+      },
+      "description": "The connection to a persistent service ended. end is how it ended without a protocol violation: eof when the service closed its output, unfinished line when the output ended in a line without a line break, read error with the reader's text, or violation when the service violated the protocol. waiting is the number of requests that waited for the connection when it ended. The exit status of the service is not recorded: the host does not own the process of a persistent service."
+    },
+    "host.sidecar.restart-limit": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "sidecar": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sidecar"
+        ]
+      },
+      "description": "A sidecar of either transport failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."
+    },
+    "host.trace.sidecar.restart-reset": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "sidecar": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sidecar",
+          "surface",
+          "plugin"
+        ]
+      },
+      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened, or the person enabled a plugin that lists it: the host cleared the failure record, and the next request starts the sidecar. The surface field names the opened surface and the plugin field names the enabled plugin (docs/spec/sidecars.md#failure)."
+    },
+    "host.project.removal_allowed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "project"
+        ]
+      },
+      "description": "A window ended while it was asked whether a project may be removed, so the removal is allowed."
+    },
+    "host.project.front": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "key": {
+            "type": "boolean"
+          },
+          "app_active": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "window",
+          "project",
+          "key",
+          "app_active"
+        ]
+      },
+      "description": "The host showed the window of a project owner after another window opened the project: key tells whether the window is the key window after it was shown, and app_active whether the application is active (null when that state could not be read). The host does not activate the application (docs/spec/projects.md)."
+    },
+    "host.workspace.settings": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "set": {
+            "type": "string"
+          },
+          "removed": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "set",
+          "removed"
+        ]
+      },
+      "description": "A settings file changed; scope is common or the project id, set and removed are the sorted keys joined by commas."
+    },
+    "host.notification.event": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "authorization": {
+            "type": "string"
+          },
+          "window": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "authorization",
+          "window",
+          "surface"
+        ]
+      },
+      "description": "The notification center reported a state or a notice that was posted or activated."
+    },
+    "host.test.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "run"
+        ]
+      },
+      "description": "A window check marked the start of a test; run is the identifier of the test run."
+    },
+    "host.test.end": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "run",
+          "result"
+        ]
+      },
+      "description": "A window check marked the end of a test; result is pass, fail or skip."
+    },
+    "host.panic": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "stack": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "text",
+          "stack"
+        ]
+      },
+      "description": "A goroutine or a thread of the host panicked; name is the name that the entrance gave it, text is the panic value (the Rust host prefixes `<file>:<line>: `), and the process ends after the event is stored."
+    },
+    "host.run.unrecorded-end": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "boot": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pid": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "previous": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "boot",
+          "pid"
+        ]
+      },
+      "description": "A process.lock that was not locked when this run started was left by an earlier run that ended without removing it, and this run took it over. boot and pid are the boot identifier and the process identifier of that run when the file is the current form, and null otherwise; previous holds the content of the file, cut to 256 bytes, when the file is not the current form."
+    },
+    "host.view.killed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "unsent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "unsent"
+        ]
+      },
+      "description": "The host ended a view that it observes (kill, close or crash); plugin and surface name the view, and unsent is true because the records of the view that were not yet sent to the writer may be lost, which the event states and no count gives. The writer stores it through its own path, so it passes every gate."
+    },
+    "host.view.call": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "id": {
+            "type": "number"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "id",
+          "command"
+        ]
+      },
+      "description": "The host forwarded a call request of a view to the main page of its window (docs/spec/native-surfaces.md#view-surfaces, view call). A call with this record and no host.view.reply of the same plugin, surface and id has not been answered by the host."
+    },
+    "host.view.reply": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "id": {
+            "type": "number"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "id",
+          "outcome"
+        ]
+      },
+      "description": "The host forwarded the reply of a view call to the view; outcome is result or error, and the id is the id of the call."
+    },
+    "host.view.sidecar.discard": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "sidecar": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "sidecar",
+          "id",
+          "generation",
+          "reason"
+        ]
+      },
+      "description": "The host removed the sidecar route of a view whose generation is no longer current when a message of the route arrived."
+    },
+    "host.view.reply.dispatch": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "page": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "number"
+          },
+          "id": {
+            "type": "number"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "page",
+          "surface",
+          "generation",
+          "id",
+          "outcome",
+          "disposition"
+        ]
+      },
+      "description": "After generation validation, the host records the view-reply dispatch result; for a current target, it records after the native post operation returns. disposition is posted when the native post API accepts the message, or discarded when the target generation is no longer current; reason is view-generation-not-current for discarded. posted does not prove JavaScript receipt or handling. A native post error rejects the host call and writes no dispatch record."
+    },
+    "host.stall": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "late_ms": {
+            "type": "number"
+          },
+          "watch_late_ms": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "late_ms",
+          "watch_late_ms"
+        ]
+      },
+      "description": "The heartbeat of the main thread of the host was late_ms milliseconds late, 1 s or more: the main thread ran nothing else in that time. watch_late_ms is the lateness of the watch's own wake beyond its 250 ms beat: at least half of late_ms means the process was not scheduled, and less than half means the main thread was blocked."
+    },
+    "host.stall.sampled": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "description": "The file in the logs folder with the stacks of the threads of the host during a stall of its main thread; error states why the file was not written."
+    },
+    "host.stall.resumed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "stalled_ms": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "stalled_ms"
+        ]
+      },
+      "description": "The main thread of the host ran again after a stall of stalled_ms milliseconds."
+    },
+    "host.stall.dump": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "description": "A host that did not answer has its threads sampled into the file at path."
+    },
+    "host.crash.found": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "time": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "pid",
+          "time"
+        ]
+      },
+      "description": "The system wrote a crash report of an earlier run of the application; the start of the host announces it once. It passes every gate."
+    },
+    "host.log.index_rebuilt": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "micros": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "file",
+          "reason",
+          "lines",
+          "bytes",
+          "micros"
+        ]
+      },
+      "description": "The index of an event file was built from the whole file, because it did not exist or was not the index of that file."
+    },
+    "host.relaunch.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pid": {
+            "type": "number"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pid",
+          "command"
+        ]
+      },
+      "description": "The host started the detached command that starts the application again after the process ended (diagnostics.host.relaunch)."
+    },
+    "host.update.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pid": {
+            "type": "number"
+          },
+          "command": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pid",
+          "command"
+        ]
+      },
+      "description": "The host started the detached command that replaces the application bundle."
+    },
+    "native.app.activated": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "previous_pid": {
+            "type": "number"
+          },
+          "previous_bundle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "previous_pid",
+          "previous_bundle"
+        ]
+      },
+      "description": "The application became active: `previous_pid` and `previous_bundle` name the application that the workspace activated last before it, which was frontmost when this one became active, or 0 and the empty text before the workspace activated another application."
+    },
+    "native.app.deactivated": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "frontmost_pid": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "frontmost_bundle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "frontmost_pid",
+          "frontmost_bundle"
+        ]
+      },
+      "description": "The application resigned active. The frontmost process snapshot names the app that receives key events at the native deactivation callback, when available; it does not establish why focus changed."
+    },
+    "native.app.hidden": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "description": "The application was hidden."
+    },
+    "native.app.unhidden": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "description": "The application was shown again."
+    },
+    "native.document.backforward_cleared": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "description": "A document region cleared its back-forward cache, so going back loads the page again. reason is hidden when the region stayed hidden for the hidden clear delay and pressure when the system reported memory pressure."
+    },
+    "native.memory.pressure": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "level",
+          "seq"
+        ]
+      },
+      "description": "The memory pressure source of the process reported a change of level. level is normal, warn or critical and seq numbers the reports of the process from 1; each host relays the report to the pages as the page event memory-pressure."
+    },
+    "native.window.key": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "first_responder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "first_responder"
+        ]
+      },
+      "description": "A window became the key window."
+    },
+    "native.window.resign_key": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "first_responder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "first_responder"
+        ]
+      },
+      "description": "A window resigned key."
+    },
+    "native.window.main": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "first_responder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "first_responder"
+        ]
+      },
+      "description": "A window became the main window."
+    },
+    "native.window.resign_main": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "first_responder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "first_responder"
+        ]
+      },
+      "description": "A window resigned main."
+    },
+    "native.window.miniaturized": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "first_responder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "first_responder"
+        ]
+      },
+      "description": "A window was miniaturized."
+    },
+    "native.window.deminiaturized": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "first_responder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "first_responder"
+        ]
+      },
+      "description": "A window was deminiaturized."
+    },
+    "native.window.occlusion": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "window",
+          "visible"
+        ]
+      },
+      "description": "The occlusion state of a window changed."
+    },
+    "native.surface.key_kept": {
+      "layer": "native",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "count"
+        ]
+      }
+    },
+    "native.surface.keys_delivered": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "count"
+        ]
+      }
+    },
+    "native.surface.keys_dropped": {
+      "layer": "native",
+      "class": "input",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "reason"
+        ]
+      }
+    },
+    "native.keyboard.hold_dropped": {
+      "layer": "native",
+      "class": "input",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "reason": {
+            "enum": [
+              "full",
+              "closed"
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "reason"
+        ]
+      }
+    },
+    "native.window.first_responder": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "from",
+          "to"
+        ]
+      },
+      "description": "The first responder of a window that a host observes changed, from the key-value observation that also sends window-responder."
+    },
+    "native.capture.lifecycle": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": [
+        "debug",
+        "error"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "start-request",
+              "start-completion",
+              "first-sample",
+              "delegate-stop",
+              "failed",
+              "sample-discarded"
+            ],
+            "type": "string"
+          },
+          "windowNumber": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "requestMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callbackMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "elapsedMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "machTimebaseNumerator": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "machTimebaseDenominator": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "sampleType": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "statusPresent": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "displayTimePresent": {
+            "type": "boolean"
+          },
+          "displayTimeMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorDomain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "factsObservedMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visible": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "occluded": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "displayID": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "applicationActive": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "startCompletionSeen": {
+            "type": "boolean"
+          },
+          "firstSampleSeen": {
+            "type": "boolean"
+          },
+          "delegateStopSeen": {
+            "type": "boolean"
+          },
+          "stopAfterMilliseconds": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "stopTargetMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stopRegistrationMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latestSampleCallbackMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latestSampleStatusPresent": {
+            "type": "boolean"
+          },
+          "latestSampleStatus": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "latestSampleDisplayTimePresent": {
+            "type": "boolean"
+          },
+          "latestSampleDisplayTimeMachTicks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "session",
+          "phase",
+          "windowNumber",
+          "requestMachTicks",
+          "callbackMachTicks",
+          "elapsedMachTicks",
+          "machTimebaseNumerator",
+          "machTimebaseDenominator",
+          "sampleType",
+          "statusPresent",
+          "status",
+          "displayTimePresent",
+          "displayTimeMachTicks",
+          "errorDomain",
+          "errorCode",
+          "reason",
+          "factsObservedMachTicks",
+          "visible",
+          "occluded",
+          "displayID",
+          "applicationActive",
+          "startCompletionSeen",
+          "firstSampleSeen",
+          "delegateStopSeen",
+          "stopAfterMilliseconds",
+          "stopTargetMachTicks",
+          "stopRegistrationMachTicks",
+          "latestSampleCallbackMachTicks",
+          "latestSampleStatusPresent",
+          "latestSampleStatus",
+          "latestSampleDisplayTimePresent",
+          "latestSampleDisplayTimeMachTicks"
+        ]
+      },
+      "description": "A bounded ScreenCaptureKit attempt trace. Debug records describe start request, start completion, first sample, delegate stop and each sample discarded because its stream was replaced or intake closed; discarded records retain the originating attempt and contain no sample bytes. The error-level failed record is emitted once per failed attempt and preserves whether start completion or a sample was observed. Stop diagnostics preserve the host's after value in milliseconds, its computed Mach target and registration tick, and the latest callback's status and display time. Time fields are raw Mach ticks with the captured timebase; display facts are null until a timestamped main-thread observation exists."
+    },
+    "native.input.key_down": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "keyCode": {
+            "type": "number"
+          },
+          "characters": {
+            "type": "string"
+          },
+          "charactersIgnoringModifiers": {
+            "type": "string"
+          },
+          "modifierFlags": {
+            "type": "number"
+          },
+          "isARepeat": {
+            "type": "boolean"
+          },
+          "timestamp": {
+            "type": "number"
+          },
+          "before": {
+            "type": "object"
+          },
+          "after": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "keyCode",
+          "characters",
+          "charactersIgnoringModifiers",
+          "modifierFlags",
+          "isARepeat",
+          "timestamp",
+          "before",
+          "after"
+        ]
+      },
+      "description": "A key reached an image region. The native layer assigns the correlation identifier of the input here; `before` and `after` hold the state of the input document."
+    },
+    "native.image.spare_released": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "bytes"
+        ]
+      },
+      "description": "An image region in the copy mode released its spare presentation copy because no frame arrived for the spare delay. bytes is the allocation size of the copy."
+    },
+    "native.input.callback": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "call": {
+            "type": "string"
+          },
+          "before": {
+            "type": "object"
+          },
+          "after": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "call",
+          "before",
+          "after"
+        ]
+      },
+      "description": "A callback of the input method or a step of the region that it causes (`setMarkedText`, `insertText`, `unmarkText`, `doCommandBySelector`, `commitThrough`, `reportPreedit`, `commitPending`, `clearDocument`, `becomeFirstResponder`, `resignFirstResponder`, `virtualKeyText`), with its arguments next to `call` and the state of the input document before and after. It takes the identifier of the input that caused it."
+    },
+    "native.input.report": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "cids": "required",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "report": {
+            "type": "string"
+          },
+          "dropped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "report",
+          "dropped"
+        ]
+      },
+      "description": "A report of a region to the page, as the JSON text that was sent; `dropped` is true when the region was closed and the report was not sent. The sent report carries the identifier as its member `cids`."
+    },
+    "native.input.source_changed": {
+      "layer": "native",
+      "class": "input",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "description": "The selected keyboard input source changed."
+    },
+    "native.input.query": {
+      "layer": "native",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "call": {
+            "type": "string"
+          },
+          "focus": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "call",
+          "focus"
+        ]
+      },
+      "description": "A query of the input method that an image region answered; `answer` holds the answer."
+    },
+    "native.observe.registered": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "registrations": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "source",
+          "kind",
+          "target",
+          "mode",
+          "registrations"
+        ]
+      },
+      "description": "An observer, monitor, key-value observer, run loop observer, dispatch source, Apple event handler or delegate was registered through the native entrance; `registrations` counts the registrations of the source."
+    },
+    "native.observe.failed": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "kind",
+          "reason"
+        ]
+      },
+      "description": "The native entrance refused a registration or a delivery that names no registered source."
+    },
+    "native.observe.delivered": {
+      "layer": "native",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "source",
+          "count"
+        ]
+      },
+      "description": "One delivery of a registration of the mode `record`; `count` is the exact number of deliveries of the source so far."
+    },
+    "native.observe.counted": {
+      "layer": "native",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "micros": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "source",
+          "count",
+          "total",
+          "micros"
+        ]
+      },
+      "description": "The deliveries of a registration of the mode `count` since the earlier summary (at most one per second), their total and the microseconds between the summaries."
+    },
+    "native.log.gated": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "class",
+          "level",
+          "count"
+        ]
+      },
+      "description": "The number of events of the class and the level that the gate of the native library refused since the earlier report."
+    },
+    "native.process.exit_timeout": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "pid": {
+            "type": "number"
+          },
+          "seconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "pid",
+          "seconds"
+        ]
+      },
+      "description": "A process did not end within the time that the caller waited for it."
+    },
+    "native.webview.process_ended": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "code": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "reason",
+          "code"
+        ]
+      },
+      "description": "The WebContent process of an app DOM webview ended. reason is the name of the WebKit termination reason (exceeded-memory, exceeded-cpu, requested-by-client, crash, exceeded-shared-process-crash-limit, or unknown-<n> for a value that WebKit defines later) and code is its number."
+    },
+    "native.input.virtual": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "native.webview.input": {
+      "layer": "native",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "view": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "phase",
+          "view",
+          "count"
+        ]
+      },
+      "description": "An input registration of a web view changed phase: registered when the registration is attached to the web view, ended when the registration is unregistered (it is still alive), and released when its last reference is dropped. phase is the name of the phase, view is the address of the web view that identifies its records, and count is the number of live input registrations after the phase."
+    }
+  },
+  "budget": {
+    "lifecycle": {
+      "events": 7700,
+      "bytes": 2000000
+    },
+    "input": {
+      "events": 8600,
+      "bytes": 2700000
+    },
+    "call": {
+      "events": 33500,
+      "bytes": 18200000
+    },
+    "io": {
+      "events": 4900,
+      "bytes": 19500000
+    },
+    "frame": {
+      "events": 2300,
+      "bytes": 750000
+    }
+  },
+  "chains": {
+    "input": [
+      "native.input.key_down",
+      "host.input.relay",
+      "workbench.call",
+      "host.sidecar.request"
+    ],
+    "plugin": [
+      "workbench.plugin.operation",
+      "workbench.call",
+      "host.binding.call"
+    ],
+    "project": [
+      "workbench.project.operation",
+      "workbench.call",
+      "host.binding.call"
+    ],
+    "window": [
+      "workbench.window.operation",
+      "host.binding.call"
+    ],
+    "settings": [
+      "workbench.settings.change",
+      "workbench.call",
+      "host.binding.call"
+    ],
+    "update": [
+      "workbench.update.operation",
+      "workbench.call",
+      "host.binding.call"
+    ]
+  }
+}

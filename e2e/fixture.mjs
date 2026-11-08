@@ -1,14 +1,14 @@
 // Starting layout of the core window checks. The checks run on the core fixtures only (docs/spec/plugin-processes.md#verification-boundaries):
-// each application has every plugin of the fixture registry pack `fixtures` installed, and no real plugin. diagnostics.fixture opens
-// the new-space layout that environment.json of the application declares (workspace.grid); its tabs name the plugins of the
-// published starter, which a fixture configuration does not load, so they open as placeholders. The preparation replaces each such
-// placeholder by a tab of the layout probe fixture `layoutprobe` in the same card and returns the tab of the focused card.
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { keepCommonSettings, prepareFixture, TRACE } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { catalogOf } from "../scripts/check-events.mjs";
+// each application has every plugin of the fixture registry pack `fixtures` installed, and no real plugin. The start state of
+// @soksak/window-check/start.mjs opens the new-space layout that environment.json of the application declares (workspace.grid); its
+// tabs name the plugins of the published starter, which a fixture configuration does not load, so they open as placeholders. The
+// preparation replaces each such placeholder by a tab of the layout probe fixture `layoutprobe` in the same card and returns the tab
+// of the focused card.
+import { untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
+import * as start from "@soksak/window-check/start.mjs";
+
+export { placeholderTabs, reading, restoreRegistry, useRegistry } from "@soksak/window-check/start.mjs";
 
 /**
  * The fixture plugin of the start tab: the layout probe (e2e/fixtures/layout-probe/layoutprobe). It reports its start values,
@@ -20,131 +20,28 @@ export const START_PLUGIN = "layoutprobe";
 /** The entries that a start tab has registered when it is ready for a check. */
 export const START_ENTRIES = Object.freeze(["status layoutprobe.view", "status layoutprobe.surface"]);
 
-/**
- * The tabs of the layout `grid` (core.grid) that `surfaces` (core.surfaces) report as placeholders, the tabs of plugins that are not
- * loaded, as `{card, tab, plugin}` in the order of the cards and their tabs.
- */
-export function placeholderTabs(grid, surfaces) {
-  const placeholders = new Set(surfaces.filter((row) => row.kind === "tab" && row.placeholder != null).map((row) => row.surface));
-  return (grid?.cards ?? []).flatMap((card) => (card.tabs ?? []).filter((tab) => placeholders.has(tab.id))
-    .map((tab) => ({ card: card.id, tab: tab.id, plugin: tab.plugin })));
-}
+/** Replaces every placeholder tab of the start layout by a START_PLUGIN tab of its card; returns the new tabs as `{card, tab}`. */
+export const replacePlaceholders = (s) => start.replacePlaceholders(s, START_PLUGIN);
 
-/**
- * Replaces every placeholder tab of the start layout by a tab of START_PLUGIN in its card: the new tab is added and activated first,
- * so the card never loses its last tab, and the placeholder tab is closed. Returns the new tabs as `{card, tab}`.
- */
-export async function replacePlaceholders(s) {
-  const added = [];
-  for (const { card, tab } of placeholderTabs(await s.get("core.grid"), await s.get("core.surfaces"))) {
-    const { tab: opened } = await s.run("core.card.add-tab", { card, plugin: START_PLUGIN });
-    await s.run("core.tab.close", { tab });
-    added.push({ card, tab: opened });
-  }
-  return added;
-}
-
-/**
- * Waits until the active tab of the focused card is a ready START_PLUGIN tab that registered START_ENTRIES, and returns it as
- * `{surface, plugin}`. A start layout whose focused card holds no START_PLUGIN tab fails with the grid.
- */
-export async function startTab(s) {
-  const grid = await s.get("core.grid");
-  const focused = grid?.cards.find((card) => card.focused);
-  const active = focused?.tabs?.find((tab) => tab.id === focused.active);
-  if (active?.plugin !== START_PLUGIN) {
-    throw new Error(`the focused card of the start layout holds no active ${START_PLUGIN} tab: ${JSON.stringify(grid?.cards ?? null)}`);
-  }
-  await s.until("core.surfaces", (surfaces) => surfaces.some((row) => row.surface === active.id && row.visible && row.status?.phase === "ready"),
-    `the start tab ${active.id} did not become ready`);
-  await s.registered(active.id, START_ENTRIES);
-  return { surface: active.id, plugin: START_PLUGIN };
-}
+/** Waits until the active tab of the focused card is a ready START_PLUGIN tab that registered START_ENTRIES and returns it. */
+export const startTab = (s) => start.startTab(s, { startPlugin: START_PLUGIN, startEntries: START_ENTRIES });
 
 /**
  * Puts a card-left sidebar on each card whose active tab is a tab of `plugin` (START_PLUGIN by default). Without `sections` it links
- * the set `set` that the plugin declares (the layout probe declares `layoutprobe.list`, list layout, and `layoutprobe.tabs`, tabs
- * layout); with `sections` it first stores a common list set with the id `set` (by default `check-sections`) that holds those
- * sections. keepCommonSettings restores the sets and the links when the check ends. Returns the ids of the card sidebars.
+ * the set `set`, by default the list set `<plugin>.list` that the layout probe declares (it also declares `layoutprobe.tabs`, tabs
+ * layout); with `sections` it stores a common list set of those sections (start.mjs cardSidebar). Returns the ids of the card sidebars.
  */
-export async function cardSidebar(s, { plugin = START_PLUGIN, set, sections } = {}) {
-  const id = set ?? (sections === undefined ? `${plugin}.list` : "check-sections");
-  await keepCommonSettings(s);
-  if (sections !== undefined) {
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: [...sets, { id, title: "검사", sections, layout: "list" }] }, scope: "common" });
-  }
-  await s.run("core.settings.link", { place: "card-left", plugin, set: id, scope: "common" });
-  const cards = (await s.get("core.grid")).cards
-    .filter((card) => card.tabs?.find((tab) => tab.id === card.active)?.plugin === plugin).map((card) => `${card.id}:left`);
-  if (cards.length === 0) throw new Error(`no card shows an active ${plugin} tab for its card sidebar`);
-  await s.until("core.sidebars", (value) => cards.every((sidebar) => value.some((item) => item.sidebar === sidebar && item.set === id)),
-    `the card sidebars ${cards.join(", ")} did not show the set ${id}`);
-  return cards;
-}
-
-/** The event catalog of this repository (docs/spec/logging.md#catalog). */
-const CATALOG = fileURLToPath(new URL("../docs/spec/events.json", import.meta.url));
+export const cardSidebar = (s, { plugin = START_PLUGIN, set, sections } = {}) =>
+  start.cardSidebar(s, { plugin, set: set ?? (sections === undefined ? `${plugin}.list` : undefined), sections });
 
 /**
- * The declarations of the records that a check reads: the catalog of this repository joined with the catalogs of the sidecars
+ * The declarations of the records that a check reads: the catalog of core joined with the catalogs of the plugins and sidecars
  * installed in the configuration folder of the application.
  */
-export const recordCatalog = (app) => catalogOf(JSON.parse(readFileSync(CATALOG, "utf8")), app.configDir);
+export const recordCatalog = (app) => catalogOfConfiguration(app.configDir);
 
-/** The declaration `{ catalog, records }` of a wait of `untilEventLines` on the records that the predicate reads. */
-export const reading = (app, records) => ({ catalog: recordCatalog(app), records });
-
-/** The surface registration rows of the trace that the event log gained after the offsets. */
-async function registrationTimeline(s, offsets) {
-  await s.flushLog();
-  return traceRows(readEvents(s.app.configDir, offsets).events).filter((row) => row.event === "surface.registration");
-}
-
-/** The file of the disposable configuration that holds the registry of the application while a check uses its own registry. */
-const heldRegistryFile = (s) => join(s.app.configDir, "check-registry.json");
-
-/**
- * Sets a registry of the check. The first change records the registry that the application had. The record outlives a restore
- * that fails, so the registry of a failed run is never taken for the registry of the application.
- */
-export async function useRegistry(s, index) {
-  const held = heldRegistryFile(s);
-  if (!existsSync(held)) writeFileSync(held, JSON.stringify({ registry: (await s.get("core.plugins")).registry }));
-  await s.run("core.plugins.registry", { index });
-}
-
-/** Restores the recorded registry and removes the record; without a record the check changed no registry. */
-export async function restoreRegistry(s) {
-  const held = heldRegistryFile(s);
-  if (!existsSync(held)) return;
-  await s.run("core.plugins.registry", { index: JSON.parse(readFileSync(held, "utf8")).registry });
-  rmSync(held);
-}
-
-/**
- * Puts the window in the start state of a check and returns the start tab `{surface, plugin}`: diagnostics.fixture opens the
- * new-space layout, every placeholder tab of it is replaced by a START_PLUGIN tab (replacePlaceholders), and the active tab of the
- * focused card is ready (startTab). `log` is the log policy that the check declares and `reads` the records below `error` that it
- * reads (prepareFixture); with the performance trace the registration timeline of a failed start is read too.
- */
-export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = {}, reads = [] } = {}) {
-  const traceOffsets = currentEventOffsets(s.app.configDir);
-  const declared = performanceTrace ? [...reads, "workbench.trace.surface.registration"] : reads;
-  await prepareFixture(s, { settings, performanceTrace, log, reads: declared, catalog: declared.length ? recordCatalog(s.app) : undefined });
-  // A record that remains belongs to an earlier run whose restore failed.
-  await restoreRegistry(s);
-  let tab;
-  try {
-    await replacePlaceholders(s);
-    tab = await startTab(s);
-  } catch (error) {
-    if (!performanceTrace) throw error;
-    throw new Error(`${error.message}; registration timeline: ${JSON.stringify(await registrationTimeline(s, traceOffsets))}`, { cause: error });
-  }
-  await s.presented();
-  return tab;
-}
+/** Puts the window in the start state of a check with a START_PLUGIN start tab (start.mjs fresh) and returns `{surface, plugin}`. */
+export const fresh = (s, options = {}) => start.fresh(s, { ...options, startPlugin: START_PLUGIN, startEntries: START_ENTRIES });
 
 /**
  * Waits until the page of the window has reloaded after a plugin operation that changed installed.json
@@ -152,7 +49,7 @@ export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = 
  * document writes `workbench.start`, and `host.windows`, which the host answers while the page reloads, then reports the page ready.
  */
 export async function pluginChangeApplied(s, offsets, action) {
-  await untilEventLine(s.app.configDir, offsets, (line) => line.includes("workbench.start"), 30000, reading(s.app, ["workbench.start"]));
+  await untilEventLine(s.app.configDir, offsets, (line) => line.includes("workbench.start"), 30000, start.reading(s.app, ["workbench.start"]));
   await s.windows(1, `the page was not ready again after ${action}`);
 }
 

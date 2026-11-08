@@ -1,0 +1,11 @@
+{
+  "name": "@sok-check/start-probe",
+  "version": "0.0.40",
+  "private": true,
+  "type": "module",
+  "description": "Window check fixture: the start tab of the start layout.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}
