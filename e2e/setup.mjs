@@ -24,7 +24,7 @@ export async function globalSetup() {
   await withSetupLimit("e2e setup", E2E_SETUP_LIMIT_MS, async () => {
     const variables = ["WAILSV3", "TAURIV2", "MYGO"].map(name => `SOKSAK_BINARY_${name}`);
     if (variables.every(variable => process.env[variable])) return;
-    const declared = debugBinaries(targetDirectory());
+    const declared = await debugBinaries(targetDirectory());
     for (const [variable, path] of Object.entries(declared)) process.env[variable] ??= path;
   });
 }

@@ -12,6 +12,8 @@ type DiagnosticFunctions struct {
 	CountPageObjects                    func(unsafe.Pointer, bool, uintptr)
 	CountWhen                           func(*SpWindowObjects, float64, uintptr)
 	InputReference                      func(uintptr, *byte, *byte, uintptr)
+	InputSourceIdentifierRole           func(*byte) *byte
+	InputSourceRoleIdentifier           func(*byte) *byte
 	InputSourceSelectAndAwait           func(*byte, uintptr)
 	ListDeliveredNotifications          func()
 	MainSpCaptureHasStream              func() bool
@@ -47,6 +49,12 @@ func (functions DiagnosticFunctions) Validate() error {
 	}
 	if functions.InputReference == nil {
 		return fmt.Errorf("native API function is missing: inputReference")
+	}
+	if functions.InputSourceIdentifierRole == nil {
+		return fmt.Errorf("native API function is missing: inputSourceIdentifierRole")
+	}
+	if functions.InputSourceRoleIdentifier == nil {
+		return fmt.Errorf("native API function is missing: inputSourceRoleIdentifier")
 	}
 	if functions.InputSourceSelectAndAwait == nil {
 		return fmt.Errorf("native API function is missing: inputSourceSelectAndAwait")

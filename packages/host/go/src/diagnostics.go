@@ -1345,7 +1345,6 @@ type captureStatusAdapter struct{ platformCapture }
 func (c captureStatusAdapter) Limited() bool       { return c.CaptureLimited() }
 func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap() }
 
-// diagnosticInputSource selects that input source when select is given, and returns the currently selected keyboard input source.
 // diagnosticLogFlush waits until the records written so far are in the event log of the host.
 func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, err := e.window(params); err != nil {
@@ -1459,39 +1458,92 @@ func diagnosticInputReference(e *Endpoint, _ *endpointConn, params json.RawMessa
 	return reply.value, reply.failure
 }
 
-func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
-	if _, err := e.window(params); err != nil {
-		return nil, err
-	}
+// inputSourceRoles are the input source roles that select of diagnostics.input.source takes (docs/spec/endpoint.md). The platform
+// maps each role to its input source; no identifier of a platform's input source is named here.
+var inputSourceRoles = []string{"latin", "korean", "japanese"}
+
+// inputSourceRequest is a diagnostics.input.source request: Select is the role to select, Restore the platform identifier of an
+// input source that an earlier reply reported in source, and both are empty for a read of the current input source.
+type inputSourceRequest struct {
+	Select  string
+	Restore string
+}
+
+// parseInputSource reads the params of diagnostics.input.source. A select that is not an input source role, an empty restore, and
+// a request with both are refused.
+func parseInputSource(params json.RawMessage) (inputSourceRequest, error) {
 	var p struct {
-		Select *string `json:"select"`
+		Select  *string `json:"select"`
+		Restore *string `json:"restore"`
 	}
 	if err := decode(params, &p); err != nil {
-		return nil, err
+		return inputSourceRequest{}, err
 	}
-	if p.Select != nil && *p.Select == "" {
-		return nil, rpcError(codeInvalidParams, "select must be a non-empty string")
+	if p.Select != nil && p.Restore != nil {
+		return inputSourceRequest{}, rpcError(codeInvalidParams, "select and restore exclude each other")
 	}
-	sources, ok := system.(platform.InputSources)
-	if !ok {
-		return nil, errors.New("keyboard input sources are not implemented on this platform")
+	if p.Restore != nil {
+		if *p.Restore == "" {
+			return inputSourceRequest{}, rpcError(codeInvalidParams, "restore must be a non-empty string")
+		}
+		return inputSourceRequest{Restore: *p.Restore}, nil
 	}
-	var current string
-	var err error
-	if p.Select != nil {
+	if p.Select == nil {
+		return inputSourceRequest{}, nil
+	}
+	for _, role := range inputSourceRoles {
+		if *p.Select == role {
+			return inputSourceRequest{Select: role}, nil
+		}
+	}
+	return inputSourceRequest{}, rpcError(codeInvalidParams, "select must be one of latin, korean, japanese")
+}
+
+// answerInputSource performs request through the input source operations of the platform, each in a main-thread step that step
+// runs, and replies {current, source}: the role of the selected input source, null for an input source without a role, and its
+// platform identifier.
+func answerInputSource(sources platform.InputSources, request inputSourceRequest, step func(func())) (any, error) {
+	if request.Select != "" || request.Restore != "" {
 		adopted := make(chan error, 1)
-		mainThreadStep(func() {
-			sources.SelectInputSource(*p.Select, func(failure error) { adopted <- failure })
+		step(func() {
+			if request.Select != "" {
+				sources.SelectInputSource(request.Select, func(failure error) { adopted <- failure })
+			} else {
+				sources.RestoreInputSource(request.Restore, func(failure error) { adopted <- failure })
+			}
 		})
 		if err := <-adopted; err != nil {
 			return nil, err
 		}
 	}
-	mainThreadStep(func() { current, err = sources.InputSource() })
+	var role, source string
+	var err error
+	step(func() { role, source, err = sources.InputSource() })
 	if err != nil {
 		return nil, err
 	}
-	return map[string]string{"current": current}, nil
+	var current any
+	if role != "" {
+		current = role
+	}
+	return map[string]any{"current": current, "source": source}, nil
+}
+
+// diagnosticInputSource selects the input source of a role when select is given, or the input source that restore names, and
+// returns the role and the platform identifier of the currently selected keyboard input source.
+func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	if _, err := e.window(params); err != nil {
+		return nil, err
+	}
+	request, err := parseInputSource(params)
+	if err != nil {
+		return nil, err
+	}
+	sources, ok := system.(platform.InputSources)
+	if !ok {
+		return nil, errors.New("keyboard input sources are not implemented on this platform")
+	}
+	return answerInputSource(sources, request, mainThreadStep)
 }
 
 // transcriptTopic reads the diagnostics.log subscription and direction of the connection from the params of diagnostics.transcript.

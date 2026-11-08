@@ -41,22 +41,27 @@ test("a cleanup failure is reported when the check body already failed", { timeo
   assert.match(result.stdout, /# cleanup failed: Error: probe press stayed open/);
 });
 
+/**
+ * A fake endpoint answer of diagnostics.input.source: the role of the selected input source, or null for a source without a role, and
+ * its opaque platform `source`. The person's source `person-source` has no role.
+ */
+const sourceAnswer = (source) => ({ current: source.startsWith("role-") ? source.slice(5) : null, source });
+
 test("an input-source selection in a session tree restores the first source after baseline cleanup", { timeout: 10000 }, async () => {
   const cleanupEvents = [];
-  let current = "com.apple.keylayout.ABC";
+  let current = "person-source";
   let sourceReads = 0;
   let cleaning = false;
   const client = {
     endpoint: { pid: process.pid },
     async request(method, params) {
       assert.equal(method, "diagnostics.input.source");
-      if (params.select) {
-        current = params.select;
-        if (cleaning) cleanupEvents.push(`restore:${params.select}`);
-        return { current };
-      }
-      sourceReads++;
-      return { current };
+      if (params.select) current = `role-${params.select}`;
+      else if (params.restore) {
+        current = params.restore;
+        if (cleaning) cleanupEvents.push(`restore:${params.restore}`);
+      } else sourceReads++;
+      return sourceAnswer(current);
     },
   };
   const session = new Session({ name: "input-source", configDir: "/unused" }, client);
@@ -65,20 +70,29 @@ test("an input-source selection in a session tree restores the first source afte
     cleanupEvents.push("baseline");
   });
 
-  await session.selectInputSource("com.apple.inputmethod.Korean.2SetKorean");
-  await session.on("child").selectInputSource("com.apple.keylayout.ABC");
+  await session.selectInputSource("korean");
+  await session.on("child").selectInputSource("latin");
   cleaning = true;
   for (const clean of session.cleanups.reverse()) await clean();
 
-  assert.deepEqual(cleanupEvents, ["baseline", "restore:com.apple.keylayout.ABC"]);
+  assert.deepEqual(cleanupEvents, ["baseline", "restore:person-source"]);
   assert.equal(sourceReads, 1, "the session tree captures the original source once");
-  assert.equal(current, "com.apple.keylayout.ABC");
+  assert.equal(current, "person-source");
+});
+
+test("an input-source selection fails when the endpoint reports another role than the selected one", { timeout: 10000 }, async () => {
+  const client = {
+    endpoint: { pid: process.pid },
+    async request(_method, params) { return params.select ? sourceAnswer("role-latin") : sourceAnswer("person-source"); },
+  };
+  const session = new Session({ name: "input-source", configDir: "/unused" }, client);
+  await assert.rejects(() => session.selectInputSource("korean"), /input source korean was not selected \(current latin\)/);
 });
 
 test("a child-first input-source restore uses the root window after the child closes", { timeout: 10000 }, async () => {
   const cleanupEvents = [];
   const closed = new Set();
-  let current = "com.apple.keylayout.ABC";
+  let current = "person-source";
   const sourceWindows = [];
   const client = {
     endpoint: { pid: process.pid },
@@ -90,19 +104,19 @@ test("a child-first input-source restore uses the root window after the child cl
       if (method !== "diagnostics.input.source") throw new Error(`unexpected request ${method}`);
       if (closed.has(params.window)) throw new Error(`window ${params.window} is closed`);
       sourceWindows.push(params.window);
-      if (params.select) {
-        current = params.select;
-        if (cleanupEvents.length) cleanupEvents.push(`restore:${params.window}:${params.select}`);
-        return { current };
+      if (params.select) current = `role-${params.select}`;
+      else if (params.restore) {
+        current = params.restore;
+        if (cleanupEvents.length) cleanupEvents.push(`restore:${params.window}:${params.restore}`);
       }
-      return { current };
+      return sourceAnswer(current);
     },
   };
   const root = new Session({ name: "input-source", configDir: "/unused" }, client);
   root.cleanups.push(async () => cleanupEvents.push("baseline"));
   const child = root.on("child");
 
-  await child.selectInputSource("com.apple.inputmethod.Korean.2SetKorean");
+  await child.selectInputSource("korean");
   await child.close();
   const cleanupErrors = [];
   for (const clean of root.cleanups.reverse()) {
@@ -110,9 +124,9 @@ test("a child-first input-source restore uses the root window after the child cl
   }
 
   assert.deepEqual(cleanupErrors, []);
-  assert.deepEqual(cleanupEvents, ["baseline", "restore:main:com.apple.keylayout.ABC"]);
+  assert.deepEqual(cleanupEvents, ["baseline", "restore:main:person-source"]);
   assert.deepEqual(sourceWindows, ["child", "child", "main"]);
-  assert.equal(current, "com.apple.keylayout.ABC");
+  assert.equal(current, "person-source");
 });
 
 // A check that passes its body still fails on an error event that the application stored in its event log during the check.

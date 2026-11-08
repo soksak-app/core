@@ -10,7 +10,6 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { inputSources } from "../platform/platform.js";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexAcceptedFrameTrace,
@@ -42,7 +41,6 @@ import {
   terminalStageEvents,
 } from "./terminal-ime-document.mjs";
 
-const { latin: ABC, korean: KOREAN_2SET } = inputSources();
 
 async function machAbsoluteBoundary(s) {
   return hostClockBoundary((method, params) => s.request(method, params));
@@ -134,8 +132,8 @@ for (const app of Object.values(APPS)) {
       await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
         "the shell prompt did not appear");
 
-      const original = (await s.request("diagnostics.input.source")).current;
-      s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
+      const original = (await s.request("diagnostics.input.source")).source;
+      s.cleanup(() => s.request("diagnostics.input.source", { restore: original }));
 
       // The key window receives the pointer position as a movement, so the window is placed away from the pointer.
       await s.keepPointerOutside();
@@ -153,18 +151,18 @@ for (const app of Object.values(APPS)) {
       s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
 
       // Order from the user report: ddd with the English layout, then Hangul with the Korean 2-set layout (g k s r m f), Space, Enter.
-      assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
+      assert.equal((await s.request("diagnostics.input.source", { select: "latin" })).current, "latin");
       for (const typed of ["d", "dd", "ddd"]) {
         await s.press("d");
         await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith(typed)),
-          `the ABC key did not produce ${typed}`);
+          `the latin key did not produce ${typed}`);
       }
       // In the empty cell after a narrow glyph, the cursor covers only one cell.
       const narrow = await cursorCellCoverage(s, surface);
       t.diagnostic(`${app.name}: narrow cursor coverage ${JSON.stringify({ col: narrow.cursor.col, first: narrow.first, second: narrow.second })}`);
       assert.ok(narrow.first > 0.9 && narrow.second < 0.1,
         `the cursor after ASCII text must cover exactly one cell: ${JSON.stringify(narrow)}`);
-      assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+      assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
 
       const steps = [["g", "ㅎ"], ["k", "하"], ["s", "한"], ["r", "ㄱ"], ["m", "그"], ["f", "글"]];
       let preeditCursor;
@@ -279,8 +277,8 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
-    const original = (await s.request("diagnostics.input.source")).current;
-    s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
+    const original = (await s.request("diagnostics.input.source")).source;
+    s.cleanup(() => s.request("diagnostics.input.source", { restore: original }));
     await s.keepPointerOutside();
     const view = await s.rect("terminal.view", undefined, surface);
     const x = view.document.x + view.x + view.width / 2;
@@ -290,11 +288,11 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (host) => host.active === true &&
       host.regions.some((region) => region.surface === surface && region.focused),
     "the terminal did not receive native focus in the active window");
-    assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
+    assert.equal((await s.request("diagnostics.input.source", { select: "latin" })).current, "latin");
     for (const key of "ddd") await s.press(key);
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("ddd")),
       "ASCII input did not reach the PTY before Korean input");
-    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
     await s.run("terminal.ime.trace", { action: "start" }, surface);
     s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
     for (const key of ["g", "k", "s", "r", "m", "f", "d", "m", "s"]) await s.press(key);
@@ -344,8 +342,8 @@ for (const app of Object.values(APPS)) {
     manifest.clockPreflight = await machAbsoluteBoundary(s);
     persist("manifest.json", manifest);
 
-    const original = (await s.request("diagnostics.input.source")).current;
-    s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
+    const original = (await s.request("diagnostics.input.source")).source;
+    s.cleanup(() => s.request("diagnostics.input.source", { restore: original }));
     await s.keepPointerOutside();
     const terminalView = await s.rect("terminal.view", undefined, surface);
     const x = terminalView.document.x + terminalView.x + terminalView.width / 2;
@@ -359,8 +357,8 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (host) => host.responder?.surface === surface &&
       host.regions.some((region) => region.surface === surface && region.focused),
     "the terminal focus command did not install its native responder");
-    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
-      `the ${KOREAN_2SET} input source is not enabled`);
+    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean",
+      `the korean input source is not enabled`);
 
     let traceActive = false;
     let activeTraceName = "terminal-input";
@@ -649,8 +647,8 @@ for (const app of Object.values(APPS)) {
       "move", { activate: true });
     const focusedReference = await s.request("diagnostics.input.reference", { action: "focus" });
     assert.equal(focusedReference.focused, true, "the same-window AppKit reference must receive native focus");
-    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
-      `the ${KOREAN_2SET} input source is not enabled for the reference`);
+    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean",
+      `the korean input source is not enabled for the reference`);
 
     const expectedReferenceDocuments = [
       ...Array.from({ length: 8 }, (_, index) => "ㅏ".repeat(index + 1)),
@@ -709,8 +707,8 @@ for (const app of Object.values(APPS)) {
     await s.until("host.window", (host) => host.responder?.surface === surface &&
       host.regions.some((region) => region.surface === surface && region.focused),
     "the terminal did not regain its native responder after the reference closed");
-    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
-      `the ${KOREAN_2SET} input source is not enabled for the terminal`);
+    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean",
+      `the korean input source is not enabled for the terminal`);
     const terminalReady = {
       host: await s.get("host.window"),
       compose: await s.get("terminal.compose", surface),

@@ -5,6 +5,28 @@
 #import "application_log.h"
 #import "observe.h"
 
+static const struct { const char *role; const char *identifier; } SPInputSourceRoles[] = {
+    {"latin", "com.apple.keylayout.ABC"},
+    {"korean", "com.apple.inputmethod.Korean.2SetKorean"},
+    {"japanese", "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese"},
+};
+
+const char *sp_input_source_role_identifier(const char *role) {
+    if (!role) return NULL;
+    for (size_t index = 0; index < sizeof SPInputSourceRoles / sizeof SPInputSourceRoles[0]; index++) {
+        if (strcmp(SPInputSourceRoles[index].role, role) == 0) return SPInputSourceRoles[index].identifier;
+    }
+    return NULL;
+}
+
+const char *sp_input_source_identifier_role(const char *identifier) {
+    if (!identifier) return NULL;
+    for (size_t index = 0; index < sizeof SPInputSourceRoles / sizeof SPInputSourceRoles[0]; index++) {
+        if (strcmp(SPInputSourceRoles[index].identifier, identifier) == 0) return SPInputSourceRoles[index].role;
+    }
+    return NULL;
+}
+
 char *sp_input_source_current(void) {
     NSCAssert(NSThread.isMainThread, @"input sources are read on the main thread");
     TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();

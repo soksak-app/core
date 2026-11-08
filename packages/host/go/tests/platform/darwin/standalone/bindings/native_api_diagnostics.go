@@ -23,6 +23,12 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 		InputReference: func(a0 uintptr, a1 *byte, a2 *byte, a3 uintptr) {
 			C.inputReference(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), C.uintptr_t(a3))
 		},
+		InputSourceIdentifierRole: func(a0 *byte) *byte {
+			return (*byte)(unsafe.Pointer(C.inputSourceIdentifierRole((*C.char)(unsafe.Pointer(a0)))))
+		},
+		InputSourceRoleIdentifier: func(a0 *byte) *byte {
+			return (*byte)(unsafe.Pointer(C.inputSourceRoleIdentifier((*C.char)(unsafe.Pointer(a0)))))
+		},
 		InputSourceSelectAndAwait: func(a0 *byte, a1 uintptr) {
 			C.inputSourceSelectAndAwait((*C.char)(unsafe.Pointer(a0)), C.uintptr_t(a1))
 		},

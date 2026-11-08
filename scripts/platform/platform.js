@@ -1,10 +1,8 @@
-// Selects platform operations without loading a native implementation until that operation is requested.
-//
-// Each operation is an explicit contract. Importing this file never depends on the running operating system: an operation that the
-// selected platform does not implement throws PlatformOperationNotImplemented when it is called, never at import, and never with a
-// substitute result.
-import * as darwinArtifacts from './darwin/artifacts.mjs';
-import * as darwinEndToEnd from './darwin/end-to-end.mjs';
+// Selects the platform operations of the verification scripts. Each operation is named by its intent and returns platform-neutral
+// values; how a platform performs it lives in the implementation of that platform (scripts/platform/<platform>/), which the selector
+// loads only when an operation runs for that platform. Importing this file therefore never depends on the operating system, and an
+// operation that the selected platform does not implement rejects with PlatformOperationNotImplemented when it is called, never at
+// import and never with a substitute result.
 
 /** The error of an operation that the selected platform does not implement: `<operation> is not implemented on <platform>`. */
 export class PlatformOperationNotImplemented extends Error {
@@ -16,22 +14,19 @@ export class PlatformOperationNotImplemented extends Error {
   }
 }
 
-const processReaders = new Map([
-  ['darwin', () => import('./darwin/process-executable.mjs')],
-  ['linux', () => import('./linux/process-executable.mjs')],
+const implementations = new Map([
+  ['darwin', () => import('./darwin/darwin.mjs')],
+  ['linux', () => import('./linux/linux.mjs')],
 ]);
-const artifactLayouts = new Map([['darwin', darwinArtifacts]]);
-const endToEndOperations = new Map([['darwin', darwinEndToEnd]]);
 const releaseSystems = new Map([['darwin', 'darwin'], ['linux', 'linux'], ['win32', 'windows']]);
 const releaseArchitectures = new Set(['arm64', 'x64']);
 
-/** The implementation of `operation` in `table` for `platform`; a platform without it throws the named error. */
-function select(table, operation, platform, member) {
-  const implementation = table.get(platform);
-  if (implementation === undefined || (member !== undefined && typeof implementation[member] !== 'function')) {
-    throw new PlatformOperationNotImplemented(operation, platform);
-  }
-  return member === undefined ? implementation : implementation[member];
+/** The implementation of `operation` on `platform`; a platform without it rejects with the named error. */
+async function implementation(operation, platform) {
+  const load = implementations.get(platform);
+  const selected = load === undefined ? undefined : (await load())[operation];
+  if (typeof selected !== 'function') throw new PlatformOperationNotImplemented(operation, platform);
+  return selected;
 }
 
 /** Metadata uses the runtime key that selects a sidecar release; it does not require live process lookup. */
@@ -41,49 +36,62 @@ export function releasePlatform({ platform = process.platform, arch = process.ar
   return `${os}-${arch}`;
 }
 
-/** The registry key of the core release of `app` on the platform, `<platform>-<host>` (docs/spec/installation.md). */
+/** The registry key of the core release of `app` on the declared platform, `<platform>-<host>` (docs/spec/installation.md). */
 export function releaseKey(app, { platform = process.platform, arch = process.arch } = {}) {
   return `${releasePlatform({ platform, arch })}-${app}`;
 }
 
-/** The declared artifact of application `app` in the build output `folder` (for example `<target>/debug`). */
-export function applicationBundle(folder, app, { platform = process.platform } = {}) {
-  return select(artifactLayouts, 'application artifact', platform, 'applicationBundle')(folder, app);
+/** The path of the declared application artifact of `app` in the build output `folder` (for example `<target>/debug`). */
+export async function applicationArtifact(folder, app, { platform = process.platform } = {}) {
+  return (await implementation('applicationArtifact', platform))(folder, app);
 }
 
-/** The executables of the declared application artifact `bundle`: `{ application, installer }` (the bundled `sok`). */
-export function artifactExecutables(bundle, app, { platform = process.platform } = {}) {
-  return select(artifactLayouts, 'application artifact executables', platform, 'artifactExecutables')(bundle, app);
+/** The executables of the declared application artifact `artifact` of `app`: `{application, sok}`. */
+export async function applicationExecutables(artifact, app, { platform = process.platform } = {}) {
+  return (await implementation('applicationExecutables', platform))(artifact, app);
 }
 
-/** The keyboard shortcut and menu key equivalent of the Quit item of the application menu. */
-export function quitShortcut({ platform = process.platform } = {}) {
-  return select(endToEndOperations, 'quit shortcut', platform, 'quitShortcut')();
+/**
+ * Asks the application of the endpoint `client` to quit as a person does: `by` `menu` through the quit item of its menu, `by` `key`
+ * through the quit key of the platform. Resolves with the name of the action once the application accepted the request.
+ */
+export async function quitApplication(client, by, { platform = process.platform } = {}) {
+  if (by !== 'menu' && by !== 'key') throw new Error(`unknown quit path ${JSON.stringify(by)}`);
+  return (await implementation('quitApplication', platform))(client, by);
 }
 
-/** The command that runs the native end-to-end target `target` of the platform's native library. */
-export function nativeEndToEndCommand(target, { platform = process.platform } = {}) {
-  return select(endToEndOperations, 'native end-to-end tests', platform, 'nativeEndToEndCommand')(target);
+/**
+ * Opens the running application whose executable is `executable` through the application launcher of the system as a person does,
+ * which activates it. Resolves once the launcher accepted the request.
+ */
+export async function openApplication(executable, { platform = process.platform } = {}) {
+  return (await implementation('openApplication', platform))(executable);
 }
 
-/** The command that ends with status 0 once no process holds the lock file `lock`, within `seconds`. */
-export function lockReleaseCommand(lock, seconds, { platform = process.platform } = {}) {
-  return select(endToEndOperations, 'lock release wait', platform, 'lockReleaseCommand')(lock, seconds);
+/** Resolves with true once no process holds the lock file `lock`, and with false when `seconds` pass first. */
+export async function waitForLockRelease(lock, seconds, { platform = process.platform } = {}) {
+  return (await implementation('waitForLockRelease', platform))(lock, seconds);
 }
 
-/** The command whose output lists every process as `<pid> <command>` lines. */
-export function processTableCommand({ platform = process.platform } = {}) {
-  return select(endToEndOperations, 'process table', platform, 'processTableCommand')();
+/** Every process of the system as `{pid, ppid, executable, arguments}` records; `arguments` is the command line as one text. */
+export async function listProcesses({ platform = process.platform } = {}) {
+  return (await implementation('listProcesses', platform))();
 }
 
-/** The system crash reports of application `app` written since `since` (ms), each line naming its file and fault. */
-export function crashReports(app, since, { platform = process.platform, ...options } = {}) {
-  return select(endToEndOperations, 'crash reports', platform, 'crashReports')(app, since, options);
+/**
+ * Runs the native end-to-end tests `target` of the platform's native library from the checkout `cwd` with `env`, with their output
+ * on the output of the run. Resolves when they pass; an abort of `signal` ends them.
+ */
+export async function runNativeTests(target, { platform = process.platform, cwd, env, signal } = {}) {
+  return (await implementation('runNativeTests', platform))(target, { cwd, env, signal });
+}
+
+/** The crash reports that the system wrote for `app` since `since` (ms), as `{report, fault}` records. */
+export async function crashReports(app, since, { platform = process.platform, ...options } = {}) {
+  return (await implementation('crashReports', platform))(app, since, options);
 }
 
 /** Reads the executable the kernel associates with the live PID. */
 export async function processExecutable(pid, { platform = process.platform, ...options } = {}) {
-  const load = select(processReaders, 'process executable identity', platform);
-  const implementation = await load();
-  return implementation.processExecutable(pid, options);
+  return (await implementation('processExecutable', platform))(pid, options);
 }

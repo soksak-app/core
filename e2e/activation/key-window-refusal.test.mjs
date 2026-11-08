@@ -10,10 +10,8 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { inputSources } from "../platform/platform.js";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 
-const { latin: ABC } = inputSources();
 
 /**
  * A folder for a project that the check opens. The library keeps the project after its window closes, so the cleanup closes it
@@ -44,7 +42,7 @@ for (const app of Object.values(APPS)) {
     const x = view.document.x + view.x + view.width / 2;
     const y = view.document.y + view.y + view.height / 2;
     await s.pointer(x, y, "move", { activate: true });
-    await s.selectInputSource(ABC);
+    await s.selectInputSource("latin");
     await s.click(x, y);
     await s.until("host.window", (host) => host.active === true &&
       host.regions.some((region) => region.surface === surface && region.focused),

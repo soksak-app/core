@@ -92,6 +92,15 @@ static BOOL completionTokenDeallocated = NO;
 
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
+    check(strcmp(sp_input_source_role_identifier("latin") ?: "", "com.apple.keylayout.ABC") == 0
+        && strcmp(sp_input_source_role_identifier("korean") ?: "", "com.apple.inputmethod.Korean.2SetKorean") == 0
+        && strcmp(sp_input_source_role_identifier("japanese") ?: "", "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") == 0,
+        @"each input source role names its Text Input Sources identifier");
+    check(sp_input_source_role_identifier("greek") == NULL && sp_input_source_role_identifier("") == NULL
+        && sp_input_source_role_identifier(NULL) == NULL, @"a string that is not an input source role names no input source");
+    check(strcmp(sp_input_source_identifier_role("com.apple.inputmethod.Korean.2SetKorean") ?: "", "korean") == 0
+        && sp_input_source_identifier_role("com.apple.keylayout.US") == NULL && sp_input_source_identifier_role(NULL) == NULL,
+        @"an input source has the role of its identifier, and an input source outside the table has no role");
     char *current = sp_input_source_current();
     check(current != NULL, @"the current global keyboard source can be read");
     __block NSUInteger noClientCalls = 0;

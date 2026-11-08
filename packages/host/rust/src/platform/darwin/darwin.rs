@@ -764,12 +764,16 @@ impl Platform for Darwin {
         input_reference::call(window, action, document, done);
     }
     #[cfg(feature = "diagnostics")]
-    fn input_source(&self) -> Result<String, String> {
+    fn input_source(&self) -> Result<(Option<String>, String), String> {
         input_source::current()
     }
     #[cfg(feature = "diagnostics")]
-    fn select_input_source(&self, identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
-        input_source::select(identifier, adopted)
+    fn select_input_source(&self, role: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+        input_source::select(role, adopted)
+    }
+    #[cfg(feature = "diagnostics")]
+    fn restore_input_source(&self, source: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+        input_source::restore(source, adopted)
     }
 
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {

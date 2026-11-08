@@ -2,10 +2,12 @@
 
 package darwin
 
-// Reads and selects the keyboard input source. The implementation is input_source.m of native/darwin. It is included only in diagnostic builds.
+// Reads and selects the keyboard input source. The implementation is input_source.m of native/darwin, which also holds the input
+// source of each role. It is included only in diagnostic builds.
 
 import (
 	"errors"
+	"fmt"
 
 	"strings"
 	"unsafe"
@@ -13,26 +15,51 @@ import (
 	handles "github.com/soksak-app/core/packages/host/go/src/callback"
 )
 
-// InputSource returns the identifier of the currently selected keyboard input source. Call it in a main-thread step.
-func (implementation) InputSource() (string, error) {
+// InputSource returns the role of the currently selected keyboard input source, "" for an input source without a role, and its
+// identifier. Call it in a main-thread step.
+func (implementation) InputSource() (string, string, error) {
 	pointer := diagnosticNative.MainSpInputSourceCurrent()
 	if pointer == nil {
-		return "", errors.New("the selected keyboard input source could not be read")
+		return "", "", errors.New("the selected keyboard input source could not be read")
 	}
 	defer native.Free(unsafe.Pointer(pointer))
-	return native.GoString(pointer), nil
+	role := diagnosticNative.InputSourceIdentifierRole(pointer)
+	if role == nil {
+		return "", native.GoString(pointer), nil
+	}
+	return native.GoString(role), native.GoString(pointer), nil
 }
 
-// SelectInputSource selects identifier and waits for active key-view context adoption. Call it in a main-thread step.
-func (implementation) SelectInputSource(identifier string, adopted func(error)) {
+// SelectInputSource selects the input source of role and waits for active key-view context adoption. Call it in a main-thread step.
+func (implementation) SelectInputSource(role string, adopted func(error)) {
 	if adopted == nil {
 		panic("input source selection requires an adoption callback")
 	}
-	if strings.IndexByte(identifier, 0) >= 0 {
+	if strings.IndexByte(role, 0) >= 0 {
+		adopted(errors.New("input source role contains NUL"))
+		return
+	}
+	wanted := native.CString(role)
+	defer native.Free(unsafe.Pointer(wanted))
+	identifier := diagnosticNative.InputSourceRoleIdentifier(wanted)
+	if identifier == nil {
+		adopted(fmt.Errorf("the input source role %q has no input source on macOS", role))
+		return
+	}
+	diagnosticNative.InputSourceSelectAndAwait(identifier, uintptr(handles.NewHandle(adopted)))
+}
+
+// RestoreInputSource selects the input source with identifier source and waits for active key-view context adoption. Call it in a
+// main-thread step.
+func (implementation) RestoreInputSource(source string, adopted func(error)) {
+	if adopted == nil {
+		panic("input source selection requires an adoption callback")
+	}
+	if strings.IndexByte(source, 0) >= 0 {
 		adopted(errors.New("input source identifier contains NUL"))
 		return
 	}
-	wanted := native.CString(identifier)
+	wanted := native.CString(source)
 	defer native.Free(unsafe.Pointer(wanted))
 	diagnosticNative.InputSourceSelectAndAwait(wanted, uintptr(handles.NewHandle(adopted)))
 }

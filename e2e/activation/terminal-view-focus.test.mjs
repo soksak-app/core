@@ -10,12 +10,10 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { captureCadence, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
-import { inputSources } from "../platform/platform.js";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { assertInputTraceDelivery } from "./terminal-ime-document.mjs";
 
-const { latin: ABC, korean: KOREAN_2SET } = inputSources();
 const COMMAND = "echo focuscheck";
 const REPEATED_VOWEL_KEYS = ["k", "k", "k", "k"];
 const REPEATED_VOWELS = "ㅏㅏㅏㅏ";
@@ -37,8 +35,8 @@ async function step(t, name, action) {
 }
 
 async function typeCommand(s, requests = []) {
-  const selected = await s.request("diagnostics.input.source", { select: ABC });
-  assert.equal(selected.current, ABC, "ABC must be selected after focus");
+  const selected = await s.request("diagnostics.input.source", { select: "latin" });
+  assert.equal(selected.current, "latin", "the latin input source must be selected after focus");
   for (const key of [...COMMAND, "Enter"]) {
     const name = key === " " ? "Space" : key;
     for (const phase of ["down", "up"]) {
@@ -568,8 +566,8 @@ for (const app of Object.values(APPS)) {
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")), "shell prompt missing");
     await s.keepPointerOutside();
-    const originalSource = (await s.request("diagnostics.input.source")).current;
-    s.cleanup(() => s.request("diagnostics.input.source", { select: originalSource }));
+    const originalSource = (await s.request("diagnostics.input.source")).source;
+    s.cleanup(() => s.request("diagnostics.input.source", { restore: originalSource }));
     assert.deepEqual(await s.request("diagnostics.input.reference", { action: "read" }), { open: false },
       "the disposable configuration must not contain an open reference");
     await s.request("diagnostics.input.reference", { action: "open" });
@@ -639,8 +637,8 @@ for (const app of Object.values(APPS)) {
     const surface = terminal.surface;
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")), "shell prompt missing");
     await s.keepPointerOutside();
-    const originalSource = (await s.request("diagnostics.input.source")).current;
-    s.cleanup(() => s.request("diagnostics.input.source", { select: originalSource }));
+    const originalSource = (await s.request("diagnostics.input.source")).source;
+    s.cleanup(() => s.request("diagnostics.input.source", { restore: originalSource }));
     assert.deepEqual(await s.request("diagnostics.input.reference", { action: "read" }), { open: false },
       "the disposable configuration must not contain an open reference");
     await s.request("diagnostics.input.reference", { action: "open" });
@@ -659,7 +657,7 @@ for (const app of Object.values(APPS)) {
             "move", { activate: true });
           const focused = await s.request("diagnostics.input.reference", { action: "focus" });
           assert.equal(focused.focused, true, "the AppKit reference must receive native focus");
-          assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
+          assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean",
             "Korean 2-set must be selected for the reference");
           for (const [index, key] of REPEATED_VOWEL_KEYS.entries()) {
             await s.press(key);
@@ -695,7 +693,7 @@ for (const app of Object.values(APPS)) {
             value.regions.some((region) => region.surface === surface && region.name === "view" && region.focused),
           "the clicked terminal did not receive native focus in the active key window");
           assert.equal(host.responder?.surface, surface, "the first responder must belong to the clicked terminal");
-          assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
+          assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean",
             "Korean 2-set must be selected for the terminal");
           const initialScreen = await presentedScreen(s, surface);
           const initialCursor = await s.get("terminal.cursor", surface);

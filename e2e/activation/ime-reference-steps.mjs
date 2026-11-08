@@ -19,8 +19,7 @@ export async function compareAppKitReference(s, keys, expected, expectedDocument
   s.cleanup(() => s.request("diagnostics.input.reference", { window, action: "close" }));
   await s.request("diagnostics.input.reference", { window, action: "focus" });
   const source = await s.request("diagnostics.input.source", { window });
-  assert.equal(typeof source.current, "string", "the active keyboard input source is unavailable after reference focus");
-  assert.ok(source.current.length > 0, "the active keyboard input source is empty after reference focus");
+  assert.equal(typeof source.current, "string", "the active keyboard input source has no input source role after reference focus");
   await s.selectInputSource(source.current);
   const focused = await s.request("diagnostics.input.reference", { window, action: "read" });
   assert.equal(focused.focused, true, "the AppKit reference lost focus while adopting its input source");

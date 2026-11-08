@@ -19,6 +19,16 @@
 - (void)cancelSelectionTimeout:(id)timer;
 @end
 
+// The input source roles of diagnostics.input.source (docs/spec/endpoint.md): `latin` types Latin letters without composition,
+// `korean` composes Hangul with the 2-set layout and `japanese` composes kana from romaji. This table is the only place that names
+// the Text Input Sources identifier of a role. Both functions are pure and may run on any thread.
+
+// Returns the Text Input Sources identifier of `role` as a static string, or NULL when `role` is not an input source role.
+const char *sp_input_source_role_identifier(const char *role);
+
+// Returns the role whose input source has the identifier `identifier` as a static string, or NULL when the input source has no role.
+const char *sp_input_source_identifier_role(const char *identifier);
+
 // Returns the identifier of the currently selected keyboard input source as a malloc-allocated string; the caller frees it.
 // Returns NULL when the input source cannot be read.
 char *sp_input_source_current(void);

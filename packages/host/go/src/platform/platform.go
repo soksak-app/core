@@ -139,12 +139,17 @@ type DocumentFrameIdentityCapture interface {
 
 // InputSources are the keyboard input source operations. Only the platform implementation of a diagnostic build (tag diagnostics) provides them, and
 // diagnostic code uses them by checking the value of Current() against this interface. Selection and key-view adoption are one main-thread operation.
+// A role is one of the input source roles of diagnostics.input.source (docs/spec/endpoint.md); the platform owns the input source of each role.
 type InputSources interface {
-	// InputSource returns the identifier of the currently selected keyboard input source.
-	InputSource() (string, error)
-	// SelectInputSource selects identifier and calls adopted after the active key-view context has adopted it, or reports an error within 2 seconds.
-	// With no active text client, it completes after global selection. Call it on the main thread; adopted runs on the main thread.
-	SelectInputSource(identifier string, adopted func(error))
+	// InputSource returns the role of the currently selected keyboard input source, "" for an input source without a role, and its platform identifier.
+	InputSource() (role string, source string, err error)
+	// SelectInputSource selects the input source of role and calls adopted after the active key-view context has adopted it, or reports an error within
+	// 2 seconds. A role without an input source on the platform reports an error. With no active text client, it completes after global selection.
+	// Call it on the main thread; adopted runs on the main thread.
+	SelectInputSource(role string, adopted func(error))
+	// RestoreInputSource selects the input source whose platform identifier is source, a value that InputSource returned, with the adoption of
+	// SelectInputSource.
+	RestoreInputSource(source string, adopted func(error))
 }
 
 // WindowObjects is the number of live objects, among the objects that the common library attached to windows and web views, whose lifetime shows the release of the window and the web view.

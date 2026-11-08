@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { runReferenceSteps, compareAppKitReference } from "../../activation/ime-reference-steps.mjs";
-import { inputSources } from "../../platform/platform.js";
 
-// The AppKit reference is the macOS owner of these steps, so its fixture uses the macOS input source.
-const { korean: KOREAN } = inputSources({ platform: "darwin" });
+// The input source role that the reference fixture reports and selects.
+const KOREAN = "korean";
 
 test("the next AppKit reference key waits for the prior presentation checkpoint", { timeout: 5000 }, async () => {
   let releasePresentation;

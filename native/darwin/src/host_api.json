@@ -163,6 +163,8 @@
     "countPageObjects",
     "countWhen",
     "inputReference",
+    "inputSourceIdentifierRole",
+    "inputSourceRoleIdentifier",
     "inputSourceSelectAndAwait",
     "listDeliveredNotifications",
     "main_sp_capture_has_stream",

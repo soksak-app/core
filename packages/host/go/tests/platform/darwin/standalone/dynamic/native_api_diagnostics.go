@@ -42,6 +42,26 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.InputReference, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "inputSourceIdentifierRole")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API inputSourceIdentifierRole: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API inputSourceIdentifierRole: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.InputSourceIdentifierRole, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "inputSourceRoleIdentifier")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API inputSourceRoleIdentifier: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API inputSourceRoleIdentifier: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.InputSourceRoleIdentifier, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "inputSourceSelectAndAwait")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API inputSourceSelectAndAwait: %w", err)

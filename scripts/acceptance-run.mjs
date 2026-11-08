@@ -10,7 +10,7 @@ import { CANDIDATE_HOSTS } from './candidate-policy.mjs';
 import { encodeAcceptanceReport } from './candidate-report.mjs';
 import { runningProcess } from './test-evidence.mjs';
 import { runCommand } from './test-command.mjs';
-import { artifactExecutables, releasePlatform } from './platform/platform.js';
+import { applicationExecutables, releasePlatform } from './platform/platform.js';
 
 async function installReference(command, args, { signal } = {}) {
   const result = await runCommand({ id: `candidate reference ${args[0]} ${args[1]}`, command, args,
@@ -22,7 +22,7 @@ const byComponent = (a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.i
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const requireValue = (condition, message) => { if (!condition) throw new Error(`candidate acceptance: ${message}`); };
 const configDir = (root, app) => join(root, `soksak-check-${app}`);
-const executable = ({ bundle, app }) => artifactExecutables(bundle, app).application;
+const executable = async ({ bundle, app }) => (await applicationExecutables(bundle, app)).application;
 
 /** One checkout's complete tracked inputs; the subset hashes retain test and dependency ownership. */
 export async function sourceIdentity(root) {
@@ -165,7 +165,7 @@ async function prepareArtifactInputs(input, { install, remove, signal, candidate
     requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'registry bytes changed while the private copy was prepared');
     const reference = join(directory, 'reference');
     await mkdir(reference);
-    const installer = artifactExecutables(context.hosts[0].bundle, context.hosts[0].app).installer;
+    const installer = (await applicationExecutables(context.hosts[0].bundle, context.hosts[0].app)).sok;
     const bundleBefore = await hashTree(context.hosts[0].bundle);
     await install(installer, ['registry', 'use', context.registry.path, '--config-dir', reference], { signal });
     // Candidate scope is its pack; ordinary scope is its explicit full cohort.
@@ -203,7 +203,7 @@ async function collectArtifactInputs(root, context, configRoot, { live, identify
   const hosts = [];
   for (const host of context.hosts) {
     const config = configDir(configRoot, host.app);
-    const file = executable(host);
+    const file = await executable(host);
     let processIdentity;
     if (live) {
       const endpoint = await json(join(config, 'endpoint.json'));

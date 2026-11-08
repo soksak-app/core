@@ -9,11 +9,9 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
-import { inputSources } from "../platform/platform.js";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
 
-const { korean: KOREAN_2SET } = inputSources();
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";
 const PICKER_CLOSE = "workbench.trace.picker.close";
@@ -63,7 +61,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: IME Escape ends view composition as it does in AppKit`, { timeout: 90000 }, async (t) => {
     const s = await openProbe(t, app);
     const { surface } = await focusedTerminal(s);
-    await s.selectInputSource(KOREAN_2SET);
+    await s.selectInputSource("korean");
     await compareAppKitReference(s, ["g", "k", "s", "Escape"], "한", ["ㅎ", "하", "한", "한"]);
     await focusedTerminal(s);
     const recording = await s.record();

@@ -968,37 +968,88 @@ fn input_reference(window: &Window, params: &Map<String, Value>) -> Result<Value
         .map_err(internal)
 }
 
+/// The input source roles that `select` of `diagnostics.input.source` takes (docs/spec/endpoint.md). The platform maps each role to
+/// its input source; no identifier of a platform's input source is named here.
+const INPUT_SOURCE_ROLES: [&str; 3] = ["latin", "korean", "japanese"];
+
+/// The change of the selected input source that a `diagnostics.input.source` request asks for.
+#[derive(Debug, PartialEq)]
+enum InputSourceChange {
+    /// Selects the input source of the role.
+    Select(String),
+    /// Selects the input source with this platform identifier, a `source` value of an earlier reply.
+    Restore(String),
+}
+
+/// Reads the params of `diagnostics.input.source`: no change for a read of the current input source. A `select` that is not an
+/// input source role, an empty `restore`, and a request with both are refused.
+fn parse_input_source(params: &Map<String, Value>) -> Result<Option<InputSourceChange>, Failure> {
+    let select = params.get("select").filter(|value| !value.is_null());
+    let restore = params.get("restore").filter(|value| !value.is_null());
+    match (select, restore) {
+        (Some(_), Some(_)) => Err(Failure::params("select and restore exclude each other")),
+        (Some(select), None) => match select.as_str() {
+            Some(role) if INPUT_SOURCE_ROLES.contains(&role) => {
+                Ok(Some(InputSourceChange::Select(role.to_string())))
+            }
+            _ => Err(Failure::params(
+                "select must be one of latin, korean, japanese",
+            )),
+        },
+        (None, Some(restore)) => match restore.as_str() {
+            Some(source) if !source.is_empty() => {
+                Ok(Some(InputSourceChange::Restore(source.to_string())))
+            }
+            _ => Err(Failure::params("restore must be a non-empty string")),
+        },
+        (None, None) => Ok(None),
+    }
+}
+
+/// Performs `change` with `adopt` and replies `{current, source}` from `read`: the role of the selected input source, null for an
+/// input source without a role, and its platform identifier.
+fn answer_input_source(
+    change: Option<InputSourceChange>,
+    adopt: impl FnOnce(InputSourceChange) -> Result<(), String>,
+    read: impl FnOnce() -> Result<(Option<String>, String), String>,
+) -> Result<Value, Failure> {
+    if let Some(change) = change {
+        adopt(change).map_err(internal)?;
+    }
+    let (role, source) = read().map_err(internal)?;
+    Ok(json!({"current": role, "source": source}))
+}
+
 fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Failure> {
-    let select = match params.get("select") {
-        None | Some(Value::Null) => None,
-        Some(Value::String(identifier)) if !identifier.is_empty() => Some(identifier.clone()),
-        Some(_) => return Err(Failure::params("select must be a non-empty string")),
-    };
+    let change = parse_input_source(&params)?;
     let platform = platform::current().map_err(internal)?;
-    if let Some(identifier) = select {
-        // The selection callback runs on the main thread after the active text context adopts the source.
-        let (adopted, held) = std::sync::mpsc::channel();
-        on_main(window, move || {
-            platform.select_input_source(
-                &identifier,
-                Box::new(move |result| {
+    answer_input_source(
+        change,
+        |change| {
+            // The selection callback runs on the main thread after the active text context adopts the source.
+            let (adopted, held) = std::sync::mpsc::channel();
+            on_main(window, move || {
+                let done: Box<dyn Fn(Result<(), String>)> = Box::new(move |result| {
                     if let Err(unsent) = adopted.send(result) {
                         log_error(
                             "input source",
                             format!("selection completed after its reply ended: {:?}", unsent.0),
                         );
                     }
-                }),
-            );
-            Ok(())
-        })
-        .map_err(internal)?;
-        held.recv()
-            .map_err(|_| internal("input source selection ended without an answer".to_string()))?
-            .map_err(internal)?;
-    }
-    let current = on_main(window, move || platform.input_source()).map_err(internal)?;
-    Ok(json!({"current": current}))
+                });
+                match change {
+                    InputSourceChange::Select(role) => platform.select_input_source(&role, done),
+                    InputSourceChange::Restore(source) => {
+                        platform.restore_input_source(&source, done)
+                    }
+                }
+                Ok(())
+            })?;
+            held.recv()
+                .map_err(|_| "input source selection ended without an answer".to_string())?
+        },
+        || on_main(window, move || platform.input_source()),
+    )
 }
 
 /// Creates `<config-dir>/test-project` with an empty folder setting and requests the page to open only that project.
@@ -1863,6 +1914,10 @@ mod lock_test;
 #[cfg(test)]
 #[path = "diagnostics_input_reference_test.rs"]
 mod input_reference_test;
+
+#[cfg(test)]
+#[path = "diagnostics_input_source_test.rs"]
+mod input_source_test;
 
 #[cfg(test)]
 mod capture_start_options_test {

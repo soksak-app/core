@@ -13,11 +13,9 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { inputSources } from "../platform/platform.js";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { assertInputTraceDelivery, inputTraceTransactions } from "./terminal-ime-document.mjs";
 
-const { latin: ABC, japanese: JAPANESE } = inputSources();
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: marked text that the input method ends is written to the PTY once`,
@@ -29,8 +27,8 @@ for (const app of Object.values(APPS)) {
       await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
         "the shell prompt did not appear");
 
-      const original = (await s.request("diagnostics.input.source")).current;
-      s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
+      const original = (await s.request("diagnostics.input.source")).source;
+      s.cleanup(() => s.request("diagnostics.input.source", { restore: original }));
 
       // The key window receives the pointer position as a movement, so the window is placed away from the pointer.
       await s.keepPointerOutside();
@@ -46,8 +44,8 @@ for (const app of Object.values(APPS)) {
       await s.run("terminal.ime.trace", { action: "start" }, surface);
       s.cleanup(() => s.run("terminal.ime.trace", { action: "stop" }, surface));
 
-      assert.equal((await s.request("diagnostics.input.source", { select: JAPANESE })).current, JAPANESE,
-        `the ${JAPANESE} input source is not enabled`);
+      assert.equal((await s.request("diagnostics.input.source", { select: "japanese" })).current, "japanese",
+        `the japanese input source is not enabled`);
       for (const key of ["n", "i", "h", "o", "n", "n"]) await s.press(key);
       // No romaji remains in the marked text after the last n.
       const marked = (await s.until("terminal.compose", (compose) => compose.text.length > 0 && !/[a-z]/.test(compose.text),
@@ -57,7 +55,7 @@ for (const app of Object.values(APPS)) {
         "marked text reached the PTY before the composition ended");
 
       // When the input source changes, the input method ends the composition and AppKit commits the marked text.
-      assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
+      assert.equal((await s.request("diagnostics.input.source", { select: "latin" })).current, "latin");
       await s.until("terminal.compose", (compose) => compose.text === "",
         "the ended composition left a preedit", { surface });
       const composing = await s.get("terminal.ime.trace", surface);

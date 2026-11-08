@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateNativeTests, candidateScripts } from './candidate-policy.mjs';
-import { artifactExecutables, releaseKey } from './platform/platform.js';
+import { applicationExecutables, releaseKey } from './platform/platform.js';
 import { hashFile, hashTree, hashValue } from './candidate-identity.mjs';
 import { decodeAcceptanceReport, MAX_REPORT_BYTES } from './candidate-report.mjs';
 
@@ -134,12 +134,12 @@ export async function candidateAssetNames(root) {
 export async function candidatePolicy(root, context) {
   const { discoverNodeTests } = await import('./node-tests.mjs');
   const { candidatePlanNames } = await import('./test-app.mjs');
-  return candidateScripts(root).map((script) => {
+  return Promise.all(candidateScripts(root).map(async (script) => {
     const native = candidateNativeTests(root, script);
     const tests = discoverNodeTests({ root, packages: ['e2e'], script }).tests.map((item) => item.name);
     if (!tests.length) throw new Error(`${script}: candidate policy declares no test files`);
-    return { script, tests, native, steps: candidatePlanNames(context, script) };
-  });
+    return { script, tests, native, steps: await candidatePlanNames(context, script) };
+  }));
 }
 
 /** Hashes the downloaded files and their complete extracted bundles; no candidate is rebuilt for publication. */
@@ -158,7 +158,7 @@ export async function candidateFiles(root, directory) {
     try {
       execFileSync('unzip', ['-q', path, '-d', temporary], { stdio: 'pipe' });
       const bundle = join(temporary, 'soksak.app');
-      bundles.push({ app, bundleSha256: await hashTree(bundle), executableSha256: await hashFile(artifactExecutables(bundle, app, CANDIDATE_PLATFORM).application) });
+      bundles.push({ app, bundleSha256: await hashTree(bundle), executableSha256: await hashFile((await applicationExecutables(bundle, app, CANDIDATE_PLATFORM)).application) });
     } finally { await rm(temporary, { recursive: true, force: true }); }
   }
   return { assets, bundles };

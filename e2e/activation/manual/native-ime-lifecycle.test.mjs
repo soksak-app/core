@@ -9,7 +9,6 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
-import { inputSources } from "../../platform/platform.js";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil } from "../../terminal-screen.mjs";
 import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptMatches,
@@ -17,7 +16,6 @@ import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptM
   terminalComposeMatchesPreedit, terminalObserverStatusesMatch, startTerminalStatusObserver,
   waitForTerminalStage, waitForStateEvent } from "../terminal-ime-document.mjs";
 
-const { latin: ABC, korean: KOREAN_2SET } = inputSources();
 
 async function focusedTerminal(s, surface) {
   await s.keepPointerOutside();
@@ -51,8 +49,8 @@ async function startInputTrace(s, surface) {
 
 
 async function preserveInputSource(s) {
-  const original = (await s.request("diagnostics.input.source")).current;
-  s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
+  const original = (await s.request("diagnostics.input.source")).source;
+  s.cleanup(() => s.request("diagnostics.input.source", { restore: original }));
 }
 
 function insertedText(entries) {
@@ -107,17 +105,17 @@ for (const app of Object.values(APPS)) {
       await preserveInputSource(s);
       await focusedTerminal(s, surface);
       await compareAppKitReference(s, [
-        { source: ABC }, { key: "d" }, { key: "d" }, { key: "d" }, { source: KOREAN_2SET },
+        { source: "latin" }, { key: "d" }, { key: "d" }, { key: "d" }, { source: "korean" },
         { key: "g" }, { key: "k" }, { key: "s" }, { key: "r" }, { key: "m" }, { key: "f" }, { key: "Space" },
       ], "ddd한글 ", ["", "d", "dd", "ddd", "ddd", "dddㅎ", "ddd하", "ddd한", "ddd한ㄱ", "ddd한그", "ddd한글", "ddd한글 "]);
       await focusedTerminal(s, surface);
       const stopTrace = await startInputTrace(s, surface);
 
-      assert.equal((await s.request("diagnostics.input.source", { select: ABC })).current, ABC);
+      assert.equal((await s.request("diagnostics.input.source", { select: "latin" })).current, "latin");
       for (const key of ["d", "d", "d"]) await s.press(key);
       await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("ddd")),
-        "ABC input did not reach the terminal before Korean input");
-      assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+        "latin input did not reach the terminal before Korean input");
+      assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
       for (const key of ["g", "k", "s", "r", "m", "f", "Space"]) await s.press(key);
       await s.until("terminal.compose", (compose) => compose.text === "",
         "Space did not end the Korean composition", { surface });
@@ -139,12 +137,12 @@ for (const app of Object.values(APPS)) {
       "the shell prompt did not appear");
     await preserveInputSource(s);
     await focusedTerminal(s, surface);
-    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
     await compareAppKitReference(s, ["g", "k", "s", "k", "Space", "Enter"], "하나 \n", ["ㅎ", "하", "한", "하나", "하나 ", "하나 \n"]);
     await focusedTerminal(s, surface);
-    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
     const stopTrace = await startInputTrace(s, surface);
-    assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
     for (const key of ["g", "k", "s", "k", "Space"]) await s.press(key);
     await s.until("terminal.compose", (compose) => compose.text === "",
       "Space did not end the Korean resyllabification", { surface });
@@ -201,11 +199,11 @@ for (const app of Object.values(APPS)) {
           "the lifecycle shell prompt did not appear");
         await preserveInputSource(lifecycle);
         await focusedTerminal(lifecycle, surface);
-        assert.equal((await lifecycle.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+        assert.equal((await lifecycle.request("diagnostics.input.source", { select: "korean" })).current, "korean");
         await compareAppKitReference(lifecycle, [...Array(8).fill("k"), "Backspace", "Space"], `${"ㅏ".repeat(7)} `,
           [...Array.from({ length: 8 }, (_, index) => "ㅏ".repeat(index + 1)), "ㅏ".repeat(7), `${"ㅏ".repeat(7)} `]);
         await focusedTerminal(lifecycle, surface);
-        assert.equal((await lifecycle.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+        assert.equal((await lifecycle.request("diagnostics.input.source", { select: "korean" })).current, "korean");
         const baselineScreen = await presentedScreen(lifecycle, surface);
         const baselineCompose = await lifecycle.get("terminal.compose", surface);
         const baselineCursor = await lifecycle.get("terminal.cursor", surface);
@@ -225,7 +223,7 @@ for (const app of Object.values(APPS)) {
         });
         s.cleanup(() => observer.stop());
         const stopCapture = await preserveGestureCapture(lifecycle, artifactDir, "approved-eight-vowels-backspace-space");
-        assert.equal((await lifecycle.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
+        assert.equal((await lifecycle.request("diagnostics.input.source", { select: "korean" })).current, "korean");
         const stopTrace = await startInputTrace(lifecycle, surface);
         for (const key of Array(8).fill("k").concat("Backspace", "Space")) await lifecycle.press(key);
         const expectedDocument = `${"ㅏ".repeat(7)} `;

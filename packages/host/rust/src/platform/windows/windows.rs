@@ -623,12 +623,16 @@ impl Platform for Windows {
         done(unsupported::input_reference());
     }
     #[cfg(feature = "diagnostics")]
-    fn input_source(&self) -> Result<String, String> {
+    fn input_source(&self) -> Result<(Option<String>, String), String> {
         unsupported::input_source()
     }
     #[cfg(feature = "diagnostics")]
-    fn select_input_source(&self, identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
-        adopted(unsupported::select_input_source(identifier))
+    fn select_input_source(&self, _role: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+        adopted(unsupported::change_input_source())
+    }
+    #[cfg(feature = "diagnostics")]
+    fn restore_input_source(&self, _source: &str, adopted: Box<dyn Fn(Result<(), String>)>) {
+        adopted(unsupported::change_input_source())
     }
 
     fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {

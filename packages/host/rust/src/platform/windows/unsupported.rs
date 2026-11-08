@@ -478,12 +478,12 @@ pub fn layout_trace_stop() -> Result<Vec<[f64; 5]>, String> {
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn input_source() -> Result<String, String> {
+pub fn input_source() -> Result<(Option<String>, String), String> {
     missing("keyboard input sources")
 }
 
 #[cfg(feature = "diagnostics")]
-pub fn select_input_source(_identifier: &str) -> Result<(), String> {
+pub fn change_input_source() -> Result<(), String> {
     missing("keyboard input sources")
 }
 

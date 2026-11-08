@@ -919,13 +919,21 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     // Input source
 
+    // A role is one of the input source roles of `diagnostics.input.source` (docs/spec/endpoint.md); the platform owns the
+    // input source of each role.
     #[cfg(feature = "diagnostics")]
-    /// Returns the identifier of the currently selected keyboard input source. Call it on the main thread.
-    fn input_source(&self) -> Result<String, String>;
+    /// Returns the role of the currently selected keyboard input source, None for an input source without a role, and its
+    /// platform identifier. Call it on the main thread.
+    fn input_source(&self) -> Result<(Option<String>, String), String>;
     #[cfg(feature = "diagnostics")]
-    /// Selects identifier and calls adopted after the active key-view context has adopted it, or reports an error within
-    /// 2 seconds. With no active text client, it completes after global selection. Call it on the main thread.
-    fn select_input_source(&self, identifier: &str, adopted: Box<dyn Fn(Result<(), String>)>);
+    /// Selects the input source of role and calls adopted after the active key-view context has adopted it, or reports an
+    /// error within 2 seconds. A role without an input source on the platform reports an error. With no active text client,
+    /// it completes after global selection. Call it on the main thread.
+    fn select_input_source(&self, role: &str, adopted: Box<dyn Fn(Result<(), String>)>);
+    #[cfg(feature = "diagnostics")]
+    /// Selects the input source whose platform identifier is source, a value that input_source returned, with the adoption
+    /// of select_input_source. Call it on the main thread.
+    fn restore_input_source(&self, source: &str, adopted: Box<dyn Fn(Result<(), String>)>);
 
     // Termination request
 

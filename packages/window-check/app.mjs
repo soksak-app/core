@@ -863,23 +863,25 @@ export class Session {
   }
 
   /**
-   * Selects the keyboard input source and restores the earlier input source when the check ends. The current input
-   * source decides the characters of native keys, so a check that types English selects an English layout first.
-   * Selecting an input source does not activate a window.
+   * Selects the keyboard input source of `role` (`latin`, `korean` or `japanese`, docs/spec/endpoint.md) and restores the earlier
+   * input source when the check ends. The current input source decides the characters of native keys, so a check that types
+   * English selects the `latin` role first. The earlier input source is restored by the `source` value that the endpoint reported
+   * for it, which the check never reads, so a person's input source without a role is restored too. Selecting an input source does
+   * not activate a window.
    */
-  async selectInputSource(id) {
+  async selectInputSource(role) {
     const inputSourceRestore = this.inputSourceRestore;
     if (!inputSourceRestore.capture) {
-      inputSourceRestore.capture = this.request("diagnostics.input.source").then(({ current }) => {
-        inputSourceRestore.original = current;
+      inputSourceRestore.capture = this.request("diagnostics.input.source").then(({ source }) => {
+        inputSourceRestore.original = source;
         this.cleanups.unshift(() => inputSourceRestore.requester.request("diagnostics.input.source", {
-          select: inputSourceRestore.original,
+          restore: inputSourceRestore.original,
         }));
       });
     }
     await inputSourceRestore.capture;
-    const selected = await this.request("diagnostics.input.source", { select: id });
-    if (selected.current !== id) throw new Error(`${this.app.name}: input source ${id} was not selected (current ${selected.current})`);
+    const selected = await this.request("diagnostics.input.source", { select: role });
+    if (selected.current !== role) throw new Error(`${this.app.name}: input source ${role} was not selected (current ${selected.current})`);
   }
 
   /** A native key with press and release. */
