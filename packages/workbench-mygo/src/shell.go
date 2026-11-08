@@ -32,6 +32,9 @@ type ShellOptions struct {
 	Environment []byte
 	// Invalidate asks for a frame.
 	Invalidate func()
+	// FirstScreen tells the window that the start shows its first screen: the library or the project of the window, or the failure
+	// of the start. The window keeps the last frame of the previous workbench until then (docs/spec/native-host.md#page-start).
+	FirstScreen func()
 	// Backdrop sets the color of the window behind its content, which a surface without a background of its own shows.
 	Backdrop func(color string) error
 	// Post runs a task as a later step of the main thread.
@@ -518,14 +521,17 @@ func (s *Shell) Start() {
 		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
 			if err != nil {
 				s.fail(err)
+				s.options.FirstScreen()
 				return
 			}
 			if err := s.adopt(value); err != nil {
 				s.fail(err)
+				s.options.FirstScreen()
 				return
 			}
 			s.openTabs(func() {
 				s.showRequested(func() {
+					s.options.FirstScreen()
 					s.calls.Call("windowReady", nil, func(_ any, err error) {
 						if err != nil {
 							s.fail(err)
