@@ -11811,6 +11811,7 @@ const FEATURE_LINKS = [
       { file: "e2e/window-first-frames.test.mjs", id: "a project window shows its complete first screen from its first frame" },
       { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAProjectThatAnotherWindowRemovedLeavesTheWindow" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAWindowWhoseProjectAnotherWindowRemovedClosesWithoutAQuestion" },
+      { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt" },
       { file: "native/darwin/tests/input_source_test.m", id: "a text input client without an input context is not an active text client" },
       { file: "e2e/test/fixture.test.mjs", id: "the document region of a layout probe tab is painted after its document reports and is ready once it reports the colour" },
       { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestAnAttachThatWaitsForTheSessionOfAClosedTabEndsWithItsView" },

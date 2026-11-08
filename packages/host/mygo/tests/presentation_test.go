@@ -59,6 +59,37 @@ func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
 	receive(t, "the uncover", uncovered)
 }
 
+// A window that the host shows goes on the screen with the first screen of its workbench, and a check may size and move it before
+// that, as e2e/placement.test.mjs does with the project window that covers the window of the check. The frame set while the window
+// waited is the frame it goes on the screen with, above the window it covers, so the covered window hears the cover.
+func TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt(t *testing.T) {
+	framework, workbench, below := support.Open(t, "below")
+	covered := make(chan struct{}, 8)
+	uncovered := make(chan struct{}, 8)
+	below.OnWindowEvent(host.WindowHide, func() { covered <- struct{}{} })
+	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
+	below.Show()
+	support.Wait(t, "the window below", below.Window().IsVisible)
+	receiveOnScreen(t, "the show of the window below", uncovered, below)
+	workbench.HoldFirstScreen()
+	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
+	t.Cleanup(above.Window().Destroy)
+	above.Show()
+	support.Wait(t, "the start of the window above", func() bool { return slices.Contains(workbench.Received(), "shown above") })
+	if above.Window().IsVisible() {
+		t.Fatal("the window above went on the screen before the first screen of its workbench")
+	}
+	x, y := below.Position()
+	above.SetSize(600, 500)
+	above.SetPosition(x-100, y-100)
+	mygo.RunOnMain(above.FirstScreen)
+	support.Wait(t, "the window above", above.Window().IsVisible)
+	if ax, ay := above.Position(); ax != x-100 || ay != y-100 {
+		t.Fatalf("the window above went on the screen at %v,%v, not at the position %v,%v set before its first screen", ax, ay, x-100, y-100)
+	}
+	receive(t, "the cover", covered)
+}
+
 // receive waits for a value of events.
 func receive(t *testing.T, what string, events <-chan struct{}) {
 	t.Helper()
