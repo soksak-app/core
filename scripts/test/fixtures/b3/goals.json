@@ -17,6 +17,6 @@
     { "id": "G3-S4-host-footprint", "goal": "G3", "scenario": "S4", "target": "make measure-host-allocations MINUTES=60", "measurement": "hostFootprintKb", "unit": "KB", "over": "median", "against": "G3-S1-host-footprint" },
     { "id": "G3-S10-host-growth", "goal": "G3", "scenario": "S10", "target": "make benchmark-split-load", "measurement": "hostGrowthKb", "unit": "KB", "over": "median", "bound": { "below": 131072 }, "constant": "SPLIT_LOAD_GROWTH_BOUND_KB" },
     { "id": "G4-S5-view-drag", "goal": "G4", "scenario": "S5", "target": "make benchmark-view-drag TRACE=0", "measurement": "verdict", "unit": "verdict", "over": "each", "bound": { "equals": "passed" } },
-    { "id": "G5-S2-rows-1-frame-rate", "goal": "G5", "scenario": "S2", "target": "make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1", "measurement": "framesPerSecond", "unit": "frames/s", "over": "median", "bound": { "atLeast": 27 }, "relative": true }
+    { "id": "G5-S2-rows-1-frame-rate", "goal": "G5", "scenario": "S2", "target": "make measure-terminal-redraw PLUGIN=rasterprobe RATE=30 ROWS=1", "measurement": "framesPerSecond", "unit": "frames/s", "over": "median", "bound": { "atLeast": 27 }, "relative": true }
   ]
 }

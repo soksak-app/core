@@ -113,7 +113,7 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
   record("S1", 3, "tauriv2").values["G2-S0-frames"] = 0;
   record("S5", 1, "mygo").conditions["make benchmark-view-drag TRACE=0"].refreshRate = 60;
   record("S5", 3, "mygo").conditions["make benchmark-view-drag TRACE=0"].window = { width: 760, height: 614 };
-  record("S2", 1, "mygo").conditions["make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1"].window = { width: 1200, height: 760 };
+  record("S2", 1, "mygo").conditions["make measure-terminal-redraw PLUGIN=rasterprobe RATE=30 ROWS=1"].window = { width: 1200, height: 760 };
   delete record("S5", 2, "mygo").conditions;
   session.records.splice(session.records.indexOf(record("S10", 3, "mygo")), 1);
   assert.deepEqual(failedLines(judgeSession(fixtureGoals(), session)), [
@@ -126,7 +126,7 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
     "failed run 1 of mygo in S5: make benchmark-view-drag TRACE=0: the display mode runs at 60 Hz, expected 120 Hz",
     "failed run 2 of mygo in S5: the run records no conditions of its targets (undefined)",
     "failed run 3 of mygo in S5: make benchmark-view-drag TRACE=0: the window is 760×614 points, expected 1200×760 points",
-    "failed run 1 of mygo in S2: make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1: the window is 1200×760 points, expected 760×614 points",
+    "failed run 1 of mygo in S2: make measure-terminal-redraw PLUGIN=rasterprobe RATE=30 ROWS=1: the window is 1200×760 points, expected 760×614 points",
     "failed G3-S10-host-growth mygo: the session records 2 of its 3 runs",
   ]);
   const short = fixtureSession();
