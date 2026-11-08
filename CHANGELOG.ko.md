@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F715-4: `@soksak/window-check` 는 core 의 범용 창 검사 module(view content, view frame geometry, view process footprint, view metrics collection, marker view, drag measurement, operation chain, project resource, process table, region raster, HID 입력 도구)을 내보내고, 그 시작 상태는 시작 plugin 과 따로 placeholder plugin 을 정하므로 새 space layout 이 정한 plugin 은 자기 검사의 시작 plugin 이다.
 - F715-4: core release 는 `@soksak/plugin-api` 옆에 `@soksak/window-check`, `@soksak/client`, `@soksak/log-contract` 를 공개한다. packed package 의 각 workspace dependency 는 같은 core release 의 그 package release file 이므로 plugin 저장소는 release 만으로 `@soksak/window-check` 를 설치하고, plugin 명세는 plugin 의 창 검사가 쓸 수 있는 것을 정한다.
 - F715-3: core 의 window check 는 core fixture 위에서 실행된다: `make test-app` 과 candidate run 은 fixture registry 의 pack `fixtures` 만 각 앱에 설치하고, candidate context 와 acceptance report 는 registry 를 기록하지 않으며, 각 check 는 fixture 가 설치하지 않는 plugin 의 새 공간 layout tab 대신 둔 `layoutprobe` tab 에서 시작한다.
 - F715-3: `make build-fixture-registry` 는 core fixture 만으로 registry 를 만든다: `e2e/fixtures` 의 모든 plugin folder 와 `e2e/fixtures/sidecars` 의 모든 fake sidecar 를 pack `fixtures` 하나로 담는다. workspace registry 옆에 probe 를 설치하던 window check 는 새 fixture registry 에서 그것을 설치하며, 이 registry 는 plugin 저장소도 registry index 도 읽지 않는다.
