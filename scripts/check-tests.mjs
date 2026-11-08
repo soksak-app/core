@@ -599,12 +599,12 @@ const FEATURE_LINKS = [
   },
   {
     id: "F668",
-    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds(session, surface, cells) {" }],
+    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionCells(session, surface, cells) {" }],
     tests: [
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds preserve a capture when the view read fails" },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells retain their sample until successful session finalization" },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells preserve a capture when the view read fails" },
     ],
-    expected: "The terminal cell sampling tests answer the element.rect request that Session.rect sends, and cell sampling reads the view after it stops the recording.",
+    expected: "The region cell sampling tests answer the element.rect request that Session.rect sends, and cell sampling reads the view after it stops the recording.",
     levels: ["unit"],
   },
   {
@@ -1011,16 +1011,16 @@ const FEATURE_LINKS = [
   {
     id: "F652-2",
     requirement: { key: "capture-coordinates", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The coordinate conversion reads one finalized frame and has no concurrent state transition.", recovery: "Coordinate conversion retains no mutable state after refusing invalid geometry; failed recording cleanup belongs to capture-lifecycle." } },
-    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
+    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionCells" }],
     tests: [
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content scale", covers: ["normal"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include capture content origin", covers: ["normal"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include combined capture scales and origin", covers: ["normal"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds include document offsets before capture conversion", covers: ["normal"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds read each requested row and column in order", covers: ["normal"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds reject a cell outside the capture and keep its evidence", covers: ["failure"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells include capture content scale", covers: ["normal"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells include capture content origin", covers: ["normal"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells include combined capture scales and origin", covers: ["normal"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells include document offsets before capture conversion", covers: ["normal"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells read each requested row and column in order", covers: ["normal"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells reject a cell outside the capture and keep its evidence", covers: ["failure"] },
     ],
-    expected: "Each terminal cell sample uses document offsets and the shared capture origin and scale conversion, preserves requested row and column order, and retains evidence when geometry lies outside the capture.",
+    expected: "Each region cell sample uses document offsets and the shared capture origin and scale conversion, preserves requested row and column order, and retains evidence when geometry lies outside the capture.",
     levels: ["unit"],
   },
   {
@@ -1181,15 +1181,15 @@ const FEATURE_LINKS = [
   {
     id: "F652-1",
     requirement: { key: "capture-lifecycle", platforms: CAPTURE_REQUIREMENT_PLATFORMS, inapplicable: {} },
-    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }, { file: "e2e/terminal-screen.mjs", symbol: "export async function cellBackgrounds" }],
+    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionSample" }, { file: "e2e/region-sample.mjs", symbol: "export async function regionCells" }],
     tests: [
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background presentation failure stops during cleanup and preserves its original error", covers: ["failure", "recovery"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background keeps the presentation error and reports a cleanup stop error", covers: ["failure", "recovery"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background preserves a successful sample when the final error audit fails", covers: ["failure", "race"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell backgrounds retain their sample until successful session finalization", covers: ["normal"] },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal cell stop failure remains failed after being caught and is not retried" },
+      { file: "e2e/test/region-sample.test.mjs", id: "region sample presentation failure stops during cleanup and preserves its original error", covers: ["failure", "recovery"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region sample keeps the presentation error and reports a cleanup stop error", covers: ["failure", "recovery"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region sample preserves a successful sample when the final error audit fails", covers: ["failure", "race"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cells retain their sample until successful session finalization", covers: ["normal"] },
+      { file: "e2e/test/region-sample.test.mjs", id: "region cell stop failure remains failed after being caught and is not retried" },
     ],
-    expected: "Terminal samples use Session recording cleanup, preserve failed capture evidence and original errors, attempt stop once, and remove successful captures only after successful session finalization. The race scenario is a late application error after stop and before the final audit; parallel or repeated finalization is unverified.",
+    expected: "Region samples use Session recording cleanup, preserve failed capture evidence and original errors, attempt stop once, and remove successful captures only after successful session finalization. The race scenario is a late application error after stop and before the final audit; parallel or repeated finalization is unverified.",
     levels: ["unit"],
   },
   {
@@ -1212,12 +1212,12 @@ const FEATURE_LINKS = [
   },
   {
     id: "F652",
-    implementation: [{ file: "e2e/terminal-screen.mjs", symbol: "export async function terminalBackgroundSample" }],
+    implementation: [{ file: "e2e/region-sample.mjs", symbol: "export async function regionSample" }],
     tests: [
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background samples the captured view at combined scale and origin" },
-      { file: "e2e/test/terminal-screen.test.mjs", id: "terminal background rejects an empty capture and preserves its folder" },
+      { file: "e2e/test/region-sample.test.mjs", id: "region sample reads the captured view at combined scale and origin" },
+      { file: "e2e/test/region-sample.test.mjs", id: "region sample rejects an empty capture and preserves its folder" },
     ],
-    expected: "Terminal background sampling reads a pixel inside the transformed capture view, retains failed recordings and removes successful recordings after successful session finalization.",
+    expected: "Region sampling reads a pixel inside the transformed capture view, retains failed recordings and removes successful recordings after successful session finalization.",
     levels: ["unit"],
   },
   {
@@ -6275,7 +6275,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "shutdown_waiters" },
       { file: "packages/host/go/src/sidecars.go", symbol: "CloseOwner" },
     ],
-    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
+    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
     levels: ["application"],
   },
@@ -6284,8 +6284,8 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "Close" },
     ],
-    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
-    expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
+    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "process measurement preserves identities" }],
+    expected: "Closing raster probe tabs reaps their session children while retaining the shared persistent service.",
     levels: ["native", "application"],
   },
   
@@ -12878,11 +12878,11 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-47-2",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function visibleInputBeforeCursor(" }],
+    implementation: [{ file: "e2e/input-probe.mjs", symbol: "export function inputDocument(" }],
     tests: [
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
     ],
-    expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
+    expected: "Each Hangul and Backspace input leaves the document of its same-window AppKit reference in the image region, and the sidecar receives every input transaction once and unchanged.",
     levels: ["unit", "application"],
   },
   {

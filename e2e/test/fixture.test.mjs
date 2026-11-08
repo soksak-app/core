@@ -184,6 +184,6 @@ test("a card sidebar stores its own set of the layout probe list sections, or of
 
 test("the start layout module names no real plugin and imports no terminal helper", () => {
   const source = readFileSync(new URL("../fixture.mjs", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /terminal-screen|prepare-terminal|check-shell|check-zsh/);
+  assert.doesNotMatch(source, /terminal-screen|terminal-processes|terminal-ime-document|prepare-terminal|check-shell|check-zsh/);
   assert.doesNotMatch(source, /["'](terminal|term|browser|files|editor|hwp)["'.]/);
 });

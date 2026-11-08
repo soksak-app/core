@@ -624,7 +624,7 @@ new Promise((resolve, reject) => {
   const timer = setTimeout(() => finish(reject, new Error("no later status")), 1500);
 });
 `;
-  assert.deepEqual(auditE2ESource(source, "e2e/activation/terminal-ime-document.mjs"), []);
+  assert.deepEqual(auditE2ESource(source, "e2e/activation/timeout-case.mjs"), []);
   const completion = `
 new Promise((resolve, reject) => {
   const finish = (settle) => Promise.resolve().then(settle);

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { processTable } from "./process-table.mjs";
+import { processRows } from "./service-processes.mjs";
 
 /** The plugin id of the raster probe. */
 export const RASTER = "rasterprobe";
@@ -140,11 +141,7 @@ export function rasterServiceSnapshot(configDir) {
   const endpoint = JSON.parse(readFileSync(join(serviceDir, "endpoint.json"), "utf8"));
   assert.equal(endpoint.protocol, 1, "the raster probe service protocol does not match");
   assert.ok(Number.isInteger(endpoint.pid) && endpoint.pid > 0, "the raster probe service PID is missing");
-  const rows = processTable("pid=,ppid=,stat=,command=").trim().split("\n").filter(Boolean).map((line) => {
-    const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/.exec(line);
-    assert.ok(match, `invalid process row: ${line}`);
-    return { pid: Number(match[1]), parent: Number(match[2]), state: match[3], command: match[4] };
-  });
+  const rows = processRows(processTable("pid=,ppid=,stat=,command="));
   // The host passes the service folder as one argument of the command, wherever it stands.
   const services = rows.filter((row) => ` ${row.command} `.includes(` --service-dir ${serviceDir} `));
   assert.equal(services.length, 1, "the configuration must own exactly one raster probe service");

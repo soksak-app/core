@@ -2,24 +2,9 @@
   "schema": 1,
   "files": [
     {
-      "file": "e2e/activation/terminal-ime-document.mjs",
-      "owner": "tool",
-      "reason": "Helper that pulls terminal compose and cursor state for IME checks; it is terminal-specific and must be reduced to a fixture probe status shape."
-    },
-    {
       "file": "e2e/browser-cohort-upgrade.test.mjs",
       "owner": "environment",
       "reason": "Checks that the official CLI upgrade of browser keeps the starter cohort (including sidecar-files and sidecar-vt-alacritty) ready."
-    },
-    {
-      "file": "e2e/terminal-screen.mjs",
-      "owner": "tool",
-      "reason": "Helper that opens terminals and reads terminal screen glyphs and pixels, and is used by many core tests. It must be reduced to fixture helpers (open `plain-view`, read the fixture color or echo log)."
-    },
-    {
-      "file": "e2e/test/terminal-screen.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Tests how the terminal's cell screen and backgrounds are read and sampled (wrapped command output, cell rows), which is terminal screen content."
     },
     {
       "file": "scripts/test/benchmark-b3.test.mjs",
