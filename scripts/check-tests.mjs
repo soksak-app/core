@@ -82,6 +82,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs", "scripts/platform/p
   "scripts/test/platform/darwin/end-to-end.test.mjs"]),
 lane("candidate identity", "js-ts", ["scripts/candidate-identity.mjs"], ["scripts/test/candidate-identity.test.mjs"]),
 lane("candidate acceptance gate", "js-ts", ["scripts/candidate-policy.mjs", "scripts/candidate-report.mjs", "scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
+lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scripts/test/pack-release-packages.test.mjs"]),
 lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"], ["scripts/test/acceptance-run.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
