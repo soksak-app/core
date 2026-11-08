@@ -58,7 +58,12 @@ func (s *Shell) drawBrand(c *ui.Context) {
 
 // drawChromeActs draws the switches of the chrome bar in the order of the page.
 func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
-	if updates := len(s.pluginOperations.Status().Updates); updates > 0 {
+	// The count holds the plugin updates and the application update, as the update button of packages/workbench/index.html counts.
+	updates := len(s.pluginOperations.Status().Updates)
+	if s.appUpdates.Status().Available != nil {
+		updates++
+	}
+	if updates > 0 {
 		s.chromeTextAct(c, "core.chrome.updates", "core.plugins.show-updates", fmt.Sprintf("업데이트 %d", updates))
 	}
 	if !browsing {
