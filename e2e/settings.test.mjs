@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
-import { cardSidebar, fresh } from "./fixture.mjs";
+import { cardSidebar, fresh, probeSidebarSets, settingsShown } from "./fixture.mjs";
 
 /** The second layout probe: a plugin without settings, sections or sidebar defaults beside the start plugin. */
 const SECOND = "layoutprobe2";
@@ -177,7 +177,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: each sidebar set line fits beside its buttons on one line`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await keepCommonSettings(s);
+    // A set line names the sections of the set that are shown: the sets of the configuration take the sections of the loaded probe.
+    await probeSidebarSets(s);
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
@@ -237,9 +238,9 @@ for (const app of Object.values(APPS)) {
     ]);
     const select = rowsShown.controls.find((c) => c.key === `row:${made.id}:0`);
     assert.equal(select.value, three[0]);
-    // The layout probe is the only loaded plugin that declares sections: four of them.
-    assert.deepEqual(select.groups.map((g) => g.label), ["Layout probe"]);
-    assert.equal(select.groups.flatMap((g) => g.values).length, 4);
+    // The layout probe and the plain view probe are the loaded plugins that declare sections: four and one.
+    assert.deepEqual(select.groups.map((g) => g.label), ["Layout probe", "Plain view probe"]);
+    assert.equal(select.groups.flatMap((g) => g.values).length, 5);
 
     await press(s, "core.settings-modal.row-act", `down:${made.id}:0`);
     await saved([three[1], three[0], three[2]], "▼ did not move row 0 down");
@@ -247,7 +248,7 @@ for (const app of Object.values(APPS)) {
     await saved([three[1], three[2], three[0]], "▲ did not move row 2 up");
     await press(s, "core.settings-modal.row-act", `remove:${made.id}:1`);
     await saved([three[1], three[0]], "− did not remove row 1");
-    // The fourth section of the probe is the one that + did not add.
+    // A section that + did not add.
     const spare = select.groups.flatMap((g) => g.values).find((id) => !three.includes(id));
     await press(s, "core.settings-modal.row", `row:${made.id}:0`, spare, "section");
     await saved([spare, three[0]], "the select box did not replace row 0");
@@ -444,8 +445,8 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.open");
     const { card } = await s.until("core.settings-modal", (modal) => modal.open && modal.scroll === 0,
       "the settings window did not open at its top");
-    // The wheel goes to the displayed modal web view. A wheel before the display goes to the main page.
-    await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "the settings window was not shown");
+    // The wheel goes to the displayed settings window. A wheel before the display goes to the workbench behind it.
+    await settingsShown(s, "the settings window was not shown");
     // Scrolls the General section down. The native window reports the position.
     await s.pointer(card.x + card.w / 2, card.y + card.h / 2, "scroll", { deltaY: 240 });
     const { scroll } = await s.until("core.settings-modal", (modal) => modal.scroll > 0, "the settings window did not scroll");

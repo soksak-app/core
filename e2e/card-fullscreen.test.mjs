@@ -6,7 +6,7 @@ import { dirname } from "node:path";
 import { readPng } from "@soksak/window-check/png.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh, probeSets } from "./fixture.mjs";
+import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { tabElementIndex } from "./input-probe.mjs";
 
 /** The card of the grid that holds the tab surface. */
@@ -162,12 +162,9 @@ for (const app of Object.values(APPS)) {
     for (const side of ["top", "bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: target.id, side, set: "inherit" });
     }
-    // The sets of the configuration name sections of plugins that a fixture configuration does not load, which a sidebar keeps
-    // and does not show, so the check stores the sets of the layout probe and compares the shown sections with them.
-    const sets = probeSets();
-    const stored = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: [...stored.filter(item => !sets.some(set => set.id === item.id)), ...sets] },
-      scope: "common" });
+    // The sets of the configuration take the sections of the layout probe, so a set and the sections that it shows are the same.
+    const stored = await probeSidebarSets(s);
+    const sets = ["list", "tabs"].map(layout => stored.find(set => set.layout === layout));
     await s.run("core.card.fullscreen", { card: target.id });
     for (const [mode, set] of [["fullscreen", sets[0]], ["restored", sets[1]]]) {
       if (mode === "restored") await s.run("core.card.fullscreen", { card: target.id });

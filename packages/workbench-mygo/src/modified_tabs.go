@@ -2,7 +2,6 @@ package workbench
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -55,14 +54,27 @@ func (s *Shell) askModified(card string, tab layout.Tab, answered func(settled b
 func (s *Shell) saveTab(tab, save string, answered func(settled bool)) {
 	s.registry.RunOn(save, json.RawMessage(`{}`), tab, func(_ any, err error) {
 		present := s.cardOfTab(tab) != "" // The tab leaves with its plane while the view saves, and then nothing is left to close.
-		if err == nil && present && s.tabModified(tab) {
-			err = errors.New("left the tab modified")
+		failure := ""
+		switch {
+		case err != nil:
+			failure = fmt.Sprintf("저장하지 못했습니다 · %s: %v", save, err)
+		case present && s.tabModified(tab):
+			failure = fmt.Sprintf("저장하지 못했습니다 · %s left the tab modified", save)
 		}
-		if err != nil {
-			s.errors.Show(tab, fmt.Sprintf("저장하지 못했습니다 · %s: %v", save, err), "")
+		switch {
+		case failure == "":
+		case present:
+			// The failure is the error of the tab, which core.grid reports and its card shows and records, as reportError of
+			// packages/workbench/plane.js reports it (docs/spec/plugins.md#tab-reports).
+			s.report(tab).Error = failure
+			s.options.Invalidate()
+			s.settle()
+		default:
+			// The tab left with its plane, so no card shows the failure, which lost the work of the person.
+			s.errors.Show(tab, failure, "")
 			s.settle()
 		}
-		answered(err == nil && present)
+		answered(failure == "" && present)
 	})
 }
 

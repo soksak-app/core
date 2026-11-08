@@ -592,6 +592,50 @@ func TestAFailedSaveKeepsTheTabAndShowsTheError(t *testing.T) {
 	}
 }
 
+// A save that succeeds but leaves the tab modified keeps the tab, and its failure is the error of the tab, which core.grid reports
+// and the card records, as reportError of packages/workbench/plane.js reports it (docs/spec/plugins.md#tab-reports).
+func TestASaveThatLeavesTheTabModifiedIsTheErrorOfTheTab(t *testing.T) {
+	f := modifiedShell(t)
+	f.viewCalled("tab-aaaaaa", "runtime.command.register", map[string]any{"name": "notes.save"})
+	f.run(t, "core.tab.close", `{"tab":"tab-aaaaaa"}`)
+	f.settle()
+	item, ok := exposedNode(f.tester.ElementTree(), "core.picker.item", "save")
+	if !ok {
+		t.Fatal("no save item")
+	}
+	f.tester.ClickAt(item.Bounds.X+4, item.Bounds.Y+4)
+	// The save answers after the frame that its run asked for, and the next frame draws the error of the tab.
+	f.pending.drain(t)
+	f.tester.Frame()
+	refusal := "저장하지 못했습니다 · notes.save left the tab modified"
+	if shown := f.shownRecords(); !slices.Contains(shown, shownRecord{where: "tab error tab-aaaaaa", text: refusal}) {
+		t.Fatalf("the shell recorded %q", shown)
+	}
+	f.settle()
+	if len(f.tabsOf("main")) != 2 {
+		t.Fatal("the tab closed")
+	}
+	var reported []string
+	for _, card := range status[struct {
+		Cards []struct {
+			Tabs []struct {
+				ID       string  `json:"id"`
+				Modified bool    `json:"modified"`
+				Error    *string `json:"error"`
+			} `json:"tabs"`
+		} `json:"cards"`
+	}](t, f.shellFixture, "core.grid").Cards {
+		for _, tab := range card.Tabs {
+			if tab.Error != nil {
+				reported = append(reported, fmt.Sprintf("%s %v %s", tab.ID, tab.Modified, *tab.Error))
+			}
+		}
+	}
+	if want := []string{"tab-aaaaaa true " + refusal}; !slices.Equal(reported, want) {
+		t.Fatalf("core.grid reports the tab errors %q, want %q", reported, want)
+	}
+}
+
 func TestClosingTheActiveSpaceAsksAboutItsModifiedTabs(t *testing.T) {
 	f := modifiedShell(t)
 	if _, err := f.shell.Registry().Run("core.space.add", nil); err != nil {
