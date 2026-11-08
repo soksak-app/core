@@ -465,6 +465,45 @@ func TestTheLayoutObserverReportsTheTransactionOfAWindow(t *testing.T) {
 	}
 }
 
+// A frame that presents with the transaction keeps its drawable until the commit, and the frames after it wait for the commit. So the
+// preparation holds the frames of its window until it asks for the frame of the transaction, or a frame drawn meanwhile would take
+// the drawable of the transaction and the frame of the transaction would wait for the commit that waits for it.
+// contract: mygo.framework.frame-reports-reach-the-counters
+func TestAPreparationHoldsTheFramesOfItsWindowUntilItAsksForItsFrame(t *testing.T) {
+	framework, workbench, window := support.Open(t, "prepared")
+	if err := framework.ObserveLayout(); err != nil {
+		t.Fatal(err)
+	}
+	window.Show()
+	draws := func() int { return strings.Count(strings.Join(workbench.Received(), "\n"), "draw prepared") }
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown prepared") })
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := window.NativeWindow()
+	ready := make(chan bool, 1)
+	mygo.RunOnMain(func() { err = system.BeginLayout(native, 1, func(allowed bool) { ready <- allowed }) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !<-ready {
+		t.Fatal("the transaction of the window did not start")
+	}
+	before := draws()
+	window.Window().Invalidate()
+	time.Sleep(250 * time.Millisecond)
+	if drawn := draws() - before; drawn != 0 {
+		t.Fatalf("the window drew %d frames in its preparation before it asked for the frame of the transaction", drawn)
+	}
+	var committed bool
+	mygo.RunOnMain(func() { committed = system.CommitLayout(native, 1) })
+	if !committed {
+		t.Fatal("the transaction of the window did not commit")
+	}
+	support.Wait(t, "the frame after the transaction", func() bool { return draws() > before })
+}
+
 // contract: mygo.framework.frame-reports-reach-the-counters
 func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
 	frames := host.NewWindowFrames("main")

@@ -144,21 +144,19 @@ func (f *Framework) ObserveLayout() error {
 	return err
 }
 
-// layoutStarted holds the frames of every other window from the start of a preparation of window, and releases the hold of window
-// before the preparation asks for its frame.
+// layoutStarted holds the frames of every window from the start of a preparation of window. The preparation releases the hold of
+// window when it asks for its frame (AfterPresentation).
 //
 // The transaction stays open across passes of the run loop, and a frame of any window presents with it, so every window learns
 // of it: a frame presented meanwhile keeps its drawable until the commit, and a later frame waits for the commit instead of
-// waiting on the main thread for a drawable that only the commit returns.
-func (f *Framework) layoutStarted(window platform.Window) {
+// waiting on the main thread for a drawable that only the commit returns. A frame of window drawn before the preparation asks
+// for its frame would take the drawable of the transaction and place the native views of window in it, so the frame of the
+// transaction would wait for the commit that waits for it, and the native views would show the frames after it at the commit.
+func (f *Framework) layoutStarted(platform.Window) {
 	f.transaction = true
 	for _, frontend := range f.windows() {
 		frontend.window.TransactionOpened()
-		if frontend.NativeWindow() == window {
-			frontend.release()
-		} else {
-			frontend.hold()
-		}
+		frontend.hold()
 	}
 }
 

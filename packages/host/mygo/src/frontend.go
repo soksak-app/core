@@ -377,9 +377,10 @@ func AwaitPresentation(name string, notice func(func(mygo.Presentation, error)) 
 }
 
 // AfterPresentation is the presentation notice of the workbench: done runs after the frame of this step presented. In a layout
-// transaction the window holds its frames from inside that notice, so that no later frame presents before the transaction ends.
-// A diagnostics recording holds the time of this call as the request of the frame of the transaction and the time of the notice as its
-// presentation.
+// transaction the preparation held the frames of the window from its start, so the frame that this call asks for is the one frame of
+// the window in the transaction: the call releases the window and holds it again from inside that notice, so that no later frame
+// presents before the transaction ends. A diagnostics recording holds the time of this call as the request of the frame of the
+// transaction and the time of the notice as its presentation.
 func (f *Frontend) AfterPresentation(done func(err error)) error {
 	recorded := func() {}
 	if f.framework.transaction {
@@ -390,6 +391,7 @@ func (f *Frontend) AfterPresentation(done func(err error)) error {
 		if capturer, ok := system.(platform.Capturer); ok {
 			recorded = capturer.LayoutTraceRequested()
 		}
+		f.release()
 	}
 	return f.presented(false, func(err error) {
 		if err == nil && f.framework.transaction {
