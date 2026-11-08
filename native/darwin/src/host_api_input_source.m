@@ -1,7 +1,6 @@
 // Native implementation of the host binding helpers formerly owned by input_source.go.
 #include "host_api_input_source.h"
 
-#ifdef SOKSAK_DIAGNOSTIC
 #include <stdint.h>
 #include <stdlib.h>
 #include "input_source.h"
@@ -20,4 +19,3 @@ void inputSourceSelectAndAwait(const char *identifier, uintptr_t callback) {
 char *main_sp_input_source_current(void) { return ON_MAIN(char *, sp_input_source_current()); }
 const char *inputSourceRoleIdentifier(const char *role) { return sp_input_source_role_identifier(role); }
 const char *inputSourceIdentifierRole(const char *identifier) { return sp_input_source_identifier_role(identifier); }
-#endif
