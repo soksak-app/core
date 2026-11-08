@@ -870,8 +870,8 @@ impl Platform for Darwin {
     fn menu_items(&self) -> Result<Value, String> {
         dock::menu()
     }
-    fn menu_select(&self, menu: &str, title: &str) -> Result<(), String> {
-        dock::menu_select(menu, title)
+    fn menu_select(&self, window: Handle, menu: &str, title: &str) -> Result<(), String> {
+        dock::menu_select(window, menu, title)
     }
     fn main_window(&self) -> Result<Handle, String> {
         Ok(dock::main_window())

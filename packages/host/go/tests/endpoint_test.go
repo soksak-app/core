@@ -100,7 +100,7 @@ func (b *fakeBackend) HostStatus(window, name string) (any, error) {
 	return map[string]any{"key": true}, nil
 }
 
-func (b *fakeBackend) HostCommand(window, name string, params json.RawMessage) (any, error) {
+func (b *fakeBackend) HostCommand(window, name string, params json.RawMessage, _ *host.ReplyScope) (any, error) {
 	b.mu.Lock()
 	b.commands = append(b.commands, name)
 	b.mu.Unlock()

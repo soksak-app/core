@@ -349,33 +349,29 @@ char *sp_menu_items(void) {
     return copyJSON(menus);
 }
 
-bool sp_menu_select(const char *menu, const char *title) {
-    if (!menu || !title) {
-        sp_log_error("window facts", "the menu or the item title to select is missing");
-        return false;
-    }
+const char *sp_menu_select(void *handle, const char *menu, const char *title) {
+    NSWindow *window = (__bridge NSWindow *)handle;
+    if (!window) return "menu action window is missing";
+    if (!menu || !title) return "menu or item title is missing";
     NSString *menuTitle = [NSString stringWithUTF8String:menu];
     NSString *itemTitle = [NSString stringWithUTF8String:title];
+    if (!menuTitle || !itemTitle) return "menu or item title is not UTF-8";
     for (NSMenuItem *top in NSApp.mainMenu.itemArray) {
         NSString *name = top.submenu.title.length ? top.submenu.title : top.title;
         if (![name isEqualToString:menuTitle]) continue;
         NSInteger index = [top.submenu indexOfItemWithTitle:itemTitle];
-        if (index < 0) {
-            sp_log_error("window facts", [NSString stringWithFormat:@"the menu %@ has no item %@", menuTitle, itemTitle].UTF8String);
-            return false;
-        }
+        if (index < 0) return "menu item is missing";
         NSMenuItem *item = [top.submenu itemAtIndex:index];
-        if (!item.action) {
-            sp_log_error("window facts", [NSString stringWithFormat:@"the menu item %@ has no action", itemTitle].UTF8String);
-            return false;
-        }
-        // performActionForItemAtIndex: defers the action to the run loop on this system (V5-108), so choose
-        // the item with the equivalent synchronous form. Without a target it passes through the responder
-        // chain and returns whether the action was delivered.
-        return [NSApp sendAction:item.action to:item.target from:item];
+        if (!item.action) return "menu item has no action";
+        // Inactive framework callbacks read the same virtual window as injected input.
+        // Explicit responder dispatch below remains window-owned even in an active application.
+        if (!sp_input_virtual_real_active()) sp_input_virtual_enter(handle);
+        BOOL performed = item.target
+            ? [NSApp sendAction:item.action to:item.target from:item]
+            : [(window.firstResponder ?: window) tryToPerform:item.action with:item];
+        return performed ? NULL : "menu action has no responder";
     }
-    sp_log_error("window facts", [NSString stringWithFormat:@"the main menu has no menu %@", menuTitle].UTF8String);
-    return false;
+    return "menu is missing";
 }
 
 void *sp_app_main_window(void) {

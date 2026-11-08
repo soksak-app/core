@@ -583,7 +583,7 @@ pub fn application_active() -> Result<bool, String> {
     missing("application activation state")
 }
 
-pub fn menu_select(_menu: &str, _title: &str) -> Result<(), String> {
+pub fn menu_select(_window: Handle, _menu: &str, _title: &str) -> Result<(), String> {
     missing("application menu")
 }
 

@@ -50,7 +50,7 @@ func parseDocumentReferenceRequest(params json.RawMessage) (documentReferenceReq
 	return documentReferenceRequest{Surface: *request.Surface, Document: *request.Document, RequestID: *request.RequestID}, nil
 }
 
-func diagnosticCaptureDocumentReference(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticCaptureDocumentReference(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	request, err := parseDocumentReferenceRequest(params)
 	if err != nil {
 		return nil, err

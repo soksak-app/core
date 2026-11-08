@@ -383,7 +383,7 @@ func (s *Session) End() {
 // OnShutdown answers that request after the save finishes (docs/spec/hosts.md#process-lifecycle).
 func setupQuitRequest() {
 	mainThreadStep(func() {
-		if err := system.OnQuitRequest(func() { QuitWithCause("quit-request", framework.Quit) }); err != nil {
+		if err := system.OnQuitRequest(func() { AfterOwnerResponse(func() { QuitWithCause("quit-request", framework.Quit) }) }); err != nil {
 			fatalError("quit request", err)
 		}
 	})

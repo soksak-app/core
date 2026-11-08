@@ -176,6 +176,7 @@ impl Service for GatedPage {
         _window: &str,
         method: &str,
         _params: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let _ = self.entered.lock().unwrap().send(method.to_string());
         let gate = self.gate.lock().unwrap().take();

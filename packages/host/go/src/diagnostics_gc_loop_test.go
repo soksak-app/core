@@ -16,7 +16,7 @@ func runGCLoop(t *testing.T, params string) error {
 	if method == nil {
 		t.Fatal("diagnostics.gc.loop is not registered")
 	}
-	_, err := method(nil, nil, json.RawMessage(params))
+	_, err := method(nil, nil, json.RawMessage(params), nil)
 	return err
 }
 
@@ -71,7 +71,7 @@ func TestTheCollectionLoopAnswersItsStopAfterTheHeldCollectionReturned(t *testin
 	stopped := make(chan error, 1)
 	go func() {
 		method := diagnosticMethods["diagnostics.gc.loop"]
-		_, err := method(nil, nil, json.RawMessage(`{"on":false}`))
+		_, err := method(nil, nil, json.RawMessage(`{"on":false}`), nil)
 		stopped <- err
 	}()
 	select {

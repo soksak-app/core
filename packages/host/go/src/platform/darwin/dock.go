@@ -40,12 +40,12 @@ func (implementation) PreferredLanguage() (string, error) {
 	return native.GoString(tag), nil
 }
 
-func (implementation) MenuSelect(menu, title string) error {
+func (implementation) MenuSelect(window platform.Window, menu, title string) error {
 	menuText, titleText := native.CString(menu), native.CString(title)
 	defer native.Free(unsafe.Pointer(menuText))
 	defer native.Free(unsafe.Pointer(titleText))
-	if !native.MainSpMenuSelect(menuText, titleText) {
-		return fmt.Errorf("application menu %q has no item %q", menu, title)
+	if failure := native.MainSpMenuSelect(uintptr(window), menuText, titleText); failure != nil {
+		return fmt.Errorf("window %d application menu %q item %q: %s", window, menu, title, native.GoString(failure))
 	}
 	return nil
 }

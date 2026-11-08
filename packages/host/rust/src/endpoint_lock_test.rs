@@ -60,6 +60,7 @@ impl Service for Pages {
         window: &str,
         method: &str,
         _params: Map<String, Value>,
+        _reply: Option<crate::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         self.calls
             .lock()

@@ -68,6 +68,7 @@ impl Service for Fake {
         window: &str,
         method: &str,
         params: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let plain = params.get("name").and_then(Value::as_str) == Some("core.plain");
         let call = (
@@ -988,6 +989,7 @@ impl Service for GatedPage {
         _window: &str,
         method: &str,
         _params: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let _ = self.entered.lock().unwrap().send(method.to_string());
         if method == "status.unwatch" {
@@ -1082,7 +1084,13 @@ impl Service for Late {
         window == "main" && self.0.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    fn call(&self, _: &str, _: &str, _: Map<String, Value>) -> Result<Box<RawValue>, Failure> {
+    fn call(
+        &self,
+        _: &str,
+        _: &str,
+        _: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
+    ) -> Result<Box<RawValue>, Failure> {
         raw(&json!("answered"))
     }
 }
@@ -1254,6 +1262,7 @@ impl Service for HeldPage {
         _window: &str,
         _method: &str,
         _params: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let _ = self.entered.lock().unwrap().send(());
         let gate = self.gate.lock().unwrap().take();
@@ -1477,4 +1486,76 @@ fn the_endpoint_records_an_accept_error() {
         output.status,
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+/// A service whose request ends the endpoint after its response: the end of a quit that has no ready window to close.
+struct Terminal {
+    endpoint: Mutex<std::sync::Weak<Endpoint>>,
+    completed: Mutex<Sender<endpoint::ReplyOutcome>>,
+}
+impl Service for Terminal {
+    fn windows(&self) -> Result<Value, Failure> {
+        Ok(json!([{"window":"w1"}]))
+    }
+    fn exists(&self, window: &str) -> bool {
+        window == "w1"
+    }
+    fn unwatched(&self, _: &str, _: &str) {}
+    fn call(
+        &self,
+        _: &str,
+        _: &str,
+        _: Map<String, Value>,
+        reply: Option<endpoint::ReplyScope>,
+    ) -> Result<Box<RawValue>, Failure> {
+        let endpoint = self.endpoint.lock().unwrap().clone();
+        let completed = self.completed.lock().unwrap().clone();
+        reply
+            .expect("external request owns its response")
+            .after_response(move |outcome| {
+                // stop closes the real peer and takes its writer lock. It must run
+                // after response flush AND after the writer lock has been released.
+                endpoint.upgrade().unwrap().stop();
+                completed.send(outcome).unwrap();
+            });
+        raw(&Value::Null)
+    }
+}
+
+/// A request whose work ends the endpoint after its response receives that response before the connection closes.
+// contract: endpoint.response.follows-the-socket-write
+#[test]
+fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
+    let config = folder::Folder::new();
+    let (tx, rx) = mpsc::channel();
+    let service = Arc::new(Terminal {
+        endpoint: Mutex::new(std::sync::Weak::new()),
+        completed: Mutex::new(tx),
+    });
+    let endpoint = Arc::new(
+        Endpoint::start(
+            &config.path().join("sockets"),
+            config.path(),
+            "reply-scope",
+            service.clone(),
+        )
+        .unwrap(),
+    );
+    *service.endpoint.lock().unwrap() = Arc::downgrade(&endpoint);
+    endpoint.publish("w1").unwrap();
+    let mut client = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let body = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":71,"method":"command.run","params":{"window":"w1","name":"probe.terminate"}})).unwrap();
+    client
+        .write_all(&(body.len() as u32).to_be_bytes())
+        .unwrap();
+    client.write_all(&body).unwrap();
+    let response = endpoint::read_frame(&mut client)
+        .unwrap()
+        .expect("normal result must precede terminal EOF");
+    assert_eq!(response, json!({"jsonrpc":"2.0","id":71,"result":null}));
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        endpoint::ReplyOutcome::Written
+    );
+    assert_eq!(endpoint::read_frame(&mut client).unwrap(), None);
 }

@@ -707,8 +707,8 @@ impl Platform for Windows {
     fn application_active(&self) -> Result<bool, String> {
         unsupported::application_active()
     }
-    fn menu_select(&self, menu: &str, title: &str) -> Result<(), String> {
-        unsupported::menu_select(menu, title)
+    fn menu_select(&self, window: Handle, menu: &str, title: &str) -> Result<(), String> {
+        unsupported::menu_select(window, menu, title)
     }
     fn main_window(&self) -> Result<Handle, String> {
         unsupported::main_window()

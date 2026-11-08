@@ -27,7 +27,7 @@ func TestDocumentReferenceObservationRejectsInvalidRequests(t *testing.T) {
 		`{"window":"main","surface":"browser-a","document":"page","requestId":0}`,
 		`{"window":"main","surface":"browser-a","document":"page","requestId":1,"expected":{"text":"invented producer truth"}}`,
 	} {
-		_, err := method(nil, nil, json.RawMessage(params))
+		_, err := method(nil, nil, json.RawMessage(params), nil)
 		if err == nil || !strings.Contains(err.Error(), "document reference") {
 			t.Fatalf("invalid reference request %s returned %v", params, err)
 		}

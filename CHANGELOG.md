@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F502-12: Run the quit that a request causes after the response of that request: `host.quit`, and the system quit request that the native work of `host.menu.select` or `host.dock.select` causes. The Go and Rust endpoints carry a per-request response context whose completion follows the actual write. Both owner tests fail when the quit runs at once and pass with the seven response tests; the rebuilt three-host quit run remains open.
+
 - F502-12: Apply the existing quit deadline to connection, the normal menu/key request and child exit. Close late or expired clients and continue later cleanup after a timed-out request without changing normal-reply or exit criteria. All 42 runner and artifact owners pass; actual three-host acceptance remains open.
 
 - F502-4: Keep empty setting overrides as arrays and open debug text at its rendered tail once without pinning later scrolling. Move native menu actions to the existing queue after the framework callback ends. The 18 debug/settings and three menu executor owners pass; rebuilt UI and normal Tauri quit acceptance remain open.

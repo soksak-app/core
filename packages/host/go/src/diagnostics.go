@@ -93,7 +93,7 @@ type documentViewportMarkerPlatform interface {
 	SetDocumentViewportMarker(document unsafe.Pointer, enabled bool) (color [3]uint8, borderWidthPt float64, err error)
 }
 
-func diagnosticDocumentViewportMarker(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticDocumentViewportMarker(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	var request struct {
 		Window   *string `json:"window"`
 		Surface  *string `json:"surface"`
@@ -149,7 +149,7 @@ func diagnosticDocumentViewportMarker(e *Endpoint, _ *endpointConn, params json.
 	}{Enabled: *request.Enabled, Kind: "native", MarkerColor: color, BorderWidthPt: borderWidthPt}, nil
 }
 
-func diagnosticClock(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticClock(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
@@ -195,14 +195,14 @@ func onModalWebViews(method endpointMethod) endpointMethod {
 }
 
 func onlyWith(subject string, method endpointMethod) endpointMethod {
-	return func(e *Endpoint, c *endpointConn, params json.RawMessage) (any, error) {
+	return func(e *Endpoint, c *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
 		if _, _, err := diagnosticHost(e, params); err != nil {
 			return nil, err
 		}
 		if !framework.MainPage() {
 			return nil, fmt.Errorf("the %s host has no %s", framework.ApplicationName(), subject)
 		}
-		return method(e, c, params)
+		return method(e, c, params, reply)
 	}
 }
 
@@ -210,7 +210,7 @@ func onlyWith(subject string, method endpointMethod) endpointMethod {
 // before it leaves the page so that it arrives after the request ends, so the page handles diagnostics.surface.hold and diagnostics.surface.held
 // (docs/spec/endpoint.md).
 func diagnosticPageMethod(method string) endpointMethod {
-	return func(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	return func(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 		h, s, err := diagnosticHost(e, params)
 		if err != nil {
 			return nil, err
@@ -219,7 +219,7 @@ func diagnosticPageMethod(method string) endpointMethod {
 	}
 }
 
-func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -241,7 +241,7 @@ type documentDrawCoveredPlatform interface {
 // diagnosticWindowDrawCovered makes the image regions and the documents of the document regions of the window draw while the
 // window is covered, or ends that, and sends the drawing state that changed. The window keeps reporting its occlusion
 // (docs/spec/native-surfaces.md#image-regions, docs/spec/native-surfaces.md#document-regions).
-func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -271,7 +271,7 @@ func diagnosticWindowDrawCovered(e *Endpoint, _ *endpointConn, params json.RawMe
 
 // diagnosticFixture creates <config-dir>/test-project as an empty folder configuration and makes the page close other
 // projects, reset the common settings to their defaults, and open that project with a new layout.
-func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -518,7 +518,7 @@ func recorder() (platformCapture, error) {
 // The page finds the boundary and applies the input at each step. When the window is not in front, the browser
 // slows the clock of the document, so the host sends the time of each step as a diagnostics-tick event. When the page finishes the drag and
 // replies, the host waits until the last layout is displayed and then replies.
-func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -847,7 +847,7 @@ func startCapture(h *Host, s *Surfaces, display bool, frameIdentity, documentIde
 
 // diagnosticCaptureStill takes one picture of a window without giving it focus, writes it to <config-dir>/captures/still-*/window.png, and returns
 // the path. It is observation material for visual checks during development, and the requester deletes that directory after checking.
-func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticCaptureStill(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -911,7 +911,7 @@ func debugCaptureWindows(h *Host) ([]string, error) {
 }
 
 // diagnosticCaptureStart starts the window recording and returns the frame folder.
-func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -940,7 +940,7 @@ func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage
 	return map[string]any{"frames": directory}, nil
 }
 
-func diagnosticCaptureDocumentIdentityStart(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticCaptureDocumentIdentityStart(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	request, err := parseCaptureDocumentIdentityRequest(params)
 	if err != nil {
 		return nil, err
@@ -1121,7 +1121,7 @@ func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, erro
 
 // diagnosticCaptureStop records up to the display time of after, ends the recording, and returns the frame folder and the number of
 // frames.
-func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1364,7 +1364,7 @@ func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap(
 
 // diagnosticInputSource selects that input source when select is given, and returns the currently selected keyboard input source.
 // diagnosticLogFlush waits until the records written so far are in the event log of the host.
-func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
@@ -1374,7 +1374,7 @@ func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage) (a
 // diagnosticHostRelaunch quits the application as host.quit does and starts it again with the same executable and
 // arguments once this process has ended, so the new process reads the files that a check left in the configuration
 // folder (docs/spec/endpoint.md#diagnostic-builds). It replies once the quit has begun.
-func diagnosticHostRelaunch(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticHostRelaunch(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, _, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1395,7 +1395,7 @@ func diagnosticHostRelaunch(e *Endpoint, _ *endpointConn, params json.RawMessage
 }
 
 // diagnosticTestMark stores the start or the end of a test as an event and replies with the position of its line.
-func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
@@ -1411,7 +1411,7 @@ func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage) (a
 }
 
 // diagnosticStallDump stores the path of a stall dump that the window check wrote as an event and replies with the position of its line.
-func diagnosticStallDump(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticStallDump(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
@@ -1449,7 +1449,7 @@ func parseInputReference(params json.RawMessage) (string, *string, error) {
 	return action, document, nil
 }
 
-func diagnosticInputReference(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticInputReference(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	action, document, err := parseInputReference(params)
 	if err != nil {
 		return nil, err
@@ -1476,7 +1476,7 @@ func diagnosticInputReference(e *Endpoint, _ *endpointConn, params json.RawMessa
 	return reply.value, reply.failure
 }
 
-func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
@@ -1562,7 +1562,7 @@ func (set *modalHoldSet) wait(s *Surfaces) {
 
 // diagnosticModalHold starts holding the modal content reply of the window when on is set; otherwise it sends the held reply
 // and stops holding.
-func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1591,7 +1591,7 @@ func diagnosticModalHold(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 
 // diagnosticModalHeld replies when the window has held one modal content reply.
 // diagnosticNotifications returns the notifications of this application that the notification center still shows.
-func diagnosticNotifications(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticNotifications(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
 	}
@@ -1613,7 +1613,7 @@ func diagnosticNotifications(e *Endpoint, _ *endpointConn, params json.RawMessag
 	}
 }
 
-func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1633,7 +1633,7 @@ func diagnosticModalHeld(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 
 // diagnosticPageCollect makes the WebContent process of the app page of the window collect JavaScript objects. It is called before a memory check measures so that
 // the check measures the remaining memory independently of the collection time.
-func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1651,7 +1651,7 @@ func diagnosticPageCollect(e *Endpoint, _ *endpointConn, params json.RawMessage)
 const maxHostEvents = 1000
 
 // diagnosticHostEvents sends count host events diagnostics-unlistened, for which the page declares no listener, to the main page of the window.
-func diagnosticHostEvents(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticHostEvents(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1676,7 +1676,7 @@ func diagnosticHostEvents(e *Endpoint, _ *endpointConn, params json.RawMessage) 
 // The objects of a closed window are released when the autorelease pool of the event loop iteration that closed the window is drained, and the pool is drained when the application
 // handles an event. A window check inserts one event so that it can measure the release of a closed window without user input, and counts after it.
 // AppKit keeps a window that was on the screen until its close animation ends, so with equal the method replies when the count becomes equal to equal.
-func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
 	}
@@ -1725,7 +1725,7 @@ type nativeWindowColorSpaceFacts struct {
 	ICCSHA256 *string `json:"iccSHA256"`
 }
 
-func diagnosticNativeWindowColorSpace(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticNativeWindowColorSpace(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	_, surfaces, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1747,7 +1747,7 @@ type pageAnswer struct {
 
 // diagnosticObjects returns the object counts of the window (docs/spec/endpoint.md) that the diagnostic backend counts, and the figures of the
 // Go runtime.
-func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticObjects(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	window, err := e.window(params)
 	if err != nil {
 		return nil, err
@@ -1847,7 +1847,7 @@ func (b hostBackend) ObjectCounts(window string) (ObjectCounts, error) {
 }
 
 // diagnosticHeapProfile writes the heap profile of the Go runtime to the diagnostic folder of the configuration directory and replies its path.
-func diagnosticHeapProfile(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticHeapProfile(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	h, _, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1861,7 +1861,7 @@ func diagnosticHeapProfile(e *Endpoint, _ *endpointConn, params json.RawMessage)
 
 // diagnosticCPUProfile starts the CPU profile of the Go runtime with on: true and stops it with on: false, so a check profiles the work
 // of the host between its two requests (docs/spec/endpoint.md).
-func diagnosticCPUProfile(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticCPUProfile(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	var p struct {
 		On *bool `json:"on"`
 	}
@@ -1897,7 +1897,7 @@ var gcLoop struct {
 
 // diagnosticGCLoop starts a goroutine that collects garbage without pause, or stops it and answers after it has returned, so a
 // check measures the work of the main thread while the runtime collects (docs/spec/endpoint.md).
-func diagnosticGCLoop(_ *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticGCLoop(_ *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	var p struct {
 		On *bool `json:"on"`
 	}
@@ -1934,7 +1934,7 @@ func diagnosticGCLoop(_ *Endpoint, _ *endpointConn, params json.RawMessage) (any
 
 // diagnosticMemoryPressure delivers a memory pressure level as the source of the process delivers it, so a check observes the
 // report that the pages receive (docs/spec/hosts.md#memory-pressure).
-func diagnosticMemoryPressure(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticMemoryPressure(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
@@ -1955,7 +1955,7 @@ func diagnosticMemoryPressure(e *Endpoint, _ *endpointConn, params json.RawMessa
 
 // diagnosticProcessExit replies when the process pid ends. A window check waits for the WebContent process of a closed window to end through
 // the exit notification of the kernel.
-func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func diagnosticProcessExit(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if _, _, err := diagnosticHost(e, params); err != nil {
 		return nil, err
 	}

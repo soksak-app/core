@@ -52,16 +52,30 @@ pub fn items() -> Result<Value, String> {
 }
 
 /// Runs the application menu item with the title title in the submenu with the title menu.
-pub fn menu_select(menu: &str, title: &str) -> Result<(), String> {
+pub fn menu_select(window: super::Handle, menu: &str, title: &str) -> Result<(), String> {
     unsafe extern "C" {
-        fn sp_menu_select(menu: *const c_char, title: *const c_char) -> bool;
+        fn sp_menu_select(
+            window: *mut std::ffi::c_void,
+            menu: *const c_char,
+            title: *const c_char,
+        ) -> *const c_char;
     }
     let menu_text = CString::new(menu).map_err(|e| e.to_string())?;
     let title_text = CString::new(title).map_err(|e| e.to_string())?;
-    if unsafe { sp_menu_select(menu_text.as_ptr(), title_text.as_ptr()) } {
+    let error = unsafe {
+        sp_menu_select(
+            window as *mut std::ffi::c_void,
+            menu_text.as_ptr(),
+            title_text.as_ptr(),
+        )
+    };
+    if error.is_null() {
         Ok(())
     } else {
-        Err(format!("application menu {menu:?} has no item {title:?}"))
+        let reason = unsafe { std::ffi::CStr::from_ptr(error) }.to_string_lossy();
+        Err(format!(
+            "window {window} application menu {menu:?} item {title:?}: {reason}"
+        ))
     }
 }
 

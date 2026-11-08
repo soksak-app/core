@@ -33,7 +33,7 @@ func answerOf(t *testing.T, e *Endpoint, name, params string) error {
 	if !ok {
 		t.Fatalf("%s is not registered", name)
 	}
-	_, err := method(e, nil, json.RawMessage(params))
+	_, err := method(e, nil, json.RawMessage(params), nil)
 	return err
 }
 

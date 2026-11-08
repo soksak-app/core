@@ -4,8 +4,18 @@
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "input_virtual.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <objc/runtime.h>
+
+// Distinct responders make a global/current-window menu dispatch observable.
+@interface MenuWindowResponder : NSView
+@property NSUInteger selections;
+@end
+@implementation MenuWindowResponder
+- (BOOL)acceptsFirstResponder { return YES; }
+- (void)selectAll:(id)sender { (void)sender; self.selections++; }
+@end
 
 static int failures = 0;
 
@@ -124,8 +134,51 @@ int main(void) { @autoreleasepool {
     NSMenuItem *zoomIn = [viewMenu itemWithTitle:@"Zoom In"];
     zoomIn.target = [NSBlockOperation blockOperationWithBlock:^{ performed = YES; }];
     zoomIn.action = @selector(main);
-    check(sp_menu_select("View", "Zoom In") && performed, @"a menu item is performed by its menu and title");
-    check(!sp_menu_select("View", "Missing") && !sp_menu_select("Missing", "Zoom In"), @"an unknown menu item is rejected");
+    check(sp_menu_select(window, "View", "Zoom In") == NULL && performed, @"a menu item is performed by its menu and title");
+    check(sp_menu_select(window, "View", "Missing") != NULL && sp_menu_select(window, "Missing", "Zoom In") != NULL, @"an unknown menu item is rejected");
+
+    // Request B while A owns the virtual input context. Neither action may borrow A's responder.
+    NSWindow *menuA = [[NSWindow alloc] initWithContentRect:NSMakeRect(20, 20, 160, 100)
+        styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
+    NSWindow *menuB = [[NSWindow alloc] initWithContentRect:NSMakeRect(40, 40, 160, 100)
+        styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
+    menuA.releasedWhenClosed = NO;
+    menuB.releasedWhenClosed = NO;
+    MenuWindowResponder *responderA = [[[MenuWindowResponder alloc] initWithFrame:menuA.contentView.bounds] autorelease];
+    MenuWindowResponder *responderB = [[[MenuWindowResponder alloc] initWithFrame:menuB.contentView.bounds] autorelease];
+    [menuA.contentView addSubview:responderA];
+    [menuB.contentView addSubview:responderB];
+    [menuA makeFirstResponder:responderA];
+    [menuB makeFirstResponder:responderB];
+    [menuA orderBack:nil];
+    [menuB orderBack:nil];
+    check(sp_input_virtual_enter(menuA), @"the menu fixture owns an inactive virtual window A");
+    BOOL realActiveBefore = sp_input_virtual_real_active();
+    NSArray *orderBefore = [NSApp.orderedWindows copy];
+    NSMenuItem *select = [viewMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@""];
+    select.target = nil;
+    check(sp_menu_select(menuB, "View", "Select All") == NULL && responderA.selections == 0 && responderB.selections == 1,
+        @"a nil-target Edit menu action reaches only requested window B");
+    performed = NO;
+    check(sp_menu_select(menuB, "View", "Zoom In") == NULL && performed,
+        @"window-scoped selection preserves an explicit menu target");
+    NSMenuItem *unhandled = [viewMenu addItemWithTitle:@"Unclaimed" action:NSSelectorFromString(@"unclaimedMenuFixtureAction:") keyEquivalent:@""];
+    unhandled.target = nil;
+    const char *missingError = sp_menu_select(menuB, "View", "Missing");
+    const char *unhandledError = sp_menu_select(menuB, "View", "Unclaimed");
+    check(missingError && unhandledError && strcmp(missingError, unhandledError) != 0,
+        @"missing menu items and actions without a responder have distinct errors");
+    check(!realActiveBefore && !sp_input_virtual_real_active() && [orderBefore isEqual:NSApp.orderedWindows],
+        @"window-scoped Edit dispatch neither activates nor changes window order");
+    [orderBefore release];
+    NSMenuItem *close = [viewMenu addItemWithTitle:@"Close Fixture" action:@selector(performClose:) keyEquivalent:@""];
+    close.target = nil;
+    check(sp_menu_select(menuB, "View", "Close Fixture") == NULL && !menuB.visible && menuA.visible,
+        @"a nil-target Close menu action closes only requested window B");
+    check(!sp_input_virtual_real_active(), @"window-scoped Close does not activate the application");
+    [menuA close];
+    [menuA release];
+    [menuB release];
 
     check(sp_window_move(window, 120, 80), @"move accepted");
     checkFactsKeepTheFeature(window);

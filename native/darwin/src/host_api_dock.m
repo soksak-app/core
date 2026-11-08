@@ -14,6 +14,6 @@ bool installDockMenu(void) {
 char *main_sp_dock_items(void) { return ON_MAIN(char *, sp_dock_items()); }
 char *main_sp_menu_items(void) { return ON_MAIN(char *, sp_menu_items()); }
 char *main_sp_preferred_language(void) { return ON_MAIN(char *, sp_preferred_language()); }
-bool main_sp_menu_select(const char *menu, const char *title) { return ON_MAIN(bool, sp_menu_select(menu, title)); }
+const char *main_sp_menu_select(uintptr_t window, const char *menu, const char *title) { return ON_MAIN(const char *, sp_menu_select((void *)window, menu, title)); }
 uintptr_t main_sp_app_main_window(void) { return (uintptr_t)ON_MAIN(void *, sp_app_main_window()); }
 bool main_sp_dock_select(const char *title) { return ON_MAIN(bool, sp_dock_select(title)); }

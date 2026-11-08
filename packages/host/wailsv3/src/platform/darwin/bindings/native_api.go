@@ -106,8 +106,8 @@ func Functions() abi.NativeFunctions {
 		},
 		MainSpMemoryPressureInject: func(a0 *byte) bool { return bool(C.main_sp_memory_pressure_inject((*C.char)(unsafe.Pointer(a0)))) },
 		MainSpMenuItems:            func() *byte { return (*byte)(unsafe.Pointer(C.main_sp_menu_items())) },
-		MainSpMenuSelect: func(a0 *byte, a1 *byte) bool {
-			return bool(C.main_sp_menu_select((*C.char)(unsafe.Pointer(a0)), (*C.char)(unsafe.Pointer(a1))))
+		MainSpMenuSelect: func(a0 uintptr, a1 *byte, a2 *byte) *byte {
+			return (*byte)(unsafe.Pointer(C.main_sp_menu_select(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)))))
 		},
 		MainSpNotificationsPost: func(a0 *byte, a1 *byte, a2 *byte) {
 			C.main_sp_notifications_post((*C.char)(unsafe.Pointer(a0)), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)))

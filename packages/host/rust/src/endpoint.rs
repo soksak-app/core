@@ -7,6 +7,10 @@
 //! connection and the notifications. The transport is provided by `platform/<os>/endpoint.*`. The format is defined in
 //! docs/spec/endpoint.md.
 
+#[cfg(test)]
+#[path = "endpoint_response_test.rs"]
+mod response_tests;
+
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::{File, TryLockError};
 use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
@@ -146,6 +150,84 @@ pub fn raw(value: &Value) -> Result<Box<RawValue>, Failure> {
     serde_json::value::to_raw_value(value).map_err(|error| Failure::new(-32603, error.to_string()))
 }
 
+/// The transport outcome of one endpoint response, distinct from its command result.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReplyOutcome {
+    Written,
+    NoResponse,
+    WriteFailed(String),
+    Abandoned,
+}
+
+type ReplyCallback = Box<dyn FnOnce(ReplyOutcome) + Send + 'static>;
+#[derive(Default)]
+struct ReplyState {
+    outcome: Option<ReplyOutcome>,
+    callbacks: Vec<ReplyCallback>,
+}
+
+/// Owned context for work that must follow this request's response attempt.
+/// Cloning or dropping the context does not complete the response.
+#[derive(Clone)]
+pub struct ReplyScope(Arc<Mutex<ReplyState>>);
+
+impl ReplyScope {
+    pub(crate) fn pending() -> (Self, ReplyCompletion) {
+        let scope = Self(Arc::new(Mutex::new(ReplyState::default())));
+        let completion = ReplyCompletion {
+            scope: scope.clone(),
+            finished: false,
+        };
+        (scope, completion)
+    }
+
+    /// Runs once after response completion, outside the scope and connection writer locks.
+    /// Registration after completion runs immediately with the retained transport outcome.
+    pub fn after_response(&self, callback: impl FnOnce(ReplyOutcome) + Send + 'static) {
+        let outcome = {
+            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            match &state.outcome {
+                Some(outcome) => outcome.clone(),
+                None => {
+                    state.callbacks.push(Box::new(callback));
+                    return;
+                }
+            }
+        };
+        callback(outcome);
+    }
+}
+
+/// The answer side of a reply scope: finishing it completes the response once, and dropping it unfinished abandons it.
+pub(crate) struct ReplyCompletion {
+    scope: ReplyScope,
+    finished: bool,
+}
+
+impl ReplyCompletion {
+    pub(crate) fn finish(&mut self, outcome: ReplyOutcome) -> bool {
+        if self.finished {
+            return false;
+        }
+        self.finished = true;
+        let callbacks = {
+            let mut state = self.scope.0.lock().unwrap_or_else(PoisonError::into_inner);
+            state.outcome = Some(outcome.clone());
+            std::mem::take(&mut state.callbacks)
+        };
+        for callback in callbacks {
+            callback(outcome.clone());
+        }
+        true
+    }
+}
+
+impl Drop for ReplyCompletion {
+    fn drop(&mut self) {
+        self.finish(ReplyOutcome::Abandoned);
+    }
+}
+
 /// Runs endpoint requests in windows and pages.
 pub trait Service: Send + Sync + 'static {
     /// Returns the result of `windows.list`.
@@ -154,11 +236,13 @@ pub trait Service: Send + Sync + 'static {
     fn exists(&self, window: &str) -> bool;
     /// Runs method in the window window. params does not hold `window`. The call waits until the response is ready. The
     /// result is the JSON text for the response, and a value that the page sent is the received text.
+    /// reply is the owned external request context; internal watch maintenance has no response context.
     fn call(
         &self,
         window: &str,
         method: &str,
         params: Map<String, Value>,
+        reply: Option<ReplyScope>,
     ) -> Result<Box<RawValue>, Failure>;
     /// Called when the last connection stops watching the status name of the window window without a surface
     /// specification, after the change that ended the watch is queued.
@@ -273,6 +357,7 @@ struct Answer {
     writer: Arc<Mutex<Box<dyn Connection>>>,
     id: Option<Value>,
     call: Call,
+    completion: ReplyCompletion,
 }
 
 /// A success response. result is written as the received text.
@@ -284,36 +369,45 @@ struct Success<'a> {
 }
 
 impl Answer {
-    fn send(self, outcome: Result<Box<RawValue>, Failure>) {
+    fn send(mut self, outcome: Result<Box<RawValue>, Failure>) {
         // The event is stored before the reply is written, so a client that has its reply finds the event after a flush.
         self.call.record(&outcome);
-        let Some(id) = self.id else { return };
+        let Some(id) = self.id else {
+            self.completion.finish(ReplyOutcome::NoResponse);
+            return;
+        };
         // default: a lock that a panicking thread poisoned still holds the connection of the client, which the reply
         // is written to; the panic hook records the panic.
-        let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
-        let written = match outcome {
-            Ok(result) => write_to_peer(
-                &mut *writer,
-                &Success {
-                    jsonrpc: "2.0",
-                    id: &id,
-                    result: &result,
-                },
-            ),
-            Err(failure) => write_to_peer(
-                &mut *writer,
-                &json!({"jsonrpc": "2.0", "id": id,
+        let written = {
+            let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
+            match outcome {
+                Ok(result) => write_to_peer(
+                    &mut *writer,
+                    &Success {
+                        jsonrpc: "2.0",
+                        id: &id,
+                        result: &result,
+                    },
+                ),
+                Err(failure) => write_to_peer(
+                    &mut *writer,
+                    &json!({"jsonrpc": "2.0", "id": id,
                     "error": {"code": failure.code, "message": failure.message}}),
-            ),
-        };
-        match written {
-            Ok(()) => {}
-            // The call record holds the outcome, and the serve loop records the close by the peer.
-            Err(Unsent::PeerClosed) => {
-                log_info("endpoint", format!("reply to {id} not sent: peer closed"))
+                ),
             }
-            Err(Unsent::Failed(error)) => log_error("endpoint reply", error),
-        }
+        };
+        let completion = match written {
+            Ok(()) => ReplyOutcome::Written,
+            Err(Unsent::PeerClosed) => {
+                log_info("endpoint", format!("reply to {id} not sent: peer closed"));
+                ReplyOutcome::WriteFailed(String::from("peer closed"))
+            }
+            Err(Unsent::Failed(error)) => {
+                log_error("endpoint reply", error.clone());
+                ReplyOutcome::WriteFailed(error)
+            }
+        };
+        self.completion.finish(completion);
     }
 }
 
@@ -1155,10 +1249,12 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             reason = format!("method {:?} is not declared", request.method);
             break;
         }
+        let (reply, completion) = ReplyScope::pending();
         let answer = Answer {
             writer: writer.clone(),
             id: request.id,
             call: Call::begin(&request.method, &body),
+            completion,
         };
         if SUBSCRIPTIONS.contains(&request.method.as_str()) {
             match subscription(&shared, &request.method, request.params) {
@@ -1169,7 +1265,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         }
         let shared = shared.clone();
         crate::routine::spawn_named("endpoint-run", move || {
-            let outcome = run(&shared, &request.method, request.params);
+            let outcome = run(&shared, &request.method, request.params, Some(reply));
             // A timeout is an error that the requesting side receives, but only this record keeps which method and what
             // it waited for.
             if let Err(failure) = &outcome
@@ -1347,8 +1443,12 @@ fn drain(shared: &Shared, topic: Topic) {
             shared.service.unwatched(&watch.window, &watch.name);
         }
         let (method, params) = topic.request(next.on);
+        let reply = next
+            .answer
+            .as_ref()
+            .map(|answer| answer.completion.scope.clone());
         let (outcome, following) = if next.on && !page {
-            match shared.service.call(topic.window(), method, params) {
+            match shared.service.call(topic.window(), method, params, reply) {
                 Ok(result) => (Ok(result), true),
                 Err(failure) => {
                     // If this connection did not change this target again after that, the start is reverted.
@@ -1365,7 +1465,10 @@ fn drain(shared: &Shared, topic: Topic) {
             }
         } else if !next.on && next.last && page {
             // Even if the page fails a stop request, a later start request is sent to the page again.
-            (shared.service.call(topic.window(), method, params), false)
+            (
+                shared.service.call(topic.window(), method, params, reply),
+                false,
+            )
         } else {
             (raw(&Value::Null), page)
         };
@@ -1375,6 +1478,7 @@ fn drain(shared: &Shared, topic: Topic) {
         if let Some(line) = lines.get_mut(&topic) {
             line.page = following;
         }
+        drop(lines);
         if let Some(answer) = next.answer {
             answer.send(outcome);
         }
@@ -1382,7 +1486,12 @@ fn drain(shared: &Shared, topic: Topic) {
 }
 
 /// Runs one request that is not a subscription change.
-fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawValue>, Failure> {
+fn run(
+    shared: &Shared,
+    method: &str,
+    params: Option<Value>,
+    reply: Option<ReplyScope>,
+) -> Result<Box<RawValue>, Failure> {
     if method == "windows.list" {
         return shared.service.windows().and_then(|list| raw(&list));
     }
@@ -1394,7 +1503,7 @@ fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawVa
     if method == "diagnostics.clock" {
         return raw(&crate::diagnostics::clock()?);
     }
-    shared.service.call(&window, method, params)
+    shared.service.call(&window, method, params, reply)
 }
 
 /// Returns name of params.

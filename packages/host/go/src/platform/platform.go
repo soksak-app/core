@@ -732,7 +732,7 @@ type Platform interface {
 	// ApplicationActive reports whether the application is the active application (NSApplication isActive on macOS). Call it on the UI thread.
 	ApplicationActive() (bool, error)
 	// MenuSelect runs the item with the title title in the submenu with the title menu. Call it on the UI thread.
-	MenuSelect(menu, title string) error
+	MenuSelect(window Window, menu, title string) error
 	// MainWindow is the handle of the main window of the application. It is zero when there is none. Call it on the UI thread.
 	MainWindow() (Window, error)
 	// DockSelect runs the Dock menu item with the title title. Call it on the UI thread.

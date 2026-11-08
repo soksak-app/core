@@ -99,7 +99,8 @@ func TestSetMenuInstallsTheMenuInTheApplication(t *testing.T) {
 	if !strings.Contains(items, "Tools") || !strings.Contains(items, "Run") {
 		t.Fatalf("the application menu holds %s", items)
 	}
-	mygo.RunOnMain(func() { err = system.MenuSelect("Tools", "Run") })
+	_, _, window := open(t, "menu-target")
+	mygo.RunOnMain(func() { err = system.MenuSelect(window.NativeWindow(), "Tools", "Run") })
 	if err != nil {
 		t.Fatal(err)
 	}

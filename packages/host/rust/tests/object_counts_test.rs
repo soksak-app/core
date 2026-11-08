@@ -288,6 +288,7 @@ impl Service for ObjectsService {
         window: &str,
         method: &str,
         _params: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, endpoint::Failure> {
         assert_eq!(method, "diagnostics.objects");
         endpoint::raw(&soksak_host::object_counts::objects_reply(&self.0, window)?)

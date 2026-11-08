@@ -1056,7 +1056,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Whether the application is the active application (NSApplication isActive on macOS). Call it on the main thread.
     fn application_active(&self) -> Result<bool, String>;
     /// Runs the item with the title title in the submenu with the title menu. Call it on the main thread.
-    fn menu_select(&self, menu: &str, title: &str) -> Result<(), String>;
+    fn menu_select(&self, window: Handle, menu: &str, title: &str) -> Result<(), String>;
     /// The main window handle of the application. It is 0 when there is none. Call it on the main thread.
     fn main_window(&self) -> Result<Handle, String>;
     /// Runs the Dock menu item with the title title. Call it on the main thread.

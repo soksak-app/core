@@ -114,7 +114,7 @@ func QueryEventLogs(configDir string, request []byte) (page sok.LogPage, invalid
 }
 
 // logQuery is the endpoint method `log.query`: one page of the events of the event files (docs/spec/endpoint.md#log-query).
-func logQuery(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func logQuery(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	if len(params) == 0 || params[0] != '{' {
 		return nil, rpcError(codeInvalidParams, "params must be an object")
 	}

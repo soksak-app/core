@@ -888,7 +888,7 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 	return s.windowState()
 }
 
-func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (any, error) {
+func (b hostBackend) HostCommand(window, name string, params json.RawMessage, reply *ReplyScope) (any, error) {
 	s, err := b.window(window)
 	if err != nil {
 		return nil, err
@@ -948,9 +948,10 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		if p.Menu == nil || p.Title == nil {
 			return nil, rpcError(codeInvalidParams, "menu and title are required")
 		}
-		var selected error
-		mainThreadStep(func() { selected = system.MenuSelect(*p.Menu, *p.Title) })
-		return nil, selected
+		// A quit that the menu item requests follows the response of this request.
+		return nil, WithResponseOwner(reply, func() error {
+			return s.useWindow(func(window platform.Window) error { return system.MenuSelect(window, *p.Menu, *p.Title) })
+		})
 	case "host.dock.select":
 		var p struct {
 			Title *string
@@ -961,9 +962,12 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		if p.Title == nil {
 			return nil, rpcError(codeInvalidParams, "title is required")
 		}
-		var selected error
-		mainThreadStep(func() { selected = system.DockSelect(*p.Title) })
-		return nil, selected
+		// A quit that the Dock item requests follows the response of this request.
+		return nil, WithResponseOwner(reply, func() error {
+			var selected error
+			mainThreadStep(func() { selected = system.DockSelect(*p.Title) })
+			return selected
+		})
 	case "host.window.reload":
 		return nil, s.reloadPage()
 	case "host.window.presented":
@@ -984,8 +988,11 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage) (a
 		}
 		return s.hit(*p.X, *p.Y)
 	case "host.quit":
+		// The quit follows the response of this request, so the client receives null before the endpoint closes.
 		b.h.quit.Request(func() {
-			QuitWithCause("quit-command", func() { routine.Go("quit", framework.Quit) })
+			reply.AfterResponse(func(ReplyOutcome) {
+				QuitWithCause("quit-command", func() { routine.Go("quit", framework.Quit) })
+			})
 		})
 	default:
 		return nil, rpcError(codeUnknownName, "unknown command %s", name)

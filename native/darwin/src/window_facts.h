@@ -63,8 +63,8 @@ char *sp_preferred_language(void);
 // activate the application.
 bool sp_application_active(void);
 
-// Runs the item titled title in the submenu titled menu. Returns false when there is no such item.
-bool sp_menu_select(const char *menu, const char *title);
+// Dispatches in the requested window. NULL is success; errors are process-lifetime static literals.
+const char *sp_menu_select(void *window, const char *menu, const char *title);
 
 // Main window of the application. When there is no main window (an application that was never activated),
 // it is the frontmost visible window, and NULL when there is none.

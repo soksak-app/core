@@ -83,7 +83,13 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: Select All, Cut and Paste of the Edit menu reach the focused text field`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    s.cleanup(() => s.run("core.library.search", { query: "" }));
+    await s.run("core.library.open");
+    s.cleanup(async () => {
+      await s.run("core.library.search", { query: "" });
+      await s.run("core.library.return");
+      await s.until("core.screen", (screen) => screen.screen === "workspace", "Edit menu cleanup did not restore the workspace");
+    });
+    await s.until("core.screen", (screen) => screen.screen === "library", "the Edit menu fixture did not open the library");
     const [selectAll, cut, paste] = [await menuItem(s, "cmd+a"), await menuItem(s, "cmd+x"), await menuItem(s, "cmd+v")];
     await s.run("core.library.search", { query: "window-end" });
     await s.run("core.library.search.focus");

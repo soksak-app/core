@@ -145,7 +145,7 @@ type NativeFunctions struct {
 	MainSpLinkOpen                        func(*byte) *byte
 	MainSpMemoryPressureInject            func(*byte) bool
 	MainSpMenuItems                       func() *byte
-	MainSpMenuSelect                      func(*byte, *byte) bool
+	MainSpMenuSelect                      func(uintptr, *byte, *byte) *byte
 	MainSpNotificationsPost               func(*byte, *byte, *byte)
 	MainSpNotificationsRemove             func(*byte)
 	MainSpObserveActivity                 func()

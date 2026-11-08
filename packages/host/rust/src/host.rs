@@ -309,8 +309,13 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     // A termination request of the operating system runs the same termination as host.quit and answers after
     // the exit has finished the save (docs/spec/hosts.md#process-lifecycle).
     let quit = app.clone();
+    // A request that the native work of an endpoint request causes, such as the Quit menu item that host.menu.select
+    // performs, quits after the response of that request.
     platform::current()?.on_quit_request(Box::new(move || {
-        event_record::quit_with_cause("quit-request", || quit.quit())
+        let quit = quit.clone();
+        crate::quit::after_owner_response(move || {
+            event_record::quit_with_cause("quit-request", || quit.quit())
+        })
     }))?;
     // The one memory pressure source of the process starts with the host, and each report goes to every window
     // (docs/spec/hosts.md#memory-pressure).

@@ -161,7 +161,7 @@ type Backend interface {
 	// HostStatus is the value of the host status name.
 	HostStatus(window, name string) (any, error)
 	// HostCommand runs the host command name.
-	HostCommand(window, name string, params json.RawMessage) (any, error)
+	HostCommand(window, name string, params json.RawMessage, reply *ReplyScope) (any, error)
 	// Pointer and Key deliver native input to a window.
 	Pointer(window string, input PointerInput) error
 	Key(window string, input KeyInput) error
@@ -182,7 +182,7 @@ type EndpointInfo struct {
 }
 
 // endpointMethod is the handling of one declared method.
-type endpointMethod func(e *Endpoint, c *endpointConn, params json.RawMessage) (any, error)
+type endpointMethod func(e *Endpoint, c *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error)
 
 // diagnosticMethods are the methods that a diagnostic build adds in init. It is empty when the build is not a diagnostic build.
 var diagnosticMethods = map[string]endpointMethod{}
@@ -667,11 +667,97 @@ func (e *Endpoint) topics(window string) []topic {
 }
 
 // endpointFrame is one frame of the write queue and the name that records it when it is not sent: "reply to <id>" or
-// "notification <method>".
+// "notification <method>". answer is the response completion of a reply, nil for a notification.
 type endpointFrame struct {
-	body []byte
-	name string
+	body   []byte
+	name   string
+	answer *replyAnswer
 }
+
+// ReplyOutcomeKind is the transport outcome of one endpoint response, apart from its command result.
+type ReplyOutcomeKind int
+
+const (
+	// ReplyWritten: the whole response frame was written to the socket.
+	ReplyWritten ReplyOutcomeKind = iota + 1
+	// ReplyNoResponse: the request is a notification, which gets no response.
+	ReplyNoResponse
+	// ReplyWriteFailed: the response was not written; Error holds the reason.
+	ReplyWriteFailed
+	// ReplyAbandoned: the request ended without producing a response.
+	ReplyAbandoned
+)
+
+// ReplyOutcome is the transport outcome of one endpoint response and, for a failed write, its reason.
+type ReplyOutcome struct {
+	Kind  ReplyOutcomeKind
+	Error string
+}
+
+// ReplyScope is the response context of one endpoint request, for work that must follow the write attempt of that
+// response, such as a normal quit (docs/spec/endpoint.md). Internal subscription maintenance has no scope.
+type ReplyScope struct {
+	mu        sync.Mutex
+	done      bool
+	outcome   ReplyOutcome
+	callbacks []func(ReplyOutcome)
+}
+
+// AfterResponse runs callback once after the response attempt of the request completes, outside the locks of the scope
+// and of the connection writer. A callback registered after completion runs at once with the same outcome. A nil
+// scope has no response, so callback runs at once with ReplyNoResponse.
+func (s *ReplyScope) AfterResponse(callback func(ReplyOutcome)) {
+	if s == nil {
+		callback(ReplyOutcome{Kind: ReplyNoResponse})
+		return
+	}
+	s.mu.Lock()
+	if !s.done {
+		s.callbacks = append(s.callbacks, callback)
+		s.mu.Unlock()
+		return
+	}
+	outcome := s.outcome
+	s.mu.Unlock()
+	callback(outcome)
+}
+
+// replyAnswer completes the scope of one request exactly once.
+type replyAnswer struct {
+	scope *ReplyScope
+	once  sync.Once
+}
+
+// newReplyScope returns the scope of a request and the answer that completes it.
+func newReplyScope() (*ReplyScope, *replyAnswer) {
+	scope := &ReplyScope{}
+	return scope, &replyAnswer{scope: scope}
+}
+
+// finish records outcome and runs the registered callbacks; later calls do nothing. A nil answer does nothing.
+func (a *replyAnswer) finish(outcome ReplyOutcome) {
+	if a == nil {
+		return
+	}
+	a.once.Do(func() {
+		a.scope.mu.Lock()
+		a.scope.done, a.scope.outcome = true, outcome
+		callbacks := a.scope.callbacks
+		a.scope.callbacks = nil
+		a.scope.mu.Unlock()
+		for _, callback := range callbacks {
+			callback(outcome)
+		}
+	})
+}
+
+// failed finishes the answer with a write that did not happen for reason.
+func (a *replyAnswer) failed(reason string) {
+	a.finish(ReplyOutcome{Kind: ReplyWriteFailed, Error: reason})
+}
+
+// Abandon finishes an answer whose request produced no response.
+func (a *replyAnswer) Abandon() { a.finish(ReplyOutcome{Kind: ReplyAbandoned}) }
 
 // endpointConn is one connection and its subscriptions. topics is protected by Endpoint.mu.
 type endpointConn struct {
@@ -705,27 +791,34 @@ func (c *endpointConn) close(reason string) {
 // bytes. When the queue is full, the connection does not read, so the frame is refused, the refusal is the event
 // `host.buffer.dropped`, and the connection is closed. A frame of a closed connection is recorded as not sent under its name.
 func (c *endpointConn) send(body []byte, name string) {
-	size := int64(len(body))
+	c.sendFrame(endpointFrame{body: body, name: name})
+}
+
+// sendFrame queues frame as send does and finishes the answer of a reply that is not queued with its reason.
+func (c *endpointConn) sendFrame(frame endpointFrame) {
+	size := int64(len(frame.body))
 	if c.queued.Add(size) > EndpointOutputBytes {
 		c.queued.Add(-size)
-		c.refuse(len(body), fmt.Sprintf("%d bytes", EndpointOutputBytes))
+		c.refuse(len(frame.body), fmt.Sprintf("%d bytes", EndpointOutputBytes))
+		frame.answer.failed(c.closeReason())
 		return
 	}
 	select {
 	case <-c.done:
 		c.queued.Add(-size)
-		c.unsent(name)
+		c.unsent(frame)
 		return
 	default:
 	}
 	select {
-	case c.out <- endpointFrame{body: body, name: name}:
+	case c.out <- frame:
 	case <-c.done:
 		c.queued.Add(-size)
-		c.unsent(name)
+		c.unsent(frame)
 	default:
 		c.queued.Add(-size)
-		c.refuse(len(body), fmt.Sprintf("%d messages", EndpointOutputFrames))
+		c.refuse(len(frame.body), fmt.Sprintf("%d messages", EndpointOutputFrames))
+		frame.answer.failed(c.closeReason())
 	}
 }
 
@@ -736,9 +829,11 @@ func (c *endpointConn) refuse(bytes int, limit string) {
 	c.close("the output queue is full")
 }
 
-// unsent records a frame that the connection did not send because it is closed.
-func (c *endpointConn) unsent(name string) {
-	LogInfo("endpoint", name+" not sent: "+c.closeReason())
+// unsent records a frame that the connection did not send because it is closed, and finishes its answer with that reason.
+func (c *endpointConn) unsent(frame endpointFrame) {
+	reason := c.closeReason()
+	LogInfo("endpoint", frame.name+" not sent: "+reason)
+	frame.answer.failed(reason)
 }
 
 // closeReason is the reason that closed the connection.
@@ -758,13 +853,20 @@ func (c *endpointConn) write() {
 				select {
 				case frame := <-c.out:
 					c.queued.Add(-int64(len(frame.body)))
-					c.unsent(frame.name)
+					c.unsent(frame)
 				default:
 					return
 				}
 			}
 		case frame := <-c.out:
 			c.queued.Add(-int64(len(frame.body)))
+			// A frame taken while the connection closed is not written to the closed socket.
+			select {
+			case <-c.done:
+				c.unsent(frame)
+				continue
+			default:
+			}
 			prefixed := binary.BigEndian.AppendUint32(make([]byte, 0, 4+len(frame.body)), uint32(len(frame.body)))
 			if _, err := c.conn.Write(append(prefixed, frame.body...)); err != nil {
 				if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
@@ -773,9 +875,12 @@ func (c *endpointConn) write() {
 					LogError("endpoint connection write", err)
 					c.close("write failed")
 				}
-				c.unsent(frame.name)
+				// The answer keeps the error of the write; the log line keeps the close reason.
+				frame.answer.failed(err.Error())
+				c.unsent(frame)
 				continue
 			}
+			frame.answer.finish(ReplyOutcome{Kind: ReplyWritten})
 		}
 	}
 }
@@ -957,19 +1062,27 @@ func (e *Endpoint) notifyPage(t topic, on bool) error {
 func (e *Endpoint) run(c *endpointConn, req request, method endpointMethod) {
 	// The name, the arguments, the result and the time of every endpoint method are the event host.endpoint.call.
 	started := time.Now()
-	result, err := method(e, c, req.Params)
+	scope, answer := newReplyScope()
+	result, err := method(e, c, req.Params, scope)
 	recordEndpointCall(req, started, err)
 	// A timeout is an error that the requester receives, but only this record keeps which method and what the request waited for.
 	var coded *RPCError
 	if errors.As(err, &coded) && coded.Code == codeTimeout {
 		LogError("endpoint timeout", fmt.Sprintf("%s: %s", methodOf(req), coded.Message))
 	}
-	e.reply(c, req, result, err)
+	e.replyWithCompletion(c, req, result, err, answer)
 }
 
 // reply sends the result or the error of the request req. It does not reply to a request without id.
 func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
+	e.replyWithCompletion(c, req, result, err, nil)
+}
+
+// replyWithCompletion sends the reply as reply does and finishes answer with the transport outcome of that reply: written
+// after the socket write, no response for a notification, or a failed write with its reason.
+func (e *Endpoint) replyWithCompletion(c *endpointConn, req request, result any, err error, answer *replyAnswer) {
 	if len(req.ID) == 0 || string(req.ID) == "null" {
+		answer.finish(ReplyOutcome{Kind: ReplyNoResponse})
 		return
 	}
 	reply := map[string]any{"jsonrpc": "2.0", "id": req.ID}
@@ -985,10 +1098,11 @@ func (e *Endpoint) reply(c *endpointConn, req request, result any, err error) {
 	data, marshalErr := json.Marshal(reply)
 	if marshalErr != nil {
 		LogError("endpoint reply", fmt.Sprintf("cannot encode the reply for %s: %v", req.ID, marshalErr))
+		answer.failed(fmt.Sprintf("the reply cannot be encoded: %v", marshalErr))
 		c.close("the reply cannot be encoded")
 		return
 	}
-	c.send(data, "reply to "+string(req.ID))
+	c.sendFrame(endpointFrame{body: data, name: "reply to " + string(req.ID), answer: answer})
 }
 
 func mustJSON(value any) json.RawMessage {
@@ -1009,7 +1123,9 @@ func (e *Endpoint) method(name string) (endpointMethod, bool) {
 }
 
 var endpointMethods = map[string]endpointMethod{
-	"windows.list":  func(e *Endpoint, _ *endpointConn, _ json.RawMessage) (any, error) { return e.backend.Windows(), nil },
+	"windows.list": func(e *Endpoint, _ *endpointConn, _ json.RawMessage, _ *ReplyScope) (any, error) {
+		return e.backend.Windows(), nil
+	},
 	"log.query":     logQuery,
 	"exposure.list": exposureList,
 	"status.get":    statusGet,
@@ -1093,7 +1209,7 @@ func withoutWindow(params json.RawMessage) json.RawMessage {
 	return mustJSON(fields)
 }
 
-func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	window, err := e.window(params)
 	if err != nil {
 		return nil, err
@@ -1134,7 +1250,7 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 	return list, nil
 }
 
-func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	window, name, err := e.named(params)
 	if err != nil {
 		return nil, err
@@ -1176,7 +1292,7 @@ func watchTopic(e *Endpoint, params json.RawMessage, on bool) (topic, bool, erro
 	return t, on, nil
 }
 
-func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
 	window, name, err := e.named(params)
 	if err != nil {
 		return nil, err
@@ -1197,13 +1313,13 @@ func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, erro
 		if fields.Params[0] != '{' {
 			return nil, rpcError(codeInvalidParams, "params of %s must be an object", name)
 		}
-		return e.backend.HostCommand(window, name, fields.Params)
+		return e.backend.HostCommand(window, name, fields.Params, reply)
 	}
 	return e.backend.PageRequest(window, "command.run", withoutWindow(params))
 }
 
 func elementRequest(method string) endpointMethod {
-	return func(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	return func(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 		window, name, err := e.named(params)
 		if err != nil {
 			return nil, err
@@ -1217,7 +1333,7 @@ func elementRequest(method string) endpointMethod {
 
 var pointerPhases = map[string]bool{"move": true, "down": true, "drag": true, "up": true, "scroll": true}
 
-func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	window, err := e.window(params)
 	if err != nil {
 		return nil, err
@@ -1283,7 +1399,7 @@ func inputPointer(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, er
 // modifierBits are the modifiers names of input.key and the bits of the native input.
 var modifierBits = map[string]uint{"shift": 1, "control": 2, "option": 4, "command": 8}
 
-func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
 	window, err := e.window(params)
 	if err != nil {
 		return nil, err

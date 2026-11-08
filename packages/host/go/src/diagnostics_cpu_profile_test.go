@@ -15,7 +15,7 @@ func runCPUProfile(t *testing.T, params string) (any, error) {
 	if method == nil {
 		t.Fatal("diagnostics.cpu.profile is not registered")
 	}
-	return method(nil, nil, json.RawMessage(params))
+	return method(nil, nil, json.RawMessage(params), nil)
 }
 
 // contract: diagnostics.cpu-profile.profiles-until-stopped

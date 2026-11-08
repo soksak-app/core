@@ -198,7 +198,7 @@ func (h *Host) runDeepLink(value string) {
 		LogError("deep link", fmt.Sprintf("%s: %s", value, err))
 		return
 	}
-	if _, err := commandRun(h.endpoint, nil, params); err != nil {
+	if _, err := commandRun(h.endpoint, nil, params, nil); err != nil {
 		LogError("deep link", fmt.Sprintf("%s: %s", value, err))
 	}
 }

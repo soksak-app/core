@@ -434,7 +434,7 @@ pub fn use_owner<W: Send + 'static, T: Send + 'static>(
 /// closing or a window whose registration Destroyed deleted. Call it on the main thread. If the close request is not
 /// blocked, the runtime sets closing in the same main-thread handling and then closes the window, so a window that is
 /// not closing on the main thread is open.
-fn open_owner(window: &Window) -> Result<Option<Handle>, String> {
+pub(crate) fn open_owner(window: &Window) -> Result<Option<Handle>, String> {
     let open = window
         .state::<Windows>()
         .windows

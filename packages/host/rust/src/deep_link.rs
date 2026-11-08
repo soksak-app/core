@@ -250,7 +250,7 @@ fn run(app: &AppHandle, value: &str) -> Result<(), String> {
     arguments.insert("params".to_string(), json!(link.params));
     endpoint::name(&arguments).map_err(|failure| failure.message)?;
     service
-        .call(window, "command.run", arguments)
+        .call(window, "command.run", arguments, None)
         .map_err(|failure| failure.message)?;
     Ok(())
 }

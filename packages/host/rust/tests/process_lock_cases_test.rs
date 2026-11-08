@@ -42,6 +42,7 @@ impl Service for NoWindow {
         _window: &str,
         _method: &str,
         _params: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         raw(&Value::Null)
     }

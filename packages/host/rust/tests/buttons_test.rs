@@ -39,6 +39,7 @@ impl Service for Fake {
         _window: &str,
         method: &str,
         params: Map<String, Value>,
+        _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<serde_json::value::RawValue>, Failure> {
         match (method, params.get("name").and_then(Value::as_str)) {
             ("status.get", Some("host.buttons")) => raw(&self.buttons.get().unwrap().value()),

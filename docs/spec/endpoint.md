@@ -67,6 +67,18 @@ The host closes the connection when it receives any of the following:
 
 An HTTP request line is read as a length prefix larger than the maximum or as invalid JSON, so the host closes the connection before any method runs.
 
+## Responses and termination
+
+Each request has one response context. Its completion is one of four outcomes: the response was written, the request was a notification without a response, the write failed, or the answer was abandoned. A failed write is not a written response. The context completes once, after the write and flush attempt of the response and after the connection writer lock is released. Work registered after completion runs at once with the same outcome. Dropping a copy of the context does not complete it.
+
+The termination that a request causes runs after the completion of its response, so the client receives the response before the endpoint closes:
+
+- `host.quit` quits after its response.
+- The operating system quit request that the native work of `host.menu.select` or `host.dock.select` causes, such as the Quit item of the application menu, quits after the response of that request. Such native work runs one at a time.
+- A quit request outside such work, or one that a request without a response causes, quits at once.
+
+The boundary is per request: termination does not wait for other requests that are still running. In Rust the context is the `ReplyScope` argument of `Service::call`; in Go it is the `*ReplyScope` argument of each endpoint method and of `HostCommand`. A call that does not come from an endpoint request, such as a deep link, has no context.
+
 ## Startup
 
 The host creates the endpoint before it shows windows. If the host cannot create the endpoint, the application exits with an error.

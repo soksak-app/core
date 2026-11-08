@@ -377,3 +377,9 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 A 1005 error of a relayed request has the message `the document did not reply within <ms> ms`. Both hosts remember the 256 most recent requests that timed out, dropping the oldest; a reply to one of them fails with `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`, and a reply to no remembered request fails with `exposure reply <id> has no matching request`, so the delay of a late reply is in the error that the page reports. A command forwarded to a surface page that times out writes the event `host.call.timeout` with its plugin and command, and a late reply to such a command writes `host.trace.call.late-reply` with its delay.
 
 The [local endpoint](endpoint.md) closes the connection after an undeclared method.
+
+### Window-owned application menu actions
+
+`host.menu.select` performs the item in the window of its request. The window goes through the platform port and the native interface to the selection, and the host does not choose another window. An item with a target sends its action to that target. An item without a target sends its action from the first responder of the requested window up its responder chain, and not through the responder chain of the key window. The selection works the same when the application is active and when it is not, and it neither activates nor reorders a window.
+
+The selection fails with a distinct reason for each case: the window is missing, the menu or item title is missing or not UTF-8, the menu is missing, the item is missing, the item has no action, and the action has no responder. The error of the Go and Rust hosts adds the requested window, menu and title to the reason.

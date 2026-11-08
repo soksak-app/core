@@ -740,7 +740,7 @@ func runViewportMarker(t *testing.T, e *Endpoint, params string) (any, error) {
 	if method == nil {
 		t.Fatal("diagnostics.document.viewport-marker is not registered")
 	}
-	return method(e, nil, json.RawMessage(params))
+	return method(e, nil, json.RawMessage(params), nil)
 }
 
 // contract: diagnostics.document.viewport-marker.uses-the-owning-window-document, diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result

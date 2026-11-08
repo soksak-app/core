@@ -20,7 +20,7 @@ func (diagnosticsClockBackend) PageRequest(string, string, json.RawMessage) (jso
 	return json.RawMessage(`null`), nil
 }
 func (diagnosticsClockBackend) HostStatus(string, string) (any, error) { return nil, nil }
-func (diagnosticsClockBackend) HostCommand(string, string, json.RawMessage) (any, error) {
+func (diagnosticsClockBackend) HostCommand(string, string, json.RawMessage, *ReplyScope) (any, error) {
 	return nil, nil
 }
 func (diagnosticsClockBackend) Pointer(string, PointerInput) error { return nil }

@@ -9,6 +9,6 @@ bool installDockMenu(void);
 char *main_sp_dock_items(void);
 char *main_sp_menu_items(void);
 char *main_sp_preferred_language(void);
-bool main_sp_menu_select(const char *menu, const char *title);
+const char *main_sp_menu_select(uintptr_t window, const char *menu, const char *title);
 uintptr_t main_sp_app_main_window(void);
 bool main_sp_dock_select(const char *title);

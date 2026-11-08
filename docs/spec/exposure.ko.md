@@ -377,3 +377,9 @@ AppKit과 WebKit은 일부 상태를 pointer마다가 아니라 창, 페이지, 
 중계한 요청의 1005 오류 메시지는 `the document did not reply within <ms> ms`다. 두 host는 시간이 초과된 최근 요청 256개를 기억하고 가장 오래된 것을 버린다. 그중 하나에 온 답은 `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`로 실패하고, 기억하지 않는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패하므로, 늦은 답의 지연이 page가 보고하는 오류에 들어간다. 표면 페이지로 전달한 command가 시간 초과되면 `host.call.timeout`을 plugin과 command와 함께 쓰고, 그 늦은 답은 `host.trace.call.late-reply`를 지연과 함께 쓴다.
 
 [로컬 엔드포인트](endpoint.ko.md)는 선언되지 않은 메서드를 받으면 연결을 종료한다.
+
+### 창이 소유하는 애플리케이션 메뉴 동작
+
+`host.menu.select`는 요청의 창에서 항목을 실행한다. 창은 플랫폼 포트와 native interface를 거쳐 선택까지 전달되며, 호스트는 다른 창을 고르지 않는다. target이 있는 항목은 그 target에 action을 보낸다. target이 없는 항목은 요청한 창의 first responder부터 그 responder chain을 따라 action을 보내며, key window의 responder chain을 거치지 않는다. 선택은 애플리케이션이 활성일 때와 아닐 때 똑같이 동작하고, 창을 활성화하거나 순서를 바꾸지 않는다.
+
+선택은 경우마다 다른 이유로 실패한다: 창이 없음, 메뉴나 항목 제목이 없거나 UTF-8이 아님, 메뉴가 없음, 항목이 없음, 항목에 action이 없음, action을 처리할 responder가 없음. Go와 Rust host의 오류는 요청한 창, 메뉴, 제목을 이유에 더한다.

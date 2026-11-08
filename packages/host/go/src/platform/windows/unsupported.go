@@ -217,7 +217,7 @@ func (implementation) ApplicationActive() (bool, error) {
 	return false, unsupported("application activation state")
 }
 
-func (implementation) MenuSelect(string, string) error {
+func (implementation) MenuSelect(platform.Window, string, string) error {
 	return unsupported("application menu")
 }
 

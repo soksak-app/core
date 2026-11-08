@@ -2489,6 +2489,7 @@ impl Host {
         method: &str,
         name: &str,
         params: &Map<String, Value>,
+        reply: Option<&crate::endpoint::ReplyScope>,
     ) -> Result<Value, Failure> {
         check_host_name(method, name)?;
         let unknown = || Failure::new(UNKNOWN_NAME, format!("{name} is not declared"));
@@ -2533,7 +2534,7 @@ impl Host {
                     Some(Value::Object(arguments)) => arguments.clone(),
                     Some(_) => return Err(Failure::params("params must be an object")),
                 };
-                self.host_command(window, name, &arguments)
+                self.host_command(window, name, &arguments, reply)
                     .ok_or_else(unknown)?
             }
             _ => Err(unknown()),
@@ -2545,6 +2546,7 @@ impl Host {
         window: &Window,
         name: &str,
         arguments: &Map<String, Value>,
+        reply: Option<&crate::endpoint::ReplyScope>,
     ) -> Option<Result<Value, Failure>> {
         let done =
             |result: crate::framework::Result<()>| result.map(|_| Value::Null).map_err(internal);
@@ -2590,12 +2592,20 @@ impl Host {
                 };
                 let (menu, title) = (text("menu")?, text("title")?);
                 let platform = platform::current().map_err(internal)?;
-                menu_select_from_worker(
-                    menu,
-                    title,
-                    move |task| platform.enqueue_ui(task),
-                    move |menu, title| platform.menu_select(&menu, &title),
-                )
+                let requested_window = window.clone();
+                // A quit that the menu item requests follows the response of this request.
+                crate::quit::with_response_owner(reply, || {
+                    menu_select_from_worker(
+                        menu,
+                        title,
+                        move |task| platform.enqueue_ui(task),
+                        move |menu, title| {
+                            let handle = windows::open_owner(&requested_window)?
+                                .ok_or_else(|| "menu action window is closed".to_string())?;
+                            platform.menu_select(handle, &menu, &title)
+                        },
+                    )
+                })
                 .map_err(internal)?;
                 Ok(Value::Null)
             })(),
@@ -2606,12 +2616,24 @@ impl Host {
                     .ok_or_else(|| Failure::params("title must be a string"))?
                     .to_string();
                 let platform = platform::current().map_err(internal)?;
-                on_main(window, move || platform.dock_select(&title)).map_err(internal)?;
+                // A quit that the Dock item requests follows the response of this request.
+                crate::quit::with_response_owner(reply, || {
+                    on_main(window, move || platform.dock_select(&title))
+                })
+                .map_err(internal)?;
                 Ok(Value::Null)
             })(),
             "host.hit" => (|| hit(window, number(arguments, "x")?, number(arguments, "y")?))(),
+            // The quit follows the response of this request, so the client receives the response before the endpoint
+            // closes; a request without a response quits at once.
             "host.quit" => {
-                crate::event_record::quit_with_cause("quit-command", || self.0.quit());
+                let app = self.0.clone();
+                let quit =
+                    move || crate::event_record::quit_with_cause("quit-command", || app.quit());
+                match reply {
+                    Some(reply) => reply.after_response(move |_| quit()),
+                    None => quit(),
+                }
                 Ok(Value::Null)
             }
             _ => return None,
@@ -2767,12 +2789,13 @@ impl Service for Host {
         window: &str,
         method: &str,
         params: Map<String, Value>,
+        reply: Option<crate::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let window = windows::find(&self.0, window).ok_or_else(|| missing_window(window))?;
         // The time and result of every endpoint method are recorded in the performance trace (V5-104). A rejection is
         // recorded as it is: a mismatched value is contained in the error string.
         let started = std::time::Instant::now();
-        let outcome = self.dispatch(&window, method, params);
+        let outcome = self.dispatch(&window, method, params, reply.as_ref());
         crate::performance::observe("host", || {
             let (ok, error) = match &outcome {
                 Ok(_) => (true, None),
@@ -2797,6 +2820,7 @@ impl Host {
         window: &crate::framework::Window,
         method: &str,
         params: Map<String, Value>,
+        reply: Option<&crate::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         match method {
             "input.pointer" => raw(&self.input_pointer(window, pointer(&params)?)?),
@@ -2818,7 +2842,7 @@ impl Host {
                     .unwrap_or_default()
                     .to_string();
                 if name == "host" || name.starts_with("host.") {
-                    return raw(&self.host_entry(window, method, &name, &params)?);
+                    return raw(&self.host_entry(window, method, &name, &params, reply)?);
                 }
                 // The main page ends a command forwarded to a surface within the time limit of its declaration, so
                 // command.run has no limit.
