@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
 
@@ -114,6 +114,23 @@ export const fresh = (s, options = {}) => start.fresh(s, { ...options, startPlug
 export async function pluginChangeApplied(s, offsets, action) {
   await untilEventLine(s.app.configDir, offsets, (line) => line.includes("workbench.start"), 30000, start.reading(s.app, ["workbench.start"]));
   await s.windows(1, `the page was not ready again after ${action}`);
+}
+
+/**
+ * Runs `change`, a plugin change that starts the workbench of the window again, and returns `{workbench, result}`: core.window.workbench
+ * of the new start and the result of `change`. The command answers before the new start (docs/spec/installation.md#applying-a-change),
+ * and a page status refuses requests while the page starts again, so the wait reads the start from the event log
+ * (pluginChangeApplied) and reads the workbench only after the host reports the page ready.
+ */
+export async function pluginChangeStarted(s, change, action) {
+  const before = (await s.get("core.window.workbench")).start;
+  const offsets = currentEventOffsets(s.app.configDir);
+  const result = await change();
+  await pluginChangeApplied(s, offsets, action);
+  const workbench = await s.get("core.window.workbench");
+  if (workbench.start === before) throw new Error(`${action} did not start the workbench again`);
+  if (workbench.readyState !== "complete") throw new Error(`${action}: the new workbench is ${workbench.readyState}, not complete`);
+  return { workbench, result };
 }
 
 
