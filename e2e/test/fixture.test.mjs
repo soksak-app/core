@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, placeholderTabs, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, paintProbeDocument, placeholderTabs, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -235,4 +235,33 @@ test("the settings dialog is shown when the modal web view of a main page shows 
   await settingsShown(mygo.s, "not shown");
   assert.deepEqual(mygo.waited, ["core.modal"]);
   await assert.rejects(settingsShown(shown({ "host.window": { pageProcess: null, modal: null }, "core.modal": null }).s, "not shown"), /not shown/);
+});
+
+test("the document region of a layout probe tab is painted after its document reports and is ready once it reports the colour", async () => {
+  const calls = [];
+  const document = { reported: false, color: null };
+  let applies = true;
+  const s = {
+    until: async (name, predicate, message, params) => {
+      calls.push(["until", name, params]);
+      assert.equal(name, "layoutprobe.document");
+      document.reported = true;
+      if (!predicate(document)) throw new Error(message);
+    },
+    run: async (name, params, surface) => {
+      calls.push(["run", name, params, surface]);
+      assert.ok(document.reported, "the colour was posted before the document reported");
+      if (applies) document.color = params.color;
+    },
+  };
+  await paintProbeDocument(s, "probe-1", "rgb(25, 27, 36)");
+  assert.deepEqual(calls, [
+    ["until", "layoutprobe.document", { surface: "probe-1" }],
+    ["run", "layoutprobe.document.color", { color: "rgb(25, 27, 36)" }, "probe-1"],
+    ["until", "layoutprobe.document", { surface: "probe-1" }],
+  ]);
+  assert.equal(document.color, "rgb(25, 27, 36)");
+  applies = false;
+  await assert.rejects(paintProbeDocument(s, "probe-1", "rgb(250, 250, 250)"),
+    /probe-1 did not paint its document region rgb\(250, 250, 250\)/);
 });

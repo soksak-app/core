@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, paintProbeDocument } from "./fixture.mjs";
 
 /** The CSS color rgb(r, g, b) of a #rrggbb token, as a view reports its computed background. */
 const cssColor = (token) => `rgb(${[1, 3, 5].map((at) => parseInt(token.slice(at, at + 2), 16)).join(", ")})`;
@@ -23,6 +23,9 @@ for (const app of Object.values(APPS)) {
       const expected = [1, 3, 5].map(at => parseInt(token.slice(at, at + 2), 16));
       await s.until("layoutprobe.surface", state => state?.theme?.background === cssColor(token),
         "the start tab did not apply the card theme", { surface: start.surface });
+      // The frames before the new view presents show the start tab at the sample points: its page shows the card token, and its
+      // document region (rgb(0,128,96) by default) is painted in the card token so that only the new view can depart from it.
+      await paintProbeDocument(s, start.surface, cssColor(token));
       await s.presented();
       const recording = await s.record();
       // Session.record stops an unfinished recording during cleanup and preserves its failure.

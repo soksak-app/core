@@ -44,16 +44,17 @@ char *sp_input_source_current(void) {
 @property(assign) NSWindow *window;
 @property(assign) id responder;
 @property(retain) NSTextInputContext *context;
+- (instancetype)initWithWindow:(NSWindow *)window responder:(id)responder;
 @end
 
 @implementation SPLiveInputSourceSelectionDriver
-- (instancetype)init {
+- (instancetype)initWithWindow:(NSWindow *)window responder:(id)responder {
     if ((self = [super init])) {
-        self.window = NSApp.keyWindow;
-        self.responder = self.window.firstResponder;
-        if ([self.responder conformsToProtocol:@protocol(NSTextInputClient)]
-            && [self.responder respondsToSelector:@selector(inputContext)]) {
-            self.context = [self.responder inputContext];
+        self.window = window;
+        self.responder = responder;
+        if ([responder conformsToProtocol:@protocol(NSTextInputClient)]
+            && [responder respondsToSelector:@selector(inputContext)]) {
+            self.context = [responder inputContext];
         }
     }
     return self;
@@ -65,8 +66,10 @@ char *sp_input_source_current(void) {
     CFRelease(current);
     return [identifier autorelease];
 }
+// A responder that conforms to NSTextInputClient but has no input context accepts no text now (a web view without an
+// editable focus), so only a responder with a context is an active text client.
 - (BOOL)hasActiveTextClient {
-    return [self.responder conformsToProtocol:@protocol(NSTextInputClient)];
+    return self.context != nil;
 }
 - (BOOL)targetContextIsCurrent {
     return self.window && self.window == NSApp.keyWindow && self.window.firstResponder == self.responder
@@ -252,8 +255,12 @@ void sp_input_source_select_and_await_with_driver(const char *identifier, id<SPI
     [selection start];
 }
 
+id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, id responder) {
+    return [[[SPLiveInputSourceSelectionDriver alloc] initWithWindow:window responder:responder] autorelease];
+}
+
 void sp_input_source_select_and_await(const char *identifier, void (^adopted)(const char *error)) {
     NSCAssert(NSThread.isMainThread, @"input sources are selected on the main thread");
-    SPLiveInputSourceSelectionDriver *driver = [[[SPLiveInputSourceSelectionDriver alloc] init] autorelease];
-    sp_input_source_select_and_await_with_driver(identifier, driver, adopted);
+    NSWindow *window = NSApp.keyWindow;
+    sp_input_source_select_and_await_with_driver(identifier, sp_input_source_live_driver(window, window.firstResponder), adopted);
 }
