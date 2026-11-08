@@ -9,7 +9,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { cardSidebar, fresh } from "./fixture.mjs";
 
-/** The section that both sidebars show: the first section of the list set `layoutprobe.list` of the layout probe. */
+/** The section that both sidebars show: a list section of the layout probe. */
 const SECTION = "layoutprobe.alpha";
 
 /** The section entry of the sidebar in core.sidebars, or undefined when the sidebar does not draw it. */
@@ -32,8 +32,12 @@ for (const app of Object.values(APPS)) {
     const { plugin } = await fresh(s);
     await s.until("core.project", (value) => value?.root, "the fixture project was not shown");
     await keepCommonSettings(s);
-    await s.run("core.settings.set", { patch: { left: true }, scope: "common" });
-    await s.run("core.settings.link", { place: "left", plugin: null, set: `${plugin}.list`, scope: "common" });
+    // environment.json of each application declares its own sidebar sets, which replace the sets that plugins declare
+    // (docs/spec/plugins.md#default-sidebar-sets), so the check stores the set of the window sidebar itself.
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { left: true, sets: [...sets,
+      { id: "check-window-sections", title: "검사", sections: [SECTION], layout: "list" }] }, scope: "common" });
+    await s.run("core.settings.link", { place: "left", plugin: null, set: "check-window-sections", scope: "common" });
     const [cardLeft] = await cardSidebar(s, { sections: [SECTION] });
     const card = cardLeft.slice(0, -":left".length);
     const space = (await s.get("core.project")).activeSpaceId;
