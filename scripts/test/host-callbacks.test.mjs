@@ -205,3 +205,18 @@ test("cgo-free generated artifacts are checked and obsolete diagnostics are remo
       "isolated callback fixture generation changed production artifacts");
   } finally { rmSync(folder, { recursive: true }); }
 });
+
+test("the Go binding checks run with the builds that compile Go, and the native library build needs no Go toolchain", { timeout: 30000 }, () => {
+  // The CI native job and the Tauri release job install no Go, so a gofmt that their build runs fails them.
+  const checks = (target) => {
+    const result = spawnSync("make", ["-n", "--no-print-directory", target], { cwd: new URL("../..", import.meta.url).pathname, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return ["check-host-callbacks.mjs", "check-host-api.mjs"].filter((script) => result.stdout.includes(`scripts/${script}`));
+  };
+  for (const target of ["build-native", "build-tauriv2", "build-tauriv2-release", "test-tauriv2", "check-release-tauriv2"]) {
+    assert.deepEqual(checks(target), [], `${target} runs a Go binding check`);
+  }
+  for (const target of ["build-wailsv3", "build-wailsv3-release", "test-wailsv3", "build-mygo", "build-mygo-release", "test-mygo", "test-hosts", "test-native"]) {
+    assert.deepEqual(checks(target), ["check-host-callbacks.mjs", "check-host-api.mjs"], `${target} omits a Go binding check`);
+  }
+});

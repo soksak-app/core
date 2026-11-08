@@ -416,7 +416,10 @@ sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$
 sok-mygo = CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_INTERNAL_LINK)" $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
-build-native: check-host-callbacks check-host-api
+# The native library build reads only the native sources. The Go bindings that the checks of the callback and host API declarations
+# hold are compiled by the Go hosts, so those checks run with the builds and tests of the Go hosts, which install Go; the Rust host and
+# the native tests install no Go.
+build-native:
 	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM)
 
 .PHONY: build-native-mygo check-host-api create-host-api
@@ -526,14 +529,14 @@ build-tauriv2-release: check-cargo build-native build
 	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
 
-build-wailsv3: build-native copy-frontend-wailsv3
+build-wailsv3: check-host-callbacks check-host-api build-native copy-frontend-wailsv3
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(call bundle-dev,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(GO_ENV) go build -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
 	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
 
-build-wailsv3-release: build-native build
+build-wailsv3-release: check-host-callbacks check-host-api build-native build
 	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
 	@$(call copy-wailsv3,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@$(GO_ENV) go build -C apps/wailsv3 -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
@@ -611,7 +614,7 @@ test-hosts: check-cargo build-native-mygo build-native-tests copy-core-frontend-
 	@$(call go-env) $(CARGO_ENV) node scripts/test-hosts.mjs --go-ldflags="$(GO_INTERNAL_LINK)" --cgo-ldflags="$(GO_LINK)"
 
 # Per-language CI checks use the same selected host contract without discovering or building the other host.
-test-wailsv3: build-native build-native-tests copy-core-frontend-wailsv3
+test-wailsv3: check-host-callbacks check-host-api build-native build-native-tests copy-core-frontend-wailsv3
 	@$(call go-env) node scripts/test-hosts.mjs --host wailsv3 --cgo-ldflags="$(GO_LINK)"
 
 test-tauriv2: check-cargo build-native copy-core-frontend-tauriv2

@@ -449,6 +449,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F704",
+    implementation: [{ file: "Makefile", symbol: "build-wailsv3: check-host-callbacks check-host-api build-native copy-frontend-wailsv3" }],
+    tests: [{ file: "scripts/test/host-callbacks.test.mjs", id: "the Go binding checks run with the builds that compile Go, and the native library build needs no Go toolchain" }],
+    expected: "The native library build and the Tauri builds and tests run no Go command, and the checks of the Go bindings run with the builds and tests of the Go hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F702",
     implementation: [{ file: "packages/soksak/scripts/workspace-copy.mjs", symbol: "export const ROOT_PARTS = [" }],
     tests: [{ file: "packages/soksak/test/workspace-copy.test.mjs", id: "every file that a copied module imports from outside the package is a copied workspace part" }],
@@ -2307,7 +2314,7 @@ const FEATURE_LINKS = [
       { file: "apps/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" },
       { file: "packages/host/wailsv3/go.mod", symbol: "replace github.com/wailsapp/wails/v3 => github.com/min-0-max/wails/v3" },
       { file: ".github/workflows/release.yml", symbol: "run: make check-release-wailsv3" },
-      { file: "Makefile", symbol: "build-wailsv3-release: build-native build" },
+      { file: "Makefile", symbol: "build-wailsv3-release: check-host-callbacks check-host-api build-native build" },
       { file: "Makefile", symbol: "check-release-wailsv3: build-wailsv3-release" },
     ],
     tests: [
