@@ -7138,9 +7138,9 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_result sp_input_key" },
     ],
     tests: [
-      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to the prompt, trace off and on" },
+      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to its arrival, trace off and on" },
     ],
-    expected: "Every injected Enter is answered by a prompt with the performance trace off, on and off again, and the measured times are reported.",
+    expected: "Every injected Enter arrives in the input probe field with the performance trace off, on and off again, and the measured times are reported.",
     levels: ["application"],
   },
   {

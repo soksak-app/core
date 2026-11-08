@@ -247,16 +247,6 @@
       "reason": "Checks HWP page drawing, keys, selection, saving and startup timing."
     },
     {
-      "file": "e2e/input-latency.mjs",
-      "owner": "tool",
-      "reason": "Configuration for the input latency check that names the terminal and term plugins; reduce to a fixture view that echoes keys and records the time a key arrives."
-    },
-    {
-      "file": "e2e/input-latency.test.mjs",
-      "owner": "core",
-      "reason": "Measures latency from a native key to its delivery (input path harness) with the terminal and term PTY as the receiver; replace with a fixture echo view, or keep a per-plugin variant in the terminal repo."
-    },
-    {
       "file": "e2e/input-oracle.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks that the bytes the terminal sidecar writes to the PTY match what an independent receiver reads, which is the terminal sidecar's own contract."
@@ -520,11 +510,6 @@
       "file": "e2e/test/hwp-view-metrics-case.test.mjs",
       "owner": "plugin:hwp",
       "reason": "Unit tests of the HWP benchmark case (layout, marker, reclaim, footprint)."
-    },
-    {
-      "file": "e2e/test/input-latency.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of the input-latency measurement harness. It names terminal and term tabs as the measured plugins; it should measure a keyboard-echo fixture, and per-plugin latency belongs to the plugins."
     },
     {
       "file": "e2e/test/normal-shutdown-audit.test.mjs",
