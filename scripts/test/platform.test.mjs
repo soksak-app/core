@@ -84,6 +84,29 @@ test('a quit asks the application through the endpoint and returns the name of t
   await assert.rejects(() => quitApplication(client, 'shortcut', { platform: 'darwin' }), /unknown quit path "shortcut"/);
 });
 
+// The key down of Command+Q starts the quit, which closes the window and may end the process before the key up arrives, so an up that
+// finds the window gone or the connection closed completes the press; any other failure of the up still fails the quit.
+test('a quit by the key completes when the quit that the key down started closed the window before the key up', { timeout: 10000 }, async () => {
+  const keyClient = (upFailure) => {
+    const client = { closed: false, async request(method, params) {
+      if (method === 'windows.list') return [{ window: 'main' }];
+      if (params.phase === 'up') {
+        const error = new Error(upFailure.message);
+        error.code = upFailure.code;
+        if (upFailure.closes) client.closed = true;
+        throw error;
+      }
+      return null;
+    } };
+    return client;
+  };
+  assert.equal(await quitApplication(keyClient({ code: 1003, message: 'window "main" does not exist' }), 'key', { platform: 'darwin' }),
+    'Command+Q');
+  assert.equal(await quitApplication(keyClient({ message: 'endpoint connection closed', closes: true }), 'key', { platform: 'darwin' }),
+    'Command+Q');
+  await assert.rejects(() => quitApplication(keyClient({ code: 1005, message: 'late' }), 'key', { platform: 'darwin' }), /late/);
+});
+
 for (const platform of ['linux', 'win32']) {
   test(`${platform}: the common selector imports, and each operation that ${platform} does not implement rejects with its named error when called`, { timeout: 10000 }, () => {
     const selector = new URL('../platform/platform.js', import.meta.url).href;

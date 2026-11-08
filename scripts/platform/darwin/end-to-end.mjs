@@ -11,6 +11,9 @@ import { describeEnd, runProgram } from '../process.mjs';
 const QUIT_MENU_KEY = 'cmd+q';
 const QUIT_KEY = Object.freeze({ key: 'q', text: 'q', modifiers: ['command'] });
 
+/** The endpoint error of a window that does not exist (docs/spec/endpoint.md). */
+const WINDOW_GONE = 1003;
+
 /**
  * Quits the application of the endpoint `client` as a person does: `menu` performs the item of the application menu whose key
  * equivalent is Command+Q with host.menu.select, and `key` sends Command+Q down and up to a window with input.key. Returns the name
@@ -29,9 +32,18 @@ export async function quitApplication(client, by) {
   if (by === 'key') {
     const [first] = await client.request('windows.list', {});
     if (first === undefined) throw new Error('the application has no window to take Command+Q');
-    for (const phase of ['down', 'up']) {
+    const press = async (phase) => {
       const reply = await client.request('input.key', { window: first.window, ...QUIT_KEY, phase });
       if (reply !== null) throw new Error(`input.key ${phase} of Command+Q returned ${JSON.stringify(reply)}, expected null`);
+    };
+    await press('down');
+    // The key down starts the quit, which closes the window and may end the process before the key up arrives. The up of a person
+    // then reaches no window of the application, so an up that finds the window gone (1003) or the connection closed completes the
+    // press.
+    try {
+      await press('up');
+    } catch (error) {
+      if (error.code !== WINDOW_GONE && !client.closed) throw error;
     }
     return 'Command+Q';
   }

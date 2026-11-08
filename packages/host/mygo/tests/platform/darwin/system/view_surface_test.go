@@ -47,13 +47,15 @@ type elementWorkbench struct {
 	startOnce sync.Once
 }
 
-// Shown answers as the workbench of the application does: it reports that the workbench of the window is ready.
+// Shown answers as the workbench of the application does: it reports that the workbench of the window is ready and shows its first
+// screen, which puts a new window on the screen and releases the frames that a restart of the workbench holds.
 func (w *elementWorkbench) Shown(window host.Frontend) {
 	w.Record("shown %s", window.Name())
 	err := w.host.Load().WindowReady(*w.context.Load())
 	if err != nil {
 		w.Record("ready failed: %v", err)
 	}
+	mygo.RunOnMain(window.(*adapter.Frontend).FirstScreen)
 	w.startOnce.Do(func() { w.started <- err })
 }
 
