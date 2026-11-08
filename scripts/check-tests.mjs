@@ -449,6 +449,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F705",
+    implementation: [{ file: "Makefile", symbol: "check-host-debug: check-cargo build-native build-native-tests copy-core-frontend-wailsv3" }],
+    tests: [{ file: "scripts/test/host-debug-check.test.mjs", id: "the debug check builds the native test library that the compiled tests link" }],
+    expected: "The debug check builds the native test library before it compiles the Go tests that link it, so it passes on a checkout that has built nothing.",
+    levels: ["unit"],
+  },
+  {
     id: "F704",
     implementation: [{ file: "Makefile", symbol: "build-wailsv3: check-host-callbacks check-host-api build-native copy-frontend-wailsv3" }],
     tests: [{ file: "scripts/test/host-callbacks.test.mjs", id: "the Go binding checks run with the builds that compile Go, and the native library build needs no Go toolchain" }],

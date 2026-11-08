@@ -296,9 +296,9 @@ check-windows-build:
 	@echo "PASS: mygo diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
 
 # Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.
-# A source behind a diagnostic feature or tag fails here and not in the build of an app. The core frontend is staged because the apps
-# include it at compile time.
-check-host-debug: check-cargo build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
+# A source behind a diagnostic feature or tag fails here and not in the build of an app. The Go tests link the native test library,
+# so it is built. The core frontend is staged because the apps include it at compile time.
+check-host-debug: check-cargo build-native build-native-tests copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
 	@echo "START: Rust hosts cargo check --tests --features $(TAURI_DEBUG_FEATURES)"
 	@$(CARGO_ENV) $(CARGO) check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
 	@echo "PASS: Rust hosts in the debug configuration"
