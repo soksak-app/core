@@ -4,7 +4,8 @@
 //   preedit, commits, caret, copies, pastes, wheels and pointer gestures that reach the text field of its view and the text field
 //   of its native document region, and `probeinput.routing` the Escape that the view forwards;
 // - the raster probe (e2e/fixtures/raster-probe/probe): its image region takes native input through the input client of core, and
-//   `rasterprobe.input` logs each input transaction of the region with the echo of the sidecar that received it.
+//   `rasterprobe.input` logs each input transaction of the region with the echo of the sidecar that received it and the identity
+//   of the frame that the sidecar drew first after it.
 import { isDeepStrictEqual } from "node:util";
 
 /** The plugin id of the input probe. */
@@ -136,6 +137,32 @@ export async function imageRect(s, surface) {
 export async function imagePoint(s, surface) {
   const rect = await imageRect(s, surface);
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+}
+
+/**
+ * Whether the image region row `region` of `host.window` presents the frame of the input transaction `entry` of the raster probe or
+ * a later frame of the same generation and raster: the frame that the sidecar drew first after it handled the transaction
+ * (`entry.frame`), so the region shows the state after that transaction.
+ */
+export function presentsTransaction(region, entry) {
+  const frame = entry?.frame;
+  if (!frame || !region?.presented) return false;
+  return region.presented.generation === frame.generation && region.presented.raster === frame.raster
+    && region.presented.sequence >= frame.sequence;
+}
+
+/**
+ * Waits until the last transaction of the input log of the raster probe `surface` has the frame that presents it and the image
+ * region presents that frame (presentsTransaction), so the stage of the input that the transaction ended is on screen, and returns
+ * the transaction. `label` names the stage in a failure.
+ */
+export async function presentedStage(s, surface, label) {
+  const { log } = await s.until("rasterprobe.input", (value) => value.log.length > 0 && value.log.at(-1).frame !== null,
+    `${label}: the sidecar drew no frame after the last input transaction`, { surface });
+  const entry = log.at(-1);
+  await s.until("host.window", (window) => presentsTransaction(imageRegion(window, surface), entry),
+    `${label}: the image region did not present frame ${JSON.stringify(entry.frame)} of input transaction ${entry.sequence}`);
+  return entry;
 }
 
 /** The transactions of the input log of the raster probe `surface` (`rasterprobe.input`) after the transaction `after`. */

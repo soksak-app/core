@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertReceivedUnchanged, documentFocused, focusedCard, imageFocused, inputDocument, insertedText, transactionMatchesKey,
-  typedText } from "../input-probe.mjs";
+import { assertReceivedUnchanged, documentFocused, focusedCard, imageFocused, inputDocument, insertedText, presentsTransaction,
+  transactionMatchesKey, typedText } from "../input-probe.mjs";
 
 test("the document of input transactions folds commits, deletions and the last preedit as a plain text client", { timeout: 5000 }, () => {
   const transactions = [
@@ -65,4 +65,18 @@ test("each transaction must reach the sidecar once and unchanged, and an empty l
     /did not receive transaction 3 unchanged/);
   assert.throws(() => assertReceivedUnchanged([{ ...entry, errors: [{ reason: "late" }], received }], "case"),
     /transaction 3 failed/);
+});
+
+test("an image region presents a transaction from the frame that the sidecar drew after it, in the same generation and raster", { timeout: 5000 }, () => {
+  const entry = { sequence: 4, frame: { generation: 2, raster: 3, sequence: 9 } };
+  const region = (presented) => ({ surface: "tab-1", name: "raster", presented });
+  assert.equal(presentsTransaction(region({ generation: 2, raster: 3, sequence: 9 }), entry), true);
+  assert.equal(presentsTransaction(region({ generation: 2, raster: 3, sequence: 12 }), entry), true, "a later frame shows the state after it too");
+  assert.equal(presentsTransaction(region({ generation: 2, raster: 3, sequence: 8 }), entry), false, "an earlier frame does not");
+  assert.equal(presentsTransaction(region({ generation: 1, raster: 3, sequence: 20 }), entry), false, "another generation does not");
+  assert.equal(presentsTransaction(region({ generation: 2, raster: 4, sequence: 20 }), entry), false, "another raster does not");
+  assert.equal(presentsTransaction(region(null), entry), false, "a region that presented nothing does not");
+  assert.equal(presentsTransaction(undefined, entry), false, "a missing region does not");
+  assert.equal(presentsTransaction(region({ generation: 2, raster: 3, sequence: 9 }), { sequence: 4, frame: null }), false,
+    "a transaction without its frame is not presented");
 });

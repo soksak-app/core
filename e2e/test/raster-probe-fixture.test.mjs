@@ -85,7 +85,7 @@ test("the sidecar catalog composes with the core catalog and declares the lines 
       line(5, "info", "lifecycle", "log.open", { schema: 3, pid: 20, role: "rasterprobe", boot: "1791500000-20" }),
       line(6, "debug", "io", "sidecar.rasterprobe.request", { operation: "open", bytes: 80 }, { surface: "tab-1", cids: ["b.1"] }),
       line(9, "debug", "frame", "sidecar.rasterprobe.frame", { event: "frame", name: REGION, generation: 2, raster: 5, sequence: 1, width: 160, height: 96,
-        scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3, color: "#0050b4", marker: "#020001", surface: 7, draw_us: 41 }, { surface: "tab-1", session: "s1" }),
+        scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3, color: "#0050b4", marker: "#020001", surface: 7, draw_us: 41, inputs: [1] }, { surface: "tab-1", session: "s1" }),
     ].join("\n") + "\n");
     assert.deepEqual(auditLogDirectories(BASE, [folder]), []);
     writeFileSync(join(folder, "logs", "rasterprobe-1791500000-20.debug.jsonl"),
@@ -165,7 +165,7 @@ function fakeView({ textSize = 1.25, held = null, textSizeAtOnce = false } = {})
   };
   const document = { getElementById: (id) => { assert.equal(id, REGION); return element; } };
   return { bridge, expose, view, document, sent, order, errors, commands, statuses, elements, element, imageHandlers, press: (type, event) => listeners.get(type)({ type, ...event }),
-    answer: (body) => answer(body), fail: (reason) => failure(reason), textSize: (value) => onTextSize(value), resized: () => observed() };
+    answer: (body, cids) => answer(body, cids), fail: (reason) => failure(reason), textSize: (value) => onTextSize(value), resized: () => observed() };
 }
 
 test("the probe opens its session with its image and reports the view, the session and the frames", { timeout: 1000 }, async () => {
@@ -184,9 +184,9 @@ test("the probe opens its session with its image and reports the view, the sessi
   const values = [];
   fake.statuses.get("rasterprobe.frame").subscribe((value) => values.push(value));
   fake.answer({ event: "session", session: "s1", created: true, mode: "image", rows: 0 });
-  fake.answer({ event: "frame", generation: 2, raster: 5, sequence: 1, rows: 0 });
+  fake.answer({ event: "frame", generation: 2, raster: 5, sequence: 1, rows: 0, inputs: [] });
   assert.deepEqual(status("rasterprobe.session"), { event: "session", session: "s1", created: true, mode: "image", rows: 0, connected: true, failure: null, error: null });
-  assert.deepEqual(values, [{ event: "frame", generation: 2, raster: 5, sequence: 1, rows: 0 }]);
+  assert.deepEqual(values, [{ event: "frame", generation: 2, raster: 5, sequence: 1, rows: 0, inputs: [] }]);
 
   await fake.commands.get("rasterprobe.rows")({ count: 4 });
   await fake.commands.get("rasterprobe.kill")({});
@@ -216,7 +216,7 @@ test("the probe forwards region input with its cids, follows the text size and o
   fake.imageHandlers.get("input")({ type: "input", actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], cids: ["n.7"] });
   assert.deepEqual(fake.sent[1], { surface: "tab-9", body: { operation: "input", sequence: 1, actions: [{ type: "insert", text: "a" }], preedit: { text: "" } }, cids: ["n.7"] });
   assert.deepEqual(fake.statuses.get("rasterprobe.input").read(), { focused: true, transactions: 1, preedit: { text: "" }, actions: [{ type: "insert", text: "a" }], errors: [],
-    log: [{ sequence: 1, cids: ["n.7"], actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], received: null }], pointer: [] });
+    log: [{ sequence: 1, cids: ["n.7"], actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], received: null, receivedCids: null, frame: null }], pointer: [] });
 
   fake.textSize(1.5);
   assert.deepEqual(fake.sent[2].body, { operation: "textSize", factor: 1.5 });
@@ -258,6 +258,36 @@ test("the probe logs each input transaction with the body that the sidecar echoe
   assert.equal(input().log[0].sequence, 6, "the log keeps the last transactions in order");
   await fake.commands.get("rasterprobe.input.clear")({});
   assert.deepEqual([input().log, input().pointer, input().transactions], [[], [], INPUT_LOG_LIMIT + 5]);
+});
+
+test("each logged transaction keeps the cids of the answer of the sidecar and the identity of the frame that presents it", { timeout: 1000 }, async () => {
+  const fake = fakeView();
+  await startRasterProbe(fake);
+  const input = () => fake.statuses.get("rasterprobe.input").read();
+  const transaction = (cids) => fake.imageHandlers.get("input")({ type: "input", actions: [], preedit: { text: "ㅎ" }, errors: [], cids });
+  transaction(["n.1"]);
+  transaction(["n.2"]);
+  const received = (sequence) => ({ operation: "input", sequence, actions: [], preedit: { text: "ㅎ" } });
+  fake.answer({ event: "input", received: received(1) }, ["n.1"]);
+  fake.answer({ event: "input", received: received(2) }, ["n.2"]);
+  assert.deepEqual(input().log.map(({ receivedCids, frame }) => [receivedCids, frame]), [[["n.1"], null], [["n.2"], null]]);
+  // One frame presents both inputs that the sidecar handled while its frame before was in flight.
+  fake.answer({ event: "frame", generation: 3, raster: 2, sequence: 7, inputs: [1, 2] });
+  assert.deepEqual(input().log.map(({ frame }) => frame), [{ generation: 3, raster: 2, sequence: 7 }, { generation: 3, raster: 2, sequence: 7 }]);
+  assert.deepEqual(fake.errors, []);
+
+  transaction(["n.3"]);
+  fake.answer({ event: "frame", generation: 3, raster: 2, sequence: 8, inputs: [3] });
+  assert.deepEqual(input().log[2].frame, { generation: 3, raster: 2, sequence: 8 });
+  fake.answer({ event: "frame", generation: 3, raster: 2, sequence: 9, inputs: [3, 9] });
+  fake.answer({ event: "frame", generation: 3, raster: 2, sequence: 10 });
+  assert.deepEqual(fake.errors, ["rasterprobe: the sidecar presented input 3 twice", "rasterprobe: the sidecar presented input 9, which the view never sent",
+    "rasterprobe: the sidecar sent frame 10 without its inputs"]);
+  assert.deepEqual(input().log[2].frame, { generation: 3, raster: 2, sequence: 8 }, "a second presentation does not move the frame of an input");
+  // An input that the log no longer holds is not attributed and is not an error.
+  await fake.commands.get("rasterprobe.input.clear")({});
+  fake.answer({ event: "frame", generation: 3, raster: 2, sequence: 11, inputs: [1] });
+  assert.equal(fake.errors.length, 3);
 });
 
 test("a primary press on the region gives it the focus and the pointer list records the press", { timeout: 1000 }, async () => {

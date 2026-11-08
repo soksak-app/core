@@ -293,6 +293,12 @@
           },
           "draw_us": {
             "type": "number"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
           }
         },
         "required": [
@@ -309,10 +315,11 @@
           "color",
           "marker",
           "surface",
-          "draw_us"
+          "draw_us",
+          "inputs"
         ]
       },
-      "description": "The service sent a frame: its identity, its raster, its grid, the row bands it paints, its color, its identity marker, the id of its transfer image and the time in microseconds that painting the image took (draw_us)."
+      "description": "The service sent a frame: its identity, its raster, its grid, the row bands it paints, its color, its identity marker, the id of its transfer image, the time in microseconds that painting the image took (draw_us) and the sequences of the inputs that it handled since the frame before (inputs)."
     },
     "sidecar.rasterprobe.kill": {
       "layer": "sidecar",
