@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -89,14 +89,16 @@ function programs(line) {
 }
 
 test("a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder", (t) => {
-  // rustup installs cargo in $CARGO_HOME/bin, which is ~/.cargo/bin when CARGO_HOME is not set.
-  const cargoHome = process.env.CARGO_HOME;
-  const cargo = join(cargoHome ?? join(homedir(), ".cargo"), "bin", "cargo");
-  assert.ok(existsSync(cargo), `the test needs the cargo of rustup at ${cargo}`);
-  const { probe } = cargoProbe(t);
-  const result = make({ home: homedir(), cargoHome }, ["Makefile", probe], "probe-cargo");
+  // rustup installs cargo in $CARGO_HOME/bin, which is ~/.cargo/bin when CARGO_HOME is not set; the fake cargo in the cargo
+  // folder of HOME stands for its toolchain.
+  const { folder, probe } = cargoProbe(t);
+  const home = join(folder, "home");
+  mkdirSync(join(home, ".cargo", "bin"), { recursive: true });
+  writeFileSync(join(home, ".cargo", "bin", "cargo"), "#!/bin/sh\necho 'cargo 9.9.9 (the cargo of HOME)'\n");
+  chmodSync(join(home, ".cargo", "bin", "cargo"), 0o755);
+  const result = make({ home }, ["Makefile", probe], "probe-cargo");
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /^cargo \d+\.\d+\.\d+/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^cargo 9\.9\.9 \(the cargo of HOME\)$/m, result.stdout + result.stderr);
 });
 
 test("a recipe line runs the cargo of CARGO_HOME when CARGO_HOME is not the cargo folder of HOME", (t) => {

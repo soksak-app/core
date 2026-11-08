@@ -449,6 +449,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F708",
+    implementation: [{ file: "Makefile", symbol: "export CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" }],
+    tests: [{ file: "scripts/test/makefile-recipes.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" }],
+    expected: "The Makefile runs the cargo of the cargo folder of HOME when its PATH holds no cargo folder, which a fake cargo there shows without an installed Rust toolchain.",
+    levels: ["unit"],
+  },
+  {
     id: "F707",
     implementation: [{ file: "e2e/setup.mjs", symbol: "export function targetDirectory(" }],
     tests: [{ file: "e2e/test/setup.test.mjs", id: "the target directory comes from the cargo of the toolchain when the PATH holds no cargo folder" }],
