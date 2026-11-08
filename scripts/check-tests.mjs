@@ -7742,9 +7742,9 @@ const FEATURE_LINKS = [
     ],
     tests: [
       // The message-row part of the expected result is held (F332-4-4-1); this test covers the error display part.
-      { file: "e2e/files.test.mjs", id: "a file that no plugin opens from the files tree section stays out of the error display" },
+      { file: "e2e/sidebar-sections.test.mjs", id: "a file that no plugin opens from a view stays out of the error display" },
     ],
-    expected: "The failure of core.file.open for a file that no plugin opens is shown in the message row of the file tree of the files plugin and not in the error display of the main document.",
+    expected: "The failure of core.file.open for a file that no plugin opens returns to the view that ran it and is not shown in the error display of the main document.",
     levels: ["application"],
   },
   {
@@ -12385,8 +12385,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F332-7",
-    implementation: [{ file: "e2e/observation/section-design.test.mjs", symbol: "stills of the files and browser sections in each mode" }],
-    tests: [{ file: "e2e/observation/section-design.test.mjs", id: "stills of the files and browser sections in each mode" }],
+    implementation: [{ file: "e2e/observation/section-design.test.mjs", symbol: "stills of the probe sections and document in each mode" }],
+    tests: [{ file: "e2e/observation/section-design.test.mjs", id: "stills of the probe sections and document in each mode" }],
     expected: "Stills of the applications in each mode show the sections for inspection.",
     levels: ["application"],
   },

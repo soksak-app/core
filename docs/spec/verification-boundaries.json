@@ -222,11 +222,6 @@
       "reason": "Checks the host event log and the trace (logging); one test traces sidecar memory, which should come from a fixture plugin with a fake sidecar process."
     },
     {
-      "file": "e2e/files.test.mjs",
-      "owner": "mixed",
-      "reason": "the files sections of the left sidebar mount as section surfaces and run the files commands on their surface: plugin:files; a files tree section mounts in a card sidebar beside the left sidebar: core (card sidebar section placement, fixture with a section view); a file that no plugin opens from the files tree section stays out of the error display: core (open-by-extension and error display, core.file.open with a probe); a double click on a file row of the files tree opens the file in an editor tab: plugin:files; two bookmarks that two views add at the same moment both stay: plugin:files; a bookmark that one window wrote reaches the window that opens the project after it: plugin:files."
-    },
-    {
       "file": "e2e/footer.test.mjs",
       "owner": "core",
       "reason": "Checks the footer border under vertical drag and the active tab's footer text, using a terminal tab; plain-view probe that declares footer text."
@@ -295,11 +290,6 @@
       "file": "e2e/normal-shutdown-runner.mjs",
       "owner": "tool",
       "reason": "Shutdown helper that prepares a real terminal and audits its sidecar service at quit. Reduce it to fixtures: a fake persistent-service fixture should stand in for the terminal."
-    },
-    {
-      "file": "e2e/observation/section-design.test.mjs",
-      "owner": "mixed",
-      "reason": "Leaves stills of the files and browser sidebar sections in light and dark modes, so it observes those plugins' own design. It should move to those plugins."
     },
     {
       "file": "e2e/observation/terminal-focus-current.test.mjs",
