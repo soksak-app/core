@@ -348,7 +348,7 @@ fn item_row(
 }
 
 /// The key-format shortcut of the item (menu, id) in the contract table.
-fn item_key(menu: &str, id: &str) -> Result<&'static str, String> {
+pub fn item_key(menu: &str, id: &str) -> Result<&'static str, String> {
     item_row(menu, id).map(|row| row.5)
 }
 

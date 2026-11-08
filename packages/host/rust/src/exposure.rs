@@ -2593,7 +2593,9 @@ impl Host {
                 let (menu, title) = (text("menu")?, text("title")?);
                 let platform = platform::current().map_err(internal)?;
                 let requested_window = window.clone();
-                // A quit that the menu item requests follows the response of this request.
+                // A quit that the menu item requests follows the response of this request. The framework delivers the
+                // event of an item of the host, such as Quit, through its main-thread queue after the native action, and
+                // a main-thread step queued after the action runs after that event, so the event belongs to this request.
                 crate::quit::with_response_owner(reply, || {
                     menu_select_from_worker(
                         menu,
@@ -2605,6 +2607,7 @@ impl Host {
                             platform.menu_select(handle, &menu, &title)
                         },
                     )
+                    .and_then(|()| on_main(window, || Ok(())))
                 })
                 .map_err(internal)?;
                 Ok(Value::Null)

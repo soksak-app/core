@@ -366,9 +366,13 @@ const char *sp_menu_select(void *handle, const char *menu, const char *title) {
         // Inactive framework callbacks read the same virtual window as injected input.
         // Explicit responder dispatch below remains window-owned even in an active application.
         if (!sp_input_virtual_real_active()) sp_input_virtual_enter(handle);
+        // An item without a target goes up the responders of the requested window and then to the application, whose
+        // tryToPerform:with: also asks its delegate, so an application action such as terminate: is performed. The key
+        // window is never asked.
         BOOL performed = item.target
             ? [NSApp sendAction:item.action to:item.target from:item]
-            : [(window.firstResponder ?: window) tryToPerform:item.action with:item];
+            : [(window.firstResponder ?: window) tryToPerform:item.action with:item]
+                || [NSApp tryToPerform:item.action with:item];
         return performed ? NULL : "menu action has no responder";
     }
     return "menu is missing";

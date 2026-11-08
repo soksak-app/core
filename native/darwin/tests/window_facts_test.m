@@ -17,6 +17,15 @@
 - (void)selectAll:(id)sender { (void)sender; self.selections++; }
 @end
 
+// An application delegate that owns an application action, as the Quit item of an application menu sends terminate:
+// to the application and its delegate after the responders of the window.
+@interface MenuApplicationDelegate : NSObject
+@property NSUInteger quits;
+@end
+@implementation MenuApplicationDelegate
+- (void)applicationMenuFixtureQuit:(id)sender { (void)sender; self.quits++; }
+@end
+
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
@@ -176,6 +185,15 @@ int main(void) { @autoreleasepool {
     check(sp_menu_select(menuB, "View", "Close Fixture") == NULL && !menuB.visible && menuA.visible,
         @"a nil-target Close menu action closes only requested window B");
     check(!sp_input_virtual_real_active(), @"window-scoped Close does not activate the application");
+    MenuApplicationDelegate *applicationDelegate = [[MenuApplicationDelegate alloc] init];
+    id<NSApplicationDelegate> previousDelegate = NSApp.delegate;
+    NSApp.delegate = (id<NSApplicationDelegate>)applicationDelegate;
+    NSMenuItem *quit = [viewMenu addItemWithTitle:@"Quit Fixture" action:@selector(applicationMenuFixtureQuit:) keyEquivalent:@""];
+    quit.target = nil;
+    check(sp_menu_select(menuA, "View", "Quit Fixture") == NULL && applicationDelegate.quits == 1 && responderA.selections == 0,
+        @"a nil-target application action that no responder of the window handles reaches the application delegate");
+    NSApp.delegate = previousDelegate;
+    [applicationDelegate release];
     [menuA close];
     [menuA release];
     [menuB release];

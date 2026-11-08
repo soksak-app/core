@@ -449,7 +449,12 @@ pub fn web_content_process_terminated(webview: &Webview) {
 
 /// Runs the menu item with id.
 pub fn menu_event(app: &AppHandle, id: &str) {
-    if id == "new-window" {
+    if id == "quit" {
+        // The Quit item of the host runs the host quit, whose exit request records it (log.closed exit-request); a
+        // quit that the native work of an endpoint request causes follows the response of that request.
+        let quit = app.clone();
+        crate::quit::after_owner_response(move || quit.quit());
+    } else if id == "new-window" {
         if let Err(error) = windows::window_new_on_main(app.clone()) {
             log_error("window new", error);
         }

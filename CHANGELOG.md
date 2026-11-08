@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F502-12: A menu item without a target goes up the responder chain of the requested window and then to the application and its delegate, so Quit and the other application actions run from a window menu request. The Edit case of the window checks reads the field through `core.projects.browse`, Command+W sends its key up to the window that remains, and the press of the close button moves to the real-input tier (`e2e/real/window-close.test.mjs`), because a press of the endpoint goes to a view of the content view and the buttons of the title bar are outside it. The Tauri host builds Quit as an item of its own that runs the host quit, because the predefined item of the framework sends `terminate:` and ends without the saves; host.menu.select owns the event of that item, so its quit follows the response.
+
 - F696-4: A document reference request names the root document with the empty name in both hosts, and the Rust host checks the document name before any platform call. The Rust capture goes through the shared observation wait, so its errors name the document reference. Its Rust and Go request and lifetime tests pair by file.
 
 - F502-12: Run the quit that a request causes after the response of that request: `host.quit`, and the system quit request that the native work of `host.menu.select` or `host.dock.select` causes. The Go and Rust endpoints carry a per-request response context whose completion follows the actual write. Both owner tests fail when the quit runs at once and pass with the seven response tests; the rebuilt three-host quit run remains open.

@@ -77,7 +77,16 @@ fn menu_item(
                 "hide" => PredefinedMenuItem::hide(app, title),
                 "hide-others" => PredefinedMenuItem::hide_others(app, title),
                 "show-all" => PredefinedMenuItem::show_all(app, title),
-                "quit" => PredefinedMenuItem::quit(app, title),
+                // The predefined quit item of the framework sends terminate:, which ends the application without the
+                // saves of the host quit, so Quit is an item of the host whose event runs the host quit
+                // (docs/spec/hosts.md, Quit request).
+                "quit" => {
+                    let key = accelerator(soksak_host::menu::item_key("app", "quit")?)?;
+                    let title = title.ok_or("the quit item has no title")?;
+                    return TauriMenuItem::with_id(app, "quit", title, true, Some(key.as_str()))
+                        .map(boxed)
+                        .map_err(string);
+                }
                 "close-window" => PredefinedMenuItem::close_window(app, title),
                 "undo" => PredefinedMenuItem::undo(app, title),
                 "redo" => PredefinedMenuItem::redo(app, title),

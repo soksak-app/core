@@ -1,7 +1,8 @@
-// The ordinary ends of a window and the Edit items of the application menu: the close button, the item Close Window and its key
-// equivalent end a window and leave the application open, a window whose project core.project.close closed ends the same way, and the
+// The ordinary ends of a window and the Edit items of the application menu: the item Close Window and its key equivalent end a
+// window and leave the application open, a window whose project core.project.close closed ends the same way, and the
 // items Select All, Cut and Paste reach the focused text field (docs/spec/hosts.md#mygo-host). Every input is the input of the
-// endpoint; no check activates the application.
+// endpoint; no check activates the application. The press of the close button takes the path of a person's pointer
+// (e2e/real/window-close.test.mjs).
 import assert from "node:assert/strict";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,7 +40,7 @@ async function ended(s, window, how) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the close button, Close Window and its key end a window and leave the application open`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: Close Window and its key end a window and leave the application open`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     s.cleanup(() => s.windows(1, "the check left an extra window"));
@@ -50,15 +51,13 @@ for (const app of Object.values(APPS)) {
     await ended(s, byItem.window, `the item ${close.title}`);
 
     const byKey = await newWindow(s);
-    await byKey.press("w", { text: "w", modifiers: ["command"] });
+    // The key equivalent can end the window at key down; the key up then goes to the window that remains, as from a keyboard.
+    const command = { text: "w", modifiers: ["command"] };
+    await byKey.key("w", "down", command);
+    const remains = (await s.get("host.windows")).some((entry) => entry.window === byKey.window);
+    await (remains ? byKey : s).key("w", "up", command);
     await ended(s, byKey.window, "Command+W");
 
-    const byButton = await newWindow(s);
-    const { controls } = await byButton.get("host.window");
-    const button = controls[0];
-    assert.equal(button?.hidden, false, `the close button of window ${byButton.window} is not shown: ${JSON.stringify(controls)}`);
-    await byButton.click(button.x + button.width / 2, button.y + button.height / 2);
-    await ended(s, byButton.window, "the close button");
   });
 
   test(`${app.name}: a window whose project core.project.close closed ends like any window`, { timeout: 90000 }, async (t) => {
@@ -83,7 +82,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: Select All, Cut and Paste of the Edit menu reach the focused text field`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await s.run("core.library.open");
+    await s.run("core.projects.browse");
     s.cleanup(async () => {
       await s.run("core.library.search", { query: "" });
       await s.run("core.library.return");
@@ -93,11 +92,11 @@ for (const app of Object.values(APPS)) {
     const [selectAll, cut, paste] = [await menuItem(s, "cmd+a"), await menuItem(s, "cmd+x"), await menuItem(s, "cmd+v")];
     await s.run("core.library.search", { query: "window-end" });
     await s.run("core.library.search.focus");
-    await s.until("core.library", (library) => library?.search === "window-end", "the search field did not take its text");
+    await s.until("core.library", (library) => library?.query === "window-end", "the search field did not take its text");
     await s.run("host.menu.select", selectAll);
     await s.run("host.menu.select", cut);
-    await s.until("core.library", (library) => library?.search === "", `${cut.title} did not remove the selected text of the field`);
+    await s.until("core.library", (library) => library?.query === "", `${cut.title} did not remove the selected text of the field`);
     await s.run("host.menu.select", paste);
-    await s.until("core.library", (library) => library?.search === "window-end", `${paste.title} did not put the text back`);
+    await s.until("core.library", (library) => library?.query === "window-end", `${paste.title} did not put the text back`);
   });
 }
