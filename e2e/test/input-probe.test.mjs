@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { assertReceivedUnchanged, documentFocused, focusedCard, imageFocused, inputDocument, insertedText, presentsTransaction,
-  transactionMatchesKey, typedText } from "../input-probe.mjs";
+  readyRasterProbe, transactionMatchesKey, typedText } from "../input-probe.mjs";
 
 test("the document of input transactions folds commits, deletions and the last preedit as a plain text client", { timeout: 5000 }, () => {
   const transactions = [
@@ -79,4 +79,28 @@ test("an image region presents a transaction from the frame that the sidecar dre
   assert.equal(presentsTransaction(undefined, entry), false, "a missing region does not");
   assert.equal(presentsTransaction(region({ generation: 2, raster: 3, sequence: 9 }), { sequence: 4, frame: null }), false,
     "a transaction without its frame is not presented");
+});
+
+test("a raster probe that a check makes ready draws its image regions covered before the wait for its first frame", { timeout: 5000 }, async () => {
+  // A check window opens behind other windows, and a covered image region draws no raster, so every wait for the first frame of
+  // a raster probe turns the covered drawing on first (rasterReady in e2e/raster-probe.mjs, docs/spec/hosts.md#launch-activation).
+  const calls = [];
+  const s = {
+    registered: async (surface, entries) => { calls.push(["registered", surface, entries]); },
+    request: async (method, params) => { calls.push(["request", method, params]); return null; },
+    until: async (name, accept) => {
+      calls.push(["until", name]);
+      const value = name === "rasterprobe.session" ? { session: "s1", connected: true }
+        : name === "rasterprobe.frame" ? { generation: 1, raster: 1, sequence: 1 }
+          : { regions: [{ surface: "tab-1", name: "raster", visible: true, frame: { width: 10 } }] };
+      assert.ok(accept(value));
+      return value;
+    },
+    cleanup: () => {},
+  };
+  await readyRasterProbe(s, "tab-1");
+  const covered = calls.findIndex(([kind, method, params]) => kind === "request" && method === "diagnostics.window.draw-covered" &&
+    params?.draw === true);
+  const frame = calls.findIndex(([kind, name]) => kind === "until" && name === "rasterprobe.frame");
+  assert.ok(covered >= 0 && covered < frame, `the window draws covered before the frame wait: ${JSON.stringify(calls)}`);
 });

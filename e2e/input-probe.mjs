@@ -7,6 +7,7 @@
 //   `rasterprobe.input` logs each input transaction of the region with the echo of the sidecar that received it and the identity
 //   of the frame that the sidecar drew first after it.
 import { isDeepStrictEqual } from "node:util";
+import { rasterReady } from "./raster-probe.mjs";
 
 /** The plugin id of the input probe. */
 export const INPUT_PROBE = "probeinput";
@@ -97,14 +98,13 @@ export const imageRegion = (window, surface) => window.regions.find((item) => it
 export const imageFocused = (window, surface) => imageRegion(window, surface)?.focused === true;
 
 /**
- * Waits until the raster probe tab `surface` registered RASTER_PROBE_ENTRIES, its session is open, its image region drew a frame and
- * `host.window` shows the region with a frame, and returns that row of `host.window.regions`.
+ * Waits until the raster probe tab `surface` registered RASTER_PROBE_ENTRIES, it is ready as rasterReady makes it ready (its session
+ * is open and its image region drew a frame while the window draws covered), and `host.window` shows the region with a frame, and
+ * returns that row of `host.window.regions`.
  */
 export async function readyRasterProbe(s, surface) {
   await s.registered(surface, RASTER_PROBE_ENTRIES);
-  await s.until("rasterprobe.session", (state) => state.connected && state.session !== null,
-    `the raster probe ${surface} did not open its session`, { surface });
-  await s.until("rasterprobe.frame", (frame) => frame !== null, `the raster probe ${surface} drew no frame`, { surface });
+  await rasterReady(s, surface);
   const window = await s.until("host.window", (value) => imageRegion(value, surface)?.visible === true
     && imageRegion(value, surface).frame?.width > 0, `the image region of ${surface} is not shown`);
   return imageRegion(window, surface);
