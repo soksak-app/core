@@ -4,6 +4,9 @@ import { join } from 'node:path';
 /** The hosts of a candidate in sorted order: each has its release job, its release artifact and its applications in the window checks. */
 export const CANDIDATE_HOSTS = Object.freeze(['mygo', 'tauriv2', 'wailsv3']);
 
+/** The platform of the candidate release artifacts; the platform operations of its plan and its release keys are those of this platform. */
+export const CANDIDATE_PLATFORM = Object.freeze({ platform: 'darwin', arch: 'arm64' });
+
 /** Acceptance reuses the declared application, activation and dedicated performance scripts. */
 export function candidateScripts(root) {
   const { scripts } = JSON.parse(readFileSync(join(root, 'e2e', 'package.json'), 'utf8'));

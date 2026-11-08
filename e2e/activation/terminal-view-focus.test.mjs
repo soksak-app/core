@@ -10,12 +10,12 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { captureCadence, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
+import { inputSources } from "../platform/platform.js";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { assertInputTraceDelivery } from "./terminal-ime-document.mjs";
 
-const ABC = "com.apple.keylayout.ABC";
-const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
+const { latin: ABC, korean: KOREAN_2SET } = inputSources();
 const COMMAND = "echo focuscheck";
 const REPEATED_VOWEL_KEYS = ["k", "k", "k", "k"];
 const REPEATED_VOWELS = "ㅏㅏㅏㅏ";

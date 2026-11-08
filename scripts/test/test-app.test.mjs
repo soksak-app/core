@@ -10,6 +10,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startFakeEndpoint } from "@soksak/client/testing";
 import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan, validateOrdinaryArtifacts, quitApplication } from "../test-app.mjs";
+import { applicationBundle, artifactExecutables, processTableCommand, quitShortcut } from "../platform/platform.js";
+
+// A hand-made quit step carries the platform and the quit shortcut that e2ePlan resolves; these steps use the macOS ones.
+const DARWIN_QUIT = { platform: "darwin", shortcut: quitShortcut({ platform: "darwin" }) };
 
 const node = (code) => [process.execPath, "-e", code];
 // The limit of a test of a start step is the limit of the step (START_LIMIT_MS, 60 s) and some more: at a high load of the file system
@@ -23,7 +27,7 @@ test("ordinary focused acceptance owns explicit prebuilt artifacts and unchanged
     hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })),
     registry: { path: "/prebuilt/registry/index.json", components: [{ kind: "plugin", id: "declared-plugin" }] },
   };
-  const plan = e2ePlan({ root: "/source", configRoot: "/configuration/fresh", script: "test-app", artifacts, only: "window-end.test.mjs" });
+  const plan = e2ePlan({ root: "/source", configRoot: "/configuration/fresh", script: "test-app", artifacts, only: "window-end.test.mjs", platform: "darwin" });
   for (const host of artifacts.hosts) {
     assert.equal(plan.find((item) => item.name === `start ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok-${host.app}`);
     assert.deepEqual(plan.find((item) => item.name === `registry ${host.app}`).argv,
@@ -201,7 +205,7 @@ test("each run gets a new empty configuration root under target/e2e", { timeout:
 test("the plan prepares, starts the three applications, checks and quits them in this order", { timeout: 5000 }, () => {
   const root = "/work";
   const configRoot = "/work/target/e2e/run";
-  const plan = e2ePlan({ root, configRoot, script: "verify", native: "e2e" });
+  const plan = e2ePlan({ root, configRoot, script: "verify", native: "e2e", platform: "darwin" });
   assert.deepEqual(plan.map((item) => [item.phase, item.name]), [
     ["prepare", "registry certificates"],
     ["prepare", "install plugins wailsv3"],
@@ -241,10 +245,60 @@ test("the plan prepares, starts the three applications, checks and quits them in
   assert.ok(!checks.argv.includes("--when-idle"));
   assert.deepEqual(plan.find((item) => item.name === "native end-to-end tests").argv, ["make", "-C", "native/darwin", "e2e"]);
   assert.equal(plan.some((item) => item.name === "capture text warm-up"), false);
-  const person = e2ePlan({ root, configRoot, script: "test-app:person", whenIdle: "60" });
+  const person = e2ePlan({ root, configRoot, script: "test-app:person", whenIdle: "60", platform: "darwin" });
   assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(2, 4), ["--script", "test-app:person"]);
   assert.deepEqual(person.find((item) => item.name === "window checks").argv.slice(-2), ["--when-idle", "60"]);
   assert.equal(person.some((item) => item.name === "native end-to-end tests"), false);
+});
+
+test("test-app resolves the executables of each platform from its declared application artifact", { timeout: 5000 }, () => {
+  const root = "/work";
+  const configRoot = "/work/target/e2e/run";
+  const plan = e2ePlan({ root, configRoot, script: "test-app", native: "test-app", platform: "darwin" });
+  const checks = plan.find((item) => item.name === "window checks");
+  for (const app of ["wailsv3", "tauriv2", "mygo"]) {
+    const bundle = applicationBundle(join(root, "target", "debug"), app, { platform: "darwin" });
+    const { application } = artifactExecutables(bundle, app, { platform: "darwin" });
+    assert.equal(plan.find((item) => item.name === `start ${app}`).argv[0], application, app);
+    assert.equal(checks.env[`SOKSAK_BINARY_${app.toUpperCase()}`], application, app);
+    assert.ok(plan.find((item) => item.name === "remaining processes").paths.includes(bundle), app);
+  }
+  const quits = plan.filter((item) => item.kind === "quit");
+  assert.deepEqual(quits.map((item) => [item.platform, item.shortcut]), quits.map(() => ["darwin", quitShortcut({ platform: "darwin" })]));
+  assert.deepEqual(plan.find((item) => item.name === "remaining processes").argv, processTableCommand({ platform: "darwin" }));
+  // A platform without a declared application artifact fails before any step can start an application, with the named operation.
+  for (const platform of ["linux", "win32"]) {
+    assert.throws(() => e2ePlan({ root, configRoot, script: "test-app", platform }),
+      { name: "PlatformOperationNotImplemented", message: `application artifact is not implemented on ${platform}` }, platform);
+  }
+  // Prebuilt artifacts name their bundles, and the executables inside them still come from the platform declaration.
+  const artifacts = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })),
+    registry: { path: "/prebuilt/registry/index.json", components: [] } };
+  for (const platform of ["linux", "win32"]) {
+    assert.throws(() => e2ePlan({ root, configRoot: "/configuration/fresh", script: "test-app", artifacts, platform }),
+      { name: "PlatformOperationNotImplemented", message: `application artifact executables is not implemented on ${platform}` }, platform);
+  }
+});
+
+test("a quit step sends the quit shortcut that its plan resolved for the platform", { timeout: 10000 }, async (t) => {
+  const app = await quittingApplication(t);
+  const keys = [];
+  const fake = await startFakeEndpoint({
+    "windows.list": () => [{ window: "w1" }],
+    "input.key": (params) => {
+      keys.push(params);
+      if (params.phase === "up") app.kill("SIGTERM");
+      return null;
+    },
+  });
+  t.after(() => fake.close());
+  const shortcut = { name: "Control+Q", menuKey: "ctrl+q", key: "q", text: "q", modifiers: ["control"] };
+  const { lines, write } = recorder();
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", shortcut, by: "key", app: "app", configDir: fake.configDir }],
+    { write, children: new Map([["app", app]]) });
+  assert.deepEqual(failures, []);
+  assert.deepEqual(keys, ["down", "up"].map((phase) => ({ window: "w1", key: "q", text: "q", modifiers: ["control"], phase })));
+  assert.ok(lines.some((line) => /^passed quit app /.test(line)), lines.join("\n"));
 });
 
 test("a failed preparation skips the checks, runs the cleanup and names the failed step", { timeout: 10000 }, async () => {
@@ -268,7 +322,7 @@ test("a candidate plan uses its bundled installers and frozen registry without b
     registry: { path: "/candidate/index.json", pack: "required", components: [{ kind: "plugin", id: "fixture" }] },
   };
   const plan = e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app",
-    native: "test-app", candidate, runFolder: "/work/target/test-runs/candidate" });
+    native: "test-app", candidate, runFolder: "/work/target/test-runs/candidate", platform: "darwin" });
   assert.equal(plan.some((step) => step.argv?.includes("install-plugins")), false);
   assert.deepEqual(plan.find((step) => step.name === "registry wailsv3").argv,
     ["/candidate/wailsv3.app/Contents/MacOS/sok", "registry", "use", "/candidate/index.json", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
@@ -354,7 +408,7 @@ test("quit deadline covers connection and closes a client that arrives after exp
   const configDir = workspace(t), child = { exitCode: 0, signalCode: null };
   let arrive, calls = 0, closed = 0, settled = false;
   const client = { request: async (method) => { calls++; return method === "status.get" ? MENUS : null; }, close() { closed++; } };
-  const pending = quitApplication({ app: "fixture", by: "menu", configDir }, new Map([["fixture", child]]), 0, () => {}, () => new Promise((resolve) => { arrive = resolve; }));
+  const pending = quitApplication({ app: "fixture", ...DARWIN_QUIT, by: "menu", configDir }, new Map([["fixture", child]]), 0, () => {}, () => new Promise((resolve) => { arrive = resolve; }));
   const observed = pending.then(() => ({ ok: true }), (error) => ({ error }));
   observed.then(() => { settled = true; });
   t.after(async () => { arrive(client); await observed; });
@@ -380,8 +434,8 @@ test("quit deadline closes a pending RPC and runs the remaining quit and process
   }, close() { firstClosed++; } };
   const next = { request: async (method) => method === "status.get" ? MENUS : null, close() { nextClosed++; } };
   const { lines, write } = recorder();
-  const item = (app, configDir) => ({ name: `quit ${app}`, phase: "cleanup", kind: "quit", by: "menu", app, configDir });
-  const pending = runPlan([item("first", firstDir), item("next", nextDir), { name: "remaining processes", phase: "cleanup", kind: "remaining", paths: [] }],
+  const item = (app, configDir) => ({ name: `quit ${app}`, phase: "cleanup", kind: "quit", ...DARWIN_QUIT, by: "menu", app, configDir });
+  const pending = runPlan([item("first", firstDir), item("next", nextDir), { name: "remaining processes", phase: "cleanup", kind: "remaining", paths: [], argv: processTableCommand({ platform: "darwin" }) }],
     { write, children: new Map([["first", { exitCode: 0, signalCode: null }], ["next", { exitCode: 0, signalCode: null }]]), connectClient: async ({ configDir }) => configDir === firstDir ? first : next });
   pending.then(() => { settled = true; });
   t.after(async () => { release(null); await pending; });
@@ -418,7 +472,7 @@ test("a quit step by the menu selects the Quit item that host.menu lists and pas
     },
   });
   t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", ...DARWIN_QUIT, by: "menu", app: "app", configDir: fake.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, []);
   assert.deepEqual(fake.requests.map((request) => request.method), ["status.get", "command.run"]);
@@ -436,7 +490,7 @@ test("a quit step by the key sends Command+Q down and up to the window and passe
     },
   });
   t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "key", app: "app", configDir: fake.configDir }],
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", ...DARWIN_QUIT, by: "key", app: "app", configDir: fake.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, []);
   assert.deepEqual(keys, ["down", "up"].map((phase) => ({ window: "w1", key: "q", text: "q", modifiers: ["command"], phase })));
@@ -446,7 +500,7 @@ test("a quit step fails when the application ends with another status than 0 aft
   const app = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
   const fake = await startFakeEndpoint({ "status.get": () => MENUS, "command.run": () => { app.kill("SIGTERM"); return null; } });
   t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", ...DARWIN_QUIT, by: "menu", app: "app", configDir: fake.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, ["quit app: the application ended with signal SIGTERM"]);
 });
@@ -455,7 +509,7 @@ test("a quit step fails when the application menu has no item with the key equiv
   const app = await quittingApplication(t);
   const fake = await startFakeEndpoint({ "status.get": () => ({ language: "en", menus: [MENUS.menus[1]] }) });
   t.after(() => fake.close());
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", ...DARWIN_QUIT, by: "menu", app: "app", configDir: fake.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
   assert.deepEqual(failures, ["quit app: the application menu has no item with the key equivalent cmd+q"]);
 });
@@ -469,7 +523,7 @@ test("a quit step ends when the process that holds the configuration lock exits,
   const holder = spawn("lockf", [join(fake.configDir, "process.lock"), process.execPath, "-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"]);
   t.after(() => holder.kill());
   await new Promise((resolve) => holder.stdout.once("data", resolve));
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", by: "menu", app: "app", configDir: fake.configDir }],
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", ...DARWIN_QUIT, by: "menu", app: "app", configDir: fake.configDir }],
     { write: () => {}, children: new Map([["app", started]]) });
   assert.deepEqual(failures, []);
   assert.notEqual(holder.exitCode, null, "the quit step ended while the process that holds process.lock was running");

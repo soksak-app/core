@@ -4,6 +4,7 @@ import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
+import { inputSources } from "./platform/platform.js";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an inactive view retains input across main focus and handles picker Escape`, { timeout: 60000 }, async (t) => {
@@ -12,7 +13,7 @@ for (const app of Object.values(APPS)) {
       "native.record.info", "native.input.key_down", "native.window.first_responder",
     ] });
     await keepCommonSettings(s);
-    await s.selectInputSource("com.apple.keylayout.ABC");
+    await s.selectInputSource(inputSources().latin);
     const browser = (await s.get("core.surfaces")).find(item => item.plugin === "browser" && item.visible);
     assert.ok(browser, "the fixture has no visible browser view");
     await s.until("core.surfaces", all => all.some(item => item.surface === browser.surface

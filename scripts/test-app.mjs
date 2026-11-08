@@ -4,33 +4,33 @@
 // window-check script of their tier (`verify`, `test-app:activation`, `test-app:real`, `test-app:person`) and the native end-to-end target
 // of that tier. Each run makes a new configuration root under target/e2e, prepares the registry certificates and the plugins of the
 // applications in it, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
-// applications through the Quit item of the application menu and the last one through Command+Q, and fails when an application ends
-// with another status than 0 or when a process of
-// the root or of a bundle remains. A passed run removes its root; a failed run keeps it with the logs of the applications, so a second
+// applications through the Quit item of the application menu and the last one through the quit shortcut of the platform, and fails
+// when an application ends with another status than 0 or when a process of the root or of an application artifact remains. The
+// application artifacts, the quit shortcut, the native end-to-end target and the process operations are platform operations
+// (scripts/platform/platform.js); a platform that does not implement one fails the run with the name of that operation. A passed run removes its root; a failed run keeps it with the logs of the applications, so a second
 // run starts from the same state as the first. Each step prints `running`, then `passed` or `failed` with its elapsed time, or `skipped`
 // with the failed step that skipped it.
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { connect } from '@soksak/client';
 import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
-import { crashFault } from './crash-fault.mjs';
+import { applicationBundle, artifactExecutables, crashReports, lockReleaseCommand, nativeEndToEndCommand, processTableCommand,
+  quitShortcut } from './platform/platform.js';
 import { collectAcceptanceInputs, collectOrdinaryInputs, finishAcceptanceRun, prepareCandidate, prepareOrdinaryArtifacts } from './acceptance-run.mjs';
-import { CANDIDATE_HOSTS, candidateScripts } from './candidate-policy.mjs';
+import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateScripts } from './candidate-policy.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const APPS = ['wailsv3', 'tauriv2', 'mygo'];
 /** The limit of a start step: the time that an application has to write endpoint.json. */
 const START_LIMIT_MS = 60_000;
-/** The limit of a quit step: the time that an application has to exit after its Quit item or Command+Q. */
+/** The limit of a quit step: the time that an application has to exit after its Quit item or the quit shortcut. */
 const QUIT_LIMIT_MS = 60_000;
 
-const bundle = (root, app) => join(root, 'target', 'debug', `sok-${app}.app`);
 const configDir = (configRoot, app) => join(configRoot, `soksak-check-${app}`);
 const nativeTarget = (script) => script === 'test-app' ? 'test-app' : script === 'test-app:activation' ? 'test-app-activation' : undefined;
 
@@ -60,22 +60,30 @@ export function newConfigRoot(root) {
 /**
  * The steps of a run. A step of the phase `prepare` that fails skips every later step except those of `cleanup`; a failed `check`
  * skips nothing. `run` runs a command to its end, `start` starts an application and ends when it writes endpoint.json, `quit` quits a
- * started application through the Quit item of its menu (`by` `menu`) or Command+Q (`by` `key`), and `remaining` fails on a process whose command names the configuration root or a bundle.
+ * started application through the Quit item of its menu (`by` `menu`) or the quit shortcut of the platform (`by` `key`), and
+ * `remaining` fails on a process whose command names the configuration root or an application artifact. `platform` selects the
+ * platform operations, the running platform when it is not given. The plan resolves every platform operation that it uses, so a
+ * platform that does not implement one fails before any step starts an application.
  */
-export function e2ePlan({ root, configRoot, script, native, whenIdle, candidate, artifacts, only, runFolder }) {
+export function e2ePlan({ root, configRoot, script, native, whenIdle, candidate, artifacts, only, runFolder, platform }) {
   if (candidate && (artifacts !== undefined || only !== undefined)) throw new Error('candidate acceptance rejects ordinary selection or artifact overrides');
   if (artifacts) validateOrdinaryArtifacts(artifacts);
   if (artifacts && !isAbsolute(configRoot)) throw new Error('ordinary configuration root must be absolute');
   const inputs = candidate ?? artifacts;
   const env = { SOKSAK_CONFIG_ROOT: configRoot };
   const ca = join(configRoot, 'soksak-check-registry-tls', 'ca.pem');
-  const appBundle = (app) => inputs ? inputs.hosts.find((host) => host.app === app).bundle : bundle(root, app);
-  const appBinary = (app) => join(appBundle(app), 'Contents', 'MacOS', `sok-${app}`);
+  const bundles = new Map(APPS.map((app) => [app, inputs ? inputs.hosts.find((host) => host.app === app).bundle
+    : applicationBundle(join(root, 'target', 'debug'), app, { platform })]));
+  const executables = new Map(APPS.map((app) => [app, artifactExecutables(bundles.get(app), app, { platform })]));
+  const appBundle = (app) => bundles.get(app);
+  const appBinary = (app) => executables.get(app).application;
+  const shortcut = quitShortcut({ platform });
+  const processTable = processTableCommand({ platform });
   const registry = inputs ? inputs.registry.path : join(root, 'target', 'registry', 'index.json');
   return [
     { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'create-test-certificates'], env },
     ...(inputs ? APPS.flatMap((app) => {
-      const sok = join(appBundle(app), 'Contents', 'MacOS', 'sok');
+      const sok = executables.get(app).installer;
       const config = ['--config-dir', configDir(configRoot, app)];
       return [
         { name: `registry ${app}`, phase: 'prepare', kind: 'run', argv: [sok, 'registry', 'use', registry, ...config], env },
@@ -101,27 +109,32 @@ export function e2ePlan({ root, configRoot, script, native, whenIdle, candidate,
         ...(candidate ? { SOKSAK_CANDIDATE_RUN_FOLDER: runFolder } : {}),
       },
     },
-    ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'run', argv: ['make', '-C', 'native/darwin', native],
+    ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'run', argv: nativeEndToEndCommand(native, { platform }),
       env: { ...env, ...(candidate ? { SOKSAK_NATIVE_TEST_RUN_FOLDER: join(runFolder, 'native') } : {}) } }]),
     ...(inputs ? [{ name: 'acceptance after', phase: 'cleanup', kind: 'capture', capture: 'after' }] : []),
     // A person quits through the Quit item of the application menu or its key equivalent: each application ends by the item and the
-    // last one by Command+Q, and the run, the parent of each process, checks that it exits with status 0.
+    // last one by the quit shortcut, and the run, the parent of each process, checks that it exits with status 0.
     ...APPS.map((app, index) => ({
       name: `quit ${app}`, phase: 'cleanup', kind: 'quit', by: index === APPS.length - 1 ? 'key' : 'menu', app, configDir: configDir(configRoot, app),
+      shortcut, platform,
     })),
-    { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map(appBundle)] },
+    { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map(appBundle)], argv: processTable },
   ];
 }
 
-/** The required terminal steps use placeholder locations so the publication gate needs no workstation path. */
+/**
+ * The required terminal steps use placeholder locations so the publication gate needs no workstation path, and the platform of the
+ * candidate artifacts, so the gate gives the same steps on every platform that it runs on.
+ */
 export function candidatePlanNames(context, script) {
   const candidate = { registry: { ...context.registry, path: '/candidate/index.json' },
     hosts: CANDIDATE_HOSTS.map((app) => ({ app, bundle: `/candidate/${app}.app` })) };
   return [...e2ePlan({ root: '/source', configRoot: '/configuration', runFolder: '/run', script,
-    native: nativeTarget(script), candidate }).map(({ name }) => name), 'acceptance after cleanup', 'reference cleanup', 'configuration cleanup'];
+    native: nativeTarget(script), candidate, platform: CANDIDATE_PLATFORM.platform }).map(({ name }) => name),
+  'acceptance after cleanup', 'reference cleanup', 'configuration cleanup'];
 }
 
-/** The lines `<pid> <command>` of `ps -axo pid=,command=` whose command names one of the paths, except the process `self`. */
+/** The lines `<pid> <command>` of the process table whose command names one of the paths, except the process `self`. */
 export function remainingProcesses(text, paths, self = process.pid) {
   return text.split('\n').map((line) => line.trim()).filter((line) => {
     const match = /^(\d+)\s+(.*)$/.exec(line);
@@ -196,43 +209,31 @@ async function startApplication(item, children) {
   }
 }
 
-/** The crash reports of the application that the system wrote since `since` (ms), each with the fault that names its address. */
-function crashReports(app, since) {
-  const folder = join(homedir(), 'Library', 'Logs', 'DiagnosticReports');
-  if (!existsSync(folder)) return [];
-  return readdirSync(folder)
-    .filter((name) => name.startsWith(`sok-${app}-`) && name.endsWith('.ips'))
-    .map((name) => join(folder, name))
-    .filter((file) => statSync(file).mtimeMs >= since)
-    .map((file) => `${file}: ${JSON.stringify(crashFault(readFileSync(file, 'utf8'), file))}`);
-}
-
-/** The key equivalent of the Quit item of the application menu, as host.menu writes it. */
-const QUIT_KEY = 'cmd+q';
-
 /**
  * Quits the application through the path of a person (docs/operations/examples.md#end-to-end-run): `by` `menu` performs the item
- * of the application menu whose key equivalent is Command+Q with host.menu.select, and `by` `key` sends Command+Q down and up to a
- * window with input.key. Returns the name of the action for the messages of the step.
+ * of the application menu whose key equivalent is the quit shortcut with host.menu.select, and `by` `key` sends the quit shortcut
+ * down and up to a window with input.key. `shortcut` is the quit shortcut that the plan resolved for its platform. Returns the name of
+ * the action for the messages of the step.
  */
-async function requestQuit(client, by) {
+async function requestQuit(client, by, shortcut) {
+  if (shortcut === undefined) throw new Error('the quit step names no quit shortcut of its platform');
   if (by === 'menu') {
     const { menus } = await client.request('status.get', { window: 'main', name: 'host.menu' });
-    const menu = menus.find((entry) => entry.items.some((entry) => entry.key === QUIT_KEY));
-    if (menu === undefined) throw new Error(`the application menu has no item with the key equivalent ${QUIT_KEY}`);
-    const { title } = menu.items.find((entry) => entry.key === QUIT_KEY);
+    const menu = menus.find((entry) => entry.items.some((entry) => entry.key === shortcut.menuKey));
+    if (menu === undefined) throw new Error(`the application menu has no item with the key equivalent ${shortcut.menuKey}`);
+    const { title } = menu.items.find((entry) => entry.key === shortcut.menuKey);
     const reply = await client.request('command.run', { window: 'main', name: 'host.menu.select', params: { menu: menu.title, title } });
     if (reply !== null) throw new Error(`host.menu.select of ${title} returned ${JSON.stringify(reply)}, expected null`);
     return `the item ${title}`;
   }
   if (by === 'key') {
     const [first] = await client.request('windows.list', {});
-    if (first === undefined) throw new Error('the application has no window to take Command+Q');
+    if (first === undefined) throw new Error(`the application has no window to take ${shortcut.name}`);
     for (const phase of ['down', 'up']) {
-      const reply = await client.request('input.key', { window: first.window, key: 'q', text: 'q', modifiers: ['command'], phase });
-      if (reply !== null) throw new Error(`input.key ${phase} of Command+Q returned ${JSON.stringify(reply)}, expected null`);
+      const reply = await client.request('input.key', { window: first.window, key: shortcut.key, text: shortcut.text, modifiers: shortcut.modifiers, phase });
+      if (reply !== null) throw new Error(`input.key ${phase} of ${shortcut.name} returned ${JSON.stringify(reply)}, expected null`);
     }
-    return 'Command+Q';
+    return shortcut.name;
   }
   throw new Error(`unknown quit path ${JSON.stringify(by)}`);
 }
@@ -254,14 +255,19 @@ export async function quitApplication(item, children, since, write, connectClien
           throw new Error('the normal quit deadline expired before connection');
         }
         client = connected;
-        const selected = await requestQuit(connected, item.by);
+        const selected = await requestQuit(connected, item.by, item.shortcut);
         if (expired) throw new Error('the normal quit deadline expired before its response');
         connected.close();
         client = undefined;
         const end = await exited(child);
         if (end.code !== 0) {
-          for (const line of crashReports(item.app, since)) write(`crash ${line}`);
-          throw new Error(`the application ended with ${describeExit(end)}`);
+          const ended = `the application ended with ${describeExit(end)}`;
+          // A platform without crash reports names that operation in the failure, which keeps the exit status.
+          let reports;
+          try { reports = crashReports(item.app, since, { platform: item.platform }); }
+          catch (error) { throw new Error(`${ended}; ${error.message}`); }
+          for (const line of reports) write(`crash ${line}`);
+          throw new Error(ended);
         }
         return selected;
       })(),
@@ -275,29 +281,31 @@ export async function quitApplication(item, children, since, write, connectClien
   }
   // Retain the existing lock-holder proof, including a replacement process
   // after relaunch. A timeout above is a failed Quit, never a forced shutdown.
-  await lockReleased(item.configDir, action);
+  await lockReleased(item.configDir, action, item.platform);
 }
 
 /**
  * Waits until no process holds `<config-dir>/process.lock` (docs/spec/endpoint.md). The started process is not always the owner:
- * diagnostics.host.relaunch replaces it with a new process. lockf(1) takes the flock(2) lock that the host holds for its life, and
- * the kernel wakes it when the owner exits, so the wait needs no polling.
+ * diagnostics.host.relaunch replaces it with a new process. The lock release wait of the platform returns when the owner exits.
  */
-async function lockReleased(configDir, action) {
+async function lockReleased(configDir, action, platform) {
   const lock = join(configDir, 'process.lock');
   if (!existsSync(lock)) return;
-  const child = spawn('lockf', ['-s', '-t', String(QUIT_LIMIT_MS / 1000), lock, 'true'], { stdio: 'ignore' });
+  const [command, ...args] = lockReleaseCommand(lock, QUIT_LIMIT_MS / 1000, { platform });
+  const child = spawn(command, args, { stdio: 'ignore' });
   const end = await Promise.race([
     exited(child),
-    once(child, 'error').then(([error]) => { throw new Error(`cannot start lockf: ${error.message}`); }),
+    once(child, 'error').then(([error]) => { throw new Error(`cannot start ${command}: ${error.message}`); }),
   ]);
   if (end.code !== 0) {
-    throw new Error(`the process that holds ${lock} did not exit in ${QUIT_LIMIT_MS / 1000}s after ${action} (lockf ${describeExit(end)})`);
+    throw new Error(`the process that holds ${lock} did not exit in ${QUIT_LIMIT_MS / 1000}s after ${action} (${command} ${describeExit(end)})`);
   }
 }
 
 function checkRemaining(item) {
-  const found = remainingProcesses(execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8', maxBuffer: 1 << 26 }), item.paths);
+  if (item.argv === undefined) throw new Error('the remaining step names no process table command of its platform');
+  const [command, ...args] = item.argv;
+  const found = remainingProcesses(execFileSync(command, args, { encoding: 'utf8', maxBuffer: 1 << 26 }), item.paths);
   if (found.length > 0) throw new Error(`${found.length} processes remain: ${found.join('; ')}`);
 }
 

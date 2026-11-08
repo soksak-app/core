@@ -75,7 +75,8 @@ lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/te
 lane("private API inventory", "js-ts", ["scripts/check-private-apis.mjs"], ["scripts/test/check-private-apis.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
-lane("test evidence", "js-ts", ["scripts/test-evidence.mjs", "scripts/platform/platform.js", "scripts/platform/darwin/process-executable.mjs"], ["scripts/test/test-evidence.test.mjs", "scripts/test/platform.test.mjs", "scripts/test/platform/darwin/process-evidence.test.mjs"]),
+lane("test evidence", "js-ts", ["scripts/test-evidence.mjs", "scripts/platform/platform.js", "scripts/platform/darwin/process-executable.mjs",
+  "scripts/platform/linux/process-executable.mjs", "scripts/platform/darwin/artifacts.mjs", "scripts/platform/darwin/end-to-end.mjs"], ["scripts/test/test-evidence.test.mjs", "scripts/test/platform.test.mjs", "scripts/test/platform/darwin/process-evidence.test.mjs"]),
 lane("candidate identity", "js-ts", ["scripts/candidate-identity.mjs"], ["scripts/test/candidate-identity.test.mjs"]),
 lane("candidate acceptance gate", "js-ts", ["scripts/candidate-policy.mjs", "scripts/candidate-report.mjs", "scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
 lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"], ["scripts/test/acceptance-run.test.mjs"]),
@@ -11841,7 +11842,7 @@ const FEATURE_LINKS = [
   {
     id: "F346",
     implementation: [
-      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir, action)" },
+      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir, action, platform)" },
     ],
     tests: [
       { file: "scripts/test/test-app.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },

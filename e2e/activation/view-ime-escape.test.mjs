@@ -9,10 +9,11 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
+import { inputSources } from "../platform/platform.js";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
 
-const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
+const { korean: KOREAN_2SET } = inputSources();
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";
 const PICKER_CLOSE = "workbench.trace.picker.close";

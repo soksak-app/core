@@ -10,6 +10,7 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
+import { inputSources } from "../platform/platform.js";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexAcceptedFrameTrace,
@@ -41,8 +42,7 @@ import {
   terminalStageEvents,
 } from "./terminal-ime-document.mjs";
 
-const ABC = "com.apple.keylayout.ABC";
-const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
+const { latin: ABC, korean: KOREAN_2SET } = inputSources();
 
 async function machAbsoluteBoundary(s) {
   return hostClockBoundary((method, params) => s.request(method, params));

@@ -9,6 +9,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
+import { inputSources } from "../../platform/platform.js";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil } from "../../terminal-screen.mjs";
 import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptMatches,
@@ -16,8 +17,7 @@ import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptM
   terminalComposeMatchesPreedit, terminalObserverStatusesMatch, startTerminalStatusObserver,
   waitForTerminalStage, waitForStateEvent } from "../terminal-ime-document.mjs";
 
-const ABC = "com.apple.keylayout.ABC";
-const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
+const { latin: ABC, korean: KOREAN_2SET } = inputSources();
 
 async function focusedTerminal(s, surface) {
   await s.keepPointerOutside();

@@ -51,10 +51,10 @@ function startupFixture(t, { startError, readError, stopError, clockValues = [10
     async verifyContent() {
       calls.push("verify-content");
       const copiedFrame = join(recordingCopyDirectory, "frame-0001.bgra");
-      assert.ok(existsSync(copiedFrame), "preserved recording copy must exist before offline OCR");
+      assert.ok(existsSync(copiedFrame), "preserved recording copy must exist before the deferred content frame selection");
       assert.equal(readFileSync(copiedFrame, "utf8"), "raw-frame");
       assert.equal(readFileSync(join(recordingCopyDirectory, "recording.json"), "utf8"),
-        JSON.stringify({ count: 1, time: 120 }), "recording metadata must be copied before offline OCR");
+        JSON.stringify({ count: 1, time: 120 }), "recording metadata must be copied before the deferred content frame selection");
       return { contentFrame: { frameIndex: 7, frameCount: 12, timeMs: 140, proof: { expected: "body" } } };
     },
   };

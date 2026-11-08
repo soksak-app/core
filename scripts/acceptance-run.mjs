@@ -10,7 +10,7 @@ import { CANDIDATE_HOSTS } from './candidate-policy.mjs';
 import { encodeAcceptanceReport } from './candidate-report.mjs';
 import { runningProcess } from './test-evidence.mjs';
 import { runCommand } from './test-command.mjs';
-import { releasePlatform } from './platform/platform.js';
+import { artifactExecutables, releasePlatform } from './platform/platform.js';
 
 async function installReference(command, args, { signal } = {}) {
   const result = await runCommand({ id: `candidate reference ${args[0]} ${args[1]}`, command, args,
@@ -22,7 +22,7 @@ const byComponent = (a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.i
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const requireValue = (condition, message) => { if (!condition) throw new Error(`candidate acceptance: ${message}`); };
 const configDir = (root, app) => join(root, `soksak-check-${app}`);
-const executable = ({ bundle, app }) => join(bundle, 'Contents', 'MacOS', `sok-${app}`);
+const executable = ({ bundle, app }) => artifactExecutables(bundle, app).application;
 
 /** One checkout's complete tracked inputs; the subset hashes retain test and dependency ownership. */
 export async function sourceIdentity(root) {
@@ -165,7 +165,7 @@ async function prepareArtifactInputs(input, { install, remove, signal, candidate
     requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'registry bytes changed while the private copy was prepared');
     const reference = join(directory, 'reference');
     await mkdir(reference);
-    const installer = join(context.hosts[0].bundle, 'Contents', 'MacOS', 'sok');
+    const installer = artifactExecutables(context.hosts[0].bundle, context.hosts[0].app).installer;
     const bundleBefore = await hashTree(context.hosts[0].bundle);
     await install(installer, ['registry', 'use', context.registry.path, '--config-dir', reference], { signal });
     // Candidate scope is its pack; ordinary scope is its explicit full cohort.

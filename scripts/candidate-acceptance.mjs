@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { CANDIDATE_HOSTS, candidateNativeTests, candidateScripts } from './candidate-policy.mjs';
+import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateNativeTests, candidateScripts } from './candidate-policy.mjs';
+import { artifactExecutables, releaseKey } from './platform/platform.js';
 import { hashFile, hashTree, hashValue } from './candidate-identity.mjs';
 import { decodeAcceptanceReport, MAX_REPORT_BYTES } from './candidate-report.mjs';
 
@@ -125,7 +126,7 @@ export async function candidateAssetNames(root) {
   const manifests = await Promise.all(['packages/plugin-api/package.json', 'native/darwin/process-identity/package.json'].map((path) => jsonFile(join(root, path))));
   const version = manifests[0].version;
   if (!/^\d+\.\d+\.\d+$/.test(version) || manifests.some((m) => m.version !== version)) throw new Error('candidate package versions differ');
-  return { version, names: [...CANDIDATE_HOSTS.map((host) => `soksak-${version}-darwin-arm64-${host}.zip`),
+  return { version, names: [...CANDIDATE_HOSTS.map((host) => `soksak-${version}-${releaseKey(host, CANDIDATE_PLATFORM)}.zip`),
     ...manifests.map((m) => `${m.name.replace(/^@/, '').replace('/', '-')}-${version}.tgz`)].sort() };
 }
 
@@ -149,7 +150,7 @@ export async function candidateFiles(root, directory) {
   const assets = await Promise.all(names.map(async (name) => ({ name, sha256: await hashFile(join(directory, name)) })));
   const bundles = [];
   for (const app of CANDIDATE_HOSTS) {
-    const path = join(directory, `soksak-${version}-darwin-arm64-${app}.zip`);
+    const path = join(directory, `soksak-${version}-${releaseKey(app, CANDIDATE_PLATFORM)}.zip`);
     const entries = execFileSync('unzip', ['-Z1', path], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\n').filter(Boolean);
     if (!entries.length || entries.some((entry) => entry.startsWith('/') || entry.includes('\\') || entry.split('/').includes('..')
       || (!entry.startsWith('soksak.app/') && !entry.startsWith('__MACOSX/')))) throw new Error(`${path}: unexpected release member path`);
@@ -157,7 +158,7 @@ export async function candidateFiles(root, directory) {
     try {
       execFileSync('unzip', ['-q', path, '-d', temporary], { stdio: 'pipe' });
       const bundle = join(temporary, 'soksak.app');
-      bundles.push({ app, bundleSha256: await hashTree(bundle), executableSha256: await hashFile(join(bundle, 'Contents', 'MacOS', `sok-${app}`)) });
+      bundles.push({ app, bundleSha256: await hashTree(bundle), executableSha256: await hashFile(artifactExecutables(bundle, app, CANDIDATE_PLATFORM).application) });
     } finally { await rm(temporary, { recursive: true, force: true }); }
   }
   return { assets, bundles };

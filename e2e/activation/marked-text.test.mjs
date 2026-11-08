@@ -13,11 +13,11 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
+import { inputSources } from "../platform/platform.js";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { assertInputTraceDelivery, inputTraceTransactions } from "./terminal-ime-document.mjs";
 
-const ABC = "com.apple.keylayout.ABC";
-const JAPANESE = "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese";
+const { latin: ABC, japanese: JAPANESE } = inputSources();
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: marked text that the input method ends is written to the PTY once`,

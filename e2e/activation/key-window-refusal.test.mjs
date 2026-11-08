@@ -10,9 +10,10 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
+import { inputSources } from "../platform/platform.js";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 
-const ABC = "com.apple.keylayout.ABC";
+const { latin: ABC } = inputSources();
 
 /**
  * A folder for a project that the check opens. The library keeps the project after its window closes, so the cleanup closes it

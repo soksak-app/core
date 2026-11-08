@@ -1,9 +1,10 @@
-import { join } from "node:path";
+// The macOS operations of the window checks.
 
-/** Executable paths inside the app bundles in the macOS debug build. */
-export function debugBinaries(target) {
-  return Object.fromEntries(["wailsv3", "tauriv2", "mygo"].map((name) => [
-    `SOKSAK_BINARY_${name.toUpperCase()}`,
-    join(target, "debug", `sok-${name}.app`, "Contents", "MacOS", `sok-${name}`),
-  ]));
+/** The Text Input Sources identifiers of the input sources that the activation checks select. */
+export function inputSources() {
+  return Object.freeze({
+    latin: "com.apple.keylayout.ABC",
+    korean: "com.apple.inputmethod.Korean.2SetKorean",
+    japanese: "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese",
+  });
 }

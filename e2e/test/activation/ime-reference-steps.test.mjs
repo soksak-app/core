@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { runReferenceSteps, compareAppKitReference } from "../../activation/ime-reference-steps.mjs";
+import { inputSources } from "../../platform/platform.js";
+
+// The AppKit reference is the macOS owner of these steps, so its fixture uses the macOS input source.
+const { korean: KOREAN } = inputSources({ platform: "darwin" });
 
 test("the next AppKit reference key waits for the prior presentation checkpoint", { timeout: 5000 }, async () => {
   let releasePresentation;
@@ -64,7 +68,7 @@ function referenceSession({ focused = true } = {}) {
     async presented() { pending = false; checkpoints.push(document); },
     async selectInputSource() {},
     async request(name, params) {
-      if (name === "diagnostics.input.source") return { current: "com.apple.inputmethod.Korean.2SetKorean" };
+      if (name === "diagnostics.input.source") return { current: KOREAN };
       assert.equal(name, "diagnostics.input.reference");
       if (params.action === "wait" || params.action === "wait-document")
         assert.equal(document, params.document);
@@ -122,7 +126,7 @@ test("reference keys wait for selected-source readiness on the newly focused cli
     async request(name, params) {
       if (name === "diagnostics.input.source") {
         calls.push("source:read");
-        return { current: "com.apple.inputmethod.Korean.2SetKorean" };
+        return { current: KOREAN };
       }
       assert.equal(name, "diagnostics.input.reference");
       if (params.action === "wait") assert.equal(ready, true);
@@ -135,10 +139,10 @@ test("reference keys wait for selected-source readiness on the newly focused cli
 
   const run = compareAppKitReference(session, ["g"], "ㅎ", ["ㅎ"]);
   await started;
-  assert.deepEqual(calls, ["open", "focus", "source:read", "select:start:com.apple.inputmethod.Korean.2SetKorean"]);
+  assert.deepEqual(calls, ["open", "focus", "source:read", `select:start:${KOREAN}`]);
   finishSelection();
   await run;
-  assert.ok(calls.indexOf("select:done:com.apple.inputmethod.Korean.2SetKorean") < calls.indexOf("press:g"));
+  assert.ok(calls.indexOf(`select:done:${KOREAN}`) < calls.indexOf("press:g"));
 });
 
 test("reference steps await a delayed document update while marked text remains", { timeout: 5000 }, async () => {
@@ -156,7 +160,7 @@ test("reference steps await a delayed document update while marked text remains"
     async press(key) { calls.push(`press:${key}`); },
     async presented() { calls.push("presented"); },
     async request(name, params) {
-      if (name === "diagnostics.input.source") return { current: "com.apple.inputmethod.Korean.2SetKorean" };
+      if (name === "diagnostics.input.source") return { current: KOREAN };
       assert.equal(name, "diagnostics.input.reference");
       calls.push(params.action);
       if (params.action === "wait-document") {
