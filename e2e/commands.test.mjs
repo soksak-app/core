@@ -3,6 +3,7 @@
 // The controls that a person presses run the same commands (docs/spec/exposure.md), so when the result of a command
 // appears in status, the result of the control is the same.
 import assert from "node:assert/strict";
+import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
