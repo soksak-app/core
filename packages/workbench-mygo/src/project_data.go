@@ -222,8 +222,8 @@ func sameData(one, other json.RawMessage) (bool, error) {
 	return reflect.DeepEqual(first, second), nil
 }
 
-// workspaceChanged reads the store after a write and reports each key of plugin data that differs from what this window holds,
-// as a write of another window reaches this window through the store.
+// workspaceChanged reads the store after a write, takes the stored record of each project that this window does not hold and reports
+// each key of plugin data that differs from what this window holds, as a write of another window reaches this window through the store.
 func (s *Shell) workspaceChanged() {
 	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
 		if err == nil {
@@ -235,7 +235,8 @@ func (s *Shell) workspaceChanged() {
 	})
 }
 
-// compareData takes the plugin data of the projects of a workspace snapshot.
+// compareData takes the projects of a workspace snapshot: the whole record of a project that this window does not hold, and the plugin
+// data of one that it holds.
 func (s *Shell) compareData(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
@@ -271,7 +272,11 @@ func (s *Shell) compareData(value any) error {
 		if err != nil {
 			return err
 		}
-		if stored, ok := read.Rest["plugins"]; ok {
+		// The window keeps the spaces of a project that it holds, which it writes itself; every other project takes its stored record,
+		// which another window or another environment may have changed, as readProjects of the page does.
+		if !s.windowProjects[read.ID] {
+			*project = read
+		} else if stored, ok := read.Rest["plugins"]; ok {
 			if project.Rest == nil {
 				project.Rest = map[string]json.RawMessage{}
 			}
