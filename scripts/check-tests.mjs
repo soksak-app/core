@@ -11776,6 +11776,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAStartThatFailsShowsItsFailureAsItsFirstScreen" },
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAStartWithRefusedStoredFilesShowsTheirErrorsAndStarts" },
       { file: "packages/workbench-mygo/tests/events_test.go", id: "TestAHostCallIsRecordedAtItsEndAndNotAtTheStepOfItsAnswer" },
+      { file: "native/darwin/tests/input_key_time_test.m", id: "the named key Enter carries the uptime of its injection" },
+      { file: "native/darwin/tests/input_key_time_test.m", id: "the key with a stated text a carries the uptime of its injection" },
       { file: "packages/host/mygo/tests/framework_test.go", id: "TestAWindowGoesOnTheScreenWithTheFirstScreenOfItsWorkbench" },
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAStartAtTheLibraryShowsItsFirstScreenBeforeTheWindowIsReady" },
       { file: "packages/workbench-mygo/tests/shell_statuses_test.go", id: "TestFullscreenCoversThePlaneAndKeepsTheLayout" },
