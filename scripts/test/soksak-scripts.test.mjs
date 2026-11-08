@@ -753,8 +753,11 @@ test("window-source audit allows activation only in the activation tier", { time
 test("window-source audit allows activation in the real-input tier and input pacing only in its tool", { timeout: 1000 }, () => {
   const line = 'await session.pointer(x, y, "move", { activate: true });';
   assert.deepEqual(auditE2ESource(line, "e2e/real/probe.test.mjs"), []);
+  assert.deepEqual(auditE2ESource(line, "packages/window-check/hid.mjs"), []);
+  assert.equal(auditE2ESource(line, "packages/window-check/app.mjs").length, 1);
   const pacing = "  if (step.wait) delay(step.wait / 1000);";
-  assert.deepEqual(auditE2ESource(pacing, "e2e/real/hid.mjs"), []);
+  assert.deepEqual(auditE2ESource(pacing, "packages/window-check/hid.mjs"), []);
+  assert.deepEqual(auditE2ESource(pacing, "packages/window-check/app.mjs"), ["packages/window-check/app.mjs:1: uses a fixed sleep"]);
   assert.deepEqual(auditE2ESource(pacing, "e2e/real/probe.test.mjs"), ["e2e/real/probe.test.mjs:1: uses a fixed sleep"]);
   assert.deepEqual(auditE2ESource(pacing, "e2e/probe.test.mjs"), ["e2e/probe.test.mjs:1: uses a fixed sleep"]);
 });

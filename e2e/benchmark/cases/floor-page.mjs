@@ -12,10 +12,10 @@ import { fileURLToPath } from "node:url";
 import { drag, keepCommonSettings } from "@soksak/window-check/app.mjs";
 import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measureDragPerformance, pointerLag, shownTimes,
-  transactionCadence } from "../../drag-measurement.mjs";
+  transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 import { outside } from "../../outside.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, measureViewFrameGeometry, VIEW_GEOMETRY_COLOR_TOLERANCE }
-  from "../../view-frame-geometry.mjs";
+  from "@soksak/window-check/view-frame-geometry.mjs";
 
 /** The floor page plugin: its id and its folder. */
 export const FLOOR_PAGE = Object.freeze({

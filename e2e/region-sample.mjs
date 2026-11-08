@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { presentedFrame } from "./raster-probe.mjs";
-import { cropViewPixels } from "./view-content.mjs";
+import { cropViewPixels } from "@soksak/window-check/view-content.mjs";
 
 /** The element of the image region of the raster probe (`element.rect`). */
 export const RASTER_ELEMENT = "rasterprobe.raster";

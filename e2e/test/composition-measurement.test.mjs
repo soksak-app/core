@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { glyphShape, outside, rasterRow, surfaceBoxes, whitePixels } from "../outside.mjs";
 import { bare, cardSize } from "../surface.mjs";
-import { assertHeldStatesShown, assertRoundTrips } from "../drag-measurement.mjs";
+import { assertHeldStatesShown, assertRoundTrips } from "@soksak/window-check/drag-measurement.mjs";
 
 test("drag measurement rejects a stationary, incomplete, or non-returning gesture", () => {
   assert.throws(() => assertRoundTrips([100, 100, 100], 2), /moved only/);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import test from "node:test";
-import { Session } from "@soksak/window-check/app.mjs";
+import { Session } from "../app.mjs";
 import { temporaryProject, ownProjectWindow } from "../project-resource.mjs";
 
 for (const bodyFails of [false, true]) test(`temporary project releases its live window before removing files after ${bodyFails ? "failure" : "success"}`, { timeout: 5000 }, async () => {

@@ -8,7 +8,7 @@ import { realpathSync } from "node:fs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { hostProcess } from "../../../scripts/measure-app-usage.mjs";
 import { fresh } from "../../fixture.mjs";
-import { processTable } from "../../process-table.mjs";
+import { processTable } from "@soksak/window-check/process-table.mjs";
 import { failureWithSlowestPhase, readPhases } from "../../reload-phases.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";

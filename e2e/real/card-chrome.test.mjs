@@ -8,7 +8,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, START_PLUGIN } from "../fixture.mjs";
 import { imageRect, rasterProbeTab } from "../input-probe.mjs";
-import { bringFront, click, post, requireTrusted, screenCenter, systemCursor } from "./hid.mjs";
+import { bringFront, click, post, requireTrusted, screenCenter, systemCursor } from "@soksak/window-check/hid.mjs";
 
 /** The colours that the raster probe repaints its image region in while a check reads the cursor over a divider. */
 const REDRAW_COLOURS = Object.freeze(["#204060", "#602040", "#406020"]);

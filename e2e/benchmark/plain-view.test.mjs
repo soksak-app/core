@@ -9,10 +9,10 @@ import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frameChange, frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "../view-metrics-collection.mjs";
+import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "@soksak/window-check/view-metrics-collection.mjs";
 import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./cases/plain-view.mjs";
 import { outside } from "../outside.mjs";
-import { assertRoundTrips, measureDragPerformance, pointerLag, shownTimes, transactionCadence } from "../drag-measurement.mjs";
+import { assertRoundTrips, measureDragPerformance, pointerLag, shownTimes, transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 
 const descriptor = Object.freeze({
   plugin: "probeplain",

@@ -14,8 +14,8 @@ import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { fresh, reading, START_PLUGIN } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { rasterMarks, surfaceBoxes, whitePixels } from "./outside.mjs";
-import { assertHeldStatesShown } from "./drag-measurement.mjs";
-import { presentsFrame } from "./region-raster.mjs";
+import { assertHeldStatesShown } from "@soksak/window-check/drag-measurement.mjs";
+import { presentsFrame } from "@soksak/window-check/region-raster.mjs";
 import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
 } from "./reload-view-reply.mjs";

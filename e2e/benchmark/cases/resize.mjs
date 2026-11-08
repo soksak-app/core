@@ -16,7 +16,7 @@ import { fixtureSettings } from "./b3-run.mjs";
 import { gestureB3Values } from "./gesture-records.mjs";
 import { fresh } from "../../fixture.mjs";
 import { frameEvidence, lagStages, measureFrame, writeEvidence } from "../../resize-frames.mjs";
-import { effectiveCardCornerRadiusPt } from "../../view-frame-geometry.mjs";
+import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
 import { dragGeometryFrame, floorSlotInsets, measureFloorLayoutFrame, openFloorPage } from "./floor-page.mjs";
 
 /**

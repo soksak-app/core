@@ -12,7 +12,7 @@ import { frameChange, frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { outside, rasterMarks, whitePixels } from "./outside.mjs";
 import { addRasterTabAt, RASTER } from "./raster-probe.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
-import { measureDragPerformance, shownTimes, assertFinalContentSize, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "./drag-measurement.mjs";
+import { measureDragPerformance, shownTimes, assertFinalContentSize, assertHeldStatesShown, assertRoundTrips, lagStages, pointerLag, transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 
 // Vertical line 1 is the boundary between the left fixed sidebar and the first card of the middle column. Dragging it moves the left
 // edge of that card.

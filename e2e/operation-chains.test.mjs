@@ -20,7 +20,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
-import { chainOf, declaredChains, PERFORMED, tailOf } from "./chains.mjs";
+import { chainOf, tailOf } from "@soksak/window-check/chains.mjs";
+import { declaredChains, PERFORMED } from "./chains.mjs";
 import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
 import { releaseKey } from "../scripts/platform/platform.js";
 

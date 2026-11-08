@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { VIEW_DRAG_PLAN } from "../benchmark/cases/floor-page.mjs";
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
-import { assertDragPerformance, measureDragPerformance } from "../drag-measurement.mjs";
+import { assertDragPerformance, measureDragPerformance } from "@soksak/window-check/drag-measurement.mjs";
 import { completeViewDrag, dragProcesses, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
 
 test("the benchmark defers captured thresholds until valid third-drag measurements are published", { timeout: 5000 }, () => {

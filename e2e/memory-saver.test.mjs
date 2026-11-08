@@ -12,7 +12,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { allRows, tailOf } from "./chains.mjs";
+import { allRows, tailOf } from "@soksak/window-check/chains.mjs";
 import { fresh } from "./fixture.mjs";
 
 /** A loopback server of three small pages, /a, /b and /c. It is closed when the check ends. */

@@ -73,7 +73,7 @@ import { connect } from '@soksak/client';
 import { policyOfSetting } from '@soksak/window-check/log-policy.mjs';
 import { displayFailures, GOALS_FILE, readGoals, startConditionFailures, targetConditionFailures } from './b3-judge.mjs';
 import { readB3Out } from './b3-out.mjs';
-import { trusted } from '../e2e/real/hid.mjs';
+import { trusted } from '@soksak/window-check/hid.mjs';
 import { runPlan } from './test-app.mjs';
 import { parseCpuTime } from './measure-app-usage.mjs';
 import { FRAME_RECORDS, traceSettings } from './measure-trace.mjs';
