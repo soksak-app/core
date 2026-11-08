@@ -194,8 +194,6 @@ type surfaceState struct {
 	// views that the current frame draws in the workbench.
 	drawn map[string]layout.Rect
 	shown []layout.Rect
-	// placeholders are the tabs of plugins that the window did not load that the current frame draws, in the order it draws them.
-	placeholders []placeholderStatus
 	// seated holds the seats of the section surfaces of the sidebars of the current frame, drawnPlane is the plane that the frame drew,
 	// and drawnLibrary tells that the frame drew the library instead.
 	seated map[string]SidebarSeat

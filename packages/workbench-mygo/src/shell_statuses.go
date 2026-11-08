@@ -384,9 +384,13 @@ func (s *Shell) railState() any {
 }
 
 // surfacesState returns the value of core.surfaces: each surface that the host holds, in the order the host took them, then the
-// unloaded sections and the placeholder tabs of the current frame.
-func (s *Shell) surfacesState() []any {
-	status := make([]any, 0, len(s.surfaces.order)+len(s.surfaces.placeholders))
+// unloaded sections and the placeholder tabs of the plane.
+func (s *Shell) surfacesState() ([]any, error) {
+	placeholders, err := s.placeholderRows()
+	if err != nil {
+		return nil, err
+	}
+	status := make([]any, 0, len(s.surfaces.order)+len(placeholders))
 	for _, id := range s.surfaces.order {
 		held := s.surfaces.held[id]
 		unit := s.units[held.tab.Plugin]
@@ -411,10 +415,10 @@ func (s *Shell) surfacesState() []any {
 	for _, row := range s.unloadedSections() {
 		status = append(status, row)
 	}
-	for _, row := range s.surfaces.placeholders {
+	for _, row := range placeholders {
 		status = append(status, row)
 	}
-	return status
+	return status, nil
 }
 
 // unloadedSections returns the rows of the sections whose surfaces the memory saver unloaded: a section keeps its seat, so it stays in the
@@ -522,7 +526,14 @@ func (s *Shell) registerStatuses() {
 		}
 		return value
 	})
-	s.registry.Status("core.surfaces", func() any { return s.surfacesState() })
+	s.registry.Status("core.surfaces", func() any {
+		value, err := s.surfacesState()
+		if err != nil {
+			s.fail(err)
+			return nil
+		}
+		return value
+	})
 	s.registry.Status("core.chrome", func() any {
 		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": s.projectTabsPlace()}
 	})

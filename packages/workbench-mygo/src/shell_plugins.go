@@ -243,11 +243,9 @@ type pluginStarter struct {
 }
 
 // drawPluginPlaceholder draws the tab tab of a plugin that the window did not load: the reason, and the install or enable button
-// when that is what the tab waits for. The frame lists the tab in core.surfaces with the reason of its placeholder.
+// when that is what the tab waits for.
 func (s *Shell) drawPluginPlaceholder(c *ui.Context, tab layout.Tab) {
 	reason, installable := s.placeholderReason(tab.Plugin)
-	s.surfaces.placeholders = append(s.surfaces.placeholders, placeholderStatus{Surface: tab.ID, Plugin: tab.Plugin, Visible: true,
-		Placeholder: reason, Kind: "tab"})
 	line, action, label := placeholderOf(tab.Plugin, reason, installable)
 	// The line is a paragraph of the page, whose margin of one line stands under it as well as the gap of the placeholder.
 	gap := s.options.Declared.ChromeNumber("placeholder-gap", "px")
@@ -258,6 +256,32 @@ func (s *Shell) drawPluginPlaceholder(c *ui.Context, tab layout.Tab) {
 			s.uiButton(c, s.binder.Press(c, "core.card.placeholder-action", command, tab.Plugin, pluginParam{tab.Plugin}), label, false)
 		}
 	})
+}
+
+// placeholderRows returns the entries of core.surfaces of the placeholder tabs of the plane: the active tab of each shown card whose
+// plugin the window did not load, in card order. They follow the plane, not a drawn frame, so a read right after a reload, before
+// the first frame, lists them too.
+func (s *Shell) placeholderRows() ([]placeholderStatus, error) {
+	var rows []placeholderStatus
+	if s.plane == nil {
+		return rows, nil
+	}
+	for _, card := range s.plane.Cards() {
+		if s.fullscreen != "" && card.ID != s.fullscreen {
+			continue
+		}
+		data, err := layout.DecodeCardData(card.Data)
+		if err != nil {
+			return nil, fmt.Errorf("card %s: %w", card.ID, err)
+		}
+		active := data.ActiveTab()
+		if active == nil || s.units[active.Plugin] != nil {
+			continue
+		}
+		reason, _ := s.placeholderReason(active.Plugin)
+		rows = append(rows, placeholderStatus{Surface: active.ID, Plugin: active.Plugin, Visible: true, Placeholder: reason, Kind: "tab"})
+	}
+	return rows, nil
 }
 
 // placeholderReason returns the reason of the placeholder of a tab of plugin (docs/spec/plugins.md): unread when the install state
