@@ -1,5 +1,5 @@
 // The memory saver end to end (docs/spec/plugins.md#memory-saver, docs/spec/exposure.md#tab-memory). An unload probe that
-// declares surface.unload is packed into a registry of the check beside the workspace plugins and installed. On each host the
+// declares surface.unload is installed from the fixture registry. On each host the
 // check requires that:
 // 1. core.tab.unload of a hidden probe tab reports it unloaded in core.tab.memory and removes its document region from the
 //    host objects (diagnostics.objects);
@@ -12,15 +12,13 @@ import { createServer } from "node:http";
 import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { allRows, tailOf } from "./chains.mjs";
 import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
 import { fixtureRegistry } from "./benchmark/cases/floor-page.mjs";
-
-const PROBE = fileURLToPath(new URL("./fixtures/memory-saver/unload-probe/", import.meta.url));
 
 /** A loopback server of three small pages, /a, /b and /c. It is closed when the check ends. */
 async function serve(s) {
@@ -76,7 +74,7 @@ for (const app of Object.values(APPS)) {
     await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 },
       log: { lifecycle: "info" }, reads: ["workbench.tab.restored", "workbench.tab.unloaded", "workbench.tab.unload.skipped"] }));
     const pages = await serve(s);
-    const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok"), plugin: PROBE });
+    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     s.cleanup(async () => {
       await s.windows(1, "the page was not ready for the cleanup");

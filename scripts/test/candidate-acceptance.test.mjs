@@ -80,7 +80,8 @@ test('candidate publication validates the completed attempt and immutable artifa
 async function rootFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'soksak-acceptance-files-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  for (const [path, name] of [['packages/plugin-api', '@soksak/plugin-api'], ['native/darwin/process-identity', '@soksak/native-process-identity-darwin']]) {
+  for (const [path, name] of [['packages/plugin-api', '@soksak/plugin-api'], ['native/darwin/process-identity', '@soksak/native-process-identity-darwin'],
+    ['packages/client', '@soksak/client'], ['packages/log-contract', '@soksak/log-contract'], ['packages/window-check', '@soksak/window-check']]) {
     await mkdir(join(root, path), { recursive: true });
     await writeFile(join(root, path, 'package.json'), JSON.stringify({ name, version: '0.0.39' }));
   }
@@ -104,8 +105,10 @@ test('candidate publication hashes the exact downloaded files and complete bundl
     execFileSync('zip', ['-q', '-r', join(files, `soksak-0.0.39-darwin-arm64-${host}.zip`), 'soksak.app'], { cwd: folder });
   }
   for (const name of names.filter((name) => name.endsWith('.tgz'))) await writeFile(join(files, name), 'packed release bytes');
+  assert.deepEqual(names.filter((name) => name.endsWith('.tgz')), ['soksak-client-0.0.39.tgz', 'soksak-log-contract-0.0.39.tgz',
+    'soksak-native-process-identity-darwin-0.0.39.tgz', 'soksak-plugin-api-0.0.39.tgz', 'soksak-window-check-0.0.39.tgz']);
   const observed = await candidateFiles(root, files);
-  assert.equal(observed.assets.length, 5);
+  assert.equal(observed.assets.length, 8);
   assert.deepEqual(observed.bundles.map((b) => [b.app, b.bundleSha256]), [...expected]);
   await writeFile(join(files, 'unaccepted.txt'), 'extra');
   await assert.rejects(() => candidateFiles(root, files), /must be exactly/);

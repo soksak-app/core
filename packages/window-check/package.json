@@ -39,6 +39,7 @@
     "frontmost.mjs",
     "log-policy.mjs",
     "view-calls.mjs",
+    "view-edges.mjs",
     "view-metrics.mjs",
     "lz4.mjs",
     "order-names.mjs",

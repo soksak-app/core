@@ -21,11 +21,12 @@
 import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { compareVersions, rangeContains } from "../packages/plugin-api/index.js";
+import { pluginEntry, registryBuild, sidecarEntry, sidecarFileName, writeJson } from "./fixture-registry.mjs";
 
 const ROOT = new URL("../", import.meta.url);
 const DECLARATION = "scripts/workspace-registry.json";
@@ -82,47 +83,6 @@ export function gitCommonDir(dir) {
   }).trim();
 }
 
-/** The address of the package.json repository. It is a string or { url }. */
-export function repositoryText(repository) {
-  const url = typeof repository === "string" ? repository : repository?.url;
-  if (typeof url !== "string" || url === "") throw new Error("package.json repository has no url");
-  return url;
-}
-
-/**
- * The registry entry of one plugin. pack is the release that packPlugin returns, and sidecars is the set of the package names of
- * the sidecars of the registry: the index lists only the dependencies on sidecars, and a dependency on a plugin stays in the
- * plugin.json of the release (contract case `cli.registry.checks-plugin-dependencies` of docs/spec/host-contract.md).
- */
-export function pluginEntry(manifest, pkg, pack, sidecars) {
-  return {
-    id: manifest.id, package: pkg.name, name: manifest.name, description: pkg.description, license: pkg.license,
-    repository: repositoryText(pkg.repository),
-    versions: [{
-      version: pkg.version, release: { url: pathToFileURL(pack.release).href, sha256: pack.sha256 },
-      // default: the plugin.json of a plugin that uses no sidecar has no dependencies.
-      engines: { soksak: pkg.engines?.soksak },
-      // default: the plugin.json of a plugin without dependencies has no dependencies.
-      sidecars: Object.fromEntries(Object.entries(manifest.dependencies ?? {}).filter(([name]) => sidecars.has(name))),
-    }],
-  };
-}
-
-/** The registry entry of one sidecar. release is the result of releaseSidecar. */
-export function sidecarEntry(pkg, declaration, release) {
-  return {
-    name: pkg.name, repository: repositoryText(pkg.repository),
-    versions: [{
-      version: pkg.version, protocol: declaration.protocol,
-      releases: { [release.platform]: { url: pathToFileURL(release.release).href, sha256: release.sha256 } },
-    }],
-  };
-}
-
-function sok(binary, args) {
-  return JSON.parse(execFileSync(binary, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
-}
-
 /**
  * Runs `make <target> OUT=<folder> <variables>` of a repository, which writes one release into the folder, and returns the release
  * that the target added and its sha256; a target that adds no file or more than one file is an error.
@@ -158,14 +118,6 @@ export function releaseSidecar(repository, out, variables = []) {
   const platform = /-((?:darwin|linux|windows)-(?:arm64|x64))\.tgz$/.exec(release.release)?.[1];
   if (!platform) throw new Error(`make release of ${repository} wrote ${release.release}, whose name ends with no <os>-<arch>.tgz`);
   return { ...release, platform };
-}
-
-/** Writes the pnpm pack file of the plugin folder dir into out (docs/spec/installation.md#plugin-release) and returns it and its sha256. */
-export function pnpmPack(dir, out) {
-  mkdirSync(out, { recursive: true });
-  const { filename } = JSON.parse(execFileSync("pnpm", ["pack", "--json", "--pack-destination", resolve(out)],
-    { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }));
-  return { release: filename, sha256: createHash("sha256").update(readFileSync(filename)).digest("hex") };
 }
 
 /**
@@ -215,11 +167,6 @@ export function installWorkspace(root = ROOT) {
   }
 }
 
-function write(path, value) {
-  mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
-}
-
 /**
  * The names of the sidecars that the registry releases: every declared sidecar, because a connector plugin outside the
  * workspace uses a sidecar that no workspace plugin names. A dependency of a workspace plugin that is neither a declared
@@ -245,7 +192,7 @@ function clearRegistry(out) {
  * Writes the registry folder anew and creates index.json. Earlier entries in the output folder are removed. sidecars "diagnostic"
  * releases the sidecars with DIAGNOSTIC_RELEASE and writes the revision record; root is the core checkout.
  */
-export function buildWorkspaceRegistry(binary, out, { sidecars, root = ROOT } = {}) {
+export async function buildWorkspaceRegistry(binary, out, { sidecars, root = ROOT } = {}) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
   const commonDir = gitCommonDir(fileURLToPath(root));
   const folder = (relative) => repositoryFolder(relative, commonDir);
@@ -266,7 +213,7 @@ export function buildWorkspaceRegistry(binary, out, { sidecars, root = ROOT } = 
     checkPluginId(item, manifest, join(dir, "plugin.json"));
     const pkg = read(pathToFileURL(join(dir, "package.json")));
     const pack = packPlugin(dir, releases);
-    write(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));
+    writeJson(join(out, "plugins", `${manifest.id}.json`), pluginEntry(manifest, pkg, pack, new Set(declared.keys())));
     manifests.push(manifest);
   }
   // The declared repository → the revision of the sources that its first release builds, in declaration order.
@@ -275,16 +222,15 @@ export function buildWorkspaceRegistry(binary, out, { sidecars, root = ROOT } = 
     const { item, repository, sidecar } = declared.get(name);
     if (sidecars === "diagnostic" && !revisions.has(item.repository)) revisions.set(item.repository, sourceRevision(repository));
     const release = releaseSidecar(repository, releases, sidecars === "diagnostic" ? DIAGNOSTIC_RELEASE : []);
-    const file = name.startsWith("@") ? name.slice(1).replace("/", "-") : name;
-    write(join(out, "sidecars", `${file}.json`),
+    writeJson(join(out, "sidecars", `${sidecarFileName(name)}.json`),
       sidecarEntry(read(pathToFileURL(join(sidecar, "package.json"))), read(pathToFileURL(join(sidecar, "sidecar.json"))), release));
   }
-  for (const pack of declaration.packs) write(join(out, "packs", `${pack.name}.json`), pack);
-  write(join(out, "revoked.json"), { plugins: [], sidecars: [] });
-  const result = sok(binary, ["registry", "build", out]);
+  for (const pack of declaration.packs) writeJson(join(out, "packs", `${pack.name}.json`), pack);
+  writeJson(join(out, "revoked.json"), { plugins: [], sidecars: [] });
+  const result = await registryBuild(binary, out);
   // The record follows index.json, so a run that fails leaves none and PLUGINS=public refuses its folder.
   if (sidecars === "diagnostic") {
-    write(join(out, REVISIONS), { sidecars: [...revisions].map(([repository, source]) => ({ repository, ...source })) });
+    writeJson(join(out, REVISIONS), { sidecars: [...revisions].map(([repository, source]) => ({ repository, ...source })) });
   }
   return result;
 }
@@ -333,7 +279,7 @@ export function publicRegistryEntries(index, sidecars) {
  * Writes the registry folder of --plugins public anew and creates index.json: the plugins of the public index beside the sidecar
  * entries and releases that --sidecars diagnostic wrote into sidecarRegistry, whose revision record shows that run.
  */
-export function buildPublicRegistry(binary, out, sidecarRegistry, index) {
+export async function buildPublicRegistry(binary, out, sidecarRegistry, index) {
   if (resolve(out) === resolve(sidecarRegistry)) {
     throw new Error(`--out ${out} is the folder of the sidecar releases; PLUGINS=public writes another folder`);
   }
@@ -356,11 +302,11 @@ export function buildPublicRegistry(binary, out, sidecarRegistry, index) {
   });
   const entries = publicRegistryEntries(index, sidecars.map((item) => item.entry));
   clearRegistry(out);
-  for (const plugin of entries.plugins) write(join(out, "plugins", `${plugin.id}.json`), plugin);
-  for (const { name, entry } of sidecars) write(join(out, "sidecars", name), entry);
-  for (const pack of entries.packs) write(join(out, "packs", `${pack.name}.json`), pack);
-  write(join(out, "revoked.json"), entries.revoked);
-  return { ...sok(binary, ["registry", "build", out]), dropped: entries.dropped };
+  for (const plugin of entries.plugins) writeJson(join(out, "plugins", `${plugin.id}.json`), plugin);
+  for (const { name, entry } of sidecars) writeJson(join(out, "sidecars", name), entry);
+  for (const pack of entries.packs) writeJson(join(out, "packs", `${pack.name}.json`), pack);
+  writeJson(join(out, "revoked.json"), entries.revoked);
+  return { ...(await registryBuild(binary, out)), dropped: entries.dropped };
 }
 
 /** Reads a registry index from its address; an answer other than 200 is an error that names the address. */
@@ -393,13 +339,13 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   checkOptions(values);
   if (values.plugins === "public") {
     for (const name of ["sidecar-registry", "public-index"]) if (!values[name]) throw new Error(`--${name} is required with --plugins public`);
-    const result = buildPublicRegistry(values.sok, values.out, values["sidecar-registry"], await readIndex(values["public-index"]));
+    const result = await buildPublicRegistry(values.sok, values.out, values["sidecar-registry"], await readIndex(values["public-index"]));
     for (const item of result.dropped) {
       console.log(`Public registry: left out ${item.id} ${item.version}, which needs ${item.sidecar} ${item.range}`);
     }
     console.log(`Public registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
   } else {
-    const result = buildWorkspaceRegistry(values.sok, values.out, { sidecars: values.sidecars });
+    const result = await buildWorkspaceRegistry(values.sok, values.out, { sidecars: values.sidecars });
     console.log(`Workspace registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
   }
 }

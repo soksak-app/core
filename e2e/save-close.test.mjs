@@ -1,52 +1,22 @@
 // The native core close boundary consumes a declared fixture's save reply and modified report.
 // Actual Editor save behavior is checked separately; this fixture performs no Editor filesystem write.
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { pluginEntry } from "../scripts/workspace-registry.mjs";
-import { hashFile } from "../scripts/candidate-identity.mjs";
-import { runCommand } from "../scripts/test-command.mjs";
 import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
+import { fixtureRegistry } from "./benchmark/cases/floor-page.mjs";
 
-const PROBE = fileURLToPath(new URL("./fixtures/save-close/probe/", import.meta.url));
-const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
 const tabOf = (grid, id) => grid.cards.flatMap((card) => card.tabs ?? []).find((tab) => tab.id === id);
-
-async function probeRegistry(sok, signal) {
-  const folder = mkdtempSync(join(tmpdir(), "soksak-close-registry-"));
-  try {
-    for (const name of ["plugins", "sidecars", "packs", "revoked.json"]) cpSync(join(REGISTRY, name), join(folder, name), { recursive: true });
-    const manifest = JSON.parse(readFileSync(join(PROBE, "plugin.json"), "utf8"));
-    const pkg = JSON.parse(readFileSync(join(PROBE, "package.json"), "utf8"));
-    const releases = join(folder, "releases");
-    mkdirSync(releases);
-    const pack = await runCommand({ id: "pack close probe", command: "pnpm", args: ["pack", "--json", "--pack-destination", releases],
-      cwd: PROBE, timeoutMs: 30000, signal });
-    assert.equal(pack.status, "pass", `close probe pack: ${JSON.stringify(pack.error ?? pack.stderr)}`);
-    const { filename } = JSON.parse(pack.stdout);
-    const packed = { release: filename, sha256: await hashFile(filename) };
-    writeFileSync(join(folder, "plugins", `${manifest.id}.json`), JSON.stringify(pluginEntry(manifest, pkg, packed, new Set())));
-    const build = await runCommand({ id: "build close probe registry", command: sok, args: ["registry", "build", folder],
-      cwd: PROBE, timeoutMs: 30000, signal });
-    assert.equal(build.status, "pass", `close probe registry: ${JSON.stringify(build.error ?? build.stderr)}`);
-    return folder;
-  } catch (error) {
-    try { rmSync(folder, { recursive: true }); }
-    catch (cleanup) { throw new AggregateError([error, cleanup], "close fixture preparation and cleanup failed"); }
-    throw error;
-  }
-}
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: save replies that retain modified state keep the native tab open`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const folder = await probeRegistry(join(dirname(app.binary), "sok"), t.signal);
+    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
     s.cleanup(() => rmSync(folder, { recursive: true }));
     const change = async (name, run) => {
       const offsets = currentEventOffsets(app.configDir);

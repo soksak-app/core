@@ -83,6 +83,7 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs", "scripts/platform/p
   "scripts/test/platform/darwin/end-to-end.test.mjs"]),
 lane("candidate identity", "js-ts", ["scripts/candidate-identity.mjs"], ["scripts/test/candidate-identity.test.mjs"]),
 lane("candidate acceptance gate", "js-ts", ["scripts/candidate-policy.mjs", "scripts/candidate-report.mjs", "scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
+lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scripts/test/pack-release-packages.test.mjs"]),
 lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"], ["scripts/test/acceptance-run.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
@@ -130,6 +131,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("Temporary folders of runs", "js-ts", ["scripts/temporary-folder.mjs"], ["scripts/test/temporary-folder.test.mjs"]),
+  lane("fixture registry", "js-ts", ["scripts/fixture-registry.mjs"], ["scripts/test/fixture-registry.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platform-files.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
@@ -1372,11 +1374,11 @@ const FEATURE_LINKS = [
   {
     id: "F502-2-5",
     implementation: [
-      { file: "scripts/workspace-registry.mjs", symbol: "export function buildWorkspaceRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export async function buildWorkspaceRegistry(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function sourceRevision(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function checkOptions(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function publicRegistryEntries(" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function buildPublicRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export async function buildPublicRegistry(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export async function readIndex(" },
     ],
     tests: [
@@ -11597,7 +11599,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },
       { file: "packages/sok/go/src/registry.go", symbol: "func checkReleaseModules" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function pnpmPack(" },
+      { file: "scripts/fixture-registry.mjs", symbol: "export async function pnpmPack(" },
     ],
     tests: [
       { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_entry_outside_package" },
@@ -12120,9 +12122,25 @@ const FEATURE_LINKS = [
   },
   {
     id: "F320",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "pnpm -C packages/plugin-api pack --pack-destination" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "node scripts/pack-release-packages.mjs dist" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],
     expected: "The core release publishes sok only inside its application zips.",
+    levels: ["unit"],
+  },
+  {
+    id: "F715-4",
+    implementation: [
+      { file: "scripts/pack-release-packages.mjs", symbol: "export function releaseManifest" },
+      { file: "scripts/pack-release-packages.mjs", symbol: "export function packReleasePackages" },
+      { file: ".github/workflows/release.yml", symbol: "node scripts/pack-release-packages.mjs dist" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "RELEASE_PACKAGES.map((folder) => jsonFile(join(root, folder, 'package.json')))" },
+    ],
+    tests: [
+      { file: "scripts/test/pack-release-packages.test.mjs", id: "a workspace dependency of a published package becomes the release address of that package" },
+      { file: "scripts/test/pack-release-packages.test.mjs", id: "the packed window check packages resolve from the core release and hold their exported modules" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication hashes the exact downloaded files and complete bundle contents" },
+    ],
+    expected: "The core release packs @soksak/window-check, @soksak/client and @soksak/log-contract beside @soksak/plugin-api, each workspace dependency of a packed manifest is the release file of that package in the same core release, every module that the exports of a packed package name is in its release file, and the publication gate requires the five packed packages.",
     levels: ["unit"],
   },
   {

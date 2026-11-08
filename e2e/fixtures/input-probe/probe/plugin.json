@@ -1,0 +1,105 @@
+{
+  "id": "probeinput",
+  "name": "Input probe",
+  "description": "Core input fixture: a view text field and a native document region field report keys, preedit, commits, caret, copy and paste, and the Escape the view forwards.",
+  "surface": {
+    "composition": { "kind": "view", "page": "ui/page.html", "regions": [{ "name": "text", "kind": "document", "input": "native" }], "overlays": [] }
+  },
+  "mark": "I",
+  "icon": "<rect x=\"2\" y=\"5\" width=\"12\" height=\"6\" rx=\"1\"/>",
+  "exposes": {
+    "status": [
+      {
+        "name": "probeinput.field",
+        "description": "The text field of the view: whether it has focus, its value and caret, the preedit and its range, and in order the keys, commits, copies and pastes it received.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "documentTimeOriginMs": { "type": "number" },
+            "focused": { "type": "boolean" },
+            "value": { "type": "string" },
+            "caret": { "type": "object", "properties": { "start": { "type": "integer" }, "end": { "type": "integer" }, "direction": { "type": "string" } } },
+            "preedit": { "type": ["object", "null"], "properties": { "text": { "type": "string" }, "start": { "type": "integer" }, "end": { "type": "integer" } } },
+            "keys": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "type": { "type": "string", "enum": ["keydown", "keyup"] }, "key": { "type": "string" },
+              "code": { "type": "string" }, "modifiers": { "type": "array", "items": { "type": "string", "enum": ["shift", "alt", "control", "command"] } },
+              "text": { "type": "string" }, "composing": { "type": "boolean" }, "repeat": { "type": "boolean" }, "trusted": { "type": "boolean" },
+              "atMs": { "type": "number" } } } },
+            "commits": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "composed": { "type": "boolean" }, "atMs": { "type": "number" } } } },
+            "copies": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } },
+            "pastes": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } }
+          }
+        }
+      },
+      {
+        "name": "probeinput.document",
+        "description": "The text field of the document region in the shape of probeinput.field, with ready false until the region document has loaded and reported.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "ready": { "type": "boolean" },
+            "documentTimeOriginMs": { "type": "number" },
+            "focused": { "type": "boolean" },
+            "value": { "type": "string" },
+            "caret": { "type": "object", "properties": { "start": { "type": "integer" }, "end": { "type": "integer" }, "direction": { "type": "string" } } },
+            "preedit": { "type": ["object", "null"], "properties": { "text": { "type": "string" }, "start": { "type": "integer" }, "end": { "type": "integer" } } },
+            "keys": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "type": { "type": "string", "enum": ["keydown", "keyup"] }, "key": { "type": "string" },
+              "code": { "type": "string" }, "modifiers": { "type": "array", "items": { "type": "string", "enum": ["shift", "alt", "control", "command"] } },
+              "text": { "type": "string" }, "composing": { "type": "boolean" }, "repeat": { "type": "boolean" }, "trusted": { "type": "boolean" },
+              "atMs": { "type": "number" } } } },
+            "commits": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "composed": { "type": "boolean" }, "atMs": { "type": "number" } } } },
+            "copies": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } },
+            "pastes": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "text": { "type": "string" }, "atMs": { "type": "number" } } } }
+          }
+        }
+      },
+      {
+        "name": "probeinput.routing",
+        "description": "Whether a picker is open, and each workbench command that the view forwarded for a key, with the target and key sequence of the key and the refusal.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "pickerOpen": { "type": "boolean" },
+            "forwarded": { "type": "array", "items": { "type": "object", "properties": {
+              "sequence": { "type": "integer" }, "target": { "type": "string", "enum": ["field", "document"] }, "keySequence": { "type": "integer" },
+              "command": { "type": "string" }, "error": { "type": ["string", "null"] } } } }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "probeinput.clear",
+        "description": "Empties both fields, their key, commit, copy and paste lists and their preedit, and the forwarded commands.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "probeinput.select",
+        "description": "Sets the value of the field of target when value is given and its selection from start to end when start is given.",
+        "params": { "type": "object", "properties": {
+          "target": { "type": "string", "enum": ["field", "document"] }, "value": { "type": "string" },
+          "start": { "type": "integer" }, "end": { "type": "integer" } } },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "probeinput.clock",
+        "description": "The time origin and the current time of the document of target, which map the atMs of its keys to the source clock.",
+        "params": { "type": "object", "properties": { "target": { "type": "string", "enum": ["field", "document"] } } },
+        "result": { "type": "object", "properties": {
+          "documentTimeOriginMs": { "type": "number" }, "sourceNowMs": { "type": "number" }, "sourceResolutionMs": { "type": "number" } } }
+      }
+    ],
+    "element": [
+      { "name": "probeinput.field", "description": "The text field of the view." },
+      { "name": "probeinput.text", "description": "The element of the document region whose document holds a text field that fills it." }
+    ]
+  }
+}
