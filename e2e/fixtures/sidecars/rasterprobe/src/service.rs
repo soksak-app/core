@@ -10,7 +10,10 @@
 //   color {color}                            the color `#rrggbb` of the frames. Answer: the event color.
 //   textSize {factor}                        the text size factor that sizes the cells of the grid. Answer: the event textSize.
 //   state                                    Answer: the event state, the session as the event session describes it.
-//   input {..}                               Answer: the event input with the body it received; the request event keeps its cids.
+//   input {sequence, ..}                     Answer: the event input with the body it received; the request event keeps its cids.
+//                                            Each input makes a frame due, and the event frame of the frame that the service draws
+//                                            next names the sequence of each input that it handled since the frame before in
+//                                            `inputs`, so a page tells which frame presents the state after an input.
 //   close                                    closes the session and its child process. Answer: the event closed.
 //   kill                                     ends the service process at once with SIGKILL, without an answer.
 // Each frame that the service sends is followed by the event frame with its identity, its raster, its grid and its rows.
@@ -28,6 +31,8 @@ pub const NAME: &str = "rasterprobe";
 pub const DEFAULT_COLOR: Rgb = Rgb(0, 80, 180);
 pub const DEFAULT_ROWS: u32 = 0;
 pub const DEFAULT_FACTOR: f64 = 1.0;
+/// The number of input sequences that an image keeps for its next frame; an image that does not draw keeps the last ones.
+pub const PENDING_INPUTS: usize = 256;
 
 /// The levels of docs/spec/logging.md#event, whose numbers order them against the policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,11 +155,23 @@ struct Image {
     sequence: u64,
     frames: u64,
     error: Option<String>,
+    /// The sequences of the inputs handled since the last frame, in order, which the next frame reports.
+    inputs: Vec<u64>,
 }
 
 impl Image {
     fn new(name: &str) -> Image {
-        Image { name: name.to_string(), generation: None, config: None, drawing: false, dirty: true, sequence: 0, frames: 0, error: None }
+        Image {
+            name: name.to_string(),
+            generation: None,
+            config: None,
+            drawing: false,
+            dirty: true,
+            sequence: 0,
+            frames: 0,
+            error: None,
+            inputs: Vec::new(),
+        }
     }
 }
 
@@ -591,7 +608,17 @@ impl Service {
                 state.image.iter_mut().for_each(|image| image.dirty = true);
                 answer(out, json!({"event": "textSize", "factor": factor}));
             }
-            "input" => answer(out, json!({"event": "input", "received": Value::Object(fields.clone())})),
+            "input" => {
+                let sequence = fields.get("sequence").and_then(Value::as_u64).ok_or("input requires a non-negative integer sequence")?;
+                if let Some(image) = &mut state.image {
+                    if image.inputs.len() == PENDING_INPUTS {
+                        image.inputs.remove(0);
+                    }
+                    image.inputs.push(sequence);
+                    image.dirty = true;
+                }
+                answer(out, json!({"event": "input", "received": Value::Object(fields.clone())}));
+            }
             "state" => {
                 let body = self.session_body(key, "state", false);
                 answer(out, body);
@@ -883,6 +910,7 @@ impl Service {
         image.sequence = sequence;
         image.dirty = false;
         image.frames += 1;
+        let inputs = std::mem::take(&mut image.inputs);
         state.in_flight = Some(((image.name.clone(), generation, config.raster, sequence), slot));
         let session_id = session.id.clone();
         let frame = json!({
@@ -911,6 +939,7 @@ impl Service {
             "marker": scene.marker().text(),
             "surface": transfer.id(),
             "draw_us": draw_us,
+            "inputs": inputs,
         });
         let conn = state.attachment;
         out.push(Out { conn, line: envelope(&key.1, &[], json!({"image": frame})) });
@@ -1150,14 +1179,16 @@ mod tests {
         send(&mut service, 1, page("tab-1", json!({"operation": "open"})));
         let lines = send(&mut service, 1, page("tab-1", json!({"operation": "dance"})));
         assert_eq!(bodies(&lines), [json!({"error": "unknown operation dance"})]);
-        let input = send(&mut service, 1, page("tab-1", json!({"operation": "input", "text": "a"})));
+        let refused = send(&mut service, 1, page("tab-1", json!({"operation": "input", "text": "a"})));
+        assert_eq!(bodies(&refused), [json!({"error": "input requires a non-negative integer sequence"})]);
+        let input = send(&mut service, 1, page("tab-1", json!({"operation": "input", "sequence": 1, "text": "a"})));
         assert_eq!(input[0]["cids"], json!(["b.1"]));
         let requests: Vec<Value> = shared.lock().unwrap().events.iter()
             .filter(|(name, _)| name == "sidecar.rasterprobe.request").map(|(_, event)| event.clone()).collect();
-        assert_eq!(requests.len(), 4);
-        assert_eq!(requests[3]["cids"], json!(["b.1"]));
-        assert_eq!(requests[3]["fields"]["operation"], "input");
-        assert_eq!(requests[3]["surface"], "tab-1");
+        assert_eq!(requests.len(), 5);
+        assert_eq!(requests[4]["cids"], json!(["b.1"]));
+        assert_eq!(requests[4]["fields"]["operation"], "input");
+        assert_eq!(requests[4]["surface"], "tab-1");
     }
 
     #[test]
@@ -1199,6 +1230,50 @@ mod tests {
         send(&mut service, 2, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
         let lines = send(&mut service, 2, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
         assert_eq!(lines[0]["body"]["image"]["sequence"], 1, "the new connection draws from the first sequence");
+    }
+
+    #[test]
+    fn each_input_makes_a_frame_whose_event_names_the_inputs_it_presents() {
+        let (mut service, shared) = service();
+        hello(&mut service, 1);
+        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
+        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
+        let first = send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
+        assert_eq!(bodies(&first)[1]["inputs"], json!([]), "a frame that follows no input names none");
+        let input = |sequence: u64| page("tab-1", json!({"operation": "input", "sequence": sequence, "actions": [], "preedit": null}));
+        // The frame of the configure is in flight, so the inputs wait for its answer and the next frame presents both.
+        let held = send(&mut service, 1, input(1));
+        assert_eq!(bodies(&held), [json!({"event": "input", "received": {"operation": "input", "sequence": 1, "actions": [], "preedit": null}})]);
+        send(&mut service, 1, input(2));
+        let next = send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}})));
+        let next = bodies(&next);
+        assert_eq!((next[0]["image"]["sequence"].as_u64(), next[1]["event"].as_str(), next[1]["sequence"].as_u64()), (Some(2), Some("frame"), Some(2)));
+        assert_eq!(next[1]["inputs"], json!([1, 2]));
+        // With no frame in flight, an input draws its own frame right after its answer.
+        send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 2}})));
+        let own = bodies(&send(&mut service, 1, input(3)));
+        assert_eq!((own[0]["event"].as_str(), own[1]["image"]["sequence"].as_u64(), own[2]["inputs"].clone()), (Some("input"), Some(3), json!([3])));
+        let rows = bodies(&send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 3}}))));
+        assert!(rows.is_empty(), "no input and no change makes no frame: {rows:?}");
+        assert_eq!(shared.lock().unwrap().painted.len(), 3);
+
+        // A region that does not draw keeps the last PENDING_INPUTS inputs for its next frame.
+        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": false, "hidden": true}})));
+        for sequence in 4..(4 + PENDING_INPUTS as u64 + 2) {
+            send(&mut service, 1, input(sequence));
+        }
+        let shown = bodies(&send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}}))));
+        let inputs: Vec<u64> = shown[1]["inputs"].as_array().unwrap().iter().filter_map(Value::as_u64).collect();
+        assert_eq!(inputs, (6..(6 + PENDING_INPUTS as u64)).collect::<Vec<u64>>());
+    }
+
+    #[test]
+    fn a_headless_session_answers_input_without_a_frame() {
+        let (mut service, _) = service();
+        hello(&mut service, 1);
+        send(&mut service, 1, page("tab-1", json!({"operation": "open"})));
+        let lines = send(&mut service, 1, page("tab-1", json!({"operation": "input", "sequence": 1, "actions": [], "preedit": null})));
+        assert_eq!(bodies(&lines), [json!({"event": "input", "received": {"operation": "input", "sequence": 1, "actions": [], "preedit": null}})]);
     }
 
     #[test]

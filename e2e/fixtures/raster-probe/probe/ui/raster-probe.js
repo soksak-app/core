@@ -82,7 +82,35 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   const send = (body, cids) => sidecar.send(surface, body, cids);
   const open = () => send({ operation: "open", image: REGION, textSize: factor });
 
-  const answer = (body) => {
+  // The sidecar names in each frame event the sequences of the inputs that it handled since its frame before; the frame is the first
+  // that shows the state after each of them, so each entry of the log keeps the identity of that frame.
+  const presented = (body) => {
+    if (!Array.isArray(body.inputs)) {
+      report(`the sidecar sent frame ${body.sequence} without its inputs`);
+      return;
+    }
+    const frame = { generation: body.generation, raster: body.raster, sequence: body.sequence };
+    const { log, transactions } = inputStatus.read();
+    const shown = new Set();
+    for (const sequence of body.inputs) {
+      const entry = log.find((item) => item.sequence === sequence);
+      if (entry === undefined) {
+        // default: an input that the log no longer holds (cleared or past its limit) is not attributed; one it never held is reported.
+        if (!(Number.isInteger(sequence) && sequence >= 1 && sequence <= transactions)) {
+          report(`the sidecar presented input ${JSON.stringify(sequence)}, which the view never sent`);
+        }
+        continue;
+      }
+      if (entry.frame !== null || shown.has(sequence)) {
+        report(`the sidecar presented input ${sequence} twice`);
+        continue;
+      }
+      shown.add(sequence);
+    }
+    if (shown.size > 0) changeInput(({ log: current }) => ({ log: current.map((item) => (shown.has(item.sequence) ? { ...item, frame } : item)) }));
+  };
+  // default: the host leaves out the cids of an answer whose line names none, so the listener receives no identifiers.
+  const answer = (body, cids = []) => {
     if (typeof body?.error === "string") {
       report(body.reason === undefined ? body.error : `${body.error}: ${body.reason}`);
       return;
@@ -94,6 +122,7 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
         return;
       case "frame":
         frameStatus.set(body);
+        presented(body);
         return;
       case "rows":
         sessionStatus.set({ ...sessionStatus.read(), rows: body.count });
@@ -120,7 +149,7 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
           report(`the sidecar answered input ${sequence} twice`);
           return;
         }
-        changeInput(({ log }) => ({ log: log.map((item) => (item === entry ? { ...item, received: body.received } : item)) }));
+        changeInput(({ log }) => ({ log: log.map((item) => (item === entry ? { ...item, received: body.received, receivedCids: cids } : item)) }));
         return;
       }
       case "connection":
@@ -152,7 +181,7 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
       preedit,
       actions,
       errors,
-      log: [...log, { sequence, cids, actions, preedit, errors, received: null }].slice(-INPUT_LOG_LIMIT),
+      log: [...log, { sequence, cids, actions, preedit, errors, received: null, receivedCids: null, frame: null }].slice(-INPUT_LOG_LIMIT),
     }));
     send({ operation: "input", sequence, actions, preedit }, cids).catch((error) => report(`input: ${error.message}`));
   });
