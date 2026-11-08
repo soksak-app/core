@@ -1,4 +1,4 @@
-// Reads from the frames of a window recording whether the window shows a completely drawn screen (docs/spec/surface-composition.md). It looks at two places in each frame.
+// Reads from the frames of a recording whether a window shows a completely drawn screen (docs/spec/surface-composition.md). It looks at two places in each frame.
 // The logo text of the head row must be in its place to the right of the traffic light buttons (before the application style applies, the logo is pushed toward
 // the buttons), and the card head must have the card color (if the workspace is empty, only the window background shows).
 import assert from "node:assert/strict";
@@ -8,9 +8,7 @@ import { pixel } from "@soksak/window-check/frame.mjs";
 /** The area of the logo text, to the right of the logo icon in the window head row (window points). If the logo is pushed toward the traffic light buttons, this area is empty. */
 export const LOGO = { x: 112, y: 13, width: 48, height: 12 };
 
-/** The SCFrameStatus values of a callback status record (docs/spec/endpoint.md). */
-const COMPLETE = 0, IDLE = 1, BLANK = 2;
-
+/** Whether the colors a and b differ by at most tolerance in each channel. */
 export const near = (a, b, tolerance) => a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
 
 /** The point at the head of the first card with tabs of core.grid that must have the card color (window points). */
@@ -44,20 +42,6 @@ export function ink(frame, rect, background) {
 }
 
 /**
- * Whether the window is visible in the frame: some pixel of the logo area is not fully transparent. A window that the host keeps transparent until its
- * first screen (window_reveal.m) is recorded with no opacity, and the screen shows what lies behind it.
- */
-export function visible(frame, logo) {
-  for (let y = logo.y; y < logo.y + logo.height; y++) {
-    for (let x = logo.x; x < logo.x + logo.width; x++) {
-      const at = position(frame, { x, y });
-      if (frame.data[at.y * frame.stride + at.x * 4 + 3] !== 0) return true;
-    }
-  }
-  return false;
-}
-
-/**
  * The incompletely drawn frames of captured. logo is the area of the logo text in its place, and card is one point that must have the card color (it is not
  * examined when null). The background of the logo and the card color are read from reference, which must show the logo.
  */
@@ -71,15 +55,21 @@ export function undrawn(captured, { logo, card, reference }) {
 }
 
 /**
- * The callback records of a recording (callback-status.jsonl) that come before the first frame that shows the window: idle and blank callbacks, and complete
- * frames in which the window is not visible. shows(name) says whether the written frame name shows the window. A recording that started after the window
- * went on the screen has none. Rejects a recording without a frame that shows the window.
+ * frame, a frame of a display recording whose display has its origin at display (screen points), read in the coordinates of the window at
+ * rect (screen points), so the window points of LOGO and cardPoint sample it.
  */
-export function beforeReveal(records, shows) {
-  const ordered = [...records].sort((a, b) => a.sequence - b.sequence);
-  const shown = (record) => record.status === COMPLETE && record.frame !== null && shows(record.frame);
-  const first = ordered.findIndex(shown);
-  assert.ok(first >= 0, `no recorded frame shows the window: ${JSON.stringify(ordered.map((record) => record.status))}`);
-  return ordered.slice(0, first).filter((record) => record.status === IDLE || record.status === BLANK ||
-    (record.status === COMPLETE && record.frame !== null));
+export function inWindow(frame, display, rect) {
+  return { ...frame, content: { x: frame.content.x + (rect.x - display.x) * frame.contentScale,
+    y: frame.content.y + (rect.y - display.y) * frame.contentScale, width: rect.width, height: rect.height } };
+}
+
+/**
+ * Whether a window of size (points) shows at its full size in view, a frame read in its coordinates: the middle of each edge, 2 points
+ * inside the window, has the pixel of the frame last. While the window opening animation draws the window smaller, those points show
+ * what lies around it.
+ */
+export function fullSize(view, last, size) {
+  const points = [{ x: size.width / 2, y: 2 }, { x: size.width / 2, y: size.height - 3 }, { x: 2, y: size.height / 2 },
+    { x: size.width - 3, y: size.height / 2 }];
+  return points.every((point) => near(sample(view, point), sample(last, point), 12));
 }

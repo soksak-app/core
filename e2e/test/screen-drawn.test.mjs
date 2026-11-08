@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { beforeReveal, cardPoint, LOGO, sample, undrawn, visible } from "../screen-drawn.mjs";
+import { cardPoint, fullSize, inWindow, LOGO, sample, undrawn } from "../screen-drawn.mjs";
 
 const BACKGROUND = [20, 20, 30];
 const CARD = [43, 46, 61];
@@ -53,23 +53,18 @@ test("undrawn rejects a reference without the logo at its place", () => {
   assert.throws(() => undrawn([frame()], { logo: LOGO, card: null, reference: frame({ logo: false }) }), /reference frame has no logo/);
 });
 
-test("a window is visible in a frame unless its logo area is fully transparent", () => {
-  assert.equal(visible(frame(), LOGO), true);
-  assert.equal(visible(frame({ alpha: 0 }), LOGO), false);
+test("a display frame read in the coordinates of a window samples the window points at the window origin", () => {
+  const card = { x: 50, y: 40 };
+  // The frame shows the window at its content origin 4 points from the edge of the buffer; the display starts 100 points left and 30 points above.
+  const view = inWindow({ ...frame({ card }), content: { x: 0, y: 0, width: 204, height: 64 } }, { x: -100, y: -30 }, { x: -96, y: -26, width: 200, height: 60 });
+  assert.deepEqual(sample(view, card), CARD);
+  assert.deepEqual(sample(view, { x: 40, y: 40 }), BACKGROUND);
 });
 
-test("the records before the reveal are the idle, blank and invisible frames before the first frame that shows the window", () => {
-  const shows = (name) => name === "shown";
-  const records = [
-    { sequence: 4, status: 0, frame: "shown" },
-    { sequence: 1, status: 4, frame: null },
-    { sequence: 2, status: 2, frame: null },
-    { sequence: 3, status: 0, frame: "transparent" },
-    { sequence: 5, status: 1, frame: null },
-  ];
-  assert.deepEqual(beforeReveal(records, shows).map((record) => record.sequence), [2, 3]);
-  // A recording that started after the window went on the screen has nothing before its first frame.
-  assert.deepEqual(beforeReveal([{ sequence: 1, status: 4, frame: null }, { sequence: 2, status: 0, frame: "shown" },
-    { sequence: 3, status: 1, frame: null }], shows), []);
-  assert.throws(() => beforeReveal([{ sequence: 1, status: 2, frame: null }], shows), /no recorded frame shows the window/);
+test("a window shows at its full size when the middle of each edge has the pixel of the last frame", () => {
+  const size = { width: 200, height: 60 };
+  const last = frame();
+  assert.equal(fullSize(frame(), last, size), true);
+  // A window that the opening animation draws smaller leaves the middle of its left edge to what lies around it.
+  assert.equal(fullSize(frame({ card: { x: 2, y: 30 }, cardColour: [200, 10, 10] }), last, size), false);
 });
