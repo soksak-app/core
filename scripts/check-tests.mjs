@@ -4833,25 +4833,6 @@ const FEATURE_LINKS = [
     ]
   },
   {
-    id: "F239-175",
-    implementation: [
-      {
-        file: "e2e/activation/ime-visual-capture.mjs",
-        symbol: "export function persistThenRequireVisualProof("
-      }
-    ],
-    tests: [
-      {
-        file: "e2e/test/activation/ime-visual-capture.test.mjs",
-        id: "visual proof preserves cadence measurements without a functional gap threshold"
-      }
-    ],
-    expected: "Complete IME visual proof preserves cadence measurements while missing proof remains a failure.",
-    levels: [
-      "unit"
-    ]
-  },
-  {
     id: "F239-176",
     implementation: [
       {
@@ -4968,19 +4949,6 @@ const FEATURE_LINKS = [
     levels: [
       "application"
     ]
-  },
-  {
-    id: "F239-98",
-    implementation: [
-      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export async function startImeCapture(" },
-      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function attachImeFrameIdentities(" },
-    ],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "IME capture does not start when renderer metadata is absent" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "display time differs" },
-    ],
-    expected: "IME capture requires renderer metadata and opt-in identity capture, and joins each exact callback display time to its issued source identity.",
-    levels: ["unit"],
   },
   {
     id: "F239-146",
@@ -10590,16 +10558,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-47-17",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an advanced cursor frame against prior rows when identical rows suppress screen status" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "rejects future rows but reuses identical rows across a frame generation change" },
-    ],
-    expected: "Visual status indexing associates a cursor frame with the valid preceding screen rows even when identical rows suppress a new screen event, and rejects future row state.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-47-18",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function selectCoherentTerminalObservation(" }],
     tests: [
@@ -10607,16 +10565,6 @@ const FEATURE_LINKS = [
       { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
     ],
     expected: "The selected terminal observation is the latest coherent reread, screen, region and accepted event slice; an incoherent earlier read is not returned.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-19",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function planVisualStage(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "stage planning accepts prior base rows with the exact current overlay frame" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "requires coherent base screen presentation without equating a later overlay frame" },
-    ],
-    expected: "Visual stages retain the exact cursor overlay frame and use prior base-screen rows without requiring those distinct frames to have equal sequence identities.",
     levels: ["unit"],
   },
   {
@@ -12725,34 +12673,6 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
-    id: "F239-98-1-1",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
-    expected: "Visual proof persistence requires complete cadence evidence and records measured outcomes before rejection.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-1",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
-    expected: "Complete visual results and cadence measurements are persisted before incomplete functional proof is rejected.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-2",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual indexing projects rows-only screen status without inventing a screen frame" }],
-    expected: "Visual input uses prior rows-only terminal screen status without inventing a screen frame identity.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-3",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function semanticRasterColorSpace(name)" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "source manifest loads only digest-verified frame-bound rasters" }],
-    expected: "The retained-source consumer maps the emitted CoreGraphics sRGB name to the semantic sRGB label and rejects unsupported names without changing raster bytes.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-93",
     implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function auditHostContract" }],
     tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the static audit reports each case of a host scope that no test declares" }],
@@ -12874,16 +12794,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
     ],
     expected: "Capture stop and layout failures preserve and report the folder returned by capture start.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-134",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexAcceptedFrameTrace(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "joins repeated screen messages to every exact accepted native frame tuple" },
-    ],
-    expected: "Visual screen records join only to accepted native frame tuples with exact trace and hash identity.",
     levels: ["unit"],
   },
   {
@@ -13018,13 +12928,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function placeSurfaces(" }],
     tests: [{ file: "packages/workbench/test/surface-view-path.test.mjs", id: "a later retained mount waits for the preceding placement release" }],
     expected: "A retained mount starts only after the preceding placement finishes its release and survives that release.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-158",
-    implementation: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", symbol: "@capture-fixture/sidecar" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" }],
-    expected: "Consumer capture fixtures retain wire behavior without naming a workspace sidecar implementation.",
     levels: ["unit"],
   },
   {
@@ -13455,13 +13358,6 @@ const FEATURE_LINKS = [
     ],
     expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
     levels: ["unit", "application"],
-  },
-  {
-    id: "F239-98-4",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],
-    expected: "Tag-scoped visual proof evaluates the exact issued target despite unrelated incomplete source state.",
-    levels: ["unit"],
   },
   {
     id: "F239-111",
@@ -14611,7 +14507,11 @@ const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "
 // F239-201, F239-229, F608 and F684 wrote the build target of the captured-text recognizer, the crop of a frame that it read and the
 // statement of its failure, which F696-4-4 removes with the recognizer: a window check reads the content of a view from the public
 // value that holds it.
-const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
+// F239-98, F239-98-1, F239-98-1-1, F239-98-2, F239-98-3, F239-98-4, F239-47-17, F239-47-19, F239-134, F239-158 and F239-175 wrote
+// the capture of a terminal IME composition, its stages and its visual proof, which F715-2 removes: the IME checks of core type
+// into the image region of the raster probe, and the glyph proof of a terminal belongs to the terminal plugin.
+const REMOVED_COMPLETIONS = new Set(["F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+  "F239-47-19", "F239-134", "F239-158", "F239-175", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
