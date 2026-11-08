@@ -1,0 +1,11 @@
+{
+  "name": "@sok-check/probe-input",
+  "version": "0.0.40",
+  "private": true,
+  "type": "module",
+  "description": "Core input fixture: a view text field and a document region text field that report the keys, preedit, commits, caret, copy and paste that reach them.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}
