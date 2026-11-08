@@ -210,15 +210,16 @@ test("the document status follows the messages of the region document and the vi
   const { view, fake, served } = await startTab();
   const status = served.get("layoutprobe.document");
   assert.deepEqual(status.read(), { url: documentAddress("tab-7"), reported: false, scheme: null, document: null,
-    visibility: null, stored: null, color: null });
+    visibility: null, changes: null, stored: null, color: null });
   // The view receives its own posts as document messages too, and they carry no from mark.
   fake.region.onMessage({ to: "layoutprobe.document", color: "red" });
   assert.equal(status.read().reported, false);
-  fake.region.onMessage({ from: "layoutprobe.document", scheme: "light", visibility: "visible", stored: "kept", color: "rgb(0, 128, 96)" });
+  fake.region.onMessage({ from: "layoutprobe.document", scheme: "light", visibility: "visible", changes: 0, stored: "kept", color: "rgb(0, 128, 96)" });
   assert.deepEqual(status.read(), { url: documentAddress("tab-7"), reported: true, scheme: "light", document: "visible",
-    visibility: "shown", stored: "kept", color: "rgb(0, 128, 96)" });
-  fake.region.onMessage({ from: "layoutprobe.document", scheme: "dark", visibility: "hidden", stored: "kept", color: "rgb(0, 128, 96)" });
+    visibility: "shown", changes: 0, stored: "kept", color: "rgb(0, 128, 96)" });
+  fake.region.onMessage({ from: "layoutprobe.document", scheme: "dark", visibility: "hidden", changes: 1, stored: "kept", color: "rgb(0, 128, 96)" });
   assert.equal(status.read().visibility, "occluded");
+  assert.equal(status.read().changes, 1);
   view.document.visibilityState = "hidden";
   view.document.dispatch("visibilitychange");
   assert.equal(status.read().visibility, "hidden");
@@ -296,7 +297,8 @@ test("the region document reports its scheme, visibility, stored value and color
     postMessage: (message, origin) => { assert.equal(origin, "soksak://layoutprobe"); posted.push(message); },
   });
   startDocumentProbe(window);
-  const report = (change) => ({ from: "layoutprobe.document", scheme: "dark", visibility: "visible", stored: "before", color: "rgb(0, 128, 96)", ...change });
+  const report = (change) => ({ from: "layoutprobe.document", scheme: "dark", visibility: "visible", changes: 0, stored: "before",
+    color: "rgb(0, 128, 96)", ...change });
   assert.deepEqual(posted, [report()]);
   dark.matches = false;
   dark.dispatch("change");
@@ -307,10 +309,14 @@ test("the region document reports its scheme, visibility, stored value and color
   window.dispatch("message", { data: { to: "layoutprobe.document", store: "after" } });
   assert.deepEqual(posted.slice(1), [
     report({ scheme: "light" }),
-    report({ scheme: "light", visibility: "hidden" }),
-    report({ scheme: "light", visibility: "hidden", color: "rgb(1, 2, 3)" }),
-    report({ scheme: "light", visibility: "hidden", color: "rgb(1, 2, 3)", stored: "after" }),
+    report({ scheme: "light", visibility: "hidden", changes: 1 }),
+    report({ scheme: "light", visibility: "hidden", changes: 1, color: "rgb(1, 2, 3)" }),
+    report({ scheme: "light", visibility: "hidden", changes: 1, color: "rgb(1, 2, 3)", stored: "after" }),
   ]);
+  // A scheme change is no visibility change, and each visibilitychange counts once.
+  document.visibilityState = "visible";
+  document.dispatch("visibilitychange");
+  assert.deepEqual(posted.at(-1), report({ scheme: "light", changes: 2, color: "rgb(1, 2, 3)", stored: "after" }));
   assert.equal(storage.get("layoutprobe.site.tab-7"), "after");
   assert.equal(storageKey({ href: "soksak://layoutprobe/ui/document.html" }), "layoutprobe.site.");
 });

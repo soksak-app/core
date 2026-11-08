@@ -101,7 +101,7 @@ export async function startLayoutProbe({ bridge, expose, view }) {
   const size = createState(readSurface(view, element));
   const region = createState({
     url: address, reported: false, scheme: null, document: null,
-    visibility: regionVisibility(view.document.visibilityState, null), stored: null, color: null,
+    visibility: regionVisibility(view.document.visibilityState, null), changes: null, stored: null, color: null,
   });
   const resized = () => size.set(readSurface(view, element));
   view.addEventListener("resize", resized);
@@ -126,7 +126,7 @@ export async function startLayoutProbe({ bridge, expose, view }) {
     region.set({
       reported: true, scheme: message.scheme, document: message.visibility,
       visibility: regionVisibility(view.document.visibilityState, message.visibility),
-      stored: message.stored, color: message.color,
+      changes: message.changes, stored: message.stored, color: message.color,
     });
   });
 
