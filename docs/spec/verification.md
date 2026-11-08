@@ -13,7 +13,7 @@ The view-drag benchmark separates structurally valid capture collection from thr
 
 ## Coverage and evidence
 
-View display acceptance enumerates installed enabled view plugins and identifies the actual opened tab. Each plugin requires an explicit content case that checks its declared readiness and returns a content verifier. A missing case fails with the plugin and tab identifiers. Colour variation alone does not prove plugin content; rejecting a missing case removes a false pass without lowering the acceptance criterion.
+View display acceptance opens the view plugin of each content case, which must be installed and enabled, and identifies the actual opened tab. Each opened plugin requires an explicit content case that checks its declared readiness and returns a content verifier. A missing case fails with the plugin and tab identifiers. Colour variation alone does not prove plugin content; rejecting a missing case removes a false pass without lowering the acceptance criterion.
 
 The content verifier of a view reads its fixed expected content after the recording stops from a content read that the view exposes in its own namespace and that answers the text the view shows; the check names the command and the document region, and the value is read while that region is visible. The core check reads `probeplain.content.read` of the plain view probe fixture, which answers the line `Plain view probe content` of its document region `page`. The complete recording is decoded and its finalized frame count is checked. Readiness without a content verifier is rejected.
 

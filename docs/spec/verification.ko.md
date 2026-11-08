@@ -13,7 +13,7 @@ View-drag benchmark는 구조가 유효한 캡처 수집과 기준 판정을 분
 
 ## 범위와 증거
 
-View display acceptance는 설치되고 활성화된 view plugin을 열거하고 실제로 연 tab을 식별한다. 각 plugin은 선언된 readiness를 검사하고 content verifier를 돌려주는 명시적 content case를 요구한다. Case가 없으면 plugin과 tab 식별자를 밝히며 실패한다. Colour variation만으로 plugin content를 입증할 수 없다. Missing case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
+View display acceptance는 content case마다 설치되고 활성화되어 있어야 하는 그 view plugin을 열고 실제로 연 tab을 식별한다. 연 각 plugin은 선언된 readiness를 검사하고 content verifier를 돌려주는 명시적 content case를 요구한다. Case가 없으면 plugin과 tab 식별자를 밝히며 실패한다. Colour variation만으로 plugin content를 입증할 수 없다. Missing case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
 
 view의 content verifier는 녹화가 끝난 뒤, view가 자기 namespace에 노출하고 view가 보이는 text를 답하는 content read에서 고정된 예상 콘텐츠를 읽는다. 검사가 command와 document region의 이름을 정하며, 그 값은 그 region이 보이는 동안 읽는다. core 검사는 plain view probe fixture의 `probeplain.content.read`를 읽으며, 그것은 document region `page`의 줄 `Plain view probe content`를 답한다. 전체 녹화를 decode하고 확정 frame count를 확인한다. Content verifier 없이 readiness만 제공하는 case는 거부한다.
 

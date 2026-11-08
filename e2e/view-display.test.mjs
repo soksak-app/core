@@ -1,5 +1,5 @@
-// Checks installed view display using explicit per-plugin content cases and declared surface/document statuses.
-// Missing content cases fail explicitly; sampled colour variation alone does not establish plugin content.
+// Checks the core view display path on the plain view probe fixture, the one vehicle of the content cases (e2e/view-content.mjs),
+// using its declared content case and surface/document statuses. Sampled colour variation alone does not establish view content.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -27,7 +27,7 @@ async function untilViewReady(s, offsets, wait) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: each installed view plugin requires an explicit content case in a card`, { timeout: 240000 }, async (t) => {
+  test(`${app.name}: the plain view probe shows its content case in a card`, { timeout: 240000 }, async (t) => {
     const s = await open(t, app);
     // The view calls of the page are records at the debug level of the class call; the check declares that policy, and the
     // preparation restores the setting when the check ends (keepCommonSettings).

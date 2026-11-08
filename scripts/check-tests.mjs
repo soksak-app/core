@@ -5216,7 +5216,7 @@ const FEATURE_LINKS = [
       { file: "e2e/test/view-display.test.mjs", id: "view display runs the content verifier of the case after the recording stops" },
       { file: "e2e/test/view-content.test.mjs", id: "view content reads the text of the content read that the check names in the visible document region" },
       { file: "e2e/test/view-content.test.mjs", id: "the content case of the plain view probe waits for its content read and proves the text of its region document" },
-      { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
+      { file: "e2e/view-display.test.mjs", id: "the plain view probe shows its content case in a card" },
     ],
     expected: "Every view of a content case reaches declared readiness and holds its expected content in the content read that it exposes in its own namespace, with exact finalized frame counts and empty binder audits.",
     levels: ["unit", "application"],
@@ -5230,7 +5230,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportWritesAnErrorLineForALostConnection" },
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
-      { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
+      { file: "e2e/view-display.test.mjs", id: "the plain view probe shows its content case in a card" },
     ],
     expected: "The five completed child contracts preserve null replies and sidecar-loss facts and close the intended surface and real project window without closed-window errors.",
     levels: ["unit", "application"],
@@ -11734,7 +11734,7 @@ const FEATURE_LINKS = [
   {
     id: "F409",
     implementation: [{ file: "e2e/view-content.mjs", symbol: "export async function viewContentCases(" }],
-    tests: [{ file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" }],
+    tests: [{ file: "e2e/view-display.test.mjs", id: "the plain view probe shows its content case in a card" }],
     expected: "The window checks read the entries that they name, wait for the status that they judge, and cover the installed plugins.",
     levels: ["application"],
   },

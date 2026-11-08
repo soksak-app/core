@@ -110,7 +110,7 @@ Focused `e2e/view-restart.test.mjs` case는 노출된 browser view process를 �
 
 View 표시 검사는 `core.plugins`에서 열린 tab이 없는 plugin도 포함하여 설치되고 활성화된 view plugin을 열거한다. `core.card.add-tab`이 반환한 tab으로 surface를 식별하고 해당 document를 검사하며 capture content offset과 scale을 적용해 그 surface의 applied rectangle만 측정한다. 영역 안의 색 차이는 빈 영역 검사이며 해당 plugin의 첫 content frame을 증명하지 않는다.
 
-View display acceptance는 설치된 각 view plugin의 명시적 content case를 요구한다. Case가 없으면 plugin과 실제로 연 tab을 밝히며 실패한다. Applied surface 영역의 colour variation은 영역 관찰만 제공하고 first content를 입증하지 않는다. 따라서 missing content case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
+View display acceptance는 content case마다 그 view plugin을 열고(core에서는 plain view probe) 그 명시적 content case를 요구한다. Case가 없으면 plugin과 실제로 연 tab을 밝히며 실패한다. Applied surface 영역의 colour variation은 영역 관찰만 제공하고 first content를 입증하지 않는다. 따라서 missing content case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
 
 공통 창 검사 준비는 애플리케이션 실행 파일만 선언한다. 명시한 SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2, SOKSAK_BINARY_MYGO 경로를 유지하며, 세 경로가 모두 있으면 Cargo 탐색이나 네이티브 플랫폼 도구가 필요 없다. 기본 탐색은 현재 Cargo metadata로 macOS 디버그 번들을 찾는다. 지원하지 않는 기본 탐색은 해당 연산에서 실패하며 실행 파일의 명시적 선언을 요구한다. 준비 단계는 아무것도 빌드하지 않는다. 이 준비 단계 수정은 Linux·Windows 앱 동작의 검증 완료가 아니다.
 
