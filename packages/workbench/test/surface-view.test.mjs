@@ -1926,3 +1926,58 @@ test("a validated native view call uses only the private sidecar bridge with its
     assert.deepEqual(generic,[],"native view operations must not enter generic/window sidecarSend");
   } finally {await disposeSurface(surfaceId);dom.window.close();}
 });
+
+// A place that leaves an unmounted view out of the host request removes that surface in the host, its declaration included
+// (docs/spec/native-surfaces.md#view-surfaces). The view declares after that place has its reply, so the removal cannot take a
+// declaration that the view made while the place was in flight.
+test("a view declares its composition only after a place that left it out has its reply", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const calls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
+        calls.push({ name, payload });
+        return null;
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, holdCompositionDeclarations } =
+    await import("../surface-modules.js?view-left-out-place");
+  const pluginId = "fixture-view-left-out";
+  const surfaceId = "fixture-view-left-out-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" } };
+  let replyPlace;
+  const place = new Promise((resolve, reject) => { replyPlace = reject; });
+  let mounting;
+  try {
+    holdCompositionDeclarations([surfaceId], place);
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
+    mounting = mountSurface(document.querySelector("#slot"), surface);
+    for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls.some(({ name }) => name === "compositionDeclare"), false,
+      "the view declared its composition while a place that left it out had no reply");
+    // A refused place removes nothing in the host, so its end also releases the declaration.
+    replyPlace(new Error("refused place"));
+    await mounting;
+    await waitSurfaceCompositionDeclared(surfaceId);
+    assert.equal(calls.filter(({ name }) => name === "compositionDeclare").length, 1);
+  } finally {
+    replyPlace(new Error("end"));
+    if (mounting) await mounting.catch(() => {});
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
