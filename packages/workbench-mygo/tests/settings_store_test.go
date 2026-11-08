@@ -429,3 +429,35 @@ func TestAWindowTakesALinkThatTheSettingsKeep(t *testing.T) {
 		t.Fatalf("the left sidebar shows %q", name.Label)
 	}
 }
+
+// core.settings declares overridden as an array in exposure.json, including
+// an empty array before overrides exist and after the last reset.
+func TestCoreSettingsOverriddenIsAnArrayAcrossEmptyAndReset(t *testing.T) {
+	f := viewShell(t)
+	read := func() []any {
+		t.Helper()
+		observed := status[map[string]any](t, f, "core.settings")
+		keys, ok := observed["overridden"].([]any)
+		if !ok {
+			t.Fatalf("public core.settings.overridden must be an array, got %#v in %+v", observed["overridden"], observed)
+		}
+		return keys
+	}
+	initial := status[struct {
+		Overridden []string `json:"overridden"`
+	}](t, f, "core.settings")
+	for _, key := range initial.Overridden {
+		f.run("core.settings.reset", map[string]string{"key": key})
+	}
+	if keys := read(); len(keys) != 0 {
+		t.Fatalf("reset settings retained overrides: %v", keys)
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"gap": 10.0}, "scope": "project"})
+	if keys := read(); !reflect.DeepEqual(keys, []any{"gap"}) {
+		t.Fatalf("the actual project override is %v", keys)
+	}
+	f.run("core.settings.reset", map[string]string{"key": "gap"})
+	if keys := read(); len(keys) != 0 {
+		t.Fatalf("last reset retained overrides: %v", keys)
+	}
+}

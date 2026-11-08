@@ -217,11 +217,13 @@ type debugStateShown struct {
 // debugViewState is the debug view of a shell. Tasks are the reads and changes of the timeline, one after another, so a notice that
 // arrives during a read waits and a row is read once.
 type debugViewState struct {
-	open      bool
-	recorded  *string
-	captures  []string
-	entries   []DebugEntry
-	viewing   *DebugShown
+	open     bool
+	recorded *string
+	captures []string
+	entries  []DebugEntry
+	viewing  *DebugShown
+	// tail owns one reveal request for the exact newly shown text content.
+	tail      *DebugShown
 	timeline  *debugTimelineState
 	state     *debugStateShown
 	operation *debugOperation
@@ -466,6 +468,7 @@ func (s *Shell) closeDebug() {
 	}
 	s.errors.Hide(debugErrorPlace)
 	d.open, d.viewing, d.timeline, d.state = false, nil, nil, nil
+	d.tail = nil
 	s.options.Invalidate()
 }
 
@@ -526,7 +529,14 @@ func (s *Shell) viewDebugFile(path string, answer func(any, error)) {
 		if err != nil {
 			d.fail("view", err)
 		} else {
+			// Re-reading identical content preserves a user's position. A new
+			// text, or an unconsumed reveal of that text, owns one tail request.
+			tail := shown.Kind == "text" && (d.tail != nil || d.viewing == nil || d.viewing.Path != shown.Path || d.viewing.Kind != shown.Kind || d.viewing.Text != shown.Text)
 			d.viewing = shown
+			d.tail = nil
+			if tail {
+				d.tail = shown
+			}
 		}
 		s.options.Invalidate()
 		answer(nil, err)
@@ -539,6 +549,7 @@ func (s *Shell) listDebugFiles() error {
 		return errDebugClosed
 	}
 	d.viewing, d.timeline, d.state = nil, nil, nil
+	d.tail = nil
 	s.options.Invalidate()
 	return nil
 }
@@ -571,6 +582,7 @@ func (s *Shell) showDebugTimeline(answer func(any, error)) {
 			if err == nil {
 				d.timeline = d.fresh(filter, rows, page, map[string]debugRow{}, true, map[string]string{})
 				d.viewing, d.state = nil, nil
+				d.tail = nil
 			}
 			end(err)
 		})
@@ -863,6 +875,7 @@ func (s *Shell) showDebugState(path string, answer func(any, error)) {
 		} else {
 			d.state = &debugStateShown{path: path, state: state, lines: DebugStateLines(state)}
 			d.viewing, d.timeline = nil, nil
+			d.tail = nil
 		}
 		s.options.Invalidate()
 		answer(nil, err)
@@ -1150,7 +1163,7 @@ func (s *Shell) debugScreen() DebugView {
 	d := &s.debugView
 	width := s.options.Declared.ChromeNumber("dbg-card-w", "px")
 	view := DebugView{CardWidth: float32(width), CardMaxHeight: float32(s.settingsWindow.height * settingsCardMaxShare), Entries: d.entries,
-		Viewing: d.viewing, Failure: d.failure, Scroll: &d.scroll, Style: s.debugStyle()}
+		Viewing: d.viewing, TextTail: d.viewing != nil && d.tail == d.viewing, Failure: d.failure, Scroll: &d.scroll, Style: s.debugStyle()}
 	if operation := d.operation; operation != nil {
 		view.Operation = &DebugOperation{Action: operation.Action, State: operation.State, Writing: operation.Total != nil}
 		if operation.Path != nil {
@@ -1183,9 +1196,25 @@ func (s *Shell) debugScreen() DebugView {
 
 // drawDebug draws the view over the window.
 func (s *Shell) drawDebug(c *ui.Context) {
-	if s.debugView.open {
-		ui.Overlay(c, func() { DrawDebugView(c, s.binder, s.debugScreen(), s.errors) })
+	d := &s.debugView
+	if !d.open {
+		return
 	}
+	ui.Overlay(c, func() {
+		target := d.tail
+		DrawDebugView(c, s.binder, s.debugScreen(), s.errors)
+		if target != nil && d.viewing == target {
+			d.tail = nil
+			// Post is a later UI step, after this frame resolves ScrollIntoView
+			// and TrackScroll writes its actual clamped position. An old content
+			// or closed view cannot publish on behalf of its successor.
+			s.options.Post(func() {
+				if d.open && d.viewing == target {
+					s.pushStatuses()
+				}
+			})
+		}
+	})
 }
 
 type debugPath struct {

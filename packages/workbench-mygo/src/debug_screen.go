@@ -92,10 +92,12 @@ type DebugView struct {
 	CardMaxHeight float32
 	Entries       []DebugEntry
 	Viewing       *DebugShown
-	Timeline      *DebugTimeline
-	State         *DebugStateView
-	Operation     *DebugOperation
-	Failure       *string
+	// TextTail asks the actual text element to reveal its end in this frame only.
+	TextTail  bool
+	Timeline  *DebugTimeline
+	State     *DebugStateView
+	Operation *DebugOperation
+	Failure   *string
 	// Scroll receives the scroll position of the shown content.
 	Scroll *ui.ScrollState
 	Style  DebugStyle
@@ -205,7 +207,7 @@ func drawDebugPane(c *ui.Context, binder *Binder, view DebugView, shown *ShownEr
 	}
 	switch {
 	case view.Viewing != nil:
-		drawDebugFile(c, binder, st, *view.Viewing)
+		drawDebugFile(c, binder, st, *view.Viewing, view.TextTail)
 	case view.Timeline != nil:
 		drawDebugTimeline(c, binder, st, *view.Timeline)
 	case view.State != nil:
@@ -252,7 +254,7 @@ func drawDebugList(c *ui.Context, binder *Binder, st DebugStyle, entries []Debug
 	}
 }
 
-func drawDebugFile(c *ui.Context, binder *Binder, st DebugStyle, file DebugShown) {
+func drawDebugFile(c *ui.Context, binder *Binder, st DebugStyle, file DebugShown, textTail bool) {
 	st.bar(c, func() {
 		st.button(c, binder, "core.debug.list", "core.debug.list", "", "목록", nil)
 		st.path(c, file.Path+" · "+sizeText(file.Size))
@@ -264,7 +266,12 @@ func drawDebugFile(c *ui.Context, binder *Binder, st DebugStyle, file DebugShown
 		ui.Image(binder.Name(c, "core.debug.image", ""), file.Image).Border(st.Border, st.Edge).Radius(st.ButtonRadius).Role(ui.RoleImage).Label(file.Path)
 		return
 	}
-	st.mono(ui.Text(binder.Name(c, "core.debug.text", ""), file.Text).Label(file.Text)).TextColor(st.Fg)
+	text := st.mono(ui.Text(binder.Name(c, "core.debug.text", ""), file.Text).Label(file.Text)).TextColor(st.Fg)
+	if textTail {
+		// The framework resolves the semantic end against this frame's actual
+		// layout. No estimated height or synthetic scroll offset is published.
+		text.ScrollIntoView(ui.ScrollIntoViewOptions{Block: ui.ScrollEnd})
+	}
 }
 
 func drawDebugLine(c *ui.Context, st DebugStyle, line string) {

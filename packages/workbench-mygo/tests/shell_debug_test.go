@@ -623,3 +623,46 @@ func TestTheFiltersOfTheTimelineFlowAsOnThePage(t *testing.T) {
 		t.Fatalf("the text ends at %v and the line under it at %v", text.X+text.W, prefix.X+prefix.W)
 	}
 }
+
+func TestDebugTextOpensAtItsRenderedTailAndDoesNotPinLaterScroll(t *testing.T) {
+	f, stored := debugShell(t)
+	text := strings.Repeat("long diagnostic line with actual glyphs\n", 200) + "FINAL DIAGNOSTIC LINE"
+	stored.debug.files["logs/long-tail.log"] = text
+	f.do("core.debug.view", map[string]string{"path": "logs/long-tail.log"})
+	readScroll := func() float32 {
+		t.Helper()
+		var observed struct {
+			Scroll  float32 `json:"scroll"`
+			Viewing *struct {
+				Path string `json:"path"`
+			} `json:"viewing"`
+		}
+		if err := json.Unmarshal([]byte(f.status("core.debug")), &observed); err != nil {
+			t.Fatal(err)
+		}
+		if observed.Viewing == nil || observed.Viewing.Path != "logs/long-tail.log" {
+			t.Fatalf("actual text view not shown: %+v", observed)
+		}
+		return observed.Scroll
+	}
+	tail := readScroll()
+	if tail <= 0 {
+		t.Fatalf("a long debug text must open at its rendered tail, public scroll=%v", tail)
+	}
+	card := f.box("core.debug.card", "")
+	shown := f.box("core.debug.text", "")
+	if shown.Y+shown.H > card.Y+card.H || shown.Y+shown.H <= card.Y {
+		t.Fatalf("the actual text tail is not within the rendered debug card: text=%+v card=%+v", shown, card)
+	}
+	f.tester.Scroll(card.X+card.W/2, card.Y+card.H/2, 0, -80)
+	f.settle()
+	moved := readScroll()
+	if moved < 0 || moved >= tail {
+		t.Fatalf("user scroll must move above the tail: before=%v after=%v", tail, moved)
+	}
+	f.tester.Frame()
+	f.settle()
+	if got := readScroll(); got != moved {
+		t.Fatalf("a later frame pinned text back to its tail: user=%v next=%v", moved, got)
+	}
+}

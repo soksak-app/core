@@ -1698,6 +1698,30 @@ pub fn native_failure(window: &str, code: i64) -> impl Fn(NativeFailure) -> Fail
     }
 }
 
+// Called only by the endpoint worker's native menu exposure, never on the UI
+// thread. The ports are the platform's existing UI queue and menu operation.
+// Native actions can synchronously reenter application lifecycle callbacks.
+// The platform queue runs after the framework callback has released its locks;
+// posting a framework task here would hold those locks through sendAction.
+fn menu_select_from_worker(
+    menu: String,
+    title: String,
+    enqueue_ui: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), String>,
+    select: impl FnOnce(String, String) -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    let (tx, rx) = mpsc::channel();
+    enqueue_ui(Box::new(move || {
+        if let Err(mpsc::SendError(Err(error))) = tx.send(select(menu, title)) {
+            log_error("native menu action", error);
+        }
+    }))?;
+    rx.recv().map_err(|error| error.to_string())?
+}
+
+#[cfg(test)]
+#[path = "exposure_menu_executor_test.rs"]
+mod menu_executor_tests;
+
 /// Runs work on the main thread and waits for the result.
 pub fn on_main<T: Send + 'static>(
     window: &Window,
@@ -1987,17 +2011,25 @@ fn window_frame_counters() -> serde_json::Map<String, Value> {
 
 // Native evidence is mandatory; retain the object and decimal string exactly.
 fn window_activation_observation(facts: &Value) -> Result<Value, String> {
-    let observation = facts.get("activationObservation")
+    let observation = facts
+        .get("activationObservation")
         .and_then(Value::as_object)
         .ok_or("window facts missing or invalid activationObservation")?;
-    observation.get("registered").and_then(Value::as_bool)
+    observation
+        .get("registered")
+        .and_then(Value::as_bool)
         .ok_or("window facts activationObservation.registered must be a boolean")?;
-    let count = observation.get("count").and_then(Value::as_str)
-        .ok_or("window facts activationObservation.count must be a canonical uint64 decimal string")?;
-    let number = count.parse::<u64>()
-        .map_err(|_| "window facts activationObservation.count must be a canonical uint64 decimal string")?;
+    let count = observation.get("count").and_then(Value::as_str).ok_or(
+        "window facts activationObservation.count must be a canonical uint64 decimal string",
+    )?;
+    let number = count.parse::<u64>().map_err(
+        |_| "window facts activationObservation.count must be a canonical uint64 decimal string",
+    )?;
     if number.to_string() != count {
-        return Err("window facts activationObservation.count must be a canonical uint64 decimal string".into());
+        return Err(
+            "window facts activationObservation.count must be a canonical uint64 decimal string"
+                .into(),
+        );
     }
     Ok(Value::Object(observation.clone()))
 }
@@ -2558,7 +2590,13 @@ impl Host {
                 };
                 let (menu, title) = (text("menu")?, text("title")?);
                 let platform = platform::current().map_err(internal)?;
-                on_main(window, move || platform.menu_select(&menu, &title)).map_err(internal)?;
+                menu_select_from_worker(
+                    menu,
+                    title,
+                    move |task| platform.enqueue_ui(task),
+                    move |menu, title| platform.menu_select(&menu, &title),
+                )
+                .map_err(internal)?;
                 Ok(Value::Null)
             })(),
             "host.dock.select" => (|| {
@@ -2826,7 +2864,10 @@ mod activation_observation_tests {
 
     #[test]
     fn host_window_preserves_exact_activation_observation() {
-        for observation in [json!({"registered":true,"count":"0"}), json!({"registered":false,"count":"18446744073709551615"})] {
+        for observation in [
+            json!({"registered":true,"count":"0"}),
+            json!({"registered":false,"count":"18446744073709551615"}),
+        ] {
             let facts = json!({"activationObservation":observation});
             assert_eq!(window_activation_observation(&facts).unwrap(), observation);
         }
@@ -2834,14 +2875,31 @@ mod activation_observation_tests {
 
     #[test]
     fn host_window_refuses_missing_or_invalid_activation_observation() {
-        let invalid = [Value::Null, json!({}), json!({"registered":true}), json!({"count":"1"}),
-            json!({"registered":"true","count":"1"}), json!({"registered":false,"count":1}),
-            json!({"registered":false,"count":""}), json!({"registered":false,"count":"01"}),
-            json!({"registered":false,"count":"-1"}), json!({"registered":false,"count":"+1"}),
-            json!({"registered":false,"count":"1.0"}), json!({"registered":false,"count":"18446744073709551616"})];
-        assert!(window_activation_observation(&json!({})).unwrap_err().contains("activationObservation"));
+        let invalid = [
+            Value::Null,
+            json!({}),
+            json!({"registered":true}),
+            json!({"count":"1"}),
+            json!({"registered":"true","count":"1"}),
+            json!({"registered":false,"count":1}),
+            json!({"registered":false,"count":""}),
+            json!({"registered":false,"count":"01"}),
+            json!({"registered":false,"count":"-1"}),
+            json!({"registered":false,"count":"+1"}),
+            json!({"registered":false,"count":"1.0"}),
+            json!({"registered":false,"count":"18446744073709551616"}),
+        ];
+        assert!(
+            window_activation_observation(&json!({}))
+                .unwrap_err()
+                .contains("activationObservation")
+        );
         for observation in invalid {
-            assert!(window_activation_observation(&json!({"activationObservation":observation})).unwrap_err().contains("activationObservation"));
+            assert!(
+                window_activation_observation(&json!({"activationObservation":observation}))
+                    .unwrap_err()
+                    .contains("activationObservation")
+            );
         }
     }
 }

@@ -3,7 +3,6 @@
 // The controls that a person presses run the same commands (docs/spec/exposure.md), so when the result of a command
 // appears in status, the result of the control is the same.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -175,14 +174,29 @@ for (const app of Object.values(APPS)) {
       if (!captureActive) return;
       const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
       captureActive = false;
-      rmSync(stopped.frames, { recursive: true, force: true });
+      s.trackRecording(stopped.frames);
       if (stopped.limited) throw new Error("the aborted chrome width capture reached its frame limit");
     });
 
+    const chromeViewport = async (geometry) => {
+      const workbench = await s.get("core.window.workbench");
+      assert.deepEqual([workbench.width, workbench.height, workbench.scale],
+        [geometry.content.width, geometry.content.height, geometry.scale],
+        "the workbench must fill the native content at its backing scale");
+      const viewport = { x: 0, y: 0, width: workbench.width, height: workbench.height };
+      const main = geometry.webviews.find((webview) => webview.main);
+      if (app.name === "mygo") {
+        assert.equal(main, undefined, "the native workbench has no main WebView");
+      } else {
+        assert.ok(main, "the page workbench must have a main WebView");
+        assert.deepEqual(main.frame, viewport, "the main WebView must fill the workbench viewport");
+      }
+      return viewport;
+    };
+
     const clickChrome = async (name) => {
       const geometry = await s.get("host.window");
-      const main = geometry.webviews.find((webview) => webview.main);
-      assert.ok(main, `host.window did not report the main WebView before ${name}: ${JSON.stringify(geometry.webviews)}`);
+      const viewport = await chromeViewport(geometry);
       const rect = await s.rect(name);
       assert.ok(rect.width > 0 && rect.height > 0, `${name} has no visible hit rectangle: ${JSON.stringify(rect)}`);
       const point = {
@@ -193,12 +207,12 @@ for (const app of Object.values(APPS)) {
       // Sends the native click even when hit testing reports another owner. For a useful Red,
       // the hit result and the effect of the command are recorded separately.
       await s.click(point.x, point.y);
-      const inMainWebview = point.x >= main.frame.x && point.x < main.frame.x + main.frame.width &&
-        point.y >= main.frame.y && point.y < main.frame.y + main.frame.height;
+      const inWorkbench = point.x >= viewport.x && point.x < viewport.x + viewport.width &&
+        point.y >= viewport.y && point.y < viewport.y + viewport.height;
       const hitFrame = owner.kind === "native" ? owner.view?.frame : null;
       const hitViewContains = owner.kind !== "native" || Boolean(hitFrame && point.x >= hitFrame.x &&
         point.x < hitFrame.x + hitFrame.width && point.y >= hitFrame.y && point.y < hitFrame.y + hitFrame.height);
-      return { name, point, owner, mainFrame: main.frame, inMainWebview, hitViewContains,
+      return { name, point, owner, workbenchFrame: viewport, inWorkbench, hitViewContains,
         active: geometry.active, key: geometry.key };
     };
 
@@ -265,10 +279,9 @@ for (const app of Object.values(APPS)) {
       const geometry = await s.get("host.window");
       assert.ok(geometry.frame.x >= screen.visible.x && geometry.frame.x + geometry.frame.width <= screen.visible.x + screen.visible.width,
         `the window frame is outside the visible screen at ${width}: ${JSON.stringify(geometry.frame)}, screen ${JSON.stringify(screen.visible)}`);
-      const main = geometry.webviews.find((webview) => webview.main);
-      assert.ok(main, `host.window did not report a main WebView at ${width}: ${JSON.stringify(geometry.webviews)}`);
+      const viewport = await chromeViewport(geometry);
       t.diagnostic(`measured chrome viewport ${JSON.stringify({ requested: width, content: resized.content.width,
-        scale: resized.scale, active: geometry.active, key: geometry.key, mainWebview: main.frame,
+        scale: resized.scale, active: geometry.active, key: geometry.key, workbench: viewport,
         surfaces: geometry.surfaces.filter((surface) => surface.visible) })}`);
 
       const outcomes = [];
@@ -339,9 +352,9 @@ for (const app of Object.values(APPS)) {
         await s.until("core.settings-modal", (modal) => !modal.open, `settings did not close at ${width}`);
       }
 
-      const failed = outcomes.filter(({ owner, effect, inMainWebview, hitViewContains }) =>
-        owner.kind !== "workbench" || !effect || !inMainWebview || !hitViewContains);
-      t.diagnostic(`chrome click outcomes ${JSON.stringify({ width, outcomes, mainWebview: main.frame })}`);
+      const failed = outcomes.filter(({ owner, effect, inWorkbench, hitViewContains }) =>
+        owner.kind !== "workbench" || !effect || !inWorkbench || !hitViewContains);
+      t.diagnostic(`chrome click outcomes ${JSON.stringify({ width, outcomes, workbench: viewport })}`);
       failures.push(...failed.map((outcome) => ({ width, ...outcome })));
       const finalGeometry = await s.get("host.window");
       measurements.push({ width, active: geometry.active, key: geometry.key,

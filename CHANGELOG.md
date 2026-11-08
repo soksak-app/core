@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F502-4: Keep empty setting overrides as arrays and open debug text at its rendered tail once without pinning later scrolling. Move native menu actions to the existing queue after the framework callback ends. The 18 debug/settings and three menu executor owners pass; rebuilt UI and normal Tauri quit acceptance remain open.
+
 - F502-4: Bind private view-sidecar requests to their original source generation and committed project, cancel queued work on retirement, and synchronize final admission with retirement. Reject conflicting project roots after service startup and create session records only after successful enqueue. Remove obsolete capture-current paths. Per-call background ownership also prevents mount-then-retire resurrection without invalidating unrelated surfaces or retaining history. The 13 Rust owners, 30 adjacent Go host owners and 164 native workbench owners pass; rebuilt application parity remains open.
 
 - F502-12: Add parent-owned ordinary focused runs against an explicit three-host artifact context and a fresh configuration root. Verify the complete installed plugin cohort without weakening candidate provenance or lifecycle audits. All 40 runner owners pass; the rebuilt application lifecycle run remains open.

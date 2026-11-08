@@ -21,9 +21,13 @@ pub const DISPLAY_NAME: &str = "Fixture";
 #[derive(Default)]
 pub struct Fixture {
     queued: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    callback_guard: Mutex<Option<Arc<Mutex<()>>>>,
 }
 
 impl Fixture {
+    pub fn hold_callback(&self, guard: Arc<Mutex<()>>) {
+        *self.callback_guard.lock().unwrap() = Some(guard);
+    }
     /// Runs task before the next post.
     pub fn queue(&self, task: impl FnOnce() + Send + 'static) {
         *self.queued.lock().unwrap_or_else(PoisonError::into_inner) = Some(Box::new(task));
@@ -40,6 +44,8 @@ impl Framework for Fixture {
     }
 
     fn post(&self, task: Box<dyn FnOnce() + Send>) -> Result<()> {
+        let callback = self.callback_guard.lock().unwrap().clone();
+        let _held = callback.as_ref().map(|guard| guard.lock().unwrap());
         let queued = self
             .queued
             .lock()

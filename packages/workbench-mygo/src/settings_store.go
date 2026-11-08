@@ -361,7 +361,7 @@ func (s *SettingsStore) Status() SettingsStatus {
 	if s.project != "" {
 		project = &s.project
 	}
-	overridden := slices.Sorted(maps.Keys(s.overrides))
+	overridden := nonNil(slices.Sorted(maps.Keys(s.overrides)))
 	values := s.effective(s.common, s.overrides)
 	common := make(map[string]any, len(values))
 	for key := range values {
