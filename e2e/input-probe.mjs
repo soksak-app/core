@@ -173,6 +173,76 @@ export function assertReceivedUnchanged(transactions, label) {
   }
 }
 
+/** The text of the insert actions of `transactions`, joined in order: what the input client committed. */
+export const insertedText = (transactions) => transactions.flatMap((entry) => entry.actions)
+  .filter((action) => action.type === "insert").map((action) => action.text).join("");
+
+/**
+ * The document that `transactions` of an image region leave in a plain text client, as the AppKit reference holds it: the typed
+ * text (typedText), less one character for each Backspace key or deleteBackward: command outside a composition, followed by the
+ * preedit of the last transaction.
+ */
+export function inputDocument(transactions) {
+  let committed = "";
+  for (const action of transactions.flatMap((entry) => entry.actions)) {
+    if ((action.type === "key" && action.key === "Backspace") || (action.type === "command" && action.selector === "deleteBackward:")) {
+      committed = [...committed].slice(0, -1).join("");
+    } else committed += typedText([{ actions: [action] }]);
+  }
+  // default: a log without a transaction has no preedit.
+  return committed + (transactions.at(-1)?.preedit?.text ?? "");
+}
+
+/**
+ * Whether the transaction acknowledges the key: `k` as a character key, an insert of visible text or a preedit without actions;
+ * `Backspace` as its key or the deleteBackward: command; `Space` as its key, a character key with a space or an insert with a space.
+ */
+export function transactionMatchesKey(transaction, key) {
+  const { actions } = transaction;
+  if (key === "k") {
+    if (actions.some((action) => action.type === "command" || (action.type === "key" && !(action.key === "Char" && action.text === key)))) {
+      return false;
+    }
+    return actions.some((action) => (action.type === "key" && action.key === "Char" && action.text === key)
+      || (action.type === "insert" && action.text.trim().length > 0)) || (actions.length === 0 && transaction.preedit.text.length > 0);
+  }
+  if (key === "Backspace") {
+    return actions.some((action) => (action.type === "key" && action.key === key) || (action.type === "command" && action.selector === "deleteBackward:"));
+  }
+  if (key === "Space") {
+    return actions.some((action) => (action.type === "key" && (action.key === key || (action.key === "Char" && action.text.includes(" "))))
+      || (action.type === "insert" && action.text.includes(" ")));
+  }
+  throw new Error(`no receipt rule for the key ${JSON.stringify(key)}`);
+}
+
+/**
+ * Waits until the transactions of the raster probe `surface` after `after` leave `expected` as their document (inputDocument) and
+ * returns them.
+ */
+export async function untilDocument(s, surface, after, expected, message) {
+  const state = await s.until("rasterprobe.input", (value) => inputDocument(value.log.filter((entry) => entry.sequence > after)) === expected,
+    message, { surface });
+  return state.log.filter((entry) => entry.sequence > after);
+}
+
+/**
+ * Gives the native keyboard of the active key window to the image region of the raster probe `surface` as a person does: the window
+ * moves away from the pointer, the check activates the application with a move over the region and presses it, and the probe focuses
+ * its region. The input methods of the system serve only the key window of the active application
+ * (docs/spec/exposure.md#virtual-key-window).
+ */
+export async function focusImageActive(s, surface) {
+  await s.keepPointerOutside();
+  const point = await imagePoint(s, surface);
+  await s.pointer(point.x, point.y, "move", { activate: true });
+  await s.click(point.x, point.y);
+  await s.run("rasterprobe.focus", {}, surface);
+  await s.until("host.window", (host) => host.active === true && host.key === true && imageFocused(host, surface)
+    && host.responder?.surface === surface, "the image region did not become the focused view of the active key window");
+  await s.until("rasterprobe.input", (input) => input.focused, "the image region did not report its focus", { surface });
+}
+
 /**
  * Waits until the input log of the raster probe `surface` holds a transaction after `after` and the sidecar echoed every such
  * transaction, then returns them.

@@ -4,7 +4,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertReceivedUnchanged, documentFocused, focusedCard, imageFocused, typedText } from "../input-probe.mjs";
+import { assertReceivedUnchanged, documentFocused, focusedCard, imageFocused, inputDocument, insertedText, transactionMatchesKey,
+  typedText } from "../input-probe.mjs";
+
+test("the document of input transactions folds commits, deletions and the last preedit as a plain text client", { timeout: 5000 }, () => {
+  const transactions = [
+    { actions: [{ type: "insert", text: "ddd" }], preedit: { text: "" } },
+    { actions: [], preedit: { text: "ㅏ" } },
+    { actions: [{ type: "insert", text: "ㅏ" }], preedit: { text: "ㅏ" } },
+    { actions: [{ type: "insert", text: "ㅏ" }, { type: "key", key: "Backspace" }], preedit: { text: "" } },
+    { actions: [{ type: "command", selector: "deleteBackward:" }, { type: "insert", text: " " }], preedit: { text: "한" } },
+  ];
+  assert.equal(inputDocument(transactions), "ddd 한");
+  assert.equal(inputDocument([]), "");
+  assert.equal(insertedText(transactions), "dddㅏㅏ ");
+});
+
+test("a transaction acknowledges a vowel key, a Backspace and a Space by its actions or its preedit", { timeout: 5000 }, () => {
+  const preedit = (text) => ({ text });
+  assert.equal(transactionMatchesKey({ actions: [], preedit: preedit("ㅏ") }, "k"), true);
+  assert.equal(transactionMatchesKey({ actions: [{ type: "insert", text: "ㅏ" }], preedit: preedit("ㅏ") }, "k"), true);
+  assert.equal(transactionMatchesKey({ actions: [{ type: "key", key: "Backspace" }], preedit: preedit("") }, "k"), false);
+  assert.equal(transactionMatchesKey({ actions: [{ type: "command", selector: "deleteBackward:" }], preedit: preedit("") }, "Backspace"), true);
+  assert.equal(transactionMatchesKey({ actions: [{ type: "insert", text: "ㅏ " }], preedit: preedit("") }, "Space"), true);
+  assert.throws(() => transactionMatchesKey({ actions: [], preedit: preedit("") }, "q"), /no receipt rule for the key "q"/);
+});
 
 test("a probe tab joins the focused card, else the first card that holds tabs", { timeout: 5000 }, () => {
   const fixed = { id: "c0", fixed: true, tabs: [{ id: "t0" }] };
