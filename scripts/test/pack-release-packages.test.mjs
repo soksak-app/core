@@ -16,13 +16,13 @@ test('a release file is addressed by the core release of its version', { timeout
 });
 
 test('a workspace dependency of a published package becomes the release address of that package', { timeout: 1000 }, () => {
-  const source = { name: '@soksak/x', version: '0.0.41', dependencies: { '@soksak/y': 'workspace:*', ajv: '^8.0.0' }, devDependencies: { '@soksak/z': 'workspace:*' } };
-  const packed = { name: '@soksak/x', version: '0.0.41', dependencies: { '@soksak/y': '0.0.41', ajv: '^8.0.0' }, devDependencies: { '@soksak/z': '0.0.41' } };
-  const manifest = releaseManifest(packed, source, new Set(['@soksak/x', '@soksak/y', '@soksak/z']));
-  assert.deepEqual(manifest.dependencies, { '@soksak/y': releaseUrl('@soksak/y', '0.0.41'), ajv: '^8.0.0' });
-  assert.deepEqual(manifest.devDependencies, { '@soksak/z': releaseUrl('@soksak/z', '0.0.41') });
-  assert.equal(packed.dependencies['@soksak/y'], '0.0.41', 'the packed manifest is not changed in place');
-  assert.throws(() => releaseManifest(packed, source, new Set(['@soksak/x', '@soksak/z'])), /dependencies @soksak\/y is a workspace package that the release does not publish/);
+  const source = { name: '@soksak/window-check', version: '0.0.41', dependencies: { '@soksak/client': 'workspace:*', ajv: '^8.0.0' }, devDependencies: { '@soksak/log-contract': 'workspace:*' } };
+  const packed = { name: '@soksak/window-check', version: '0.0.41', dependencies: { '@soksak/client': '0.0.41', ajv: '^8.0.0' }, devDependencies: { '@soksak/log-contract': '0.0.41' } };
+  const manifest = releaseManifest(packed, source, new Set(['@soksak/window-check', '@soksak/client', '@soksak/log-contract']));
+  assert.deepEqual(manifest.dependencies, { '@soksak/client': releaseUrl('@soksak/client', '0.0.41'), ajv: '^8.0.0' });
+  assert.deepEqual(manifest.devDependencies, { '@soksak/log-contract': releaseUrl('@soksak/log-contract', '0.0.41') });
+  assert.equal(packed.dependencies['@soksak/client'], '0.0.41', 'the packed manifest is not changed in place');
+  assert.throws(() => releaseManifest(packed, source, new Set(['@soksak/window-check', '@soksak/log-contract'])), /dependencies @soksak\/client is a workspace package that the release does not publish/);
 });
 
 test('every workspace dependency of a release package is a package that the release publishes', { timeout: 1000 }, () => {
