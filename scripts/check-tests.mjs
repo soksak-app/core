@@ -292,6 +292,25 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F696-7",
+    implementation: [
+      { file: "scripts/node-tests.mjs", symbol: "function onlyList(only) {" },
+      { file: "Makefile", symbol: "@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/" },
+      { file: "Makefile", symbol: "@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics" },
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core test-headless-owners" },
+      { file: ".github/workflows/ci.yml", symbol: "run: make -C core check-windows-rust" },
+    ],
+    tests: [
+      { file: "scripts/test/node-tests.test.mjs", id: "a repeated only selects the files that contain any of its values" },
+      { file: "scripts/test/workflows.test.mjs", id: "the linux-node job runs the headless owner tests on Linux after the locked install and the required gate waits for it" },
+      { file: "scripts/test/workflows.test.mjs", id: "make test-headless-owners runs every Node test of scripts/test, e2e/test and packages/window-check/test" },
+      { file: "scripts/test/workflows.test.mjs", id: "make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics and the Tauri job runs it" },
+      { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
+    ],
+    expected: "A Linux job of CI installs the locked Node dependencies and runs every Node test of scripts/test, e2e/test and packages/window-check/test through make test-headless-owners, and the required gate fails unless it succeeds. The Tauri job compiles the Rust host library for x86_64-pc-windows-msvc in the default and the diagnostic build through make check-windows-rust.",
+    levels: ["unit"],
+  },
+  {
     id: "F698",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef copyTaggedPresentation(" },
