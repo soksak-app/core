@@ -11660,6 +11660,7 @@ const FEATURE_LINKS = [
       { file: "e2e/input-probe.mjs", symbol: "export async function presentedStage(" },
       { file: "e2e/activation/native-input-trace.mjs", symbol: "export function assertNativeInputDelivered(" },
       { file: "e2e/activation/native-input-trace.mjs", symbol: "export function nativeInputTransactions(" },
+      { file: "e2e/raster-probe.mjs", symbol: "async function drawCovered(s) {" },
     ],
     tests: [
       { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", id: "each_input_makes_a_frame_whose_event_names_the_inputs_it_presents" },
@@ -11671,8 +11672,9 @@ const FEATURE_LINKS = [
       { file: "e2e/test/activation/native-input-trace.test.mjs", id: "the native records and the input log must match one to one, and a check without input fails" },
       { file: "e2e/test/activation/native-input-trace.test.mjs", id: "a native transaction must be complete, sent, error free and recorded under the identifiers of its report" },
       { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" },
+      { file: "e2e/test/raster-probe-fixture.test.mjs", id: "a raster probe waits for its first frame while its window draws its image regions covered, until the check ends" },
     ],
-    expected: "The raster probe sidecar draws a frame after each input that it handles and names the inputs in that frame event, the view keeps the identity of that frame with each logged transaction, and each IME stage waits until the image region presents that frame. Each native.input.report input transaction of an IME check is complete, sent and error free, and matches one to one in order the raster probe input log entry with the same cids, whose actions, preedit, sidecar echo and answer cids are unchanged, with one later host.sidecar.request of the sidecar under those cids.",
+    expected: "The raster probe sidecar draws a frame after each input that it handles and names the inputs in that frame event, the view keeps the identity of that frame with each logged transaction, and each IME stage waits until the image region presents that frame. Each native.input.report input transaction of an IME check is complete, sent and error free, and matches one to one in order the raster probe input log entry with the same cids, whose actions, preedit, sidecar echo and answer cids are unchanged, with one later host.sidecar.request of the sidecar under those cids. A check that waits for the first frame of a raster probe makes the image regions of its window draw while the window is covered, because a check window opens behind the windows of other applications and of the other check applications, and turns that off when the check ends.",
     levels: ["unit", "application"],
   },
   {

@@ -12,6 +12,7 @@ import { validateManifest, validateSidecar } from "@soksak/plugin-api";
 
 import { catalogOf, auditLogDirectories } from "../../scripts/check-events.mjs";
 import { INPUT_LOG_LIMIT, REGION, SIDECAR, startRasterProbe } from "../fixtures/raster-probe/probe/ui/raster-probe.js";
+import { RASTER_ENTRIES, rasterReady } from "../raster-probe.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PROBE = join(ROOT, "e2e/fixtures/raster-probe/probe");
@@ -300,4 +301,33 @@ test("a primary press on the region gives it the focus and the pointer list reco
   assert.deepEqual(fake.sent.filter((item) => item.focus).length, 1, "only the primary press focuses the region");
   assert.deepEqual(fake.statuses.get("rasterprobe.input").read().pointer,
     [{ type: "pointerdown", button: 2, trusted: true }, { type: "pointerdown", button: 0, trusted: true }, { type: "pointerup", button: 0, trusted: false }]);
+});
+
+test("a raster probe waits for its first frame while its window draws its image regions covered, until the check ends", { timeout: 1000 }, async () => {
+  // A check window opens behind the windows of other applications and of the other check applications, so a covered window is
+  // the normal case, and the image regions of a covered window draw no raster (docs/spec/hosts.md#launch-activation).
+  const calls = [];
+  const cleanups = [];
+  const s = {
+    registered: async (surface, entries) => { calls.push(["registered", surface, entries]); },
+    request: async (method, params) => { calls.push(["request", method, params]); return null; },
+    until: async (name, accept, _what, options) => {
+      calls.push(["until", name, options]);
+      const value = name === "rasterprobe.session" ? { session: "s1", connected: true } : { generation: 1, raster: 1, sequence: 1 };
+      assert.ok(accept(value));
+      return value;
+    },
+    cleanup: (run) => { cleanups.push(run); },
+  };
+  assert.deepEqual(await rasterReady(s, "tab-1"), { session: "s1", connected: true });
+  await rasterReady(s, "tab-2");
+  const covered = calls.filter(([kind]) => kind === "request");
+  assert.deepEqual(covered, [["request", "diagnostics.window.draw-covered", { draw: true }], ["request", "diagnostics.window.draw-covered", { draw: true }]]);
+  const frame = calls.findIndex(([kind, name]) => kind === "until" && name === "rasterprobe.frame");
+  assert.ok(calls.findIndex(([kind]) => kind === "request") < frame, "the window draws covered before the wait for the frame");
+  assert.deepEqual(calls[0], ["registered", "tab-1", RASTER_ENTRIES]);
+  assert.equal(cleanups.length, 1, "the end of the check ends the covered drawing once");
+  calls.length = 0;
+  await cleanups[0]();
+  assert.deepEqual(calls, [["request", "diagnostics.window.draw-covered", { draw: false }]]);
 });
