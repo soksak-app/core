@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { ensureRasters, presentedFrame } from "./raster-probe.mjs";
+import { ensureRasters, presentedFrame, reopenedSession } from "./raster-probe.mjs";
 
 // Reads the endpoint that one persistent service directory of the configuration directory holds.
 // The raster probe sidecar is the only persistent sidecar of the fixtures, so there is also one entry under services.
@@ -51,11 +51,11 @@ for (const app of Object.values(APPS)) {
     session.expectError(new RegExp(`^error workbench surface ${surface} rasterprobe: image raster: .*notFound`));
     session.expectError(new RegExp(`^error workbench surface status rasterprobe ${surface}: .*native image: notFound$`));
     session.expectError(/^error host sidecar @sok-check\/sidecar-rasterprobe: write: Broken pipe \(os error 32\)$/);
+    assert.equal(before.service?.pid, killed.pid, "the session before the kill is not held by the service that the check kills");
     process.kill(killed.pid, "SIGKILL");
 
-    // Recovery: the surface attaches to the reopened session. A session different from that of the dead session must arrive.
-    await session.until("rasterprobe.session",
-      (value) => typeof value.session === "string" && value.session !== "" && value.session !== before.session && value.connected,
+    // Recovery: the surface attaches to the session that the respawned service opens, which the new service holds.
+    await session.until("rasterprobe.session", reopenedSession(before),
       "the raster probe did not reopen a session after the sidecar died", { surface });
     const after = await session.get("rasterprobe.session", surface);
     assert.equal(after.error, null, `the reopened session kept an error: ${after.error}`);
