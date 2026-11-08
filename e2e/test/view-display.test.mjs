@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   checkViewDisplay as acceptViewDisplay, expectedPresentations, observeViewDisplay as checkViewDisplay, rasterIdentity,
-  viewPresentationJoins, viewWebviews,
+  appDomWebviews, viewPresentationJoins, viewWebviews,
 } from "../view-display.mjs";
 
 /** A window with two installed views but only one open card, and decoded frames of that card. */
@@ -282,4 +282,22 @@ test("each loaded view surface of core.surfaces counts one view web view, shown 
   assert.deepEqual(views.sections.map((item) => item.surface), ["spc-1/left/layoutprobe.list"]);
   assert.throws(() => viewWebviews([entry("tab-x", "layoutprobe", { state: "restoring" })]), /tab-x/,
     "a view whose web view is being restored has no count yet");
+});
+
+test("the app DOM web views of a window are its main page, when it has one, and one view web view for each loaded view", () => {
+  // A window of the Wails and Tauri hosts has one app DOM web view, its main page; a window of the mygo host draws the workbench in
+  // native UI and has none (docs/spec/plugins.md#surface-ownership). Each loaded view holds its own web view on every host.
+  const entry = (surface, plugin, fields = {}) => ({ surface, plugin, kind: "tab", sidebar: null, visible: true, composition: "view",
+    placeholder: null, state: "loaded", ...fields });
+  const surfaces = [entry("tab-a", "layoutprobe"), entry("tab-b", "rasterprobe"),
+    entry("spc-1/left/layoutprobe.list", "layoutprobe", { kind: "section", sidebar: "left" })];
+  const paged = appDomWebviews(surfaces, { mainPage: true });
+  assert.equal(paged.mainPages, 1);
+  assert.equal(paged.count, 4);
+  const native = appDomWebviews(surfaces, { mainPage: false });
+  assert.equal(native.mainPages, 0);
+  assert.equal(native.count, 3);
+  assert.deepEqual(native.tabs.map((item) => item.surface), ["tab-a", "tab-b"]);
+  assert.deepEqual(native.sections.map((item) => item.surface), ["spc-1/left/layoutprobe.list"]);
+  assert.throws(() => appDomWebviews(surfaces, {}), /mainPage/, "a window names whether it has a main page");
 });
