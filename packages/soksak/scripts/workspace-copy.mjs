@@ -14,9 +14,13 @@ const REPO = new URL("../", import.meta.url).pathname;
 const ROOT = new URL("../../../", import.meta.url).pathname;
 
 /** The package parts the suite reads. */
-const PACKAGE_PARTS = ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"];
-/** The workspace root parts the suite reads, and the execution evidence reader with its reporter, which judge each run of the copy. */
-const ROOT_PARTS = ["package.json", "Makefile", ".node-version", "docs/spec/cases/layout", "scripts/node-test-evidence.mjs", "scripts/test-event-reporter.mjs"];
+export const PACKAGE_PARTS = ["dist", "test", "scripts", "src", "docs", "package.json", "tsconfig.json"];
+/**
+ * The workspace root parts the suite reads: the execution evidence reader with its reporter, which judge each run of the copy,
+ * and the bounded command group, which ends each run. Every file of the package parts that a module imports from outside the
+ * package is one of these parts.
+ */
+export const ROOT_PARTS = ["package.json", "Makefile", ".node-version", "docs/spec/cases/layout", "scripts/node-test-evidence.mjs", "scripts/test-event-reporter.mjs", "scripts/test-command.mjs"];
 
 /**
  * Copies the parts into a new directory named with prefix; returns the copy's root and its package directory.
