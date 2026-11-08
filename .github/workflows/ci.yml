@@ -327,8 +327,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes zsh clang pkg-config unzip build-essential python3
+      # pnpm runs the lifecycle scripts of every workspace project without reading its os field, so the install leaves out the
+      # projects that exclude Linux, whose prepare builds native code against Apple frameworks.
       - name: Fetch locked Node dependencies
-        run: pnpm -C core install --frozen-lockfile
+        run: node core/scripts/install-platform.mjs linux
       - name: Headless owner tests
         env:
           npm_config_offline: 'true'

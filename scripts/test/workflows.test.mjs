@@ -210,7 +210,7 @@ test('the linux-node job runs the headless owner tests on Linux after the locked
   const job = ciJob('linux-node');
   assert.match(job, /^ {4}runs-on: ubuntu-26\.04-arm$/m, 'linux-node does not run on the hosted Linux runner');
   const list = steps(job);
-  const install = list.findIndex((step) => /run: pnpm -C core install --frozen-lockfile$/m.test(step.text));
+  const install = list.findIndex((step) => /run: node core\/scripts\/install-platform\.mjs linux$/m.test(step.text));
   const owners = list.findIndex((step) => step.name === 'Headless owner tests');
   assert.ok(install >= 0 && owners > install, 'linux-node does not install the locked dependencies before the headless owner tests');
   assert.match(list[owners].text, /run: make -C core test-headless-owners$/m);
@@ -319,7 +319,9 @@ test('the build-native job records the display session before the native tests',
 test('every CI job installs the locked workspace dependencies before its first core command', { timeout: 1000 }, () => {
   const jobs = read('.github/workflows/ci.yml').split(/^ {2}(?=[a-z-]+:$)/m).filter((part) => /^[a-z-]+:\n/.test(part));
   assert.ok(jobs.length > 0, 'ci.yml has no job');
-  const install = /run: pnpm -C core install --frozen-lockfile$/m;
+  // A job of another operating system installs through scripts/install-platform.mjs, which leaves out the projects whose os
+  // field excludes that system and runs the same locked install.
+  const install = /run: (?:pnpm -C core install --frozen-lockfile|node core\/scripts\/install-platform\.mjs [a-z0-9]+)$/m;
   const core = /run: (?:make -C core|node core\/|pnpm -C core(?! install))/m;
   for (const job of jobs) {
     const name = job.split(':')[0];
@@ -327,7 +329,8 @@ test('every CI job installs the locked workspace dependencies before its first c
     const first = list.findIndex((step) => core.test(step.text));
     if (first < 0) continue;
     const installed = list.findIndex((step) => install.test(step.text));
-    assert.ok(installed >= 0 && installed < first,
+    // The install through scripts/install-platform.mjs is itself the first core command of its job.
+    assert.ok(installed >= 0 && installed <= first,
       `${name}: the step ${list[first].name} runs a core command before the locked workspace dependencies are installed`);
   }
 });
