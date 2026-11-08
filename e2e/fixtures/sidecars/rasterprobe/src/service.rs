@@ -4,7 +4,8 @@
 //
 // Requests of the page, by `operation`:
 //   open {image?, color?, rows?, textSize?}  opens the session of the surface, which starts one child process, or reattaches to it;
-//                                            the settings apply only when the session starts. Answer: the event session.
+//                                            the settings apply only when the session starts. Answer: the event session, which
+//                                            names its image region as `region`.
 //   rows {count}                             the number of row bands that the frames paint. Answer: the event rows.
 //   color {color}                            the color `#rrggbb` of the frames. Answer: the event color.
 //   textSize {factor}                        the text size factor that sizes the cells of the grid. Answer: the event textSize.
@@ -13,6 +14,8 @@
 //   close                                    closes the session and its child process. Answer: the event closed.
 //   kill                                     ends the service process at once with SIGKILL, without an answer.
 // Each frame that the service sends is followed by the event frame with its identity, its raster, its grid and its rows.
+// The host reads the member `image` of every body that the service sends as an image envelope (docs/spec/sidecars.md#image-envelope),
+// so only a frame and a detach answer carry it.
 use std::collections::HashMap;
 
 use serde_json::{Map, Value, json};
@@ -539,7 +542,7 @@ impl Service {
             "child": session.child.pid(),
             "service": {"pid": self.identity.pid, "version": self.identity.version, "directory": self.identity.directory},
             "mode": state.mode(),
-            "image": state.image.as_ref().map(|image| image.name.clone()),
+            "region": state.image.as_ref().map(|image| image.name.clone()),
             "color": session.color.text(),
             "rows": session.rows,
             "textSize": session.factor,
@@ -1196,6 +1199,40 @@ mod tests {
         send(&mut service, 2, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
         let lines = send(&mut service, 2, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
         assert_eq!(lines[0]["body"]["image"]["sequence"], 1, "the new connection draws from the first sequence");
+    }
+
+    #[test]
+    fn only_a_frame_and_a_detach_answer_carry_the_member_image() {
+        let (mut service, _) = service();
+        hello(&mut service, 1);
+        let mut lines = Vec::new();
+        lines.extend(send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"}))));
+        lines.extend(send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}}))));
+        lines.extend(send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}}))));
+        for body in [json!({"operation": "state"}), json!({"operation": "rows", "count": 1}), json!({"operation": "color", "color": "#101010"}),
+            json!({"operation": "textSize", "factor": 1.5}), json!({"operation": "input", "sequence": 1, "actions": [], "preedit": null}),
+            json!({"operation": "open", "image": "raster"}), json!({"operation": "open"}), json!({"operation": "dance"})] {
+            lines.extend(send(&mut service, 1, page("tab-1", body)));
+        }
+        lines.extend(send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}}))));
+        lines.extend(send(&mut service, 1, host("tab-1", json!({"detach": {"request": "d1", "name": "raster", "generation": 1}}))));
+        lines.extend(send(&mut service, 1, page("tab-1", json!({"operation": "state"}))));
+        lines.extend(send(&mut service, 1, page("tab-1", json!({"operation": "close"}))));
+        let sessions: Vec<&Value> = lines.iter().map(|line| &line["body"]).filter(|body| body["event"] == "session" || body["event"] == "state").collect();
+        assert!(sessions.len() >= 3, "the reports of the session were sent: {lines:?}");
+        assert!(sessions.iter().all(|body| body.get("region").is_some()), "a session report names its region: {sessions:?}");
+        let mut frames = 0;
+        for line in &lines {
+            let Some(image) = line["body"].get("image") else { continue };
+            let image = image.as_object().unwrap_or_else(|| panic!("the member image is not an envelope: {line}"));
+            if image.contains_key("detached") {
+                assert_eq!(image.len(), 1, "a detach answer holds only detached: {line}");
+            } else {
+                assert!(image.contains_key("token") && image.contains_key("sequence"), "the member image is not a frame: {line}");
+                frames += 1;
+            }
+        }
+        assert!(frames >= 2, "the frames were sent: {lines:?}");
     }
 
     #[test]
