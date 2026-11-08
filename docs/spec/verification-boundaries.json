@@ -12,21 +12,6 @@
       "reason": "Helper that starts the terminal-renderer IME capture and reads its frame identities (terminal sidecar); reduce it to a fixture view that reports its preedit and frame identity."
     },
     {
-      "file": "e2e/activation/ime.test.mjs",
-      "owner": "core",
-      "reason": "Checks OS IME composition reaching the focused view (preedit, a single commit, cursor) and uses the terminal PTY only as the place text arrives; replace with a plain-view probe text input that reports its composition, commits and caret through a status."
-    },
-    {
-      "file": "e2e/activation/manual/native-ime-lifecycle.test.mjs",
-      "owner": "core",
-      "reason": "Checks the native input client lifecycle across project close and reopen and 2-Set commits; replace the terminal with a plain-view probe that reports commits."
-    },
-    {
-      "file": "e2e/activation/marked-text.test.mjs",
-      "owner": "core",
-      "reason": "Checks that Japanese marked text is committed once when composition ends (IME) and uses the PTY as the receiver; replace with a plain-view probe commit log."
-    },
-    {
       "file": "e2e/activation/registry-active.test.mjs",
       "owner": "core",
       "reason": "Checks that a window re-reads the registry when it becomes key (installation and registry code) and uses browser only as an entry in the registry; replace with an extension-probe or plain-view package in a fixture registry."
@@ -45,11 +30,6 @@
       "file": "e2e/activation/terminal-view-focus.test.mjs",
       "owner": "mixed",
       "reason": "visible input preserves the prompt, handles wide cells, and ignores later blanks: plugin:terminal; sidecar screen facts preserve the numeric row count and frame cursor: plugin:terminal; terminal IME stage waits for cursor notification after composition changes: plugin:terminal; terminal IME stage waits for cursor movement when native preedit stays unchanged: plugin:terminal; terminal IME stage rereads coherent composition on a screen notification: plugin:terminal; terminal stage requires matching screen, cursor, and compose state: plugin:terminal; a terminal click accepts the same native keys as its AppKit reference: core (focus and key routing, plain-view probe key log); repeated Korean vowels stay visible before Space: core (IME, plain-view probe preedit status)."
-    },
-    {
-      "file": "e2e/activation/view-ime-escape.test.mjs",
-      "owner": "core",
-      "reason": "Checks that Escape ends a view's composition without forwarding a workbench command (IME and keyboard routing); replace the terminal with a plain-view probe that has a text input and a command log."
     },
     {
       "file": "e2e/app-update.test.mjs",

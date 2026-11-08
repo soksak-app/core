@@ -4895,10 +4895,6 @@ const FEATURE_LINKS = [
       {
         file: "e2e/activation/terminal-ime-document.mjs",
         symbol: "export async function readTerminalObservationSnapshot("
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        symbol: "readHost: async () =>"
       }
     ],
     tests: [
@@ -4937,10 +4933,6 @@ const FEATURE_LINKS = [
       {
         file: "e2e/activation/terminal-ime-document.mjs",
         symbol: "let stopping = null;"
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        symbol: "await stateObserver.stop();"
       }
     ],
     tests: [
@@ -4951,16 +4943,11 @@ const FEATURE_LINKS = [
       {
         file: "e2e/test/activation/terminal-ime-document.test.mjs",
         id: "terminal observer stop retries only subscriptions whose release did not succeed"
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        id: "eight Korean vowels and one Backspace retain an exact input trace"
       }
     ],
     expected: "Observation ends before offline analysis and repeated cleanup retries only unfinished subscription releases.",
     levels: [
-      "unit",
-      "application"
+      "unit"
     ]
   },
   {
@@ -4968,7 +4955,7 @@ const FEATURE_LINKS = [
     implementation: [
       {
         file: "e2e/activation/ime.test.mjs",
-        symbol: "const runRepeatedVowelScenario = async"
+        symbol: "for (const [index, key] of keys.entries())"
       }
     ],
     tests: [
@@ -4977,7 +4964,7 @@ const FEATURE_LINKS = [
         id: "eight Korean vowels and one Backspace retain an exact input trace"
       }
     ],
-    expected: "The complete approved two-host IME gesture retains matching documents, exact visual proof and error-free cleanup.",
+    expected: "The complete approved two-host IME gesture retains matching documents, each transaction received unchanged by the sidecar and error-free cleanup.",
     levels: [
       "application"
     ]
@@ -5173,25 +5160,14 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
-    id: "F239-47-36",
-    implementation: [
-      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario(t, \"zsh\")" },
-    ],
-    tests: [
-      { file: "e2e/activation/ime.test.mjs", id: "zsh ZLE redraw retains the eight-vowel Backspace and Space input trace" },
-    ],
-    expected: "The fixed zsh ZLE gesture preserves all reference documents and measured glyph/underline stages with complete captures and independent cadence metrics.",
-    levels: ["application"],
-  },
-  {
     id: "F239-180",
     implementation: [
-      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const completed = await waitForTerminalStage(" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "await untilDocument(lifecycle, surface, start, expectedDocument," },
     ],
     tests: [
       { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
     ],
-    expected: "Lifecycle completion waits for a coherent complete reference document and preserves isolated observations and complete decoded capture artifacts.",
+    expected: "Lifecycle completion waits for the complete reference document in the image region and preserves isolated observations and complete decoded capture artifacts.",
     levels: ["application"],
   },
   {
@@ -5533,12 +5509,12 @@ const FEATURE_LINKS = [
     id: "F212.13",
     implementation: [
       { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
-      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario" },
+      { file: "e2e/activation/ime.test.mjs", symbol: "await compareAppKitReference(s, keys, documents.at(-1), documents);" },
     ],
     tests: [
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
     ],
-    expected: "Approved same-window AppKit and terminal activation inputs match all documents and measured glyph/underline stages with complete captures, restored baseline and clean shutdown.",
+    expected: "Approved same-window AppKit and image region activation inputs match all documents, each received unchanged by the sidecar, with restored baseline and clean shutdown.",
     levels: ["application"],
   },
   {
@@ -7891,7 +7867,7 @@ const FEATURE_LINKS = [
   {
     id: "F149",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
-    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
+    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" }],
     expected: "Typed English text and a composed Korean syllable pass through every layer of a running application and reach the PTY once.",
     levels: ["application"],
   },
@@ -10379,7 +10355,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Backspace during a composition edits it to 하 without PTY input" },
       { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Enter commits the edited syllable once and is reported after it" },
-      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" },
+      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" },
     ],
     expected: "The image-region client commits its local marked buffer once before following input, while Backspace can edit the current composition without sending a PTY key. The real-input-source result remains separately verified by its activation case.",
     levels: ["native", "application"],
@@ -13448,9 +13424,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-76",
-    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: 'await s.run("terminal.focus", {}, surface)' }],
+    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: "await focusImageActive(s, surface);" }],
     tests: [{ file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" }],
-    expected: "The declared terminal focus command establishes focus before the input trace.",
+    expected: "The declared raster probe focus command establishes image region focus before the input trace.",
     levels: ["application"],
   },
   {
