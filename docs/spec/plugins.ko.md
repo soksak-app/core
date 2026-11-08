@@ -51,7 +51,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 ## Plugin의 창 검사
 
-plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검증 경계](plugin-processes.ko.md#검증-경계)). plugin repository는 `@soksak/window-check`를 version 이 자기 `engines.soksak` 범위 안에 있는 core release 에서 설치한다. 그 `package.json`은 release file `https://github.com/soksak-app/core/releases/download/v<version>/soksak-window-check-<version>.tgz`를 development dependency로 가리키고, 그 package는 자기 dependency `@soksak/client`와 `@soksak/log-contract`를 같은 core release의 release file로 가리킨다([release](../operations/examples.ko.md#release)). 검사는 그 release의 게시된 core application, 곧 application zip `soksak-<version>-darwin-arm64-<host>.zip`의 bundle을 이 package로 시작한다. 검사는 `@soksak/window-check`의 `package.json` `exports`가 가리키는 module과, core와 자기 plugin이 expose한 command, element entry, status만 쓴다([exposure](exposure.ko.md)). core의 source 경로는 읽지 않는다.
+plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검증 경계](plugin-processes.ko.md#검증-경계)). plugin repository는 `@soksak/window-check`를 version 이 자기 `engines.soksak` 범위 안에 있는 core release 에서 설치한다. 그 `package.json`은 release file `https://github.com/soksak-app/core/releases/download/v<version>/soksak-window-check-<version>.tgz`를 development dependency로 가리키고, 그 package는 자기 dependency `@soksak/client`, `@soksak/log-contract`, `@soksak/plugin-api`를 같은 core release의 release file로 가리킨다([release](../operations/examples.ko.md#release)). 검사는 그 release의 게시된 core application, 곧 application zip `soksak-<version>-darwin-arm64-<host>.zip`의 bundle을 이 package로 시작한다. 검사는 `@soksak/window-check`의 `package.json` `exports`가 가리키는 module과, core와 자기 plugin이 expose한 command, element entry, status만 쓴다([exposure](exposure.ko.md)). core의 source 경로는 읽지 않는다.
 
 ## plugin.json
 

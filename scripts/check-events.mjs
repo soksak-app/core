@@ -12,8 +12,8 @@ import { parseArgs } from 'node:util';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { auditLogs, composeCatalogs } from '../packages/log-contract/index.js';
-import { validateManifest, validateSidecar } from '../packages/plugin-api/index.js';
+import { auditLogs } from '../packages/log-contract/index.js';
+import { catalogOf } from '@soksak/window-check/catalog.mjs';
 import { catalogReport, trackedSources } from '@soksak/kit/events';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -24,74 +24,8 @@ const EVENT_SOURCES = 'scripts/event-sources.json';
 /** The text of the tracked sources of this repository that can emit events, by path. */
 export const repositorySources = () => trackedSources(ROOT);
 
-/**
- * The event catalogs of the sidecars that `plugins/installed.json` of a configuration folder records: each recorded folder
- * holds a `sidecar.json`, whose member `events` names the catalog file (docs/spec/sidecars.md). A sidecar without the member
- * declares no catalog. A file that is missing, not JSON or of another format is an error that names the file.
- */
-export function installedSidecarCatalogs(directory) {
-  const file = join(directory, 'plugins', 'installed.json');
-  let installed;
-  try {
-    installed = JSON.parse(readFileSync(file, 'utf8'));
-  } catch (error) {
-    // default: a configuration folder without installed.json has installed no sidecar.
-    if (error.code === 'ENOENT') return [];
-    throw new Error(`${file}: ${error.message}`, { cause: error });
-  }
-  if (installed?.format !== 3) throw new Error(`${file}: plugins/installed.json: format must be 3, found ${JSON.stringify(installed?.format)}`);
-  const catalogs = [];
-  for (const [name, { path }] of Object.entries(installed.sidecars ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
-    const manifest = join(directory, path, 'sidecar.json');
-    const sidecar = validateSidecar(JSON.parse(readFileSync(manifest, 'utf8')));
-    if (sidecar.events === undefined) continue;
-    const catalog = join(directory, path, sidecar.events);
-    try {
-      catalogs.push(JSON.parse(readFileSync(catalog, 'utf8')));
-    } catch (error) {
-      throw new Error(`${catalog}: the event catalog of the sidecar ${name}: ${error.message}`, { cause: error });
-    }
-  }
-  return catalogs;
-}
-
-/** The event catalogs of installed plugins that declare `events` in plugin.json. */
-export function installedPluginCatalogs(directory) {
-  const installedFile = join(directory, 'plugins', 'installed.json');
-  let installed;
-  try {
-    installed = JSON.parse(readFileSync(installedFile, 'utf8'));
-  } catch (error) {
-    if (error.code === 'ENOENT') return [];
-    throw new Error(`${installedFile}: ${error.message}`, { cause: error });
-  }
-  if (installed?.format !== 3) throw new Error(`${installedFile}: plugins/installed.json: format must be 3, found ${JSON.stringify(installed?.format)}`);
-  const catalogs = [];
-  for (const [id, record] of Object.entries(installed.plugins ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
-    if (typeof record?.path !== 'string' || record.path === '') throw new Error(`${installedFile}: installed plugin ${id} has no path`);
-    const manifestFile = join(directory, record.path, 'plugin.json');
-    let manifest;
-    try {
-      manifest = validateManifest(JSON.parse(readFileSync(manifestFile, 'utf8')));
-    } catch (error) {
-      throw new Error(`${manifestFile}: ${error.message}`, { cause: error });
-    }
-    if (manifest.id !== id) throw new Error(`${manifestFile}: plugin id ${manifest.id} does not match installed plugin ${id}`);
-    if (manifest.events === undefined) continue;
-    const catalogFile = join(directory, record.path, manifest.events);
-    let catalog;
-    try {
-      catalog = JSON.parse(readFileSync(catalogFile, 'utf8'));
-    } catch (error) {
-      throw new Error(`${catalogFile}: event catalog of plugin ${id}: ${error.message}`, { cause: error });
-    }
-    catalogs.push({ kind: 'plugin', id, catalog, source: catalogFile });
-  }
-  return catalogs;
-}
-
-/** The catalog of this repository joined with installed plugin and sidecar catalogs in a configuration folder. */
-export const catalogOf = (base, directory) => composeCatalogs(base, ...installedPluginCatalogs(directory), ...installedSidecarCatalogs(directory));
+// The catalog join of a configuration folder is the one of @soksak/window-check, whose release the checks of a plugin repository use.
+export { catalogOf, installedPluginCatalogs, installedSidecarCatalogs } from '@soksak/window-check/catalog.mjs';
 
 /** The event files of every layer (`<role>-<pid>-<time>`: the host, `sok` and each sidecar), generation and debug file of a configuration folder, in name order. */
 export function eventFiles(directory) {

@@ -26,6 +26,7 @@
     "./shutdown-wait.mjs": "./shutdown-wait.mjs",
     "./stall-sample.mjs": "./stall-sample.mjs",
     "./text-difference.mjs": "./text-difference.mjs",
+    "./catalog.mjs": "./catalog.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -49,7 +50,9 @@
     "session.mjs",
     "shutdown-wait.mjs",
     "stall-sample.mjs",
-    "text-difference.mjs"
+    "text-difference.mjs",
+    "catalog.mjs",
+    "core-events.json"
   ],
   "bin": {
     "sok-repeat": "./repeat.mjs"
@@ -60,6 +63,7 @@
   "dependencies": {
     "@parcel/watcher": "2.6.0",
     "@soksak/client": "workspace:*",
-    "@soksak/log-contract": "workspace:*"
+    "@soksak/log-contract": "workspace:*",
+    "@soksak/plugin-api": "workspace:*"
   }
 }

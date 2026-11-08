@@ -10923,7 +10923,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-62",
     implementation: [
-      { file: "scripts/check-events.mjs", symbol: "export function installedSidecarCatalogs(directory)" },
+      { file: "packages/window-check/catalog.mjs", symbol: "export function installedSidecarCatalogs(directory)" },
       { file: "packages/plugin-api/index.js", symbol: "export function validateSidecar(sidecar)" },
     ],
     tests: [
@@ -12911,7 +12911,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-137",
-    implementation: [{ file: "scripts/check-events.mjs", symbol: "export const catalogOf =" }],
+    implementation: [{ file: "packages/window-check/catalog.mjs", symbol: "export const catalogOf =" }],
     tests: [{ file: "scripts/test/check-events.test.mjs", id: "the audit composes every installed plugin manifest event catalog and its plugin layer" }],
     expected: "The event audit composes each installed plugin manifest catalog with its declared plugin layer.",
     levels: ["unit"],

@@ -164,6 +164,9 @@ importers:
       '@soksak/log-contract':
         specifier: workspace:*
         version: link:../log-contract
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
 
   packages/workbench:
     dependencies:
