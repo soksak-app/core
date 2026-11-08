@@ -203,9 +203,12 @@ type surfaceState struct {
 	drawnLibrary bool
 	// dataWrites counts the writes of project data of each project that the store has not answered.
 	dataWrites map[string]int
-	// placed is the lines of the last request, and running tells that a placement has not finished.
-	placed  []surfaceLine
-	running bool
+	// placed is the lines of the last request, titlebar the height of the first row of the window, which the last request gave or
+	// the start took (adopt), and running tells that a placement has not finished. Before the start took the common settings,
+	// titlebar is 0 and no frame places for the first row.
+	placed   []surfaceLine
+	titlebar float32
+	running  bool
 	// going tells that the last placement belongs to a run.
 	going   bool
 	views   map[string]*viewState
@@ -571,7 +574,7 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
 				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section}})
 	}
-	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.metrics.chromeH, "declarations": table}, nil
+	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.chromeHeight(), "declarations": table}, nil
 }
 
 // surfaceDimmed tells whether the setting dims the surface: a card has one surface shown, and the card without focus dims it.
@@ -628,13 +631,16 @@ func (s *Shell) withdrawWhenPresented() {
 // follows it places what changed meanwhile.
 func (s *Shell) placeSurfaces() {
 	lines := s.surfaceLines()
+	// The first row is part of the placement: the host sets the title bar, and so the window buttons, with the frame that draws the row
+	// (frameLayout of packages/workbench/frame-text.js), also when no surface moved.
+	same := slices.Equal(lines, s.surfaces.placed) && (s.surfaces.titlebar == 0 || s.chromeHeight() == s.surfaces.titlebar)
 	if s.surfaces.running {
-		s.surfaces.moved = s.surfaces.moved || !slices.Equal(lines, s.surfaces.placed)
+		s.surfaces.moved = s.surfaces.moved || !same
 		return
 	}
 	// The host ends a run on a settled placement, so the end of a run places also when its last move placed these lines.
 	runEnds := s.surfaces.going && s.held == nil
-	if slices.Equal(lines, s.surfaces.placed) && !runEnds {
+	if same && !runEnds {
 		s.afterKeyboard(s.surfaces.commits)
 		s.surfaces.commits = nil
 		return
@@ -654,7 +660,7 @@ func (s *Shell) placeSurfaces() {
 		s.fail(err)
 		return
 	}
-	s.surfaces.placed = lines
+	s.surfaces.placed, s.surfaces.titlebar = lines, s.chromeHeight()
 	s.surfaces.running = true
 	settledNow, _ := request["settled"].(bool) // silent: surfaceRequest writes settled as a bool.
 	s.followRun(!settledNow)

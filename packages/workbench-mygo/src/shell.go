@@ -620,7 +620,13 @@ func (s *Shell) adopt(value any) error {
 	}
 	s.projects = projects
 	s.takeOpen(snapshot.Open)
-	return s.beginSettings(snapshot.Common)
+	if err := s.beginSettings(snapshot.Common); err != nil {
+		return err
+	}
+	// The window shows the first row of the common settings: the host gives a new window the row of factor 1, and the workbench
+	// before a reload placed the row of the common settings, which the new workbench reads.
+	s.surfaces.titlebar = s.chromeHeight()
+	return nil
 }
 
 // decode reads the answer of a host call, which is the value of the handler or its JSON text.

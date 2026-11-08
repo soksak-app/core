@@ -1768,3 +1768,35 @@ func TestAProjectReturnAnswersWhenItsSurfacesArePresented(t *testing.T) {
 		t.Fatalf("core.library.open answered %t with the surface visible %v and its placement presented %t", answered, visible, presented)
 	}
 }
+
+// Each placement gives the host the height of the first row that its frame draws, round(max(40, 36 × frame factor)), as the page
+// gives it with each preparation (frameLayout of packages/workbench/frame-text.js), so the window buttons move with the row that
+// shows them. A change of the factor alone places again, with no surface, as on the library screen.
+func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
+	f, stored := surfaceShell(t)
+	titlebar := func() float64 {
+		t.Helper()
+		if len(stored.requests) == 0 {
+			t.Fatal("the workbench placed nothing")
+		}
+		value, _ := stored.requests[len(stored.requests)-1]["titlebar"].(float64)
+		return value
+	}
+	if got := titlebar(); got != 40 {
+		t.Fatalf("the first row at factor 1 is %v, want 40", got)
+	}
+	for _, step := range []struct{ factor, row float64 }{{2, 72}, {1.25, 45}} {
+		f.run("core.settings.set", map[string]any{"patch": map[string]any{"textSize": step.factor}, "scope": "common"})
+		f.settle()
+		if got := titlebar(); got != step.row {
+			t.Fatalf("the placement at factor %v gives the first row %v, want %v", step.factor, got, step.row)
+		}
+	}
+	f.run("core.projects.browse", nil)
+	f.settle()
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"textSize": 3}, "scope": "common"})
+	f.settle()
+	if got := titlebar(); got != 108 {
+		t.Fatalf("the library at factor 3 gives the first row %v, want 108", got)
+	}
+}
