@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F715-2: core fixture `probeinput`(`e2e/fixtures/input-probe`)는 view 의 text field 와 native document region 안의 text field 를 가진다. 각 field 는 focus, value, caret, preedit 와 그 범위, 그리고 순서대로 도착 시각을 가진 key, commit, Edit > Copy 와 Edit > Paste 의 text 를 보고하고, view 는 `core.picker.close` 로 전달한 각 Escape 를 보고한다.
 - F696-7: CI 는 `linux-node` job 에서 검증 pipeline 의 headless owner test 를 Linux 로 실행하고, 이 job 은 `os` field 가 Linux 를 제외하는 workspace project 없이 잠긴 dependency 를 설치한다. 실제 macOS 기능이 필요한 owner 는 macOS job 의 system owner 로 실행되고, `make check-windows-rust` 는 Windows host 에서 Rust host 를 Windows 용으로 검사한다.
 - F696-4-5: 인식을 대체하려고만 있던 reference-pixel 장치를 제거한다. native/darwin, Go·Rust host, plugin API의 document reference producer와 capture(`diagnostics.capture.document-reference`, 그 contract 행, 명세, provider), terminal reference acquisition과 그 recorded content·recorded fixture, capture callback fixture, 그리고 reference만 쓰던 composition pixel proof와 card frame geometry가 대상이다. 호출자 감사에서 다른 쓰임은 없었다. document frame identity entry, QR atlas, `serveContentPage`는 identity·IME·layout 쓰임으로 남고, root-only frame identity entry는 붙은 document가 plugin-root capability를 얻지 않는다는 검사를 유지한다.
 - F502-4: sidecar로 보내는 view call은 그 page의 send와 같은 admission을 거친다. 그래서 place가 도는 동안의 send는 그 place의 결과를 기다리고, place가 view를 놓은 뒤의 send는 보내지 않는다. send가 private sidecar bridge로 place를 건너뛰지 않는다. sidecar root와 선택적 correlation identifier의 fallback 이유를 적고, Tauri send command를 다른 command와 같은 형태로 쓰며, workbench host는 report default의 이유를 되살린다.
