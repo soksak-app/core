@@ -115,7 +115,7 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native content, cards, and the sidebar rail stay aligned`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { frame: "debug", io: "info" }, reads: ["sidecar.rasterprobe.frame", "sidecar.rasterprobe.request"] });
+    await fresh(s, { log: { frame: "debug" }, reads: ["sidecar.rasterprobe.frame"] });
     const raster = await rasterInFirstCard(s);
     // The right override of the raster probe ties the fixed sidebar and the rail to the raster probe card; the set is the list set
     // of the layout probe.
