@@ -19,6 +19,9 @@ test("the plugin page of the library lists each plugin with its description, ver
     if (value) element.dataset.value = value;
   } } });
   t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
+  t.mock.module("../contributions.js", { namedExports: {
+    contributionsState: () => [{ plugin: "tty", point: "db.items", index: 0, state: "connected" }], onContributionsChange: () => {},
+  } });
   let refreshed = 0;
   const listeners = [];
   const status = {
@@ -98,6 +101,11 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(text("db", "id"), "db");
     assert.equal(text("db", "state"), "설치 안 됨");
     assert.equal(text("db", "about"), "데이터베이스 표면.");
+    // The description and the contribution lines of a card are elements of their own names, so a check measures where each host places them.
+    const named = (id, name) => [...card(id).querySelectorAll(`[data-expose="core.library.plugins.${name}"]`)].map((line) => line.textContent);
+    assert.deepEqual(named("db", "about"), ["데이터베이스 표면."]);
+    assert.deepEqual(named("tty", "contribution"), ["db.items 기여 1: 연결됨"]);
+    assert.deepEqual(named("db", "contribution"), [], "a card shows the contributions of another plugin");
     assert.equal(text("db", "versions"), "최신 버전 2.0.0");
     assert.equal(text("db", "sidecars"), "사이드카 @x/db ^1.0.0");
     assert.equal(text("db", "operation"), "db install 진행 중");

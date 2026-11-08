@@ -219,7 +219,10 @@ export function createLibrary(root, rendered = () => {}) {
     const head = element('div', 'library-plugin__head');
     head.append(element('h2', '', row.name), element('span', 'library-plugin__state', PLUGIN_STATES[row.state]));
     card.append(head, element('p', 'library-plugin__id', row.id));
-    if (row.description) card.append(element('p', 'library-plugin__about', row.description));
+    if (row.description) {
+      const about = element('p', 'library-plugin__about', row.description); about.dataset.expose = 'core.library.plugins.about';
+      card.append(about);
+    }
     const versions = [
       row.installed ? `설치된 버전 ${row.installed.version}` : null,
       row.latest ? `최신 버전 ${row.latest}` : null,
@@ -230,7 +233,7 @@ export function createLibrary(root, rendered = () => {}) {
     for (const entry of contributionsState().filter((item) => item.plugin === row.id)) {
       const where = `library plugin ${row.id} contribution ${entry.point} ${entry.index + 1}`;
       const line = element('p', 'library-plugin__contribution', `${entry.point} 기여 ${entry.index + 1}: ${CONTRIBUTION_STATES[entry.state]}`);
-      line.dataset.state = entry.state;
+      line.dataset.state = entry.state; line.dataset.expose = 'core.library.plugins.contribution';
       card.append(line);
       if (entry.state === 'invalid') showError(line, where, `${entry.point} 기여 ${entry.index + 1}: ${entry.reason}`);
       else hideError(line, where);
