@@ -199,7 +199,20 @@ The identifiers in code use the names as written here.
 - Tests:
   - Core tests verify its boundary with fake plugin fixtures.
   - Common contract cases (RPC, restart) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths. It keeps each fixture that it replays as a byte copy that `contract-copies.json` declares, and the registry check compares the copies with the published files of each listed core ([contract copies](plugins.md#contract-copies)).
-  - Measurements with real plugins and window checks are end-to-end checks of the installed environment, not package tests.
+  - Measurements with real plugins and window checks are end-to-end checks of the installed environment, not package tests; they gate no release of core or of a plugin.
+
+## Verification boundaries
+
+Each check belongs to one of three owners, and only the first two gate a release.
+
+- Core: window checks, benchmarks and the candidate acceptance of a core release run the core applications with the fake plugin fixtures of `e2e/fixtures` only. They install no registry index, build no plugin or sidecar repository and name no real plugin or sidecar.
+- Plugin: the checks of the behavior of a plugin run in the repository of that plugin, against a published core application, through the published `@soksak/window-check`. They gate the release of that plugin.
+- Environment: the installed cohort of published core and plugin releases is checked by the registry after both are published. The check gates no release.
+
+The table below assigns every file of core that installs, builds or names a real plugin or sidecar to its owner.
+
+| File | Owner | Reason |
+| --- | --- | --- |
 ## Tabs and processes
 
 - A view is one per tab. No public API assigns processes.

@@ -199,7 +199,20 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `p
 - 시험:
   - core 시험은 자기 경계를 fake plugin fixture로 검증한다.
   - 공통 계약 case(RPC, 재시작)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다. replay하는 각 fixture는 `contract-copies.json`이 선언하는 byte 사본으로 두고, registry 검사가 그 사본을 각 listed core의 게시된 파일과 비교한다([contract 사본](plugins.ko.md#contract-사본)).
-  - 실제 plugin을 띄우는 측정과 창 검사는 설치된 환경의 end-to-end 검사이고, package 시험이 아니다.
+  - 실제 plugin을 띄우는 측정과 창 검사는 설치된 환경의 end-to-end 검사이고, package 시험이 아니며, core 나 plugin 의 어떤 release 도 막지 않는다.
+
+## 검증 경계
+
+각 check 는 세 소유자 중 하나에 속하며, 앞의 둘만 release 를 막는다.
+
+- core: core release 의 window check, benchmark, candidate acceptance 는 `e2e/fixtures` 의 fake plugin fixture 만으로 core 앱을 실행한다. registry index 를 설치하지 않고, plugin 이나 sidecar 저장소를 build 하지 않으며, 실제 plugin 이나 sidecar 를 이름 짓지 않는다.
+- plugin: plugin 동작의 check 는 그 plugin 저장소에서, 공개된 core 앱을 대상으로, 공개된 `@soksak/window-check` 로 실행된다. 그 plugin 의 release 를 막는다.
+- 환경: 공개된 core 와 plugin release 의 설치 cohort 는 양쪽이 공개된 뒤 registry 가 check 한다. 이 check 는 어떤 release 도 막지 않는다.
+
+아래 표는 실제 plugin 이나 sidecar 를 설치, build 하거나 이름 짓는 core 의 모든 파일을 그 소유자에게 배정한다.
+
+| 파일 | 소유자 | 이유 |
+| --- | --- | --- |
 ## 탭과 프로세스
 
 - view는 탭마다 하나다. 프로세스 배정을 정하는 공개 API는 없다.
