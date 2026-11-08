@@ -1,6 +1,7 @@
 {
   "runtime": "runtime",
-  "install": "browser-example",
+  "registry": "https://soksak-app.github.io/registry/index.json",
+  "install": "starter",
   "sidecars": false,
   "workspace": {
     "focus": "terminal",

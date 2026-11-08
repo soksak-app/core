@@ -103,7 +103,7 @@ jobs:
       - name: Build the native library and the Tauri frontend offline
         env:
           OFFLINE: '1'
-        run: make -C core build-native copy-core-frontend-tauriv2
+        run: make -C core build-native copy-frontend-tauriv2
       - name: Repeat the Rust test
         env:
           CARGO_NET_OFFLINE: 'true'

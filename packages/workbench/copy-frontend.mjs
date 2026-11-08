@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Places the frontend of the application in one directory (staging layout in docs/spec/plugins.md).
 //
-//   sok-copy-frontend <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]
+//   sok-copy-frontend <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>]
 //
 // Reads environment.json from the application package in the current directory. The package location is found
-// by Node module resolution. The staged registry changes only when --registry-index is given.
+// by Node module resolution. The staged environment.json keeps the registry that the application declares.
 //
 // With --no-main-page the host draws the workbench itself and no page runs it: the output is the view root, the paths
 // marked (view root) below, and environment.json names no runtime.
@@ -31,21 +31,21 @@
 import { parseArgs } from "node:util";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, isAbsolute, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { STAGED, missingPageReferences } from "./staged.js";
 import {
   CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, PAGE_IMPORTS, RUNTIME, VIEW_IMPORTS_FILE,
   modulePath, pageImports, pageImportsForBuild, validateEnvironment, validateInstalledPlugins, viewCoreTargets, viewImports,
 } from "@soksak/plugin-api";
 
-const USAGE = "usage: sok-copy-frontend <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>] [--registry-index <absolute index path>]";
+const USAGE = "usage: sok-copy-frontend <output directory> [--diagnostics] [--no-main-page] [--installed <configuration directory>]";
 let parsed;
 try {
   parsed = parseArgs({
     options: {
       diagnostics: { type: "boolean", default: false }, "no-main-page": { type: "boolean", default: false },
-      installed: { type: "string" }, "registry-index": { type: "string" },
+      installed: { type: "string" },
     },
     allowPositionals: true, strict: true, tokens: true,
   });
@@ -62,7 +62,7 @@ if (parsed.positionals.length !== 1) {
   process.exit(2);
 }
 const [out] = parsed.positionals;
-const { diagnostics, "no-main-page": noMainPage, installed: installedDirectory, "registry-index": registryIndex } = parsed.values;
+const { diagnostics, "no-main-page": noMainPage, installed: installedDirectory } = parsed.values;
 
 const app = process.cwd();
 const target = resolve(app, out);
@@ -113,12 +113,7 @@ function enabledInstalledPlugins(configuration) {
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
-const environmentInput = readJson(join(app, ENVIRONMENT));
-if (registryIndex !== undefined) {
-  if (!isAbsolute(registryIndex)) throw new Error("--registry-index must be an absolute file path");
-  environmentInput.registry = pathToFileURL(registryIndex).href;
-}
-const environment = validateEnvironment(environmentInput);
+const environment = validateEnvironment(readJson(join(app, ENVIRONMENT)));
 if (noMainPage && environment.runtime !== undefined) throw new Error("--no-main-page refuses the runtime of environment.json");
 if (!noMainPage && environment.runtime === undefined) throw new Error("a main page requires runtime in environment.json");
 if (!noMainPage && !existsSync(join(app, environment.runtime, "index.js"))) throw new Error(`${environment.runtime}/index.js is missing`);

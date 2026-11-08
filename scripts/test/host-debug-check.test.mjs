@@ -30,14 +30,14 @@ function assertCompilesDebugConfiguration(output) {
 }
 
 test("the debug check compiles the features and tags of the debug apps", { timeout: 60000 }, () => {
-  assertCompilesDebugConfiguration(dryRun("check-host-debug", "copy-core-frontend-wailsv3", "copy-core-frontend-tauriv2", "copy-core-frontend-mygo"));
+  assertCompilesDebugConfiguration(dryRun("check-host-debug", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo"));
 });
 
 test("check-host-files runs the debug check", { timeout: 60000 }, () => {
-  assertCompilesDebugConfiguration(dryRun("check-host-files", "copy-core-frontend-wailsv3", "copy-core-frontend-tauriv2", "copy-core-frontend-mygo"));
+  assertCompilesDebugConfiguration(dryRun("check-host-files", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo"));
 });
 
 test("the debug check builds the native test library that the compiled tests link", { timeout: 60000 }, () => {
-  const output = dryRun("check-host-debug", "copy-core-frontend-wailsv3", "copy-core-frontend-tauriv2", "copy-core-frontend-mygo");
+  const output = dryRun("check-host-debug", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo");
   assert.match(output, /build-host-test build-host-callback-abi build-host-callback-worker/, output);
 });

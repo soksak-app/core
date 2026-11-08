@@ -5,7 +5,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import { PAGE_IMPORTS, VIEW_IMPORTS, VIEW_IMPORTS_FILE, importSpecifiers, pageImports, viewImports } from "@soksak/plugin-api";
 import { STAGED, missingPageReferences, pageReferences } from "../staged.js";
@@ -115,17 +115,17 @@ test("unknown staging arguments are rejected", (t) => {
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--release"], { cwd: app, stdio: "pipe" }), /usage/);
 });
 
-test("a staged registry override leaves the application environment unchanged", (t) => {
+test("staging keeps the registry that the application declares and takes no registry override", (t) => {
   const app = fixtureApp(t);
   const sourceEnvironment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
   sourceEnvironment.registry = "https://registry.example/index.json";
   writeFileSync(join(app, "environment.json"), JSON.stringify(sourceEnvironment));
-  const registryIndex = join(app, "registry # folder", "index.json");
 
-  stage(app, "--registry-index", registryIndex);
+  stage(app, "--diagnostics");
 
-  assert.equal(JSON.parse(readFileSync(join(app, "out/environment.json"), "utf8")).registry, pathToFileURL(registryIndex).href);
-  assert.equal(JSON.parse(readFileSync(join(app, "environment.json"), "utf8")).registry, "https://registry.example/index.json");
+  assert.equal(JSON.parse(readFileSync(join(app, "out/environment.json"), "utf8")).registry, "https://registry.example/index.json");
+  assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--registry-index", join(app, "index.json")], { cwd: app, stdio: "pipe" }),
+    (error) => /Unknown option '--registry-index'/.test(error.stderr.toString()));
 });
 
 /** A configuration directory with two enabled plugins and one disabled plugin installed. probe holds the diagnostics declaration. */
