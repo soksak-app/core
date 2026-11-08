@@ -2,54 +2,14 @@
   "schema": 1,
   "files": [
     {
-      "file": "e2e/activation/ime-capture-replay.mjs",
-      "owner": "tool",
-      "reason": "Replays recorded IME capture artifacts of a `plugin.terminal.*` session; it builds or installs nothing, but it is tied to the terminal and should be rewritten against an IME-capable plain-view fixture (text-input element plus a frame identity)."
-    },
-    {
-      "file": "e2e/activation/ime-visual-capture.mjs",
-      "owner": "tool",
-      "reason": "Helper that starts the terminal-renderer IME capture and reads its frame identities (terminal sidecar); reduce it to a fixture view that reports its preedit and frame identity."
-    },
-    {
-      "file": "e2e/activation/ime.test.mjs",
-      "owner": "core",
-      "reason": "Checks OS IME composition reaching the focused view (preedit, a single commit, cursor) and uses the terminal PTY only as the place text arrives; replace with a plain-view probe text input that reports its composition, commits and caret through a status."
-    },
-    {
-      "file": "e2e/activation/key-window-refusal.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a key to a non-key window is refused (keyboard routing and key window) and uses the terminal only as the target; replace with a plain-view probe that counts the keys it receives."
-    },
-    {
-      "file": "e2e/activation/manual/native-ime-lifecycle.test.mjs",
-      "owner": "core",
-      "reason": "Checks the native input client lifecycle across project close and reopen and 2-Set commits; replace the terminal with a plain-view probe that reports commits."
-    },
-    {
-      "file": "e2e/activation/marked-text.test.mjs",
-      "owner": "core",
-      "reason": "Checks that Japanese marked text is committed once when composition ends (IME) and uses the PTY as the receiver; replace with a plain-view probe commit log."
-    },
-    {
       "file": "e2e/activation/terminal-ime-document.mjs",
       "owner": "tool",
       "reason": "Helper that pulls terminal compose and cursor state for IME checks; it is terminal-specific and must be reduced to a fixture probe status shape."
     },
     {
-      "file": "e2e/activation/terminal-ime-visual.mjs",
-      "owner": "tool",
-      "reason": "Helper that crops terminal cells from a capture to check the IME preedit; it is terminal-specific and must be reduced to fixture pixel markers."
-    },
-    {
       "file": "e2e/activation/terminal-view-focus.test.mjs",
       "owner": "mixed",
       "reason": "visible input preserves the prompt, handles wide cells, and ignores later blanks: plugin:terminal; sidecar screen facts preserve the numeric row count and frame cursor: plugin:terminal; terminal IME stage waits for cursor notification after composition changes: plugin:terminal; terminal IME stage waits for cursor movement when native preedit stays unchanged: plugin:terminal; terminal IME stage rereads coherent composition on a screen notification: plugin:terminal; terminal stage requires matching screen, cursor, and compose state: plugin:terminal; a terminal click accepts the same native keys as its AppKit reference: core (focus and key routing, plain-view probe key log); repeated Korean vowels stay visible before Space: core (IME, plain-view probe preedit status)."
-    },
-    {
-      "file": "e2e/activation/view-ime-escape.test.mjs",
-      "owner": "core",
-      "reason": "Checks that Escape ends a view's composition without forwarding a workbench command (IME and keyboard routing); replace the terminal with a plain-view probe that has a text input and a command log."
     },
     {
       "file": "e2e/balance.test.mjs",
@@ -202,11 +162,6 @@
       "reason": "Checks card, tab, menu, settings, library, layout and rename commands, with browser or terminal as tab plugins and library entries; plain-view probe plus a fixture registry entry."
     },
     {
-      "file": "e2e/document-typing.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the virtual key window delivers typed text into a document region (keyboard routing) and drives browser.navigate only to load a page; replace with a plain-view probe document region with a text field and a typed-text status."
-    },
-    {
       "file": "e2e/editor.test.mjs",
       "owner": "plugin:editor",
       "reason": "Editor opening, saving, save error and ask-before-close of its documents (its save-close core part is already covered by the save-close probe)."
@@ -237,24 +192,9 @@
       "reason": "Checks HWP page drawing, keys, selection, saving and startup timing."
     },
     {
-      "file": "e2e/input-latency.mjs",
-      "owner": "tool",
-      "reason": "Configuration for the input latency check that names the terminal and term plugins; reduce to a fixture view that echoes keys and records the time a key arrives."
-    },
-    {
-      "file": "e2e/input-latency.test.mjs",
-      "owner": "core",
-      "reason": "Measures latency from a native key to its delivery (input path harness) with the terminal and term PTY as the receiver; replace with a fixture echo view, or keep a per-plugin variant in the terminal repo."
-    },
-    {
       "file": "e2e/input-oracle.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks that the bytes the terminal sidecar writes to the PTY match what an independent receiver reads, which is the terminal sidecar's own contract."
-    },
-    {
-      "file": "e2e/input-records.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a typed key leaves a record in every layer of the input path (native, host, workbench, sidecar request). The terminal and its VT sidecar only carry the key; a new fake fixture capability would replace them: an echo surface backed by a fake sidecar that logs the key it receives as `sidecar.*.request`."
     },
     {
       "file": "e2e/late-reply.test.mjs",
@@ -267,19 +207,9 @@
       "reason": "Checks how the library window creates, opens and restores projects and names a missing folder. The terminal is only the default card (plus a process snapshot); `plain-view` can serve as the default view."
     },
     {
-      "file": "e2e/modal-escape-terminal.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the keyboard returns after Escape closes the add picker and that keys pressed while it opens are dropped (modal and focus routing). A new keyboard-echo capability for `plain-view` would replace the terminal."
-    },
-    {
       "file": "e2e/modal.test.mjs",
       "owner": "mixed",
       "reason": "\"reloading under settings leaves successor terminal images and documents unblurred\": core (`plain-view` raster); \"the settings modal is on screen at the time presented reports after it is shown\": core; \"an open modal's document receives the content the page updates\": core; \"a first modal answer that arrives after later changes keeps the moved position\": core; \"a card split while settings are open keeps settings above new surfaces\": core (`plain-view`); \"reloading the main document removes its settings webview\": core; \"settings blocks background input and closes only through its close button\": core (keyboard-echo `plain-view`); \"add and split menus are transparent and have no backdrop\": core; \"moving settings and resizing the parent preserves its native coverage\": core; \"Help > Debug records the state, lists the logs folder and refuses a path outside it\": core; the four \"debug timeline/debug view\" tests: core."
-    },
-    {
-      "file": "e2e/new-tab-keys.test.mjs",
-      "owner": "core",
-      "reason": "Checks that keys typed while a new tab opens all reach it (input held until the tab can take it). A keyboard-echo `plain-view` would replace the terminal."
     },
     {
       "file": "e2e/normal-shutdown-runner.mjs",
@@ -332,16 +262,6 @@
       "reason": "Checks the drawing of sidebar rails when adjacent or apart and in card full screen. A fixture plugin with a sidebar override would replace the terminal."
     },
     {
-      "file": "e2e/real/focus.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a real press on a native region never moves focus to another tab's text field (focus routing). Two fixtures would replace terminal and browser: `plain-view` and `extension-probe` with a webview text field."
-    },
-    {
-      "file": "e2e/real/input.test.mjs",
-      "owner": "core",
-      "reason": "Checks the real HID input path, modifier flags, sidebar divider fold, and pasteboard helpers. `plain-view` with a native region would replace the terminal."
-    },
-    {
       "file": "e2e/real/terminal.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Every test checks terminal behavior itself: selection, copy and paste, scrollback, scrollbar, OSC 8, mouse modes, keypad, fixture TUI, Finder drop. \"dividers and card icons show their cursors...\" is core (`view-drag`)."
@@ -390,16 +310,6 @@
       "file": "e2e/surface-sync-turn.test.mjs",
       "owner": "core",
       "reason": "Checks that a surface layout runs in one main-thread turn. `plain-view` would replace the terminal card."
-    },
-    {
-      "file": "e2e/tab-press-keys.test.mjs",
-      "owner": "core",
-      "reason": "Checks that keys right after a tab press are held and reach the tab whole (native-surfaces keyboard). A keyboard-echo `plain-view` would replace the terminal."
-    },
-    {
-      "file": "e2e/terminal-edit.test.mjs",
-      "owner": "core",
-      "reason": "Checks that injected Command+C and Command+V run the Edit menu like a person's keys (virtual key window and menu routing). A fixture that handles edit copy and paste would replace the terminal."
     },
     {
       "file": "e2e/terminal-font.test.mjs",
@@ -462,11 +372,6 @@
       "reason": "\"a newly split terminal presents its first native raster\": core (`plain-view`); \"balancing unequal cards presents every terminal at its new size\": core; \"four split terminals complete native presentation without a host crash\": core; \"endpoint split requests survive repeated native WebView presentation\": core; \"native presentation failure is explicit and the next split remains usable\": core; \"three terminals and two browsers keep one view web view each and one terminal service\": core (fake shared-service fixture); \"closing terminal tabs reaps every PTY child without killing the shared service\": plugin:terminal; \"padding settings inset the terminal grid and show the terminal background\": plugin:terminal; \"removing a project ends the terminal sessions that its layout held\": core (fake session fixture); \"a click gives native focus to the clicked terminal and its card\": core; \"the login shell setting starts the account's login shell as a login shell\": plugin:terminal; \"a resize redraws a wrapped ${shell} input line without rows of the previous width\": plugin:terminal; \"the terminal tab shows the program title unless the title setting is name\": plugin:terminal; \"a long tab title is cut at the width bound of a tab\": core; the two \"an OSC 9 notification from a terminal out of view ...\" tests: plugin:terminal (core tab notice reachable with a fixture notice command); \"OSC 8 linked cells are drawn with an underline and plain cells are not\": plugin:terminal; \"clear leaves no history and hides the scrollbar\": plugin:terminal; \"a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable\": core; \"a terminal split from a terminal starts in the directory that terminal reported\": core (cwd-reporting fixture); \"a page start keeps the terminal sessions that the layouts hold\": core; \"hiding three terminals retains native geometry and rasters\": core; \"three terminals survive repeated divider drags and project returns\": core (`view-drag`); \"terminal input returns terminal output through the terminal sidecar\": plugin:terminal; \"inline image pixels follow scroll, resize, replacement, deletion, and cleanup\": plugin:terminal; \"the terminal background equals the card color of every theme and mode\": plugin:terminal; \"terminal raster follows application light and dark theme\": plugin:terminal; \"terminal cursor policy uses declared settings, persistence, and pixels\": plugin:terminal; \"each cursor shape and focus state renders its own cursor-cell pixels\": plugin:terminal; \"the terminal font follows the pressed card's text size\": plugin:terminal; \"a native drag over blank terminal cells ends without a surface error\": plugin:terminal; \"a terminal draws its screen after the window is resized from outside\": core; \"a native drag into the padding below the last row selects to the last row\": plugin:terminal; \"native terminal selection renders and copies through one explicit paste\": plugin:terminal; \"an explicit PNG paste writes an owned image and inserts its quoted path\": plugin:terminal; \"terminal file drop pastes quoted paths without executing\": plugin:terminal; \"diagnostic terminal entries inject preedit and record terminal input\": plugin:terminal; \"a terminal session error stays until the event that resolves it\": plugin:terminal; \"terminal image follows a window resize\": core; \"multiple terminals keep fixed cells during a divider drag\": plugin:terminal."
     },
     {
-      "file": "e2e/test/activation/ime-visual-capture.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Unit test of IME capture verification against terminal screen-render fixtures and VT sidecar data. The capture harness is core, but the data is the terminal's own document; it should move with the terminal, or the core harness should be tested with a fake IME echo fixture."
-    },
-    {
       "file": "e2e/test/activation/terminal-ime-document.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Unit tests of reconstructing the terminal's input document from terminal.screen.read and VT receipts."
@@ -510,11 +415,6 @@
       "file": "e2e/test/hwp-view-metrics-case.test.mjs",
       "owner": "plugin:hwp",
       "reason": "Unit tests of the HWP benchmark case (layout, marker, reclaim, footprint)."
-    },
-    {
-      "file": "e2e/test/input-latency.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of the input-latency measurement harness. It names terminal and term tabs as the measured plugins; it should measure a keyboard-echo fixture, and per-plugin latency belongs to the plugins."
     },
     {
       "file": "e2e/test/normal-shutdown-audit.test.mjs",
@@ -577,11 +477,6 @@
       "reason": "Tests that the core text-size commands enlarge the pressed card or frame, using the terminal's `terminal.session` cellHeight and `terminal.view` as the vehicle. Replace with plain-view exposing a text-size/scale status and a view element."
     },
     {
-      "file": "e2e/two-pointers.test.mjs",
-      "owner": "core",
-      "reason": "Tests routing of two native pointers, using the browser's `browser.navigate`/`browser.location` and `browser.document` as the vehicle. Replace with extension-probe/plain-view with a pointer-echo page that publishes a pointer status."
-    },
-    {
       "file": "e2e/view-content.mjs",
       "owner": "mixed",
       "reason": "This helper (not a test) reads the shown content of each real plugin (`browser.content.read`, `editor.read`, hwp page SVG, `term`/`terminal.screen.read`) and builds the cases for those plugins. The per-plugin readers belong to plugin:browser, plugin:editor, plugin:hwp, plugin:term and plugin:terminal; the generic harness is core and should use a plain-view content-read command."
@@ -597,24 +492,9 @@
       "reason": "Tests that a native view touches its card lines at each slot, using terminal surfaces as the native view. Replace with a native-view fixture (plain-view or view-drag with a native raster)."
     },
     {
-      "file": "e2e/view-input.test.mjs",
-      "owner": "core",
-      "reason": "Tests that an inactive view keeps input across main focus and handles picker Escape, using the browser address field as the vehicle. Replace with extension-probe/plain-view with a focusable text field element and a focused status."
-    },
-    {
-      "file": "e2e/view-keyboard-routing.test.mjs",
-      "owner": "core",
-      "reason": "Tests keyboard routing between a terminal view and the browser address field. Replace with plain-view text-field/key-echo capabilities (two fixture views)."
-    },
-    {
       "file": "e2e/view-restart.test.mjs",
       "owner": "core",
       "reason": "Tests view lifetime: restoring state, stopping after four failures and reopening after unload, using `browser.navigate`/`browser.reload`. Replace with a fake fixture that has restorable state, a crash/reload command and a location status."
-    },
-    {
-      "file": "e2e/view-shortcut.test.mjs",
-      "owner": "core",
-      "reason": "Tests that Command-zero in a focused view runs the native text-size menu command, using the browser address field for focus. Replace with plain-view with a focusable field."
     },
     {
       "file": "e2e/view-start-handoff.test.mjs",

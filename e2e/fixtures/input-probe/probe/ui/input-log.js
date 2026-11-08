@@ -1,5 +1,6 @@
 // The input log of one text field of the input probe: the keys that reach the field in order, the preedit of the input method
-// and its range, every commit, the caret, and the text that Edit > Copy and Edit > Paste move. The view field and the field of
+// and its range, every commit, the caret, the text that Edit > Copy and Edit > Paste move, the wheel events of its document and
+// the counts of the pointer gesture on its document. The view field and the field of
 // the document region use the same log, so both report the same shape. The module imports nothing, because a region document
 // has no import map (docs/spec/native-surfaces.md#document-regions).
 
@@ -28,8 +29,12 @@ const push = (list, entry) => {
  */
 export function createInputLog(element, view) {
   let sequence = 0;
-  let keys = [], commits = [], copies = [], pastes = [];
+  let keys = [], commits = [], copies = [], pastes = [], wheels = [];
   let preedit = null;
+  // The pointer gesture of the document: presses, moves with the primary button held, releases, and the events whose buttons are
+  // not those of the gesture of the document (a button of another gesture).
+  let pointer = { downs: 0, drags: 0, ups: 0, foreign: 0 };
+  let pressed = false;
   let compositionStart = 0;
   const listeners = new Set();
   const caret = () => ({ start: element.selectionStart, end: element.selectionEnd, direction: element.selectionDirection });
@@ -44,6 +49,8 @@ export function createInputLog(element, view) {
     commits: [...commits],
     copies: [...copies],
     pastes: [...pastes],
+    wheels: [...wheels],
+    pointer: { ...pointer },
   });
   const changed = () => {
     const state = read();
@@ -97,6 +104,28 @@ export function createInputLog(element, view) {
     select: changed,
   };
   for (const [type, handler] of Object.entries(handlers)) element.addEventListener(type, handler);
+  const documentHandlers = {
+    wheel: (event) => {
+      push(wheels, { sequence: next(), deltaX: event.deltaX, deltaY: event.deltaY, modifiers: modifiersOf(event), atMs: event.timeStamp });
+      changed();
+    },
+    pointerdown: (event) => {
+      pressed = true;
+      pointer = { ...pointer, downs: pointer.downs + 1, foreign: pointer.foreign + (event.buttons === 1 ? 0 : 1) };
+      changed();
+    },
+    pointermove: (event) => {
+      if (pressed && event.buttons === 1) pointer = { ...pointer, drags: pointer.drags + 1 };
+      else if (event.buttons !== (pressed ? 1 : 0)) pointer = { ...pointer, foreign: pointer.foreign + 1 };
+      changed();
+    },
+    pointerup: (event) => {
+      pressed = false;
+      pointer = { ...pointer, ups: pointer.ups + 1, foreign: pointer.foreign + (event.buttons === 0 ? 0 : 1) };
+      changed();
+    },
+  };
+  for (const [type, handler] of Object.entries(documentHandlers)) view.document.addEventListener(type, handler, { passive: true });
   // The caret moves without an event of the element, such as by an arrow key or a press, so the selection of the document is followed.
   view.document.addEventListener("selectionchange", changed);
   view.addEventListener("focus", changed);
@@ -107,12 +136,15 @@ export function createInputLog(element, view) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
-    /** Empties the lists and the field. */
+    /** Empties the lists, the pointer counts and the field. */
     clear() {
       keys = [];
       commits = [];
       copies = [];
       pastes = [];
+      wheels = [];
+      pointer = { downs: 0, drags: 0, ups: 0, foreign: 0 };
+      pressed = false;
       preedit = null;
       element.value = "";
       changed();

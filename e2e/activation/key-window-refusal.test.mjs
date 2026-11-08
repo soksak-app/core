@@ -10,7 +10,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
+import { documentFocused, documentPoint, inputProbeTab } from "../input-probe.mjs";
 
 
 /**
@@ -34,33 +34,31 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a key to a window that is not the key window is rejected instead of delivered`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const [terminal] = await ensureTerminals(s, 1);
-    const surface = terminal.surface;
-    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("$")), "shell prompt missing");
+    // The document region of the input probe takes the keyboard of the window and reports each key that reaches it.
+    const { surface } = await inputProbeTab(s);
     await s.keepPointerOutside();
-    const view = await s.rect("terminal.view", undefined, surface);
-    const x = view.document.x + view.x + view.width / 2;
-    const y = view.document.y + view.y + view.height / 2;
+    const { x, y } = await documentPoint(s, surface);
     await s.pointer(x, y, "move", { activate: true });
     await s.selectInputSource("latin");
     await s.click(x, y);
-    await s.until("host.window", (host) => host.active === true &&
-      host.regions.some((region) => region.surface === surface && region.focused),
-    "the terminal did not receive native focus in the active window");
+    await s.until("host.window", (host) => host.active === true && documentFocused(host, surface),
+      "the input probe document did not receive native focus in the active window");
 
     // When another project window becomes the key window, human keys do not reach the first window. The diagnostic key does not deliver to another window either and is rejected.
-    const project = temporaryProject(s, "soksak-terminal-key-window-");
+    const project = temporaryProject(s, "soksak-key-window-");
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.project.open", { root: project, color: "#7fe3b0" });
     const child = s.on((await s.windows(2, "the second project window did not open"))
       .find((window) => window.window !== s.window).window);
     await child.until("host.window", (host) => host.active === true && host.key === true,
       "the second project window did not become the key window");
-    await s.until("host.window", (host) => host.key === false && host.regions.some((region) =>
-      region.surface === surface && region.focused), "the first window lost its terminal responder");
+    await s.until("host.window", (host) => host.key === false && documentFocused(host, surface),
+      "the first window lost its input probe responder");
+    const before = (await s.get("probeinput.document", surface)).keys.at(-1)?.sequence ?? 0;
 
     await assert.rejects(s.press("e"), /keys reach only the key window of the active application/);
-    assert.equal((await s.get("terminal.session", surface)).error, undefined, "the rejected key reached the terminal");
+    const reached = (await s.get("probeinput.document", surface)).keys.filter((key) => key.sequence > before);
+    assert.deepEqual(reached, [], "the rejected key reached the input probe document");
     await child.close();
     await s.windows(1, "the second project window did not close");
   });

@@ -751,7 +751,7 @@ benchmark-split-load:
 benchmark-plain-view:
 	@pnpm -F @soksak/e2e run benchmark:plain-view
 
-# The time from a key to the prompt in an open application (docs/operations/examples.md#input-latency): APP names the application, by
+# The time from a key to its arrival in the input probe of an open application (docs/operations/examples.md#input-latency): APP names the application, by
 # default mygo, and SOKSAK_CONFIG_DIR the configuration folder that the application runs with.
 benchmark-input-latency:
 	@$(B3_BENCHMARK_ENV) SOKSAK_APP=$(or $(APP),mygo) node scripts/node-tests.mjs --script benchmark:input-latency --concurrency 1 --timeout 600
