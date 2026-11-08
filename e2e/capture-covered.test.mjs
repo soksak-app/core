@@ -1,9 +1,10 @@
 // A still capture reads a covered window without a permission prompt, the activation of the application or the real cursor:
-// while the window draws covered (`diagnostics.window.draw-covered`), the document of a browser tab stays shown, the still of
+// while the window draws covered (`diagnostics.window.draw-covered`), the region document of a tab stays shown, the still of
 // the covered window holds it as the still before the cover does, and a change made while covered is in the next still
-// (docs/spec/hosts.md#platform-interface, docs/spec/native-surfaces.md#document-regions).
+// (docs/spec/hosts.md#platform-interface, docs/spec/native-surfaces.md#document-regions). The document is the region document of the
+// layout probe start tab, which paints its content in a color on command and reports its visibility state and the number of its
+// visibility changes (layoutprobe.document).
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
 import { mkdtempSync, realpathSync, rmSync, rmdirSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -15,29 +16,11 @@ import { fresh } from "./fixture.mjs";
 
 const RED = [0xc8, 0x32, 0x32];
 const BLUE = [0x32, 0x78, 0xc8];
+/** The CSS color that the document reports for a color. */
+const css = ([r, g, b]) => `rgb(${r}, ${g}, ${b})`;
+const hex = (rgb) => `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 /** The largest channel difference of two pixels of the same colour, as in e2e/capture-still.test.mjs. */
 const TOLERANCE = 3;
-
-/**
- * A loopback server whose documents fill the page with one colour and show their visibility state and the number of their
- * visibility changes as their title. `/red` is static; `/blue` paints itself in an animation frame, which a hidden document
- * does not run. It is closed when the check ends.
- */
-async function serve(s) {
-  const server = createServer((request, response) => {
-    const blue = request.url === "/blue";
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    response.end("<!doctype html><title>visibility</title><style>html,body{margin:0;height:100%;background:#c83232}</style><script>"
-      + "let changes = 0; const show = () => { document.title = `visibility:${document.visibilityState}:${changes}`; };"
-      + "document.addEventListener('visibilitychange', () => { changes++; show(); }); show();"
-      + (blue ? "requestAnimationFrame(() => { document.documentElement.style.background = '#3278c8';"
-        + " document.body.style.background = '#3278c8'; });" : "")
-      + "</script>");
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  s.cleanup(() => new Promise((resolve) => server.close(resolve)));
-  return `http://127.0.0.1:${server.address().port}`;
-}
 
 /**
  * Takes a still of the window and returns the decoded image. The files are removed when the check ends, and each folder after
@@ -68,27 +51,21 @@ function samples(image, scale, rect) {
 const unlike = (points, rgb) => points.filter((point) => distance(point.rgb, rgb) > TOLERANCE);
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a still of a covered window holds the document of its browser tab and its changes`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: a still of a covered window holds the document of its tab and its changes`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface } = await fresh(s);
     await s.request("diagnostics.window.draw-covered", { draw: true });
     s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
-    const base = await serve(s);
-    await s.until("core.surfaces",
-      (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),
-      "no visible browser surface registered browser.location");
-    const active = new Set((await s.get("core.grid")).cards.map((card) => card.active).filter(Boolean));
-    const browser = (await s.get("core.surfaces")).find((x) => x.visible && x.plugin === "browser" && active.has(x.surface));
-    assert.ok(browser, "the grid has no active visible browser surface");
-    const surface = browser.surface;
-    await s.run("browser.navigate", { url: `${base}/red` }, surface);
-    await s.until("browser.location", (at) => at.url === `${base}/red` && !at.loading && at.title === "visibility:visible:0",
-      "the browser document did not report itself visible", { surface });
+    await s.registered(surface, ["command layoutprobe.document.color", "status layoutprobe.document"]);
+    await s.until("layoutprobe.document", (at) => at.reported, "the region document did not report", { surface });
+    await s.run("layoutprobe.document.color", { color: hex(RED) }, surface);
+    await s.until("layoutprobe.document", (at) => at.color === css(RED) && at.document === "visible" && at.changes === 0,
+      "the region document did not report itself visible and red", { surface });
     await s.presented();
     const before = await s.get("host.window");
     assert.equal(before.active, false, "the application is active before the still");
     const region = before.documents.find((d) => d.surface === surface && d.document === "page" && d.visible);
-    assert.ok(region, `the browser tab has no visible document region: ${JSON.stringify(before.documents)}`);
+    assert.ok(region, `the probe tab has no visible document region: ${JSON.stringify(before.documents)}`);
     const rect = region.frame, scale = before.scale;
     const folders = new Set();
 
@@ -128,14 +105,14 @@ for (const app of Object.values(APPS)) {
     const kept = samples(covered, scale, rect);
     const moved = kept.filter((point, i) => distance(point.rgb, reference[i].rgb) > TOLERANCE);
     assert.deepEqual(moved, [], "the covered still differs from the uncovered still in the document region");
-    assert.equal((await s.get("browser.location", surface)).title, "visibility:visible:0",
-      "the document of the covered window was hidden");
+    const shown = await s.get("layoutprobe.document", surface);
+    assert.deepEqual([shown.document, shown.changes], ["visible", 0], "the document of the covered window was hidden");
 
     // Still C: a change of the theme and of the document while covered is drawn.
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-    await s.run("browser.navigate", { url: `${base}/blue` }, surface);
-    await s.until("browser.location", (at) => at.url === `${base}/blue` && !at.loading && at.title === "visibility:visible:0",
-      "the browser document of the covered window did not report itself visible", { surface });
+    await s.run("layoutprobe.document.color", { color: hex(BLUE) }, surface);
+    await s.until("layoutprobe.document", (at) => at.color === css(BLUE) && at.document === "visible" && at.changes === 0,
+      "the region document of the covered window did not report itself visible and blue", { surface });
     await s.presented();
     const changed = await still(s, folders);
     assert.deepEqual(unlike(samples(changed, scale, rect), BLUE), [],

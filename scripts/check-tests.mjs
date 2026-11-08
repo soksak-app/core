@@ -2532,9 +2532,9 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region shows its document when the state is set while the window is covered" },
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the other window still hides its document" },
-      { file: "e2e/capture-covered.test.mjs", id: "a still of a covered window holds the document of its browser tab and its changes" },
+      { file: "e2e/capture-covered.test.mjs", id: "a still of a covered window holds the document of its tab and its changes" },
     ],
-    expected: "While a window draws covered, a still of the covered window holds the document of its browser tab as before the cover and the changes made while covered; the regions of other windows keep hiding their documents.",
+    expected: "While a window draws covered, a still of the covered window holds the region document of its tab as before the cover and the changes made while covered; the regions of other windows keep hiding their documents.",
     levels: ["unit", "application"],
   },
   {
@@ -4200,7 +4200,7 @@ const FEATURE_LINKS = [
     },
     {
       "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity setup adds its editor tab only to editable pane cards"
+      "id": "document identity setup adds its root view tab only to editable pane cards"
     },
     {
       "file": "native/darwin/tests/document_core_root_test.m",
@@ -5551,7 +5551,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
       { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
       { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
-      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach the pages of the opened files" },
     ],
     expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
     levels: ["unit", "application"],
@@ -5566,7 +5566,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
       { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
       { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
-      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach the pages of the opened files" },
     ],
     expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
     levels: ["unit", "application"],

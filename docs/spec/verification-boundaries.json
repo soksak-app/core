@@ -167,16 +167,6 @@
       "reason": "the browser document region navigates, takes native input, and follows its surface: plugin:browser; a browser without an address hides its document region and shows the empty state: plugin:browser; the address field shows each loaded address and keeps text being typed: plugin:browser; the browser history buttons draw the core icons at the card header button size: plugin:browser; document site data lives in the configuration directory: core (document region data store, plain-view probe with a document region); a new browser card opens the home setting or starts empty: plugin:browser; a placement that keeps a shown document in place does not hide it: core (view placement, plain-view probe document region); browser document focus and isolation: plugin:browser; browser documents follow host theme pixels for existing, new, and reloaded documents: core (theme propagation, probe document that reports its colour scheme); the address bar paints the card colour in light and dark modes: plugin:browser; a site: plugin:browser; a change of the color scheme reaches the document of a browser card at once: core (probe colour-scheme status); a change of the color scheme reaches the document of a hidden browser card: core (probe colour-scheme status); the browser document zoom follows the pressed card: plugin:browser; the browser records its navigation, load and address commit in the event log: plugin:browser; a quit with a browser tab reads its sessions once and calls no page after the window: core (quit and view lifetime, save-close or unload probe)."
     },
     {
-      "file": "e2e/capture-covered.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a still capture of a covered window holds the document region (capture); replace the browser with a plain-view probe whose document can change colour on command."
-    },
-    {
-      "file": "e2e/capture-document-frame-identity.test.mjs",
-      "owner": "core",
-      "reason": "Checks capture frame identity of a live WebKit root document (capture) and uses the editor only to open a file; replace with a plain-view probe root document."
-    },
-    {
       "file": "e2e/card-fullscreen.test.mjs",
       "owner": "core",
       "reason": "Checks card fullscreen geometry, tab switch and refused layout tools, with terminal or browser tabs as vehicles; plain-view probe tabs."
@@ -357,11 +347,6 @@
       "reason": "Checks that plugin operations read an https registry and refuse a wrong hash, a revoked version and an unreachable registry (core registry code). A packed fixture plugin in the test registry would replace browser."
     },
     {
-      "file": "e2e/retained-view-placement.test.mjs",
-      "owner": "core",
-      "reason": "Checks startup placement of a stored, inactive, unloadable view under both memory-saver settings. The `memory-saver` fixture would replace browser."
-    },
-    {
       "file": "e2e/semantic-screen.test.mjs",
       "owner": "mixed",
       "reason": "Checks that hidden terminal and term screens keep notifying their screen status, which is those plugins' own screen subscription."
@@ -460,11 +445,6 @@
       "file": "e2e/test/browser-view-metrics-case.test.mjs",
       "owner": "plugin:browser",
       "reason": "Unit tests of the browser metrics benchmark case (browser readiness, history, diagnostic callbacks)."
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of the capture harness for document frame identity. Editor and terminal appear only as tab names in data; a fixture tab name would replace them."
     },
     {
       "file": "e2e/test/card-panel-checks.test.mjs",
@@ -587,39 +567,14 @@
       "reason": "Tests keyboard routing between a terminal view and the browser address field. Replace with plain-view text-field/key-echo capabilities (two fixture views)."
     },
     {
-      "file": "e2e/view-restart.test.mjs",
-      "owner": "core",
-      "reason": "Tests view lifetime: restoring state, stopping after four failures and reopening after unload, using `browser.navigate`/`browser.reload`. Replace with a fake fixture that has restorable state, a crash/reload command and a location status."
-    },
-    {
       "file": "e2e/view-shortcut.test.mjs",
       "owner": "core",
       "reason": "Tests that Command-zero in a focused view runs the native text-size menu command, using the browser address field for focus. Replace with plain-view with a focusable field."
     },
     {
-      "file": "e2e/view-start-handoff.test.mjs",
-      "owner": "core",
-      "reason": "Tests that core.file.open start parameters reach page views (`core.surface.document`), using editor and hwp as vehicles. Replace with a fixture that declares file types and publishes the received path/document (save-close or plain-view)."
-    },
-    {
       "file": "e2e/view-theme.test.mjs",
       "owner": "core",
       "reason": "Tests that a new view paints the card theme in its first presentation, using `terminal.session` background and `browser.empty`. Replace with plain-view reporting the applied theme background and an empty element."
-    },
-    {
-      "file": "e2e/wails-window-close-warning.test.mjs",
-      "owner": "core",
-      "reason": "Tests that closing a project window keeps the host available, using the editor and an .hwp fixture as the opened document. Replace with the save-close fixture with a document status."
-    },
-    {
-      "file": "e2e/window-close.test.mjs",
-      "owner": "core",
-      "reason": "Tests the close-window and quit modal flow for a modified tab, using `editor.edit`/`editor.document`. This is exactly the save-close fixture (modified document plus an edit command)."
-    },
-    {
-      "file": "e2e/window-occlusion.test.mjs",
-      "owner": "core",
-      "reason": "Tests that window occlusion hides a view's document, using a browser page title reporting visibility. Replace with plain-view/memory-saver publishing a document visibility status."
     },
     {
       "file": "e2e/window-sidebar-persistence.test.mjs",
