@@ -54,7 +54,7 @@
     "sok-repeat": "./repeat.mjs"
   },
   "scripts": {
-    "test": "node --test --experimental-test-module-mocks test/*.test.mjs"
+    "test": "node --test --experimental-test-module-mocks test/*.test.mjs test/platform/darwin/system/*.test.mjs"
   },
   "dependencies": {
     "@parcel/watcher": "2.6.0",

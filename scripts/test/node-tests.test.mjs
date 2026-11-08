@@ -241,6 +241,17 @@ test("a repeated only selects the files that contain any of its values", () => {
   assert.throws(() => planNodeRun(all, { only: ["missing/", "absent/"] }), /no test file contains "missing\/" or "absent\/"/);
 });
 
+test("an excluded folder removes its files under every folder of the workspace and nothing else", () => {
+  const all = ["scripts/test/platform/darwin/system/a.test.mjs", "scripts/test/platform/darwin/b.test.mjs",
+    "packages/window-check/test/platform/darwin/system/c.test.mjs", "platform/darwin/system/d.test.mjs",
+    "e2e/test/platform/darwin/systems/e.test.mjs"].map((name) => ({ name }));
+  assert.deepEqual(selectNodeTests(all, { excludeFolder: ["platform/darwin/system"] }).map(({ name }) => name),
+    ["scripts/test/platform/darwin/b.test.mjs", "e2e/test/platform/darwin/systems/e.test.mjs"]);
+  for (const path of ["", "/platform", "../platform", "platform/../darwin"]) {
+    assert.throws(() => selectNodeTests(all, { excludeFolder: [path] }), /--exclude-folder path must be a nonempty root-relative path/);
+  }
+});
+
 test("excluded test scopes reject empty, absolute, and traversing paths", () => {
   const tests = [{ name: "scripts/a.test.mjs" }];
   for (const path of ["", "/scripts", "../scripts", "scripts/../packages", "C:\\scripts"]) {

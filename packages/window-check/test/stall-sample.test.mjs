@@ -2,9 +2,6 @@
 // What the main thread did while it did not answer can be seen only at that moment.
 import assert from "node:assert/strict";
 import * as childProcess from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import test, { mock } from "node:test";
 
 // The host pid that no process holds. launchctl and sample answer for it as they do on macOS 27 for a process that does not run,
@@ -30,8 +27,6 @@ mock.module("node:child_process", {
 });
 const { within } = await import("../app.mjs");
 const { sampleProcess } = await import("../stall-sample.mjs");
-// The tests that sample live processes ask the platform for that facility, so they fail by name on a system without it.
-const { liveProcessSampling } = await import("./platform/platform.js");
 
 test("a request that does not answer within its limit records what the host was doing and names the record", async () => {
   const never = new Promise(() => {});
@@ -93,22 +88,6 @@ test("a state at the limit that does not finish does not hold the end of the pro
   const { runProcess } = await import("../stall-sample.mjs");
   const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit: () => new Promise(() => {}), stateLimitMs: 100 });
   assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none; at the limit: not read within 100 ms");
-});
-
-test("a sample that stalls records the stacks of the sampling process before it ends", { timeout: 20000 }, async (t) => {
-  await liveProcessSampling();
-  const { runProcess } = await import("../stall-sample.mjs");
-  const folder = mkdtempSync(join(tmpdir(), "stall-sampler-"));
-  t.after(() => rmSync(folder, { recursive: true, force: true }));
-  const file = join(folder, "stall.txt");
-  const stalled = (command, args, options) => runProcess("/bin/sh", ["-c", "exec sleep 30"], { ...options, limitMs: 100 });
-  const failure = await sampleProcess(4321, file, stalled).then(() => null, (error) => error.message);
-  const start = "sample 4321: ended by SIGTERM at its limit of 100 ms; standard error: none; at the limit: ";
-  assert.ok(failure?.startsWith(start), failure);
-  const state = failure.slice(start.length);
-  assert.match(state, /^free \d+ MB on \/, load \d+\.\d, stacks of the process: /);
-  assert.equal(state.split("stacks of the process: ")[1], `${file}.sampler.txt`);
-  assert.match(readFileSync(`${file}.sampler.txt`, "utf8"), /Call graph:/);
 });
 
 test("the limit of a process holds while a check moves mocked timers", { timeout: 5000 }, async (t) => {
@@ -224,26 +203,6 @@ test("a request that answers before 3 s does not start a sample", async (t) => {
 });
 
 
-test("native stall sampling keeps the check event loop responsive", { timeout: 10000 }, async (t) => {
-  await liveProcessSampling();
-  const { mkdtemp, rm } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const directory = await mkdtemp(join(tmpdir(), "soksak-stall-async-"));
-  t.after(() => rm(directory, { recursive: true }));
-  let heartbeat = false;
-  const beat = new Promise((resolve) => setImmediate(() => { heartbeat = true; resolve(); }));
-  const task = sampleProcess(process.pid, join(directory, "sample.txt"));
-  try {
-    assert.equal(typeof task?.then, "function", "sampling must return before the child finishes");
-    await beat;
-    assert.equal(heartbeat, true);
-    assert.equal(await task, join(directory, "sample.txt"));
-  } finally {
-    await task;
-  }
-});
-
 // The sample of a page process whose render queue waits in flock, as /usr/bin/sample of macOS 27 writes it, and of one
 // that waits in no flock. Only the section of the tops of the stacks is read.
 const FLOCK_SAMPLE = [
@@ -351,25 +310,4 @@ test("a flock wait that cannot be read is named in the record with the reason", 
   assert.equal(await record(async () => FLOCK_SAMPLE, commands({ "/usr/sbin/lsof 12": { status: 0, stdout: LSOF_PAGE },
     "/usr/bin/perl /c/web.db": { status: 0, stdout: "locked\t-1\t/c/metal/shaders.data\n" } }, [])),
   "/x/logs/stall-10-7-page-12.txt; flock.error=the lock probe answered 1 of 2 files");
-});
-
-test("lsof and the lock probe of macOS name the file and the holder of a real flock wait", { timeout: 20000 }, async (t) => {
-  await liveProcessSampling();
-  const { spawn } = await import("node:child_process");
-  const { realpathSync, writeFileSync } = await import("node:fs");
-  const { flockWait } = await import("../stall-sample.mjs");
-  const folder = realpathSync(mkdtempSync(join(tmpdir(), "stall-flock-")));
-  t.after(() => rmSync(folder, { recursive: true, force: true }));
-  const file = join(folder, "shaders.data");
-  writeFileSync(file, "");
-  const started = (script, word) => new Promise((resolve, reject) => {
-    const child = spawn("/usr/bin/perl", ["-e", script, file], { stdio: ["ignore", "pipe", "ignore"] });
-    t.after(() => child.kill("SIGKILL"));
-    child.on("error", reject);
-    child.stdout.on("data", (data) => { if (String(data).includes(word)) resolve(child); });
-  });
-  const holder = await started('use Fcntl ":flock"; $| = 1; open(my $f, "<", $ARGV[0]) or die; flock($f, LOCK_EX) or die; print "held\\n"; sleep 60', "held");
-  const waiter = await started('use Fcntl ":flock"; $| = 1; open(my $f, "<", $ARGV[0]) or die; print "opened\\n"; flock($f, LOCK_EX) or die; sleep 60', "opened");
-  assert.deepEqual(await flockWait(waiter.pid, "/x/page.txt", { read: async () => FLOCK_SAMPLE }),
-    { file, holder: { pid: holder.pid, command: "perl" } });
 });

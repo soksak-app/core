@@ -337,11 +337,12 @@ install: check-tools
 build: install
 	@pnpm build
 
-# Runs the headless owner tests of the verification pipeline: every Node test of scripts/test, e2e/test and
+# Runs the headless owner tests of the verification pipeline: the Node tests of scripts/test, e2e/test and
 # packages/window-check/test, which start no application and need no display. The owners of a platform implementation take
-# its facilities by injection, so they run on any system; CI runs this selection on Linux.
+# its facilities by injection, so they run on any system; CI runs this selection on Linux. A test that needs a live facility of
+# macOS (the SDK, FSEvents, sample) is a system owner placed in platform/darwin/system/, which the macOS jobs run.
 test-headless-owners:
-	@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/
+	@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/ --exclude-folder platform/darwin/system
 
 test-all: install check-docs check-exposure check-tests check-hosts-same
 	@pnpm test

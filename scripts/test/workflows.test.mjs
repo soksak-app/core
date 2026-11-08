@@ -224,12 +224,32 @@ test('the linux-node job runs the headless owner tests on Linux after the locked
   assert.match(gate, /LINUX_NODE: \$\{\{ needs\.linux-node\.result \}\}/);
 });
 
-test('make test-headless-owners runs every Node test of scripts/test, e2e/test and packages/window-check/test', { timeout: 1000 }, () => {
+test('make test-headless-owners runs the Node tests of scripts/test, e2e/test and packages/window-check/test outside platform/darwin/system', { timeout: 1000 }, () => {
   const recipe = /^test-headless-owners:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
   assert.ok(recipe, 'the Makefile has no test-headless-owners target');
   assert.deepEqual(recipe[1].trim().split('\n').map((line) => line.trim()),
-    ['@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/'],
-    'test-headless-owners runs another selection or excludes a folder of the owners');
+    ['@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/ --exclude-folder platform/darwin/system'],
+    'test-headless-owners runs another selection or excludes another folder of the owners');
+});
+
+test('every system owner under platform/darwin/system runs in a macOS job of CI and in no Linux job', { timeout: 10_000 }, async () => {
+  const { discoverNodeTests, selectNodeTests } = await import('../node-tests.mjs');
+  const packages = JSON.parse(execFileSync('pnpm', ['-r', 'list', '--json', '--depth', '-1'], { cwd: ROOT, encoding: 'utf8' }))
+    .map((item) => relative(ROOT, item.path) || '.')
+    .sort((a, b) => (a === '.' ? -1 : b === '.' ? 1 : a.localeCompare(b)));
+  const { tests } = discoverNodeTests({ root: ROOT, packages });
+  const system = tests.filter(({ name }) => name.includes('/platform/darwin/system/')).map(({ name }) => name).sort();
+  assert.ok(system.length > 0, 'no discovered test file is a system owner under platform/darwin/system');
+  // The scopes of the macOS jobs core-node and equivalence, and the selection of linux-node, as ci.yml and the Makefile state them.
+  assert.match(ciJob('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
+  assert.match(ciJob('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
+  assert.match(ciJob('linux-node'), /make -C core test-headless-owners/);
+  const macos = [...selectNodeTests(tests, { exclude: ['scripts/', 'native/'] }), ...selectNodeTests(tests, { only: 'scripts/' })]
+    .map(({ name }) => name);
+  assert.deepEqual(system.filter((name) => !macos.includes(name)), [], 'a system owner runs in no macOS job');
+  const linux = selectNodeTests(tests, { only: ['scripts/test/', 'e2e/test/', 'packages/window-check/test/'],
+    excludeFolder: ['platform/darwin/system'] }).map(({ name }) => name);
+  assert.deepEqual(system.filter((name) => linux.includes(name)), [], 'a system owner runs in the Linux job');
 });
 
 test('make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics and the Tauri job runs it', { timeout: 10_000 }, () => {

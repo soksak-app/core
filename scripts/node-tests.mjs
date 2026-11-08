@@ -195,36 +195,43 @@ function onlyList(only) {
   return (Array.isArray(only) ? only : [only]).filter((value) => value !== '');
 }
 
+/** A nonempty relative path without `.` or `..` segments, normalized to forward slashes and no trailing slash. */
+function relativePath(path, option) {
+  const message = `${option} path must be a nonempty root-relative path, found ${JSON.stringify(path)}`;
+  if (typeof path !== 'string') throw new Error(message);
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+  const segments = normalized.split('/');
+  if (normalized.length === 0 || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)
+      || segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+    throw new Error(message);
+  }
+  return normalized;
+}
+
 /**
- * Selects test files by the substring selector, which a repeated `--only` widens to the files that contain any of its values, and
- * explicit root-relative path exclusions.
+ * Selects test files by the substring selector, which a repeated `--only` widens to the files that contain any of its values,
+ * explicit root-relative path exclusions, and `excludeFolder`: relative folder paths such as `platform/darwin/system` whose files
+ * are excluded under any folder of the workspace.
  */
-export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
+export function selectNodeTests(tests, { only = '', exclude = [], excludeFolder = [] } = {}) {
   const onlies = onlyList(only);
-  const prefixes = exclude.map((path) => {
-    if (typeof path !== 'string') throw new Error(`--exclude path must be a nonempty root-relative path, found ${JSON.stringify(path)}`);
-    const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
-    const segments = normalized.split('/');
-    if (normalized.length === 0 || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized)
-        || segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
-      throw new Error(`--exclude path must be a nonempty root-relative path, found ${JSON.stringify(path)}`);
-    }
-    return normalized;
-  });
+  const prefixes = exclude.map((path) => relativePath(path, '--exclude'));
+  const folders = excludeFolder.map((path) => relativePath(path, '--exclude-folder'));
   return tests.filter((item) => (onlies.length === 0 || onlies.some((value) => item.name.includes(value)))
-    && !prefixes.some((prefix) => item.name === prefix || item.name.startsWith(`${prefix}/`)));
+    && !prefixes.some((prefix) => item.name === prefix || item.name.startsWith(`${prefix}/`))
+    && !folders.some((folder) => item.name.startsWith(`${folder}/`) || item.name.includes(`/${folder}/`)));
 }
 
 /**
  * The tests to run, or the reason to run none: with `range` (a --changed revision range) a selection that is empty after
  * `only` and `exclude` runs no test, because the range changed no test file that the run owns; without a range it is an error.
  */
-export function planNodeRun(all, { range, only = '', exclude = [] } = {}) {
-  const tests = selectNodeTests(all, { only, exclude });
+export function planNodeRun(all, { range, only = '', exclude = [], excludeFolder = [] } = {}) {
+  const tests = selectNodeTests(all, { only, exclude, excludeFolder });
   if (tests.length > 0) return { tests };
   const onlies = onlyList(only);
   if (range === undefined) throw new Error(`no test file contains ${onlies.length === 0 ? '""' : onlies.map((value) => JSON.stringify(value)).join(' or ')}`);
-  const after = all.length === 0 ? '' : ` remains after ${exclude.map((path) => `--exclude ${path}`).join(' ')}${onlies.map((value) => ` --only ${value}`).join('')}`;
+  const after = all.length === 0 ? '' : ` remains after ${[...exclude.map((path) => `--exclude ${path}`), ...excludeFolder.map((path) => `--exclude-folder ${path}`)].join(' ')}${onlies.map((value) => ` --only ${value}`).join('')}`;
   return { skip: `SKIP no test file of a package changed in ${range}${after}` };
 }
 
@@ -292,7 +299,7 @@ export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalo
 
 /** A candidate run is the complete declared script on every candidate host, without an inherited selection. */
 export function candidateSelection(values, tests, env = process.env) {
-  if (onlyList(values.only ?? '').length || values.exclude?.length || values.changed !== undefined || env.SOKSAK_APP || env.NATIVE_TEST_ONLY
+  if (onlyList(values.only ?? '').length || values.exclude?.length || values['exclude-folder']?.length || values.changed !== undefined || env.SOKSAK_APP || env.NATIVE_TEST_ONLY
     || /--test-(?:name-pattern|skip-pattern|only|shard)\b/.test(env.NODE_OPTIONS ?? '')
     || tests.some(({ args }) => args.some((arg) => /^--test-(?:name-pattern|skip-pattern|only|shard)(?:=|$)/.test(arg)))) {
     throw new Error('candidate acceptance requires the complete declared script and every candidate host without test selection');
@@ -306,6 +313,7 @@ async function main(argv) {
     options: {
       only: { type: 'string', multiple: true, default: [] },
       exclude: { type: 'string', multiple: true, default: [] },
+      'exclude-folder': { type: 'string', multiple: true, default: [] },
       script: { type: 'string', default: 'test' },
       timeout: { type: 'string', default: String(TEST_TIMEOUT_MS / 1000) },
       concurrency: { type: 'string', default: String(Math.max(2, cpus().length - 2)) },
@@ -330,7 +338,7 @@ async function main(argv) {
   const candidateFolder = process.env.SOKSAK_CANDIDATE_RUN_FOLDER;
   const selection = candidateFolder ? candidateSelection(values, all) : null;
   if (candidateFolder && !candidateScripts(ROOT).includes(scriptName)) throw new Error(`candidate acceptance does not declare script ${scriptName}`);
-  const plan = planNodeRun(all, { range: values.changed, only, exclude: values.exclude });
+  const plan = planNodeRun(all, { range: values.changed, only, exclude: values.exclude, excludeFolder: values['exclude-folder'] });
   if (plan.skip !== undefined) {
     write(plan.skip);
     return 0;

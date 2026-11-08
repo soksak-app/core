@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm -F soksak build",
     "test": "node scripts/node-tests.mjs",
-    "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs",
+    "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs scripts/test/platform/darwin/system/*.test.mjs",
     "fuzz": "pnpm -F soksak fuzz",
     "mutate": "pnpm -F soksak mutate",
     "check-breaks": "pnpm -F soksak check-breaks"
