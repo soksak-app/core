@@ -138,7 +138,7 @@ test("the exported lifecycle collector forwards the selected card ID to its firs
   };
   await assert.rejects(collectViewStartAndMemory(t, s, {
     plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
-    expectedContent: "target text", language: "en-US",
+    expectedContent: "target text", readContent: async () => "target text",
   }), (error) => error === sentinel);
   assert.equal(recordCalls, 1, "the selected card ID did not reach openRecordedView before recording");
 });
@@ -164,7 +164,7 @@ test("view totals are sampled at their declared count before extra process-start
           fields: { plugin: "fixture", surface } },
         { event: "host.trace.view.process-ready", ts_us: base + 1, mono_ns: (base + 1) * 1_000_000,
           fields: { plugin: "fixture", surface } },
-      ], verifyContent: async () => { timeline.push(`ocr:${ordinal}`);
+      ], verifyContent: async () => { timeline.push(`content:${ordinal}`);
         return { contentFrame: { frameIndex: 0, timeMs: base } }; } };
     },
     async readFootprints(surfaces) {
@@ -176,8 +176,8 @@ test("view totals are sampled at their declared count before extra process-start
   });
 
   assert.deepEqual(timeline, ["live:1", "footprint:1", "live:2", "live:3", "footprint:3",
-    "live:4", "live:5", "ocr:1", "ocr:2", "ocr:3", "ocr:4", "ocr:5"],
-  "offline OCR must follow both total-footprint samples and the five process-start view opens");
+    "live:4", "live:5", "content:1", "content:2", "content:3", "content:4", "content:5"],
+  "the content frame selection must follow both total-footprint samples and the five process-start view opens");
   assert.deepEqual(collected.oneViewSampleClock, sampleClock(1));
   assert.deepEqual(collected.allViewSampleClock, sampleClock(3));
   assert.deepEqual(collected.opened.map(({ contentFrame }) => contentFrame.frameIndex), [0, 0, 0, 0, 0]);
@@ -186,27 +186,27 @@ test("view totals are sampled at their declared count before extra process-start
     "the extra views must still provide all five process-start samples");
 });
 
-test("footprint failure retains recording paths and skips deferred OCR", { timeout: 5000 }, async () => {
+test("footprint failure retains recording paths and skips the deferred content frame", { timeout: 5000 }, async () => {
   const sentinel = new Error("footprint read failed");
   const diagnostics = [];
-  let ocrCalls = 0;
+  let contentCalls = 0;
   await assert.rejects(collectViewProcessGroups({
     viewCount: 3,
     processStartCount: 5,
     diagnostic: (message) => diagnostics.push(message),
     async openView() {
       return { surface: "view-1", events: [], recording: { directory: "/retained/view-1" },
-        async verifyContent() { ocrCalls++; return { contentFrame: {} }; } };
+        async verifyContent() { contentCalls++; return { contentFrame: {} }; } };
     },
     async readFootprints() { throw sentinel; },
   }), (error) => error === sentinel);
-  assert.equal(ocrCalls, 0, "footprint failure must not start offline OCR");
+  assert.equal(contentCalls, 0, "footprint failure must not select the content frame");
   assert.match(diagnostics[0], /footprint read failed/);
   assert.deepEqual(diagnostics.slice(1), ["view recording retained at /retained/view-1 after one-view footprint sample failure"]);
 });
 
-test("deferred OCR failure retains its recording path and rejects the collector", { timeout: 5000 }, async () => {
-  const sentinel = new Error("OCR failed");
+test("deferred content frame failure retains its recording path and rejects the collector", { timeout: 5000 }, async () => {
+  const sentinel = new Error("content frame selection failed");
   const diagnostics = [];
   let ordinal = 0;
   await assert.rejects(collectViewProcessGroups({
@@ -226,7 +226,7 @@ test("deferred OCR failure retains its recording path and rejects the collector"
         sampleClock: { before: clockReading(1_000_000), after: clockReading(2_000_000) } };
     },
   }), (error) => error === sentinel);
-  assert.match(diagnostics[0], /OCR failed/);
+  assert.match(diagnostics[0], /content frame selection failed/);
   assert.deepEqual(diagnostics.slice(1), ["view recording retained at /retained/view-1 after deferred content verification failure",
     "view recording retained at /retained/view-2 after deferred content verification failure"]);
 });
@@ -688,279 +688,151 @@ test("shared readiness wrapper waits for the declared status exposure before rea
   assert.deepEqual(calls, ["until:core.surfaces", "readiness"]);
 });
 
-test("anchor OCR rejects missing or unsupported host menu languages", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-anchor-language-"));
-  const logDirectory = join(root, "logs");
-  mkdirSync(logDirectory);
-  writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  for (const language of [undefined, "ja"]) {
-    const recordingDirectory = join(root, `recording-${language ?? "missing"}`);
-    mkdirSync(recordingDirectory);
-    const session = {
-      app: { configDir: root },
-      async record() {
-        return { stop: async () => ({ frames: recordingDirectory, count: 0, limited: false }) };
-      },
-      async get(name) {
-        if (name === "core.grid") return { cards: [{ id: "card-1", active: "anchor", tabs: [
-          { id: "anchor", plugin: "other-fixture" },
-        ] }] };
-        if (name === "host.window") return { documents: [{ surface: "anchor", document: "", visible: true,
-          process: 3100, frame: { x: 0, y: 0, width: 20, height: 10 } }] };
-        if (name === "host.menu") return language === undefined ? {} : { language };
-        assert.fail(`unexpected status ${name}`);
-      },
-      async presented() { return { displayed: 1 }; },
-    };
-    await assert.rejects(openRecordedView({ diagnostic() {} }, session, {
-      card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
-      expectedContent: "fixture", language: "en-US",
-    }), (error) => error.message.includes("host.menu reported an unsupported language for anchor OCR")
-      && error.message.includes(language ?? "undefined"));
-  }
+test("recorded views require a reader of the content value", { timeout: 5000 }, async () => {
+  let recorded = false;
+  await assert.rejects(openRecordedView({}, { async record() { recorded = true; } }, {
+    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
+    expectedContent: "fixture",
+  }), /view content reader callback is required/);
+  assert.equal(recorded, false, "a view without a content reader started its recording");
 });
 
 test("recorded view observation window rejects nonpositive and nonfinite durations", { timeout: 5000 }, async () => {
   for (const captureObservationWindowMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
     await assert.rejects(openRecordedView({}, {}, {
       card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
-      expectedContent: "fixture", language: "en-US", captureObservationWindowMs,
+      expectedContent: "fixture", readContent: async () => "fixture", captureObservationWindowMs,
     }), /finite positive duration/);
   }
 });
 
-test("direct recorded views return first-content proof before resolving", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-direct-content-"));
+/** A session that opens view-1 in card-1 under a recording of frames at frameTimes and presents it at displayed. */
+function recordedViewSession(t, { frameTimes, displayed, calls = [] }) {
+  const root = mkdtempSync(join(tmpdir(), "view-recorded-content-"));
   const logDirectory = join(root, "logs");
   const recordingDirectory = join(root, "recording");
   mkdirSync(logDirectory);
   mkdirSync(recordingDirectory);
   writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const recognized = [];
-  let activeTab = "target-old";
-  let presentation = 0;
+  let viewOpen = false;
   const s = {
     app: { configDir: root },
+    cleanups: [],
     async record() {
-      writeCapturedFrame(recordingDirectory, 0, 5);
-      writeCapturedFrame(recordingDirectory, 1, 6);
-      return { stop: async () => ({ frames: recordingDirectory, count: 2, limited: false }) };
+      calls.push("record");
+      return { stop: async ({ after }) => {
+        calls.push(`stop after ${after}`);
+        for (const [index, time] of frameTimes.entries()) writeCapturedFrame(recordingDirectory, index, time);
+        return { frames: recordingDirectory, count: frameTimes.length, limited: false };
+      } };
     },
-    async request() { return { mono_ns: "5000000" }; },
+    async request(method) { calls.push(method); return { mono_ns: "5000000" }; },
     async run(method, params) {
-      if (method === "core.tab.select") { activeTab = params.tab; return null; }
+      calls.push(method);
+      if (method === "core.tab.close") { viewOpen = false; return { closed: true }; }
       assert.equal(method, "core.card.add-tab");
+      assert.equal(params.card, "card-1");
       appendFileSync(join(logDirectory, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
         "host.trace.view.process-request", ts_us: 10, mono_ns: 6_000_000, seq: 1,
         fields: { plugin: "fixture", surface: "view-1" } })}\n${JSON.stringify({ level: "debug", event:
         "host.trace.view.process-ready", ts_us: 20, mono_ns: 7_000_000, seq: 2,
         fields: { plugin: "fixture", surface: "view-1" } })}\n`);
-      activeTab = "view-1";
+      viewOpen = true;
       return { tab: "view-1" };
     },
     async until(name, predicate, message) {
-      const value = name === "core.grid" ? { cards: [{ id: "card-1", active: activeTab, tabs: [
-        { id: "target-old", plugin: "fixture" }, { id: "anchor", plugin: "other-fixture" },
-      ] }] } : [{ surface: "view-1", exposes: ["status fixture.ready"] }];
-      assert.ok(predicate(value), message);
-      return value;
-    },
-    async presented() { return { displayed: presentation++ === 0 ? 5 : 6 }; },
-    async get(name) {
-      if (name === "core.grid") return { cards: [{ id: "card-1", active: activeTab, tabs: [
-        { id: "target-old", plugin: "fixture" }, { id: "anchor", plugin: "other-fixture" },
-      ] }] };
-      if (name === "host.menu") return { language: "en" };
-      assert.equal(name, "host.window");
-      return { documents: [
-        { surface: "anchor", document: "", visible: true, process: 3100, frame: { x: 0, y: 0, width: 1, height: 1 } },
-        { surface: "view-1", document: "", visible: true, process: 3141, frame: { x: 0, y: 0, width: 1, height: 1 } },
-      ] };
-    },
-    cleanup() {},
-  };
-  const result = await openRecordedView({ diagnostic() {} }, s, {
-    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
-    expectedContent: "target content", language: "en-US", captureObservationWindowMs: 1,
-    recognizeFrame: async (frame) => { recognized.push(frame.time); return { lines: [frame.time === 5 ? "anchor" : "target content"] }; },
-  });
-  assert.deepEqual(recognized, [5, 6], "direct consumers received the view before its OCR proof was complete");
-  assert.equal(result.contentFrame.frameIndex, 1);
-  assert.equal(result.recording.anchorContentFrame.frameIndex, 0);
-});
-
-test("one recording proves the physical anchor boundary before target content", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-metrics-session-"));
-  const logDirectory = join(root, "logs");
-  const recordingDirectory = join(root, "recording");
-  mkdirSync(logDirectory);
-  mkdirSync(recordingDirectory);
-  writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const calls = [];
-  let activeTab = "old-target";
-  let recordCount = 0;
-  let presentationCount = 0;
-  let viewOpen = true;
-  let exposureRegistered = false;
-  let releaseExposure;
-  let signalExposureWait;
-  const exposureWaitStarted = new Promise((resolve) => { signalExposureWait = resolve; });
-  const exposureNotification = new Promise((resolve) => { releaseExposure = resolve; });
-  let signalReadiness;
-  const readinessStarted = new Promise((resolve) => { signalReadiness = resolve; });
-  let readinessCalls = 0;
-  const recognizedTimes = [];
-  const recognizedLanguages = [];
-  const s = {
-    app: { configDir: root },
-    async record() {
-      calls.push("record");
-      recordCount++;
-      writeCapturedFrame(recordingDirectory, 0, 0.5);
-      writeCapturedFrame(recordingDirectory, 1, 5.5);
-      writeCapturedFrame(recordingDirectory, 2, 6.1);
-      writeCapturedFrame(recordingDirectory, 3, 7.1);
-      writeCapturedFrame(recordingDirectory, 4, 10);
-      return { stop: async ({ after }) => {
-        calls.push(`stop after ${after}`);
-        if (after >= 13) writeCapturedFrame(recordingDirectory, 5, 13);
-        return { frames: recordingDirectory, count: after >= 13 ? 6 : 5, limited: false };
-      } };
-    },
-    async request(method) { calls.push(method); return { mono_ns: "6000000" }; },
-    async run(method, params) {
-      calls.push(method);
-      if (method === "core.tab.select") {
-        assert.deepEqual(params, { tab: "anchor" });
-        activeTab = "anchor";
-        return null;
-      }
-      assert.deepEqual(params, { card: "card-1", plugin: "fixture", params: { path: "file.txt" } });
-      appendFileSync(join(logDirectory, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
-        "host.trace.view.process-request", ts_us: 1000, mono_ns: 6_000_000, seq: 1,
-        fields: { plugin: "fixture", surface: "view-1" } })}\n${JSON.stringify({ level: "debug", event:
-        "host.trace.view.process-ready", ts_us: 2000, mono_ns: 7_000_000, seq: 2,
-        fields: { plugin: "fixture", surface: "view-1" } })}\n`);
-      activeTab = "new-target";
-      return { tab: "view-1" };
-    },
-    async until(name, predicate, message, options) {
-      calls.push(["until", name, options]);
-      if (name === "core.grid") {
-        const grid = { cards: [{ id: "card-1", active: activeTab, tabs: [
-          { id: "old-target", plugin: "fixture" }, { id: "anchor", plugin: "other-fixture" },
-        ] }] };
-        assert.ok(predicate(grid), message);
-        return grid;
-      }
-      if (!exposureRegistered) {
-        assert.equal(name, "core.surfaces");
-        signalExposureWait();
-        await exposureNotification;
-        exposureRegistered = true;
-        const value = [{ surface: "view-1", exposes: ["status fixture.ready"] }];
-        assert.ok(predicate(value), message);
-        return value;
-      }
+      calls.push(`until ${name}`);
       const value = viewOpen ? [{ surface: "view-1", exposes: ["status fixture.ready"] }] : [];
       assert.ok(predicate(value), message);
       return value;
     },
-    async presented() { calls.push("presented"); return { displayed: presentationCount++ === 0 ? 5 : 12 }; },
+    async presented() { calls.push("presented"); return { displayed }; },
     async get(name) {
-      if (name === "core.grid") return { cards: [{ id: "card-1", active: activeTab, tabs: [
-        { id: "old-target", plugin: "fixture" }, { id: "anchor", plugin: "other-fixture" },
-      ] }] };
       if (name === "core.surfaces") return viewOpen ? [{ surface: "view-1" }] : [];
-      if (name === "host.menu") return { language: "ko" };
       assert.equal(name, "host.window");
       return { documents: [
-        { surface: "anchor", document: "", visible: true, process: 3100,
-          frame: { x: 0, y: 0, width: 1, height: 1 } },
-        { surface: "view-1", document: "", visible: true, process: 3141,
-          frame: { x: 0, y: 0, width: 1, height: 1 } },
+        { surface: "view-1", document: "", visible: true, process: 3141, frame: { x: 0, y: 0, width: 1, height: 1 } },
       ] };
     },
-    cleanup(fn) { calls.push("cleanup"); this.cleanups ??= []; this.cleanups.push(fn); },
+    cleanup(fn) { calls.push("cleanup"); this.cleanups.push(fn); },
   };
+  return s;
+}
+
+test("direct recorded views return the content frame of the value before resolving", { timeout: 5000 }, async (t) => {
+  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5 });
+  const result = await openRecordedView({ diagnostic() {} }, s, {
+    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
+    expectedContent: "target content", readContent: async () => "the target content line", captureObservationWindowMs: 1,
+  });
+  assert.deepEqual(result.contentFrame, { frameIndex: 1, frameCount: 2, timeMs: 6, displayedAtMs: 5,
+    proof: { method: "value", expected: "target content", actual: "the target content line" } });
+  assert.equal("anchor" in result, false, "the recorded view still reports an anchor");
+  assert.equal(result.recording.frameCount, 2);
+});
+
+test("a recorded view whose value lacks the expected content stops its recording and fails", { timeout: 5000 }, async (t) => {
+  const calls = [];
+  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, calls });
+  await assert.rejects(openRecordedView({ diagnostic() {} }, s, {
+    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
+    expectedContent: "target content", readContent: async () => "loading",
+  }), /fixture view view-1 does not show "target content": "loading"/);
+  assert.equal(calls.includes("presented"), false, "the window presentation was read for a view without its content");
+  assert.ok(calls.includes("stop after 0"), `the failed view left its recording running: ${calls}`);
+});
+
+test("the content frame is the first recorded frame at or after the presentation of the value", { timeout: 5000 }, () => {
+  const proof = { method: "value", expected: "x", actual: "x" };
+  assert.deepEqual(viewMetrics.recordedContentFrame([{ time: 1 }, { time: 5 }, { time: 9 }], 5, proof),
+    { frameIndex: 1, frameCount: 3, timeMs: 5, displayedAtMs: 5, proof });
+  assert.throws(() => viewMetrics.recordedContentFrame([{ time: 1 }, { time: 4 }], 5, proof),
+    /no recorded frame is at or after the content presentation at 5 ms/);
+  assert.throws(() => viewMetrics.recordedContentFrame([{ time: 4 }, { time: 4 }], 1, proof),
+    /recorded frame 1 has no increasing display time/);
+  assert.throws(() => viewMetrics.recordedContentFrame([], 1, proof), /requires recorded frames/);
+  assert.throws(() => viewMetrics.recordedContentFrame([{ time: 1 }], Number.NaN, proof), /invalid display time/);
+});
+
+test("one recording reads the content value after readiness and defers the content frame past the footprint sample", { timeout: 5000 }, async (t) => {
+  const calls = [];
+  const s = recordedViewSession(t, { frameTimes: [0.5, 5.5, 10, 13], displayed: 12, calls });
+  let readinessCalls = 0;
   const opening = openRecordedView({ diagnostic: () => {} }, s, {
     card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, params: { path: "file.txt" },
     readinessStatus: "fixture.ready",
     readiness: async (_session, surface) => {
-      signalReadiness();
-      assert.equal(exposureRegistered, true, "status read began before its exposure registration notification");
+      calls.push("readiness");
       readinessCalls++;
       assert.equal(surface, "view-1");
     },
-    expectedContent: "SOKSAK FIXTURE", language: "en-US", captureObservationWindowMs: 20,
-    deferContentVerification: true,
-    recognizeFrame: async (decoded, rect, language) => {
-      assert.deepEqual(rect, { x: 0, y: 0, w: 1, h: 1 });
-      calls.push(`recognize ${decoded.time}`);
-      recognizedTimes.push(decoded.time);
-      recognizedLanguages.push(language);
-      return { lines: [decoded.time === 7.1 ? "different anchor"
-        : decoded.time === 10 ? "loading" : "SOKSAK FIXTURE"] };
+    readContent: async (_session, surface) => {
+      calls.push("read");
+      assert.equal(surface, "view-1");
+      return "SOKSAK FIXTURE";
     },
+    expectedContent: "SOKSAK FIXTURE", captureObservationWindowMs: 20,
+    deferContentVerification: true,
   });
-  const openingResult = opening.then((value) => ({ value }), (error) => ({ error }));
-  const firstStep = await Promise.race([
-    exposureWaitStarted.then(() => "exposure-wait"),
-    readinessStarted.then(() => "readiness"),
-  ]);
-  assert.equal(firstStep, "exposure-wait", "status readiness began before waiting for exposure registration");
-  assert.equal(readinessCalls, 0, "status readiness ran before its exposure was registered");
-  releaseExposure();
-  const { value: result, error } = await openingResult;
-  if (error) throw error;
-  assert.deepEqual(recognizedTimes, [], "offline OCR ran before the footprint collector could sample this live view");
+  const result = await opening;
+  assert.equal(readinessCalls, 1);
+  assert.equal("contentFrame" in result, false, "the deferred content frame was selected before the footprint sample");
   calls.push("footprint sample");
   Object.assign(result, await result.verifyContent());
-  assert.ok(calls.indexOf("footprint sample") < calls.findIndex((call) => typeof call === "string" && call.startsWith("recognize ")),
-    "the live process footprint must be sampled before offline frame OCR");
-  assert.ok(calls.indexOf("core.tab.select") >= 0, "the collector did not select a different-plugin anchor");
-  assert.equal(calls.indexOf("core.tab.select") < calls.indexOf("presented"), true,
-    "anchor presentation was checked before selecting the different plugin");
-  assert.equal(calls.indexOf("presented") < calls.indexOf("core.card.add-tab"), true,
-    "the target view request preceded its different-content anchor presentation");
-  assert.equal(calls.indexOf("record"), calls.lastIndexOf("record"), "one view lifecycle started multiple recordings");
-  const stopIndex = calls.findIndex((call) => typeof call === "string" && call.startsWith("stop after "));
-  assert.ok(stopIndex > calls.indexOf("core.card.add-tab"),
-    "the continuous recording stopped before the target view request");
-  assert.ok(stopIndex > calls.lastIndexOf("presented"),
-    "the continuous recording stopped before the target view presentation");
-  assert.ok(calls.includes("stop after 32"), `the observation window was not retained through its deadline: ${calls}`);
-  assert.deepEqual(recognizedTimes, [0.5, 5.5, 6.1, 7.1, 10, 13],
-    "the scanner skipped old target frames, missed the actual anchor transition, or scanned target before its boundary");
-  assert.deepEqual(recognizedLanguages, ["ko-KR", "ko-KR", "ko-KR", "ko-KR", "en-US", "en-US"],
-    "anchor OCR did not use the host menu language while target OCR retained its declared language");
+  const at = (name) => calls.indexOf(name);
+  assert.ok(at("until core.surfaces") < at("readiness"), "status readiness began before waiting for its exposure");
+  assert.ok(at("readiness") < at("read"), "the content value was read before the view was ready");
+  assert.ok(at("read") < at("presented"), "the presentation that bounds the content frame preceded the value read");
+  assert.ok(at("presented") < at("stop after 32"), `the observation window was not retained through its deadline: ${calls}`);
+  assert.equal(at("record"), calls.lastIndexOf("record"), "one view lifecycle started multiple recordings");
   assert.equal(result.surface, "view-1");
   assert.equal(result.openedPid, 3141);
-  assert.ok(result.anchor.contentFrame.timeMs >= result.anchor.displayed,
-    "the different-content pixel boundary preceded the anchor presentation");
-  assert.ok(result.contentFrame.frameIndex > result.anchor.contentFrame.frameIndex,
-    "target content was accepted before the different-content pixel boundary");
-  assert.deepEqual(result.anchor.contentFrame, { frameIndex: 3, frameCount: 6, timeMs: 7.1,
-    proof: { targetAbsent: "SOKSAK FIXTURE", actual: "different anchor", lines: ["different anchor"] } });
-  assert.deepEqual(result.recording.anchorContentFrame, result.anchor.contentFrame,
-    "raw anchor recording evidence omitted the different-content OCR proof");
-  assert.equal(result.recording.files.length, 6);
-  assert.equal(readFrame(result.recording.files[0]).time, 0.5,
-    "the recording discarded the original old-content frame before the UI anchor transition");
-  assert.deepEqual(result.contentFrame, { frameIndex: 5, frameCount: 6, timeMs: 13,
-    proof: { expected: "SOKSAK FIXTURE", actual: "SOKSAK FIXTURE", lines: ["SOKSAK FIXTURE"] } });
+  assert.deepEqual(result.contentFrame, { frameIndex: 3, frameCount: 4, timeMs: 13, displayedAtMs: 12,
+    proof: { method: "value", expected: "SOKSAK FIXTURE", actual: "SOKSAK FIXTURE" } });
   assert.equal(s.cleanups.length, 1, "the opened view had no cleanup owner");
-  s.run = async (method) => {
-    assert.equal(method, "core.tab.close");
-    viewOpen = false;
-    return { closed: true };
-  };
   await s.cleanups[0]();
+  assert.ok(calls.includes("core.tab.close"), "the cleanup did not close the opened view");
 });
 
 test("view process-group close records observed history and every original PID", { timeout: 5000 }, async () => {
@@ -1170,52 +1042,21 @@ test("a measured drag keeps a falsy rejection of its action", { timeout: 5000 },
   }
 });
 
-test("terminal anchor admission waits for a committed normal capture at the public future presentation boundary", { timeout: 10000 }, async t => {
-  const directory = mkdtempSync(join(tmpdir(), "view-anchor-capture-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  writeCapturedFrame(directory, 0, 10);
-  writeFileSync(join(directory, "frame-1.bgra.partial"), "uncommitted frame bytes");
-  assert.equal(typeof viewMetrics.waitForRecordedViewAnchor, "function", "target open must wait for actual capture admission, not a scheduled refresh timestamp");
-  const admitted = viewMetrics.waitForRecordedViewAnchor({ frames: directory }, 20);
-  writeCapturedFrame(directory, 1, 21);
-  const frame = await admitted;
-  assert.equal(frame.timeMs, 21);
-  assert.equal(frame.file, join(directory, "frame-1.bgra"));
-  assert.equal(frame.afterMs, 20);
-});
-
-test("terminal anchor admission never accepts an older captured frame when its bounded watch expires", { timeout: 10000 }, async t => {
-  const directory = mkdtempSync(join(tmpdir(), "view-anchor-old-capture-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  writeCapturedFrame(directory, 0, 10);
-  assert.equal(typeof viewMetrics.waitForRecordedViewAnchor, "function", "capture boundary admission is required");
-  await assert.rejects(viewMetrics.waitForRecordedViewAnchor({ frames: directory }, 20, 50), /anchor|capture|boundary/);
-});
-
-test("actual terminal consumer admits its captured anchor before reading the pre-open request clock", { timeout: 5000 }, async () => {
-  const { readFileSync } = await import("node:fs");
-  const source = readFileSync(new URL("../view-metrics-collection.mjs", import.meta.url), "utf8");
-  const body = source.slice(source.indexOf("export async function openRecordedView("), source.indexOf("function validateFootprintSample("));
-  const admission = body.indexOf("await waitForRecordedViewAnchor(");
-  assert.ok(admission > body.indexOf("await presentDifferentPluginAnchor("), "capture admission must follow the public anchor presentation");
-  assert.ok(admission < body.indexOf("await monotonicTimeMs(s)"), "target request may not start before its captured anchor admission");
-});
-
-test("reclaim finishes the same live recorded view's reference and cleanup before its footprint/close interval begins", { timeout: 5000 }, async () => {
+test("reclaim finishes the content verification of the same live recorded view before its footprint/close interval begins", { timeout: 5000 }, async () => {
   const calls = ["normal recording stopped"];
   let alive = true;
-  let referenceReleased = false;
+  let verified = false;
   const view = { surface: "recorded-original", async verifyContent() {
-    assert.equal(alive, true, "an ended view cannot provide a same-surface reference");
-    calls.push("reference started");
+    assert.equal(alive, true, "an ended view cannot have its content verified");
+    calls.push("verification started");
     await Promise.resolve();
-    referenceReleased = true;
-    calls.push("reference capture stopped and restored");
-    return { contentFrame: { frameIndex: 2, timeMs: 3, proof: "strict-reference" } };
+    verified = true;
+    calls.push("verification finished");
+    return { contentFrame: { frameIndex: 2, timeMs: 3, proof: { method: "value", expected: "x", actual: "x" } } };
   } };
   assert.equal(typeof viewMetrics.closeVerifiedRecordedViewGroup, "function", "reclaim must own verification before it closes the target");
   const result = await viewMetrics.closeVerifiedRecordedViewGroup([view], async () => {
-    assert.equal(referenceReleased, true);
+    assert.equal(verified, true);
     assert.equal(alive, true);
     calls.push("before footprint");
     alive = false;
@@ -1223,13 +1064,13 @@ test("reclaim finishes the same live recorded view's reference and cleanup befor
     return { exactSample: true };
   });
   assert.deepEqual(result, { exactSample: true });
-  assert.deepEqual(calls, ["normal recording stopped", "reference started", "reference capture stopped and restored",
+  assert.deepEqual(calls, ["normal recording stopped", "verification started", "verification finished",
     "before footprint", "original target closed", "after footprint"]);
   assert.equal(view.surface, "recorded-original");
 });
 
-test("reclaim preserves a failed same-target reference without closing or substituting a target", { timeout: 5000 }, async () => {
-  const failure = new Error("original reference acquisition failed");
+test("reclaim preserves a failed content verification without closing or substituting a target", { timeout: 5000 }, async () => {
+  const failure = new Error("original content verification failed");
   let closed = false;
   assert.equal(typeof viewMetrics.closeVerifiedRecordedViewGroup, "function", "reclaim admission must precede close");
   await assert.rejects(viewMetrics.closeVerifiedRecordedViewGroup([{ surface: "original", verifyContent: async () => { throw failure; } }],
@@ -1237,11 +1078,11 @@ test("reclaim preserves a failed same-target reference without closing or substi
   assert.equal(closed, false);
 });
 
-test("actual reclaim collector admits reference proof before the existing measured close group", { timeout: 5000 }, async () => {
+test("actual reclaim collector verifies content before the existing measured close group", { timeout: 5000 }, async () => {
   const { readFileSync } = await import("node:fs");
   const source = readFileSync(new URL("../view-metrics-collection.mjs", import.meta.url), "utf8");
   const body = source.slice(source.indexOf("export async function collectViewReclaimMeasurements("), source.indexOf("/** Executes process, memory"));
-  assert.ok(body.includes("closeVerifiedRecordedViewGroup(views,"), "actual initial and reopened reclaim groups must use live reference admission");
+  assert.ok(body.includes("closeVerifiedRecordedViewGroup(views,"), "actual initial and reopened reclaim groups must verify content before the measured close");
   assert.equal(body.includes("const sample = await closeInitial([view]);\n    await verifyOpenedViewContent(view);"), false,
     "live verification after the measured close is forbidden");
 });

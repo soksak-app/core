@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import * as content from "../terminal-reference-content.mjs";
 import { acquireTerminalReference } from "../terminal-reference-acquisition.mjs";
@@ -46,10 +45,3 @@ for (const plugin of ["terminal", "term"]) {
   });
 }
 
-test("actual terminal startup/reopen/reclaim consumer dispatches strict proof while other plugins retain their declared path", options, () => {
-  const source = readFileSync(new URL("../view-metrics-collection.mjs", import.meta.url), "utf8");
-  const body = source.slice(source.indexOf("export async function openRecordedView("), source.indexOf("function validateFootprintSample("));
-  assert.ok(body.includes("verifyTerminalRecordedContent("), "the actual shared consumer must route both terminal plugins to strict recorded reference proof");
-  assert.ok(body.includes('plugin === "terminal"') && body.includes('plugin === "term"'), "neither terminal backend can retain an OCR fallback");
-  assert.ok(source.includes("verifyOpenedViewContent(view)"), "process-group collector must retain its deferred verification after footprints");
-});

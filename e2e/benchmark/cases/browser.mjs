@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import { drag } from "@soksak/window-check/app.mjs";
+import { readViewContent } from "../../view-content.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry }
   from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTimeMs,
@@ -19,7 +19,7 @@ export const browserViewDescriptor = Object.freeze({
   placement: TAB_PLACEMENT,
   params: undefined,
   expectedContent: "주소를 입력하세요",
-  language: "ko-KR",
+  readContent: (s, surface) => readViewContent(s, "browser", surface),
   readinessStatus: "browser.location",
   readiness: async (s, surface) => {
     const location = await s.until("browser.location", (value) => value.url === "" && !value.loading && value.error === null,
@@ -141,8 +141,10 @@ function documentRow(host, surface, document) {
 
 async function layoutObservation(t, s, descriptor, surface, card, expectedWidth, url, cornerRadiusPt) {
   await s.run("browser.navigate", { url }, surface);
-  await s.until("browser.location", (value) => value.url === url && !value.loading
+  const loaded = await s.until("browser.location", (value) => value.url === url && !value.loading
     && value.error === null && value.title === CONTENT, "the controlled browser content did not load", { surface });
+  // The title of the controlled document is its content text, so the loaded location is the value that holds the content.
+  const contentProof = { method: "value", expected: CONTENT, actual: loaded.title };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
     const recording = await s.record();
     const grid = await s.get("core.grid");
@@ -176,11 +178,8 @@ async function layoutObservation(t, s, descriptor, surface, card, expectedWidth,
   const captureAfter = Math.max(displayed, source.timeRange.upperMs);
   const candidates = transition.slotMatchFrameIndices.filter((index) => decoded[index].time >= captureAfter);
   assert.ok(candidates.length > 0, `browser layout has no declared-slot pixel match at or after ${captureAfter} ms`);
-  const localProof = await firstContentFrame({ captured: candidates.map((index) => decoded[index]),
-    rect: { x: page.frame.x, y: page.frame.y, w: page.frame.width, h: page.frame.height },
-    expected: CONTENT, language: "en-US", directory: result.frames });
-  const frameIndex = candidates[localProof.frameIndex];
-  const proof = { ...localProof.proof, frameIndex, frameCount: decoded.length };
+  const frameIndex = candidates[0];
+  const proof = contentProof;
   const initialGeometry = measured[frameIndex];
   const initialGeometryErrorPt = assertBrowserFrameMatchesSlot(initialGeometry, slotInsetsPt);
   return {

@@ -39,7 +39,6 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
-  lane("Window check capture recognizer target", "js-ts", ["e2e/platform/darwin/darwin.js"], ["scripts/test/platform/darwin/capture-text-target.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
   lane("Rust workspace release profile", "build", ["Cargo.toml"], ["scripts/test/rust-release-profile.test.mjs"], { testLanguage: "js-ts" }),
@@ -405,19 +404,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F691-1",
-    implementation: [
-      { file: "native/darwin/tests/capture_text_test.m", symbol: "static VNRecognizeTextRequest *textRequest(void) {" },
-      { file: "native/darwin/tests/capture_text_test.m", symbol: "static int computeDevices(void) {" },
-      { file: "native/darwin/tests/capture_text_test.m", symbol: 'if (argc == 2 && strcmp(argv[1], "--compute-devices") == 0) return computeDevices();' },
-    ],
-    tests: [
-      { file: "scripts/test/platform/darwin/capture-text-target.test.mjs", id: "the accurate capture recognizer reports its public supported compute devices" },
-    ],
-    expected: "The native --compute-devices query reports public supported Vision compute stages and device kinds from the same accurate, language-correction-disabled request factory as recognition. It performs no inference and assigns no compute device; recognition device-selection semantics are unchanged. This capability report does not establish OCR success or S5 measurements.",
-    levels: ["unit", "native"],
-  },
-  {
     id: "F692",
     implementation: [
       { file: "native/darwin/src/host_api_input.m", symbol: 'sp_observe_local_monitor("host_input.surface", SP_OBSERVE_COUNT, mask,' },
@@ -633,34 +619,14 @@ const FEATURE_LINKS = [
   {
     id: "F684-1",
     implementation: [
-      { file: "native/darwin/tests/capture_text_test.m", symbol: "static int warm(int argc, const char **argv) {" },
-      { file: "scripts/native-tests.mjs", symbol: "export const BUILD_TIMEOUT_MS = MAX_TEST_TIMEOUT_MS;" },
-      { file: "e2e/platform/darwin/darwin.js", symbol: "export function warmCaptureText(command, languages," },
-      { file: "e2e/view-content.mjs", symbol: "export const CAPTURE_TEXT_LANGUAGES = Object.freeze([" },
+      { file: "scripts/test-runner.mjs", symbol: "if (item.build) {" },
     ],
     tests: [
       { file: "scripts/test/test-runner.test.mjs", id: "a build runs before its test in a process of its own under its own limit, so the limit of the test measures only the test" },
       { file: "scripts/test/test-runner.test.mjs", id: "a build that fails or exceeds its limit is the result of its test, which does not run" },
-      { file: "scripts/test/native-tests.test.mjs", id: "the native test targets warm the text recognition model of capture_text_test before the test" },
-      { file: "scripts/test/native-tests.test.mjs", id: "the native test runner runs the build of a test before the test and fails the test whose build failed" },
-      { file: "e2e/test/setup.test.mjs", id: "the warm-up recognizes each recognition language once in a process of its own before the checks" },
-      { file: "e2e/test/setup.test.mjs", id: "a warm-up that fails or exceeds its limit fails the setup with its cause" },
-      { file: "e2e/test/view-content.test.mjs", id: "view OCR refuses a language whose model the setup did not prepare" },
-      { file: "scripts/test/test-app.test.mjs", id: "the plan prepares, starts the three applications, checks and quits them in this order" },
     ],
-    expected: "The text recognition model of each recognition language is compiled by capture_text_test --warm in a process of its own under a limit of 600 s before the window checks and before the native capture_text_test, so the limits of 10 s and 120 s measure only recognition and the test.",
-    levels: ["unit", "native"],
-  },
-  {
-    id: "F684",
-    implementation: [
-      { file: "native/darwin/tests/capture_text_test.m", symbol: "static NSError *recognizerFailure(NSError *cause) {" },
-    ],
-    tests: [
-      { file: "native/darwin/tests/capture_text_test.m", id: "the system text recognizer failed is stated" },
-    ],
-    expected: "A failure that Vision reports for a request is stated as the system text recognizer failed with exit status 3, apart from a recognition result.",
-    levels: ["native"],
+    expected: "The build of a test runs before the test in a process of its own under its own limit, so the limit of the test measures only the test; a build that fails or exceeds its limit is the result of the test, which does not run.",
+    levels: ["unit"],
   },
   {
     id: "F683-2",
@@ -1250,13 +1216,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F608",
-    implementation: [{ file: "e2e/platform/darwin/darwin.js", symbol: "build-capture-text-path" }],
-    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "the native target that the window-check setup runs is one the native Makefile declares" }],
-    expected: "The window-check setup builds the content recognizer through a target that the native Makefile declares.",
-    levels: ["unit"],
-  },
-  {
     id: "F594",
     implementation: [
       { file: "packages/window-check/view-edges.mjs", symbol: "export function viewEdgeFaults(image, frame, scale, { view, lines }) {" },
@@ -1643,7 +1602,7 @@ const FEATURE_LINKS = [
       { file: "e2e/test/view-metrics-collection.test.mjs", id: "a view descriptor without a placement is refused by every collector with an error that names the descriptor" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose plugin does not declare the three entries of the section-view contract fails with its plugin and section" },
       { file: "e2e/test/section-view-case.test.mjs", id: "the declaration of a plugin that has sections and no surface is a valid diagnostics declaration" },
-      { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose ready status does not declare a single-entry enum content and language fails with its plugin, section and field" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose ready status does not declare a single-entry enum content fails with its plugin, section and field" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose installed declaration the workbench refuses fails with the refusal of validateDiagnostics" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view that does not start in the fixture state fails with the expected and the actual state before it waits for readiness" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view starts in a new terminal card split below the tallest terminal card, as the section of its card-left sidebar" },
@@ -4154,18 +4113,18 @@ const FEATURE_LINKS = [
     },
     {
       "file": "e2e/test/view-metrics-collection.test.mjs",
-      "id": "one recording proves the physical anchor boundary before target content"
+      "id": "one recording reads the content value after readiness and defers the content frame past the footprint sample"
     },
     {
       "file": "e2e/test/view-metrics-collection.test.mjs",
-      "id": "footprint failure retains recording paths and skips deferred OCR"
+      "id": "footprint failure retains recording paths and skips the deferred content frame"
     },
     {
       "file": "e2e/test/view-metrics-collection.test.mjs",
-      "id": "deferred OCR failure retains its recording path and rejects the collector"
+      "id": "deferred content frame failure retains its recording path and rejects the collector"
     }
   ],
-  "expected": "Live readiness, finalized recordings and process identities precede clock-bracketed one-view and N-view footprint sampling; offline pixel analysis follows both samples without changing recordings, thresholds or failure retention.",
+  "expected": "Live readiness, finalized recordings and process identities precede clock-bracketed one-view and N-view footprint sampling; the offline content frame selection follows both samples without changing recordings, thresholds or failure retention.",
   "levels": [
     "unit",
     "application"
@@ -4266,17 +4225,17 @@ const FEATURE_LINKS = [
       "symbol": "export const normalizeViewText"
     },
     {
-      "file": "e2e/view-first-content.mjs",
-      "symbol": "normalizeViewText"
+      "file": "e2e/view-content.mjs",
+      "symbol": "normalizeViewText(actual).includes(normalizeViewText(expected))"
     }
   ],
   "tests": [
     {
       "file": "packages/window-check/test/view-metrics.test.mjs",
-      "id": "view OCR proof normalizes Unicode and whitespace but still rejects missing text"
+      "id": "content proof normalizes Unicode and whitespace but still rejects missing text"
     }
   ],
-  "expected": "Captured text selection and acceptance share NFC and OCR whitespace normalization without accepting genuinely absent expected text.",
+  "expected": "The content check of a measurement and the acceptance of its proof share NFC and whitespace normalization without accepting genuinely absent expected text.",
   "levels": [
     "unit"
   ]
@@ -4365,17 +4324,6 @@ const FEATURE_LINKS = [
   "expected": "Native placement readback timestamps are retained as evidence but are not treated as setter times for individual source rows. Drag cadence and capture coverage use source intervals; each captured gesture frame keeps its independent pixel geometry proof. One-shot and final convergence retain the final viewport, successful presentation, post-request/input source and capture after both displayed and source bounds without changing thresholds.",
   "levels": ["unit"]
 },
-  {
-    id: "F239-229",
-    implementation: [{ file: "e2e/view-content.mjs", symbol: "export async function recognizeViewFrame(" }],
-    tests: [
-      { file: "e2e/test/view-content.test.mjs", id: "view OCR consumes the exact crop without retaining it in the recording" },
-      { file: "e2e/test/view-content.test.mjs", id: "view OCR removes a crop after a recognizer error and preserves that error" },
-      { file: "e2e/test/view-content.test.mjs", id: "view OCR reports both recognition and scratch cleanup errors" },
-    ],
-    expected: "Each OCR crop exists only during its recognition call, is removed on success and failure, and preserves both recognition and cleanup errors when cleanup fails.",
-    levels: ["unit"],
-  },
   {
   "id": "F239-221-1",
   "implementation": [
@@ -5399,13 +5347,13 @@ const FEATURE_LINKS = [
       { file: "e2e/view-content.mjs", symbol: "export async function viewContentCases(" },
     ],
     tests: [
-      { file: "e2e/test/view-display.test.mjs", id: "view display rejects a readiness-only case without captured-pixel verification" },
-      { file: "e2e/test/view-content.test.mjs", id: "view pixel crops include the capture content origin and scale once" },
-      { file: "native/darwin/tests/capture_text_test.m", id: "SOKSAK CONTENT CHECK" },
+      { file: "e2e/test/view-display.test.mjs", id: "view display rejects a readiness-only case without a content verifier" },
+      { file: "e2e/test/view-display.test.mjs", id: "view display runs the content verifier of the case after the recording stops" },
+      { file: "e2e/test/view-content.test.mjs", id: "view content reads the value that holds the shown text of each plugin" },
       { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
     ],
-    expected: "Every installed view reaches declared readiness and its expected recorded text, with exact finalized frame counts and empty binder audits.",
-    levels: ["unit", "native", "application"],
+    expected: "Every installed view reaches declared readiness and holds its expected content in the public value of its plugin, with exact finalized frame counts and empty binder audits.",
+    levels: ["unit", "application"],
   },
   {
     id: "F212.12-1-15",
@@ -13067,11 +13015,11 @@ const FEATURE_LINKS = [
       { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export async function collectHwpViewMeasurements(" },
     ],
     tests: [
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "one recording proves the physical anchor boundary before target content" },
+      { file: "e2e/test/view-metrics-collection.test.mjs", id: "one recording reads the content value after readiness and defers the content frame past the footprint sample" },
       { file: "e2e/test/view-metrics-collection.test.mjs", id: "recorded view observation window rejects nonpositive and nonfinite durations" },
       { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP descriptor waits for its declared document status exposure" },
     ],
-    expected: "HWP capture retains its declared observation window while first-content acceptance uses actual captured timestamps.",
+    expected: "HWP capture retains its declared observation window while the first content frame uses actual captured timestamps.",
     levels: ["unit"],
   },
   {
@@ -13157,16 +13105,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
     tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "shared readiness wrapper waits for the declared status exposure before reading it" }],
     expected: "View readiness reads begin only after the declared exposure notification.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-201",
-    implementation: [{ file: "e2e/platform/darwin/darwin.js", symbol: "export function captureTextCommand(" }],
-    tests: [
-      { file: "e2e/test/setup.test.mjs", id: "capture recognition resolves its executable through the native build target" },
-      { file: "scripts/test/platform/darwin/capture-text-target.test.mjs", id: "the capture recognizer target that the window check setup names exists" },
-    ],
-    expected: "The selected platform setup builds the declared capture helper and preserves explicit build errors.",
     levels: ["unit"],
   },
   {
@@ -14554,10 +14492,14 @@ const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "
 // F332-4-3 removes with the plugin host.
 // F212.9a, F212.9a-2, F239-226, F239-230, F239-51 and F239-52 wrote the plugin-host throttle benchmark and the Files open-failure and
 // closed-project snapshot helpers, which F332-4-4 removes with the declared section controls and the plugin-host snapshots.
+// F239-201, F239-229, F608 and F684 wrote the build target of the captured-text recognizer, the crop of a frame that it read and the
+// statement of its failure, which F696-4-4 removes with the recognizer: a window check reads the content of a view from the public
+// value that holds it.
 const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
-  "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52"]);
+  "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
+  "F239-201", "F239-229", "F608", "F684"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

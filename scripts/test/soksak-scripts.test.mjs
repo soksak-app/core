@@ -697,17 +697,9 @@ test("window-source audit rejects a source path of another repository component"
   assert.deepEqual(auditE2ESource('import { APPS } from "./app.mjs";', "e2e/fixture.test.mjs"), []);
 });
 
-test("the native target that the window-check setup runs is one the native Makefile declares", () => {
-  const setup = readFileSync(new URL("../../e2e/platform/darwin/darwin.js", import.meta.url), "utf8");
-  const [, target] = setup.match(/"native", "darwin"\), "([^"]+)"\]/) ?? [];
-  assert.ok(target, "the setup runs no native target");
-  const makefile = readFileSync(new URL("../../native/darwin/Makefile", import.meta.url), "utf8");
-  assert.ok(makefile.split("\n").some((line) => line.startsWith(`${target}:`)), `the native Makefile declares no target ${target}`);
-});
-
 test("window-source audit distinguishes expected path literals from source access", { timeout: 1000 }, () => {
   const expected = `import assert from "node:assert/strict";
-assert.deepEqual(calls[1], ["make", "-C", "/work/project/native/darwin", "build-capture-text-path"]);`;
+assert.deepEqual(calls[1], ["make", "-C", "/work/project/native/darwin", "build"]);`;
   assert.deepEqual(auditE2ESource(expected, "e2e/test/fixture.test.mjs"), []);
 
   for (const source of [

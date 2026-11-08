@@ -10,9 +10,8 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, monotonicTim
   mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan,
   rootNativePlacementBeforeCapture, selectOneShotViewSourceFrame,
   TAB_PLACEMENT, waitForViewReadiness, withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
-import { captureTerminalReference } from "../../terminal-reference-acquisition.mjs";
-import { firstTerminalReferenceLayoutFrame, createTerminalReferenceProof } from "../../terminal-reference-content.mjs";
-import { readTerminalRecordedFrames } from "../../terminal-recorded-content.mjs";
+import { readViewContent, valueProof } from "../../view-content.mjs";
+import { presentsFrame } from "../../region-raster.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE }
   from "../../view-frame-geometry.mjs";
@@ -39,8 +38,9 @@ export async function readTabScreenUntil(s, plugin, surface, predicate, message)
 }
 
 /**
- * The view descriptor of a terminal view of `plugin` (`terminal` or `term`). Terminal content proof uses the initial fixture-shell
- * prompt without adding a command or waiting on readiness as proof.
+ * The view descriptor of a terminal view of `plugin` (`terminal` or `term`). Its content is the initial fixture-shell prompt, read
+ * through the screen read of the plugin (`<plugin>.screen.read`) once the image region of the view presents the frame that the read
+ * names; no command is added and readiness is not taken as proof.
  */
 export function terminalViewDescriptorOf(plugin) {
   if (!TERMINAL_PLUGINS.includes(plugin)) throw new Error(`a terminal view is a view of the terminal or the term plugin, not ${plugin}`);
@@ -49,8 +49,7 @@ export function terminalViewDescriptorOf(plugin) {
     placement: TAB_PLACEMENT,
     params: undefined,
     expectedContent: "sh-3.2$",
-    requiredContentProofMethod: "terminal-reference-exact-pixels-v1",
-    language: "en-US",
+    readContent: (session, surface) => readViewContent(session, plugin, surface),
     readinessStatus: `${plugin}.session`,
     readiness: async (s, surface) => {
       const session = await s.until(`${plugin}.session`, (value) => value?.sessionId && value.cols > 0 && value.rows > 0,
@@ -194,11 +193,16 @@ function terminalDocument(host, surface) {
   return row;
 }
 
-/** Returns the declared native raster region rectangle from host.window. */
-export function terminalRasterTargetRectPt(host, surface) {
+/** The one native raster region `view` of the terminal view `surface` in host.window. */
+function terminalRasterRegion(host, surface) {
   const regions = host?.regions?.filter((region) => region.surface === surface && region.name === "view") ?? [];
   assert.equal(regions.length, 1, `terminal view ${surface} must have exactly one native raster region`);
-  const region = regions[0];
+  return regions[0];
+}
+
+/** Returns the declared native raster region rectangle from host.window. */
+export function terminalRasterTargetRectPt(host, surface) {
+  const region = terminalRasterRegion(host, surface);
   const frame = region.frame;
   assert.ok(region.visible && frame && [frame.x, frame.y, frame.width, frame.height].every(Number.isFinite)
     && frame.width > 0 && frame.height > 0,
@@ -221,28 +225,48 @@ function frameAtOrAfter(captured, timeMs, description) {
   return index;
 }
 
+/** Whether the raster region of `surface` has a frame other than `before` and presents a raster of that frame's size. */
+function presentsResizedRaster(host, surface, before) {
+  const region = terminalRasterRegion(host, surface);
+  return (region.frame.width !== before.width || region.frame.height !== before.height) && presentsFrame(region, host.scale);
+}
+
+/**
+ * Measures the display of a card width change. The change frame is the first recorded frame whose measured slot changed. The content
+ * frame is the first recorded frame whose measured slot matches the declared slot at or after the display time of the presentation
+ * that follows the content read at the new size: the image region presents a raster of its new frame size (host.window regions
+ * `presented`, docs/spec/exposure.md), the screen read names a frame of that raster and the region presents it (presentedScreen), and
+ * `host.window.presented` then reports the display time.
+ */
 async function terminalLayoutObservation(t, s, descriptor, surface, card, directory, cornerRadiusPt) {
-  // This measurement owns the requested card/surface before any reference exists.
-  const target = { card, surface };
   const traced = await withViewContentTrace(t, s, descriptor, surface, async () => {
     const recording = await s.record();
     const grid = await s.get("core.grid");
     const current = grid.cards.find((item) => item.id === card);
     assert.ok(current && Number.isFinite(current.w), `terminal measurement card ${card} has no current width`);
+    const before = terminalRasterRegion(await s.get("host.window"), surface).frame;
     const beforeChangeTimeMs = (await monotonicTimeMs(s)).timeMs;
     await s.run("core.grid.size", { card, axis: "x", size: current.w + 80 });
+    await s.until("host.window", (host) => presentsResizedRaster(host, surface, before),
+      `terminal view ${surface} did not present a raster of its new frame size`);
+    const proof = valueProof(descriptor.expectedContent, await descriptor.readContent(s, surface),
+      `${descriptor.plugin} view ${surface}`);
+    const host = await s.get("host.window");
+    assert.ok(presentsResizedRaster(host, surface, before),
+      `terminal view ${surface} no longer presents a raster of its new frame size after its content read`);
+    const presented = terminalRasterRegion(host, surface).presented;
     const { displayed } = await s.presented();
     const capture = await recording.stop({ after: displayed });
-    return { beforeChangeTimeMs, displayed, capture };
+    return { beforeChangeTimeMs, displayed, capture, proof, presented };
   });
-  const { beforeChangeTimeMs, displayed, capture } = traced.action;
+  const { beforeChangeTimeMs, displayed, capture, proof, presented } = traced.action;
   assert.equal(capture.limited, false, "terminal layout recording reached its bounded frame limit");
   const paths = frames(capture.frames);
   assert.equal(paths.length, capture.count, "terminal layout recording omitted a frame file");
   assert.ok(paths.length > 0, "terminal layout recording contains no frames");
   const path = join(directory, "layout.json");
   const decoded = paths.map(readFrame);
-  writeFileSync(path, JSON.stringify({ beforeChangeTimeMs, displayed, contentFrames: traced.contentFrames,
+  writeFileSync(path, JSON.stringify({ beforeChangeTimeMs, displayed, proof, presented, contentFrames: traced.contentFrames,
     events: traced.events, frameFiles: paths, frameTimes: decoded.map(({ time }) => time),
     captureDirectory: capture.frames }, null, 2) + "\n");
   const host = await s.get("host.window");
@@ -259,18 +283,8 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
   const measured = decoded.map((frame) => measureTerminalLayoutFrame(frame, { cornerRadiusPt, targetRect }));
   const transition = findFirstChangedSlotFrame(measured, { beforeChangeTimeMs, slotInsetsPt });
   const captureAfter = Math.max(displayed, source.timeRange.upperMs);
-  const normalFrames = readTerminalRecordedFrames(capture, paths, decoded);
-  // Acquire only after the normal measured recording has ended. A layout
-  // anchor has the same prompt in its OLD measured slot, not absent content.
-  const reference = await captureTerminalReference(t, s, { plugin: descriptor.plugin, surface,
-    expected: { text: descriptor.expectedContent, row: 0, startColumn: 0,
-      guards: [{ row: 0, edge: "left", column: 0 }, { row: 0, column: descriptor.expectedContent.length }] },
-    criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 } });
-  // nativeRectPt is independently pixel-measured in every normal frame. No
-  // reference token, generation, raster or surface is copied into those frames.
-  const proof = firstTerminalReferenceLayoutFrame({ reference, target, frames: normalFrames,
-    geometryFrames: measured, beforeChangeTimeMs, slotInsetsPt, notBeforeTimeMs: captureAfter });
-  const frameIndex = proof.frameIndex;
+  const frameIndex = transition.slotMatchFrameIndices.find((index) => decoded[index].time >= captureAfter);
+  assert.ok(frameIndex !== undefined, `terminal layout has no declared-slot pixel match at or after ${captureAfter} ms`);
   const geometry = measured[frameIndex];
   return {
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: decoded.length,
@@ -279,8 +293,7 @@ async function terminalLayoutObservation(t, s, descriptor, surface, card, direct
       requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
       width: source.width, height: source.height, nativePlacement,
       surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
-      proof: createTerminalReferenceProof(reference, normalFrames[frameIndex].capture, proof.matchedRectPt,
-        { surface, frameIndex, frameCount: decoded.length, timeMs: decoded[frameIndex].time }) },
+      proof },
     sourceFrame: source,
     initialGeometry: { frameIndex, timeMs: decoded[frameIndex].time, cardRectPt: geometry.cardRectPt,
       nativeRectPt: geometry.nativeRectPt, slotInsetsPt },
@@ -370,7 +383,7 @@ async function terminalDragObservation(t, s, descriptor, surface, card, configDi
   };
 }
 
-/** Collects the terminal lifecycle, initial-prompt pixels, source-frame sizes and measured drag geometry. */
+/** Collects the terminal lifecycle, the initial prompt read through the screen read, source-frame sizes and measured drag geometry. */
 export async function collectTerminalViewMeasurements(t, s, descriptor, configDir) {
   const start = await collectViewStartAndMemory(t, s, descriptor);
   const cornerRadiusPt = effectiveCardCornerRadiusPt((await s.get("core.settings")).values);
@@ -567,7 +580,6 @@ export async function runTerminalViewBenchmark(t, app, plugin, baselinesMs) {
     const result = await runViewMeasurements(t, s, {
       plugin,
       baselinesMs,
-      requiredContentProofMethod: descriptor.requiredContentProofMethod,
       collect: () => collectTerminalViewMeasurements(t, s, descriptor, app.configDir),
     });
     const directory = join(app.configDir, "logs", `${plugin}-view-metrics`);

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import * as acquisition from "../terminal-reference-acquisition.mjs";
 import { loadTerminalReferenceFixture } from "./terminal-reference-fixture.mjs";
@@ -52,16 +51,6 @@ for (const plugin of ["terminal", "term"]) {
     assert.equal(calls.filter(call => call === "reference recording stopped").length, 1, "recording ownership must stop exactly once");
   });
 }
-
-test("terminal layout actual consumer uses strict references and per-frame measured placement instead of OCR or a final rectangle", options, () => {
-  const source = readFileSync(new URL("../benchmark/cases/terminal.mjs", import.meta.url), "utf8");
-  const body = source.slice(source.indexOf("async function terminalLayoutObservation("), source.indexOf("async function terminalDragObservation("));
-  assert.ok(body.includes("captureTerminalReference("), "actual layout consumer must acquire its later verified reference");
-  assert.ok(body.includes("firstTerminalReferenceLayoutFrame("), "actual layout consumer must use a geometry anchor for the same prompt, not invent different anchor content");
-  assert.ok(body.includes("nativeRectPt"), "actual layout consumer must use independently measured per-frame geometry");
-  assert.equal(body.includes("firstContentFrame("), false, "terminal layout must not retain the OCR consumer");
-});
-
 
 for (const plugin of ["terminal", "term"]) {
   test(`${plugin} layout retains its same-content old-width anchor and selects the earliest exact changed-slot reference pixels`, options, async t => {

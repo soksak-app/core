@@ -6,7 +6,7 @@ import { crc32 } from "node:zlib";
 import test from "node:test";
 
 import * as hwpCase from "../benchmark/cases/hwp.mjs";
-import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence, hwpFirstContentFrame,
+import { assertHwpFrameMatchesSlot, hwpDocumentHistoryEvidence,
   hwpViewDescriptor, layoutObservation, measureHwpPaintFrame, readHwpPaintViewport }
   from "../benchmark/cases/hwp.mjs";
 import { processStartSamples, TAB_PLACEMENT } from "../view-metrics-collection.mjs";
@@ -314,17 +314,21 @@ test("HWP layout recording covers the full display deadline after presentation",
   });
 });
 
-test("HWP layout rejects an incomplete capture before judging absent document text", { timeout: 5000 }, async (t) => {
+test("HWP layout rejects an incomplete capture before reading its document text", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "hwp-layout-incomplete-"));
   const captureDirectory = join(root, "capture");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const { session, descriptor, theme } = layoutDeadlineSession(root, captureDirectory, 114.9);
-  let recognized = 0;
-  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0, {
-    recognizeFrame: async () => { recognized += 1; return { lines: [] }; },
-  }), /HWP layout recording ended at 114\.9 ms before the 100 ms content deadline at 115 ms/);
+  let read = 0;
+  const run = session.run.bind(session);
+  session.run = async (name, ...rest) => {
+    if (name === "hwp.request") read += 1;
+    return run(name, ...rest);
+  };
+  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0),
+    /HWP layout recording ended at 114\.9 ms before the 100 ms content deadline at 115 ms/);
   assert.equal(session.stopAfter, 115);
-  assert.equal(recognized, 0, "an incomplete recording must not be judged as a missing-content failure");
+  assert.equal(read, 0, "an incomplete recording must not be judged as a missing-content failure");
 });
 
 test("HWP layout judges absent document text only after the full content deadline is captured", { timeout: 5000 }, async (t) => {
@@ -332,12 +336,18 @@ test("HWP layout judges absent document text only after the full content deadlin
   const captureDirectory = join(root, "capture");
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const { session, descriptor, theme } = layoutDeadlineSession(root, captureDirectory, 115);
-  let recognized = 0;
-  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0, {
-    recognizeFrame: async () => { recognized += 1; return { lines: [] }; },
-  }), /no recorded frame contains expected content/);
+  const read = [];
+  const run = session.run.bind(session);
+  session.run = async (name, params, surface) => {
+    if (name !== "hwp.request") return run(name, params, surface);
+    read.push([name, params, surface]);
+    return '<svg><text x="0" y="10">blank</text></svg>';
+  };
+  await assert.rejects(layoutObservation({ diagnostic() {} }, session, descriptor, "view-a", "card-a", theme, 0),
+    /does not show "속삭한글문서확인": "blank"/);
   assert.equal(session.stopAfter, 115);
-  assert.ok(recognized > 0, "a complete recording with absent text must reach captured-pixel OCR");
+  assert.deepEqual(read, [["hwp.request", { method: "getPageSvg", params: { page: 0 } }, "view-a"]],
+    "a complete recording with absent text must read the page glyphs of the document");
 });
 
 test("HWP first-display limit is the DOM mount baseline of the host plus the first-display margin", () => {
@@ -350,8 +360,6 @@ test("HWP first-display limit is the DOM mount baseline of the host plus the fir
 test("HWP descriptor waits for its declared document status exposure", { timeout: 5000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "hwp-view-readiness-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const previous = process.env.SOKSAK_CAPTURE_TEXT;
-  process.env.SOKSAK_CAPTURE_TEXT = previous ?? "not-invoked";
   const cleanups = [];
   try {
     const descriptor = await hwpViewDescriptor({
@@ -362,10 +370,9 @@ test("HWP descriptor waits for its declared document status exposure", { timeout
     assert.equal(descriptor.placement, TAB_PLACEMENT);
     assert.equal(descriptor.captureObservationWindowMs, 1001,
       "the HWP descriptor dropped the host-specific first-display observation window");
+    assert.equal(typeof descriptor.readContent, "function", "the HWP descriptor reads no content value");
   } finally {
     for (const cleanup of cleanups) cleanup();
-    if (previous === undefined) delete process.env.SOKSAK_CAPTURE_TEXT;
-    else process.env.SOKSAK_CAPTURE_TEXT = previous;
   }
 });
 
@@ -450,26 +457,6 @@ test("HWP footprint group includes its root and attached studio document process
     { surface: "other", document: "", process: 703 },
   ] };
   assert.deepEqual(viewProcessPids(host, ["hwp-a"]), [701, 702]);
-});
-
-test("HWP first-content sample requires OCR-confirmed decoded pixels in capture order", async () => {
-  const recognized = [];
-  const result = await hwpFirstContentFrame({
-    captured: [{ time: 10 }, { time: 26 }, { time: 43 }],
-    rect: { x: 0, y: 0, w: 20, h: 20 },
-    directory: "/unused-with-recognizer",
-    recognizeFrame: async (frame) => {
-      recognized.push(frame.time);
-      return { lines: frame.time === 26 ? ["속삭한글문서확인"] : ["blank"] };
-    },
-  });
-  assert.deepEqual(recognized, [10, 26]);
-  assert.deepEqual(result, {
-    frameIndex: 1,
-    frameCount: 3,
-    timeMs: 26,
-    proof: { expected: "속삭한글문서확인", actual: "속삭한글문서확인", lines: ["속삭한글문서확인"] },
-  });
 });
 
 test("HWP geometry compares measured studio edges with the declared slot insets", () => {

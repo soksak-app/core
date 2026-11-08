@@ -52,11 +52,11 @@ function readyValue(schema, field) {
 }
 
 /**
- * Returns the section view `view` (installedSectionViews) with the `content` and `language` that its view shows. The installed plugin.json
+ * Returns the section view `view` (installedSectionViews) with the `content` that its view shows. The installed plugin.json
  * and diagnostics.json pass validateDiagnostics, whose refusal is the failure, so a declaration that the workbench refuses fails here. The
  * declaration declares the commands `<plugin>.view.frames` and `<plugin>.view.history` and the status `<section id>.view.ready`, and the
- * schema of that status declares `content` and `language` each as a single-entry enum of a string; otherwise it fails with its plugin and
- * section, and for a missing enum with its field.
+ * schema of that status declares `content` as a single-entry enum of a string; otherwise it fails with its plugin and section, and for a
+ * missing enum with its field.
  */
 export function requireSectionDeclarations(view) {
   const owner = `${view.plugin} section view ${view.section}`;
@@ -73,10 +73,8 @@ export function requireSectionDeclarations(view) {
   if (!declares) throw new Error(missingDeclaration);
   const ready = exposes.status.find((entry) => entry.name === statusName);
   const content = readyValue(ready.schema, "content");
-  const language = readyValue(ready.schema, "language");
-  const missing = [content === null ? "content" : null, language === null ? "language" : null].filter(Boolean);
-  if (missing.length > 0) throw new Error(`${owner} declares ${statusName} without a single-entry enum ${missing.join(" and ")}`);
-  return { ...view, content, language };
+  if (content === null) throw new Error(`${owner} declares ${statusName} without a single-entry enum content`);
+  return { ...view, content };
 }
 
 /** The plugin whose cards hold the card-left sidebar that shows the measured section (terminalCardSidebar of e2e/fixture.mjs). */
@@ -177,11 +175,11 @@ export function sectionTopEdgeDragPlan(grid, card) {
 /**
  * The view descriptor of the section view `view` (installedSectionViews), whose plugin declares the section-view contract
  * (requireSectionDeclarations). Its readiness waits for `<section id>.view.ready` with `ready` true, requires the declared `content` and
- * `language` and a history of one entry; a section view holds no document region, so its region history is 0. Its content trace
+ * a history of one entry; a section view holds no document region, so its region history is 0. Its content trace
  * runs `<plugin>.view.frames`, and a start answer without a marker color stops the observer and fails with the plugin and section.
  */
 export function sectionViewDescriptor(view) {
-  const { plugin, section, content, language } = requireSectionDeclarations(view);
+  const { plugin, section, content } = requireSectionDeclarations(view);
   const owner = `${plugin} section view ${section}`;
   const readinessStatus = `${section}.view.ready`;
   const history = async (s, surface) => {
@@ -196,13 +194,14 @@ export function sectionViewDescriptor(view) {
     placement: SECTION_PLACEMENT,
     params: Object.freeze({ section }),
     expectedContent: content,
-    language,
+    // The ready status of a section view holds the content that it shows.
+    readContent: async (s, surface) => (await s.get(readinessStatus, surface)).content,
     readinessStatus,
     readiness: async (s, surface) => {
       const status = await s.until(readinessStatus, (value) => value?.ready === true,
         `${owner} did not report ${readinessStatus} on ${surface}`, { surface });
-      assert.deepEqual({ content: status.content, language: status.language }, { content, language },
-        `${owner} reported ${readinessStatus} on ${surface} with content and language that differ from its declaration`);
+      assert.equal(status.content, content,
+        `${owner} reported ${readinessStatus} on ${surface} with content that differs from its declaration`);
       const historyEntries = await history(s, surface);
       assert.equal(historyEntries, 1, `${owner} history on ${surface} does not contain only its initial document`);
       return { historyEntries, regionHistoryEntries: 0, status };

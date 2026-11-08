@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { firstContentFrame } from "../../view-first-content.mjs";
+import { valueProof } from "../../view-content.mjs";
 import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../../view-frame-geometry.mjs";
 import { mapViewContentFramesToCapture, monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
   selectOneShotViewSourceFrame, withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
@@ -105,8 +105,9 @@ function viewDocumentRow(host, surface, owner) {
 
 /**
  * The layout observation (v) of the view `surface` of the card `card`: core.grid.size makes the card 80 larger on `axis`
- * (x or y) while the content trace of `descriptor` runs, and the first captured frame whose pixels match the declared slot
- * and show `descriptor.expectedContent` is the content frame.
+ * (x or y) while the content trace of `descriptor` runs. The content frame is the first captured frame whose pixels match the
+ * declared slot at or after the source frame of the new size, and the content value that `descriptor.readContent` reads holds
+ * `descriptor.expectedContent`.
  */
 export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {
   const dimension = AXIS[axis];
@@ -147,10 +148,8 @@ export async function markerLayoutObservation(t, s, descriptor, surface, card, {
   const captureAfter = Math.max(displayed, source.timeRange.upperMs);
   const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= captureAfter);
   assert.ok(candidates.length > 0, `${owner} layout has no declared-slot pixel match at or after ${captureAfter} ms`);
-  const localProof = await firstContentFrame({ captured: candidates.map((index) => captured[index]),
-    rect: { x: root.frame.x, y: root.frame.y, w: root.frame.width, h: root.frame.height },
-    expected: descriptor.expectedContent, language: descriptor.language, directory: result.frames });
-  const frameIndex = candidates[localProof.frameIndex];
+  const frameIndex = candidates[0];
+  const proof = valueProof(descriptor.expectedContent, await descriptor.readContent(s, surface), owner);
   const geometry = measured[frameIndex];
   return {
     changeFrame: { frameIndex: transition.changeFrameIndex, frameCount: captured.length,
@@ -159,7 +158,7 @@ export async function markerLayoutObservation(t, s, descriptor, surface, card, {
       requestAtMs: beforeChangeTimeMs, displayedAtMs: displayed, sourceTimeRange: source.timeRange,
       width: source.width, height: source.height, nativePlacement,
       surfaceEvents: traced.events.filter((event) => event?.event === "host.trace.surface" && event.fields?.surface === surface),
-      proof: localProof.proof },
+      proof },
     sourceFrame: source,
     slotInsetsPt,
     initialGeometry: { frameIndex, timeMs: captured[frameIndex].time, cardRectPt: geometry.cardRectPt,

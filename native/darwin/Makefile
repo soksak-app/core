@@ -132,7 +132,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: build-host-callback-worker build-host-callback-abi build fetch build-capture-text-path test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
 build: fetch $(LIBRARY) $(PKGCONFIG)
 
@@ -238,13 +238,6 @@ $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(PROCE
 
 $(BUILD)/site_cost_test: tests/site_cost_test.m tests/support/site_cost.m tests/support/site_cost.h tests/support/no_activation.m | $(BUILD)
 	@clang $(CFLAGS) -I$(CURDIR)/tests $< tests/support/site_cost.m tests/support/no_activation.m -framework Foundation -framework AppKit -o $@
-
-# Vision reads captured pixels only in this check executable, outside application rendering.
-$(BUILD)/capture_text_test: tests/capture_text_test.m tests/support/no_activation.m | $(BUILD)
-	@clang $(CFLAGS) $< tests/support/no_activation.m -framework Foundation -framework AppKit -framework Vision -framework CoreText -framework CoreML -o $@
-
-build-capture-text-path: $(BUILD)/capture_text_test
-	@printf '%s\n' '$(abspath $(BUILD)/capture_text_test)'
 
 # A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
 $(BUILD)/%_benchmark: tests/%_benchmark.m tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
@@ -454,7 +447,6 @@ NATIVE_TESTS = observe_test \
   capture_frame_identity_capture_test \
   capture_source_writer_test \
   capture_frame_test \
-  capture_text_test \
   dock_menu_test \
   appearance_test \
   notifications_test \
@@ -484,13 +476,8 @@ NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts
 # The shared cases of the view page insertion, which the plugin-api test and the native tests run (docs/spec/plugin-processes.md, rule 4).
 VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/plugin-api/contract/view-page.json)
 
-# The builds of native tests (scripts/native-tests.mjs): capture_text_test compiles the text recognition model of the system into its
-# cache on the first recognition of a language, which takes minutes and can fail in the process that compiled it, so the warm-up
-# compiles it in a process of its own before the test.
-NATIVE_TEST_BUILDS = build:capture_text_test,--warm,en-US
-
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
-	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TEST_BUILDS) $(NATIVE_TESTS)
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
 
 test-app: $(addprefix $(BUILD)/,$(call executables,$(NATIVE_E2E_TESTS)))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_E2E_TESTS)
@@ -583,7 +570,7 @@ repeat: $(BUILD)/$(TEST)
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat requires TEST=<name>_test and a positive COUNT" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
 	  echo "START: $(TEST) run $$i of $(COUNT)"; \
-	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TEST_BUILDS) $(TEST) || { echo "FAIL: $(TEST) run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(TEST) || { echo "FAIL: $(TEST) run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: $(TEST) passed $(COUNT) consecutive runs"
 
@@ -592,7 +579,7 @@ repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-suite requires a positive COUNT" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
 	  echo "START: test suite run $$i of $(COUNT)"; \
-	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TEST_BUILDS) $(NATIVE_TESTS) || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: test suite passed $(COUNT) consecutive runs"
 

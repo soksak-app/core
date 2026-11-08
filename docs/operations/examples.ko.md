@@ -114,7 +114,7 @@ View 표시 검사는 `core.plugins`에서 열린 tab이 없는 plugin도 포함
 
 View display acceptance는 설치된 각 view plugin의 명시적 content case를 요구한다. Case가 없으면 plugin과 실제로 연 tab을 밝히며 실패한다. Applied surface 영역의 colour variation은 영역 관찰만 제공하고 first content를 입증하지 않는다. 따라서 missing content case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
 
-공통 창 검사 준비는 애플리케이션 실행 파일만 선언한다. 명시한 SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2, SOKSAK_BINARY_MYGO 경로를 유지하며, 세 경로가 모두 있으면 Cargo 탐색이나 네이티브 플랫폼 도구가 필요 없다. 기본 탐색은 현재 Cargo metadata로 macOS 디버그 번들을 찾는다. 지원하지 않는 기본 탐색은 해당 연산에서 실패하며 실행 파일의 명시적 선언을 요구한다. 준비 단계는 OCR 인식기를 빌드하거나 예열하지 않는다. 아직 남은 OCR 소비자는 선언된 도구가 없으면 실패하며, 공개 콘텐츠 조회와 별도 화면 출력 단언으로 교체하는 작업은 F696에서 추적한다. 이 준비 단계 수정은 해당 소비자나 Linux·Windows 앱 동작의 검증 완료가 아니다.
+공통 창 검사 준비는 애플리케이션 실행 파일만 선언한다. 명시한 SOKSAK_BINARY_WAILSV3, SOKSAK_BINARY_TAURIV2, SOKSAK_BINARY_MYGO 경로를 유지하며, 세 경로가 모두 있으면 Cargo 탐색이나 네이티브 플랫폼 도구가 필요 없다. 기본 탐색은 현재 Cargo metadata로 macOS 디버그 번들을 찾는다. 지원하지 않는 기본 탐색은 해당 연산에서 실패하며 실행 파일의 명시적 선언을 요구한다. 준비 단계는 아무것도 빌드하지 않는다. 이 준비 단계 수정은 Linux·Windows 앱 동작의 검증 완료가 아니다.
 
 현재 layout의 terminal click을 관측하려면 `SOKSAK_CONFIG_ROOT=<root> make test-app-terminal-focus-current`를 실행한다. 검사는 보이는 terminal view가 있어야 하며, 두 application을 활성화하지 않고 native click을 기록하고, 보이는 view document와 새 trusted pointer event 및 해당 native first responder를 요구한다. Layout을 보존하고 모든 기록 frame의 decoding, recording limit 미도달, 최대 35 ms의 frame gap을 확인한다. 이 검사는 문자를 입력하지 않으며 문자 입력은 activation tier에서 확인한다. 실패한 recording은 자동으로 진단 증거로 보존한다.
 
@@ -132,7 +132,7 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 디스플레이를 켜고 `make test-app`를 실행한다. `make test-app-section-design`은 원본 해상도로 확인하도록 애플리케이션의 files, browser section을 light, dark mode로 찍은 still을 `target/section-design`에 남긴다. 각 end-to-end target(`test-app`, `test-app-activation`, `test-app-real`, `test-app-person`)은 세 debug 애플리케이션과 workspace registry를 빌드하고, 자기 tier의 창 검사 script와 native end-to-end target으로 `scripts/test-app.mjs`를 실행한다.
 
 1. 실행마다 새 설정 root `target/e2e/<time>-<random>`을 만든다.
-2. 새 root에 registry 인증서를 만들고(`make create-test-certificates`), workspace registry의 플러그인을 `soksak-check-wailsv3`, `soksak-check-tauriv2`, `soksak-check-mygo`에 설치한다(`make install-plugins`). 창 검사의 global setup은 OCR 준비 없이 실행 파일 경로를 선언한다.
+2. 새 root에 registry 인증서를 만들고(`make create-test-certificates`), workspace registry의 플러그인을 `soksak-check-wailsv3`, `soksak-check-tauriv2`, `soksak-check-mygo`에 설치한다(`make install-plugins`). 창 검사의 global setup은 실행 파일 경로를 선언하고 아무것도 빌드하지 않는다.
 3. 애플리케이션을 그 root의 `--config-dir`과 `--registry-ca`로 시작하고, 출력을 `<root>/<app>.out`에 쓰고, 각 `endpoint.json`을 file watch로 최대 60초 기다린다.
 4. tier의 창 검사(`node scripts/node-tests.mjs --script <script>`)를 실행하고(이 실행이 run을 audit한다), 이어서 tier의 native end-to-end target을 실행한다.
 5. 시작한 각 애플리케이션을 사람의 경로로 끝내고 종료를 최대 60초 기다린다. Wails와 Tauri 애플리케이션은 key equivalent가 Command+Q(`host.menu`의 `cmd+q`)인 애플리케이션 메뉴 항목을 `host.menu.select`로 실행해 끝내고, 마지막인 mygo 애플리케이션은 그 window에 Command+Q down과 up(`input.key`)을 보내 끝낸다. 실행이 각 애플리케이션의 부모이므로 exit status를 읽는다. 0이 아닌 상태로 끝난 애플리케이션이나 그 항목이 없는 메뉴는 그 step을 실패시키고, 실행 시작 이후 그 애플리케이션이 남긴 시스템 crash report를 fault와 함께 출력한다(`scripts/crash-fault.mjs`). 이어서 그 step은 같은 제한 안에서 `<config-dir>/process.lock`을 쥔 프로세스가 없어질 때까지 기다린다([endpoint](../spec/endpoint.ko.md)). `diagnostics.host.relaunch`는 시작한 애플리케이션을 실행이 시작하지 않은 새 프로세스로 바꾸기 때문이다. `lockf(1)`가 잠금을 얻고, 소유자가 끝나면 돌아온다. 같은 60초 제한은 endpoint 연결, 정상 Quit RPC 완료, 실제 자식 프로세스 종료를 모두 포함한다. 제한을 넘으면 대기 중이거나 뒤늦게 연결된 client를 닫고 실패를 기록한 뒤 나머지 정리를 계속하며, 애플리케이션을 강제로 종료하지 않는다.

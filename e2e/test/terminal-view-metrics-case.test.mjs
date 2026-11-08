@@ -184,9 +184,6 @@ test("terminal convergence target comes from the visible native raster region", 
   assert.throws(() => terminalRasterTargetRectPt({ regions: [] }, "surface-a"), /exactly one native raster region/);
 });
 
-// The removed OCR-only terminalFirstContentFrame owner is replaced by the
-// real terminal/term reference recordings in terminal-reference-start.test.mjs.
-
 test("the term view descriptor reads the statuses and commands of the term plugin", { timeout: 5000 }, async () => {
   const term = terminalViewDescriptorOf("term");
   assert.equal(term.plugin, "term");
@@ -194,8 +191,8 @@ test("the term view descriptor reads the statuses and commands of the term plugi
   assert.equal(term.placement, TAB_PLACEMENT);
   assert.equal(terminalViewDescriptor.placement, TAB_PLACEMENT);
   assert.equal(term.expectedContent, "sh-3.2$");
-  assert.equal(term.requiredContentProofMethod, "terminal-reference-exact-pixels-v1");
-  assert.equal(terminalViewDescriptor.requiredContentProofMethod, "terminal-reference-exact-pixels-v1");
+  assert.equal(typeof term.readContent, "function", "the term view descriptor reads no content value");
+  assert.equal(typeof terminalViewDescriptor.readContent, "function", "the terminal view descriptor reads no content value");
   const calls = [];
   const session = {
     async run(name, params, surface) {

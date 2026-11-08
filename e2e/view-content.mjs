@@ -1,21 +1,11 @@
-// Reads plugin content from decoded recording pixels through the declared check executable.
+// Reads the declared content of a plugin view through the public value of the plugin that holds it, and checks that the host
+// presents the region that shows it (docs/features.md F696-4).
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { promisify } from "node:util";
 import { copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { normalizeViewText } from "@soksak/window-check/view-metrics.mjs";
-import { FIXTURE } from "./hwp-support.mjs";
-
-const run = promisify(execFile);
-
-/**
- * The recognition languages of the window checks. The window-check setup prepares the text recognition model of each before the first
- * check (warmCaptureText), so a recognition, whose limit is 10 s, never compiles a model; a language outside this list is refused.
- */
-export const CAPTURE_TEXT_LANGUAGES = Object.freeze(["en-US", "ko-KR"]);
+import { FIXTURE, lines } from "./hwp-support.mjs";
+import { presentedScreen, textLines } from "./terminal-screen.mjs";
 
 /** Copies one applied view's exact opaque BGRA crop without resizing or changing channels. */
 export function cropViewPixels(frame, rect) {
@@ -30,7 +20,7 @@ export function cropViewPixels(frame, rect) {
   const height = Math.ceil(frame.content.y * frame.scale + (rect.y + rect.h) * ratio) - y;
   assert.ok(x >= 0 && y >= 0 && x + width <= frame.width && y + height <= frame.height,
     "the applied view crop lies outside its recorded frame");
-  assert.ok(width * height * 4 <= 64 * 1024 * 1024, "the view crop exceeds the 64 MiB recognition limit");
+  assert.ok(width * height * 4 <= 64 * 1024 * 1024, "the view crop exceeds 64 MiB");
   const data = Buffer.alloc(width * height * 4);
   for (let row = 0; row < height; row++) {
     data.set(frame.data.subarray((y + row) * frame.stride + x * 4,
@@ -39,66 +29,67 @@ export function cropViewPixels(frame, rect) {
   return { width, height, data };
 }
 
-/** Reads text from one captured view frame without treating readiness as pixel evidence. */
-export async function recognizeViewFrame({ frame, rect, language, directory, artifactName = "view-content",
-  command = process.env.SOKSAK_CAPTURE_TEXT, runRecognition = run, removeScratch = rm }) {
-  assert.ok(typeof language === "string" && language.length > 0, "view content recognition requires a language");
-  assert.ok(CAPTURE_TEXT_LANGUAGES.includes(language),
-    `view content recognition of ${language} has no prepared model; the window-check setup prepares ${CAPTURE_TEXT_LANGUAGES.join(", ")}`);
-  assert.ok(typeof directory === "string" && directory.length > 0, "view content recognition requires a recording directory");
-  assert.ok(typeof artifactName === "string" && /^[a-zA-Z0-9_-]+$/u.test(artifactName),
-    "view content recognition requires a safe artifact name");
-  assert.ok(typeof command === "string" && command.length > 0,
-    "SOKSAK_CAPTURE_TEXT must name the built capture_text_test executable");
-  assert.ok(typeof runRecognition === "function", "view content recognition requires a capture-text runner");
-  assert.ok(typeof removeScratch === "function", "view content recognition requires a scratch cleanup operation");
-  const crop = cropViewPixels(frame, rect);
-  const scratchDirectory = await mkdtemp(join(tmpdir(), "soksak-view-content-"));
-  const file = join(scratchDirectory, `${artifactName}.bgra.bin`);
-  let recognitionFailed = false;
-  let recognitionError;
-  try {
-    await writeFile(file, crop.data);
-    const { stdout } = await runRecognition(command, ["--bgra", file, String(crop.width), String(crop.height),
-      String(crop.width * 4), language], { timeout: 10000, maxBuffer: 1024 * 1024 });
-    const result = JSON.parse(stdout);
-    assert.ok(Array.isArray(result.lines) && result.lines.every(line => typeof line === "string"),
-      `capture text recognition returned invalid lines for ${artifactName}`);
-    return { ...result, crop: { width: crop.width, height: crop.height } };
-  } catch (error) {
-    recognitionFailed = true;
-    recognitionError = error;
-    throw error;
-  } finally {
-    try {
-      await removeScratch(scratchDirectory, { recursive: true, force: true });
-    } catch (cleanupError) {
-      if (recognitionFailed) {
-        throw new AggregateError([recognitionError, cleanupError],
-          `view content recognition failed and its scratch directory could not be removed: ${scratchDirectory}`);
-      }
-      throw cleanupError;
-    }
-  }
+/** The visible document region `document` of surface in host.window, or a failure that names what it holds. */
+async function visibleDocument(s, surface, document) {
+  const host = await s.get("host.window");
+  const row = host.documents.find((item) => item.surface === surface && item.document === document);
+  assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
+    `${surface} shows no document region ${JSON.stringify(document)}: ${JSON.stringify(row)}`);
+  return row;
 }
 
-/** Recognizes the final complete frame; readiness alone cannot satisfy the pixel assertion. */
-function pixels(command, expected, language, diagnostic) {
-  return async ({ captured, rect, directory }) => {
-    const recognized = await recognizeViewFrame({ frame: captured.at(-1), rect, language, directory, command });
-    const { crop, ...result } = recognized;
-    writeFileSync(join(directory, "view-content.json"), JSON.stringify({ expected, language, ...result }, null, 2) + "\n");
-    assert.ok(normalizeViewText(recognized.lines.join(" ")).includes(normalizeViewText(expected)),
-      `captured view does not contain ${JSON.stringify(expected)}: ${JSON.stringify(recognized.lines)}`);
-    diagnostic(`captured content ${JSON.stringify(expected)} in decoded frame ${captured.length}`);
+/**
+ * The text that the plugin of surface holds as its shown content: the empty instruction of the browser (browser.content.read),
+ * the document text of the editor (editor.read), the glyphs of the first page of hwp (getPageSvg) and the cell rows of a terminal
+ * whose frame its image region presented (term.screen.read and terminal.screen.read). A page plugin shows it in its visible
+ * document region; the caller waits for the presentation of the window (host.window.presented) after this read.
+ */
+export async function readViewContent(s, plugin, surface) {
+  if (plugin === "term" || plugin === "terminal") {
+    const screen = await presentedScreen(s, surface, plugin);
+    return textLines({ lines: screen.rows }).join("\n");
+  }
+  await visibleDocument(s, surface, "");
+  if (plugin === "browser") {
+    const value = await s.run("browser.content.read", {}, surface);
+    assert.equal(value?.kind, "empty", `browser ${surface} does not show its empty instruction: ${JSON.stringify(value)}`);
+    return value.instruction;
+  }
+  if (plugin === "editor") return s.run("editor.read", {}, surface);
+  if (plugin === "hwp") {
+    await visibleDocument(s, surface, "studio");
+    return (await lines(s, surface)).join("\n");
+  }
+  throw new Error(`plugin ${plugin} has no content value`);
+}
+
+/**
+ * The proof of a content check of a measurement, {method: "value", expected, actual}, after checking that the content text
+ * actual that a check read holds expected. owner names the view in a failure.
+ */
+export function valueProof(expected, actual, owner = "the view") {
+  assert.ok(typeof expected === "string" && normalizeViewText(expected).length > 0, "view content requires nonempty expected text");
+  assert.equal(typeof actual, "string", `${owner} content is not text: ${JSON.stringify(actual)}`);
+  assert.ok(normalizeViewText(actual).includes(normalizeViewText(expected)),
+    `${owner} does not show ${JSON.stringify(expected)}: ${JSON.stringify(actual)}`);
+  return { method: "value", expected, actual };
+}
+
+/** Reads the content of surface (readViewContent) and returns the proof that it holds expected (valueProof). */
+export async function viewContentProof(s, plugin, surface, expected) {
+  return valueProof(expected, await readViewContent(s, plugin, surface), `${plugin} ${surface}`);
+}
+
+/** The content check of a view: it reads the content of surface after the display and checks that it holds expected. */
+function shows(s, plugin, surface, expected, diagnostic) {
+  return async () => {
+    await viewContentProof(s, plugin, surface, expected);
+    diagnostic(`${plugin} ${surface} shows ${JSON.stringify(expected)}`);
   };
 }
 
-/** Declared per-plugin readiness and fixed captured-content expectations for the installed fixture. */
+/** Declared per-plugin readiness and fixed content expectations for the installed fixture. */
 export async function viewContentCases(s, diagnostic) {
-  const command = process.env.SOKSAK_CAPTURE_TEXT;
-  assert.ok(typeof command === "string" && command.length > 0,
-    "SOKSAK_CAPTURE_TEXT must name the built capture_text_test executable");
   const { root } = await s.get("core.project");
   const folder = `view-content-${process.pid}`;
   mkdirSync(join(root, folder));
@@ -124,31 +115,31 @@ export async function viewContentCases(s, diagnostic) {
       const location = await status(tab, "browser.location", value => !value.loading && value.error === null);
       assert.equal(location.url, "", "the initial browser must show its empty state");
       await area(tab, "browser.empty");
-      return pixels(command, "주소를 입력하세요", "ko-KR", diagnostic);
+      return shows(s, "browser", tab, "주소를 입력하세요", diagnostic);
     } }],
     ["editor", { params: { path: editorPath }, ready: async (_, { tab }) => {
       await status(tab, "editor.document", value => value.path === editorPath && value.length === editorText.length + 1);
       await area(tab, "editor.content");
-      return pixels(command, editorText, "en-US", diagnostic);
+      return shows(s, "editor", tab, editorText, diagnostic);
     } }],
     ["hwp", { params: { path: hwpPath }, ready: async (_, { tab }) => {
       await status(tab, "hwp.document", value => value.path === hwpPath && value.phase === "ready" && value.pages === 1);
       await area(tab, "hwp.studio");
-      return pixels(command, "속삭한글문서확인", "ko-KR", diagnostic);
+      return shows(s, "hwp", tab, "속삭한글문서확인", diagnostic);
     } }],
     ["term", { ready: async (_, { tab }) => {
       await status(tab, "term.session", value => value.sessionId && value.cols > 0 && value.rows > 0);
       await s.run("term.input", { bytes: `printf '${termText}\\n'\r` }, tab);
       await status(tab, "term.screen", rows => rows.map(row => row.map(cell => cell.ch ?? " ").join("")).join("\n").includes(termText));
       await area(tab, "term.view");
-      return pixels(command, termText, "en-US", diagnostic);
+      return shows(s, "term", tab, termText, diagnostic);
     } }],
     ["terminal", { ready: async (_, { tab }) => {
       await status(tab, "terminal.session", value => value.sessionId && value.cols > 0 && value.rows > 0);
       await s.run("terminal.input", { bytes: `printf '${terminalText}\\n'\r` }, tab);
       await status(tab, "terminal.screen", rows => rows.map(row => row.map(cell => cell.ch ?? " ").join("")).join("\n").includes(terminalText));
       await area(tab, "terminal.view");
-      return pixels(command, terminalText, "en-US", diagnostic);
+      return shows(s, "terminal", tab, terminalText, diagnostic);
     } }],
   ]);
 }

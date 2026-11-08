@@ -126,14 +126,14 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
     let displayed = 0;
     let stopped;
     let tab;
-    let verifyPixels;
+    let verifyShown;
     try {
       try {
         ({ tab } = await s.run("core.card.add-tab", { card: card.id, plugin: view.id, params: paramsForPlugin(view.id) }));
         await s.until("core.surfaces", (all) => all.some((item) => item.surface === tab && item.visible
           && item.exposes.includes("status core.surface.document")), `view ${view.id} did not show its document`);
         const document = await s.get("core.surface.document", tab);
-        if (verifyContent) verifyPixels = await verifyContent({ plugin: view.id, tab, document });
+        if (verifyContent) verifyShown = await verifyContent({ plugin: view.id, tab, document });
         ({ displayed } = await s.presented());
       } finally {
         stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 });
@@ -150,11 +150,11 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
         `${view.id}: ready view document controls without a command or element name`);
       const counts = captured.map((frame) => colours(frame, now.applied));
       const first = counts.findIndex((count) => count > 1);
-      if (!verifyPixels) {
+      if (!verifyShown) {
         assert.ok(first >= 0, `${view.id}: sampled surface area is blank in ${counts.length} frames`);
         assert.ok(counts.at(-1) > 1, `${view.id}: the last sampled surface area is blank`);
       }
-      if (verifyPixels) await verifyPixels({ captured, rect: now.applied, directory: recording.frames });
+      if (verifyShown) await verifyShown();
       t.diagnostic(`${view.id}: first varied-area frame ${first < 0 ? "none" : first + 1} of ${captured.length}, gap=${stopped.longestGap}ms`);
     } finally {
       if (tab) {
@@ -173,9 +173,9 @@ export async function checkViewDisplay(s, t, readRecording, contentCases = new M
     const content = contentCases.get(observation.plugin);
     assert.equal(typeof content?.ready, "function",
       `${observation.plugin}: tab ${observation.tab} has no explicit content case`);
-    const verifyPixels = await content.ready(s, observation);
-    assert.equal(typeof verifyPixels, "function",
-      `${observation.plugin}: tab ${observation.tab} has no captured-pixel verifier`);
-    return verifyPixels;
+    const verifyShown = await content.ready(s, observation);
+    assert.equal(typeof verifyShown, "function",
+      `${observation.plugin}: tab ${observation.tab} has no content verifier`);
+    return verifyShown;
   }, (plugin) => contentCases.get(plugin)?.params);
 }

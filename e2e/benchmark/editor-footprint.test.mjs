@@ -58,7 +58,7 @@ for (const app of Object.values(APPS)) {
           const processGroup = await collectEditorProcessFootprint(s, [normalSurface]);
           sampledAt.after = await monotonicTimeMs(s);
           assert.ok(sampledAt.before.timeMs >= opened.contentFrame.timeMs,
-            "normal Editor footprint sampling started before its first OCR-confirmed content frame");
+            "normal Editor footprint sampling started before its first content frame");
           assert.ok(sampledAt.after.timeMs >= sampledAt.before.timeMs,
             "normal Editor footprint sample clock moved backward");
           assert.deepEqual(processGroup.surfaces, [normalSurface],
@@ -71,8 +71,7 @@ for (const app of Object.values(APPS)) {
           }
           normalView = { surface: normalSurface, requestAtMs: opened.requestAtMs,
             requestEvent: opened.processStart.requestEvent, firstContentFrame: opened.contentFrame,
-            recording: { directory: opened.recording.directory, frameCount: opened.recording.frameCount,
-              anchorContentFrame: opened.recording.anchorContentFrame },
+            recording: { directory: opened.recording.directory, frameCount: opened.recording.frameCount },
             readinessEvidence: opened.readinessEvidence, samplingClock: sampledAt,
             processGroupPids: processGroup.pids, processGroupSurfaces: processGroup.surfaces,
             processes: processGroup.processes };

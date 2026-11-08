@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, TAB_PLACEMENT, viewCardWithDifferentPluginTab,
   viewFootprints } from "../../view-metrics-collection.mjs";
-import { viewContentCases } from "../../view-content.mjs";
+import { readViewContent, viewContentCases } from "../../view-content.mjs";
 import { viewProcessGroup } from "../../view-process-footprint.mjs";
 import { activeCoreTheme, dragTailGeometryFrame, markerDragObservation, markerLayoutObservation, paletteWithMarkerColor,
   sourceContentFrame, themeGeometryPalette } from "./marker-view.mjs";
@@ -187,7 +187,7 @@ export function editorViewDescriptor(content) {
     placement: TAB_PLACEMENT,
     params: content.params,
     expectedContent: "SOKSAK EDITOR CONTENT",
-    language: "en-US",
+    readContent: (session, surface) => readViewContent(session, "editor", surface),
     readinessStatus: "editor.document",
     readiness: async (session, surface) => {
       await session.until("editor.document", (value) => value.path === editorPath && value.length === expectedLength,

@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
 
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mjs";
-import { firstContentFrame, firstDifferentContentFrame } from "./view-first-content.mjs";
-import { verifyTerminalRecordedContent } from "./terminal-recorded-content.mjs";
-import { declaredSlotInsets, effectiveCardCornerRadiusPt } from "./view-frame-geometry.mjs";
+import { valueProof } from "./view-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
   viewRootProcessPids } from "./view-process-footprint.mjs";
@@ -25,12 +22,10 @@ export function rightEdgeWidthDragPlan(grid, card) {
     "width drag requires an interior horizontal boundary");
   return { axis: "x", line: card.c1, dx: 80, dy: 0, ms: 500, times: 1 };
 }
-const HOST_OCR_LANGUAGES = Object.freeze({ ko: "ko-KR", en: "en-US" });
-
-/** Chooses a card that already has a visible-content anchor from another plugin. */
+/** Chooses a card that holds a tab of another plugin, so the card stays when the measured view closes. */
 export function viewCardWithDifferentPluginTab(grid, plugin, preferred) {
-  assert.ok(grid && Array.isArray(grid.cards), "core.grid must expose cards for view anchoring");
-  assert.ok(typeof plugin === "string" && plugin.length > 0, "view anchoring requires a plugin identity");
+  assert.ok(grid && Array.isArray(grid.cards), "core.grid must expose cards for a view card");
+  assert.ok(typeof plugin === "string" && plugin.length > 0, "a view card requires a plugin identity");
   const cardHasAnchor = (card) => card?.tabs?.some((tab) => typeof tab?.id === "string" && tab.id.length > 0
     && typeof tab.plugin === "string" && tab.plugin !== plugin);
   const card = grid.cards.find((item) => item.id === preferred && cardHasAnchor(item))
@@ -41,7 +36,7 @@ export function viewCardWithDifferentPluginTab(grid, plugin, preferred) {
 
 /**
  * The placement of a tab view, the `placement` of its view descriptor. A placement is { card, open, close }:
- *   card(grid, plugin, preferred)      the card that a view of `plugin` starts from, with a tab of another plugin as its anchor
+ *   card(grid, plugin, preferred)      the card that a view of `plugin` starts from, which holds a tab of another plugin
  *   open(s, { card, plugin, params })  starts one view and resolves with its surface
  *   close(s, surface, { cleanup })     closes the view and waits until core.surfaces no longer lists it; `cleanup` names the cleanup
  *                                      of a check in its errors
@@ -606,28 +601,6 @@ export async function monotonicTimeMs(s) {
   return { monoNs: value.mono_ns, timeMs: Number(BigInt(value.mono_ns)) / 1_000_000 };
 }
 
-/** Admits an actual committed capture after the scheduled refresh boundary.
- * Final .bgra files are atomically renamed by the native writer; .partial files
- * are excluded by frames(). The existing bounded watcher owns subscription and
- * cleanup, and readFrame verifies the complete header, compressed bytes and CRC. */
-export async function waitForRecordedViewAnchor(recording, afterMs, timeoutMs = 10000) {
-  assert.ok(typeof recording?.frames === "string" && recording.frames, "anchor admission requires its public recording directory");
-  assert.ok(Number.isFinite(afterMs) && afterMs >= 0, "anchor capture boundary is invalid");
-  assert.ok(Number.isFinite(timeoutMs) && timeoutMs > 0, "anchor capture watch deadline is invalid");
-  const checked = new Set();
-  let latestTimeMs = null;
-  return untilFolderState(recording.frames, () => {
-    for (const file of frames(recording.frames)) {
-      if (checked.has(file)) continue;
-      const frame = readFrame(file);
-      checked.add(file);
-      latestTimeMs = frame.time;
-      if (frame.time >= afterMs) return { file, timeMs: frame.time, afterMs };
-    }
-    return undefined;
-  }, timeoutMs, () => new Error(`anchor capture admission expired: ${JSON.stringify({ afterMs, latestTimeMs, directory: recording.frames })}`));
-}
-
 /** Waits for a view's declared status exposure before reading that status. */
 export async function waitForViewReadiness(s, surface, descriptor) {
   assert.ok(typeof surface === "string" && surface.length > 0, "view readiness requires a surface identity");
@@ -641,53 +614,31 @@ export async function waitForViewReadiness(s, surface, descriptor) {
   return descriptor.readiness(s, surface);
 }
 
-/** Selects and presents an existing different-plugin view to establish the capture phase boundary. */
-async function presentDifferentPluginAnchor(s, { card, plugin }) {
-  const grid = await s.get("core.grid");
-  const target = grid?.cards?.find((item) => item.id === card);
-  assert.ok(target, `view card ${card} is absent from core.grid`);
-  const anchor = target.tabs?.find((tab) => typeof tab?.id === "string" && tab.id.length > 0 && tab.plugin !== plugin);
-  assert.ok(anchor?.id, `view card ${card} has no different-plugin tab to separate existing pixels for ${plugin}`);
-  if (target.active !== anchor.id) {
-    await s.run("core.tab.select", { tab: anchor.id });
-    await s.until("core.grid", (value) => value.cards?.some((item) => item.id === card && item.active === anchor.id),
-      `view card ${card} did not activate its different-plugin anchor`);
+/**
+ * The first recorded frame that shows the content of a view: the first frame at or after `displayed`, the display time of the
+ * first presentation after the content value was observed. That time is no earlier than the first frame that showed the
+ * content, so a first-display criterion measured from it is at least as strict (docs/features.md F696-4).
+ */
+export function recordedContentFrame(captured, displayed, proof) {
+  assert.ok(Array.isArray(captured) && captured.length > 0, "the content frame requires recorded frames");
+  assert.ok(Number.isFinite(displayed) && displayed >= 0, `the content presentation has an invalid display time ${JSON.stringify(displayed)}`);
+  let previousTime = -Infinity;
+  for (const [index, frame] of captured.entries()) {
+    assert.ok(Number.isFinite(frame?.time) && frame.time >= 0 && frame.time > previousTime,
+      `recorded frame ${index} has no increasing display time`);
+    previousTime = frame.time;
   }
-  const { displayed } = await s.presented();
-  assert.ok(Number.isFinite(displayed) && displayed >= 0,
-    `different-plugin anchor ${anchor.id} has invalid presentation time ${JSON.stringify(displayed)}`);
-  const host = await s.get("host.window");
-  const row = host.documents.find((document) => document.surface === anchor.id && document.document === "");
-  assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
-    `different-plugin anchor ${anchor.id} has no visible native view frame`);
-  if (plugin === "terminal" || plugin === "term") {
-    // Capture the public card and outer-root slot declaration BEFORE opening
-    // the new terminal. These values are a measurement plan, not old frame IDs.
-    const declaredGrid = await s.get("core.grid");
-    const declaredCard = declaredGrid.cards.find(item => item.id === card);
-    assert.ok(declaredCard && declaredGrid.plane, "terminal recording has no declared target card geometry");
-    const surfaces = await s.get("core.surfaces");
-    const slotInsetsPt = declaredSlotInsets({ grid: declaredGrid, surfaces, card, surface: anchor.id });
-    const values = (await s.get("core.settings")).values;
-    return { tab: anchor.id, displayed,
-      rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height },
-      slotPlan: { card, slotInsetsPt, nativeRectPt: { ...row.frame },
-        cardRect: { x: declaredGrid.plane.x + declaredCard.x, y: declaredGrid.plane.y + declaredCard.y,
-          width: declaredCard.w, height: declaredCard.h },
-        geometry: { cornerRadiusPt: effectiveCardCornerRadiusPt(values), cardColor: [25, 27, 36],
-          planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [34, 36, 47], [255, 179, 107]], colorTolerance: 3 } } };
-  }
-  const menu = await s.get("host.menu");
-  const language = HOST_OCR_LANGUAGES[menu?.language];
-  assert.ok(language, `host.menu reported an unsupported language for anchor OCR: ${JSON.stringify(menu?.language)}`);
-  return { tab: anchor.id, displayed,
-    language,
-    rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height } };
+  const frameIndex = captured.findIndex((frame) => frame.time >= displayed);
+  assert.ok(frameIndex >= 0, `no recorded frame is at or after the content presentation at ${displayed} ms`);
+  return { frameIndex, frameCount: captured.length, timeMs: captured[frameIndex].time, displayedAtMs: displayed, proof };
 }
 
-/** Opens a view under a live recording and verifies pixels before return unless its caller defers analysis. */
-export async function openRecordedView(t, s, { card, plugin, placement, params, readiness, readinessStatus, expectedContent, language,
-  recognizeFrame, captureObservationWindowMs, deferContentVerification = false } = {}) {
+/**
+ * Opens a view under a live recording. The content value is read and the window presented while the view is open; the content
+ * frame is taken from the recording before return unless its caller defers that analysis.
+ */
+export async function openRecordedView(t, s, { card, plugin, placement, params, readiness, readinessStatus, expectedContent,
+  readContent, captureObservationWindowMs, deferContentVerification = false } = {}) {
   descriptorPlacement({ plugin, placement });
   assert.ok(typeof card === "string" && card.length > 0, "view card must be nonempty text");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "view plugin must be nonempty text");
@@ -695,8 +646,7 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
   assert.ok(typeof readinessStatus === "string" && readinessStatus.length > 0,
     "view readiness status exposure is required");
   assert.ok(typeof expectedContent === "string" && expectedContent.length > 0, "expected view content is required");
-  assert.ok(typeof language === "string" && language.length > 0, "view content language is required");
-  assert.ok(recognizeFrame === undefined || typeof recognizeFrame === "function", "view frame recognizer must be a function");
+  assert.equal(typeof readContent, "function", "view content reader callback is required");
   assert.equal(typeof deferContentVerification, "boolean", "view content verification deferral must be boolean");
   if (captureObservationWindowMs !== undefined) {
     assert.ok(Number.isFinite(captureObservationWindowMs) && captureObservationWindowMs > 0,
@@ -708,10 +658,6 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
   let stopped = false;
   let capture;
   try {
-    const anchor = await presentDifferentPluginAnchor(s, { card, plugin });
-    if (plugin === "terminal" || plugin === "term") {
-      anchor.captureAdmission = await waitForRecordedViewAnchor(recording, anchor.displayed);
-    }
     const requestClock = await monotonicTimeMs(s);
     const tab = await placement.open(s, { card, plugin, params });
     s.cleanup(async () => {
@@ -720,6 +666,7 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
       await placement.close(s, tab, { cleanup: true });
     });
     const readinessEvidence = await waitForViewReadiness(s, tab, { readiness, readinessStatus });
+    const proof = valueProof(expectedContent, await readContent(s, tab), `${plugin} view ${tab}`);
     const { displayed } = await s.presented();
     capture = await recording.stop({ after: displayed + (captureObservationWindowMs ?? 0) });
     stopped = true;
@@ -744,31 +691,16 @@ export async function openRecordedView(t, s, { card, plugin, placement, params, 
       processStart: starts[0],
       requestClock,
       readinessEvidence,
-      anchor,
       openedPid: pids[0],
       processGroupPids,
       recording: { directory: capture.frames, frameCount: paths.length, files: paths },
       verifyContent: async () => {
         if (contentProof) return contentProof;
         try {
-          if (plugin === "terminal" || plugin === "term") {
-            contentProof = await verifyTerminalRecordedContent(t, s,
-              { plugin, surface: tab, card, expectedContent, capture, paths, anchor, targetRequestAtMs: requestClock.timeMs });
-            return contentProof;
-          }
-          const decoded = paths.map(readFrame);
-          const anchorContentFrame = await firstDifferentContentFrame({ captured: decoded, rect: anchor.rect,
-            expected: expectedContent, language: anchor.language, directory: capture.frames, recognizeFrame });
-          const contentFrame = await firstContentFrame({ captured: decoded,
-            rect: { x: row.frame.x, y: row.frame.y, w: row.frame.width, h: row.frame.height },
-            expected: expectedContent, language, directory: capture.frames, recognizeFrame,
-            startFrameIndex: anchorContentFrame.frameIndex + 1 });
-          contentProof = { anchor: { ...anchor, contentFrame: anchorContentFrame }, contentFrame,
-            recording: { directory: capture.frames, frameCount: paths.length, files: paths,
-              anchorContentFrame } };
+          contentProof = { contentFrame: recordedContentFrame(paths.map(readFrame), displayed, proof) };
           return contentProof;
         } catch (error) {
-          t.diagnostic(`offline view content verification failed; recording retained at ${capture.frames}`);
+          t.diagnostic(`offline view content frame selection failed; recording retained at ${capture.frames}`);
           throw error;
         }
       },
@@ -937,16 +869,18 @@ export async function collectViewStartAndMemory(t, s, descriptor, { viewCount = 
   };
 }
 
-/** Runs the three initial-only process-group reclamation samples for opened view surfaces. */
-// Live reference acquisition must finish while the recorded target still
-// exists, before any footprint baseline or close/exit measurement begins.
+/**
+ * Selects the content frame of each recorded view (verifyOpenedViewContent) and then runs the measured close `closeGroup`, so the
+ * offline frame decoding does not fall within the close and footprint interval.
+ */
 export async function closeVerifiedRecordedViewGroup(views, closeGroup) {
-  assert.ok(Array.isArray(views) && views.length > 0, "reclaim reference admission requires recorded views");
+  assert.ok(Array.isArray(views) && views.length > 0, "reclaim content verification requires recorded views");
   assert.equal(typeof closeGroup, "function", "reclaim requires its existing measured close operation");
   for (const view of views) await verifyOpenedViewContent(view);
   return closeGroup();
 }
 
+/** Runs the three initial-only process-group reclamation samples for opened view surfaces. */
 export async function collectViewReclaimMeasurements(t, s, descriptor, views, evidence = { events: [], recordings: [] }) {
   assert.ok(Array.isArray(views) && views.length > 0, "reclaim requires opened view evidence");
   const placement = descriptorPlacement(descriptor);

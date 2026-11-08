@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { tmpdir } from "node:os";
 import test from "node:test";
-import { CAPTURE_TEXT_LANGUAGES, cropViewPixels, recognizeViewFrame } from "../view-content.mjs";
+import { cropViewPixels, viewContentProof } from "../view-content.mjs";
 
 function frame() {
   const data = Buffer.alloc(8 * 8 * 4);
@@ -25,78 +22,59 @@ test("view pixel crops reject clipping and incomplete pixel storage", { timeout:
   assert.throws(() => cropViewPixels(value, { x: 0, y: 0, w: 1, h: 1 }), /storage/);
 });
 
-test("view OCR consumes the exact crop without retaining it in the recording", { timeout: 5000 }, async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "view-content-crop-owner-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  let consumedFile;
-  const result = await recognizeViewFrame({ frame: frame(), rect: { x: 1, y: 1, w: 2, h: 1 }, language: "en-US",
-    directory, artifactName: "candidate-0", command: "capture_text_test",
-    runRecognition: async (command, args) => {
-      assert.equal(command, "capture_text_test");
-      consumedFile = args[1];
-      assert.ok(existsSync(consumedFile), "the crop must exist while the recognizer reads it");
-      assert.equal(dirname(dirname(consumedFile)), tmpdir(), "the crop must use the operating system temporary directory");
-      assert.deepEqual(readFileSync(consumedFile), cropViewPixels(frame(), { x: 1, y: 1, w: 2, h: 1 }).data);
-      return { stdout: JSON.stringify({ lines: ["recognized view content"] }) };
-    } });
+/**
+ * A session whose host.window shows the root document of every surface and the studio of hwp, and whose image region named
+ * view presents `presented`; `runs` answers each command by name.
+ */
+function session(runs, { visible = true, presented = { generation: 1, raster: 2, sequence: 3 } } = {}) {
+  const frame = { x: 0, y: 0, width: 100, height: 50 };
+  const host = { documents: [{ surface: "probe", document: "", visible, frame }, { surface: "probe", document: "studio", visible, frame }],
+    regions: [{ surface: "probe", name: "view", presented }] };
+  return {
+    get: async (name) => { assert.equal(name, "host.window"); return host; },
+    run: async (name, params, surface) => {
+      assert.equal(surface, "probe");
+      assert.ok(name in runs, `unexpected command ${name}`);
+      return runs[name](params);
+    },
+    async until(name, predicate, message) {
+      assert.equal(name, "host.window");
+      if (!predicate(host)) throw new Error(message);
+      return host;
+    },
+  };
+}
 
-  assert.deepEqual(result.lines, ["recognized view content"]);
-  assert.deepEqual(result.crop, { width: 4, height: 2 });
-  assert.equal(Object.hasOwn(result, "file"), false);
-  assert.equal(existsSync(consumedFile), false, "the temporary crop must be removed after recognition");
-  assert.deepEqual(readdirSync(directory), [], "recording evidence must not contain scratch crops");
+const cells = (text) => [...text].map((ch) => ch === " " ? { width: 1 } : { ch, width: 1 });
+
+test("view content reads the value that holds the shown text of each plugin", { timeout: 5000 }, async () => {
+  assert.deepEqual(await viewContentProof(session({ "editor.read": () => "SOKSAK EDITOR CONTENT\n" }), "editor", "probe",
+    "SOKSAK EDITOR CONTENT"), { method: "value", expected: "SOKSAK EDITOR CONTENT", actual: "SOKSAK EDITOR CONTENT\n" });
+  assert.equal((await viewContentProof(session({ "browser.content.read": () => ({ kind: "empty", instruction: "주소를 입력하세요" }) }),
+    "browser", "probe", "주소를 입력하세요")).actual, "주소를 입력하세요");
+  const svg = '<text x="1" y="10">속삭</text><text x="2" y="10">한글</text><text x="1" y="20">문서확인</text>';
+  assert.equal((await viewContentProof(session({ "hwp.request": ({ method }) => { assert.equal(method, "getPageSvg"); return svg; } }),
+    "hwp", "probe", "속삭한글문서확인")).actual, "속삭한글\n문서확인");
+  for (const plugin of ["term", "terminal"]) {
+    const read = () => ({ rows: [cells("SOKSAK TERM CONTENT")], frame: { generation: 1, raster: 2, sequence: 3 } });
+    assert.equal((await viewContentProof(session({ [`${plugin}.screen.read`]: read }), plugin, "probe", "SOKSAK TERM CONTENT")).actual,
+      "SOKSAK TERM CONTENT");
+  }
 });
 
-test("view OCR removes a crop after a recognizer error and preserves that error", { timeout: 5000 }, async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "view-content-crop-failure-owner-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const recognitionError = new Error("recognition failed");
-  let consumedFile;
-  let thrown;
-  try {
-    await recognizeViewFrame({ frame: frame(), rect: { x: 1, y: 1, w: 2, h: 1 }, language: "en-US",
-      directory, artifactName: "candidate-0", command: "capture_text_test",
-      runRecognition: async (_command, args) => {
-        consumedFile = args[1];
-        assert.ok(existsSync(consumedFile), "the crop must exist while the recognizer reads it");
-        throw recognitionError;
-      } });
-  } catch (error) {
-    thrown = error;
-  }
-
-  assert.strictEqual(thrown, recognitionError);
-  assert.equal(existsSync(consumedFile), false, "the temporary crop must be removed after recognition fails");
-  assert.deepEqual(readdirSync(directory), [], "failed recording evidence must not retain scratch crops");
-});
-
-test("view OCR reports both recognition and scratch cleanup errors", { timeout: 5000 }, async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "view-content-crop-double-error-owner-"));
-  let scratchDirectory;
-  t.after(() => {
-    rmSync(directory, { recursive: true, force: true });
-    if (scratchDirectory) rmSync(scratchDirectory, { recursive: true, force: true });
-  });
-  const recognitionError = new Error("recognition failed");
-  const cleanupError = new Error("scratch cleanup failed");
-  let thrown;
-  try {
-    await recognizeViewFrame({ frame: frame(), rect: { x: 1, y: 1, w: 2, h: 1 }, language: "en-US",
-      directory, artifactName: "candidate-0", command: "capture_text_test",
-      runRecognition: async (_command, args) => {
-        assert.ok(existsSync(args[1]), "the crop must exist while the recognizer reads it");
-        throw recognitionError;
-      },
-      removeScratch: async (path) => {
-        scratchDirectory = path;
-        throw cleanupError;
-      } });
-  } catch (error) {
-    thrown = error;
-  }
-
-  assert.ok(thrown instanceof AggregateError);
-  assert.deepEqual(thrown.errors, [recognitionError, cleanupError]);
+test("view content refuses a missing, wrong or not presented value", { timeout: 5000 }, async () => {
+  await assert.rejects(viewContentProof(session({ "editor.read": () => "OTHER\n" }), "editor", "probe", "SOKSAK EDITOR CONTENT"),
+    /does not show "SOKSAK EDITOR CONTENT": "OTHER\\n"/);
+  await assert.rejects(viewContentProof(session({ "editor.read": () => "SOKSAK EDITOR CONTENT\n" }, { visible: false }), "editor",
+    "probe", "SOKSAK EDITOR CONTENT"), /shows no document region ""/);
+  await assert.rejects(viewContentProof(session({ "browser.content.read": () => ({ kind: "document", instruction: null }) }), "browser",
+    "probe", "주소를 입력하세요"), /does not show its empty instruction/);
+  const read = () => ({ rows: [cells("SOKSAK TERM CONTENT")], frame: { generation: 1, raster: 2, sequence: 4 } });
+  await assert.rejects(viewContentProof(session({ "term.screen.read": read }), "term", "probe", "SOKSAK TERM CONTENT"),
+    /did not present frame/);
+  await assert.rejects(viewContentProof(session({ "editor.read": () => null }), "editor", "probe", "SOKSAK EDITOR CONTENT"),
+    /content is not text/);
+  await assert.rejects(viewContentProof(session({}), "files", "probe", "x"), /plugin files has no content value/);
 });
 
 test("terminal content readiness preserves omitted blank cell characters", { timeout: 5000 }, async (t) => {
@@ -105,13 +83,7 @@ test("terminal content readiness preserves omitted blank cell characters", { tim
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const root = mkdtempSync(join(tmpdir(), "view-content-owner-"));
-  const previous = process.env.SOKSAK_CAPTURE_TEXT;
-  process.env.SOKSAK_CAPTURE_TEXT = process.execPath;
-  t.after(() => {
-    if (previous === undefined) delete process.env.SOKSAK_CAPTURE_TEXT;
-    else process.env.SOKSAK_CAPTURE_TEXT = previous;
-    rmSync(root, { recursive: true, force: true });
-  });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   const s = {
     get: async () => ({ root }),
     cleanup() {},
@@ -127,11 +99,4 @@ test("terminal content readiness preserves omitted blank cell characters", { tim
   };
   const cases = await viewContentCases(s, () => {});
   assert.equal(typeof await cases.get("terminal").ready(s, { tab: "probe" }), "function");
-});
-
-test("view OCR refuses a language whose model the setup did not prepare", { timeout: 5000 }, async () => {
-  assert.ok(!CAPTURE_TEXT_LANGUAGES.includes("ja-JP"));
-  await assert.rejects(recognizeViewFrame({ frame: frame(), rect: { x: 1, y: 1, w: 2, h: 1 }, language: "ja-JP",
-    directory: tmpdir(), command: "capture_text_test", runRecognition: async () => assert.fail("an unprepared language must not run") }),
-  /view content recognition of ja-JP has no prepared model; the window-check setup prepares en-US, ko-KR/);
 });

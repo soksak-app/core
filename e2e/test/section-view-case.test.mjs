@@ -91,7 +91,7 @@ test("a section view whose plugin does not declare the three entries of the sect
   const failure = (view) => `${view.plugin} section view ${view.section} does not declare ${view.plugin}.view.frames, ` +
     `${view.plugin}.view.history and ${view.section}.view.ready in its diagnostics declaration`;
   assert.throws(() => requireSectionDeclarations(browser), { message: failure(browser) });
-  assert.deepEqual(requireSectionDeclarations(files), { ...files, content: "files.tree section", language: "plaintext" });
+  assert.deepEqual(requireSectionDeclarations(files), { ...files, content: "files.tree section" });
   // The ready status of another section of the plugin does not serve this section.
   assert.throws(() => requireSectionDeclarations(bookmarks), { message: failure(bookmarks) });
   const withoutReady = { ...files, diagnostics: { ...files.diagnostics, exposes: { commands: files.diagnostics.exposes.commands } } };
@@ -104,24 +104,21 @@ test("a section view whose plugin does not declare the three entries of the sect
   assert.throws(() => requireSectionDeclarations(pluginStatus), { message: failure(files) });
 });
 
-test("a section view whose ready status does not declare a single-entry enum content and language fails with its plugin, section and field", (t) => {
+test("a section view whose ready status does not declare a single-entry enum content fails with its plugin, section and field", (t) => {
   const configDir = configFolder(t, [
     { id: "files", enabled: true, manifest: { id: "files", sections: [section("files.tree", "ui/tree.html")] }, diagnostics: declared("files", ["files.tree"]) },
   ]);
   const [files] = installedSectionViews(configDir);
-  const failure = (field) => `files section view files.tree declares files.tree.view.ready without a single-entry enum ${field}`;
-  const content = { content: single("files section") };
+  const failure = `files section view files.tree declares files.tree.view.ready without a single-entry enum content`;
   const language = { language: single("plaintext") };
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema(language))), { message: failure("content") });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema(content))), { message: failure("language") });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({}))), { message: failure("content and language") });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({ content: { type: "string" }, ...language }))),
-    { message: failure("content") });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({ content: { type: "string", enum: ["one", "two"] }, ...language }))),
-    { message: failure("content") });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({ ...content, language: { enum: [7] } }))),
-    { message: failure("language") });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, { type: "object" })), { message: failure("content and language") });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema(language))), { message: failure });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({}))), { message: failure });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({ content: { type: "string" } }))), { message: failure });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({ content: { type: "string", enum: ["one", "two"] } }))),
+    { message: failure });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(files, { type: "object" })), { message: failure });
+  assert.deepEqual(requireSectionDeclarations(withReadySchema(files, readySchema({ content: single("files section") }))).content, "files section",
+    "a ready status without a language is refused");
 });
 
 test("a section view whose installed declaration the workbench refuses fails with the refusal of validateDiagnostics", (t) => {
@@ -277,9 +274,14 @@ test("the section view descriptor waits for its declared ready status and reads 
   assert.equal(descriptor.placement, SECTION_PLACEMENT);
   assert.deepEqual(descriptor.params, { section: "files.tree" });
   assert.equal(descriptor.expectedContent, "files.tree section");
-  assert.equal(descriptor.language, "plaintext");
   assert.equal(descriptor.readinessStatus, "files.tree.view.ready");
   const surface = "spc-1/card-4:left/files.tree";
+  const statusReads = [];
+  assert.equal(await descriptor.readContent({ async get(name, at) {
+    statusReads.push([name, at]);
+    return { ready: true, content: "files.tree section", language: "plaintext" };
+  } }, surface), "files.tree section", "the section view descriptor does not read the content of its ready status");
+  assert.deepEqual(statusReads, [["files.tree.view.ready", surface]]);
   const ready = { ready: true, content: "files.tree section", language: "plaintext" };
   const s = fakeSession({ "files.tree.view.ready": [{ ready: false, content: "files.tree section", language: "plaintext" }, ready] },
     { "files.view.history": () => ({ length: 1 }) });
@@ -287,7 +289,7 @@ test("the section view descriptor waits for its declared ready status and reads 
   assert.deepEqual(s.calls, [["until", "files.tree.view.ready", { surface }], ["run", "files.view.history", {}, surface]]);
   const other = fakeSession({ "files.tree.view.ready": [{ ...ready, content: "other" }] }, { "files.view.history": () => ({ length: 1 }) });
   await assert.rejects(descriptor.readiness(other, surface),
-    { message: /^files section view files.tree reported files.tree.view.ready on spc-1\/card-4:left\/files.tree with content and language that differ from its declaration\n/ });
+    { message: /^files section view files.tree reported files.tree.view.ready on spc-1\/card-4:left\/files.tree with content that differs from its declaration\n/ });
   const navigated = fakeSession({ "files.tree.view.ready": [ready] }, { "files.view.history": () => ({ length: 2 }) });
   await assert.rejects(descriptor.readiness(navigated, surface),
     { message: /^files section view files.tree history on spc-1\/card-4:left\/files.tree does not contain only its initial document\n/ });

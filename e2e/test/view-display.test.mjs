@@ -113,20 +113,26 @@ test("a failed view readiness check closes the opened tab", { timeout: 5000 }, a
     "failed view preparation left its opened tab in the next check");
 });
 
-test("view display rejects a readiness-only case without captured-pixel verification", { timeout: 5000 }, async (t) => {
+test("view display rejects a readiness-only case without a content verifier", { timeout: 5000 }, async (t) => {
   const f = fixture({ terminalOnly: true });
   await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording,
-    new Map([["terminal", { ready: async () => undefined }]])), /captured.pixel/);
+    new Map([["terminal", { ready: async () => undefined }]])), /content verifier/);
 });
 
-test("view display executes the case against its decoded capture", { timeout: 5000 }, async (t) => {
+test("view display runs the content verifier of the case after the recording stops", { timeout: 5000 }, async (t) => {
   const f = fixture({ terminalOnly: true });
-  let measured = false;
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async ({ captured }) => {
-    assert.equal(captured.length, 2);
-    measured = true;
+  let stopped = false;
+  f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
+    stopped = true;
+    return { count: 2, limited: false, longestGap: 16 };
+  } });
+  let verified = false;
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async (...args) => {
+    assert.deepEqual(args, [], "the content verifier received recorded pixels");
+    assert.equal(stopped, true, "the content verifier ran before the recording stopped");
+    verified = true;
   } }]]));
-  assert.equal(measured, true, "the expected-pixel case was never executed");
+  assert.equal(verified, true, "the content verifier was never executed");
 });
 
 test("view display rejects missing finalized frame files", { timeout: 5000 }, async (t) => {
@@ -150,14 +156,12 @@ test("view display audits controls after its declared content readiness", { time
   } }]]));
 });
 
-test("an explicit pixel verifier covers content between sparse colour samples", { timeout: 5000 }, async (t) => {
+test("a content verifier decides the content of a view whose sampled colours are blank", { timeout: 5000 }, async (t) => {
   const f = fixture({ terminalOnly: true, blank: true });
-  const captured = f.readRecording();
-  const at = (41 * captured[0].stride + 21 * 4);
-  captured[0].data.fill(0, at, at + 3);
-  await acceptViewDisplay(f.s, t, () => captured, new Map([["terminal", { ready: async () => async ({ captured: frames }) => {
-    assert.deepEqual([...frames.at(-1).data.subarray(at, at + 3)], [0, 0, 0]);
-  } }]]));
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async () => {
+    throw new Error("terminal probe-tab-1 does not show the expected text");
+  } }]])), /does not show the expected text/);
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async () => {} }]]));
 });
 
 const traceRow = (event, fields) => ({ layer: "host", event, ts: "2026-10-29T00:00:00.000Z", ...fields });

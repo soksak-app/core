@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 
@@ -99,7 +98,7 @@ function processFootprints(value, path, { allowEmpty = false } = {}) {
   return { processes, ids, totalBytes };
 }
 
-function frameAt(value, path, { recordedFrameCount, requireProof = false, proofPlugin, requiredContentProofMethod } = {}) {
+function frameAt(value, path, { recordedFrameCount, requireProof = false } = {}) {
   objectAt(value, path);
   const frameIndex = numberAt(value.frameIndex, `${path}.frameIndex`, { integer: true });
   if (recordedFrameCount !== undefined && frameIndex >= recordedFrameCount) {
@@ -110,10 +109,10 @@ function frameAt(value, path, { recordedFrameCount, requireProof = false, proofP
     if (frameIndex >= frameCount) fail(`${path}.frameIndex`, `less than frameCount ${frameCount}`, frameIndex);
     if (recordedFrameCount !== undefined) sameValue(frameCount, recordedFrameCount, `${path}.frameCount`);
   } else if (requireProof) {
-    fail(`${path}.frameCount`, "the recorded frame count for pixel proof", value.frameCount);
+    fail(`${path}.frameCount`, "the recorded frame count of the content frame", value.frameCount);
   }
   const timeMs = numberAt(value.timeMs, `${path}.timeMs`);
-  if (requireProof) contentProofAt(value.proof, `${path}.proof`, proofPlugin, value, requiredContentProofMethod);
+  if (requireProof) contentProofAt(value.proof, `${path}.proof`);
   return { frameIndex, timeMs };
 }
 
@@ -125,71 +124,13 @@ function timeRangeAt(value, path) {
   return { lowerMs, upperMs };
 }
 
-function referenceContentProofAt(value, path, plugin, frame) {
-  sameValue(value.method, "terminal-reference-exact-pixels-v1", `${path}.method`);
-  const expected = textAt(value.expected, `${path}.expected`);
-  const observed = textAt(value.observedText, `${path}.observedText`);
-  sameValue(observed, expected, `${path}.observedText`);
-  const digest = (value, suffix) => {
-    if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) fail(`${path}.${suffix}`, "a lowercase SHA-256 digest", value);
-    return value;
-  };
-  sameValue(digest(value.observedTextSha256, "observedTextSha256"),
-    createHash("sha256").update(observed).digest("hex"), `${path}.observedTextSha256`);
-  const reference = objectAt(value.reference, `${path}.reference`);
-  sameValue(reference.plugin, plugin, `${path}.reference.plugin`);
-  numberAt(reference.observationRequestId, `${path}.reference.observationRequestId`, { integer: true, minimum: 1 });
-  sameValue(textAt(reference.surface, `${path}.reference.surface`), textAt(frame.surface, `${path}.parent.surface`), `${path}.reference.surface`);
-  sameValue(reference.name, "view", `${path}.reference.name`);
-  const token = textAt(reference.regionToken, `${path}.reference.regionToken`);
-  for (const field of ["sourceRegionToken", "issuedRegionToken", "decodedRegionToken"]) sameValue(reference[field], token, `${path}.reference.${field}`);
-  const identity = (value, field) => {
-    objectAt(value, `${path}.reference.${field}`);
-    for (const part of ["generation", "raster"]) {
-      const item = value[part];
-      if (!((typeof item === "string" && /^[1-9][0-9]*$/.test(item)) ||
-          (Number.isSafeInteger(item) && item > 0)) || BigInt(item) > 18_446_744_073_709_551_615n) {
-        fail(`${path}.reference.${field}.${part}`, "a canonical positive uint64 identity", item);
-      }
-    }
-    numberAt(value.sequence, `${path}.reference.${field}.sequence`, { integer: true, minimum: 1 });
-    return `${value.generation}/${value.raster}/${value.sequence}`;
-  };
-  const key = identity(reference.frame, "frame");
-  for (const field of ["sourceFrame", "rendererFrame", "cursorFrame", "issuedFrame", "decodedFrame"]) {
-    sameValue(identity(reference[field], field), key, `${path}.reference.${field}`);
-  }
-  sameValue(digest(reference.sourceSha256, "reference.sourceSha256"),
-    digest(reference.retainedSourceSha256, "reference.retainedSourceSha256"), `${path}.reference.sourceSha256`);
-  numberAt(reference.sourceByteCount, `${path}.reference.sourceByteCount`, { integer: true, minimum: 1 });
-  const glyphCount = numberAt(reference.glyphCount, `${path}.reference.glyphCount`, { integer: true, minimum: 1 });
-  const match = objectAt(value.match, `${path}.match`);
-  for (const field of ["frameIndex", "frameCount", "timeMs"]) sameValue(match[field], frame[field], `${path}.match.${field}`);
-  const span = objectAt(match.span, `${path}.match.span`);
-  numberAt(span.row, `${path}.match.span.row`, { integer: true });
-  const start = numberAt(span.startColumn, `${path}.match.span.startColumn`, { integer: true });
-  const end = numberAt(span.endColumn, `${path}.match.span.endColumn`, { integer: true, minimum: start + 1 });
-  sameValue(span.viewportLeftEdge, start === 0, `${path}.match.span.viewportLeftEdge`);
-  assert.ok(glyphCount <= end - start, `view measurement ${path}.reference.glyphCount exceeds its complete cell span`);
-  sameValue(numberAt(match.cellCount, `${path}.match.cellCount`, { integer: true, minimum: 1 }),
-    end - start + 1 + (start > 0 ? 1 : 0), `${path}.match.cellCount`);
-  const bytes = numberAt(match.byteCount, `${path}.match.byteCount`, { integer: true, minimum: 1 });
-  assert.ok(bytes % 4 === 0 && bytes <= reference.sourceByteCount,
-    `view measurement ${path}.match.byteCount is not a complete BGRA crop of its source`);
-  sameValue(digest(match.sourceCellsSha256, "match.sourceCellsSha256"),
-    digest(match.capturedCellsSha256, "match.capturedCellsSha256"), `${path}.match.capturedCellsSha256`);
-}
-
-function contentProofAt(value, path, plugin, frame, requiredContentProofMethod) {
+function contentProofAt(value, path) {
   objectAt(value, path);
-  if (requiredContentProofMethod !== undefined) sameValue(value.method, requiredContentProofMethod, `${path}.method`);
-  if (value.method === "terminal-reference-exact-pixels-v1") return referenceContentProofAt(value, path, plugin, frame);
-  if (value.method !== undefined) fail(`${path}.method`, "a supported content proof method", value.method);
-  const expected = textAt(value.expected, `${path}.expected`).trim();
+  if (value.method !== "value") fail(`${path}.method`, JSON.stringify("value"), value.method);
+  const expected = textAt(value.expected, `${path}.expected`);
+  if (normalizeViewText(expected).length === 0) fail(`${path}.expected`, "text with a non-whitespace character", expected);
   const actual = textAt(value.actual, `${path}.actual`);
-  const lines = arrayAt(value.lines, `${path}.lines`, { minimum: 1 });
-  for (const [index, line] of lines.entries()) textAt(line, `${path}.lines[${index}]`);
-  assert.ok(normalizeViewText(actual).toLowerCase().includes(normalizeViewText(expected).toLowerCase()),
+  assert.ok(normalizeViewText(actual).includes(normalizeViewText(expected)),
     `view measurement ${path}.actual does not contain the expected text ${JSON.stringify(expected)}`);
 }
 
@@ -225,10 +166,10 @@ function assertIncreasing(values, path) {
   }
 }
 
-function displayAt(value, path, plugin, requiredContentProofMethod) {
+function displayAt(value, path) {
   objectAt(value, path);
   const requestAtMs = numberAt(value.requestAtMs, `${path}.requestAtMs`);
-  const contentFrame = frameAt(value.contentFrame, `${path}.contentFrame`, { requireProof: true, proofPlugin: plugin, requiredContentProofMethod });
+  const contentFrame = frameAt(value.contentFrame, `${path}.contentFrame`, { requireProof: true });
   const measuredMs = contentFrame.timeMs - requestAtMs;
   if (measuredMs < 0) fail(`${path}.contentFrame.timeMs`, `>= requestAtMs ${requestAtMs}`, contentFrame.timeMs);
   return { requestAtMs, contentFrame, measuredMs };
@@ -294,7 +235,7 @@ export function evaluateReclaim(value) {
   });
 }
 
-function evaluateWarmDisplay(value, baselineMs, plugin, requiredContentProofMethod) {
+function evaluateWarmDisplay(value, baselineMs) {
   const warm = objectAt(value, "warmDisplay");
   textAt(warm.surface, "warmDisplay.surface");
   const beforePids = arrayAt(warm.beforePids, "warmDisplay.beforePids", { minimum: 0 }).map((pid, index) =>
@@ -311,7 +252,7 @@ function evaluateWarmDisplay(value, baselineMs, plugin, requiredContentProofMeth
     if (warm.contentFrame !== undefined) fail("warmDisplay.contentFrame", "omitted when no prior process was reused", warm.contentFrame);
     return { applicable: false, reason: "opened view did not reuse a process already running before the request", surface: warm.surface, openedPid };
   }
-  const firstContent = frameAt(warm.contentFrame, "warmDisplay.contentFrame", { requireProof: true, proofPlugin: plugin, requiredContentProofMethod });
+  const firstContent = frameAt(warm.contentFrame, "warmDisplay.contentFrame", { requireProof: true });
   const measuredMs = firstContent.timeMs - requestAtMs;
   if (measuredMs < 0) fail("warmDisplay.contentFrame.timeMs", `>= requestAtMs ${requestAtMs}`, firstContent.timeMs);
   const limitMs = baselineMs + FIRST_DISPLAY_MARGIN_MS;
@@ -320,7 +261,7 @@ function evaluateWarmDisplay(value, baselineMs, plugin, requiredContentProofMeth
   return { applicable: true, surface: warm.surface, openedPid, measuredMs, limitMs, adjustedMs: measuredMs - baselineMs, passed: true };
 }
 
-function evaluateNewProcess(value, baselineMs, plugin, requiredContentProofMethod) {
+function evaluateNewProcess(value, baselineMs) {
   const newProcess = objectAt(value, "newProcess");
   const starts = arrayAt(newProcess.processStarts, "newProcess.processStarts", { length: PROCESS_START_SAMPLES })
     .map((sample, index) => {
@@ -333,7 +274,7 @@ function evaluateNewProcess(value, baselineMs, plugin, requiredContentProofMetho
     });
   const processStartMedianMs = median(starts.map(({ durationMs }) => durationMs));
   const displays = arrayAt(newProcess.firstDisplays, "newProcess.firstDisplays", { length: NEW_PROCESS_RUNS })
-    .map((display, index) => displayAt(display, `newProcess.firstDisplays[${index}]`, plugin, requiredContentProofMethod));
+    .map((display, index) => displayAt(display, `newProcess.firstDisplays[${index}]`));
   const adjustedDisplayMs = displays.map(({ measuredMs }) => measuredMs - processStartMedianMs);
   const limitMs = baselineMs + FIRST_DISPLAY_MARGIN_MS;
   for (const [index, adjustedMs] of adjustedDisplayMs.entries()) {
@@ -343,12 +284,12 @@ function evaluateNewProcess(value, baselineMs, plugin, requiredContentProofMetho
   return { processStarts: starts, processStartMedianMs, firstDisplays: displays, adjustedDisplayMs, limitMs, passed: true };
 }
 
-function evaluateLayoutDisplay(value, plugin, requiredContentProofMethod) {
+function evaluateLayoutDisplay(value) {
   return arrayAt(value, "layoutDisplay", { minimum: 1 }).map((entry, index) => {
     const path = `layoutDisplay[${index}]`;
     objectAt(entry, path);
     const changeFrame = frameAt(entry.changeFrame, `${path}.changeFrame`);
-    const contentFrame = frameAt(entry.contentFrame, `${path}.contentFrame`, { requireProof: true, proofPlugin: plugin, requiredContentProofMethod });
+    const contentFrame = frameAt(entry.contentFrame, `${path}.contentFrame`, { requireProof: true });
     if (entry.changeFrame.frameCount !== undefined && entry.contentFrame.frameCount !== undefined) {
       sameValue(entry.changeFrame.frameCount, entry.contentFrame.frameCount, `${path}.contentFrame.frameCount`);
     }
@@ -877,21 +818,15 @@ function evaluateDrag(value) {
 }
 
 /**
- * requiredContentProofMethod declares the proof variant required by the caller;
- * plugin identifiers remain opaque. A required method never accepts another
- * variant or the untagged text-proof form.
  * Checks collected plugin-view measurements against plugin-processes.md. Drag input, successful display, source-frame
  * intervals and capture times use the host monotonic clock; native placement readbacks remain raw event evidence and
  * are not assigned to individual source frames.
  */
-export function assertViewMeasurements(measurements, { plugin, host, baselineMs, measureEditorFootprint = false, requiredContentProofMethod } = {}) {
+export function assertViewMeasurements(measurements, { plugin, host, baselineMs, measureEditorFootprint = false } = {}) {
   objectAt(measurements, "measurements");
   textAt(plugin, "descriptor.plugin");
   textAt(host, "descriptor.host");
   numberAt(baselineMs, "descriptor.baselineMs");
-  if (requiredContentProofMethod !== undefined) {
-    sameValue(requiredContentProofMethod, "terminal-reference-exact-pixels-v1", "descriptor.requiredContentProofMethod");
-  }
   sameValue(plugin, textAt(measurements.plugin, "measurements.plugin"), "measurements.plugin");
   sameValue(host, textAt(measurements.host, "measurements.host"), "measurements.host");
 
@@ -906,9 +841,9 @@ export function assertViewMeasurements(measurements, { plugin, host, baselineMs,
   };
   evaluate("total", () => evaluateTotal(measurements.total));
   evaluate("reclaim", () => evaluateReclaim(measurements.reclaim));
-  evaluate("warmDisplay", () => evaluateWarmDisplay(measurements.warmDisplay, baselineMs, plugin, requiredContentProofMethod));
-  evaluate("newProcess", () => evaluateNewProcess(measurements.newProcess, baselineMs, plugin, requiredContentProofMethod));
-  evaluate("layoutDisplay", () => evaluateLayoutDisplay(measurements.layoutDisplay, plugin, requiredContentProofMethod));
+  evaluate("warmDisplay", () => evaluateWarmDisplay(measurements.warmDisplay, baselineMs));
+  evaluate("newProcess", () => evaluateNewProcess(measurements.newProcess, baselineMs));
+  evaluate("layoutDisplay", () => evaluateLayoutDisplay(measurements.layoutDisplay));
   evaluate("editorFootprint", () => evaluateEditorFootprint(measurements.editorFootprint, measureEditorFootprint));
   evaluate("drag", () => evaluateDrag(measurements.drag));
   if (failures.length === 1) throw failures[0].error;
@@ -927,7 +862,6 @@ export function assertViewMeasurements(measurements, { plugin, host, baselineMs,
       plugin,
       host,
       baselineMs,
-      ...(requiredContentProofMethod === undefined ? {} : { requiredContentProofMethod }),
       total,
       reclaim,
       warmDisplay,
@@ -990,7 +924,6 @@ export async function runViewMeasurements(t, s, descriptor) {
     await writeFile(join(artifactDirectory, "measurements.json"), `${rawDocument}\n`, "utf8");
     const report = assertViewMeasurements(measurements, {
       plugin, host, baselineMs, measureEditorFootprint: descriptor.measureEditorFootprint,
-      requiredContentProofMethod: descriptor.requiredContentProofMethod,
     });
     await writeFile(join(artifactDirectory, "evaluation.json"), `${JSON.stringify(report.evaluation, null, 2)}\n`, "utf8");
     return report;

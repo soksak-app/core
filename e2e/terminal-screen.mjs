@@ -98,12 +98,12 @@ export async function setMeasuredBackground(session, surface) {
 }
 
 /**
- * Reads the screen of the terminal and waits until its image region presents the frame that shows that screen: the
- * `frame` of the screen read names it ({generation, raster, sequence}), and `host.window` reports the presented frame of
- * each region. A pixel read after it shows the screen of the read, not an earlier frame. Returns the screen.
+ * Reads the screen of the terminal of plugin (terminal or term) and waits until its image region presents the frame that
+ * shows that screen: the `frame` of the screen read names it ({generation, raster, sequence}), and `host.window` reports
+ * the presented frame of each region. A pixel read after it shows the screen of the read, not an earlier frame. Returns the screen.
  */
-export async function presentedScreen(session, surface) {
-  const screen = await session.run("terminal.screen.read", {}, surface);
+export async function presentedScreen(session, surface, plugin = "terminal") {
+  const screen = await session.run(`${plugin}.screen.read`, {}, surface);
   const frame = screen?.frame;
   assert.ok(frame && Number.isInteger(frame.generation) && Number.isInteger(frame.raster) && Number.isInteger(frame.sequence),
     `the screen read of ${surface} names no frame: ${JSON.stringify(frame)}`);

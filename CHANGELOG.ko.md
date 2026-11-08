@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F696-4-4: 화면 글자 인식기를 제거한다. 그 native test program, Makefile 규칙, native test 항목과 native test runner의 build 단계, window-check 준비의 인식 명령과 warm-up, Vision 글자 인식의 private-API 행, 그리고 이들을 다루던 소유 검사가 대상이다. 검증 pipeline에 글자 인식은 남지 않는다. capture의 frame identity code를 Vision으로 decode하는 일은 그 IME·drag 쓰임과 함께 남는다.
+
+- F696-4-3: 창 검사는 view의 콘텐츠를 그 콘텐츠를 가진 plugin의 공개 값에서 읽는다. `browser.content.read`, `editor.read`, `getPageSvg`의 page glyph, image region이 조회가 가리키는 frame을 presented한 뒤의 `term.screen.read`와 `terminal.screen.read`, section ready status의 `content`이다. browser·editor·hwp 값은 그 view의 document region이 보이는 동안 읽는다. 녹화한 view는 값을 읽은 뒤의 presentation 시각 이후 첫 frame을 첫 콘텐츠 frame으로 삼고, browser·hwp·terminal·marker-view layout case는 그 presentation 이후 선언된 slot과 맞는 첫 frame을 삼는다. anchor 인식과 `e2e/view-first-content.mjs`는 제거되고, 측정의 콘텐츠 증명은 `{method: "value", expected, actual}`이다.
+
 - F502-12: 대상이 없는 메뉴 항목은 요청된 창의 responder chain을 올라간 뒤 애플리케이션과 그 delegate로 가므로, Quit과 다른 애플리케이션 동작이 창 메뉴 요청에서 실행된다. 창 검사의 Edit case는 `core.projects.browse`로 입력란을 읽고, Command+W는 key up을 남은 창으로 보내며, 닫기 버튼의 누름은 실제 입력 등급(`e2e/real/window-close.test.mjs`)으로 옮긴다. endpoint의 누름은 content view의 뷰로 가고 제목 표시줄의 버튼은 그 밖에 있기 때문이다. Tauri host는 Quit을 host 종료를 실행하는 자기 항목으로 만든다. 프레임워크의 미리 정의된 항목은 `terminate:`를 보내 저장 없이 끝나기 때문이다. host.menu.select가 그 항목의 event를 소유하므로 그 종료는 응답 뒤에 온다.
 
 - F696-4: 두 host 모두 document reference 요청에서 빈 이름으로 root document를 가리키며, Rust host는 platform 호출 전에 document 이름을 검사한다. Rust capture는 공유 observation 대기를 거치므로 그 오류가 document reference를 가리킨다. Rust와 Go의 요청·lifetime test는 파일 단위로 짝을 이룬다.

@@ -56,7 +56,7 @@ function metrics() {
         frameIndex: 2,
         frameCount: 8,
         timeMs: 320,
-        proof: { expected: "fixture text", actual: "fixture text", lines: ["fixture text"] },
+        proof: { method: "value", expected: "fixture text", actual: "fixture text" },
       },
     },
     newProcess: {
@@ -70,7 +70,7 @@ function metrics() {
           frameIndex: 3,
           frameCount: 9,
           timeMs: index * 1000 + 340,
-          proof: { expected: "fixture text", actual: "fixture text", lines: ["fixture text"] },
+          proof: { method: "value", expected: "fixture text", actual: "fixture text" },
         },
       })),
     },
@@ -79,7 +79,7 @@ function metrics() {
       contentFrame: { frameIndex: 4, frameCount: 8, timeMs: 110, sourceTimeRange: { lowerMs: 104, upperMs: 109 }, requestAtMs: 50, width: 120, height: 80,
         displayedAtMs: 109, nativePlacement: nativePlacement(120, 80, 100),
         surfaceEvents: [nativePlacement(120, 80, 100).placement],
-        proof: { expected: "fixture text", actual: "fixture text", lines: ["fixture text"] } },
+        proof: { method: "value", expected: "fixture text", actual: "fixture text" } },
     }],
     drag: {
       recordedFrameCount: 10,
@@ -183,7 +183,7 @@ test("view metrics accept exact thresholds and preserve frame and process eviden
 test("view metrics report independent failures together", { timeout: 1000 }, () => {
   const raw = metrics();
   raw.total.allViewProcesses[2].footprintBytes += 1;
-  raw.warmDisplay.contentFrame.proof.actual = "unrelated pixels";
+  raw.warmDisplay.contentFrame.proof.actual = "unrelated text";
 
   let failure;
   try {
@@ -324,28 +324,58 @@ test("reclaim requires three initial-document-only group runs and exact 90 perce
   assert.throws(() => assertViewMeasurements(history, options), /exactly 1 initial document/);
 });
 
-test("warm display requires OCR proof tied to a recorded frame identity", { timeout: 1000 }, () => {
-  const noProof = metrics();
-  delete noProof.warmDisplay.contentFrame.proof;
-  assert.throws(() => assertViewMeasurements(noProof, options), /warmDisplay\.contentFrame\.proof/);
-
-  const mismatched = metrics();
-  mismatched.warmDisplay.contentFrame.proof.actual = "unrelated pixels";
-  assert.throws(() => assertViewMeasurements(mismatched, options), /does not contain the expected text/);
+test("content proof accepts a value read that contains the declared text", { timeout: 1000 }, () => {
+  const value = metrics();
+  value.warmDisplay.contentFrame.proof = { method: "value", expected: "fixture", actual: "the fixture text" };
+  assert.doesNotThrow(() => assertViewMeasurements(value, options));
 });
 
-test("view OCR proof normalizes Unicode and whitespace but still rejects missing text", { timeout: 1000 }, () => {
+test("content proof requires a proof on the content frame", { timeout: 1000 }, () => {
+  const value = metrics();
+  delete value.warmDisplay.contentFrame.proof;
+  assert.throws(() => assertViewMeasurements(value, options), /warmDisplay\.contentFrame\.proof/);
+});
+
+test("content proof rejects a missing or different method", { timeout: 1000 }, () => {
+  for (const method of [undefined, "text", "Value", ""]) {
+    const value = metrics();
+    if (method === undefined) delete value.warmDisplay.contentFrame.proof.method;
+    else value.warmDisplay.contentFrame.proof.method = method;
+    assert.throws(() => assertViewMeasurements(value, options), /warmDisplay\.contentFrame\.proof\.method/);
+  }
+});
+
+test("content proof rejects a value read that does not contain the declared text", { timeout: 1000 }, () => {
+  const value = metrics();
+  value.warmDisplay.contentFrame.proof.actual = "unrelated text";
+  assert.throws(() => assertViewMeasurements(value, options), /proof\.actual does not contain the expected text/);
+});
+
+test("content proof compares letter case exactly", { timeout: 1000 }, () => {
+  const value = metrics();
+  value.warmDisplay.contentFrame.proof.actual = "Fixture Text";
+  assert.throws(() => assertViewMeasurements(value, options), /proof\.actual does not contain the expected text/);
+});
+
+test("content proof rejects empty or whitespace-only declared text", { timeout: 1000 }, () => {
+  for (const expected of ["", " \n\t "]) {
+    const value = metrics();
+    value.warmDisplay.contentFrame.proof.expected = expected;
+    assert.throws(() => assertViewMeasurements(value, options), /warmDisplay\.contentFrame\.proof\.expected/);
+  }
+});
+
+test("content proof normalizes Unicode and whitespace but still rejects missing text", { timeout: 1000 }, () => {
   const spacedHangul = metrics();
   spacedHangul.warmDisplay.contentFrame.proof = {
+    method: "value",
     expected: "속삭한글문서확인",
     actual: "속삭 한글 문서 확인",
-    lines: ["속삭 한글 문서 확인"],
   };
   assert.doesNotThrow(() => assertViewMeasurements(spacedHangul, options));
 
   const missingHangul = structuredClone(spacedHangul);
   missingHangul.warmDisplay.contentFrame.proof.actual = "속삭 한글 문서 누락";
-  missingHangul.warmDisplay.contentFrame.proof.lines = ["속삭 한글 문서 누락"];
   assert.throws(() => assertViewMeasurements(missingHangul, options), /does not contain the expected text/);
 });
 
@@ -948,7 +978,7 @@ test("drag criterion outcomes survive in the persisted error artifact", { timeou
 test("view metric runner preserves independent failures in the error artifact", { timeout: 1000 }, async (t) => {
   const raw = metrics();
   raw.total.allViewProcesses[2].footprintBytes += 1;
-  raw.warmDisplay.contentFrame.proof.actual = "unrelated pixels";
+  raw.warmDisplay.contentFrame.proof.actual = "unrelated text";
   const diagnostics = [];
   await assert.rejects(runViewMeasurements({ diagnostic: (message) => diagnostics.push(message) }, {
     app: { name: "wailsv3", configDir: configDir(t) },
@@ -977,111 +1007,6 @@ test("view metrics allow an observed view with no attached child documents", { t
   for (const run of value.reclaim) run.closedViews[0].documents = [];
   assert.doesNotThrow(() => assertViewMeasurements(value, options));
 });
-
-function terminalReferenceProof(frame, plugin = "fixture-view") {
-  const identity = { generation: "1", raster: "2", sequence: 3 };
-  const regionToken = "00112233445566778899aabbccddeeff";
-  return {
-    method: "terminal-reference-exact-pixels-v1", expected: "sh-3.2$", observedText: "sh-3.2$",
-    observedTextSha256: "" ,
-    reference: { plugin, observationRequestId: 1, surface: "reference-surface", name: "view", regionToken,
-      frame: identity, sourceFrame: { ...identity }, rendererFrame: { ...identity }, cursorFrame: { ...identity },
-      issuedFrame: { ...identity }, decodedFrame: { ...identity }, sourceRegionToken: regionToken,
-      issuedRegionToken: regionToken, decodedRegionToken: regionToken,
-      sourceSha256: "a".repeat(64), retainedSourceSha256: "a".repeat(64), sourceByteCount: 4096, glyphCount: 7 },
-    match: { frameIndex: frame.frameIndex, frameCount: frame.frameCount, timeMs: frame.timeMs,
-      span: { row: 0, startColumn: 0, endColumn: 7, viewportLeftEdge: true },
-      cellCount: 8, byteCount: 512, sourceCellsSha256: "b".repeat(64), capturedCellsSha256: "b".repeat(64) },
-  };
-}
-async function terminalMeasurements(plugin = "fixture-view") {
-  const { createHash } = await import("node:crypto");
-  const value = metrics();
-  value.plugin = plugin;
-  for (const frame of [value.warmDisplay.contentFrame, ...value.newProcess.firstDisplays.map(item => item.contentFrame),
-    ...value.layoutDisplay.map(item => item.contentFrame)]) {
-    frame.surface = "reference-surface";
-    frame.proof = terminalReferenceProof(frame, plugin);
-    frame.proof.observedTextSha256 = createHash("sha256").update(frame.proof.observedText).digest("hex");
-  }
-  return value;
-}
-for (const plugin of ["fixture-view", "reference-view"]) {
-  test(`${plugin} metrics accept the discriminated same-frame exact reference proof without OCR fields`, { timeout: 1000 }, async () => {
-    const value = await terminalMeasurements(plugin);
-    assert.doesNotThrow(() => assertViewMeasurements(value, { ...options, plugin, requiredContentProofMethod: "terminal-reference-exact-pixels-v1" }));
-  });
-}
-for (const [label, mutate] of [
-  ["corrupted retained source digest", proof => { proof.reference.sourceSha256 = "c".repeat(64); }],
-  ["missing observation ownership", proof => { delete proof.reference.observationRequestId; }],
-  ["mismatched renderer frame", proof => { proof.reference.rendererFrame.sequence++; }],
-  ["wrong decoded region ownership", proof => { proof.reference.decodedRegionToken = "another-region"; }],
-  ["wrong surface ownership", proof => { proof.reference.surface = "another-surface"; }],
-  ["mismatched captured cell bytes", proof => { proof.match.capturedCellsSha256 = "d".repeat(64); }],
-  ["wrong selected capture index", proof => { proof.match.frameIndex++; }],
-  ["fabricated observed text", proof => { proof.observedText = "unrelated"; }],
-  ["incomplete guard cell span", proof => { proof.match.cellCount--; }],
-]) {
-  test(`terminal metrics refuse ${label}`, { timeout: 1000 }, async () => {
-    const value = await terminalMeasurements();
-    mutate(value.layoutDisplay[0].contentFrame.proof);
-    assert.throws(() => assertViewMeasurements(value, { ...options, plugin: "fixture-view", requiredContentProofMethod: "terminal-reference-exact-pixels-v1" }), /proof|reference|digest|frame|span|cell/i);
-  });
-}
-
-test("terminal metrics refuse the legacy OCR proof even if its text happens to match", { timeout: 1000 }, () => {
-  const value = metrics();
-  value.plugin = "fixture-view";
-  assert.throws(() => assertViewMeasurements(value, { ...options, plugin: "fixture-view", requiredContentProofMethod: "terminal-reference-exact-pixels-v1" }), error => {
-    assert.ok(error instanceof AggregateError, "all three terminal proof categories must refuse the legacy form");
-    assert.deepEqual(error.errors.map(item => item.message.slice(0, item.message.indexOf(":"))),
-      ["warmDisplay", "newProcess", "layoutDisplay"]);
-    for (const item of error.errors) {
-      assert.ok(item.cause instanceof Error, "category failure must preserve its structured cause");
-      assert.match(item.cause.message, /\.proof\.method/);
-      assert.ok(item.cause.message.includes("terminal-reference-exact-pixels-v1"));
-    }
-    return true;
-  });
-});
-
-
-function exactMethodFailures(error) {
-  assert.ok(error instanceof AggregateError, "all three content categories must reject the missing required method");
-  assert.deepEqual(error.errors.map(item => item.message.slice(0, item.message.indexOf(":"))),
-    ["warmDisplay", "newProcess", "layoutDisplay"]);
-  for (const item of error.errors) {
-    assert.ok(item.cause instanceof Error, "category failure must preserve its structured cause");
-    assert.match(item.cause.message, /\.proof\.method/);
-    assert.ok(item.cause.message.includes("terminal-reference-exact-pixels-v1"));
-  }
-  return true;
-}
-
-test("a caller-required exact reference method rejects legacy text proof for an opaque view id", () => {
-  assert.throws(() => assertViewMeasurements(metrics(), {
-    ...options, requiredContentProofMethod: "terminal-reference-exact-pixels-v1",
-  }), exactMethodFailures);
-});
-
-test("a caller-required exact reference method accepts its complete proof for an opaque view id", async () => {
-  const value = await terminalMeasurements(options.plugin);
-  assert.doesNotThrow(() => assertViewMeasurements(value, {
-    ...options, requiredContentProofMethod: "terminal-reference-exact-pixels-v1",
-  }));
-});
-
-
-test("view metric runner forwards the caller-required method and rejects legacy text proof", { timeout: 1000 }, async t => {
-  await assert.rejects(runViewMeasurements({ diagnostic() {} }, {
-    app: { name: "wailsv3", configDir: configDir(t) }, get: async () => ({ refreshRate: 120 }),
-  }, {
-    plugin: options.plugin, baselinesMs: { wailsv3: 10, tauriv2: 20 },
-    requiredContentProofMethod: "terminal-reference-exact-pixels-v1", collect: async () => metrics(),
-  }), exactMethodFailures);
-});
-
 
 function cadenceBoundary(intervalMs) {
   const value = metrics(), drag = value.drag;

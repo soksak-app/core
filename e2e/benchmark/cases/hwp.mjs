@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { domMountBaselineMs, FIRST_DISPLAY_MARGIN_MS, LAYOUT_DISPLAY_LIMIT_MS } from "@soksak/window-check/view-metrics.mjs";
-import { firstContentFrame } from "../../view-first-content.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, findFirstChangedSlotFrame, measureViewFrameGeometry,
   VIEW_GEOMETRY_COLOR_TOLERANCE } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewContentFramesToCapture,
@@ -11,7 +10,7 @@ import { collectViewReclaimMeasurements, collectViewStartAndMemory, mapViewConte
   selectOneShotViewSourceFrame, TAB_PLACEMENT,
   withDragTraceMode, withViewContentTrace }
   from "../../view-metrics-collection.mjs";
-import { viewContentCases } from "../../view-content.mjs";
+import { readViewContent, viewContentCases, viewContentProof } from "../../view-content.mjs";
 
 const HWP_CONTENT = "속삭한글문서확인";
 // The DOM mount medians recorded for the HWP view on the Wails and the Tauri host (docs/spec/plugin-processes.md#pass-values).
@@ -155,7 +154,7 @@ export async function hwpViewDescriptor(s, diagnostic = () => {}, captureObserva
     placement: TAB_PLACEMENT,
     params: content.params,
     expectedContent: HWP_CONTENT,
-    language: "ko-KR",
+    readContent: (session, surface) => readViewContent(session, "hwp", surface),
     ...(captureObservationWindowMs === undefined ? {} : { captureObservationWindowMs }),
     readinessStatus: "hwp.document",
     readiness: async (session, surface) => {
@@ -183,11 +182,6 @@ export async function readHwpPaintViewport(s, surface) {
   const result = await s.run("hwp.diagnostics.frames.read", {}, surface);
   assert.ok(result?.studioViewport, `HWP view ${surface} has no active HTML viewport paint marker`);
   return result.studioViewport;
-}
-
-/** Finds the earliest HWP view recording frame that contains its fixture document text. */
-export async function hwpFirstContentFrame({ captured, rect, directory, recognizeFrame }) {
-  return firstContentFrame({ captured, rect, expected: HWP_CONTENT, language: "ko-KR", directory, recognizeFrame });
 }
 
 function documentRow(host, surface, document) {
@@ -325,7 +319,7 @@ function cardTargetRect(grid, cardId) {
   return { x: plane.x + card.x, y: plane.y + card.y, width: card.w, height: card.h };
 }
 
-export async function layoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt, { recognizeFrame } = {}) {
+export async function layoutObservation(t, s, descriptor, surface, card, theme, cornerRadiusPt) {
   const traced = await withViewContentTrace(t, s, descriptor, surface, async (startReply) => {
     assert.equal(startReply?.enabled, true, `HWP view ${surface} content-frame observer did not start`);
     return withHwpNativeMarker(s, surface, async (marker) => {
@@ -432,11 +426,8 @@ export async function layoutObservation(t, s, descriptor, surface, card, theme, 
   const captureAfter = Math.max(displayed, source.timeRange.upperMs);
   const candidates = transition.slotMatchFrameIndices.filter((index) => captured[index].time >= captureAfter);
   assert.ok(candidates.length > 0, `HWP layout has no declared-slot pixel match at or after ${captureAfter} ms`);
-  const localProof = await hwpFirstContentFrame({ captured: candidates.map((index) => captured[index]),
-    rect: { x: studio.frame.x, y: studio.frame.y, w: studio.frame.width, h: studio.frame.height },
-    directory: result.frames, recognizeFrame });
-  const frameIndex = candidates[localProof.frameIndex];
-  const proof = localProof.proof;
+  const frameIndex = candidates[0];
+  const proof = await viewContentProof(s, "hwp", surface, HWP_CONTENT);
   const geometry = measured[frameIndex];
   const initialGeometryErrorPt = assertHwpFrameMatchesSlot(geometry, slotInsetsPt);
   return {

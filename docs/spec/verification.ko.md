@@ -3,7 +3,7 @@
 [English](verification.md)
 
 
-공통 창 검사 준비는 OCR 모델을 빌드하거나 예열하지 않고 실행 파일 경로를 선언한다. 모든 실행 파일을 명시하면 기본 플랫폼 탐색과 독립적으로 동작한다. 남은 OCR 콘텐츠 소비자는 F696에서 교체하며, 그 소비자의 현재 요구사항을 무관한 기능·성능 검사에 적용하지 않는다. 공개 인터페이스의 의미적 콘텐츠와 실제 캡처 출력은 별도 단언으로 유지한다.
+공통 창 검사 준비는 실행 파일 경로를 선언하고 아무것도 빌드하지 않는다. 모든 실행 파일을 명시하면 기본 플랫폼 탐색과 독립적으로 동작한다. 창 검사는 view의 콘텐츠를 그 콘텐츠를 가진 plugin의 공개 값에서 읽고, 보이는지는 host의 presentation 상태로 판별한다. 검증 pipeline에서 글자 인식은 실행되지 않는다.
 
 
 창 검사 세션은 클립보드를 변경할 수 있는 동작 전에 `open(t, app, { clipboard: true })`로 보존 소유를 명시한다. 복사 단축키·fixture 직접 쓰기·터미널 선택 해제·허용된 OSC 52 출력은 소유가 필요하다. 무관한 세션은 클립보드를 읽거나 복원하지 않는다. 소유 획득 실패는 검사를 실패시키며 보존을 건너뛰지 않는다. 연결·실행 슬롯 정리를 준비 전에 등록하고 준비 실패 시 즉시 실행하며 준비 오류와 정리 오류를 함께 보존한다.
@@ -13,11 +13,9 @@ View-drag benchmark는 구조가 유효한 캡처 수집과 기준 판정을 분
 
 ## 범위와 증거
 
-View display acceptance는 설치되고 활성화된 view plugin을 열거하고 실제로 연 tab을 식별한다. 각 plugin은 선언된 readiness와 예상 capture pixel을 검사하는 명시적 content case를 요구한다. Case가 없으면 plugin과 tab 식별자를 밝히며 실패한다. Colour variation만으로 plugin content를 입증할 수 없다. Missing case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
+View display acceptance는 설치되고 활성화된 view plugin을 열거하고 실제로 연 tab을 식별한다. 각 plugin은 선언된 readiness를 검사하고 content verifier를 돌려주는 명시적 content case를 요구한다. Case가 없으면 plugin과 tab 식별자를 밝히며 실패한다. Colour variation만으로 plugin content를 입증할 수 없다. Missing case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
 
-macOS에서는 검사 전용 executable의 공개 Vision text recognizer로 녹화된 view content를 확인한다. 설치된 각 view에는 선언 readiness와 고정된 예상 text가 있다. Browser empty-state 안내문, editor text fixture, HWP fixture 문단 및 terminal 출력 marker를 사용한다. 전체 녹화를 decode하고 확정 frame count를 확인하며 마지막 frame crop에 예상 text가 있어야 한다. Crop은 적용된 view rectangle과 capture content origin 및 scale을 정확히 한 번 적용한다. Recognition은 application이나 rendering 경로에서 실행하지 않는다. Captured-pixel verifier 없이 readiness만 제공하는 case는 거부한다.
-
-capture recognizer는 같은 Accurate 요청 factory의 인식 level·언어 설정·correction·revision·지원 stage/device map을 관찰하는 --compute-devices 진단을 노출한다. 추론 실행·device 지정·실제 인식 경로 변경은 수행하지 않는다. Device 지원이 인식 성공이나 백그라운드 권한의 근거는 아니다. 사전 CPU 지정 후보는 지정·readback 검사를 통과했지만 실제 warm-up에서 64.718초 뒤 E5RT code 13으로 실패해 실행 정책 변경을 제거했다. 미해결 recognizer 실패와 production 성능 acceptance는 구분한다. 참조: [Apple supported compute stages](https://developer.apple.com/documentation/vision/vnrequest/supportedcomputestagedevices).
+설치된 각 view의 content verifier는 녹화가 끝난 뒤 그 plugin의 공개 값에서 고정된 예상 콘텐츠를 읽는다. Browser empty-state 안내문(`browser.content.read`), editor text fixture(`editor.read`), HWP fixture 문단(`getPageSvg`의 page glyph), terminal 출력 marker(image region이 조회가 가리키는 frame을 presented한 뒤의 `term.screen.read` 또는 `terminal.screen.read`)이다. browser·editor·HWP 값은 그 view의 document region이 보이는 동안 읽는다. 전체 녹화를 decode하고 확정 frame count를 확인한다. Content verifier 없이 readiness만 제공하는 case는 거부한다.
 
 Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. 멈춘 capture folder는 session finalization까지 성공한 뒤에만 제거하며 decoding, geometry 또는 finalization이 실패하면 보존한다.
 
