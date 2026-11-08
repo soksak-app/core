@@ -4,31 +4,35 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
 
+/** The CSS color rgb(r, g, b) of a #rrggbb token, as a view reports its computed background. */
+const cssColor = (token) => `rgb(${[1, 3, 5].map((at) => parseInt(token.slice(at, at + 2), 16)).join(", ")})`;
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a newly created view paints the card theme throughout its first presentation`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    const terminal = await fresh(s);
+    const start = await fresh(s);
     const theme = (await s.get("core.themes")).find(item => item.name === "midnight");
     assert.ok(theme, "the midnight theme is not declared");
     const initial = await s.get("core.grid");
-    const card = initial.cards.find(item => item.tabs.some(tab => tab.id === terminal.surface));
-    assert.ok(card, "the initial terminal card is absent");
+    const card = initial.cards.find(item => item.tabs.some(tab => tab.id === start.surface));
+    assert.ok(card, "the card of the start tab is absent");
     for (const mode of ["dark", "light"]) {
       console.info(`running ${app.name}: first view theme ${mode}`);
       await s.run("core.settings.theme", { name: theme.name, mode });
       const token = theme[mode].card;
       const expected = [1, 3, 5].map(at => parseInt(token.slice(at, at + 2), 16));
-      await s.until("terminal.session", state => state?.background === token,
-        "the initial terminal did not apply the card theme", { surface: terminal.surface });
+      await s.until("layoutprobe.surface", state => state?.theme?.background === cssColor(token),
+        "the start tab did not apply the card theme", { surface: start.surface });
       await s.presented();
       const recording = await s.record();
       // Session.record stops an unfinished recording during cleanup and preserves its failure.
-      const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin: "browser" });
+      // The new view is a tab of the second layout probe, whose empty area shows only the background of its page.
+      const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin: "layoutprobe2" });
       await s.until("core.surfaces", surfaces => surfaces.some(surface => surface.surface === tab && surface.visible &&
-        surface.exposes.includes("element browser.empty")), "the new view did not expose its empty document");
+        surface.exposes.includes("element layoutprobe2.empty")), "the new view did not expose its empty area");
       await s.until("core.surface.document", doc => doc?.readyState === "complete" && doc.themed,
         "the new view did not apply its first theme", { surface: tab });
-      const empty = await s.rect("browser.empty", undefined, tab);
+      const empty = await s.rect("layoutprobe2.empty", undefined, tab);
       const { displayed } = await s.presented();
       const stopped = await recording.stop({ after: displayed + 100 });
       const captured = frames(recording.frames).map(readFrame);

@@ -182,11 +182,6 @@
       "reason": "Checks a still PNG's native bounds and the settings modal in stills, with the terminal only as default content; plain-view probe."
     },
     {
-      "file": "e2e/commands.test.mjs",
-      "owner": "core",
-      "reason": "Checks card, tab, menu, settings, library, layout and rename commands, with browser or terminal as tab plugins and library entries; plain-view probe plus a fixture registry entry."
-    },
-    {
       "file": "e2e/document-typing.test.mjs",
       "owner": "core",
       "reason": "Checks that the virtual key window delivers typed text into a document region (keyboard routing) and drives browser.navigate only to load a page; replace with a plain-view probe document region with a text field and a typed-text status."
@@ -310,11 +305,6 @@
       "file": "e2e/prepare-terminal.mjs",
       "owner": "tool",
       "reason": "Helper that prepares the default terminal surface and waits for its session. Remove it or reduce it to preparing a fake-session fixture."
-    },
-    {
-      "file": "e2e/project-directory.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a view opened in a project starts at the project's canonical root (projects spec). A new fixture capability that reports the cwd/project root it was given would replace the terminal."
     },
     {
       "file": "e2e/projects.test.mjs",
@@ -557,11 +547,6 @@
       "reason": "Tests the B3 view-drag benchmark mechanics (native input drags, process CPU and footprint, GC_LOOP, judgment) and has no real-plugin references. It already fits the view-drag fixture."
     },
     {
-      "file": "e2e/text-size.test.mjs",
-      "owner": "core",
-      "reason": "Tests that the core text-size commands enlarge the pressed card or frame, using the terminal's `terminal.session` cellHeight and `terminal.view` as the vehicle. Replace with plain-view exposing a text-size/scale status and a view element."
-    },
-    {
       "file": "e2e/two-pointers.test.mjs",
       "owner": "core",
       "reason": "Tests routing of two native pointers, using the browser's `browser.navigate`/`browser.location` and `browser.document` as the vehicle. Replace with extension-probe/plain-view with a pointer-echo page that publishes a pointer status."
@@ -605,11 +590,6 @@
       "file": "e2e/view-start-handoff.test.mjs",
       "owner": "core",
       "reason": "Tests that core.file.open start parameters reach page views (`core.surface.document`), using editor and hwp as vehicles. Replace with a fixture that declares file types and publishes the received path/document (save-close or plain-view)."
-    },
-    {
-      "file": "e2e/view-theme.test.mjs",
-      "owner": "core",
-      "reason": "Tests that a new view paints the card theme in its first presentation, using `terminal.session` background and `browser.empty`. Replace with plain-view reporting the applied theme background and an empty element."
     },
     {
       "file": "e2e/wails-window-close-warning.test.mjs",
