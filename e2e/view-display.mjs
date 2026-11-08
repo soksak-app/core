@@ -28,6 +28,23 @@ export function viewPresentationJoins(rows, surface) {
   return { phases, abandoned };
 }
 
+/**
+ * The view surfaces of core.surfaces that hold a view web view, which host.window counts in appDomWebviews beside the app DOM
+ * (docs/spec/native-surfaces.md): every loaded view, shown or not. A tab that is not active in its card keeps its view as a
+ * retained view (docs/spec/exposure.md), an unloaded view released its web view, and a placeholder has none. Returns
+ * `{tabs, sections}`; a view in another state (restoring) fails, because its web view is not settled.
+ */
+export function viewWebviews(surfaces) {
+  if (!Array.isArray(surfaces)) throw new TypeError("core.surfaces must be an array");
+  const views = surfaces.filter((item) => item.placeholder == null && item.composition === "view");
+  const unsettled = views.filter((item) => item.state !== "loaded" && item.state !== "unloaded");
+  if (unsettled.length > 0) {
+    throw new Error(`views without a settled web view: ${unsettled.map((item) => `${item.surface} ${item.state}`).join(", ")}`);
+  }
+  const loaded = views.filter((item) => item.state === "loaded");
+  return { tabs: loaded.filter((item) => item.kind === "tab"), sections: loaded.filter((item) => item.kind === "section") };
+}
+
 /** The placement of a host surface row with phase `placed` (the frame and visibility of a view), validated at the boundary. */
 function placementOf(row) {
   for (const key of ["x", "y", "w", "h"]) {

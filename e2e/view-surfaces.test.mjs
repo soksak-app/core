@@ -20,7 +20,7 @@ import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
 } from "./reload-view-reply.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
-import { expectedPresentations, rasterIdentity, viewPresentationJoins } from "./view-display.mjs";
+import { expectedPresentations, rasterIdentity, viewPresentationJoins, viewWebviews } from "./view-display.mjs";
 import {
   closeRasterTabs, ensureRasters, MEASURED, presentedFrame, RASTER, rasterReady, rasterServiceSnapshot, REGION, setMeasuredColor,
 } from "./raster-probe.mjs";
@@ -179,19 +179,22 @@ for (const app of Object.values(APPS)) {
     for (const raster of rasters) await sessionOf(s, raster.surface, `session ${raster.surface} did not open`);
     await s.presented();
     const window = await s.get("host.window");
-    // The app DOM webviews are the main page and one view web view per visible view surface. A view web view is
-    // not a document region, so it is counted in appDomWebviews and not in documentWebviews.
+    // The app DOM webviews are the main page and one view web view per loaded view surface, shown or retained: the first raster
+    // probe tab was added to the card of a layout probe tab, whose view stays retained behind it. A view web view is not a
+    // document region, so it is counted in appDomWebviews and not in documentWebviews.
     const surfaces = await s.get("core.surfaces");
-    const viewSurfaces = surfaces.filter((item) => item.visible && item.kind === "tab" && (item.plugin === RASTER || item.plugin === START_PLUGIN));
-    const documents = documentViews(surfaces).length;
-    assert.equal(viewSurfaces.length, 3 + documents, `the fixture must show three image region views and ${documents} document views, found ${JSON.stringify(viewSurfaces)}`);
-    // The section views of the sidebars are view web views too, shown or hidden.
-    const sectionViews = surfaces.filter((item) => item.kind === "section");
-    const expectedAppDom = 1 + viewSurfaces.length + sectionViews.length;
+    const shown = surfaces.filter((item) => item.visible && item.kind === "tab" && (item.plugin === RASTER || item.plugin === START_PLUGIN));
+    assert.equal(shown.length, 3 + documentViews(surfaces).length,
+      `the fixture must show three image region views and two document views, found ${JSON.stringify(shown)}`);
+    const { tabs: tabViews, sections: sectionViews } = viewWebviews(surfaces);
+    const expectedAppDom = 1 + tabViews.length + sectionViews.length;
     assert.equal(window.webviews.filter((webview) => webview.main).length, 1, "the main page must be one webview of the window");
     assert.equal(window.appDomWebviews, expectedAppDom,
-      `expected the main page, ${viewSurfaces.length} tab views and ${sectionViews.length} section views (${expectedAppDom} app DOM webviews), measured ${window.appDomWebviews}`);
-    // Each layout probe view holds one document region, which has its own native WebView.
+      `expected the main page, ${tabViews.length} tab views (${tabViews.map((item) => `${item.surface} ${item.plugin}` +
+        `${item.visible ? "" : " retained"}`).join(", ")}) and ${sectionViews.length} section views ` +
+      `(${expectedAppDom} app DOM webviews), measured ${window.appDomWebviews}`);
+    // Each loaded layout probe view, shown or retained, holds one document region, which has its own native WebView.
+    const documents = tabViews.filter((item) => item.plugin === START_PLUGIN).length;
     assert.equal(window.documentWebviews, documents, "each document region must have an independent native WebView");
     const processes = rasterServiceSnapshot(app.configDir);
     const sessions = await Promise.all(rasters.map(async ({ surface }) => [surface, await s.get("rasterprobe.session", surface)]));
