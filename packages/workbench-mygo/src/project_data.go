@@ -222,8 +222,9 @@ func sameData(one, other json.RawMessage) (bool, error) {
 	return reflect.DeepEqual(first, second), nil
 }
 
-// workspaceChanged reads the store after a write, takes the stored record of each project that this window does not hold and reports
-// each key of plugin data that differs from what this window holds, as a write of another window reaches this window through the store.
+// workspaceChanged reads the store after a write: a project that the store no longer lists leaves this window, each project that this
+// window does not hold takes its stored record, and each key of plugin data that differs from what this window holds is reported, as a
+// write of another window reaches this window through the store.
 func (s *Shell) workspaceChanged() {
 	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
 		if err == nil {
@@ -235,8 +236,9 @@ func (s *Shell) workspaceChanged() {
 	})
 }
 
-// compareData takes the projects of a workspace snapshot: the whole record of a project that this window does not hold, and the plugin
-// data of one that it holds.
+// compareData takes the projects of a workspace snapshot: a project that another window removed leaves this window as readProjects of
+// packages/workbench/projects.js ends it (docs/spec/projects.md#settings), a project that this window does not hold takes its whole
+// record, and one that it holds takes its plugin data.
 func (s *Shell) compareData(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
@@ -249,13 +251,28 @@ func (s *Shell) compareData(value any) error {
 	if snapshot.ProjectsError != nil {
 		return errors.New(*snapshot.ProjectsError)
 	}
-	s.takeOpen(snapshot.Open)
-	s.options.Invalidate()
+	reads := make([]projectRecord, 0, len(snapshot.Projects))
+	listed := make(map[string]bool, len(snapshot.Projects))
 	for _, raw := range snapshot.Projects {
 		read, err := readProject(raw)
 		if err != nil {
 			return err
 		}
+		reads = append(reads, read)
+		listed[read.ID] = true
+	}
+	var removed []string
+	for _, project := range s.projects {
+		if !listed[project.ID] {
+			removed = append(removed, project.ID)
+		}
+	}
+	for _, id := range removed {
+		s.dropProject(id)
+	}
+	s.takeOpen(snapshot.Open)
+	s.options.Invalidate()
+	for _, read := range reads {
 		project := s.project(read.ID)
 		if project == nil {
 			continue // A project that this window never read holds no view here.

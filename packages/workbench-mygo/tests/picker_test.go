@@ -876,6 +876,30 @@ func TestAPluginChangeAsksAboutAModifiedTab(t *testing.T) {
 	}
 }
 
+// A window whose project another window removed after the person discarded its modified tab closes on a close request, as the quit of
+// the application asks it, without asking about that tab again: the project left the window (docs/spec/projects.md#settings).
+func TestAWindowWhoseProjectAnotherWindowRemovedClosesWithoutAQuestion(t *testing.T) {
+	f := modifiedShell(t)
+	project := status[map[string]any](t, f.shellFixture, "core.project")["id"].(string)
+	f.shell.Event("project-remove-request", []any{project})
+	f.settle()
+	f.click("core.picker.item", "discard")
+	f.settle()
+	f.host.mu.Lock()
+	f.host.projects = nil
+	f.host.mu.Unlock()
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+	f.shell.Event("project-close-request", nil)
+	f.settle()
+	if f.tester.HasText("저장하지 않고 닫기") {
+		t.Fatalf("the close request asked again: %q", f.tester.Texts())
+	}
+	if !f.host.called("windowClose") {
+		t.Fatalf("the window did not close: %v", f.host.calls)
+	}
+}
+
 // nodeLabeled returns the first element with the label.
 func nodeLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
 	for _, node := range nodes {
