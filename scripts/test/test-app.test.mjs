@@ -526,8 +526,8 @@ test("a failed run keeps the logs and removes the service folders, so the servic
   const root = workspace(t);
   const failed = newConfigRoot(root);
   for (const app of ["soksak-check-wailsv3", "soksak-check-tauriv2"]) {
-    mkdirSync(join(failed, app, "services", "sok-vt-alacritty"), { recursive: true });
-    writeFileSync(join(failed, app, "services", "sok-vt-alacritty", "endpoint.json"), "{}");
+    mkdirSync(join(failed, app, "services", "rasterprobe-service"), { recursive: true });
+    writeFileSync(join(failed, app, "services", "rasterprobe-service", "endpoint.json"), "{}");
     mkdirSync(join(failed, app, "logs"), { recursive: true });
     writeFileSync(join(failed, app, "logs", "host.jsonl"), "{}\n");
   }

@@ -36,7 +36,7 @@ test("each contributed item is connected, missing its provider, mismatched or in
 });
 
 test("the sidecars of a manifest leave out the packages of installed plugins", () => {
-  const manifest = { dependencies: { "@scope/sidecar-files": "^0.0.4", "@scope/plugin-probe": ">=0.1.0" } };
-  assert.deepEqual(manifestSidecars(manifest, new Set(["@scope/plugin-probe"])), ["@scope/sidecar-files"]);
-  assert.deepEqual(manifestSidecars(manifest), ["@scope/sidecar-files", "@scope/plugin-probe"]);
+  const manifest = { dependencies: { "@scope/sidecar-probe": "^0.0.4", "@scope/plugin-probe": ">=0.1.0" } };
+  assert.deepEqual(manifestSidecars(manifest, new Set(["@scope/plugin-probe"])), ["@scope/sidecar-probe"]);
+  assert.deepEqual(manifestSidecars(manifest), ["@scope/sidecar-probe", "@scope/plugin-probe"]);
 });
