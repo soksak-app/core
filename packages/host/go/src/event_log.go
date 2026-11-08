@@ -181,9 +181,6 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	if err := system.SetEventBoot(processBoot()); err != nil {
 		return nil, err
 	}
-	if err := system.ObserveActivity(); err != nil {
-		return nil, err
-	}
 	wake, err := nativeWake(system)
 	if err != nil {
 		return nil, err
@@ -202,6 +199,25 @@ func StartHostEventLog(config string) (*EventLog, error) {
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
 		RotateBytes: hostRotateBytes, PolicyPath: filepath.Join(config, "log-policy.json"), RetentionBytes: hostRetentionBytes,
 	})
+}
+
+// StartHostLogPolicy applies and watches the policy file of the host writer (StartLogPolicy) and then installs the activity
+// observers of the platform. The native ring stores only errors until the first policy reaches it (docs/spec/logging.md#policy),
+// so the observers register after it, and the policy in force decides whether their registration records are stored.
+func StartHostLogPolicy(log *EventLog, applied func(source, detail string)) (stop func(), err error) {
+	system, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	stop, err = StartLogPolicy(log, applied)
+	if err != nil {
+		return nil, err
+	}
+	if err := system.ObserveActivity(); err != nil {
+		stop()
+		return nil, err
+	}
+	return stop, nil
 }
 
 // FlushEventLog ends the event log of a process that is shutting down: flushObservers stores the tail of the counted sources

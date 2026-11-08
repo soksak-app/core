@@ -19,8 +19,8 @@ fn the_platform_pulls_an_empty_native_ring_as_zero_bytes_and_no_loss() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let system = platform::current().unwrap();
     let mut buffer = vec![0u8; 4096];
-    // The activity observers that an earlier test of this process installed store events into the ring; the ring is emptied
-    // first, so the pull below reads an empty ring.
+    // An earlier test of this process can leave records in the ring; the ring is emptied first, so the pull below reads an
+    // empty ring.
     while system.pull_native_events(&mut buffer).unwrap() > 0 {}
     for channel in 0..2 {
         system.take_native_event_loss(channel).unwrap();
@@ -74,7 +74,7 @@ fn the_host_writer_starts_with_the_pull_of_the_platform() {
     let text = std::fs::read_to_string(path).unwrap();
     let lines: Vec<&str> = text.lines().collect();
     assert!(lines[0].contains("\"event\":\"log.open\""), "{}", lines[0]);
-    // The activity observers that the writer installs store native events after log.open and nothing else follows.
+    // Only native events that an earlier test of this process left in the ring follow log.open.
     assert!(
         lines[1..]
             .iter()

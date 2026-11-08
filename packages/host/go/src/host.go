@@ -167,11 +167,12 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 		ReportUnrecordedEnd(end)
 	}
 	// The policy of the event log is the file log-policy.json, which the host and every process watch (docs/spec/logging.md#classes-and-policy).
-	steps := newStepRecording(framework.RecordSteps, func() bool { return eventLog.Enabled(ClassFrame, LevelDebug) },
+	// The activity observers start after the first policy is applied, so their registration records meet that policy.
+	steps :=newStepRecording(framework.RecordSteps, func() bool { return eventLog.Enabled(ClassFrame, LevelDebug) },
 		func(events uint64) { eventLog.CountLoss(sok.ChannelDebug, sok.LossStepRingFull, events, 0) })
 	host.steps = steps
 	announcePolicy := LogPolicyAnnouncer(eventLog, host.announceToWindows)
-	stopPolicy, err := StartLogPolicy(eventLog, func(source, detail string) {
+	stopPolicy, err := StartHostLogPolicy(eventLog, func(source, detail string) {
 		announcePolicy(source, detail)
 		steps.sync()
 	})

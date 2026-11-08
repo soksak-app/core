@@ -498,6 +498,19 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F716",
+    implementation: [
+      { file: "packages/host/go/src/event_log.go", symbol: "func StartHostLogPolicy(log *EventLog, applied func(source, detail string)) (stop func(), err error) {" },
+      { file: "packages/host/rust/src/event_log.rs", symbol: "pub fn start_host_log_policy(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/event_native_platform_test.go", id: "TestTheActivityObserversRegisterUnderThePolicyOfTheHostStart" },
+      { file: "packages/host/rust/tests/event_native_activity_test.rs", id: "the_activity_observers_register_under_the_policy_of_the_host_start" },
+    ],
+    expected: "Both hosts install the native activity observers after the writer applied the first policy, so a policy that stores the class lifecycle at info stores native.observe.registered of activity.window and activity.occlusion from the start of the host.",
+    levels: ["unit"],
+  },
+  {
     id: "F713",
     implementation: [
       { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) CountLoss(channel Channel, reason LossReason, events, bytes uint64) {" },
