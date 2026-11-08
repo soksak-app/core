@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, MAIN_PAGE_APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
-import { fresh, recordCatalog } from "./fixture.mjs";
+import { fresh, recordCatalog, settingsShown } from "./fixture.mjs";
 import { publicHostState, comparePublicHostStates } from "./host-public-parity.mjs";
 import { orderNames } from "@soksak/window-check/order-names.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
@@ -251,6 +251,8 @@ if (requiresAll(process.env)) test("every host preserves public surface, hit and
     states[name].resized=await readPublicState(s,normalize);
     await s.run("core.settings.open");
     await s.until("core.settings-modal",value=>value.open,"the public settings modal did not open");
+    // host.window.presented waits only for a modal web view that is already shown, so the hits wait until the dialog is shown.
+    await settingsShown(s,"the public settings modal was not shown");
     states[name].settingsOpen=await readPublicState(s,normalize);
     await s.run("core.settings.close");
     await s.until("core.settings-modal",value=>!value.open,"the public settings modal did not close");
