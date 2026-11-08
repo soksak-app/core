@@ -37,7 +37,9 @@ type gridRead struct {
 	Cards []struct {
 		ID         string  `json:"id"`
 		X          float64 `json:"x"`
+		Y          float64 `json:"y"`
 		W          float64 `json:"w"`
+		H          float64 `json:"h"`
 		C0         int     `json:"c0"`
 		Focused    bool    `json:"focused"`
 		Fullscreen bool    `json:"fullscreen"`
@@ -117,6 +119,13 @@ func TestFullscreenCoversThePlaneAndKeepsTheLayout(t *testing.T) {
 	}
 	if f.has("core.card.close", cards[1]) {
 		t.Fatal("a card stays drawn under the fullscreen card")
+	}
+	// The other cards are hidden, so core.grid gives them no presented area, as the page reports the rectangle that it painted
+	// (presentedCardRect of packages/workbench/plane.js): every card, the sidebar cards too, stands at the empty rectangle.
+	for _, card := range grid.Cards {
+		if card.ID != cards[0] && (card.X != 0 || card.Y != 0 || card.W != 0 || card.H != 0) {
+			t.Fatalf("card %s under the fullscreen card reports the rectangle %v,%v %vx%v", card.ID, card.X, card.Y, card.W, card.H)
+		}
 	}
 	if _, err := f.answer("core.card.split", map[string]string{"card": cards[0], "side": "right", "plugin": "textprobe"}); err == nil || !strings.Contains(err.Error(), "fullscreen") {
 		t.Fatalf("a split under the fullscreen card answers %v", err)

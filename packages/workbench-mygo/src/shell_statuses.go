@@ -159,12 +159,17 @@ func (s *Shell) cardStatusText(data *layout.CardData) string {
 	return ""
 }
 
-// cardRect is the rectangle of a card on the plane: the whole plane for a fullscreen card.
+// cardRect is the rectangle of a card on the plane: the whole plane for a fullscreen card, and the empty rectangle for every other
+// card while one card is fullscreen, because those cards are hidden (the presented rectangles of packages/soksak/dist/dom.js).
 func (s *Shell) cardRect(id string) (layout.Rect, bool) {
 	if s.fullscreen == id {
 		return layout.Rect{W: s.plane.Width(), H: s.plane.Height()}, true
 	}
-	return s.plane.Rect(id)
+	rect, ok := s.plane.Rect(id)
+	if ok && s.fullscreen != "" {
+		return layout.Rect{}, true
+	}
+	return rect, ok
 }
 
 // cardActs is the state of the tools of the head that the last frame drew for a card, and nil for a card without a head.
