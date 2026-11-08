@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"math"
 	"reflect"
 	"slices"
 	"testing"
@@ -296,5 +297,27 @@ func TestAVersionOfAnotherFormIsShownAndOffersNoUpdate(t *testing.T) {
 	}
 	if got := workbench.PluginPageActions(page)[0]; got.Action != "disable" {
 		t.Fatalf("the first action is %+v", got)
+	}
+}
+
+// The description and each contribution line of a card are elements of their own names, as on the page, and a contribution line, its
+// state or its error, has the caption size of .library-plugin__contribution.
+func TestTheDescriptionAndContributionLinesOfACardAreNamedElements(t *testing.T) {
+	page := hostedPlugins()
+	page.Contributions = []workbench.PluginContribution{
+		{Plugin: "alpha", Point: "db.items", Index: 0, State: "connected"},
+		{Plugin: "alpha", Point: "db.items", Index: 1, State: "invalid", Reason: "no label"},
+	}
+	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
+	if about := positional(t, tt, "core.library.plugins.about", 1); about.Label != "Second tool" {
+		t.Fatalf("the second description line is %q", about.Label)
+	}
+	// Caption 10 at the line height 1.45 of drawPlugins.
+	const line = 10 * 1.45
+	for index, want := range []string{"db.items 기여 1: 연결됨", "db.items 기여 2: no label"} {
+		node := positional(t, tt, "core.library.plugins.contribution", index)
+		if node.Label != want || math.Abs(float64(node.Bounds.H)-line) > 0.01 {
+			t.Errorf("contribution line %d is %q, %v high; want %q, %v high", index, node.Label, node.Bounds.H, want, line)
+		}
 	}
 }
