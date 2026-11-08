@@ -1,18 +1,19 @@
 // Runs the three-host benchmark B3 (docs/operations/examples.md#three-host-benchmark) on this computer and writes one session folder
 // that `make check-b3` judges against docs/spec/performance-goals.json:
-//   node scripts/benchmark-b3.mjs --phase 1|final --runs <n> --baseline <checkout>
-// `make benchmark-b3 PHASE=1|final RUNS=<n> BASELINE=<checkout>` runs it. The five applications are the mygo, the Wails and the Tauri host of
-// this checkout and the Wails and the Tauri host of the BASELINE checkout, the baseline hosts. Before its first run it fails when the
+//   node scripts/benchmark-b3.mjs --phase 1|final --runs <n> --baseline <checkout> --index <index> --baseline-index <index>
+// `make benchmark-b3 PHASE=1|final RUNS=<n> BASELINE=<checkout> INDEX=<index> BASELINE_INDEX=<index>` runs it. B3 measures an installed
+// environment and gates no release: the two registry indexes are given, files that the caller wrote, and B3 builds no plugin or sidecar.
+// The five applications are the mygo, the Wails and the Tauri host of this checkout and the Wails and the Tauri host of the BASELINE
+// checkout, the baseline hosts. Before its first run it fails when the
 // head of BASELINE differs from the last head of the baseline record or the working tree of BASELINE holds changes outside that head.
-// It then builds the release bundles of the five applications, the workspace registry of the diagnostic sidecars and the index of the
-// public registry (`make build-registry SIDECARS=diagnostic`, `make build-registry SIDECARS=diagnostic PLUGINS=public`), and fails when a sidecar
-// revision of the registry record differs from the last revision of the baseline record for that repository or a sidecar working tree
-// held changes. Phase 1 also builds the debug bundles.
+// It then builds the release bundles of the five applications; phase 1 also builds the debug bundles.
 //
 // Each run of a scenario starts a new application from the executable of its release bundle through the steps `start`, `quit` and
 // `remaining` of runPlan (scripts/test-app.mjs), in a new configuration folder under the session folder in b3Folder into which it
-// installs the index of that application: the workspace registry for the mygo and the other hosts, the public index for the baseline
-// hosts. S0b runs in the application that S3 leaves. A run starts only while swap use is below its share of the swap total and
+// installs the index of that application: INDEX for the mygo and the other hosts, BASELINE_INDEX for the baseline hosts. Every application
+// fails the run when the sidecar releases that it installed differ from the sidecars of the baseline record, so all five run the same
+// sidecar builds, and a baseline host also when its plugin releases differ from the plugins of the record.
+// S0b runs in the application that S3 leaves. A run starts only while swap use is below its share of the swap total and
 // fseventsd uses less than its share of a core, and fails when the display mode or the backing scale of a window differs from the run
 // conditions of docs/spec/performance-goals.json. It runs the targets of each value of the scenario in the order of the goals, the
 // STEP=pointer readings last, each in the checkout of its application with `APP`, `CONFIG`, `CONFIG_DIR`, `SOK`, `PLUGINS` (the
@@ -26,12 +27,10 @@
 // measure-trace-share on all five applications from their debug bundles.
 //
 // The baseline record b3/baseline.json in the git common directory of this checkout (baselineRecordFile), which the measurement target items write:
-//   {"schema": 1, "heads": [<40 hex digits>, ...], "sidecars": [{"repository": <path>, "revisions": [<40 hex digits>, ...]}],
+//   {"schema": 2, "heads": [<40 hex digits>, ...], "sidecars": [{"id": <sidecar name>, "version": <version>, "sha256": <64 hex digits>}],
 //    "plugins": [{"id": <plugin id>, "version": <version>, "sha256": <64 hex digits>}]}
-// `heads` are the heads of the baseline branch in order and `revisions` the revisions of each sidecar repository in order; the last
-// entry of each list is the one that a run requires. `plugins` are the plugin releases that the baseline hosts install.
-// The sidecar revision record <registry>/sidecar-revisions.json of make build-registry SIDECARS=diagnostic:
-//   {"sidecars": [{"repository": <path>, "revision": <40 hex digits>, "changes": <whether the working tree held changes>}]}
+// `heads` are the heads of the baseline branch in order, and the last one is the one that a run requires. `sidecars` are the sidecar
+// releases of the platform that every application installs, and `plugins` the plugin releases that the baseline hosts install.
 //
 // The output of a target. Every target that B3 runs takes the file of its output: a make target as B3_OUT=<file> (a measurement
 // script as --b3-out <file>, an e2e benchmark as the environment variable SOKSAK_B3_OUT) and a check of e2e/ as SOKSAK_B3_OUT, as the
@@ -58,7 +57,7 @@
 // its keys in B3_MEASUREMENTS of that module: one settings object for a list of keys, and for an object of states the same states,
 // of which the TRACE argument of its entry names one, so it runs once in each state. A state of one that the other lacks fails the
 // run and names it.
-// The session folder (described in scripts/b3-judge.mjs) holds session.json, baseline.json, sidecar-revisions.json, runs.jsonl,
+// The session folder (described in scripts/b3-judge.mjs) holds session.json, baseline.json, runs.jsonl,
 // attribution.jsonl of phase 1, outputs/ with the output log and the B3_OUT file of each target, and configs/ with the configuration
 // folder of each failed run; a passed run removes its configuration folder.
 import { execFileSync, spawn } from 'node:child_process';
@@ -66,7 +65,7 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { loadavg } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
@@ -131,37 +130,20 @@ export function baselineRecordFile(root) {
 export function readBaselineRecord(text, file) {
   let record;
   try { record = JSON.parse(text); } catch (error) { fail(file, `is not JSON: ${error.message}`); }
-  if (!isObject(record) || record.schema !== 1) fail(file, `holds schema ${JSON.stringify(record?.schema)}, expected 1`);
+  if (!isObject(record) || record.schema !== 2) fail(file, `holds schema ${JSON.stringify(record?.schema)}, expected 2`);
   if (!Array.isArray(record.heads) || record.heads.length === 0 || !record.heads.every((head) => HEX40.test(head))) {
     fail(file, `holds the heads ${JSON.stringify(record.heads)}, expected a list of revisions of 40 hexadecimal digits`);
   }
-  if (!Array.isArray(record.sidecars)) fail(file, 'holds no list of sidecars');
-  for (const entry of record.sidecars) {
-    if (!isObject(entry) || typeof entry.repository !== 'string' || !Array.isArray(entry.revisions) || entry.revisions.length === 0
-      || !entry.revisions.every((revision) => HEX40.test(revision))) fail(file, `holds the sidecar ${JSON.stringify(entry)}, expected a repository and its revisions`);
-  }
-  const repositories = record.sidecars.map((entry) => entry.repository);
-  if (new Set(repositories).size !== repositories.length) fail(file, `names a sidecar repository twice: ${repositories.join(', ')}`);
-  if (!Array.isArray(record.plugins)) fail(file, 'holds no list of plugins');
-  for (const entry of record.plugins) {
-    if (!isObject(entry) || typeof entry.id !== 'string' || typeof entry.version !== 'string' || !HEX64.test(entry.sha256)) {
-      fail(file, `holds the plugin ${JSON.stringify(entry)}, expected an id, a version and a sha256 of 64 hexadecimal digits`);
+  for (const kind of ['sidecars', 'plugins']) {
+    const noun = kind.slice(0, -1);
+    if (!Array.isArray(record[kind])) fail(file, `holds no list of ${kind}`);
+    for (const entry of record[kind]) {
+      if (!isObject(entry) || typeof entry.id !== 'string' || typeof entry.version !== 'string' || !HEX64.test(entry.sha256)) {
+        fail(file, `holds the ${noun} ${JSON.stringify(entry)}, expected an id, a version and a sha256 of 64 hexadecimal digits`);
+      }
     }
-  }
-  const ids = record.plugins.map((entry) => entry.id);
-  if (new Set(ids).size !== ids.length) fail(file, `names a plugin twice: ${ids.join(', ')}`);
-  return record;
-}
-
-/** Reads the sidecar revision record of the workspace registry from the text of `file`. */
-export function readSidecarRevisions(text, file) {
-  let record;
-  try { record = JSON.parse(text); } catch (error) { fail(file, `is not JSON: ${error.message}`); }
-  if (!isObject(record) || !Array.isArray(record.sidecars)) fail(file, 'holds no list of sidecars');
-  for (const entry of record.sidecars) {
-    if (!isObject(entry) || typeof entry.repository !== 'string') fail(file, `holds the sidecar ${JSON.stringify(entry)} without a repository`);
-    if (!HEX40.test(entry.revision)) fail(file, `sidecar ${entry.repository} has the revision ${JSON.stringify(entry.revision)}, expected 40 hexadecimal digits`);
-    if (typeof entry.changes !== 'boolean') fail(file, `sidecar ${entry.repository} has changes ${JSON.stringify(entry.changes)}, expected true or false`);
+    const ids = record[kind].map((entry) => entry.id);
+    if (new Set(ids).size !== ids.length) fail(file, `names a ${noun} twice: ${ids.join(', ')}`);
   }
   return record;
 }
@@ -181,27 +163,6 @@ export function baselineCheckoutFailures(record, { head, status }, path) {
   const last = record.heads.at(-1);
   if (head !== last) failures.push(`the head ${head} of ${path} differs from the last head ${last} of the baseline record`);
   if (status.length > 0) failures.push(`the working tree of ${path} holds changes outside its head ${head}: ${status.join('; ')}`);
-  return failures;
-}
-
-/** The failures of the sidecar revision record of the workspace registry against the last revision of each repository of the baseline record. */
-export function sidecarRevisionFailures(record, revisions) {
-  const failures = [];
-  for (const entry of revisions.sidecars) {
-    const baseline = record.sidecars.find((item) => item.repository === entry.repository);
-    if (!baseline) {
-      failures.push(`the registry built ${entry.repository}, for which the baseline record holds no revision`);
-      continue;
-    }
-    const last = baseline.revisions.at(-1);
-    if (entry.revision !== last) failures.push(`the registry built ${entry.repository} at ${entry.revision}, which differs from the last revision ${last} of the baseline record`);
-    if (entry.changes) failures.push(`the working tree of ${entry.repository} held changes outside ${entry.revision} when the registry built it`);
-  }
-  for (const baseline of record.sidecars) {
-    if (!revisions.sidecars.some((entry) => entry.repository === baseline.repository)) {
-      failures.push(`the registry built no revision of ${baseline.repository}, which the baseline record holds`);
-    }
-  }
   return failures;
 }
 
@@ -241,6 +202,23 @@ export function baselinePluginFailures(record, releases) {
   return failures;
 }
 
+/** The failures of the sidecar releases that the application `name` installed against the sidecars of the baseline record. */
+export function sidecarReleaseFailures(record, releases, name) {
+  const failures = [];
+  const sidecars = releases.filter((release) => release.kind === 'sidecar');
+  for (const release of sidecars) {
+    const expected = record.sidecars.find((entry) => entry.id === release.id);
+    if (!expected) failures.push(`${name} installed the sidecar ${release.id} ${release.version} ${release.sha256}, which the baseline record does not hold`);
+    else if (expected.version !== release.version || expected.sha256 !== release.sha256) {
+      failures.push(`${name} installed the sidecar ${release.id} ${release.version} ${release.sha256}, the baseline record holds ${expected.id} ${expected.version} ${expected.sha256}`);
+    }
+  }
+  for (const expected of record.sidecars) {
+    if (!sidecars.some((release) => release.id === expected.id)) failures.push(`${name} installed no release of the sidecar ${expected.id}, which the baseline record holds`);
+  }
+  return failures;
+}
+
 /** The installed plugins whose `plugin.json` declares a surface, by id; `readManifest(path)` reads the manifest in a recorded folder. */
 export function surfacePlugins(installed, readManifest) {
   if (installed === null) return [];
@@ -271,8 +249,8 @@ export function fseventsdCores(before, after, seconds) {
   return (second.centiseconds - first.centiseconds) / 100 / seconds;
 }
 
-/** The five applications of a session with the paths of their release bundles and the index that each installs. */
-export function applicationsOf({ root, baseline }, build = 'release') {
+/** The five applications of a session with the paths of their release bundles and the index that each installs: `index`, or `baselineIndex` for the baseline hosts. */
+export function applicationsOf({ root, baseline, index, baselineIndex }, build = 'release') {
   return APPLICATIONS.map(([name, host, kind]) => {
     const checkout = kind === 'baseline' ? baseline : root;
     // The baseline branch keeps the host code of its revision, whose executables carry the name of that revision.
@@ -281,7 +259,7 @@ export function applicationsOf({ root, baseline }, build = 'release') {
     return {
       name, host, build: kind, checkout, bundle,
       executable: join(bundle, 'Contents', 'MacOS', executable), sok: join(bundle, 'Contents', 'MacOS', 'sok'),
-      index: join(root, 'target', kind === 'baseline' ? 'registry-public' : 'registry', 'index.json'),
+      index: kind === 'baseline' ? baselineIndex : index,
     };
   });
 }
@@ -543,14 +521,13 @@ function readInstalled(configDir) {
   return existsSync(file) ? readJson(file) : null;
 }
 
-/** Writes a new session folder: session.json, the copies of the baseline record and of the sidecar revision record, and an empty runs.jsonl. */
-export function createSession(folder, { phase, runs, applications, builds, toolchains, baseline, sidecars }) {
+/** Writes a new session folder: session.json, the copy of the baseline record and an empty runs.jsonl. */
+export function createSession(folder, { phase, runs, applications, builds, toolchains, baseline }) {
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, 'session.json'), `${JSON.stringify({
     schema: 1, phase, runs, applications: applications.map(({ name, host, build }) => ({ name, host, build })), builds, toolchains,
   }, null, 2)}\n`);
   writeFileSync(join(folder, 'baseline.json'), `${JSON.stringify(baseline, null, 2)}\n`);
-  writeFileSync(join(folder, 'sidecar-revisions.json'), `${JSON.stringify(sidecars, null, 2)}\n`);
   writeFileSync(join(folder, 'runs.jsonl'), '');
 }
 
@@ -601,7 +578,7 @@ async function readStartConditions() {
  */
 export async function runUnit(unit, context) {
   const {
-    goals, session, write, baseline = null, trace = RUN_TRACE, benchmarks, recordsFile = 'runs.jsonl', prefix = '', interrupted,
+    goals, session, write, baseline, trace = RUN_TRACE, benchmarks, recordsFile = 'runs.jsonl', prefix = '', interrupted,
     readStart = readStartConditions, display = readDisplay, activate = activateWindow, loadAverage = loadavg, runTarget = runTargetCommand,
     targetsOf = (scenario) => scenarioTargets(goals, scenario), accessibility = () => trusted() === true, processes, lockRelease,
   } = context;
@@ -638,6 +615,7 @@ export async function runUnit(unit, context) {
       try {
         const record = readInstalled(configDir);
         installed = installedReleases(record, index, PLATFORM);
+        failures.push(...sidecarReleaseFailures(baseline, installed, application.name));
         if (application.build === 'baseline') failures.push(...baselinePluginFailures(baseline, installed));
         plugins = surfacePlugins(record, (path) => readJson(join(configDir, path, 'plugin.json')));
         shown = await display(configDir);
@@ -734,7 +712,7 @@ function toolchains() {
 
 /**
  * The build steps of a phase: the release bundles of both checkouts and, in phase 1, the debug bundles, one host at a time with the Tauri hosts
- * first, because they take the most disk, and then the two registry indexes.
+ * first, because they take the most disk. The registry indexes are inputs of the session, and B3 builds no plugin or sidecar.
  */
 export function buildSteps(phase, baseline) {
   const step = (name, argv) => ({ name, phase: 'prepare', kind: 'run', argv, env: {} });
@@ -751,8 +729,6 @@ export function buildSteps(phase, baseline) {
     ...each('tauriv2', both),
     ...each('wailsv3', both),
     ...each('mygo', [['current', ROOT]]),
-    step('workspace registry', ['make', 'build-registry', 'SIDECARS=diagnostic']),
-    step('public index', ['make', 'build-registry', 'SIDECARS=diagnostic', 'PLUGINS=public']),
   ];
 }
 
@@ -772,10 +748,13 @@ export function attributionUnits(goals, applications, debugApplications) {
 }
 
 async function main(argv) {
-  const { values } = parseArgs({ args: argv, strict: true, options: { phase: { type: 'string' }, runs: { type: 'string' }, baseline: { type: 'string' } } });
-  if (!['1', 'final'].includes(values.phase) || !/^[1-9]\d*$/.test(values.runs ?? '') || !values.baseline) {
-    throw new Error('benchmark-b3 requires --phase 1|final --runs <n> --baseline <checkout>');
+  const { values } = parseArgs({ args: argv, strict: true, options: {
+    phase: { type: 'string' }, runs: { type: 'string' }, baseline: { type: 'string' }, index: { type: 'string' }, 'baseline-index': { type: 'string' },
+  } });
+  if (!['1', 'final'].includes(values.phase) || !/^[1-9]\d*$/.test(values.runs ?? '') || !values.baseline || !values.index || !values['baseline-index']) {
+    throw new Error('benchmark-b3 requires --phase 1|final --runs <n> --baseline <checkout> --index <index> --baseline-index <index>');
   }
+  const indexes = { index: resolve(values.index), baselineIndex: resolve(values['baseline-index']) };
   const runs = Number(values.runs);
   const write = (line) => process.stdout.write(`${line}\n`);
   const goals = readGoals(readFileSync(GOALS_FILE, 'utf8'), 'docs/spec/performance-goals.json');
@@ -798,18 +777,11 @@ async function main(argv) {
     for (const failure of built) write(`failure ${failure}`);
     return 1;
   }
-  const revisionFile = join(ROOT, 'target', 'registry', 'sidecar-revisions.json');
-  const sidecars = readSidecarRevisions(readFileSync(revisionFile, 'utf8'), revisionFile);
-  const revisions = sidecarRevisionFailures(baseline, sidecars);
-  if (revisions.length > 0) {
-    for (const failure of revisions) write(`failure ${failure}`);
-    return 1;
-  }
-  const applications = applicationsOf({ root: ROOT, baseline: values.baseline });
+  const applications = applicationsOf({ root: ROOT, baseline: values.baseline, ...indexes });
   const base = b3Folder(ROOT);
   mkdirSync(base, { recursive: true });
   const session = mkdtempSync(join(base, `${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}-phase-${values.phase}-`));
-  createSession(session, { phase: values.phase, runs, applications, builds: buildsOf(applications), toolchains: toolchains(), baseline, sidecars });
+  createSession(session, { phase: values.phase, runs, applications, builds: buildsOf(applications), toolchains: toolchains(), baseline });
   write(`session ${session}`);
   const context = { goals, session, write, baseline, benchmarks: BENCHMARKS, interrupted: interrupt.signal };
   let failed = 0;
@@ -820,7 +792,7 @@ async function main(argv) {
   }
   if (values.phase === '1') {
     writeFileSync(join(session, 'attribution.jsonl'), '');
-    for (const unit of attributionUnits(goals, applications, applicationsOf({ root: ROOT, baseline: values.baseline }, 'debug'))) {
+    for (const unit of attributionUnits(goals, applications, applicationsOf({ root: ROOT, baseline: values.baseline, ...indexes }, 'debug'))) {
       if (interrupt.signal.aborted) break;
       const [record] = await runUnit(unit, { ...context, trace: ATTRIBUTION_TRACE, recordsFile: 'attribution.jsonl', prefix: 'attribution-', targetsOf: unit.targets });
       if (record.failures.length > 0) failed += 1;

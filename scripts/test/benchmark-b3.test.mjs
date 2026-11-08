@@ -1,5 +1,5 @@
 // The run of the three-host benchmark (scripts/benchmark-b3.mjs, docs/operations/examples.md#three-host-benchmark): the checks of the
-// baseline checkout, of the sidecar revision record and of the plugins of the baseline hosts against the baseline record, the run
+// baseline checkout, of the sidecar releases of every application and of the plugins of the baseline hosts against the baseline record, the run
 // conditions from injected readings, the interleaved order of the five applications, the commands of the targets, the steps of runPlan
 // for each run of fixture applications, and the session folder that make check-b3 reads.
 import assert from "node:assert/strict";
@@ -14,7 +14,7 @@ import { policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 import { judgeSession, readGoals, readSession } from "../b3-judge.mjs";
 import {
   appendRecord, b3Folder, baselineRecordFile, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
-  readBaselineRecord, readCheckout, readSidecarRevisions, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarRevisionFailures,
+  readBaselineRecord, readCheckout, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarReleaseFailures,
   surfacePlugins, targetCommand, traceStateOf, unitPlan,
 } from "../benchmark-b3.mjs";
 import { traceSettings } from "../measure-trace.mjs";
@@ -52,23 +52,7 @@ test("a BASELINE checkout whose head differs from the last head of the baseline 
   assert.equal(baselineCheckoutFailures({ ...record, heads: [next] }, readCheckout(checkout), checkout).length, 1, "an untracked file is a change outside the head");
 });
 
-test("a sidecar revision of the registry record that differs from the last revision of the baseline record, or a working tree with changes, fails", { timeout: 1000 }, () => {
-  const record = baselineRecord();
-  const revisions = readSidecarRevisions(readFileSync(join(FIXTURES, "sidecar-revisions.json"), "utf8"), "target/registry/sidecar-revisions.json");
-  assert.deepEqual(sidecarRevisionFailures(record, revisions), []);
-  const older = { sidecars: revisions.sidecars.map((entry) => (entry.repository === "../sidecars/alacritty" ? { ...entry, revision: hex("a") } : entry)) };
-  assert.deepEqual(sidecarRevisionFailures(record, older), [`the registry built ../sidecars/alacritty at ${hex("a")}, which differs from the last revision ${hex("b")} of the baseline record`]);
-  const changed = { sidecars: revisions.sidecars.map((entry) => (entry.repository === "../sidecars/files" ? { ...entry, changes: true } : entry)) };
-  assert.deepEqual(sidecarRevisionFailures(record, changed), [`the working tree of ../sidecars/files held changes outside ${hex("c")} when the registry built it`]);
-  const unknown = { sidecars: [...revisions.sidecars, { repository: "../sidecars/vt", revision: hex("f"), changes: false }] };
-  assert.deepEqual(sidecarRevisionFailures(record, unknown), ["the registry built ../sidecars/vt, for which the baseline record holds no revision"]);
-  const missing = { sidecars: revisions.sidecars.slice(1) };
-  assert.deepEqual(sidecarRevisionFailures(record, missing), ["the registry built no revision of ../sidecars/alacritty, which the baseline record holds"]);
-  assert.throws(() => readSidecarRevisions(JSON.stringify({ sidecars: [{ repository: "../sidecars/vt", revision: "abc", changes: false }] }), "record.json"),
-    /^Error: record\.json: sidecar \.\.\/sidecars\/vt has the revision "abc", expected 40 hexadecimal digits$/);
-});
-
-test("the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run", { timeout: 1000 }, () => {
+test("the installed sidecars of every application and the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run", { timeout: 1000 }, () => {
   const index = {
     plugins: [
       { id: "browser", versions: [{ version: "0.0.15", release: { url: "file:///b.tgz", sha256: hex("d", 64) } }] },
@@ -95,6 +79,14 @@ test("the installed plugins of a baseline host that differ in version or sha256 
   installed.plugins.term.version = "0.0.3";
   assert.deepEqual(baselinePluginFailures(baselineRecord(), installedReleases(installed, index, "darwin-arm64")), ["the baseline host installed no release of browser, which the baseline record holds"]);
   assert.deepEqual(installedReleases(null, index, "darwin-arm64"), [], "a configuration folder without plugins/installed.json has nothing installed");
+  assert.deepEqual(sidecarReleaseFailures(baselineRecord(), releases, "mygo"), []);
+  const other = releases.map((release) => (release.kind === "sidecar" ? { ...release, version: "0.0.21", sha256: hex("7", 64) } : release));
+  assert.deepEqual(sidecarReleaseFailures(baselineRecord(), other, "mygo"),
+    [`mygo installed the sidecar fixture-sidecar 0.0.21 ${hex("7", 64)}, the baseline record holds fixture-sidecar 0.0.20 ${hex("8", 64)}`]);
+  assert.deepEqual(sidecarReleaseFailures(baselineRecord(), [...releases, { kind: "sidecar", id: "other-sidecar", version: "1", sha256: hex("6", 64) }], "wailsv3"),
+    [`wailsv3 installed the sidecar other-sidecar 1 ${hex("6", 64)}, which the baseline record does not hold`]);
+  assert.deepEqual(sidecarReleaseFailures(baselineRecord(), releases.filter((release) => release.kind === "plugin"), "tauriv2"),
+    ["tauriv2 installed no release of the sidecar fixture-sidecar, which the baseline record holds"]);
   installed.plugins.term.version = "0.0.9";
   assert.throws(() => installedReleases(installed, index, "darwin-arm64"), /^Error: the index lists no release of term 0\.0\.9$/);
 });
@@ -189,15 +181,15 @@ test("a target runs in the checkout of its application with its configuration fo
 });
 
 test("a run installs the index of its application into a new configuration folder under its session folder and starts the executable of its release bundle", { timeout: 1000 }, () => {
-  const [mygo, , , baseline] = applicationsOf({ root: "/core", baseline: "/baseline" });
+  const [mygo, , , baseline] = applicationsOf({ root: "/core", baseline: "/baseline", index: "/indexes/current.json", baselineIndex: "/indexes/baseline.json" });
   assert.equal(mygo.executable, "/core/target/release/mygo/soksak.app/Contents/MacOS/sok-mygo");
-  assert.equal(mygo.index, "/core/target/registry/index.json");
-  assert.equal(baseline.index, "/core/target/registry-public/index.json");
+  assert.equal(mygo.index, "/indexes/current.json");
+  assert.equal(baseline.index, "/indexes/baseline.json");
   const configRoot = "/core/target/b3/s/configs/S0-1-baseline-wailsv3";
   const configDir = `${configRoot}/soksak-check-wailsv3`;
   const plan = unitPlan({ application: baseline, configRoot, configDir, pluginIds: ["browser", "term"] });
   assert.deepEqual(plan.prepare.map((step) => [step.phase, step.kind, step.argv]), [
-    ["prepare", "run", [baseline.sok, "registry", "use", "/core/target/registry-public/index.json", "--config-dir", configDir]],
+    ["prepare", "run", [baseline.sok, "registry", "use", "/indexes/baseline.json", "--config-dir", configDir]],
     ["prepare", "run", [baseline.sok, "plugin", "install", "browser", "--config-dir", configDir]],
     ["prepare", "run", [baseline.sok, "plugin", "install", "term", "--config-dir", configDir]],
     ["prepare", "start", ["/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3", "--config-dir", configDir]],
@@ -430,11 +422,12 @@ function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, 
     executable: join(FIXTURES, "application.mjs"), sok: join(FIXTURES, "sok.mjs"), index: join(session, "index.json"),
   };
   writeFileSync(application.index, JSON.stringify({ plugins: [], sidecars: [] }));
-  createSession(session, { phase: "final", runs: goals.runs, applications: [application], builds: {}, toolchains: {}, baseline: baselineRecord(), sidecars: { sidecars: [] } });
+  createSession(session, { phase: "final", runs: goals.runs, applications: [application], builds: {}, toolchains: {}, baseline: baselineRecord() });
   const lines = [];
   const targets = [];
+  // The fixture index holds no sidecar, so the baseline record of the run holds none.
   const context = {
-    goals, session, write: (line) => lines.push(line), benchmarks: BENCHMARKS,
+    goals, session, write: (line) => lines.push(line), benchmarks: BENCHMARKS, baseline: { ...baselineRecord(), sidecars: [] },
     readStart: async () => ({ loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0.01 }),
     loadAverage: () => [1, 2, 3], processes: fixtureProcesses(session),
     runTarget: async (command, { target }) => {
@@ -545,14 +538,14 @@ test("a target that cannot be run fails the run, and the application of the run 
   assert.ok(lines.some((line) => line.startsWith("passed remaining processes ")), lines.join("\n"));
 });
 
-test("the session folder holds the session, the baseline record and the sidecar record, and make check-b3 reads it", { timeout: 1000 }, (t) => {
+test("the session folder holds the session and the baseline record, and make check-b3 reads it", { timeout: 1000 }, (t) => {
   const session = folder(t);
   const goals = fixtureGoals();
   const applications = applicationsOf({ root: "/core", baseline: "/baseline" });
   createSession(session, { phase: "final", runs: goals.runs, applications, builds: {}, toolchains: { go: "go1.27.3", rust: "rustc 1.91.0" },
-    baseline: baselineRecord(), sidecars: { sidecars: [] } });
+    baseline: baselineRecord() });
   assert.deepEqual(JSON.parse(readFileSync(join(session, "baseline.json"), "utf8")), baselineRecord());
-  assert.deepEqual(JSON.parse(readFileSync(join(session, "sidecar-revisions.json"), "utf8")), { sidecars: [] });
+  assert.equal(existsSync(join(session, "sidecar-revisions.json")), false);
   for (const record of readSession(join(FIXTURES, "session")).records) appendRecord(session, record);
   const read = readSession(session);
   assert.equal(read.phase, "final");
@@ -560,11 +553,15 @@ test("the session folder holds the session, the baseline record and the sidecar 
   assert.equal(judgeSession(goals, read).failures, 0);
 });
 
-test("make benchmark-b3 refuses a phase, a run count or a baseline checkout that it does not take before it reads anything", { timeout: 20000 }, () => {
+test("make benchmark-b3 refuses a phase, a run count, a baseline checkout or a registry index that it does not take before it reads anything", { timeout: 20000 }, () => {
   const run = (...vars) => spawnSync("make", ["-s", "--no-print-directory", "benchmark-b3", ...vars], { cwd: ROOT, encoding: "utf8" });
-  assert.match(run("PHASE=2", "RUNS=7", "BASELINE=/baseline").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
-  assert.match(run("PHASE=final", "RUNS=0", "BASELINE=/baseline").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
-  assert.match(run("PHASE=final", "RUNS=7").stderr, /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout>$/m);
+  const usage = /^benchmark-b3 requires PHASE=1\|final RUNS=<n> BASELINE=<checkout> INDEX=<index> BASELINE_INDEX=<index>$/m;
+  const indexes = ["INDEX=/indexes/current.json", "BASELINE_INDEX=/indexes/baseline.json"];
+  assert.match(run("PHASE=2", "RUNS=7", "BASELINE=/baseline", ...indexes).stderr, usage);
+  assert.match(run("PHASE=final", "RUNS=0", "BASELINE=/baseline", ...indexes).stderr, usage);
+  assert.match(run("PHASE=final", "RUNS=7", ...indexes).stderr, usage);
+  assert.match(run("PHASE=final", "RUNS=7", "BASELINE=/baseline", "BASELINE_INDEX=/indexes/baseline.json").stderr, usage);
+  assert.match(run("PHASE=final", "RUNS=7", "BASELINE=/baseline", "INDEX=/indexes/current.json").stderr, usage);
 });
 
 test("a target that reports a covered window fails its run", { timeout: 30000 }, async (t) => {
@@ -638,13 +635,11 @@ test("a session builds one host at a time, the Tauri hosts first, and removes th
     "build-tauriv2-release", "-C /baseline build-tauriv2-release", "build-tauriv2", "-C /baseline build-tauriv2",
     "build-wailsv3-release", "-C /baseline build-wailsv3-release", "build-wailsv3", "-C /baseline build-wailsv3",
     "build-mygo-release", "build-mygo",
-    "build-registry SIDECARS=diagnostic", "build-registry SIDECARS=diagnostic PLUGINS=public",
   ]);
   assert.deepEqual(made(buildSteps("final", "/baseline")), [
     "build-tauriv2-release", "-C /baseline build-tauriv2-release", "build-wailsv3-release", "-C /baseline build-wailsv3-release", "build-mygo-release",
-    "build-registry SIDECARS=diagnostic", "build-registry SIDECARS=diagnostic PLUGINS=public",
   ]);
-  steps.slice(0, -2).forEach((step, position) => {
+  steps.slice(0, -1).forEach((step, position) => {
     if (step.argv[0] === "make") {
       const next = steps[position + 1].argv;
       const checkout = step.argv[1] === "-C" ? "/baseline" : ROOT.replace(/\/$/, "");

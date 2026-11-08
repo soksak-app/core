@@ -13,7 +13,6 @@
 //                            "builds": {<application>: {"revision": <source revision>, "executable": <sha256 of the executable>}},
 //                            "toolchains": {"go": <go version>, "rust": <rustc version>}}
 //   baseline.json           the copy of the baseline record that the session read
-//   sidecar-revisions.json  the copy of the sidecar revision record of the workspace registry
 //   runs.jsonl              one run record per line, in the order of the runs:
 //                           {"scenario": <scenario>, "run": <1..runs>, "application": <application>,
 //                            "start": {"loadAverage": [<1 min>, <5 min>, <15 min>], "swap": {"usedBytes": <n>, "totalBytes": <n>}, "fseventsdCores": <n>},
