@@ -101,6 +101,19 @@ test("ordinary boolean OR conditions are not value fallbacks", () => {
   }).map(({ line, pattern }) => `${line} ${pattern}`), ["5 or default", "6 or default"]);
 });
 
+test("a || in the text of a string is not an operator, and a || in a template part is", () => {
+  assert.deepEqual(scan({
+    "packages/a/a.js": [
+      "const SEPARATOR = \" || \";",
+      "const quoted = 'a || b';",
+      "const escaped = \"\\\" || \";",
+      "const shown = `${left || right}`;",
+      "const label = `a || b`;",
+      "const nested = `${pick({ a: 1 }) || other} || text`;",
+    ].join("\n"),
+  }).map(({ line, pattern }) => `${line} ${pattern}`), ["4 or default", "6 or default"]);
+});
+
 test("a short or missing reason does not accept a default", () => {
   const found = scan({ "packages/a/a.js": "// default: 그냥\nconst x = y ?? 0;\n// 다른 설명\nconst z = y ?? 1;\n" });
   assert.deepEqual(found.map((item) => item.line), [2, 4]);

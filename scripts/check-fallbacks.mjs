@@ -53,9 +53,51 @@ const language = (file) => {
 const COMMENT = /^\s*(\/\/|\*|\/\*)/;
 const OR_OPERATOR = /\|\|(?![=])/g;
 
+/**
+ * The positions of a line that are text of a string literal: the characters between the quotes of a `'…'` or `"…"` string, and
+ * the text of a template literal outside its `${…}` parts. A `||` there is a character of the text, not an operator.
+ */
+function stringText(line) {
+  const text = new Set();
+  const open = [];
+  let quote = null;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (quote !== null) {
+      if (char === "\\") {
+        text.add(index);
+        text.add(index + 1);
+        index += 1;
+      } else if (char === quote) {
+        quote = null;
+      } else if (quote === "`" && char === "$" && line[index + 1] === "{") {
+        open.push(0);
+        quote = null;
+        index += 1;
+      } else {
+        text.add(index);
+      }
+    } else if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+    } else if (open.length > 0 && char === "{") {
+      open[open.length - 1] += 1;
+    } else if (open.length > 0 && char === "}") {
+      if (open[open.length - 1] === 0) {
+        open.pop();
+        quote = "`";
+      } else {
+        open[open.length - 1] -= 1;
+      }
+    }
+  }
+  return text;
+}
+
 /** A logical OR used as a value fallback. A boolean condition remains plain logic. */
 function hasOrDefault(line) {
+  const text = stringText(line);
   for (const match of line.matchAll(OR_OPERATOR)) {
+    if (text.has(match.index)) continue;
     const before = line.slice(0, match.index);
     const after = line.slice(match.index + match[0].length).trimStart();
     // A `||` inside an expression that makes a condition or a boolean is not a fallback.
