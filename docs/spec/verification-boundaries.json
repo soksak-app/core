@@ -427,6 +427,11 @@
       "reason": "Checks that a full-screen card lists the space's apps by card and switches to a picked one. `plain-view` tabs would replace terminal and browser."
     },
     {
+      "file": "e2e/supplier-draw.mjs",
+      "owner": "tool",
+      "reason": "Measurement helper of e2e/outside.test.mjs that reads the draw records `sidecar.vt.frame` of the terminal sidecar; reduce it to the frame records of the raster probe sidecar `rasterprobe`."
+    },
+    {
       "file": "e2e/surface-sync-turn.test.mjs",
       "owner": "core",
       "reason": "Checks that a surface layout runs in one main-thread turn. `plain-view` would replace the terminal card."
@@ -704,7 +709,7 @@
     {
       "file": "scripts/test/benchmark-b3.test.mjs",
       "owner": "mixed",
-      "reason": "\"the surface plugins are the installed plugins whose manifest declares a surface\" -> core (fake manifests, but it reads plugins/term and plugins/files and should use e2e/fixtures manifests); \"the targets of a scenario come from the goals…\", \"the runs interleave the five applications…\", \"the sessions of B3 live beside the baseline record…\", \"the session folder holds the session, the baseline record and the sidecar record…\", \"the run reads the declarations of the e2e benchmarks…\", \"the run conditions are read from injected readings…\" -> core (measurement harness; fixture data names term/browser and should use view-drag/plain-view ids)"
+      "reason": "\"the surface plugins are the installed plugins whose manifest declares a surface\" -> core (fake manifests, but it reads plugins/term and plugins/files and should use e2e/fixtures manifests); \"the targets of a scenario come from the goals…\", \"the runs interleave the five applications…\", \"the sessions of B3 live beside the baseline record…\", \"the session folder holds the session and the baseline record…\", \"the run reads the declarations of the e2e benchmarks…\", \"the run conditions are read from injected readings…\" -> core (measurement harness; fixture data names term/browser and should use view-drag/plain-view ids)"
     },
     {
       "file": "scripts/test/candidate-acceptance.test.mjs",
@@ -730,26 +735,6 @@
       "file": "scripts/test/measure-terminal-redraw.test.mjs",
       "owner": "core",
       "reason": "Tests the redraw measurement harness (window server, presentedFrames, CPU per frame) for \"the plugin\" of a terminal tab. Replace with a fake fixture that presents an image region and accepts fixture rows (view-drag native raster)."
-    },
-    {
-      "file": "scripts/test/native-pkgconfig.test.mjs",
-      "owner": "tool",
-      "reason": "Tests build targets (\"Rust clippy … avoids the workspace registry\", \"registry and workspace lint targets\") that guard against building real plugins. Keep it and reduce the expectations once the workspace registry is removed."
-    },
-    {
-      "file": "scripts/test/workspace-registry.test.mjs",
-      "owner": "tool",
-      "reason": "Tests the workspace registry builder, which runs make install/release in the sibling plugin and sidecar repositories and lists public plugin versions. Remove it from core or reduce it to e2e/fixtures payloads."
-    },
-    {
-      "file": "scripts/workspace-registry.json",
-      "owner": "tool",
-      "reason": "Declares the real sibling repositories (plugins/browser, editor, files, hwp, term, terminal and sidecars) for the workspace registry. Remove it or replace it with e2e/fixtures entries."
-    },
-    {
-      "file": "scripts/workspace-registry.mjs",
-      "owner": "tool",
-      "reason": "Builds a registry by running `make release` in each declared real plugin/sidecar repository and writing index.json. Remove it from core or reduce it to packaging the fixtures."
     }
   ]
 }

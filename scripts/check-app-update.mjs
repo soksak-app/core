@@ -8,6 +8,8 @@
 // `make check-app-update` runs it.
 //
 //   node scripts/check-app-update.mjs --host wailsv3|tauriv2|mygo --bundle PATH --registry INDEX
+// INDEX is the index of the fixture registry (`make build-fixture-registry`), to which the check adds the core release; no plugin
+// repository and no published registry takes part.
 import { parseArgs } from "node:util";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";

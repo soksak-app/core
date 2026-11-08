@@ -132,7 +132,6 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("Temporary folders of runs", "js-ts", ["scripts/temporary-folder.mjs"], ["scripts/test/temporary-folder.test.mjs"]),
   lane("fixture registry", "js-ts", ["scripts/fixture-registry.mjs"], ["scripts/test/fixture-registry.test.mjs"]),
-  lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platform-files.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs", "scripts/test/surface-names.test.mjs"]),
@@ -562,7 +561,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F705",
-    implementation: [{ file: "Makefile", symbol: "check-host-debug: check-cargo build-native build-native-tests copy-core-frontend-wailsv3" }],
+    implementation: [{ file: "Makefile", symbol: "check-host-debug: check-cargo build-native build-native-tests copy-frontend-wailsv3" }],
     tests: [{ file: "scripts/test/host-debug-check.test.mjs", id: "the debug check builds the native test library that the compiled tests link" }],
     expected: "The debug check builds the native test library before it compiles the Go tests that link it, so it passes on a checkout that has built nothing.",
     levels: ["unit"],
@@ -881,17 +880,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/check-tests.mjs", symbol: 'id: "F664"' }],
     tests: [{ file: "scripts/test/check-tests.test.mjs", id: "completed capability entries all have feature evidence links" }],
     expected: "Final completion records retain their actual owning test links and distinguish verification-only work from product capabilities.",
-    levels: ["unit"],
-  },
-  {
-    id: "F664-4",
-    implementation: [{ file: "Makefile", symbol: "install-plugins:" }],
-    tests: [
-      { file: "scripts/test/test-app.test.mjs", id: "plugin installation consumes the built registry without rebuilding sibling sources" },
-      { file: "scripts/test/test-app.test.mjs", id: "plugin installation rejects missing build inputs before removing installed plugins" },
-      { file: "scripts/test/test-app.test.mjs", id: "plugin installation uses the existing registry and replaces the installed set" },
-    ],
-    expected: "Installation consumes the existing registry without rebuilding it, rejects missing executable or index before any CLI mutation, and preserves the declared installation command order. Native payload installation and identity acceptance are separate.",
     levels: ["unit"],
   },
   {
@@ -1372,30 +1360,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F502-2-5",
-    implementation: [
-      { file: "scripts/workspace-registry.mjs", symbol: "export async function buildWorkspaceRegistry(" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function sourceRevision(" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function checkOptions(" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function publicRegistryEntries(" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export async function buildPublicRegistry(" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export async function readIndex(" },
-    ],
-    tests: [
-      { file: "scripts/test/workspace-registry.test.mjs", id: "SIDECARS=diagnostic releases each sidecar with PROFILE=release FEATURES=diagnostics and records the revision of each sidecar repository" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "the default registry releases each sidecar as its make release builds it and removes the revision record of an earlier diagnostic run" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "the revision of a sidecar repository counts a tracked modification as a change and fails for a folder without a repository" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "the registry options take SIDECARS=diagnostic and PLUGINS=public, and PLUGINS=public only with SIDECARS=diagnostic" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public lists the plugin versions of the public registry whose sidecar ranges the diagnostic sidecar releases satisfy" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when leaving out a version would make an installation select an older version or no version" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public writes the public plugin entries beside the sidecar entries of make build-registry SIDECARS=diagnostic and builds no release" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "PLUGINS=public fails when the checkout holds no sidecar releases of make build-registry SIDECARS=diagnostic" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "the index of the public registry is read from its address, and an answer other than 200 is an error" },
-    ],
-    expected: "`make build-registry SIDECARS=diagnostic` runs `make release PROFILE=release FEATURES=diagnostics` of each sidecar repository and writes `sidecar-revisions.json` beside its index with the revision and the working tree changes of each sidecar repository; `make build-registry SIDECARS=diagnostic PLUGINS=public` packs and builds nothing and writes an index of the plugins of the public registry beside those sidecar releases, and fails when they are missing.",
-    levels: ["unit"],
-  },
-  {
     id: "F502-2-3",
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function prepareState(s, state, deps)" },
@@ -1685,7 +1649,7 @@ const FEATURE_LINKS = [
       { file: "scripts/b3-judge.mjs", symbol: "export function judgeSession(goals, session) {" },
       { file: "scripts/b3-judge.mjs", symbol: "export function targetConditionFailures(goals, scenario, conditions) {" },
       { file: "scripts/benchmark-b3.mjs", symbol: "export function baselineCheckoutFailures(record, { head, status }, path) {" },
-      { file: "scripts/benchmark-b3.mjs", symbol: "export function sidecarRevisionFailures(record, revisions) {" },
+      { file: "scripts/benchmark-b3.mjs", symbol: "export function sidecarReleaseFailures(record, releases, name) {" },
       { file: "scripts/benchmark-b3.mjs", symbol: "export function baselinePluginFailures(record, releases) {" },
       { file: "scripts/benchmark-b3.mjs", symbol: "export function sessionUnits(goals, runs, applications) {" },
       { file: "scripts/benchmark-b3.mjs", symbol: "export function readTargetOutput(file, { goals, scenario, target, application, trace, code, benchmarks }) {" },
@@ -1717,8 +1681,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/b3-judge.test.mjs", id: "the goals are rejected when they do not hold the format that the judge applies" },
       { file: "scripts/test/b3-judge.test.mjs", id: "make check-b3 judges a session folder against docs/spec/performance-goals.json and exits with status 1 when a value fails" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a BASELINE checkout whose head differs from the last head of the baseline record or whose working tree holds changes fails before the first run" },
-      { file: "scripts/test/benchmark-b3.test.mjs", id: "a sidecar revision of the registry record that differs from the last revision of the baseline record, or a working tree with changes, fails" },
-      { file: "scripts/test/benchmark-b3.test.mjs", id: "the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the installed sidecars of every application and the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "the surface plugins are the installed plugins whose manifest declares a surface" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "the run conditions are read from injected readings of swap use, of fseventsd and of the display" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a swap total of zero leaves no swap in use, so the run may start" },
@@ -1739,8 +1702,8 @@ const FEATURE_LINKS = [
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a run of a fixture application measures each scenario of its unit in one application and writes one record per scenario into the session folder" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a failed benchmark is the verdict failed of its row, and a target that exits with another code than 0 fails the run" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a target that cannot be run fails the run, and the application of the run quits" },
-      { file: "scripts/test/benchmark-b3.test.mjs", id: "the session folder holds the session, the baseline record and the sidecar record, and make check-b3 reads it" },
-      { file: "scripts/test/benchmark-b3.test.mjs", id: "make benchmark-b3 refuses a phase, a run count or a baseline checkout that it does not take before it reads anything" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the session folder holds the session and the baseline record, and make check-b3 reads it" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "make benchmark-b3 refuses a phase, a run count, a baseline checkout or a registry index that it does not take before it reads anything" },
       { file: "scripts/test/test-kinds.test.mjs", id: "a root target that starts an application through the start step of runPlan outside the test-app and benchmark targets is reported" },
       { file: "scripts/test/test-app.test.mjs", id: "a failed start skips the quit of its application, so the run reports the start as its one failure" },
     ],
@@ -11584,14 +11547,12 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_sidecar_release" },
       { file: "packages/sok/go/src/registry.go", symbol: "func checkSidecarRelease" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function releaseSidecar(" },
     ],
     tests: [
       { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_sidecar_release_without_its_executable" },
       { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesASidecarReleaseWithoutItsExecutable" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "a sidecar is released by the make release target of its repository, which receives only the output folder" },
     ],
-    expected: "sok plugin install extracts a sidecar release from package/ and refuses one without the executable of its sidecar.json; the workspace registry runs make release of a sidecar repository.",
+    expected: "sok plugin install extracts a sidecar release from package/ and refuses one without the executable of its sidecar.json.",
     levels: ["unit"],
   },
   {
@@ -11608,9 +11569,8 @@ const FEATURE_LINKS = [
       { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseEntryOutsidePackage" },
       { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithoutTheViewPage" },
       { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithABinaryPath" },
-      { file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository, which receives only the output folder" },
     ],
-    expected: "sok plugin install reads the pnpm pack layout of a plugin release and refuses an entry outside package/, a release without the modules that plugin.json loads and a file under .binary; the workspace registry passes only the output folder to make pack.",
+    expected: "sok plugin install reads the pnpm pack layout of a plugin release and refuses an entry outside package/, a release without the modules that plugin.json loads and a file under .binary.",
     levels: ["unit"],
   },
   {
@@ -12655,27 +12615,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: ".github/workflows/release.yml", symbol: "name: Package the releases that plugins and sidecars build with" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],
     expected: "The core release holds sok and the packed releases of @soksak/plugin-api and @soksak/native-process-identity-darwin.",
-    levels: ["unit"],
-  },
-  {
-    id: "F275-2",
-    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "// make -C runs the target in the repository, so the path that it receives is absolute." }],
-    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a relative output folder of a pack resolves from the working directory, not from the plugin repository" }],
-    expected: "The workspace registry passes an absolute output folder to the make pack target of a plugin repository.",
-    levels: ["unit"],
-  },
-  {
-    id: "F275-1",
-    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function installFolders(" }],
-    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "the installation stage runs make install once in every declared repository" }],
-    expected: "The installation stage runs make install once in every declared plugin and sidecar repository.",
-    levels: ["unit"],
-  },
-  {
-    id: "F275",
-    implementation: [{ file: "scripts/workspace-registry.mjs", symbol: "export function packPlugin(" }],
-    tests: [{ file: "scripts/test/workspace-registry.test.mjs", id: "a plugin is packed by the make pack target of its repository, which receives only the output folder" }],
-    expected: "The workspace registry packs each plugin with the make pack target of its repository and records the one release that the target adds.",
     levels: ["unit"],
   },
   {
@@ -14635,11 +14574,13 @@ const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "
 // F239-201, F239-229, F608 and F684 wrote the build target of the captured-text recognizer, the crop of a frame that it read and the
 // statement of its failure, which F696-4-4 removes with the recognizer: a window check reads the content of a view from the public
 // value that holds it.
+// F275, F275-1, F275-2 and F664-4 wrote the pack, the output folder and the installation stage of the workspace registry and the
+// installation of its plugins into a configuration, which F715-3 removes with the workspace registry: core builds no plugin repository.
 const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
-  "F239-201", "F239-229", "F608", "F684"]);
+  "F239-201", "F239-229", "F608", "F684", "F275", "F275-1", "F275-2", "F664-4"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));
