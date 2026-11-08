@@ -87,3 +87,20 @@ export function gripInk(image, rect, ratio, threshold = 16) {
   return { longest, total, runs, span: first < 0 ? 0 : last - first + 1, length: to - from };
 }
 
+
+/**
+ * The rectangle that the native surface of a card's active tab must take in the window: the card inside its border, below the head and
+ * above the foot, less the extent of each side (docs/spec/example-model.md). plane is the origin of the plane in the window, and metrics
+ * holds border, head, foot and divider in points. An open side takes its shown size, which is smaller than its stored size when the card
+ * cannot hold both that size and the layout minimum of the content.
+ */
+export function panelSurfaceRect(plane, card, metrics) {
+  const { border, head, foot, divider } = metrics;
+  const band = (side) => (card.sidebars?.[side] ? (card.sidebars[side].collapsed ? divider : card.sidebars[side].shownSize) : 0);
+  return {
+    x: plane.x + card.x + border + band("left"),
+    y: plane.y + card.y + border + head + band("top"),
+    w: card.w - 2 * border - band("left") - band("right"),
+    h: card.h - 2 * border - head - foot - band("top") - band("bottom"),
+  };
+}
