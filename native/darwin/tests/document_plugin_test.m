@@ -117,6 +117,10 @@ int main(void) { @autoreleasepool {
 
         check(!sp_document_post(document, "{\"ping\":1}"), @"a document that is not a plugin document has no message channel");
         check(sp_document_load(document, "soksak://probe/ui/app/index.html"), @"a region loads a sok address");
+        // The load has not committed yet, so the current document is still the empty document before the first load, which is not a
+        // plugin document; a post now is refused instead of running in that document (docs/spec/native-surfaces.md#document-regions).
+        check(!sp_document_post(document, "{\"ping\":3}"),
+            @"a plugin document whose load has not committed has no message channel, although the web view reports its address");
         until(@"the plugin page module runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
         check([latest[@"title"] isEqual:@"ready soksak://probe"],
             [NSString stringWithFormat:@"the plugin document has the origin of its plugin: %@", latest[@"title"]]);

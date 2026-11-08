@@ -410,6 +410,10 @@ static void frameIdentityClose(SPDocumentView *view);
 // because when the replaced earlier navigation is cancelled, WKWebView.loading becomes NO before the new navigation
 // starts.
 @property(retain) WKNavigation *navigation;
+// The address of the current document: the address of the last committed main frame navigation, or nil while no document has
+// committed or after the WebContent process ended. WKWebView.URL reports the address of a navigation that has not committed yet,
+// whose document is not the current one.
+@property(copy) NSURL *committedURL;
 // The navigation that was last counted in navigations, so a navigation is counted once, when it starts.
 @property(retain) WKNavigation *countedNavigation;
 // The number of navigations that the document has started. A progress change of a navigation does not change it, so the host
@@ -949,6 +953,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     [_plugin release];
     [_binaries release];
     [_navigation release];
+    [_committedURL release];
     [_countedNavigation release];
     [_eventMonitor release];
     [_webSurface release];
@@ -1145,6 +1150,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // A main frame commit, a reload included, replaces every frame document, so every form flag is cleared.
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
     if (self.pluginRootView) self.viewDocumentCommitted = YES;
+    self.committedURL = view.URL;
     [self.formFrames removeAllObjects];
     self.ready = NO;
     self.dirty = NO;
@@ -1216,6 +1222,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_log_error("document view", [NSString stringWithFormat:@"web content process terminated: %@", self.URL.absoluteString].UTF8String);
     self.navigation = nil;
+    self.committedURL = nil;
     self.failure = @"the web content process ended";
     [self report];
     if (self.viewEnded && !self.closed) self.viewEnded(self.viewEndedContext);
@@ -1754,7 +1761,9 @@ bool sp_document_post(void *handle, const char *json) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     if (!view || view.closed || !json || !view.plugin) return false;
-    NSURL *url = view.URL;
+    // The post runs in the current document, so the address of the committed document decides whether it is a plugin document of
+    // the region's plugin; a load that has not committed has not replaced the current document.
+    NSURL *url = view.committedURL;
     if (![url.scheme.lowercaseString isEqualToString:kApplicationScheme] || ![url.host isEqualToString:view.plugin]) return false;
     // The document parses the text: converting a message into an object here and that object into a script value costs the host
     // CPU in proportion to the message size at each post.
