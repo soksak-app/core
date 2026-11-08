@@ -28,6 +28,8 @@ type elementPlatform struct {
 	held     []unsafe.Pointer
 	settled  func(float64, error)
 	titlebar int
+	// heights are the title bar heights that were set at once.
+	heights []float64
 }
 
 func (p *elementPlatform) RetainView(view unsafe.Pointer) { p.held = append(p.held, view) }
@@ -38,6 +40,11 @@ func (p *elementPlatform) ReleaseView(view unsafe.Pointer) {
 		panic("a view that is not held was released")
 	}
 	p.held = slices.Delete(p.held, index, index+1)
+}
+
+func (p *elementPlatform) SetTitlebarHeight(_ platform.Window, height float64) error {
+	p.heights = append(p.heights, height)
+	return nil
 }
 
 func (p *elementPlatform) StartPageTitlebar(_ platform.Window, _ uint64, _ float64, ready func(error)) error {
@@ -159,14 +166,18 @@ func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	}
 }
 
-// A window without a main page has no first row to wait for: the workbench sets its title bar with its layout.
+// A window without a main page has no first row to wait for: its title bar takes the row of the common settings at once, and the
+// workbench gives each later row with its layout.
 // contract: application.window.no-main-page-starts-without-the-page-title-bar
 func TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar(t *testing.T) {
 	surfaces, fake := elements(t, &elementWindow{})
-	if err := surfaces.startTitlebar(Record{}); err != nil {
+	if err := surfaces.startTitlebar(Record{"textSize": 2.0}); err != nil {
 		t.Fatal(err)
 	}
 	if fake.titlebar != 0 {
 		t.Fatal("the start asked for the title bar of a main page")
+	}
+	if !slices.Equal(fake.heights, []float64{72}) {
+		t.Fatalf("the start set the title bar to %v, want the first row 72 of factor 2", fake.heights)
 	}
 }

@@ -653,10 +653,6 @@ func StartTitlebarHeight(common Record) (float64, error) {
 // is set immediately, and a window that shows the previous page is set inside the start transaction of the new ticket and committed together with the first display of the new page
 // (docs/spec/native-surfaces.md#title-bar-height). A full screen window does not change the height.
 func (s *Surfaces) startTitlebar(common Record) error {
-	// A window without a main page has no first row to wait for: its workbench gives the height with its layout.
-	if s.elements.drawn {
-		return nil
-	}
 	height, err := StartTitlebarHeight(common)
 	if err != nil {
 		return err
@@ -664,6 +660,13 @@ func (s *Surfaces) startTitlebar(common Record) error {
 	win, ok := s.window, s.window != nil
 	if !ok {
 		return errNoWindow
+	}
+	// A window without a main page has no first row to wait for: the title bar takes the row at once, and the workbench gives each
+	// later row with its layout. A shown window held the frame of its last workbench, which placed the row of the same settings.
+	if s.elements.drawn {
+		var set error
+		mainThreadStep(func() { set = system.SetTitlebarHeight(win.NativeWindow(), height) })
+		return set
 	}
 	done := make(chan error, 1)
 	mainThreadStep(func() {
