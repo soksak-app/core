@@ -1,0 +1,11 @@
+{
+  "name": "@sok-check/layoutprobe",
+  "version": "0.0.40",
+  "private": true,
+  "type": "module",
+  "description": "Window check fixture: a view with a document region, sections, settings and a right sidebar override that reports what core gives its views.",
+  "license": "MIT",
+  "repository": "git+https://github.com/soksak-app/core.git",
+  "engines": { "soksak": "*" },
+  "files": ["plugin.json", "ui"]
+}

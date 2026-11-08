@@ -1,0 +1,19 @@
+{
+  "id": "layoutprobe2",
+  "name": "Layout probe 2",
+  "description": "Window check fixture: a tab view without sidebar defaults that reports its size, so a window sidebar beside its tab keeps the general choice and draws no rail.",
+  "surface": { "composition": { "kind": "view", "page": "ui/page.html" } },
+  "mark": "M",
+  "icon": "<circle cx=\"8\" cy=\"8\" r=\"5\"/>",
+  "exposes": {
+    "status": [
+      {
+        "name": "layoutprobe2.surface",
+        "description": "The surface id and the size and scale of the tab view.",
+        "schema": { "type": "object", "properties": { "surface": { "type": "string" }, "width": { "type": "number" }, "height": { "type": "number" }, "scale": { "type": "number" } } }
+      }
+    ],
+    "commands": [],
+    "element": []
+  }
+}
