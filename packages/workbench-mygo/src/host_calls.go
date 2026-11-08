@@ -182,8 +182,10 @@ type Calls struct {
 	table map[string]HostCall
 	ctx   context.Context
 	post  func(task func())
-	// observer receives every call that ended, in the step of its answer.
-	observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)
+	// observer receives every call that ended, in the step of its answer, with the reading of now at its end.
+	observer func(name string, argument any, cids []string, ended time.Time, elapsed time.Duration, failure error)
+	// now is the clock of the observer, which the calls read at their start and their end.
+	now func() time.Time
 	// transcribe receives every call that ended with its answer, in the step of its answer (diagnostics.transcript).
 	transcribe func(name string, argument, value any, failure error)
 	mu         sync.Mutex
@@ -205,8 +207,10 @@ func NewHostCalls(h *host.Host, window host.Frontend, post func(task func())) *C
 	return calls
 }
 
-// Observe installs the observer of the calls (docs/spec/logging.md#entrances), before the first call.
-func (c *Calls) Observe(observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)) {
+// Observe installs the observer of the calls (docs/spec/logging.md#entrances) and its clock, before the first call. A call ends
+// before the step of its answer runs, so the calls read now when the call ends and give the observer that reading.
+func (c *Calls) Observe(now func() time.Time, observer func(name string, argument any, cids []string, ended time.Time, elapsed time.Duration, failure error)) {
+	c.now = now
 	c.observer = observer
 }
 
@@ -288,16 +292,20 @@ func (c *Calls) start(ctx context.Context, name string, argument any, cids []str
 			finished()
 			return
 		}
-		started := time.Now()
+		now := c.now
+		if now == nil {
+			now = time.Now
+		}
+		started := now()
 		value, err := c.invoke(ctx, name, argument, cids)
-		elapsed := time.Since(started)
+		ended := now()
 		finished()
 		c.post(func() {
 			if c.ended.Load() {
 				return
 			}
 			if c.observer != nil {
-				c.observer(name, argument, cids, elapsed, err)
+				c.observer(name, argument, cids, ended, ended.Sub(started), err)
 			}
 			if c.transcribe != nil {
 				c.transcribe(name, argument, value, err)

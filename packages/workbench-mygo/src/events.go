@@ -221,9 +221,13 @@ func (e *Events) BeginOperation(event string, fields map[string]any) []string {
 	return cids
 }
 
-// Call stores the event workbench.call of a host call that ended (docs/spec/logging.md#entrances): the level is debug, and
-// warn for a refused call. The arguments are read only for an event that the gate stores.
-func (e *Events) Call(name string, argument any, cids []string, elapsed time.Duration, failure error) {
+// Clock is the clock of the events, which the observer of the host calls reads (Calls.Observe).
+func (e *Events) Clock() func() time.Time { return e.options.Now }
+
+// Call stores the event workbench.call of a host call that ended at ended (docs/spec/logging.md#entrances): the event has the
+// time of the end of the call and not of the later step of its answer, so its start is ended less elapsed. The level is debug,
+// and warn for a refused call. The arguments are read only for an event that the gate stores.
+func (e *Events) Call(name string, argument any, cids []string, ended time.Time, elapsed time.Duration, failure error) {
 	if unrecordedCalls[name] {
 		return
 	}
@@ -234,7 +238,7 @@ func (e *Events) Call(name string, argument any, cids []string, elapsed time.Dur
 	if failure != nil {
 		level = sok.LevelWarn
 	}
-	e.Emit(level, "workbench.call", func() map[string]any {
+	e.emit(ended, level, "workbench.call", func() map[string]any {
 		arguments := []any{}
 		if argument != nil {
 			arguments = append(arguments, argument)
@@ -343,6 +347,11 @@ func (e *Events) End() {
 // batch reports the count as workbench.log.dropped; an identifier that the host would refuse is left out of the event and reported,
 // so one identifier does not refuse a whole batch.
 func (e *Events) Emit(level sok.Level, event string, fields func() map[string]any, cids []string) {
+	e.emit(e.options.Now(), level, event, fields, cids)
+}
+
+// emit is Emit for an event whose time is the reading at of the clock of the events.
+func (e *Events) emit(at time.Time, level sok.Level, event string, fields func() map[string]any, cids []string) {
 	if e.ended {
 		return
 	}
@@ -367,7 +376,7 @@ func (e *Events) Emit(level sok.Level, event string, fields func() map[string]an
 		e.options.Report(fmt.Sprintf("event %s: %v", event, err))
 		cids = nil
 	}
-	e.queue = append(e.queue, queuedEvent{at: e.options.Now(), level: level, event: event, fields: stored, cids: cids, charge: charge})
+	e.queue = append(e.queue, queuedEvent{at: at, level: level, event: event, fields: stored, cids: cids, charge: charge})
 	e.queueBytes += charge
 	e.schedule()
 }

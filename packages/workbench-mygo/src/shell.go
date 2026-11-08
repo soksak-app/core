@@ -427,7 +427,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.verification = NewVerification()
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
-	s.calls.Observe(s.events.Call)
+	s.calls.Observe(s.events.Clock(), s.events.Call)
 	s.exposedFocus.OnTransition(s.events.Info)
 	s.registry.Record(s.events.Command)
 	s.registry.Follow(s.followCommand)
