@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   checkViewDisplay as acceptViewDisplay, expectedPresentations, observeViewDisplay as checkViewDisplay, rasterIdentity,
-  viewPresentationJoins,
+  viewPresentationJoins, viewWebviews,
 } from "../view-display.mjs";
 
 /** A window with two installed views but only one open card, and decoded frames of that card. */
@@ -259,4 +259,27 @@ test("a view that the baseline rows do not cover is rejected instead of awaited"
     traceRow("surface", { phase: "created", surface: "tab-pre4dr" }), placed("tab-pre4dr", 403, 180)];
   assert.deepEqual(expectedPresentations(baseline, window, ["tab-l3zyob", "tab-pmhp35", "tab-pre4dr"]),
     ["tab-l3zyob", "tab-pre4dr"]);
+});
+
+test("each loaded view surface of core.surfaces counts one view web view, shown or retained", () => {
+  // The window of the view-surfaces check: a raster probe tab was added to the card of a layout probe tab, which keeps its view
+  // retained behind it; two more raster probe cards and a second layout probe card are shown, and a sidebar holds one section.
+  const entry = (surface, plugin, fields = {}) => ({ surface, plugin, kind: "tab", sidebar: null, visible: true, composition: "view",
+    placeholder: null, state: "loaded", ...fields });
+  const surfaces = [
+    entry("tab-top", "layoutprobe"),
+    entry("tab-r1", "rasterprobe"), entry("tab-r2", "rasterprobe"), entry("tab-r3", "rasterprobe"),
+    entry("tab-split", "layoutprobe"),
+    entry("tab-behind", "layoutprobe", { visible: false }),
+    entry("spc-1/left/layoutprobe.list", "layoutprobe", { kind: "section", sidebar: "left", visible: false }),
+    // Neither an unloaded tab nor a placeholder has a view web view.
+    entry("tab-unloaded", "layoutprobe", { visible: false, state: "unloaded" }),
+    { surface: "tab-missing", plugin: "gone", visible: true, placeholder: "missing", composition: null, kind: "tab", sidebar: null },
+  ];
+  const views = viewWebviews(surfaces);
+  assert.deepEqual(views.tabs.map((item) => item.surface),
+    ["tab-top", "tab-r1", "tab-r2", "tab-r3", "tab-split", "tab-behind"]);
+  assert.deepEqual(views.sections.map((item) => item.surface), ["spc-1/left/layoutprobe.list"]);
+  assert.throws(() => viewWebviews([entry("tab-x", "layoutprobe", { state: "restoring" })]), /tab-x/,
+    "a view whose web view is being restored has no count yet");
 });

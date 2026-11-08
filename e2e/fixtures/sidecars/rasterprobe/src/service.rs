@@ -690,13 +690,23 @@ impl Service {
     }
 
     fn image_message(&mut self, conn: Conn, key: &(String, String), image: &Map<String, Value>, out: &mut Vec<Out>) {
-        let Some((kind, value)) = image.iter().next() else { return };
-        let Some(fields) = value.as_object() else { return };
+        // The refusal of a frame is the one image message without a member object: its member error is the reason, beside the
+        // identity of the frame (docs/spec/sidecars.md#image-envelope).
+        let (kind, fields) = if image.get("error").is_some_and(Value::is_string) {
+            ("error", image)
+        } else {
+            let Some((kind, value)) = image.iter().next() else { return };
+            let Some(fields) = value.as_object() else {
+                out.push(Out { conn, line: envelope(&key.1, &[], json!({"error": format!("image message {kind} is not an object")})) });
+                return;
+            };
+            (kind.as_str(), fields)
+        };
         let name = text(fields, "name").unwrap_or_default().to_string();
         let generation = integer(fields, "generation").unwrap_or(0);
         let state = self.surfaces.get_mut(key).expect("the surface message entered the surface");
         let retired = state.retired.as_ref().is_some_and(|(retired, at)| *retired == name && generation <= *at);
-        match kind.as_str() {
+        match kind {
             "configure" => {
                 if retired || state.image.as_ref().is_some_and(|image| image.generation.is_some_and(|current| current > generation)) {
                     return;
@@ -754,7 +764,7 @@ impl Service {
             }
             "leased" | "consumed" | "released" | "error" => {
                 let ident: Ident = (name, generation, integer(fields, "raster").unwrap_or(0), integer(fields, "sequence").unwrap_or(0));
-                match kind.as_str() {
+                match kind {
                     "released" => {
                         state.held.remove(&ident);
                     }
@@ -768,7 +778,11 @@ impl Service {
                         }
                         if answered == "error" {
                             let reason = text(fields, "error").unwrap_or_default().to_string();
-                            if let Some(image) = &mut state.image {
+                            // A stale frame was replaced by a newer raster before the host presented it, which is no failure of
+                            // the region (docs/spec/sidecars.md#image-envelope); the due frame of the newer raster follows.
+                            if reason != "stale"
+                                && let Some(image) = &mut state.image
+                            {
                                 image.error = Some(reason);
                             }
                         } else if let Some(image) = &mut state.image {
@@ -1120,6 +1134,36 @@ mod tests {
         assert!(lines.is_empty());
         let lines = send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
         assert_eq!(lines[0]["body"]["image"]["sequence"], 1);
+    }
+
+    #[test]
+    fn a_refused_frame_ends_its_wait_and_the_new_raster_is_drawn() {
+        // A shown region is announced as drawing before its new raster, so the frame of the old raster is in flight when the
+        // configure arrives; the host refuses it with the error answer of docs/spec/sidecars.md#image-envelope, whose member
+        // error is the reason beside the identity of the frame.
+        let (mut service, _) = service();
+        hello(&mut service, 1);
+        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
+        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
+        send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
+        send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}})));
+        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": false, "hidden": true}})));
+        let shown = send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
+        assert_eq!((shown[0]["body"]["image"]["raster"].as_u64(), shown[0]["body"]["image"]["sequence"].as_u64()), (Some(1), Some(2)));
+        let configured = send(&mut service, 1, host("tab-1",
+            json!({"configure": {"name": "raster", "generation": 1, "raster": 2, "width": 8, "height": 16, "scale": 1.0}})));
+        assert!(configured.is_empty(), "the frame in flight holds the frame of the new raster");
+        let refused = send(&mut service, 1, host("tab-1",
+            json!({"error": "stale", "name": "raster", "generation": 1, "raster": 1, "sequence": 2})));
+        assert_eq!(refused.len(), 2, "the refusal ends the wait and the due frame is drawn: {refused:?}");
+        assert_eq!((refused[0]["body"]["image"]["raster"].as_u64(), refused[0]["body"]["image"]["sequence"].as_u64()), (Some(2), Some(1)));
+        let state = send(&mut service, 1, page("tab-1", json!({"operation": "state"})));
+        assert_eq!(state[0]["body"]["error"], Value::Null, "a stale frame is no failure of the region");
+        let failed = send(&mut service, 1, host("tab-1",
+            json!({"error": "presentFailed", "name": "raster", "generation": 1, "raster": 2, "sequence": 1})));
+        assert!(failed.is_empty(), "a failed frame draws nothing until the host configures again: {failed:?}");
+        let state = send(&mut service, 1, page("tab-1", json!({"operation": "state"})));
+        assert_eq!(state[0]["body"]["error"], "presentFailed", "the session reports the reason of a failed frame");
     }
 
     #[test]
