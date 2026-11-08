@@ -33,8 +33,8 @@ async function pluginChange(s, action, run) {
 const PROBE_COLOUR = [30, 30, 30];
 
 /** Installs the probe, opens it to the right of a card and returns the session state of its drag. */
-async function openProbe(s, app, prepare) {
-  const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok") });
+async function openProbe(t, s, app, prepare) {
+  const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
   s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
   s.cleanup(async () => {
     await s.windows(1, "the page was not ready for the cleanup");
@@ -59,7 +59,7 @@ async function openProbe(s, app, prepare) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the drag of a view without plugin code reports the floor of its latency with traces disabled`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    const { surface, grid, card } = await openProbe(s, app, () => fresh(s, { performanceTrace: false }));
+    const { surface, grid, card } = await openProbe(t, s, app, () => fresh(s, { performanceTrace: false }));
     const { frame } = (await s.get("host.window")).surfaces.find((item) => item.id === surface);
     const marks = { head: frame.y - 2, top: frame.y, bottom: frame.y + frame.height, colour: PROBE_COLOUR };
     const run = await drag(s, { ...rightEdgeWidthDragPlan(grid, card), ms: 400, times: 2 }, { capture: true });
@@ -90,7 +90,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the drag of a view without plugin code reports the floor of its source intervals`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    const { surface, grid, card } = await openProbe(s, app,
+    const { surface, grid, card } = await openProbe(t, s, app,
       () => fresh(s, { log: { frame: "trace" }, reads: ["plugin.probeplain.view.content_frame"] }));
     const traced = await withViewContentTrace(t, s, descriptor, surface, () =>
       drag(s, rightEdgeWidthDragPlan(grid, card), { capture: true }));

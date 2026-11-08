@@ -24,16 +24,34 @@ test("the floor page is a view whose page draws the measurement colour and runs 
   assert.match(start, /^await bridge\.composition\.create\(\);$/m);
 });
 
-test("a fixture registry is a new folder that the fixture registry build writes, and a failed build removes it", { timeout: 5000 }, (t) => {
+test("a fixture registry is a new folder that the fixture registry build writes under the signal, and a failed build removes it", { timeout: 5000 }, async (t) => {
   const builds = [];
-  const folder = fixtureRegistry({ sok: "/bin/sok", build: (sok, out) => { builds.push([sok, out]); writeFileSync(join(out, "index.json"), "{}"); } });
+  const signal = new AbortController().signal;
+  const folder = await fixtureRegistry({ sok: "/bin/sok", signal, build: async (sok, out, options) => {
+    builds.push([sok, out, options]);
+    writeFileSync(join(out, "index.json"), "{}");
+  } });
   t.after(() => rmSync(folder, { recursive: true, force: true }));
-  assert.deepEqual(builds, [["/bin/sok", folder]]);
+  assert.deepEqual(builds, [["/bin/sok", folder, { signal }]]);
   assert.equal(readFileSync(join(folder, "index.json"), "utf8"), "{}");
   let failed;
-  assert.throws(() => fixtureRegistry({ sok: "/bin/sok", build: (_, out) => { failed = out; throw new Error("registry build failed"); } }),
+  await assert.rejects(fixtureRegistry({ sok: "/bin/sok", build: async (_, out) => { failed = out; throw new Error("registry build failed"); } }),
     /registry build failed/);
   assert.equal(existsSync(failed), false);
+});
+
+test("a failed fixture registry build whose folder cannot be removed rejects with both failures", { timeout: 5000 }, async (t) => {
+  let folder;
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  await assert.rejects(fixtureRegistry({
+    sok: "/bin/sok",
+    build: async (_, out) => { folder = out; throw new Error("registry build failed"); },
+    remove: () => { throw new Error("folder removal failed"); },
+  }), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors.map((item) => item.message), ["registry build failed", "folder removal failed"]);
+    return true;
+  });
 });
 
 test("the floor page opens as the active tab of the terminal card from its registry, and the cleanup removes it in reverse", { timeout: 5000 }, async () => {
@@ -64,7 +82,7 @@ test("the floor page opens as the active tab of the terminal card from its regis
     },
   };
   const tab = await openFloorPage(s, {
-    registry: () => "/tmp/floor-registry",
+    registry: async () => "/tmp/floor-registry",
     applied: async (_, run, action) => { await run(); calls.push(`applied ${action}`); },
     remove: (folder) => calls.push(`rm ${folder}`),
   });

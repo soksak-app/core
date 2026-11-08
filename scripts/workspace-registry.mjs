@@ -192,7 +192,7 @@ function clearRegistry(out) {
  * Writes the registry folder anew and creates index.json. Earlier entries in the output folder are removed. sidecars "diagnostic"
  * releases the sidecars with DIAGNOSTIC_RELEASE and writes the revision record; root is the core checkout.
  */
-export function buildWorkspaceRegistry(binary, out, { sidecars, root = ROOT } = {}) {
+export async function buildWorkspaceRegistry(binary, out, { sidecars, root = ROOT } = {}) {
   const declaration = checkDeclaration(read(new URL(DECLARATION, root)));
   const commonDir = gitCommonDir(fileURLToPath(root));
   const folder = (relative) => repositoryFolder(relative, commonDir);
@@ -227,7 +227,7 @@ export function buildWorkspaceRegistry(binary, out, { sidecars, root = ROOT } = 
   }
   for (const pack of declaration.packs) writeJson(join(out, "packs", `${pack.name}.json`), pack);
   writeJson(join(out, "revoked.json"), { plugins: [], sidecars: [] });
-  const result = registryBuild(binary, out);
+  const result = await registryBuild(binary, out);
   // The record follows index.json, so a run that fails leaves none and PLUGINS=public refuses its folder.
   if (sidecars === "diagnostic") {
     writeJson(join(out, REVISIONS), { sidecars: [...revisions].map(([repository, source]) => ({ repository, ...source })) });
@@ -279,7 +279,7 @@ export function publicRegistryEntries(index, sidecars) {
  * Writes the registry folder of --plugins public anew and creates index.json: the plugins of the public index beside the sidecar
  * entries and releases that --sidecars diagnostic wrote into sidecarRegistry, whose revision record shows that run.
  */
-export function buildPublicRegistry(binary, out, sidecarRegistry, index) {
+export async function buildPublicRegistry(binary, out, sidecarRegistry, index) {
   if (resolve(out) === resolve(sidecarRegistry)) {
     throw new Error(`--out ${out} is the folder of the sidecar releases; PLUGINS=public writes another folder`);
   }
@@ -306,7 +306,7 @@ export function buildPublicRegistry(binary, out, sidecarRegistry, index) {
   for (const { name, entry } of sidecars) writeJson(join(out, "sidecars", name), entry);
   for (const pack of entries.packs) writeJson(join(out, "packs", `${pack.name}.json`), pack);
   writeJson(join(out, "revoked.json"), entries.revoked);
-  return { ...registryBuild(binary, out), dropped: entries.dropped };
+  return { ...(await registryBuild(binary, out)), dropped: entries.dropped };
 }
 
 /** Reads a registry index from its address; an answer other than 200 is an error that names the address. */
@@ -339,13 +339,13 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   checkOptions(values);
   if (values.plugins === "public") {
     for (const name of ["sidecar-registry", "public-index"]) if (!values[name]) throw new Error(`--${name} is required with --plugins public`);
-    const result = buildPublicRegistry(values.sok, values.out, values["sidecar-registry"], await readIndex(values["public-index"]));
+    const result = await buildPublicRegistry(values.sok, values.out, values["sidecar-registry"], await readIndex(values["public-index"]));
     for (const item of result.dropped) {
       console.log(`Public registry: left out ${item.id} ${item.version}, which needs ${item.sidecar} ${item.range}`);
     }
     console.log(`Public registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
   } else {
-    const result = buildWorkspaceRegistry(values.sok, values.out, { sidecars: values.sidecars });
+    const result = await buildWorkspaceRegistry(values.sok, values.out, { sidecars: values.sidecars });
     console.log(`Workspace registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
   }
 }

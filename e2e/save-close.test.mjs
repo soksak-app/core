@@ -16,7 +16,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: save replies that retain modified state keep the native tab open`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok") });
+    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
     s.cleanup(() => rmSync(folder, { recursive: true }));
     const change = async (name, run) => {
       const offsets = currentEventOffsets(app.configDir);
