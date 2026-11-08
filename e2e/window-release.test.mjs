@@ -62,9 +62,12 @@ for (const app of Object.values(APPS)) {
       }
       const showing = await counts(s);
       measured.push(showing);
-      // The composition view, surface, and input registration of an open window must be counted so that the value after closing shows the release.
-      assert.ok(showing.windowCompositions > before.windowCompositions && showing.surfaceHosts > before.surfaceHosts &&
-        showing.inputRegistrations > before.inputRegistrations,
+      // The surface hosts and input registrations of an open window, and the composition view around its main web view, must be
+      // counted so that the value after closing shows the release. A window without a main page has no composition view
+      // (docs/spec/endpoint.md, diagnostics.native.objects), so its composition count stays.
+      const composed = pageProcess === null ? showing.windowCompositions === before.windowCompositions
+        : showing.windowCompositions > before.windowCompositions;
+      assert.ok(composed && showing.surfaceHosts > before.surfaceHosts && showing.inputRegistrations > before.inputRegistrations,
         `${label}: the open project window is not counted: before ${JSON.stringify(before)}, open ${JSON.stringify(showing)}`);
       await child.close();
       await s.windows(1, `${label}: the project window did not close`);
