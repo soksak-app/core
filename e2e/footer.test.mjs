@@ -17,8 +17,8 @@ const MEASURED = [30, 30, 30];
  */
 async function probeMarks(s, surface) {
   const colour = `rgb(${MEASURED.join(", ")})`;
-  // The document applies a posted colour once its script listens, which its first report tells; a colour posted before that
-  // reaches the document while it loads and is lost (docs/spec/native-surfaces.md#document-regions).
+  // The document applies a posted colour once its script listens, which its first report tells; a colour posted before its load
+  // commits is refused, and one posted before its script listens is lost (docs/spec/native-surfaces.md#document-regions).
   await s.until("layoutprobe.document", (value) => value.reported === true, `the document of ${surface} did not report`, { surface });
   await s.run("layoutprobe.document.color", { color: colour }, surface);
   await s.until("layoutprobe.document", (value) => value.color === colour, `${surface} did not paint its document region`, { surface });
