@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { applicationArtifact, applicationExecutables, crashReports, listProcesses, openApplication, PlatformOperationNotImplemented, processExecutable,
-  quitApplication, releaseKey, releasePlatform, runNativeTests, waitForLockRelease } from '../platform/platform.js';
+  processStacks, quitApplication, releaseKey, releasePlatform, runNativeTests, waitForLockRelease } from '../platform/platform.js';
 import { processExecutable as linuxProcessExecutable } from '../platform/linux/process-executable.mjs';
 
 const notImplemented = (operation, platform) => ({ name: 'PlatformOperationNotImplemented', message: `${operation} is not implemented on ${platform}` });
@@ -19,6 +19,7 @@ const OPERATIONS = [
   ['runNativeTests', (platform) => runNativeTests('test-app', { platform })],
   ['crashReports', (platform) => crashReports('mygo', 0, { platform })],
   ['openApplication', (platform) => openApplication('/work/sok-mygo', { platform })],
+  ['processStacks', (platform) => processStacks(1, '/work/stacks.txt', { platform })],
 ];
 
 test('application update registry fixtures select the declared release platform without architecture fallback', { timeout: 10000 }, () => {
@@ -97,6 +98,7 @@ const calls = {
   runNativeTests: () => selected.runNativeTests('test-app'),
   crashReports: () => selected.crashReports('mygo', 0),
   openApplication: () => selected.openApplication('/work/sok-mygo'),
+  processStacks: () => selected.processStacks(1, '/work/stacks.txt'),
 };
 const results = {};
 for (const [name, call] of Object.entries(calls)) {

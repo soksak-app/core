@@ -91,6 +91,19 @@ export async function crashReports(app, since, { platform = process.platform, ..
   return (await implementation('crashReports', platform))(app, since, options);
 }
 
+/** Writes the thread stacks of the live process `pid` to `file` and resolves with `file`; a failed record rejects with the reason. */
+export async function processStacks(pid, file, { platform = process.platform } = {}) {
+  return (await implementation('processStacks', platform))(pid, file);
+}
+
+/**
+ * The JSON AST, as text, that the Objective-C compiler of the platform with its system frameworks dumps for the translation unit
+ * `file` of the folder `cwd`, with the `-D` flags `defines` and the include folders `includes`.
+ */
+export async function objectiveCSyntaxTree(file, { platform = process.platform, cwd, defines = [], includes = [] } = {}) {
+  return (await implementation('objectiveCSyntaxTree', platform))(file, { cwd, defines, includes });
+}
+
 /** Reads the executable the kernel associates with the live PID. */
 export async function processExecutable(pid, { platform = process.platform, ...options } = {}) {
   return (await implementation('processExecutable', platform))(pid, options);

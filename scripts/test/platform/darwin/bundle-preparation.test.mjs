@@ -1,67 +1,68 @@
-// Runs the Makefile bundle preparation against a disposable bundle while a non-GUI child uses its executable path.
+// Runs the bundle preparation of macOS against a disposable bundle. The process table is a recorded `ps -axww -o pid=,command=`
+// output that a reader with the signature of spawnSync returns, so the preparation is checked on any system.
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
-import { once } from "node:events";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { prepareBundle } from "../../../platform/darwin/prepare-app-bundle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+/** The output buffer of spawnSync when the caller names none. */
+const DEFAULT_BUFFER = 1024 * 1024;
 
-function makePreparationMakefile(temporary, application = "tauriv2") {
-  const makefile = join(temporary, "bundle-preparation.mk");
-  writeFileSync(makefile, `include ${join(ROOT, "Makefile")}\n.PHONY: bundle-preparation-test\nbundle-preparation-test:\n\t@$(call bundle-info,$(BUNDLE),${application})\n`);
-  return makefile;
+/**
+ * A process table reader that answers `ps -axww -o pid=,command=` with `rows`, each `[pid, command]`, and fails as spawnSync does
+ * when the output exceeds the buffer of the call. It records the calls.
+ */
+function table(rows, calls = []) {
+  return (file, args, options) => {
+    calls.push([file, args]);
+    const stdout = rows.map(([pid, command]) => `${String(pid).padStart(5)} ${command}\n`).join("");
+    const limit = options?.maxBuffer ?? DEFAULT_BUFFER;
+    if (Buffer.byteLength(stdout) > limit) {
+      return { status: null, stdout: stdout.slice(0, limit), stderr: "", error: Object.assign(new Error(`spawnSync ${file} ENOBUFS`), { code: "ENOBUFS" }) };
+    }
+    return { status: 0, stdout, stderr: "" };
+  };
 }
 
-function runPreparation(makefile, bundle) {
-  return spawnSync("make", ["--no-print-directory", "-f", makefile, "bundle-preparation-test", `BUNDLE=${bundle}`], {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
-}
+const prepare = (bundle, application, rows = []) => prepareBundle(bundle, application, { platform: "darwin", run: table(rows) });
 
-test("bundle preparation refuses a running bundle executable before removing Contents", { timeout: 10000, skip: process.platform !== "darwin" }, async () => {
+test("bundle preparation refuses a running bundle executable before removing Contents", { timeout: 10000 }, () => {
   const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-"));
   const bundle = join(temporary, "sok-tauriv2.app");
   const contents = join(bundle, "Contents");
   const executable = join(contents, "MacOS", "sok-tauriv2");
-  const source = join(temporary, "child.c");
   const sentinel = join(contents, "Resources", "preserve-me.txt");
   mkdirSync(dirname(executable), { recursive: true });
   mkdirSync(dirname(sentinel), { recursive: true });
-  writeFileSync(source, "#include <unistd.h>\nint main(void) { for (;;) pause(); }\n");
-  const compiled = spawnSync("cc", ["-o", executable, source], { encoding: "utf8" });
-  assert.equal(compiled.status, 0, `failed to compile the disposable child: ${compiled.stderr}`);
+  writeFileSync(executable, "");
   writeFileSync(sentinel, "bundle contents are in use\n");
-  const makefile = makePreparationMakefile(temporary);
-
-  const child = spawn(executable, [], { detached: true, stdio: "ignore" });
+  const calls = [];
   try {
-    await once(child, "spawn");
-    const result = runPreparation(makefile, bundle);
-    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-    assert.notEqual(result.status, 0, `preparation succeeded while PID ${child.pid} used ${bundle}; output: ${output}`);
-    assert.match(output, new RegExp(`PID ${child.pid}`));
-    assert.ok(output.includes(bundle), `preparation error omitted the bundle path ${bundle}: ${output}`);
-    assert.ok(existsSync(sentinel), `preparation removed ${sentinel}; output: ${output}`);
-    assert.ok(existsSync(executable), `preparation removed the running executable ${executable}; output: ${output}`);
+    assert.throws(() => prepareBundle(bundle, "tauriv2", { platform: "darwin", run: table([[1, "/sbin/launchd"], [4242, executable]], calls) }),
+      (error) => {
+        assert.match(error.message, /PID 4242/);
+        assert.ok(error.message.includes(bundle), `preparation error omitted the bundle path ${bundle}: ${error.message}`);
+        return true;
+      });
+    assert.deepEqual(calls, [["ps", ["-axww", "-o", "pid=,command="]]]);
+    assert.ok(existsSync(sentinel), `preparation removed ${sentinel}`);
+    assert.ok(existsSync(executable), `preparation removed the running executable ${executable}`);
   } finally {
-    child.kill("SIGTERM");
-    await once(child, "exit");
     rmSync(temporary, { recursive: true, force: true });
   }
 });
 
 for (const application of ["wailsv3", "tauriv2"]) {
-  test(`${application}: bundle preparation includes the ZXing license`, { timeout: 10000, skip: process.platform !== "darwin" }, () => {
+  test(`${application}: bundle preparation includes the ZXing license`, { timeout: 10000 }, () => {
     const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-license-"));
     const bundle = join(temporary, `sok-${application}.app`);
     try {
-      const result = runPreparation(makePreparationMakefile(temporary, application), bundle);
-      assert.equal(result.status, 0, `preparation failed: ${result.stderr}`);
+      prepare(bundle, application);
       const license = join(bundle, "Contents", "Resources", "ThirdPartyLicenses", "ZXing-LICENSE.txt");
       assert.ok(existsSync(license), "the bundle omits the statically linked ZXing license");
       assert.equal(readFileSync(license, "utf8"),
@@ -73,7 +74,7 @@ for (const application of ["wailsv3", "tauriv2"]) {
   });
 }
 
-test("bundle preparation recreates Contents when no process uses the bundle", { timeout: 10000, skip: process.platform !== "darwin" }, () => {
+test("bundle preparation recreates Contents when no process uses the bundle", { timeout: 10000 }, () => {
   const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-idle-"));
   const bundle = join(temporary, "sok-tauriv2.app");
   const contents = join(bundle, "Contents");
@@ -81,8 +82,13 @@ test("bundle preparation recreates Contents when no process uses the bundle", { 
   mkdirSync(dirname(sentinel), { recursive: true });
   writeFileSync(sentinel, "old bundle contents\n");
   try {
-    const result = runPreparation(makePreparationMakefile(temporary), bundle);
-    assert.equal(result.status, 0, `preparation failed: ${result.stderr}`);
+    // The Makefile prepares a bundle with this script.
+    const makefile = join(temporary, "bundle-preparation.mk");
+    writeFileSync(makefile, `include ${join(ROOT, "Makefile")}\n.PHONY: bundle-preparation-test\nbundle-preparation-test:\n\t@$(call bundle-info,$(BUNDLE),tauriv2)\n`);
+    const planned = spawnSync("make", ["-n", "--no-print-directory", "-f", makefile, "bundle-preparation-test", `BUNDLE=${bundle}`], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(planned.status, 0, planned.stderr);
+    assert.equal(planned.stdout.trim(), `node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "${bundle}" --app "tauriv2"`);
+    prepare(bundle, "tauriv2", [[1, "/sbin/launchd"], [77, `${join(temporary, "other.app")}/Contents/MacOS/other`]]);
     assert.equal(existsSync(sentinel), false, "preparation kept old bundle contents");
     assert.ok(existsSync(join(contents, "Info.plist")), "preparation did not write Info.plist");
     assert.ok(existsSync(join(contents, "Resources", "AppIcon.icns")), "preparation did not write the app icon");
@@ -91,16 +97,12 @@ test("bundle preparation recreates Contents when no process uses the bundle", { 
   }
 });
 
-test("bundle preparation reads the whole process table while other processes carry commands larger than a read buffer", { timeout: 20000, skip: process.platform !== "darwin" }, (t) => {
+test("bundle preparation reads the whole process table while other processes carry commands larger than a read buffer", { timeout: 20000 }, (t) => {
   // Three processes carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB output buffer of spawnSync.
-  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: "ignore" }));
+  const large = Array.from({ length: 3 }, (_, index) => [100 + index, `${process.execPath} -e setInterval(() => {}, 1000) ${"x".repeat(450 * 1024)}`]);
   const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-large-"));
-  t.after(() => {
-    for (const child of large) child.kill("SIGKILL");
-    rmSync(temporary, { recursive: true, force: true });
-  });
+  t.after(() => rmSync(temporary, { recursive: true, force: true }));
   const bundle = join(temporary, "sok-tauriv2.app");
-  const result = runPreparation(makePreparationMakefile(temporary), bundle);
-  assert.equal(result.status, 0, `preparation failed: ${result.stderr}`);
+  prepare(bundle, "tauriv2", large);
   assert.ok(existsSync(join(bundle, "Contents", "Info.plist")), "preparation did not write Info.plist");
 });

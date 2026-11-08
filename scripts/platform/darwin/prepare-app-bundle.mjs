@@ -31,10 +31,13 @@ function processUsesBundle(command, prefixes) {
   return prefixes.some((prefix) => line.startsWith(prefix) && line.slice(prefix.length).split(/[\s"']/)[0] !== "");
 }
 
-function runningBundleProcesses(bundle) {
+/**
+ * The processes that execute from `bundle`. `run` has the signature of spawnSync and reads the process table; a test passes its own.
+ */
+function runningBundleProcesses(bundle, run = spawnSync) {
   // The output has no bound, because the commands of other processes can exceed any fixed buffer, and every row is read to find
   // a process of the bundle.
-  const result = spawnSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8", maxBuffer: Infinity });
+  const result = run("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8", maxBuffer: Infinity });
   if (result.error || result.status !== 0) {
     throw new Error(`ps failed while checking bundle ${resolve(bundle)}: ${result.error?.message ?? result.stderr.trim()}`);
   }
@@ -42,11 +45,15 @@ function runningBundleProcesses(bundle) {
   return parseProcessTable(result.stdout).filter(({ pid, command }) => pid !== process.pid && processUsesBundle(command, prefixes));
 }
 
-function prepareBundle(bundle, application) {
-  if (process.platform !== "darwin") throw new Error(`macOS bundle preparation is not implemented on ${process.platform}`);
+/**
+ * Recreates the Contents of `bundle` for `application` unless a process executes from it. `platform` is the system that the bundle is
+ * prepared on and `run` reads its process table (runningBundleProcesses); a test passes both.
+ */
+export function prepareBundle(bundle, application, { platform = process.platform, run = spawnSync } = {}) {
+  if (platform !== "darwin") throw new Error(`macOS bundle preparation is not implemented on ${platform}`);
   if (!APPLICATIONS.has(application)) throw new Error(`unknown application ${JSON.stringify(application)}`);
   const absoluteBundle = resolve(bundle);
-  const active = runningBundleProcesses(bundle);
+  const active = runningBundleProcesses(bundle, run);
   if (active.length > 0) {
     const owners = active.map(({ pid }) => `PID ${pid}`).join(", ");
     throw new Error(`refusing to replace bundle ${absoluteBundle}: process ${owners} is executing from its Contents/MacOS directory`);
@@ -76,9 +83,11 @@ function main(args) {
   prepareBundle(values.bundle, values.app);
 }
 
-try {
-  main(process.argv.slice(2));
-} catch (error) {
-  console.error(`error: ${error.message}`);
-  process.exitCode = 1;
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    console.error(`error: ${error.message}`);
+    process.exitCode = 1;
+  }
 }
