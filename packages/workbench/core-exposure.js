@@ -278,7 +278,7 @@ const onDebug = (run) => async (params) => run(debugScreen ?? await debugUi(), p
 const settingsModalState = () => settingsScreen?.settingsModalState() ?? { open: false, controls: [] };
 // default: a screen that is not loaded is closed.
 const debugState = () => debugScreen?.debugState() ?? {
-  open: false, recorded: null, entries: [], viewing: null, timeline: null, state: null, scroll: 0, operation: null, error: null,
+  open: false, recorded: null, captures: [], entries: [], viewing: null, timeline: null, state: null, scroll: 0, operation: null, error: null,
 };
 const closeSettings = () => { settingsScreen?.closeSettings(); };
 const closeDebug = () => { debugScreen?.closeDebug(); };
