@@ -190,8 +190,17 @@ export function changedPackages(files, packages, specFiles = () => []) {
     || specFiles(folder).some((declared) => files.some((file) => declaresFile(declared, file))));
 }
 
-/** Selects test files by the existing substring selector and explicit root-relative path exclusions. */
+/** The substrings of `--only`: one string (empty for none) or the list of a repeated option. */
+function onlyList(only) {
+  return (Array.isArray(only) ? only : [only]).filter((value) => value !== '');
+}
+
+/**
+ * Selects test files by the substring selector, which a repeated `--only` widens to the files that contain any of its values, and
+ * explicit root-relative path exclusions.
+ */
 export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
+  const onlies = onlyList(only);
   const prefixes = exclude.map((path) => {
     if (typeof path !== 'string') throw new Error(`--exclude path must be a nonempty root-relative path, found ${JSON.stringify(path)}`);
     const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -202,7 +211,7 @@ export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
     }
     return normalized;
   });
-  return tests.filter((item) => item.name.includes(only)
+  return tests.filter((item) => (onlies.length === 0 || onlies.some((value) => item.name.includes(value)))
     && !prefixes.some((prefix) => item.name === prefix || item.name.startsWith(`${prefix}/`)));
 }
 
@@ -213,8 +222,9 @@ export function selectNodeTests(tests, { only = '', exclude = [] } = {}) {
 export function planNodeRun(all, { range, only = '', exclude = [] } = {}) {
   const tests = selectNodeTests(all, { only, exclude });
   if (tests.length > 0) return { tests };
-  if (range === undefined) throw new Error(`no test file contains ${JSON.stringify(only)}`);
-  const after = all.length === 0 ? '' : ` remains after ${exclude.map((path) => `--exclude ${path}`).join(' ')}${only === '' ? '' : ` --only ${only}`}`;
+  const onlies = onlyList(only);
+  if (range === undefined) throw new Error(`no test file contains ${onlies.length === 0 ? '""' : onlies.map((value) => JSON.stringify(value)).join(' or ')}`);
+  const after = all.length === 0 ? '' : ` remains after ${exclude.map((path) => `--exclude ${path}`).join(' ')}${onlies.map((value) => ` --only ${value}`).join('')}`;
   return { skip: `SKIP no test file of a package changed in ${range}${after}` };
 }
 
@@ -282,7 +292,7 @@ export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalo
 
 /** A candidate run is the complete declared script on every candidate host, without an inherited selection. */
 export function candidateSelection(values, tests, env = process.env) {
-  if (values.only || values.exclude?.length || values.changed !== undefined || env.SOKSAK_APP || env.NATIVE_TEST_ONLY
+  if (onlyList(values.only ?? '').length || values.exclude?.length || values.changed !== undefined || env.SOKSAK_APP || env.NATIVE_TEST_ONLY
     || /--test-(?:name-pattern|skip-pattern|only|shard)\b/.test(env.NODE_OPTIONS ?? '')
     || tests.some(({ args }) => args.some((arg) => /^--test-(?:name-pattern|skip-pattern|only|shard)(?:=|$)/.test(arg)))) {
     throw new Error('candidate acceptance requires the complete declared script and every candidate host without test selection');
@@ -294,7 +304,7 @@ async function main(argv) {
   const { values } = parseArgs({
     args: argv, strict: true,
     options: {
-      only: { type: 'string', default: '' },
+      only: { type: 'string', multiple: true, default: [] },
       exclude: { type: 'string', multiple: true, default: [] },
       script: { type: 'string', default: 'test' },
       timeout: { type: 'string', default: String(TEST_TIMEOUT_MS / 1000) },

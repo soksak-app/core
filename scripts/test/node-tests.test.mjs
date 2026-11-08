@@ -232,6 +232,15 @@ test("only and excluded path scopes partition scripts tests from workspace packa
   assert.equal(new Set([...scripts, ...packages].map(({ name }) => name)).size, all.length);
 });
 
+test("a repeated only selects the files that contain any of its values", () => {
+  const all = ["scripts/test/a.test.mjs", "e2e/test/b.test.mjs", "e2e/c.test.mjs", "packages/window-check/test/d.test.mjs", "packages/soksak/test/e.test.mjs"]
+    .map((name) => ({ name }));
+  const selected = selectNodeTests(all, { only: ["scripts/test/", "e2e/test/", "packages/window-check/test/"] });
+  assert.deepEqual(selected.map(({ name }) => name), ["scripts/test/a.test.mjs", "e2e/test/b.test.mjs", "packages/window-check/test/d.test.mjs"]);
+  assert.deepEqual(selectNodeTests(all, { only: [] }).map(({ name }) => name), all.map(({ name }) => name));
+  assert.throws(() => planNodeRun(all, { only: ["missing/", "absent/"] }), /no test file contains "missing\/" or "absent\/"/);
+});
+
 test("excluded test scopes reject empty, absolute, and traversing paths", () => {
   const tests = [{ name: "scripts/a.test.mjs" }];
   for (const path of ["", "/scripts", "../scripts", "scripts/../packages", "C:\\scripts"]) {

@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-host-files check-app-tests create-test-certificates test-app-terminal-sidebar-current test-app-terminal-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands
+.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-host-files check-app-tests create-test-certificates test-app-terminal-sidebar-current test-app-terminal-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -323,6 +323,13 @@ install: check-tools
 
 build: install
 	@pnpm build
+
+# Runs the headless owner tests of the verification pipeline: the Node tests of scripts/test, e2e/test and
+# packages/window-check/test, which start no application and need no display. The owners of one operating system live under
+# platform/<os>/ of their test folder and run on that system only, so this platform-neutral selection excludes them; CI runs it
+# on Linux.
+test-headless-owners:
+	@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/ --exclude scripts/test/platform/darwin
 
 test-all: install check-docs check-exposure check-tests check-hosts-same
 	@pnpm test
