@@ -5,7 +5,6 @@ package bindings
 
 /*
 #cgo pkg-config: soksak-darwin
-#cgo CFLAGS: -DSOKSAK_DIAGNOSTIC
 #include "host_api.h"
 */
 import "C"
