@@ -72,13 +72,14 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(missing, [], `${app.name}: the typed Enter left no record in: ${missing.join(", ")}`);
     // The identifier that the native layer assigned to the key is carried by every hop of the chain of the input
     // (docs/spec/logging.md#correlation-identifier): the report, the relay of the host, the call of the page that sends the
-    // request, the request of the host to the sidecar, and the record of the sidecar that received it.
+    // request, the request of the host to the sidecar, and the record of the sidecar that received it. The raster probe is a view,
+    // so the page sends its request with the call viewSidecarSend that it makes for the view.
     const [cid] = found.nativeKeyDown.event.cids ?? [];
     assert.ok(cid, `${app.name}: native.input.key_down has no cids`);
     const hops = {
       nativeReport: found.nativeReport.event,
       hostRelay: events.find((e) => e.event === "host.input.relay" && e.cids?.includes(cid)),
-      pageCall: events.find((e) => e.event === "workbench.call" && e.fields.name === "sidecarSend" && e.cids?.includes(cid)),
+      pageCall: events.find((e) => e.event === "workbench.call" && e.fields.name === "viewSidecarSend" && e.cids?.includes(cid)),
       hostRequest: events.find((e) => e.event === "host.sidecar.request" && e.cids?.includes(cid)),
       sidecarRequest: events.find((e) => e.event === "sidecar.rasterprobe.request" && e.fields.operation === "input" && forEnter(e)
         && e.cids?.includes(cid)),
