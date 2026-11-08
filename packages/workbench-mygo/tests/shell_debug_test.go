@@ -376,6 +376,10 @@ func TestANoticeOfAnEventFileAppendsWhatGrewOnce(t *testing.T) {
 	if status := f.status("core.debug"); !strings.Contains(status, `"appended":1,"held":3`) {
 		t.Fatalf("the status is %s", status)
 	}
+	// The status names the positions of the first page and of the last read, so the appended rows are the rows between them.
+	if status := f.status("core.debug"); !strings.Contains(status, `"start":{"app-b1":2},"tail":{"app-b1":3}`) {
+		t.Fatalf("the status is %s", status)
+	}
 	f.shell.Event("debug-log-changed", []any{map[string]any{"path": "logs/other.txt"}})
 	f.settle()
 	if len(stored.debug.queries) != 2 {

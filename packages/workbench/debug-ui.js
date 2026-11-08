@@ -83,7 +83,8 @@ function timelineState() {
   if (timeline === null) return null;
   return {
     following: timeline.following, appended: timeline.appended, held: timeline.rows.length, older: timeline.older, omitted: timeline.omitted,
-    context: timeline.context.size, selected: timeline.selected.size, warning: SELECTION_WARNING, ...timeline.filter,
+    context: timeline.context.size, selected: timeline.selected.size, warning: SELECTION_WARNING, start: timeline.start, tail: timeline.tail,
+    ...timeline.filter,
   };
 }
 
@@ -550,7 +551,8 @@ async function pageOf(request) {
 /** A timeline of the newest page of a query (in descending order) with the selection and the following that it keeps. */
 function freshTimeline(filter, page, selected, following) {
   const rows = page.rows.toReversed();
-  return { filter, rows, ids: new Set(rows.map(rowId)), context: new Set(), older: page.next !== null, tail: page.tail, following, appended: 0, omitted: 0, selected, token: {} };
+  // start is the tail of the page that showed the timeline, so the appended rows are the rows after it up to the tail of the last read.
+  return { filter, rows, ids: new Set(rows.map(rowId)), context: new Set(), older: page.next !== null, start: page.tail, tail: page.tail, following, appended: 0, omitted: 0, selected, token: {} };
 }
 
 /** Shows the newest rows of the event files of the logs folder, one page of the query of the host. */

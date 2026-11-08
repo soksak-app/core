@@ -137,18 +137,20 @@ func debugRowOf(row sok.LogRow) (debugRow, error) {
 // whether an older row may exist, the greatest seq of each process when the newest page was read, and the rows that following
 // left out. Token tells a read that finishes later that the timeline was replaced.
 type debugTimelineState struct {
-	filter    DebugFilter
-	rows      []debugRow
-	ids       map[string]bool
-	context   map[string]bool
-	older     bool
-	tail      map[string]int64
-	following bool
-	appended  int
-	omitted   int
-	selected  map[string]debugRow
-	token     int
-	drafts    map[string]string
+	filter  DebugFilter
+	rows    []debugRow
+	ids     map[string]bool
+	context map[string]bool
+	older   bool
+	// start is the tail of the page that showed the timeline and tail the tail of the last read: the appended rows are the rows after
+	// start up to tail.
+	start, tail map[string]int64
+	following   bool
+	appended    int
+	omitted     int
+	selected    map[string]debugRow
+	token       int
+	drafts      map[string]string
 }
 
 // withPage adds the rows of a page in key order, once each, and sheds the oldest rows past the hold limit. A row of the context
@@ -289,7 +291,7 @@ func (d *debugViewState) fresh(filter DebugFilter, rows []debugRow, page sok.Log
 	for _, row := range held {
 		ids[row.id()] = true
 	}
-	return &debugTimelineState{filter: filter, rows: held, ids: ids, context: map[string]bool{}, older: page.Next != nil, tail: page.Tail,
+	return &debugTimelineState{filter: filter, rows: held, ids: ids, context: map[string]bool{}, older: page.Next != nil, start: maps.Clone(page.Tail), tail: page.Tail,
 		following: following, selected: selected, token: d.tokens, drafts: drafts}
 }
 
@@ -1086,6 +1088,9 @@ type debugTimelineStatus struct {
 	Context   int    `json:"context"`
 	Selected  int    `json:"selected"`
 	Warning   string `json:"warning"`
+	// Start and Tail are the positions of the first page and of the last read of the timeline, the greatest seq of each process.
+	Start map[string]int64 `json:"start"`
+	Tail  map[string]int64 `json:"tail"`
 	DebugFilter
 }
 
@@ -1132,7 +1137,7 @@ func (s *Shell) debugStatusOf() debugStatus {
 	}
 	if t := d.timeline; t != nil {
 		status.Timeline = &debugTimelineStatus{Following: t.following, Appended: t.appended, Held: len(t.rows), Older: t.older, Omitted: t.omitted,
-			Context: len(t.context), Selected: len(t.selected), Warning: selectionWarning, DebugFilter: t.filter}
+			Context: len(t.context), Selected: len(t.selected), Warning: selectionWarning, Start: t.start, Tail: t.tail, DebugFilter: t.filter}
 	}
 	if d.state != nil {
 		status.State = &debugStateStatus{Path: d.state.path, Lines: len(d.state.lines), With: d.state.with, Differences: len(d.state.differences)}
