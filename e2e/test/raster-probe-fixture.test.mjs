@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { validateManifest, validateSidecar } from "@soksak/plugin-api";
 
 import { catalogOf, auditLogDirectories } from "../../scripts/check-events.mjs";
-import { REGION, SIDECAR, startRasterProbe } from "../fixtures/raster-probe/probe/ui/raster-probe.js";
+import { INPUT_LOG_LIMIT, REGION, SIDECAR, startRasterProbe } from "../fixtures/raster-probe/probe/ui/raster-probe.js";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PROBE = join(ROOT, "e2e/fixtures/raster-probe/probe");
@@ -107,7 +107,11 @@ function fakeView({ textSize = 1.25 } = {}) {
   let failure;
   let onTextSize;
   let observed;
-  const element = { getBoundingClientRect: () => ({ width: 400, height: 300, left: 0, top: 24 }) };
+  const listeners = new Map();
+  const element = {
+    getBoundingClientRect: () => ({ width: 400, height: 300, left: 0, top: 24 }),
+    addEventListener: (type, fn) => listeners.set(type, fn),
+  };
   const bridge = {
     runtime: {
       sidecar: (name) => {
@@ -139,7 +143,7 @@ function fakeView({ textSize = 1.25 } = {}) {
     ResizeObserver: class { constructor(callback) { observed = callback; } observe() {} },
   };
   const document = { getElementById: (id) => { assert.equal(id, REGION); return element; } };
-  return { bridge, expose, view, document, sent, errors, commands, statuses, imageHandlers,
+  return { bridge, expose, view, document, sent, errors, commands, statuses, imageHandlers, press: (type, event) => listeners.get(type)({ type, ...event }),
     answer: (body) => answer(body), fail: (reason) => failure(reason), textSize: (value) => onTextSize(value), resized: () => observed() };
 }
 
@@ -174,8 +178,9 @@ test("the probe forwards region input with its cids, follows the text size and o
   assert.equal(fake.sent[0].body.textSize, 1, "an unknown text size is factor 1");
   fake.imageHandlers.get("focus")({ type: "focus", focused: true });
   fake.imageHandlers.get("input")({ type: "input", actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], cids: ["n.7"] });
-  assert.deepEqual(fake.sent[1], { surface: "tab-9", body: { operation: "input", actions: [{ type: "insert", text: "a" }], preedit: { text: "" } }, cids: ["n.7"] });
-  assert.deepEqual(fake.statuses.get("rasterprobe.input").read(), { focused: true, transactions: 1, preedit: { text: "" }, actions: [{ type: "insert", text: "a" }], errors: [] });
+  assert.deepEqual(fake.sent[1], { surface: "tab-9", body: { operation: "input", sequence: 1, actions: [{ type: "insert", text: "a" }], preedit: { text: "" } }, cids: ["n.7"] });
+  assert.deepEqual(fake.statuses.get("rasterprobe.input").read(), { focused: true, transactions: 1, preedit: { text: "" }, actions: [{ type: "insert", text: "a" }], errors: [],
+    log: [{ sequence: 1, cids: ["n.7"], actions: [{ type: "insert", text: "a" }], preedit: { text: "" }, errors: [], received: null }], pointer: [] });
 
   fake.textSize(1.5);
   assert.deepEqual(fake.sent[2].body, { operation: "textSize", factor: 1.5 });
@@ -196,4 +201,37 @@ test("the probe shows a refused request of the sidecar and records it as an erro
   assert.equal(fake.statuses.get("rasterprobe.session").read().error, "imageAttached: surface tab-9 holds image raster");
   fake.imageHandlers.get("error")({ type: "error", reason: "size" });
   assert.deepEqual(fake.errors, ["rasterprobe: imageAttached: surface tab-9 holds image raster", "rasterprobe: image raster: size"]);
+});
+
+test("the probe logs each input transaction with the body that the sidecar echoed once, and clears its log on command", { timeout: 1000 }, async () => {
+  const fake = fakeView();
+  await startRasterProbe(fake);
+  const input = () => fake.statuses.get("rasterprobe.input").read();
+  fake.imageHandlers.get("input")({ type: "input", actions: [{ type: "insert", text: "가" }], preedit: null, errors: [], cids: ["n.1"] });
+  fake.imageHandlers.get("input")({ type: "input", actions: [], preedit: { text: "ㄴ" }, errors: [] });
+  assert.deepEqual(fake.sent.slice(1).map(({ body, cids }) => [body.sequence, cids]), [[1, ["n.1"]], [2, []]]);
+  const echoed = { operation: "input", sequence: 1, actions: [{ type: "insert", text: "가" }], preedit: null };
+  fake.answer({ event: "input", received: echoed });
+  assert.deepEqual(input().log.map(({ sequence, received }) => [sequence, received]), [[1, echoed], [2, null]]);
+  fake.answer({ event: "input", received: echoed });
+  fake.answer({ event: "input", received: { sequence: 9 } });
+  assert.deepEqual(fake.errors, ["rasterprobe: the sidecar answered input 1 twice", "rasterprobe: the sidecar answered input 9, which the log does not hold"]);
+
+  for (let index = 0; index < INPUT_LOG_LIMIT + 3; index++) fake.imageHandlers.get("input")({ type: "input", actions: [], preedit: null, errors: [] });
+  assert.equal(input().log.length, INPUT_LOG_LIMIT);
+  assert.equal(input().log[0].sequence, 6, "the log keeps the last transactions in order");
+  await fake.commands.get("rasterprobe.input.clear")({});
+  assert.deepEqual([input().log, input().pointer, input().transactions], [[], [], INPUT_LOG_LIMIT + 5]);
+});
+
+test("a primary press on the region gives it the focus and the pointer list records the press", { timeout: 1000 }, async () => {
+  const fake = fakeView();
+  await startRasterProbe(fake);
+  fake.press("pointerdown", { button: 2, isTrusted: true });
+  fake.press("pointerdown", { button: 0, isTrusted: true });
+  fake.press("pointerup", { button: 0, isTrusted: false });
+  await Promise.resolve();
+  assert.deepEqual(fake.sent.filter((item) => item.focus).length, 1, "only the primary press focuses the region");
+  assert.deepEqual(fake.statuses.get("rasterprobe.input").read().pointer,
+    [{ type: "pointerdown", button: 2, trusted: true }, { type: "pointerdown", button: 0, trusted: true }, { type: "pointerup", button: 0, trusted: false }]);
 });
