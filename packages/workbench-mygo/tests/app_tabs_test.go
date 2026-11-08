@@ -242,6 +242,51 @@ func TestAnUnloadedTabGetsTheHistoryOfItsRegionBack(t *testing.T) {
 	}
 }
 
+// A document region attach that waits for the stored session of its tab belongs to the view that called it: when the tab closes before
+// the read answers, the attach makes no host call and gets no reply, because a call of an ended view gets no answer.
+func TestAnAttachThatWaitsForTheSessionOfAClosedTabEndsWithItsView(t *testing.T) {
+	stored := &surfaceHost{}
+	stored.installed = unloadDocument
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}
+	base := stored.table()["workspace"]
+	read := make(chan struct{})
+	var attaches atomic.Int32
+	stored.calls = map[string]workbench.HostCall{
+		"workspace": func(ctx context.Context, argument json.RawMessage) (any, error) {
+			var request struct{ Kind, Tab string }
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			if request.Kind == "tabSession" && request.Tab == "tab-aaaaaa" {
+				<-read
+				return nil, nil
+			}
+			return base(ctx, argument)
+		},
+		"documentAttach": func(context.Context, json.RawMessage) (any, error) {
+			attaches.Add(1)
+			return nil, nil
+		},
+	}
+	f := newTabApp(t, stored, unloadDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	f.app.Emit(f.window, "view-call", map[string]any{"surface": "tab-aaaaaa", "plugin": "notes", "generation": 1, "id": 1, "command": "document.attach",
+		"params": map[string]any{"name": "page"}})
+	f.settle()
+	replies := len(stored.replies)
+	f.command("core.tab.close", map[string]string{"tab": "tab-aaaaaa"})
+	close(read)
+	f.settle()
+	if n := attaches.Load(); n != 0 {
+		t.Fatalf("the attach of the closed tab made %d host calls", n)
+	}
+	for _, reply := range stored.replies[replies:] {
+		if reply["surface"] == "tab-aaaaaa" {
+			t.Fatalf("the attach of the closed tab has the reply %v", reply)
+		}
+	}
+}
+
 // sectionsDocument is the document of the installed plugins with a tab view, sections that declare unload and sections that do not.
 const sectionsDocument = `{"plugins": [
 	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",

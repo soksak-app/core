@@ -33,6 +33,8 @@ type viewCallEvent struct {
 	Cids       json.RawMessage `json:"cids"`
 	Generation uint64          `json:"generation"`
 	Cancel     bool            `json:"cancel"`
+	// ctx is the lifetime of the view that made the call; the end of that view cancels it.
+	ctx context.Context
 }
 
 // viewPending is a call of a view that has not replied.
@@ -193,6 +195,7 @@ func (s *Shell) viewCall(data []any) {
 	if view.cancel == nil {
 		view.ctx, view.cancel = context.WithCancel(host.WithViewSource(s.calls.ctx, call.Surface, call.Generation))
 	}
+	call.ctx = view.ctx
 	pending := &viewPending{}
 	view.pending[call.ID] = pending
 	answer := func(result any, err error) {
@@ -255,10 +258,13 @@ func viewFields[T any](call viewCallEvent) (T, error) {
 	return fields, nil
 }
 
-// surfaceCall runs a host call of the surface of the view, after the host calls that the view made before it.
+// surfaceCall runs a host call of the surface of the view, after the host calls that the view made before it. The host call runs in the
+// lifetime of the view that made call, not of the view that the surface holds when the call runs: a call that waited past the end of
+// its view (a document attach that waits for the stored session of its tab) makes no host call and gets no answer, and it never
+// reaches a later page of the surface.
 func (s *Shell) surfaceCall(call viewCallEvent, name string, fields map[string]any, answer viewAnswer) {
 	fields["surface"] = call.Surface
-	s.calls.withContext(s.surfaces.views[call.Surface].ctx).CallInOrder("view:"+call.Surface, name, fields, answer)
+	s.calls.withContext(call.ctx).CallInOrder("view:"+call.Surface, name, fields, answer)
 }
 
 // region is the named fields of a region call.
