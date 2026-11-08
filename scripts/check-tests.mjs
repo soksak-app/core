@@ -11657,6 +11657,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", symbol: "let inputs = std::mem::take(&mut image.inputs);" },
       { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", symbol: "let (kind, fields) = if image.get(\"error\").is_some_and(Value::is_string) {" },
+      { file: "e2e/view-display.mjs", symbol: "export function viewWebviews(" },
       { file: "e2e/fixtures/raster-probe/probe/ui/raster-probe.js", symbol: "const presented = (body) => {" },
       { file: "e2e/input-probe.mjs", symbol: "export async function presentedStage(" },
       { file: "e2e/activation/native-input-trace.mjs", symbol: "export function assertNativeInputDelivered(" },
@@ -11665,6 +11666,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", id: "each_input_makes_a_frame_whose_event_names_the_inputs_it_presents" },
       { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", id: "a_refused_frame_ends_its_wait_and_the_new_raster_is_drawn" },
+      { file: "e2e/test/view-display.test.mjs", id: "each loaded view surface of core.surfaces counts one view web view, shown or retained" },
       { file: "e2e/test/raster-probe-fixture.test.mjs", id: "each logged transaction keeps the cids of the answer of the sidecar and the identity of the frame that presents it" },
       { file: "e2e/test/input-probe.test.mjs", id: "an image region presents a transaction from the frame that the sidecar drew after it, in the same generation and raster" },
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
@@ -11674,7 +11676,7 @@ const FEATURE_LINKS = [
       { file: "e2e/test/activation/native-input-trace.test.mjs", id: "a native transaction must be complete, sent, error free and recorded under the identifiers of its report" },
       { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" },
     ],
-    expected: "The raster probe sidecar draws a frame after each input that it handles and names the inputs in that frame event, reads the refusal of a frame by its member error, so a stale frame ends its wait and the due frame of the newer raster is drawn, the view keeps the identity of that frame with each logged transaction, and each IME stage waits until the image region presents that frame. Each native.input.report input transaction of an IME check is complete, sent and error free, and matches one to one in order the raster probe input log entry with the same cids, whose actions, preedit, sidecar echo and answer cids are unchanged, with one later host.sidecar.request of the sidecar under those cids.",
+    expected: "The raster probe sidecar draws a frame after each input that it handles and names the inputs in that frame event, reads the refusal of a frame by its member error, so a stale frame ends its wait and the due frame of the newer raster is drawn, a check counts one view web view for each loaded view surface, shown or retained, the view keeps the identity of that frame with each logged transaction, and each IME stage waits until the image region presents that frame. Each native.input.report input transaction of an IME check is complete, sent and error free, and matches one to one in order the raster probe input log entry with the same cids, whose actions, preedit, sidecar echo and answer cids are unchanged, with one later host.sidecar.request of the sidecar under those cids.",
     levels: ["unit", "application"],
   },
   {
