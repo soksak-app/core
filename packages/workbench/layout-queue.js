@@ -71,17 +71,21 @@ export function createLayoutQueue({ failed, superseded }) {
  * (frame(work), nextTask). The microtask checkpoint where the preparation reply was fulfilled can belong to a ResizeObserver callback, and
  * a task runs outside the observation round (F43). After drawing, it waits for the host presentation (presented) so that the next layout cannot
  * replace the DOM first. If current() differs from epoch while preparing or while waiting to draw, it does not draw and hands the open transaction to the
- * next layout (cancel({ handover: true })). A preparation that fails or whose draw fails is cancelled (cancel({ handover: false })), which also ends a
- * transaction that an earlier layout handed over.
+ * next layout (cancel({ handover: true })). The plane draws its current model, so a layout whose prepared seats no longer name the tab and the
+ * dimming that each card shows (held() is false) does not draw either: it would draw other surfaces than the ones it placed, and the change
+ * that moved the seats has queued the next layout, which takes over the transaction. A preparation that fails or whose draw fails is
+ * cancelled (cancel({ handover: false })), which also ends a transaction that an earlier layout handed over.
  */
-export async function drawPrepared({ epoch, current, prepare, draw, frame, presented, cancel }) {
+// default: a layout that seats no surface (the first row of a window without a plane, the empty plane of a switch) always holds its seats.
+export async function drawPrepared({ epoch, current, held = () => true, prepare, draw, frame, presented, cancel }) {
   if (epoch !== current()) return;
+  const live = () => epoch === current() && held();
   let drawn = false;
   try {
     await prepare();
-    if (epoch === current()) {
+    if (live()) {
       await frame(() => {
-        if (epoch !== current()) return;
+        if (!live()) return;
         draw();
         drawn = true;
       });
@@ -96,7 +100,7 @@ export async function drawPrepared({ epoch, current, prepare, draw, frame, prese
     throw error;
   }
   if (!drawn) {
-    // Only a layout epoch change skips the draw, and the change has queued the next layout, so that layout takes over the transaction.
+    // Only a layout epoch change or a seat change skips the draw, and the change has queued the next layout, so that layout takes over the transaction.
     await cancel({ handover: true });
     return;
   }

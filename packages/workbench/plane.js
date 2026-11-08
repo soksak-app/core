@@ -1391,7 +1391,8 @@ let transactionSeats = null;
  *
  * Above the plane there are OS views to which CSS does not apply, and they are placed through a separate path. That path is
  * slower, so it is handled first. If draw is called after the OS view is moved to the received rectangle, both are reflected
- * in the same frame. When nothing is registered, the plane renders immediately.
+ * in the same frame. When nothing is registered, the plane renders immediately. fn receives (made, draw, seated, titlebar, held), where
+ * held() tells whether the seats of this layout still name what the cards show (seatsHeld).
  */
 export function onLayout(fn) {
   layouter = fn;
@@ -1431,6 +1432,20 @@ function seats(rects) {
     out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id), inset, bands, presentation });
   }
   return out;
+}
+
+/**
+ * Whether the seats that a layout prepared (seats) still name, for every card of the plane, the tab that the card shows and its
+ * dimming. The draw of a layout paints the current model, so a layout whose seats moved would draw other surfaces than the ones it
+ * placed; the change that moved them renders again and queues the next layout (drawPrepared of layout-queue.js).
+ */
+function seatsHeld(seated) {
+  if (!grid) return false;
+  const cards = grid.cards.filter((card) => !isPlace(card.id));
+  return cards.length === seated.size && cards.every((card) => {
+    const seat = seated.get(card.id);
+    return seat !== undefined && seat.id === activeTab(card).id && seat.dim === dimmed(card.id);
+  });
 }
 
 function restoreWindowState(kept) {
@@ -1478,7 +1493,7 @@ function build(kept) {
         } finally {
           transactionSeats = null;
         }
-      }, seated, chromeRow(factor));
+      }, seated, chromeRow(factor), () => seatsHeld(seated));
     },
     // The render of the plane consists of what the view draws and what this document draws. onChange fires right after the
     // view draws, so the rest is drawn here and the receiver is called afterward.

@@ -20,7 +20,7 @@ test("a cancelled layout records only the phases that the event catalog declares
     waitSurfaceCompositionDeclared: () => Promise.resolve(),
   });
   armLayoutFault();
-  page.onLayout({}, () => {}, [], 0);
+  page.onLayout({}, () => {}, [], 0, () => true);
   assert.equal(await page.presented(), false, "the layout of the armed fault did not fail");
   assert.ok(phases.includes("cancelled"), `the layout did not record its cancel: ${phases}`);
   const declared = catalog.events["workbench.trace.layout"].fields.properties.phase.enum;

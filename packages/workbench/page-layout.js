@@ -199,14 +199,18 @@ export function createPageLayout({
       // If the layout that cleared the plane fails, failed of the queue has already shown the failure.
       await layouts.wait();
     },
-    /** Schedules the layout that the plane produced (receiver of onLayout of plane.js). */
-    onLayout(made, draw, seated, titlebar) {
+    /**
+     * Schedules the layout that the plane produced (receiver of onLayout of plane.js). held tells whether the seats of the layout still
+     * name what the cards show; a layout whose seats moved does not draw and hands its preparation to the next layout (drawPrepared).
+     */
+    onLayout(made, draw, seated, titlebar, held) {
+      if (typeof held !== "function") throw new TypeError("a layout of the plane needs held, the check of its seats");
       const epoch = layoutEpoch;
       const id = ++layoutTraceId;
       const mark = (phase) => trace("layout", { phase, id, t: performance.now() });
       mark("queued");
       layouts.run(() => drawPrepared({
-        epoch, current: () => layoutEpoch,
+        epoch, current: () => layoutEpoch, held,
         prepare: async () => {
           mark("prepare");
           const result = await compositor.publishAhead(made, seated, titlebar);

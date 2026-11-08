@@ -158,6 +158,24 @@ test("a preparation that a newer layout replaced before its draw hands its trans
   }
 });
 
+// The plane draws its current model, so a layout whose prepared seats no longer name the tabs that the cards show would draw other
+// surfaces than the ones it placed, which V7c reports. The change that moved the seats queued the next layout, which takes over.
+test("a preparation whose seats no longer hold before its draw hands its transaction to the next layout", { timeout: 1000 }, async () => {
+  for (const moved of ["prepare", "frame"]) {
+    const cancels = [];
+    let holds = true;
+    await drawPrepared({
+      epoch: 1, current: () => 1, held: () => holds,
+      prepare: async () => { if (moved === "prepare") holds = false; },
+      draw: assert.fail,
+      frame: async (work) => { if (moved === "frame") holds = false; work(); },
+      presented: assert.fail,
+      cancel: async (options) => { cancels.push(options); },
+    });
+    assert.deepEqual(cancels, [{ handover: true }], `the seats moved during ${moved}`);
+  }
+});
+
 // A failed draw has no queued layout after it, so its cancel ends the transaction.
 test("a preparation whose draw fails cancels its transaction without a handover", { timeout: 1000 }, async () => {
   const cancels = [];
