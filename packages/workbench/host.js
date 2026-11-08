@@ -725,6 +725,9 @@ export const surfaces = native ? {
             }
             throw error;
           });
+          // The host removes each surface that this request leaves out, its declaration included, so a deferred view declares after
+          // the reply; otherwise the view of an earlier page under the same id takes the new declaration with it at a reload.
+          if (deferredViews.length) surfaceModules.holdCompositionDeclarations(deferredViews, scheduled);
           layoutFrame = scheduled;
           layoutResult = scheduled.then((frame) => {
             checkChrome(frame.chrome);

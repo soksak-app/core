@@ -33,6 +33,8 @@ const mounting = new Map();
 let nextMountAttempt = 0;
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
+/* The places in flight that left a surface out of the host request, by surface id (holdCompositionDeclarations). */
+const declarationHolds = new Map();
 
 const authorization = new Map();
 // The project of the start values that the host holds for each view, by surface id. The view calls of a view answer for that project,
@@ -1028,6 +1030,9 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
             entry.compositionDisposed.then(() => false),
           ]);
           if (!listenersReady || entry.disposed) return null;
+          // A place that left the surface out removes its declaration in the host, so the view declares after that place ends.
+          await declarationHolds.get(surface.surfaceId);
+          if (entry.disposed) return null;
           // The view declares its composition, which resolves the composition wait of the surface. The surface is ready from that
           // declaration, as a module surface is ready after its module mounts: a view has no module whose mount releases it.
           try {
@@ -1191,6 +1196,21 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
 
 // default: a surface that is not mounted is null.
 export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
+
+/**
+ * Holds the composition declaration of each surface until place has its reply. A place that leaves a surface out of the host request
+ * removes that surface in the host with its declaration (docs/spec/native-surfaces.md#view-surfaces), so a declaration sent while that
+ * place is in flight can be removed by it. A refused place removes nothing, so its end also releases the hold.
+ */
+export function holdCompositionDeclarations(surfaceIds, place) {
+  const ended = place.then(() => undefined, () => undefined);
+  for (const surfaceId of surfaceIds) {
+    const held = Promise.all([declarationHolds.get(surfaceId), ended]).then(() => {
+      if (declarationHolds.get(surfaceId) === held) declarationHolds.delete(surfaceId);
+    });
+    declarationHolds.set(surfaceId, held);
+  }
+}
 
 /**
  * Whether a drawing or a place left the surface out (docs/spec/plugins.md#sections): a place has left it out of the host, or it is a

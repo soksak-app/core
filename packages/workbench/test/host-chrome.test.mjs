@@ -252,6 +252,7 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
       await registrationReady;
     assert.equal(mounted.disposed, false, `composition wait completed before ${surfaceId} replacement was mounted`);
     },
+    holdCompositionDeclarations: (surfaceIds) => { order.push(`hold:${surfaceIds.join(",")}`); },
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -309,7 +310,7 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
     });
     assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").at(-1).request.surfaces.map(({ id }) => [id]),
       [["view-mount-order"]], "the declared view was not sent after mount registration");
-    assert.deepEqual(order, ["syncSurfaces", "composition:view-mount-order", "syncSurfaces", "presentSurfaces"]);
+    assert.deepEqual(order, ["hold:view-mount-order", "syncSurfaces", "composition:view-mount-order", "syncSurfaces", "presentSurfaces"]);
   } finally {
     dom.window.close();
   }

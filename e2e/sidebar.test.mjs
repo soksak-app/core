@@ -280,10 +280,15 @@ for (const app of Object.values(APPS)) {
     assert.ok(ratio >= DESIGN_RULE_CONTRAST, `the header rule contrast ${ratio.toFixed(3)} is below the design's ${DESIGN_RULE_CONTRAST.toFixed(3)}`);
     // The sidebar inside the card shares the card header line, so the first section starts right below that header.
     await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === inset), "the inset sidebar was not drawn");
-    const cardHeader = (await rects(s, "core.card.header")).reduce((a, b) => (b.y < a.y ? b : a));
     const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === inset)?.sections.every((item) => item.mounted),
       "the inset sidebar did not mount its sections");
     const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === inset));
+    // The header of the card of the inset sidebar, which the start layout need not place at the top of the board: the lowest header
+    // above the sidebar that spans its middle.
+    const over = (await rects(s, "core.card.header")).filter((rect) => rect.x <= box.x + box.width / 2
+      && rect.x + rect.width >= box.x + box.width / 2 && rect.y + rect.height <= box.y + 0.5);
+    assert.ok(over.length > 0, `${inset}: no card header stands above the inset sidebar`);
+    const cardHeader = over.reduce((a, b) => (b.y > a.y ? b : a));
     assert.ok(near(box.y, cardHeader.y + cardHeader.height), `${inset}: the inset sections start at ${box.y}, the card header ends at ${cardHeader.y + cardHeader.height}`);
     // The sidebar inside the card ends with its own status line, not the status line of the window sidebar, and that line is placed on the same line as the footer of the card content
     // (docs/spec/example-model.md).
