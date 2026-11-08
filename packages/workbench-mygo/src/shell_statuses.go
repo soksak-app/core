@@ -19,7 +19,7 @@ type gridStatus struct {
 	Width      float64              `json:"width"`
 	Height     float64              `json:"height"`
 	Gap        float64              `json:"gap"`
-	Plane      layout.Point         `json:"plane"`
+	Plane      layout.Rect          `json:"plane"`
 	Lines      map[string][]float64 `json:"lines"`
 	Cards      []gridCardStatus     `json:"cards"`
 }
@@ -194,7 +194,10 @@ func (s *Shell) gridState() (any, error) {
 	if s.plane == nil {
 		return nil, nil
 	}
-	status := gridStatus{Width: s.plane.Width(), Height: s.plane.Height(), Gap: s.plane.Gap(), Plane: s.planeOrigin(),
+	// The plane is the rectangle of the plane in the window: the frame that drew it gave the grid the size of the plane (drawWork).
+	origin := s.planeOrigin()
+	plane := layout.Rect{X: origin.X, Y: origin.Y, W: s.plane.Width(), H: s.plane.Height()}
+	status := gridStatus{Width: s.plane.Width(), Height: s.plane.Height(), Gap: s.plane.Gap(), Plane: plane,
 		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []gridCardStatus{}}
 	if s.fullscreen != "" {
 		status.Fullscreen = &s.fullscreen

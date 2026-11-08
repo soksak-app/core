@@ -8,7 +8,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { APPS, drag, open, within } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, drag, open, within } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { fresh, reading, START_PLUGIN } from "./fixture.mjs";
@@ -20,7 +20,7 @@ import {
   acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
 } from "./reload-view-reply.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
-import { expectedPresentations, rasterIdentity, viewPresentationJoins, viewWebviews } from "./view-display.mjs";
+import { appDomWebviews, expectedPresentations, rasterIdentity, viewPresentationJoins } from "./view-display.mjs";
 import {
   closeRasterTabs, ensureRasters, MEASURED, presentedFrame, RASTER, rasterReady, rasterServiceSnapshot, REGION, setMeasuredColor,
 } from "./raster-probe.mjs";
@@ -179,18 +179,21 @@ for (const app of Object.values(APPS)) {
     for (const raster of rasters) await sessionOf(s, raster.surface, `session ${raster.surface} did not open`);
     await s.presented();
     const window = await s.get("host.window");
-    // The app DOM webviews are the main page and one view web view per loaded view surface, shown or retained: the first raster
-    // probe tab was added to the card of a layout probe tab, whose view stays retained behind it. A view web view is not a
-    // document region, so it is counted in appDomWebviews and not in documentWebviews.
+    // The app DOM webviews are the main page of a window that has one and one view web view per loaded view surface, shown or
+    // retained: the first raster probe tab was added to the card of a layout probe tab, whose view stays retained behind it. A
+    // window of the Wails and Tauri hosts has one main page and a window of the mygo host has none
+    // (docs/spec/plugins.md#surface-ownership). A view web view is not a document region, so it is counted in appDomWebviews and
+    // not in documentWebviews.
     const surfaces = await s.get("core.surfaces");
     const shown = surfaces.filter((item) => item.visible && item.kind === "tab" && (item.plugin === RASTER || item.plugin === START_PLUGIN));
     assert.equal(shown.length, 3 + documentViews(surfaces).length,
       `the fixture must show three image region views and two document views, found ${JSON.stringify(shown)}`);
-    const { tabs: tabViews, sections: sectionViews } = viewWebviews(surfaces);
-    const expectedAppDom = 1 + tabViews.length + sectionViews.length;
-    assert.equal(window.webviews.filter((webview) => webview.main).length, 1, "the main page must be one webview of the window");
+    const { mainPages, tabs: tabViews, sections: sectionViews, count: expectedAppDom } =
+      appDomWebviews(surfaces, { mainPage: MAIN_PAGE_APPS.includes(app) });
+    assert.equal(window.webviews.filter((webview) => webview.main).length, mainPages,
+      `the window must have ${mainPages} main page web views`);
     assert.equal(window.appDomWebviews, expectedAppDom,
-      `expected the main page, ${tabViews.length} tab views (${tabViews.map((item) => `${item.surface} ${item.plugin}` +
+      `expected ${mainPages} main page, ${tabViews.length} tab views (${tabViews.map((item) => `${item.surface} ${item.plugin}` +
         `${item.visible ? "" : " retained"}`).join(", ")}) and ${sectionViews.length} section views ` +
       `(${expectedAppDom} app DOM webviews), measured ${window.appDomWebviews}`);
     // Each loaded layout probe view, shown or retained, holds one document region, which has its own native WebView.

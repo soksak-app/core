@@ -45,6 +45,19 @@ export function viewWebviews(surfaces) {
   return { tabs: loaded.filter((item) => item.kind === "tab"), sections: loaded.filter((item) => item.kind === "section") };
 }
 
+/**
+ * The web views that host.window counts in appDomWebviews: the main page of a window that has one and one view web view for each
+ * loaded view surface (viewWebviews). A window of the Wails and Tauri hosts has one app DOM web view, its main page, and a window of
+ * the mygo host has none (docs/spec/plugins.md#surface-ownership, docs/spec/native-surfaces.md). `mainPage` tells whether the window
+ * has a main page. Returns `{mainPages, tabs, sections, count}`.
+ */
+export function appDomWebviews(surfaces, { mainPage } = {}) {
+  if (typeof mainPage !== "boolean") throw new TypeError("appDomWebviews needs mainPage, whether the window has a main page");
+  const { tabs, sections } = viewWebviews(surfaces);
+  const mainPages = mainPage ? 1 : 0;
+  return { mainPages, tabs, sections, count: mainPages + tabs.length + sections.length };
+}
+
 /** The placement of a host surface row with phase `placed` (the frame and visibility of a view), validated at the boundary. */
 function placementOf(row) {
   for (const key of ["x", "y", "w", "h"]) {
