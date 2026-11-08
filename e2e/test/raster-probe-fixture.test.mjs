@@ -12,7 +12,7 @@ import { validateManifest, validateSidecar } from "@soksak/plugin-api";
 
 import { catalogOf, auditLogDirectories } from "../../scripts/check-events.mjs";
 import { INPUT_LOG_LIMIT, REGION, SIDECAR, startRasterProbe } from "../fixtures/raster-probe/probe/ui/raster-probe.js";
-import { RASTER_ENTRIES, rasterReady } from "../raster-probe.mjs";
+import { RASTER_ENTRIES, rasterReady, reopenedSession } from "../raster-probe.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PROBE = join(ROOT, "e2e/fixtures/raster-probe/probe");
@@ -330,4 +330,18 @@ test("a raster probe waits for its first frame while its window draws its image 
   calls.length = 0;
   await cleanups[0]();
   assert.deepEqual(calls, [["request", "diagnostics.window.draw-covered", { draw: false }]]);
+});
+
+test("a session that a respawned service opens is a new session, also when the new service names it as the dead one did", { timeout: 1000 }, () => {
+  // A service numbers its sessions from s1, so the session that a respawned service opens for the surface can have the name of
+  // the session that died with the old service; the service that holds it tells the two apart (docs/spec/persistent-services.md).
+  const service = (pid) => ({ pid, directory: "/config/services/rasterprobe-service", version: "0.0.40" });
+  const before = { event: "session", session: "s1", created: true, connected: true, child: 21, service: service(20), rows: 2, error: null };
+  const reopened = reopenedSession(before);
+  assert.equal(reopened({ ...before, rows: 0, child: 31, service: service(30) }), true, "the session of the respawned service");
+  assert.equal(reopened({ ...before, session: "s2", child: 31, service: service(30) }), true, "a later session of the respawned service");
+  assert.equal(reopened(before), false, "the session before the kill");
+  assert.equal(reopened({ ...before, connected: false, failure: "restart" }), false, "the lost connection");
+  assert.equal(reopened({ ...before, session: null, child: null, service: service(30) }), false, "a connection without a session");
+  assert.equal(reopened({ ...before, connected: false, service: service(30) }), false, "a session that is not connected");
 });
