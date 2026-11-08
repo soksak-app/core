@@ -26,6 +26,8 @@ import (
 type storedHost struct {
 	folderSettings map[string]map[string]any // The settings files of the folders, by root.
 	keepsProjects  bool                      // The answer of projectRemoveAsk is that the project stays.
+	// removalAnswers holds the argument of each projectRemoveAnswer call.
+	removalAnswers []string
 	plugins        *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
@@ -280,8 +282,12 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			return nil, nil
 		}),
 		"projectRemoveAsk": answer("projectRemoveAsk", func(json.RawMessage) (any, error) { return !h.keepsProjects, nil }),
-		"folderChoose":     answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
-		"windowReady":      answer("windowReady", none),
+		"projectRemoveAnswer": answer("projectRemoveAnswer", func(argument json.RawMessage) (any, error) {
+			h.removalAnswers = append(h.removalAnswers, string(argument))
+			return nil, nil
+		}),
+		"folderChoose": answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
+		"windowReady":  answer("windowReady", none),
 		"sidecarsRetain": answer("sidecarsRetain", func(argument json.RawMessage) (any, error) {
 			h.mu.Lock()
 			defer h.mu.Unlock()
@@ -936,12 +942,11 @@ func TestHostFailureShowsInTheLibrary(t *testing.T) {
 	if !f.tester.HasText("project directory is gone") {
 		t.Fatalf("the library shows %q", f.tester.Texts())
 	}
-	shown, err := f.shell.Registry().Read("core.workbench.error")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if text, ok := shown.(*string); !ok || text == nil || *text != "project directory is gone" {
-		t.Fatalf("the status core.workbench.error is %v", shown)
+	library := status[struct {
+		Error *string `json:"error"`
+	}](t, f, "core.library")
+	if library.Error == nil || *library.Error != "project directory is gone" {
+		t.Fatalf("the status core.library reports the error %v", library.Error)
 	}
 }
 

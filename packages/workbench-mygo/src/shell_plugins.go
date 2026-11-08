@@ -98,7 +98,7 @@ func (s *Shell) libraryStatus() libraryStatus {
 			status.Previews[project.ID] = panes
 		}
 	}
-	if text, ok := s.errors.Text(workbenchErrorPlace); ok {
+	if text, ok := s.errors.Text(libraryErrorPlace); ok {
 		status.Error = &text
 	}
 	if status.Form {

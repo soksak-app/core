@@ -18,6 +18,9 @@ type Requests struct {
 	calls    *Calls
 	post     func(task func())
 	failed   func(line string)
+	// open counts the delivered requests whose reply the host has not taken yet, and answered holds what waits until none is open.
+	open     int
+	answered []func()
 }
 
 // NewRequests returns the requests of a window. post runs a task as a later step of the main thread, and failed receives the line of
@@ -28,16 +31,46 @@ func NewRequests(registry *Registry, calls *Calls, post func(task func()), faile
 
 // Deliver receives the values of the event exposure-request.
 func (q *Requests) Deliver(data ...any) {
+	q.open++
 	q.post(func() {
 		request, err := readRequest(data)
 		if err != nil {
 			q.failed(fmt.Sprintf("exposure request: %v", err))
+			q.closed()
 			return
 		}
 		q.registry.Reply(request.Method, request.Params, q.changed, func(result any, err error) {
-			q.send("exposureReply", "exposure reply", replyOf(request.ID, result, err))
+			q.calls.CallInOrder(exposureOrder, "exposureReply", replyOf(request.ID, result, err), func(_ any, err error) {
+				if err != nil {
+					q.failed(fmt.Sprintf("exposure reply: %v", err))
+				}
+				q.closed()
+			})
 		})
 	})
+}
+
+// Answered runs then once the host has taken the reply of every delivered request. A new start of the workbench ends the document
+// that the host waits on, so it runs here and a reply is not lost to it (docs/spec/installation.md#applying-a-change).
+func (q *Requests) Answered(then func()) {
+	if q.open == 0 {
+		then()
+		return
+	}
+	q.answered = append(q.answered, then)
+}
+
+// closed ends a request whose reply the host took, and runs what waits once none is open.
+func (q *Requests) closed() {
+	q.open--
+	if q.open > 0 {
+		return
+	}
+	waiting := q.answered
+	q.answered = nil
+	for _, then := range waiting {
+		then()
+	}
 }
 
 // ReplyFor answers the request id that the host forwarded to surface.

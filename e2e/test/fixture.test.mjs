@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, fixtureRegistry, placeholderTabs, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, placeholderTabs, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -235,34 +235,4 @@ test("the settings dialog is shown when the modal web view of a main page shows 
   await settingsShown(mygo.s, "not shown");
   assert.deepEqual(mygo.waited, ["core.modal"]);
   await assert.rejects(settingsShown(shown({ "host.window": { pageProcess: null, modal: null }, "core.modal": null }).s, "not shown"), /not shown/);
-});
-
-test("a fixture registry is a new folder that the fixture registry build writes under the signal, and a failed build removes it", { timeout: 5000 }, async (t) => {
-  const builds = [];
-  const signal = new AbortController().signal;
-  const folder = await fixtureRegistry({ sok: "/bin/sok", signal, build: async (sok, out, options) => {
-    builds.push([sok, out, options]);
-    writeFileSync(join(out, "index.json"), "{}");
-  } });
-  t.after(() => rmSync(folder, { recursive: true, force: true }));
-  assert.deepEqual(builds, [["/bin/sok", folder, { signal }]]);
-  assert.equal(readFileSync(join(folder, "index.json"), "utf8"), "{}");
-  let failed;
-  await assert.rejects(fixtureRegistry({ sok: "/bin/sok", build: async (_, out) => { failed = out; throw new Error("registry build failed"); } }),
-    /registry build failed/);
-  assert.equal(existsSync(failed), false);
-});
-
-test("a failed fixture registry build whose folder cannot be removed rejects with both failures", { timeout: 5000 }, async (t) => {
-  let folder;
-  t.after(() => rmSync(folder, { recursive: true, force: true }));
-  await assert.rejects(fixtureRegistry({
-    sok: "/bin/sok",
-    build: async (_, out) => { folder = out; throw new Error("registry build failed"); },
-    remove: () => { throw new Error("folder removal failed"); },
-  }), (error) => {
-    assert.ok(error instanceof AggregateError);
-    assert.deepEqual(error.errors.map((item) => item.message), ["registry build failed", "folder removal failed"]);
-    return true;
-  });
 });

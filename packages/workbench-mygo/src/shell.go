@@ -379,9 +379,15 @@ type Shell struct {
 	}
 	// drawnSize is the size of the window that the last frame drew, which tells a frame that the window was resized.
 	drawnSize [2]float32
-	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
-	// shell saves before a reload. They belong to the main thread.
-	started, changed, reloading bool
+	// started is set once the host took the first state of the shell, and changed once plugins changed before that. applying is set
+	// while a plugin change applies, applyDue when a change arrived during it, and applied holds what the running apply answers. They
+	// belong to the main thread.
+	started, changed, applying, applyDue bool
+	applied                              []func(reloaded bool, err error)
+	// settingsIssued counts the settings writes that the shell made and settingsWritten those that the host answered, in their
+	// order; settingsWaits are the commands that wait for writes. They belong to the main thread.
+	settingsIssued, settingsWritten int
+	settingsWaits                   []*settingsWait
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
@@ -553,7 +559,7 @@ func (s *Shell) Start() {
 								// After the application restarts or the window fails, the sessions of surfaces in no layout end.
 								s.retainSessions()
 								if s.changed || installed {
-									s.pluginsChanged()
+									s.applyPlugins(func(bool, error) {})
 								}
 							})
 						})

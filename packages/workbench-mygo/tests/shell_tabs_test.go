@@ -161,6 +161,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Invalidate:  func() {},
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
+		Reload:      func() { stored.reloads++ },
 		Tabs: func(*workbench.Shell) workbench.TabPorts {
 			return workbench.TabPorts{Plugins: func() []workbench.ShellPlugin {
 				return []workbench.ShellPlugin{
@@ -479,4 +480,28 @@ func TestACloseRequestClosesTheWindowAfterTheSessionsAreRead(t *testing.T) {
 	if !f.host.called("windowClose") {
 		t.Fatalf("the window did not close after the read: %v", f.host.calls)
 	}
+}
+
+// A change of the store gives the window the stored record of each project that it does not hold, so it opens the layout that another
+// window or another environment stored, as readProjects of the page does.
+func TestAStoreChangeGivesTheStoredLayoutOfAProjectThatTheWindowDoesNotHold(t *testing.T) {
+	other := storedProject(tab("tab-dddddd", "notes"))
+	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
+	stored := &storedHost{common: map[string]any{"projectOpening": "tabs"}, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes")), other}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	tabs := other["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]["data"].(map[string]any)
+	tabs["tabs"] = []map[string]any{tab("tab-dddddd", "absent")}
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+	f.run(t, "core.project.activate", `{"id":"prj-b"}`)
+	for _, row := range status[[]map[string]any](t, f.shellFixture, "core.surfaces") {
+		if row["surface"] == "tab-dddddd" {
+			if row["plugin"] != "absent" || row["placeholder"] != "missing" {
+				t.Fatalf("the stored tab opened as %v", row)
+			}
+			return
+		}
+	}
+	t.Fatalf("the stored tab is not in core.surfaces %v", status[[]map[string]any](t, f.shellFixture, "core.surfaces"))
 }

@@ -4,16 +4,12 @@
 // tabs name the plugins of the published starter, which a fixture configuration does not load, so they open as placeholders. The
 // preparation replaces each such placeholder by a tab of the layout probe fixture `layoutprobe` in the same card and returns the tab
 // of the focused card.
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
-import { buildFixtureRegistry } from "../scripts/fixture-registry.mjs";
-import { combineFailures } from "../scripts/test-command.mjs";
 
 export { placeholderTabs, reading, restoreRegistry, useRegistry } from "@soksak/window-check/start.mjs";
 
@@ -93,30 +89,6 @@ export const cardSidebar = (s, { plugin = START_PLUGIN, set, sections = probeLis
  * installed in the configuration folder of the application.
  */
 export const recordCatalog = (app) => catalogOfConfiguration(app.configDir);
-
-const removeFolder = (folder) => rmSync(folder, { recursive: true, force: true });
-
-/**
- * Resolves with a new registry folder that holds the fixture registry (scripts/fixture-registry.mjs): every plugin of e2e/fixtures
- * packed, the pack fixtures and the index that the `sok registry build` of the executable `sok` writes. `build` writes it under
- * `signal`, each of its commands within the step limit of the fixture registry. A failed build removes the folder with `remove`; when
- * the removal also fails, the build rejects with an AggregateError of both. The caller removes the folder.
- */
-export async function fixtureRegistry({ sok, signal, build = buildFixtureRegistry, remove = removeFolder }) {
-  const folder = mkdtempSync(join(tmpdir(), "soksak-fixture-registry-"));
-  try {
-    await build(sok, folder, { signal });
-  } catch (error) {
-    let cleanupError = null;
-    try {
-      remove(folder);
-    } catch (cleanup) {
-      cleanupError = cleanup;
-    }
-    throw combineFailures(error, cleanupError);
-  }
-  return folder;
-}
 
 /** Puts the window in the start state of a check with a START_PLUGIN start tab (start.mjs fresh) and returns `{surface, plugin}`. */
 export const fresh = (s, options = {}) => start.fresh(s, { ...options, startPlugin: START_PLUGIN, startEntries: START_ENTRIES });

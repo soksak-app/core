@@ -10,7 +10,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, eventLine, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { START_PLUGIN, fresh } from "./fixture.mjs";
+import { START_PLUGIN, fresh, probeSidebarSets } from "./fixture.mjs";
 
 const LIGHT_DOCUMENT = [231, 233, 238];
 const DARK_DOCUMENT = [21, 28, 42];
@@ -121,14 +121,17 @@ for (const app of Object.values(APPS)) {
     const own = cardOf(grid, surface);
     const other = grid.cards.find((card) => !card.fixed && card.id !== own.id && (card.tabs ?? []).length > 0);
     assert.ok(other, `the start layout has no other card beside ${own.id}`);
+    // The sets of environment.json replace the sets that the plugins declare (docs/spec/plugins.md#default-sidebar-sets), so the check
+    // gives its sets the sections of the layout probe and shows the first.
+    const set = (await probeSidebarSets(s))[0].id;
     s.cleanup(() => s.run("core.card.sidebar.set", { card: other.id, side: "left", set: "inherit" }));
 
     // A prepare request is applied inside the layer transaction of the window and does not appear on screen before the commit. While that, a surface that is visible on screen
     // is hidden, a press at its position goes to the page instead of the surface. Turning the inner sidebar of the other card on and off moves only the surfaces of that card
     // and the probe surface stays in place, so a layout request must not hide the probe surface.
     const offsets = currentEventOffsets(s.app.configDir);
-    for (const set of [`${START_PLUGIN}.list`, "off", `${START_PLUGIN}.list`]) {
-      await s.run("core.card.sidebar.set", { card: other.id, side: "left", set });
+    for (const shown of [set, "off", set]) {
+      await s.run("core.card.sidebar.set", { card: other.id, side: "left", set: shown });
       await s.presented();
     }
     await s.flushLog();

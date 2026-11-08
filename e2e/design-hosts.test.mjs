@@ -9,7 +9,7 @@ import test from "node:test";
 
 import { APPS, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { designDifferences } from "@soksak/window-check/design-rects.mjs";
-import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { cardSidebar, fresh } from "./fixture.mjs";
 import { retainDesignStateCapture } from "./still-capture.mjs";
 
 const DEBUG_ENTRIES = JSON.parse(readFileSync(new URL("./fixtures/design-debug-entries.json", import.meta.url), "utf8"));
@@ -166,7 +166,7 @@ async function walk(t, s, states) {
   await s.run("core.debug.close");
   await s.until("core.debug", (debug) => !debug.open, "the debug view did not close");
 
-  await terminalCardSidebar(s);
+  await cardSidebar(s);
   await read("card sidebar");
   await shown("at the end");
 }

@@ -829,6 +829,53 @@ func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
 	}
 }
 
+// A plugin change asks about a modified tab before the new start: 적용하지 않기 keeps the workbench, core.plugins.apply asks again and
+// answers reloaded false for a kept tab, and 저장하지 않고 적용 starts the workbench again after the answer reloaded true
+// (docs/spec/installation.md#applying-a-change).
+func TestAPluginChangeAsksAboutAModifiedTab(t *testing.T) {
+	f := modifiedShell(t)
+	f.shell.Event("plugins-changed", nil)
+	f.settle()
+	asked := status[pickerStatus](t, f.shellFixture, "core.picker")
+	names := make([]string, 0, len(asked.Items))
+	for _, item := range asked.Items {
+		names = append(names, item.Name)
+	}
+	if !asked.Open || !strings.HasSuffix(asked.Title, " 탭에 저장하지 않은 변경이 있습니다") ||
+		!reflect.DeepEqual(names, []string{"저장하고 적용", "저장하지 않고 적용", "적용하지 않기"}) {
+		t.Fatalf("the plugin change asked %q with %v", asked.Title, names)
+	}
+	f.click("core.picker.item", "keep")
+	f.settle()
+	if f.host.reloads != 0 {
+		t.Fatal("적용하지 않기 started the workbench again")
+	}
+	apply := func(key string) (any, error) {
+		var value any
+		var failure error
+		answered := false
+		f.shell.Registry().RunLater("core.plugins.apply", json.RawMessage(`{}`), func(result any, err error) {
+			value, failure, answered = result, err, true
+		})
+		f.settle()
+		if answered {
+			t.Fatalf("core.plugins.apply answered %v with %v before the question", value, failure)
+		}
+		f.click("core.picker.item", key)
+		f.settle()
+		if !answered {
+			t.Fatalf("core.plugins.apply did not answer after %s", key)
+		}
+		return value, failure
+	}
+	if value, err := apply("keep"); err != nil || !reflect.DeepEqual(value, map[string]bool{"reloaded": false}) || f.host.reloads != 0 {
+		t.Fatalf("a kept tab answered %v with %v after %d starts", value, err, f.host.reloads)
+	}
+	if value, err := apply("discard"); err != nil || !reflect.DeepEqual(value, map[string]bool{"reloaded": true}) || f.host.reloads != 1 {
+		t.Fatalf("저장하지 않고 적용 answered %v with %v after %d starts", value, err, f.host.reloads)
+	}
+}
+
 // nodeLabeled returns the first element with the label.
 func nodeLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
 	for _, node := range nodes {

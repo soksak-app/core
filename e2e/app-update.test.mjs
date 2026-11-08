@@ -12,8 +12,8 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { buildFixtureRegistry, nextPatch, readIndex } from "../scripts/fixture-registry.mjs";
-import { fixtureRegistry, fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
+import { buildFixtureRegistry, fixtureRegistry, nextPatch, readIndex } from "../scripts/fixture-registry.mjs";
+import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 import { releaseKey } from "../scripts/platform/platform.js";
 
 const NEWER = "99.0.0";

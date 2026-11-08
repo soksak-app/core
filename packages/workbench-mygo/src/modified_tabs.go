@@ -20,16 +20,26 @@ func (s *Shell) tabModified(tab string) bool {
 	return report != nil && report.Modified
 }
 
-// askModified asks about the modified tab of card and gives answered true when its changes were saved or discarded. The layer stands
-// at the button of the tab, and at the card when its head shows no such button.
-func (s *Shell) askModified(card string, tab layout.Tab, answered func(settled bool)) {
+// modifiedAnswers are the names of the answers of the question about a modified tab.
+type modifiedAnswers struct{ save, discard, keep string }
+
+// The answers when a tab, a card, a space or the window closes, and when a plugin change applies
+// (docs/spec/installation.md#applying-a-change).
+var (
+	closeAnswers = modifiedAnswers{save: "저장하고 닫기", discard: "저장하지 않고 닫기", keep: "닫지 않기"}
+	applyAnswers = modifiedAnswers{save: "저장하고 적용", discard: "저장하지 않고 적용", keep: "적용하지 않기"}
+)
+
+// askModified asks about the modified tab of card with the answers words and gives answered true when its changes were saved or
+// discarded. The layer stands at the button of the tab, and at the card when its head shows no such button.
+func (s *Shell) askModified(card string, tab layout.Tab, words modifiedAnswers, answered func(settled bool)) {
 	save := ""
 	if owner := s.loadedPlugin(tab.Plugin); owner != nil {
 		save = owner.Save
 	}
-	items := []pickerItem{{Key: "discard", Name: "저장하지 않고 닫기"}, {Key: "keep", Name: "닫지 않기"}}
+	items := []pickerItem{{Key: "discard", Name: words.discard}, {Key: "keep", Name: words.keep}}
 	if save != "" {
-		items = slices.Insert(items, 0, pickerItem{Key: "save", Name: "저장하고 닫기"})
+		items = slices.Insert(items, 0, pickerItem{Key: "save", Name: words.save})
 	}
 	layer := s.openPicker(s.tabName(tab)+" 탭에 저장하지 않은 변경이 있습니다", items, func(key string) error {
 		switch key {
@@ -87,7 +97,7 @@ func (s *Shell) askedCloseTab(id string) (bool, error) {
 	if !s.tabModified(id) {
 		return true, s.closeTab(id)
 	}
-	s.askModified(s.cardOfTab(id), tab, func(settled bool) {
+	s.askModified(s.cardOfTab(id), tab, closeAnswers, func(settled bool) {
 		if settled {
 			s.showFailure(s.closeTab(id))
 		}
@@ -118,7 +128,7 @@ func (s *Shell) askedCloseCard(id string) (bool, error) {
 	if data != nil {
 		for _, tab := range data.TabList() {
 			if s.tabModified(tab.ID) {
-				s.askModified(id, tab, func(settled bool) {
+				s.askModified(id, tab, closeAnswers, func(settled bool) {
 					if !settled {
 						return
 					}
@@ -138,8 +148,9 @@ func (s *Shell) askedCloseCard(id string) (bool, error) {
 	return true, s.closeCard(id)
 }
 
-// settleModified asks about each modified tab of the plane in turn, and gives done false when a tab is kept.
-func (s *Shell) settleModified(done func(settled bool)) {
+// settleModified asks about each modified tab of the plane in turn with the answers words, and gives done false when a tab is kept. The
+// library shows no space, so the window has no tab to ask about.
+func (s *Shell) settleModified(words modifiedAnswers, done func(settled bool)) {
 	type asked struct {
 		card string
 		tab  layout.Tab
@@ -164,7 +175,7 @@ func (s *Shell) settleModified(done func(settled bool)) {
 			done(true)
 			return
 		}
-		s.askModified(modified[index].card, modified[index].tab, func(settled bool) {
+		s.askModified(modified[index].card, modified[index].tab, words, func(settled bool) {
 			if !settled {
 				done(false)
 				return
@@ -178,7 +189,7 @@ func (s *Shell) settleModified(done func(settled bool)) {
 // closeWindowAsked answers a close request of the window: a modified tab that the person keeps keeps the window open, and the host hears
 // of it, because the request may belong to a quit.
 func (s *Shell) closeWindowAsked() {
-	s.settleModified(func(settled bool) {
+	s.settleModified(closeAnswers, func(settled bool) {
 		if !settled {
 			cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close_kept"})
 			s.calls.Caused(cids).CallInOrder("workspace", "windowCloseKept", nil, func(_ any, err error) {

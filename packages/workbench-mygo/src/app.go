@@ -215,31 +215,71 @@ func (a *App) Emit(window host.Frontend, name string, data ...any) {
 // Call delivers a call of the workbench call channel. The native workbench draws the state of a call as an event.
 func (a *App) Call(window host.Frontend, script string) {}
 
-// pluginsChanged applies a change of the installed plugins: the workbench saves the projects and starts again, so it loads the plugins
-// that installed.json lists (docs/spec/installation.md#applying-a-change). A shell follows the change once it started, and one reload
-// covers every change before it, because the new workbench reads the state again.
+// pluginsChanged follows the event plugins-changed: a shell that started reads the plugin state again and applies the change; a change
+// before the start waits for it, because the apply saves the projects (docs/spec/installation.md#applying-a-change).
 func (s *Shell) pluginsChanged() {
 	if !s.started {
 		s.changed = true
 		return
 	}
-	if s.reloading {
+	s.pluginOperations.Refresh(func() {
+		s.pluginOperations.RefreshOutdated(func() { s.applyPlugins(func(bool, error) {}) })
+	})
+}
+
+// applyPlugins applies a change of the installed plugins to the window: it asks about each modified tab, and when no tab was kept it
+// saves the projects, answers done reloaded true and starts the workbench again once the host took every reply, so it loads the
+// plugins that installed.json lists. A kept tab keeps the workbench and answers reloaded false. At most one apply runs: a change during
+// it is answered by it and makes one more apply due, which runs after a kept workbench when the plugin state still differs; a new
+// start reads the state again.
+func (s *Shell) applyPlugins(done func(reloaded bool, err error)) {
+	s.applied = append(s.applied, done)
+	if s.applying {
+		s.applyDue = true
 		return
 	}
-	s.reloading = true
-	s.keep()
-	s.flushTabs(func() {
-		s.events.Flush(func() {
-			s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(_ any, err error) {
-				if err != nil {
-					s.reloading = false
-					s.fail(err)
-					return
-				}
-				s.options.Reload()
+	s.applying = true
+	s.settleModified(applyAnswers, func(settled bool) {
+		if !settled {
+			s.appliedWith(false, nil)
+			return
+		}
+		s.keep()
+		s.flushTabs(func() {
+			s.events.Flush(func() {
+				s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(_ any, err error) {
+					if err != nil {
+						s.fail(err)
+						s.appliedWith(false, err)
+						return
+					}
+					s.answerApplied(true, nil)
+					s.requests.Answered(s.options.Reload)
+				})
 			})
 		})
 	})
+}
+
+// answerApplied gives the result of the running apply to each caller that waits for it.
+func (s *Shell) answerApplied(reloaded bool, err error) {
+	waiting := s.applied
+	s.applied = nil
+	for _, done := range waiting {
+		done(reloaded, err)
+	}
+}
+
+// appliedWith ends an apply that kept the workbench, and runs the due apply when the plugin state still differs.
+func (s *Shell) appliedWith(reloaded bool, err error) {
+	s.applying = false
+	s.answerApplied(reloaded, err)
+	if s.applyDue {
+		s.applyDue = false
+		if s.pluginOperations.Status().Reload {
+			s.applyPlugins(func(bool, error) {})
+		}
+	}
 }
 
 // Event handles an event of the host in a step of the main thread.
@@ -286,6 +326,8 @@ func (s *Shell) event(name string, data []any) {
 		s.appUpdates.Refresh()
 	case "project-close-request":
 		s.closeWindowAsked()
+	case "project-remove-request":
+		s.removalAsked(data)
 	case "menu-command":
 		s.menuCommand(data)
 	case "debug-save-progress", "debug-save-done", "debug-log-changed":
@@ -350,8 +392,7 @@ var eventsLeft = map[string]bool{"diagnostics-tick": true, "diagnostics-unlisten
 	"document-message": true, "document-state": true, "document-stream": true, "exit-request": true, "exposure-registered": true,
 	"image-event": true, "log-policy": true, "memory-pressure": true, "modal-content": true,
 	"modal-position": true, "modal-rendered": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,
-	"project-remove-request": true,
-	"run-began":              true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
+	"run-began": true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
 	"surface-pressed": true, "theme": true, "view-call": true, "view-process-ended": true,
 	"view-reply": true, "view-source-ended": true, "view-source-registered": true, "view-stopped": true,
 	"window-active": true}

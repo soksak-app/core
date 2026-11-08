@@ -202,6 +202,41 @@ static void checkNativeView(void) {
     [window release];
 }
 
+// A window without a main web view draws its workbench in the views outside the view that holds its surface hosts: a hit there is the
+// workbench, and a hit on a surface host or on the view that holds them is not (docs/spec/native-surfaces.md#surface-host-container).
+static void checkWorkbenchHit(void) {
+    SPScaledWindow *window = makeWindow(NSMakeRect(0, 0, 400, 300), 2);
+    NSView *native = (NSView *)sp_window_native_view(window);
+    [window.contentView addSubview:native];
+    native.frame = window.contentView.bounds;
+    // The view of the workbench stands over the native view and leaves the right half to it, as a hole over a surface does.
+    NSView *workbench = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 200, 300)] autorelease];
+    [window.contentView addSubview:workbench positioned:NSWindowAbove relativeTo:native];
+    void *surface = sp_surface_create(native);
+    check(surface != NULL, @"the workbench hit fixture creates its surface host");
+    if (surface == NULL) { [native removeFromSuperview]; [window close]; [window release]; return; }
+    webviewSetFrame(surface, 300, 0, 100, 300);
+    webviewSetSurfaceHidden(surface, false);
+    WKWebView *web = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    check(sp_surface_place_view(surface, web), @"the workbench hit fixture places its web view");
+    NSDictionary *drawn = parsed(sp_window_hit(window, native, 100, 150));
+    check([drawn[@"main"] boolValue] && [drawn[@"view"] unsignedLongLongValue] == 0,
+        [NSString stringWithFormat:@"a hit on the workbench of a window without a main web view is the workbench (%@)", drawn]);
+    NSDictionary *document = parsed(sp_window_hit(window, native, 350, 150));
+    check(![document[@"main"] boolValue] && [document[@"view"] unsignedLongLongValue] == (uintptr_t)web,
+        [NSString stringWithFormat:@"a hit on the web view of a surface host is not the workbench (%@)", document]);
+    NSDictionary *hole = parsed(sp_window_hit(window, native, 250, 150));
+    check(![hole[@"main"] boolValue],
+        [NSString stringWithFormat:@"a hit on the view that holds the surface hosts is not the workbench (%@)", hole]);
+    sp_surface_unplace_view(web);
+    [web removeFromSuperview];
+    sp_surface_close(surface);
+    [workbench removeFromSuperview];
+    [native removeFromSuperview];
+    [window close];
+    [window release];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -210,5 +245,6 @@ int main(void) { @autoreleasepool {
     checkScale();
     checkCursorUpdate();
     checkNativeView();
+    checkWorkbenchHit();
     return failures == 0 ? 0 : 1;
 } }
