@@ -6275,7 +6275,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "shutdown_waiters" },
       { file: "packages/host/go/src/sidecars.go", symbol: "CloseOwner" },
     ],
-    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
+    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "process measurement preserves identities" }],
     expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
     levels: ["application"],
   },
@@ -6284,8 +6284,8 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "Close" },
     ],
-    tests: [{ file: "e2e/test/terminal-processes.test.mjs", id: "process measurement preserves identities" }],
-    expected: "Closing terminal tabs reaps their PTY children while retaining the shared terminal service.",
+    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "process measurement preserves identities" }],
+    expected: "Closing raster probe tabs reaps their session children while retaining the shared persistent service.",
     levels: ["native", "application"],
   },
   
