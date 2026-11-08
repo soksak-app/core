@@ -408,7 +408,9 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(rawSnapshot != NULL && taggedSnapshot != NULL && rawSnapshot != taggedSnapshot,
             @"TEST 1A: the layer receives a tagged image separate from the raw source snapshot");
         NSSet<NSString *> *issuedPayloads = nil;
-        bool copiedIssued = sp_image_capture_match_identity_copy_payloads(identityToken, &issuedPayloads, &identityError);
+        unsigned char identityRegionToken[16];
+        sp_region_identity_token(identityRegion, identityRegionToken);
+        bool copiedIssued = sp_image_capture_match_identity_copy_payloads(identityRegionToken, &issuedPayloads, &identityError);
         check(copiedIssued && identityError == NULL && issuedPayloads.count == 1,
             @"TEST 1A: the presented region exposes exactly its issued decode payload");
         free(identityError); identityError = NULL;
@@ -447,6 +449,56 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_image_capture_match_end();
         sp_region_close(identityRegion);
         if (identitySurface) CFRelease(identitySurface);
+
+        // TEST 1B: a supplier may present the frames of one region from several IOSurfaces (the lease mode keeps a held surface
+        // and draws the next frame into another). Every frame of the region is tagged with the one token of the region, so the
+        // decoder of a capture sample reads all issued frames of the region at its ROI as one region.
+        void *alternatingRegion = sp_region_create(surface, "identity-alternating", testEvent, NULL);
+        sp_region_place(alternatingRegion, 0, 0, 0, 0, true);
+        double alternatingRaster[3] = {0};
+        check(sp_region_raster(alternatingRegion, alternatingRaster) && alternatingRaster[0] >= 192 && alternatingRaster[1] >= 192,
+            @"TEST 1B: the alternating identity region has enough raster for identity tags");
+        unsigned char firstSurfaceToken[16], secondSurfaceToken[16], alternatingRegionToken[16], otherRegionToken[16];
+        IOSurfaceRef firstAlternating = createColoredGlobalSurface((size_t)alternatingRaster[0], (size_t)alternatingRaster[1],
+            firstSurfaceToken);
+        IOSurfaceRef secondAlternating = createColoredGlobalSurface((size_t)alternatingRaster[0], (size_t)alternatingRaster[1],
+            secondSurfaceToken);
+        sp_region_identity_token(alternatingRegion, alternatingRegionToken);
+        void *otherRegion = sp_region_create(surface, "identity-other", testEvent, NULL);
+        sp_region_identity_token(otherRegion, otherRegionToken);
+        unsigned char sameToken[16];
+        sp_region_identity_token(alternatingRegion, sameToken);
+        check(memcmp(alternatingRegionToken, sameToken, 16) == 0 && memcmp(alternatingRegionToken, otherRegionToken, 16) != 0,
+            @"TEST 1B: a region keeps one identity token, and another region has its own");
+        sp_image_capture_match_begin(NULL, NULL);
+        check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
+            @"TEST 1B: the alternating-surface fixture starts an identity session");
+        free(identityError); identityError = NULL;
+        BOOL alternatingPresented = firstAlternating && secondAlternating
+            && sp_region_present(alternatingRegion, IOSurfaceGetID(firstAlternating), firstSurfaceToken,
+                alternatingRaster[0], alternatingRaster[1], alternatingRaster[2], 96, 10, 1)
+            && sp_region_present(alternatingRegion, IOSurfaceGetID(secondAlternating), secondSurfaceToken,
+                alternatingRaster[0], alternatingRaster[1], alternatingRaster[2], 96, 10, 2);
+        check(alternatingPresented, @"TEST 1B: the region presents two frames from two IOSurfaces");
+        NSSet<NSString *> *regionPayloads = nil, *firstSurfacePayloads = nil, *secondSurfacePayloads = nil;
+        bool copiedRegion = sp_image_capture_match_identity_copy_payloads(alternatingRegionToken, &regionPayloads, &identityError);
+        free(identityError); identityError = NULL;
+        bool copiedFirst = sp_image_capture_match_identity_copy_payloads(firstSurfaceToken, &firstSurfacePayloads, &identityError);
+        free(identityError); identityError = NULL;
+        bool copiedSecond = sp_image_capture_match_identity_copy_payloads(secondSurfaceToken, &secondSurfacePayloads, &identityError);
+        free(identityError); identityError = NULL;
+        check(copiedRegion && regionPayloads.count == 2,
+            ([NSString stringWithFormat:@"TEST 1B: both frames are issued under the token of the region, found %lu",
+                (unsigned long)regionPayloads.count]));
+        check(copiedFirst && copiedSecond && firstSurfacePayloads.count == 0 && secondSurfacePayloads.count == 0,
+            @"TEST 1B: no frame is issued under the token of the IOSurface that carried it");
+        [regionPayloads release]; [firstSurfacePayloads release]; [secondSurfacePayloads release];
+        sp_image_capture_match_identity_session_end();
+        sp_image_capture_match_end();
+        sp_region_close(alternatingRegion);
+        sp_region_close(otherRegion);
+        if (firstAlternating) CFRelease(firstAlternating);
+        if (secondAlternating) CFRelease(secondAlternating);
 
         void *smallIdentityRegion = sp_region_create(surface, "small-identity", testEvent, NULL);
         sp_region_place(smallIdentityRegion, 0, 0, 0, 330, true);
