@@ -365,7 +365,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native fetch-native build-registry build-fixture-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native fetch-native build-registry build-fixture-registry fixture-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -487,13 +487,19 @@ build-registry: check-cargo
 # every fake sidecar of e2e/fixtures/sidecars for the current platform, and then creates index.json in target/fixture-registry with
 # one pack fixtures of every fixture plugin. It reads no plugin or sidecar repository and no registry index. Each fake sidecar is
 # built first with its own build script, because its release holds the executable that its sidecar.json declares.
+# fixture-registry builds the fake sidecars and the registry with the sok that FIXTURE_SOK names and builds no sok: a candidate or
+# prebuilt run of scripts/test-app.mjs builds it from its checkout into its configuration root with the sok of a bundle under test.
 FIXTURE_REGISTRY = target/fixture-registry
+FIXTURE_SOK = target/debug/sok
 FIXTURE_SIDECARS = $(patsubst %/sidecar.json,%,$(wildcard e2e/fixtures/sidecars/*/sidecar.json))
 
 build-fixture-registry: check-cargo
 	@$(CARGO_ENV) $(CARGO) build --locked -p soksak-sok
+	@$(MAKE) --no-print-directory fixture-registry FIXTURE_SOK=target/debug/sok FIXTURE_REGISTRY=$(FIXTURE_REGISTRY)
+
+fixture-registry:
 	@for dir in $(FIXTURE_SIDECARS); do $(CARGO_ENV) pnpm --dir "$$dir" run build || exit 1; done
-	@node scripts/fixture-registry.mjs --sok target/debug/sok --out $(FIXTURE_REGISTRY)
+	@node scripts/fixture-registry.mjs --sok "$(FIXTURE_SOK)" --out "$(FIXTURE_REGISTRY)"
 
 # The installation stage of the workspace: `make install` of every plugin and sidecar repository that scripts/workspace-registry.json
 # declares. A fresh checkout runs it once before make build-registry builds and packs those repositories.
@@ -673,10 +679,10 @@ check-release-mygo: build-mygo-release
 # end-to-end tests. They need a display, so they run only locally. test-app-activation runs the activation tier and test-app-real the
 # real-input tier, which a person approves because they activate the applications and change the input source; test-app-person runs
 # the checks that a person operates at the machine.
-# Each e2e target builds the three debug applications, and scripts/test-app.mjs runs the window-check script and the native end-to-end
-# target of its tier in a new configuration root under target/e2e: it builds the fixture registry of e2e/fixtures into that root,
-# installs every fixture plugin into each application, starts the applications, runs the checks and quits the applications.
-E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo
+# Each e2e target builds the three debug applications and the fixture registry of e2e/fixtures, and scripts/test-app.mjs runs the
+# window-check script and the native end-to-end target of its tier in a new configuration root under target/e2e: it installs every
+# fixture plugin into each application, starts the applications, runs the checks and quits the applications.
+E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-fixture-registry
 # The registered Go TestE2E cases currently belong to the mygo adapter. The source
 # inventory in test-kinds.test.mjs rejects future cases outside this declared scope.
 # Display and activation requirements remain those of each case.

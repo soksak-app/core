@@ -189,9 +189,25 @@ export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack 
   return build(binary, out, bound);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { values } = parseArgs({ options: { sok: { type: "string" }, out: { type: "string" } }, strict: true });
+/**
+ * The command line: builds the registry of `--sok` into `--out` and resolves with the result of the build. SIGTERM, SIGINT or SIGHUP
+ * of `signals` (the process) aborts the signal of the build, so a run that ends the build (scripts/test-app.mjs interrupts its step
+ * with SIGTERM, and make passes it on) ends the running pack instead of leaving it behind.
+ */
+export async function main(argv, { signals = process, build = buildFixtureRegistry } = {}) {
+  const { values } = parseArgs({ args: argv, options: { sok: { type: "string" }, out: { type: "string" } }, strict: true });
   for (const name of ["sok", "out"]) if (!values[name]) throw new Error(`--${name} is required`);
-  const result = await buildFixtureRegistry(values.sok, values.out);
+  const interrupt = new AbortController();
+  const handlers = ["SIGTERM", "SIGINT", "SIGHUP"].map((name) => [name, () => interrupt.abort(name)]);
+  for (const [name, handler] of handlers) signals.once(name, handler);
+  try {
+    return await build(values.sok, values.out, { signal: interrupt.signal });
+  } finally {
+    for (const [name, handler] of handlers) signals.removeListener(name, handler);
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const result = await main(process.argv.slice(2));
   console.log(`Fixture registry: ${result.index} (${result.plugins} plugins, ${result.sidecars} sidecars, ${result.packs} packs)`);
 }

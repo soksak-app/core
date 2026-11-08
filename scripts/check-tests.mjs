@@ -995,7 +995,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate policy reuses declared application scripts and native mode arguments" },
       { file: "scripts/test/candidate-acceptance.test.mjs", id: "the complete current candidate policy fits the authenticated report input" },
       { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate report transport rejects unsupported, corrupted and oversized input" },
-      { file: "scripts/test/acceptance-run.test.mjs", id: "candidate reference installation binds the frozen registry payload to the exact enabled installed cohort" },
+      { file: "scripts/test/acceptance-run.test.mjs", id: "collected inputs bind exactly the enabled installed fixtures of the checkout" },
       { file: "scripts/test/acceptance-run.test.mjs", id: "candidate acceptance keeps real manifest results and rejects failed audits, stale identities and failed cleanup" },
       { file: "scripts/test/acceptance-run.test.mjs", id: "candidate report exports only complete matching acceptance without local paths" },
       { file: "scripts/test/workflows.test.mjs", id: "a push creates candidate files and authenticated dispatch publishes only their accepted bytes" },
@@ -1036,7 +1036,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/platform/platform.js", symbol: "export async function processExecutable" },
       { file: "scripts/platform/platform.js", symbol: "export function releasePlatform" },
-      { file: "scripts/acceptance-run.mjs", symbol: "releasePlatform()" },
+      { file: "scripts/fixture-registry.mjs", symbol: "platform = releasePlatform()" },
     ],
     tests: [
       { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
@@ -1579,7 +1579,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test-app.mjs", symbol: "const APPS = ['wailsv3', 'tauriv2', 'mygo'];" },
       { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env) {" },
       { file: "Makefile", symbol: "check-release-mygo: build-mygo-release" },
-      { file: "Makefile", symbol: "E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-registry" },
+      { file: "Makefile", symbol: "E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-fixture-registry" },
       { file: ".github/workflows/release.yml", symbol: "  release-mygo:" },
     ],
     tests: [

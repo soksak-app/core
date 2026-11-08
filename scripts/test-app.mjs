@@ -2,9 +2,10 @@
 //   node scripts/test-app.mjs --script <name> [--native <target>] [--when-idle <seconds>]
 // The e2e targets of the Makefile build the three debug applications, and then run this script with the window-check script of their
 // tier (`verify`, `test-app:activation`, `test-app:real`, `test-app:person`) and the native end-to-end target of that tier. Each run
-// makes a new configuration root under target/e2e, prepares the registry certificates in it, builds the fixture registry of the core
-// fixtures (scripts/fixture-registry.mjs) with the `sok` of the first application into it and installs every fixture plugin into the
-// configuration of each application with the `sok` of that application, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
+// makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
+// registry of the core fixtures (`make build-fixture-registry`, target/fixture-registry; a candidate or prebuilt run builds it from its
+// checkout into the root with `make fixture-registry` and the `sok` of a bundle under test) into the configuration of each application
+// with the `sok` of that application, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
 // applications through the quit item of the application menu and the last one through the quit key, and fails when an application
 // ends with another status than 0 or when a process of the root or of an application artifact remains. The application artifacts,
 // the quit, the lock release wait, the native end-to-end tests, the process list and the crash reports are platform operations
@@ -24,7 +25,7 @@ import { applicationArtifact, applicationExecutables, crashReports, listProcesse
   waitForLockRelease } from './platform/platform.js';
 import { collectAcceptanceInputs, collectOrdinaryInputs, finishAcceptanceRun, prepareCandidate, prepareOrdinaryArtifacts } from './acceptance-run.mjs';
 import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateScripts } from './candidate-policy.mjs';
-import { buildFixtureRegistry, fixturePluginIds } from './fixture-registry.mjs';
+import { fixturePluginIds } from './fixture-registry.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const APPS = ['wailsv3', 'tauriv2', 'mygo'];
@@ -60,8 +61,7 @@ export function newConfigRoot(root) {
 
 /**
  * The steps of a run. A step of the phase `prepare` that fails skips every later step except those of `cleanup`; a failed `check`
- * skips nothing. `fixture-registry` builds the fixture registry of the checkout into `out` with the `sok` of an application under
- * the bounded steps of scripts/fixture-registry.mjs, `run` runs a command to its end, `start` starts an application and ends when it writes endpoint.json, `native` runs
+ * skips nothing. `run` runs a command to its end, `start` starts an application and ends when it writes endpoint.json, `native` runs
  * the native end-to-end tests `target` of the platform, `quit` quits a started application as a person does, through the quit item of
  * its menu (`by` `menu`) or through the quit key of the platform (`by` `key`), and `remaining` fails on a process whose executable or
  * arguments name the configuration root or an application artifact. `platform` selects the platform operations, the running
@@ -87,13 +87,16 @@ export async function e2ePlan({ root, configRoot, script, native, whenIdle, cand
     executables.set(app, await applicationExecutables(artifact, app, { platform }));
   }
   const appBinary = (app) => executables.get(app).application;
-  // The fixture registry is built from this checkout into the configuration root, so a candidate run installs the fixtures of the
-  // candidate checkout with the installers of the candidate bundles and reads no other registry.
-  const registryFolder = join(configRoot, 'fixture-registry');
+  // The debug run installs the fixture registry that `make build-fixture-registry` of E2E_BUILD wrote. A candidate or prebuilt run
+  // builds the fixture registry of this checkout, its fake sidecars first, into the configuration root with the sok of the first
+  // bundle, so it installs the fixtures of the candidate checkout with the installers of the candidate bundles and reads no other
+  // registry.
+  const registryFolder = inputs ? join(configRoot, 'fixture-registry') : join(root, 'target', 'fixture-registry');
   const registry = join(registryFolder, 'index.json');
   return [
     { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'create-test-certificates'], env },
-    { name: 'fixture registry', phase: 'prepare', kind: 'fixture-registry', sok: executables.get(APPS[0]).sok, out: registryFolder },
+    ...(inputs ? [{ name: 'fixture registry', phase: 'prepare', kind: 'run', env,
+      argv: ['make', 'fixture-registry', `FIXTURE_SOK=${executables.get(APPS[0]).sok}`, `FIXTURE_REGISTRY=${registryFolder}`] }] : []),
     ...APPS.flatMap((app) => {
       const { sok } = executables.get(app);
       const config = ['--config-dir', configDir(configRoot, app)];
@@ -303,7 +306,7 @@ async function runNative(item, interrupted) {
  * `lockRelease` and `processes` are the lock release wait and the process list of the platform; a test passes its own readers.
  */
 export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {}, connectClient = connect,
-  lockRelease = waitForLockRelease, processes = listProcesses, buildRegistry = buildFixtureRegistry }) {
+  lockRelease = waitForLockRelease, processes = listProcesses }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
@@ -328,7 +331,6 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
     try {
       // A cleanup step runs to its end after an interrupt, because it ends what the earlier steps started.
       if (item.kind === 'run') await runCommand(item, item.phase === 'cleanup' ? undefined : interrupted);
-      else if (item.kind === 'fixture-registry') await buildRegistry(item.sok, item.out, { signal: interrupted });
       else if (item.kind === 'start') await startApplication(item, children);
       else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);

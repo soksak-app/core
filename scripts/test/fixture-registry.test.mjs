@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
+import { EventEmitter } from "node:events";
 
 import fs, { chmodSync, existsSync, globSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
@@ -7,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { FIXTURES, STEP_TIMEOUT_MS, buildFixtureRegistry, fixturePluginIds, fixtureSources, npmSidecarRelease, pluginEntry, pnpmPack, repositoryText,
+import { FIXTURES, STEP_TIMEOUT_MS, buildFixtureRegistry, fixturePluginIds, fixtureSources, main, npmSidecarRelease, pluginEntry, pnpmPack, repositoryText,
   sidecarEntry, sidecarFileName } from "../fixture-registry.mjs";
 
 const SHA = "a".repeat(64);
@@ -200,4 +201,18 @@ test("an aborted signal stops the fixture registry build in its running step", {
 
 test("the fixture registry bounds each step at 30000 ms", { timeout: 1000 }, () => {
   assert.equal(STEP_TIMEOUT_MS, 30000);
+});
+
+test("the command line ends its build when the process receives SIGTERM and removes its signal handlers", { timeout: 5000 }, async () => {
+  const signals = new EventEmitter();
+  let seen;
+  const running = main(["--sok", "/bin/sok", "--out", "/run/fixture-registry"], { signals, build: (sok, out, { signal }) => {
+    seen = [sok, out];
+    return new Promise((resolve, reject) => signal.addEventListener("abort", () => reject(new Error(`cancelled by ${signal.reason}`)), { once: true }));
+  } });
+  signals.emit("SIGTERM");
+  await assert.rejects(running, /cancelled by SIGTERM/);
+  assert.deepEqual(seen, ["/bin/sok", "/run/fixture-registry"]);
+  assert.deepEqual(["SIGTERM", "SIGINT", "SIGHUP"].map((name) => signals.listenerCount(name)), [0, 0, 0]);
+  await assert.rejects(main(["--sok", "/bin/sok"], { signals, build: async () => {} }), /--out is required/);
 });
