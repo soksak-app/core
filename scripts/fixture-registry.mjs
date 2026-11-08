@@ -13,13 +13,14 @@
 //   node scripts/fixture-registry.mjs --sok <sok executable> --out <registry folder>
 import { parseArgs } from "node:util";
 import { createHash } from "node:crypto";
-import { constants, accessSync, cpSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { constants, accessSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer as createHttpsServer } from "node:https";
+import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { releasePlatform } from "./platform/platform.js";
-import { runCommand } from "./test-command.mjs";
+import { combineFailures, runCommand } from "./test-command.mjs";
 
 /** The folder of the core fixtures. */
 export const FIXTURES = fileURLToPath(new URL("../e2e/fixtures/", import.meta.url));
@@ -329,6 +330,30 @@ export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack 
   writeJson(join(out, "packs", `${PACK}.json`), { name: PACK, description: "Every fake plugin of the core fixtures.", plugins: ids });
   writeJson(join(out, "revoked.json"), { plugins: [], sidecars: [] });
   return build(binary, out, bound);
+}
+
+const removeFolder = (folder) => rmSync(folder, { recursive: true, force: true });
+
+/**
+ * Resolves with a new registry folder that holds the fixture registry: every plugin of e2e/fixtures packed, the pack fixtures and the
+ * index that the `sok registry build` of the executable `sok` writes. `build` (buildFixtureRegistry) writes it under `signal`, each of
+ * its commands within the step limit. A failed build removes the folder with `remove`; when the removal also fails, the build rejects
+ * with an AggregateError of both. The caller removes the folder.
+ */
+export async function fixtureRegistry({ sok, signal, build = buildFixtureRegistry, remove = removeFolder }) {
+  const folder = mkdtempSync(join(tmpdir(), "soksak-fixture-registry-"));
+  try {
+    await build(sok, folder, { signal });
+  } catch (error) {
+    let cleanupError = null;
+    try {
+      remove(folder);
+    } catch (cleanup) {
+      cleanupError = cleanup;
+    }
+    throw combineFailures(error, cleanupError);
+  }
+  return folder;
 }
 
 /**
