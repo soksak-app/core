@@ -1291,13 +1291,55 @@ func (s *Shell) followDiagnostics() error {
 		action = "on"
 	}
 	if action != s.diagnostics.trace {
-		s.diagnostics.trace = action
-		s.calls.Call("performance", map[string]string{"action": action}, func(_ any, err error) {
-			if err != nil {
-				s.diagnostics.trace = ""
+		s.switchTrace(action)
+	}
+	return nil
+}
+
+// switchTrace asks the host to switch the trace (docs/spec/performance-trace.md#the-switch). The trace stops at once and
+// starts again only when the host acknowledged on; the requests leave in their order, and an off waits until the trace events
+// that were accepted left, as setEnabled of packages/workbench/performance.js does.
+func (s *Shell) switchTrace(action string) {
+	s.diagnostics.trace = action
+	flush := action == "off" && s.events.Traced()
+	s.events.Tracing(false)
+	s.diagnostics.switches = append(s.diagnostics.switches, traceSwitch{action: action, flush: flush})
+	if len(s.diagnostics.switches) == 1 {
+		s.sendTraceSwitch()
+	}
+}
+
+// traceSwitch is a request of the switch of the trace that waits for its turn.
+type traceSwitch struct {
+	action string
+	// flush tells that the request waits until the accepted trace events left.
+	flush bool
+}
+
+// sendTraceSwitch sends the first waiting request of the switch, and the next one when the host answered it.
+func (s *Shell) sendTraceSwitch() {
+	request := s.diagnostics.switches[0]
+	send := func() {
+		s.calls.Call("performance", map[string]string{"action": request.action}, func(_ any, err error) {
+			s.diagnostics.switches = s.diagnostics.switches[1:]
+			last := len(s.diagnostics.switches) == 0
+			switch {
+			case err != nil:
+				if last {
+					s.diagnostics.trace = ""
+				}
 				s.fail(err)
+			case last && request.action == s.diagnostics.trace:
+				s.events.Tracing(request.action == "on")
+			}
+			if !last {
+				s.sendTraceSwitch()
 			}
 		})
 	}
-	return nil
+	if request.flush {
+		s.events.Flush(send)
+		return
+	}
+	send()
 }

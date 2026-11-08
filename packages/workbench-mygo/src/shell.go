@@ -365,8 +365,13 @@ type Shell struct {
 	frameWindowRead    bool
 	frameWindow        WindowView
 	frameWindowFailure error
-	// diagnostics holds the policy and the trace switch that the host received last.
-	diagnostics struct{ policy, trace string }
+	// diagnostics holds the policy and the trace switch that the host received last, and the requests of the switch that wait.
+	diagnostics struct {
+		policy, trace string
+		switches      []traceSwitch
+	}
+	// drawnSize is the size of the window that the last frame drew, which tells a frame that the window was resized.
+	drawnSize [2]float32
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
 	// shell saves before a reload. They belong to the main thread.
 	started, changed, reloading bool
@@ -709,6 +714,19 @@ func (s *Shell) windowView() (WindowView, error) {
 	return s.frameWindow, s.frameWindowFailure
 }
 
+// traceSize stores the action marker of a window that changed its size (docs/spec/performance-trace.md#producers), as the resize
+// listener of packages/workbench/core-exposure.js does: the first frame sets the size, which is no resize.
+func (s *Shell) traceSize(width, height float32) {
+	size := [2]float32{width, height}
+	if size == s.drawnSize {
+		return
+	}
+	if s.drawnSize != ([2]float32{}) {
+		s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "resize", "width": width, "height": height} })
+	}
+	s.drawnSize = size
+}
+
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
 	s.frameWindowRead = false
@@ -730,6 +748,7 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.surfaces.seated)
 	s.surfaces.drawnPlane, s.surfaces.drawnLibrary = nil, false
 	width, height := c.Size()
+	s.traceSize(width, height)
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg
 	theme.Text = s.palette.Fg

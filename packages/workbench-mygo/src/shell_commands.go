@@ -176,6 +176,7 @@ func (s *Shell) register() {
 		return nil
 	})
 	act(s, "core.card.focus", func(value cardParam) error {
+		s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "card.focus", "card": value.Card} })
 		if err := s.requirePlane(); err != nil {
 			return err
 		}
@@ -251,6 +252,7 @@ func (s *Shell) register() {
 		return map[string]string{"tab": tab}, nil
 	})
 	act(s, "core.tab.select", func(value tabParam) error {
+		s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "tab.select", "tab": value.Tab} })
 		if err := s.requirePlane(); err != nil {
 			return err
 		}

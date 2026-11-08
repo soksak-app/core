@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
@@ -154,6 +155,48 @@ func TestTheTraceSwitchFollowsTheSetting(t *testing.T) {
 	f.run("core.settings.set", map[string]any{"patch": map[string]any{"memorySaverDelay": 7}, "scope": "common"})
 	if !slices.Equal(stored.traces, []string{"off", "on"}) {
 		t.Fatalf("the host received %v", stored.traces)
+	}
+}
+
+// While the trace is on, the workbench records the focus of a card as an action marker with its card and the command that focused
+// it with its result (docs/spec/performance-trace.md#producers); while it is off, it records neither.
+func TestTheTraceRecordsAFocusedCardWhileItIsOn(t *testing.T) {
+	stored := &storedHost{classes: traceClasses(), common: map[string]any{"diagnostics.log": traceClasses()}}
+	f := newShell(t, stored)
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	card := f.tabbedCards()[0]
+	traced := func() (rows []string) {
+		for _, name := range []string{"workbench.trace.action", "workbench.trace.command"} {
+			for _, event := range stored.written(name) {
+				fields := event["fields"].(map[string]any)
+				rows = append(rows, fmt.Sprintf("%s %v %v %v %v", name, fields["kind"], fields["card"], fields["name"], fields["ok"]))
+			}
+		}
+		return rows
+	}
+	focus := func() {
+		f.run("core.card.focus", map[string]string{"card": card})
+		f.settle()
+	}
+	focus()
+	if rows := traced(); len(rows) != 0 {
+		t.Fatalf("the disabled trace recorded %q", rows)
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"diagnostics.performance": true}, "scope": "common"})
+	f.settle()
+	focus()
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"diagnostics.performance": false}, "scope": "common"})
+	f.settle()
+	want := []string{"workbench.trace.action card.focus " + card + " <nil> <nil>", "workbench.trace.command <nil> <nil> core.card.focus true"}
+	f.pending.until(t, func() bool { return len(traced()) >= len(want) })
+	if rows := traced(); !slices.Equal(rows, want) {
+		t.Fatalf("the trace recorded %q, want %q", rows, want)
+	}
+	focus()
+	if rows := traced(); len(rows) != 2 {
+		t.Fatalf("the trace recorded %q after it was disabled", rows)
 	}
 }
 

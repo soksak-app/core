@@ -110,7 +110,11 @@ type Events struct {
 	flushes    []func()
 	// operations counts the operations that this start of the workbench began.
 	operations int
-	ended      bool
+	// tracing is the switch of the trace (docs/spec/performance-trace.md#the-switch): it is on only after the host acknowledged on,
+	// which happened at tracedSince.
+	tracing     bool
+	tracedSince time.Time
+	ended       bool
 }
 
 // NewEvents returns the writer of one start of the workbench, whose gate stores only errors until the policy of the host arrives.
@@ -281,6 +285,42 @@ func (e *Events) Command(name string, elapsed time.Duration, failure error) {
 		}
 		return fields
 	}, nil)
+	// The trace adds the command with its duration and its result, of a command that started while the trace was on (timed of
+	// packages/workbench/performance.js).
+	if !e.tracing || e.options.Now().Add(-elapsed).Before(e.tracedSince) {
+		return
+	}
+	e.Trace("command", func() map[string]any {
+		fields := map[string]any{"name": name, "us": elapsed.Microseconds(), "ok": failure == nil}
+		if failure != nil {
+			fields["error"] = failure.Error()
+		}
+		return fields
+	})
+}
+
+// Tracing turns the trace events of the class call on or off. The shell turns it off when it asks the host to switch and on when
+// the host acknowledged on, as createTracer of packages/workbench/performance.js does.
+func (e *Events) Tracing(on bool) {
+	if on && !e.tracing {
+		e.tracedSince = e.options.Now()
+	}
+	e.tracing = on
+}
+
+// Traced tells whether the trace events of the class call are on.
+func (e *Events) Traced() bool { return e.tracing }
+
+// Trace queues the event workbench.trace.<event> of the trace (docs/spec/performance-trace.md#producers) at the level debug: the
+// events of the class frame follow their gate alone, and the others pass only while the trace is on. fields runs only for an event
+// that passes.
+func (e *Events) Trace(event string, fields func() map[string]any) {
+	name := "workbench.trace." + event
+	if class, _ := sok.EventClassOf(name); !e.tracing && class != sok.ClassFrame {
+		return
+	}
+	// events: forwarded
+	e.Emit(sok.LevelDebug, name, fields, nil)
 }
 
 // failureText is `<code>: <text>` of a failure (docs/spec/logging.md#result-form); fallback is the code of a failure without one.

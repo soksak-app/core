@@ -233,6 +233,7 @@ func (s *Shell) recordViewCall(event string, call viewCallEvent, fields map[stri
 	if call.Generation > 0 {
 		fields["generation"] = call.Generation
 	}
+	// events: workbench.view.call, workbench.view.call.cancel, workbench.view.reply
 	s.events.Emit(sok.LevelDebug, event, func() map[string]any { return fields }, nil)
 }
 

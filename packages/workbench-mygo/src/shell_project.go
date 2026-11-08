@@ -174,6 +174,8 @@ func (s *Shell) registerProjectOpen() {
 		if color == "" {
 			color = projectOpenColor
 		}
+		// The action marker of opening a project (docs/spec/performance-trace.md#producers).
+		s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "project.open", "root": value.Root} })
 		s.openRoot(value.Root, color, func(project json.RawMessage, err error) {
 			if err != nil {
 				answer(nil, err)
