@@ -28,7 +28,6 @@ export const DECLARATION_COPIES = Object.freeze([
   { source: "packages/workbench/shortcuts.json", copy: "packages/workbench-mygo/src/shortcuts.json" },
   { source: "packages/workbench/workbench.json", copy: "packages/workbench-mygo/src/workbench.json" },
   { source: "packages/plugin-api/contract/contributions.json", copy: "packages/workbench-mygo/tests/testdata/contributions.json" },
-  { source: "apps/mygo/environment.json", copy: "packages/workbench-mygo/tests/testdata/application-environment.json" },
 ]);
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));

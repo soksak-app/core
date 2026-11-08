@@ -67,6 +67,8 @@ type storedHost struct {
 	sessionTabs []string
 	// startFails tells that the start of the shell shows an error, so the fixture does not audit it.
 	startFails bool
+	// environment, when set, is the environment declaration that the shell receives in place of the test environment.
+	environment []byte
 	// retains holds the argument of each sidecarsRetain call.
 	retains []json.RawMessage
 	failing map[string]error
@@ -494,6 +496,27 @@ func (h *storedHost) installedDocument() string {
 	return h.installed
 }
 
+func (h *storedHost) environmentDocument(t testing.TB) []byte {
+	t.Helper()
+	if h.environment == nil {
+		return environment(t)
+	}
+	return h.environment
+}
+
+// The environment that the application ships starts a shell with no plugin installed, as the first start of a configuration
+// directory does: it parses, its sidebar sets and links validate, and the start reports and records no error.
+func TestTheShippedEnvironmentStartsAShellWithoutPlugins(t *testing.T) {
+	shipped, err := os.ReadFile(filepath.Join("..", "..", "..", "apps", "mygo", "environment.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newShell(t, &storedHost{environment: shipped})
+	if !f.has("core.chrome.settings", "") {
+		t.Fatalf("the shell shows no chrome: %q", f.tester.Texts())
+	}
+}
+
 // environment reads the test environment: the form of the environment declaration of an application, whose cards, settings and
 // sidebar sets name the probe plugins of these tests.
 func environment(t testing.TB) []byte {
@@ -535,7 +558,7 @@ func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declar
 		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.table(), f.pending.post),
-		Environment: environment(t),
+		Environment: stored.environmentDocument(t),
 		Installed:   []byte(stored.installedDocument()),
 		Invalidate:  func() { f.frames++ },
 		Elements:    fixtureElements{f},
