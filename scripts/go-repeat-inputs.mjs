@@ -81,12 +81,21 @@ export function resolveGoNativeInputs({ patterns, tags = '', cwd = process.cwd()
   // runners subsequently build every selected test package and report failures
   // with its package name, including malformed test sources and dependencies.
   const graph = graphObjects(execute('go', ['list', '-deps', '-test', '-e', '-json', ...(tags ? ['-tags', tags] : []), ...packages]));
+  // A dynamic artifact is loaded by a test executable, so only the packages that a test main links select one: a selected
+  // package that no test executable links, such as a binding of another host under a shared pattern, needs no artifact.
+  // A static artifact is read when cgo compiles a package, so every listed package selects it.
+  const linked = new Set();
+  for (const node of graph) {
+    if (node.ImportPath?.endsWith('.test')) for (const id of node.Deps ?? []) linked.add(id);
+  }
   const imports = new Set();
   const pkgConfig = new Set();
   for (const node of graph) {
     // Public ForTest identifies augmented test packages; Dir never selects an ABI.
-    for (const id of [node.ImportPath, node.ForTest]) {
-      if (id) imports.add(id.replace(/ \[.*\]$/, ''));
+    if (node.ImportPath && linked.has(node.ImportPath)) {
+      for (const id of [node.ImportPath, node.ForTest]) {
+        if (id) imports.add(id.replace(/ \[.*\]$/, ''));
+      }
     }
     if (cgoEnabled) for (const name of node.CgoPkgConfig ?? []) pkgConfig.add(name);
   }

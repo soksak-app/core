@@ -456,6 +456,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F706",
+    implementation: [{ file: "scripts/go-repeat-inputs.mjs", symbol: "if (node.ImportPath?.endsWith('.test')) for (const id of node.Deps ?? []) linked.add(id);" }],
+    tests: [{ file: "scripts/test/go-repeat-inputs.test.mjs", id: "a selected binding that no test executable links needs no artifact" }],
+    expected: "A dynamic native artifact is required only when a test executable links its binding, so the Wails host tests, whose shared pattern lists the mygo binding without linking it, need no mygo library.",
+    levels: ["unit"],
+  },
+  {
     id: "F705",
     implementation: [{ file: "Makefile", symbol: "check-host-debug: check-cargo build-native build-native-tests copy-core-frontend-wailsv3" }],
     tests: [{ file: "scripts/test/host-debug-check.test.mjs", id: "the debug check builds the native test library that the compiled tests link" }],

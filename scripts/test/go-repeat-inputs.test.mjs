@@ -53,6 +53,11 @@ function fixture(t, graph, cgo = '0') {
   return { cwd, env, run, calls, artifacts };
 }
 
+// A graph whose test executable links each of the packages, as `go list -deps -test` lists it.
+function linked(...nodes) {
+  return [...nodes, { ImportPath: 'fixture/selected.test', Deps: nodes.map((node) => node.ImportPath) }];
+}
+
 function resolve(input, extra = {}) {
   return resolveGoNativeInputs({ patterns: ['./selected/...'], tags: 'diagnostics', ...input, ...extra });
 }
@@ -69,7 +74,7 @@ test('native discovery uses selected Go import IDs and leaves unrelated graphs f
 });
 
 test('cgo-free production and test bindings resolve declared dynamic artifacts before build', (t) => {
-  const input = fixture(t, [{ ImportPath: PRODUCTION }, { ImportPath: FRAME }]);
+  const input = fixture(t, linked({ ImportPath: PRODUCTION }, { ImportPath: FRAME }));
   const result = resolve(input);
   assert.equal(result.env.SOKSAK_NATIVE_LIBRARY, input.artifacts.productionDynamic);
   assert.equal(result.env.SOKSAK_NATIVE_TEST_LIBRARY, input.artifacts.testDynamic);
@@ -79,20 +84,31 @@ test('cgo-free production and test bindings resolve declared dynamic artifacts b
 });
 
 test('standalone dynamic bindings and the shared loader select their exact declared artifacts', (t) => {
-  const input = fixture(t, [{ ImportPath: STANDALONE + 'dynamic' }, { ImportPath: STANDALONE + 'testdynamic' }, { ImportPath: LIBRARY }]);
+  const input = fixture(t, linked({ ImportPath: STANDALONE + 'dynamic' }, { ImportPath: STANDALONE + 'testdynamic' }, { ImportPath: LIBRARY }));
   const result = resolve(input);
   assert.equal(result.env.SOKSAK_NATIVE_LIBRARY, input.artifacts.productionDynamic);
   assert.equal(result.env.SOKSAK_NATIVE_TEST_LIBRARY, input.artifacts.testDynamic);
   assert.equal(input.calls.filter((call) => call.command === 'pkg-config').length, 2);
 });
 
+test('a selected binding that no test executable links needs no artifact', (t) => {
+  const input = fixture(t, [
+    { ImportPath: STANDALONE + 'dynamic' }, { ImportPath: PRODUCTION }, { ImportPath: FRAME },
+    { ImportPath: 'fixture/other.test', Deps: ['fixture/other'] }, { ImportPath: 'fixture/other' },
+  ], '1');
+  const result = resolve(input);
+  assert.equal(result.env.SOKSAK_NATIVE_LIBRARY, undefined);
+  assert.equal(result.env.SOKSAK_NATIVE_TEST_LIBRARY, undefined);
+  assert.ok(input.calls.every((call) => call.command !== 'pkg-config'));
+});
+
 test('explicit native artifact presence rejects invalid values without pkg-config fallback', (t) => {
   for (const value of ['', 'relative.dylib', '/definitely/missing/soksak-native.dylib']) {
-    const input = fixture(t, [{ ImportPath: PRODUCTION }]);
+    const input = fixture(t, linked({ ImportPath: PRODUCTION }));
     assert.throws(() => resolve(input, { env: { ...input.env, SOKSAK_NATIVE_LIBRARY: value } }), /SOKSAK_NATIVE_LIBRARY/);
     assert.ok(input.calls.every((call) => call.command !== 'pkg-config'));
   }
-  const input = fixture(t, [{ ImportPath: FRAME }]);
+  const input = fixture(t, linked({ ImportPath: FRAME }));
   assert.throws(() => resolve(input, { env: { ...input.env, SOKSAK_NATIVE_TEST_LIBRARY: input.cwd } }), /SOKSAK_NATIVE_TEST_LIBRARY/);
   assert.ok(input.calls.every((call) => call.command !== 'pkg-config'));
 });
@@ -110,14 +126,14 @@ test('selected cgo graph hashes both pkg-config static artifacts and preserves c
 });
 
 test('callback fixture artifacts belong only to exact normalized callback test import IDs', (t) => {
-  const input = fixture(t, [
+  const input = fixture(t, linked(
     { ImportPath: `${CALLBACK}_test [${CALLBACK}.test]`, ForTest: CALLBACK },
     { ImportPath: `${WORKER} [${WORKER}.test]`, ForTest: WORKER },
-  ]);
+  ));
   const result = resolve(input);
   assert.equal(result.env.SOKSAK_NATIVE_CALLBACK_ABI_LIBRARY, input.artifacts.callback);
   assert.equal(result.env.SOKSAK_NATIVE_CALLBACK_WORKER_LIBRARY, input.artifacts.worker);
-  const unrelated = fixture(t, [{ ImportPath: PREFIX + 'mygo/src/platform/darwin/nativecallback' }, { ImportPath: CALLBACK + '/support' }]);
+  const unrelated = fixture(t, linked({ ImportPath: PREFIX + 'mygo/src/platform/darwin/nativecallback' }, { ImportPath: CALLBACK + '/support' }));
   resolve(unrelated);
   assert.ok(unrelated.calls.every((call) => call.command !== 'pkg-config'));
 });
