@@ -8,7 +8,7 @@ import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { addRasterTab, presentedFrame, RASTER, REGION } from "./raster-probe.mjs";
+import { addRasterTab, presentedFrame, presentRasterTab, REGION } from "./raster-probe.mjs";
 
 const tuple = (value) => ({ generation: String(value.generation), raster: String(value.raster), sequence: value.sequence });
 
@@ -30,21 +30,8 @@ for (const app of Object.values(APPS)) {
     let preservationError;
     let preserved;
     try {
-      const { tab: surface } = await s.run("core.card.add-tab", { card: targetCard.id, plugin: RASTER });
-      await s.until("core.grid", (value) => value.cards.some((item) => item.id === targetCard.id && item.active === surface),
-        `new raster probe ${surface} did not become the active card tab`);
-      const visible = await s.until("core.surfaces", (items) => items.find((item) => item.surface === surface
-        && item.plugin === RASTER && item.visible
-        && item.exposes.includes("status rasterprobe.session")),
-      `new raster probe ${surface} did not become a visible declared surface`);
-      assert.ok(visible, `new raster probe ${surface} is not visible`);
-      await s.until("rasterprobe.session", (state) => Boolean(state?.session),
-        `new raster probe ${surface} did not open its session`, { surface });
-      const firstImage = await s.until("host.window", (host) => host.regions.some((item) => item.surface === surface
-        && item.name === REGION && item.visible && item.presented),
-      `new raster probe ${surface} did not present an image region`);
-      assert.ok(firstImage.regions.some((item) => item.surface === surface && item.name === REGION
-        && item.visible && item.presented), `new raster probe ${surface} image was not presented`);
+      // The window draws its image regions covered from here on (presentRasterTab), as a check window opens behind other windows.
+      const surface = await presentRasterTab(s, targetCard.id);
       await presentedFrame(s, surface);
       const presentation = await s.presented();
       const host = await s.until("host.window", (value) => value.regions.some((item) => item.surface === surface
