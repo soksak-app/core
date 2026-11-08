@@ -1892,9 +1892,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestEndedCallsAnswerNothingAndCallNothing" },
       { file: "packages/host/go/src/view_join_test.go", id: "TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent" },
-      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+      { file: "e2e/edit-menu-keys.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
     ],
-    expected: "Reload ends the previous mygo workbench calls: ended calls invoke and answer nothing, cancelled presentation tickets report no longer current, and actual terminal-edit reload completes before selection and menu copy/paste.",
+    expected: "Reload ends the previous mygo workbench calls: ended calls invoke and answer nothing, cancelled presentation tickets report no longer current, and the actual edit-menu-keys reload completes before selection and menu copy/paste.",
     levels: ["unit", "application"],
   },
   {
@@ -2516,7 +2516,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+C runs copy: once through the Copy item" },
       { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+V runs paste: once through the Paste item" },
-      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+      { file: "e2e/edit-menu-keys.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
     ],
     expected: "Virtual-key Command+C and Command+V take the menu/responder equivalent path once while another application remains active, with actual copy/paste verified on mygo, Wails and Tauri.",
     levels: ["unit", "application"],
@@ -5382,7 +5382,7 @@ const FEATURE_LINKS = [
   {
     id: "F212.12-2-3",
     implementation: [
-      { file: "e2e/view-input.test.mjs", symbol: "const clickAddress =" },
+      { file: "e2e/view-input.test.mjs", symbol: "const clickField =" },
     ],
     tests: [
       { file: "e2e/view-input.test.mjs", id: "an inactive view retains input across main focus and handles picker Escape" },

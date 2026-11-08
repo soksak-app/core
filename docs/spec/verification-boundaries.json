@@ -422,11 +422,6 @@
       "reason": "Checks that keys right after a tab press are held and reach the tab whole (native-surfaces keyboard). A keyboard-echo `plain-view` would replace the terminal."
     },
     {
-      "file": "e2e/terminal-edit.test.mjs",
-      "owner": "core",
-      "reason": "Checks that injected Command+C and Command+V run the Edit menu like a person's keys (virtual key window and menu routing). A fixture that handles edit copy and paste would replace the terminal."
-    },
-    {
       "file": "e2e/terminal-font.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks the terminal's font.family fallback and wide-glyph centering."
@@ -622,19 +617,9 @@
       "reason": "Tests that a native view touches its card lines at each slot, using terminal surfaces as the native view. Replace with a native-view fixture (plain-view or view-drag with a native raster)."
     },
     {
-      "file": "e2e/view-input.test.mjs",
-      "owner": "core",
-      "reason": "Tests that an inactive view keeps input across main focus and handles picker Escape, using the browser address field as the vehicle. Replace with extension-probe/plain-view with a focusable text field element and a focused status."
-    },
-    {
       "file": "e2e/view-restart.test.mjs",
       "owner": "core",
       "reason": "Tests view lifetime: restoring state, stopping after four failures and reopening after unload, using `browser.navigate`/`browser.reload`. Replace with a fake fixture that has restorable state, a crash/reload command and a location status."
-    },
-    {
-      "file": "e2e/view-shortcut.test.mjs",
-      "owner": "core",
-      "reason": "Tests that Command-zero in a focused view runs the native text-size menu command, using the browser address field for focus. Replace with plain-view with a focusable field."
     },
     {
       "file": "e2e/view-start-handoff.test.mjs",
