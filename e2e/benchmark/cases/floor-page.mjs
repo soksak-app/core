@@ -2,15 +2,14 @@
 // view page draws one colour and runs no plugin code, so the drag measures the host and the web view alone. The page is the plugin
 // floorpage of e2e/fixtures/view-drag/floor-page; its colour is the measurement colour of the terminal geometry
 // (TERMINAL_GEOMETRY_BACKGROUND of cases/terminal.mjs), so the geometry rule of the drag reads its view as it reads a terminal view. The
-// benchmark packs the plugin into a registry of its own beside the workspace registry and installs it from there.
-import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+// benchmark installs the plugin from a fixture registry, which holds the fixtures of e2e/fixtures only.
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { pluginEntry, pnpmPack } from "../../../scripts/workspace-registry.mjs";
+import { buildFixtureRegistry } from "../../../scripts/fixture-registry.mjs";
 import { pluginChangeApplied } from "../../fixture.mjs";
 
 /** The floor page plugin: its id and its folder. */
@@ -19,22 +18,19 @@ export const FLOOR_PAGE = Object.freeze({
   folder: fileURLToPath(new URL("../../fixtures/view-drag/floor-page/", import.meta.url)),
 });
 
-/** The workspace registry that `make build-registry` writes. */
-export const WORKSPACE_REGISTRY = fileURLToPath(new URL("../../../target/registry/", import.meta.url));
-
 /**
- * A new registry folder with the entries of the registry `registry` and the plugin of the folder `plugin`, packed with `pack`, and the
- * index that `sok registry build` writes into it, run through `run`. The caller removes the folder.
+ * A new registry folder that holds the fixture registry (scripts/fixture-registry.mjs): every plugin of e2e/fixtures packed, the pack
+ * fixtures and the index that the `sok registry build` of the executable `sok` writes. `build` writes it; a failed build removes the
+ * folder. The caller removes the folder.
  */
-export function fixtureRegistry({ sok, registry = WORKSPACE_REGISTRY, plugin, pack = pnpmPack, run = execFileSync }) {
+export function fixtureRegistry({ sok, build = buildFixtureRegistry }) {
   const folder = mkdtempSync(join(tmpdir(), "soksak-fixture-registry-"));
-  for (const name of ["plugins", "sidecars", "packs", "revoked.json"]) cpSync(join(registry, name), join(folder, name), { recursive: true });
-  const sidecars = new Set(readdirSync(join(folder, "sidecars")).map((file) => JSON.parse(readFileSync(join(folder, "sidecars", file), "utf8")).name));
-  const release = pack(plugin, join(folder, "releases"));
-  const manifest = JSON.parse(readFileSync(join(plugin, "plugin.json"), "utf8"));
-  const pkg = JSON.parse(readFileSync(join(plugin, "package.json"), "utf8"));
-  writeFileSync(join(folder, "plugins", `${manifest.id}.json`), JSON.stringify(pluginEntry(manifest, pkg, release, sidecars), null, 2));
-  run(sok, ["registry", "build", folder], { encoding: "utf8" });
+  try {
+    build(sok, folder);
+  } catch (error) {
+    rmSync(folder, { recursive: true, force: true });
+    throw error;
+  }
   return folder;
 }
 
@@ -52,7 +48,7 @@ async function pluginChange(s, run, action) {
  * it is applied, and `remove(folder)` removes the registry folder.
  */
 export async function openFloorPage(s, {
-  registry = () => fixtureRegistry({ sok: join(dirname(s.app.binary), "sok"), plugin: FLOOR_PAGE.folder }),
+  registry = () => fixtureRegistry({ sok: join(dirname(s.app.binary), "sok") }),
   applied = pluginChange,
   remove = (folder) => rmSync(folder, { recursive: true, force: true }),
 } = {}) {

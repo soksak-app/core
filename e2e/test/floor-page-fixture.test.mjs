@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -25,27 +24,16 @@ test("the floor page is a view whose page draws the measurement colour and runs 
   assert.match(start, /^await bridge\.composition\.create\(\);$/m);
 });
 
-test("a fixture registry holds the workspace registry and the packed fixture plugin, and its index is built", { timeout: 5000 }, (t) => {
-  const registry = mkdtempSync(join(tmpdir(), "fixture-registry-source-"));
-  t.after(() => rmSync(registry, { recursive: true, force: true }));
-  for (const name of ["plugins", "sidecars", "packs"]) mkdirSync(join(registry, name));
-  writeFileSync(join(registry, "revoked.json"), "[]");
-  writeFileSync(join(registry, "plugins", "term.json"), "{}");
-  writeFileSync(join(registry, "sidecars", "files.json"), JSON.stringify({ name: "files" }));
-  const runs = [];
-  const folder = fixtureRegistry({
-    sok: "/bin/sok", registry, plugin: FLOOR_PAGE.folder,
-    pack: (dir, out) => { assert.equal(dir, FLOOR_PAGE.folder); return { release: join(out, "floor.tgz"), sha256: "ab" }; },
-    run: (command, args) => { runs.push([command, ...args]); },
-  });
+test("a fixture registry is a new folder that the fixture registry build writes, and a failed build removes it", { timeout: 5000 }, (t) => {
+  const builds = [];
+  const folder = fixtureRegistry({ sok: "/bin/sok", build: (sok, out) => { builds.push([sok, out]); writeFileSync(join(out, "index.json"), "{}"); } });
   t.after(() => rmSync(folder, { recursive: true, force: true }));
-  assert.deepEqual(runs, [["/bin/sok", "registry", "build", folder]]);
-  const entry = JSON.parse(readFileSync(join(folder, "plugins", `${FLOOR_PAGE.plugin}.json`), "utf8"));
-  assert.equal(entry.id, FLOOR_PAGE.plugin);
-  assert.deepEqual(entry.versions[0].sidecars, {});
-  assert.equal(entry.versions[0].release.sha256, "ab");
-  assert.equal(readFileSync(join(folder, "plugins", "term.json"), "utf8"), "{}");
-  assert.equal(readFileSync(join(folder, "revoked.json"), "utf8"), "[]");
+  assert.deepEqual(builds, [["/bin/sok", folder]]);
+  assert.equal(readFileSync(join(folder, "index.json"), "utf8"), "{}");
+  let failed;
+  assert.throws(() => fixtureRegistry({ sok: "/bin/sok", build: (_, out) => { failed = out; throw new Error("registry build failed"); } }),
+    /registry build failed/);
+  assert.equal(existsSync(failed), false);
 });
 
 test("the floor page opens as the active tab of the terminal card from its registry, and the cleanup removes it in reverse", { timeout: 5000 }, async () => {

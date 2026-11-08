@@ -130,6 +130,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("Temporary folders of runs", "js-ts", ["scripts/temporary-folder.mjs"], ["scripts/test/temporary-folder.test.mjs"]),
+  lane("fixture registry", "js-ts", ["scripts/fixture-registry.mjs"], ["scripts/test/fixture-registry.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platform-files.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
@@ -11597,7 +11598,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },
       { file: "packages/sok/go/src/registry.go", symbol: "func checkReleaseModules" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function pnpmPack(" },
+      { file: "scripts/fixture-registry.mjs", symbol: "export function pnpmPack(" },
     ],
     tests: [
       { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_entry_outside_package" },

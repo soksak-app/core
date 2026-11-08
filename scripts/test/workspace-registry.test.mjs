@@ -9,36 +9,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { buildPublicRegistry, buildWorkspaceRegistry, checkDeclaration, checkOptions, checkPluginId, installFolders, packPlugin, pluginEntry, publicRegistryEntries, readIndex,
-  releaseSidecar, repositoryFolder, repositoryText, sidecarEntry, sidecarReleases, sourceRevision } from "../workspace-registry.mjs";
+import { buildPublicRegistry, buildWorkspaceRegistry, checkDeclaration, checkOptions, checkPluginId, installFolders, packPlugin, publicRegistryEntries, readIndex,
+  releaseSidecar, repositoryFolder, sidecarReleases, sourceRevision } from "../workspace-registry.mjs";
 
 const SHA = "a".repeat(64);
-
-test("registry entries carry the declarations of package.json and the file URL and hash of each release", { timeout: 1000 }, () => {
-  const pkg = {
-    name: "@scope/plugin-probe", version: "0.0.1", description: "Probe plugin.", license: "MIT",
-    repository: { type: "git", url: "git+https://example.invalid/probe.git", directory: "plugins/probe" },
-    engines: { soksak: "^0.0.1" },
-  };
-  const manifest = { id: "probe", name: "검사", dependencies: { "@scope/sidecar-worker": "^0.0.1" } };
-  assert.deepEqual(pluginEntry(manifest, pkg, { release: "/releases/a b/probe-0.0.1.tgz", sha256: SHA }, new Set(["@scope/sidecar-worker"])), {
-    id: "probe", package: "@scope/plugin-probe", name: "검사", description: "Probe plugin.", license: "MIT",
-    repository: "git+https://example.invalid/probe.git",
-    versions: [{ version: "0.0.1", release: { url: "file:///releases/a%20b/probe-0.0.1.tgz", sha256: SHA },
-      engines: { soksak: "^0.0.1" }, sidecars: { "@scope/sidecar-worker": "^0.0.1" } }],
-  });
-  assert.deepEqual(pluginEntry({ id: "plain", name: "P" }, pkg, { release: "/r/p.tgz", sha256: SHA }, new Set()).versions[0].sidecars, {});
-  // A dependency on a plugin is not a sidecar of the entry; the index lists only sidecar dependencies.
-  const contributor = { id: "contributor", name: "C", dependencies: { "@scope/plugin-provider": ">=1.0.0", "@scope/sidecar-worker": "^0.0.1" } };
-  assert.deepEqual(pluginEntry(contributor, pkg, { release: "/r/c.tgz", sha256: SHA }, new Set(["@scope/sidecar-worker"])).versions[0].sidecars,
-    { "@scope/sidecar-worker": "^0.0.1" });
-  assert.deepEqual(sidecarEntry({ name: "@scope/sidecar-worker", version: "0.0.1", repository: "https://example.invalid/w" },
-    { executable: "build/worker", protocol: 1 }, { platform: "darwin-arm64", release: "/r/w.tar.gz", sha256: SHA }), {
-    name: "@scope/sidecar-worker", repository: "https://example.invalid/w",
-    versions: [{ version: "0.0.1", protocol: 1, releases: { "darwin-arm64": { url: "file:///r/w.tar.gz", sha256: SHA } } }],
-  });
-  assert.throws(() => repositoryText({ type: "git" }), /package.json repository has no url/);
-});
 
 test("the workspace registry declaration names sibling folders and is checked before anything is built", { timeout: 1000 }, () => {
   const declaration = checkDeclaration(JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8")));

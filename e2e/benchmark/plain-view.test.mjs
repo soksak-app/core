@@ -1,16 +1,15 @@
 // Measures the floor of a view drag: the same width drag and recording as the plugin view benchmarks, on a view without plugin code. It reports
 // the in-gesture source intervals and judges only that the recording covers the gesture, because the floor is an input of the targets.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { loadavg, tmpdir } from "node:os";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { loadavg } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { pluginEntry, pnpmPack } from "../../scripts/workspace-registry.mjs";
+import { fixtureRegistry } from "./cases/floor-page.mjs";
 import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "../fixture.mjs";
 import { frameChange, frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "../view-metrics-collection.mjs";
@@ -18,25 +17,11 @@ import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./c
 import { outside } from "../outside.mjs";
 import { assertRoundTrips, measureDragPerformance, pointerLag, shownTimes, transactionCadence } from "../drag-measurement.mjs";
 
-const PROBE = fileURLToPath(new URL("../fixtures/plain-view/probe/", import.meta.url));
 const descriptor = Object.freeze({
   plugin: "probeplain",
   startContentTrace: (s, surface) => s.run("probeplain.measure", { action: "start" }, surface),
   stopContentTrace: (s, surface) => s.run("probeplain.measure", { action: "stop" }, surface),
 });
-
-/** A registry folder that lists only the probe, and its built index. */
-function probeRegistry(sok) {
-  const folder = mkdtempSync(join(tmpdir(), "soksak-plain-registry-"));
-  for (const name of ["plugins", "sidecars", "packs"]) mkdirSync(join(folder, name));
-  writeFileSync(join(folder, "revoked.json"), `${JSON.stringify({ plugins: [], sidecars: [] })}\n`);
-  const pack = pnpmPack(PROBE, join(folder, "releases"));
-  const manifest = JSON.parse(readFileSync(join(PROBE, "plugin.json"), "utf8"));
-  const pkg = JSON.parse(readFileSync(join(PROBE, "package.json"), "utf8"));
-  writeFileSync(join(folder, "plugins", `${manifest.id}.json`), JSON.stringify(pluginEntry(manifest, pkg, pack, new Set()), null, 2));
-  execFileSync(sok, ["registry", "build", folder], { encoding: "utf8" });
-  return folder;
-}
 
 async function pluginChange(s, action, run) {
   const offsets = currentEventOffsets(s.app.configDir);
@@ -49,7 +34,7 @@ const PROBE_COLOUR = [30, 30, 30];
 
 /** Installs the probe, opens it to the right of a card and returns the session state of its drag. */
 async function openProbe(s, app, prepare) {
-  const folder = probeRegistry(join(dirname(app.binary), "sok"));
+  const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok") });
   s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
   s.cleanup(async () => {
     await s.windows(1, "the page was not ready for the cleanup");

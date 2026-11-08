@@ -210,6 +210,8 @@ Each check belongs to one of three owners, and only the first two gate a release
 - Environment: the installed cohort of published core and plugin releases is checked by the registry after both are published. The check gates no release.
 
 [verification-boundaries.json](verification-boundaries.json) assigns every file of core that installs, builds or names a real plugin or sidecar to its owner: `core` (the check reaches a core boundary through the plugin and moves to a core fixture), `plugin:<id>` (the check moves to the repository of that plugin), `environment`, `tool` (a helper that installs, builds or names real plugins and is removed or reduced to the core fixtures) or `mixed` (the reason assigns each test). A file leaves the list when it no longer names a real plugin or sidecar.
+
+The fixture registry of the core checks is built by `scripts/fixture-registry.mjs` from `e2e/fixtures` alone: every folder that holds `plugin.json` is a plugin, every folder of `e2e/fixtures/sidecars` that holds `sidecar.json` is a fake sidecar released for the current platform, and one pack `fixtures` names every fixture plugin. `make build-fixture-registry` writes it into `target/fixture-registry`, and a window check builds its own folder of it through `fixtureRegistry`.
 ## Tabs and processes
 
 - A view is one per tab. No public API assigns processes.
