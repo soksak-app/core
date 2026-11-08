@@ -243,6 +243,44 @@ func TestThePluginPageListsTheRegistry(t *testing.T) {
 	}
 }
 
+func TestEachLibraryPageReportsOnlyItsOwnCards(t *testing.T) {
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}, "beta": {"1.0.0"}})}
+	plugins.plugins = map[string]map[string]any{"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}
+	plugins.core = "1.0.0"
+	f := newShell(t, &storedHost{installed: loadedAlpha, plugins: plugins, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "session"))}})
+	read := func() (page string, projects, cards []string, actions int) {
+		t.Helper()
+		value, err := f.shell.Registry().Read("core.library")
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var library struct {
+			Page    string
+			Shown   []string
+			Plugins struct {
+				Shown   []string
+				Actions []workbench.PluginAction
+			}
+		}
+		if err := json.Unmarshal(encoded, &library); err != nil {
+			t.Fatal(err)
+		}
+		return library.Page, library.Shown, library.Plugins.Shown, len(library.Plugins.Actions)
+	}
+	f.run("core.library.page", map[string]string{"page": "plugins"})
+	if page, projects, cards, _ := read(); page != "plugins" || len(projects) != 0 || len(cards) == 0 {
+		t.Fatalf("the plugin page reports page %s, projects %v and plugins %v", page, projects, cards)
+	}
+	f.run("core.library.page", map[string]string{"page": "projects"})
+	if page, projects, cards, actions := read(); page != "projects" || len(projects) == 0 || len(cards) != 0 || actions != 0 {
+		t.Fatalf("the project page reports page %s, projects %v, plugins %v and %d plugin actions", page, projects, cards, actions)
+	}
+}
+
 func TestAPluginActionRunsTheOperationOfTheHost(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"beta": {"1.0.0"}})}
 	f := pluginShell(t, plugins, `{"plugins":[]}`)
