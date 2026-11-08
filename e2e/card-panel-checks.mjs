@@ -62,19 +62,27 @@ export function requireContentWidth(rect, card, border, divider, side) {
 /**
  * Inside the collapsed card panel grip rectangle (CSS pixels), along the center line of the long axis, the longest run of pixels that differ from the background inside the band,
  * its pixel count, the number of continuous runs (runs), and the length from the first ink to the last ink (span) (device pixels).
- * image is the result of readPng and ratio is device pixels / CSS pixels.
+ * image is the result of readPng and ratio is device pixels / CSS pixels. The background is the colour that most pixels of the band show:
+ * the band can hold the boundary line with the content at its edge and overlap the card border at its outer end, and a band at a
+ * fractional device position puts that line within 2 points of the middle.
  */
 export function gripInk(image, rect, ratio, threshold = 16) {
   const vertical = rect.height > rect.width;
   const from = Math.ceil((vertical ? rect.y : rect.x) * ratio);
   const to = Math.floor(((vertical ? rect.y + rect.height : rect.x + rect.width)) * ratio);
   const middle = Math.floor(((vertical ? rect.x + rect.width / 2 : rect.y + rect.height / 2)) * ratio);
-  // The outer end of the band can overlap the card border, so a pixel inside the band at 2 CSS pixels from the center is used as the background.
-  const edge = middle - Math.round(2 * ratio);
+  const across = [Math.ceil((vertical ? rect.x : rect.y) * ratio), Math.floor((vertical ? rect.x + rect.width : rect.y + rect.height) * ratio)];
+  const counts = new Map();
+  for (let at = from; at < to; at++) {
+    for (let side = across[0]; side < across[1]; side++) {
+      const key = (vertical ? image.pixel(side, at) : image.pixel(at, side)).join(",");
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  const background = [...counts].reduce((best, entry) => (entry[1] > best[1] ? entry : best))[0].split(",").map(Number);
   let run = 0, longest = 0, total = 0, runs = 0, first = -1, last = -1;
   for (let at = from; at < to; at++) {
-    const [x, y, ex, ey] = vertical ? [middle, at, edge, at] : [at, middle, at, edge];
-    const ink = image.pixel(x, y).some((value, index) => Math.abs(value - image.pixel(ex, ey)[index]) > threshold);
+    const ink = (vertical ? image.pixel(middle, at) : image.pixel(at, middle)).some((value, index) => Math.abs(value - background[index]) > threshold);
     if (ink && run === 0) runs++;
     run = ink ? run + 1 : 0;
     longest = Math.max(longest, run);
