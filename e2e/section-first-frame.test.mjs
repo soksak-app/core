@@ -7,7 +7,7 @@ import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 
 const near = (a, b, tolerance) => a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
@@ -58,6 +58,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a section view shows the card colour from its first frame`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
+    // The left sidebar shows the set of the configuration, whose sections a fixture configuration does not load.
+    await probeSidebarSets(s);
     const points = await sectionPoints(s, "left");
     const captured = await record(s, async () => {
       const before = (await s.get("core.window.workbench")).start;

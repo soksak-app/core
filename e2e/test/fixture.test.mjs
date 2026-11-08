@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, placeholderTabs, probeListSections, probeSets, replacePlaceholders, restoreRegistry, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, placeholderTabs, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -188,10 +188,51 @@ test("the start layout module names no real plugin and imports no terminal helpe
   assert.doesNotMatch(source, /["'](terminal|term|browser|files|editor|hwp)["'.]/);
 });
 
-test("the sets of the layout probe are stored as check sets of their sections", () => {
+test("the sidebar sets of the configuration take the sections of the layout probe set of their layout and keep their ids", async () => {
+  const s = workbench(starterLayout());
+  s.state.settings.values.sets = [
+    { id: "set-install", title: "탐색기", sections: ["files.tree", "files.bookmarks"], layout: "list" },
+    { id: "set-browser", title: "브라우저", sections: ["browser.tabs", "browser.history"], layout: "tabs" },
+  ];
   const declared = JSON.parse(readFileSync(new URL("../fixtures/layout-probe/layoutprobe/plugin.json", import.meta.url), "utf8")).sidebars.sets;
-  assert.deepEqual(probeSets(), declared.map(({ id, title, layout, sections }) => ({ id: `check-${id}`, title, layout, sections })));
-  assert.ok(probeSets().length >= 2, "two distinct sets of the layout probe");
-  assert.notDeepEqual(probeSets()[0].sections, probeSets()[1].sections);
-  assert.ok(probeSets().every((set) => set.sections.every((section) => section.startsWith(`${START_PLUGIN}.`))));
+  const [list, tabs] = ["list", "tabs"].map((layout) => declared.find((set) => set.layout === layout).sections);
+  assert.notDeepEqual(list, tabs, "the two layouts show different sections");
+  assert.ok([...list, ...tabs].every((section) => section.startsWith(`${START_PLUGIN}.`)));
+  const want = [
+    { id: "set-install", title: "탐색기", sections: list, layout: "list" },
+    { id: "set-browser", title: "브라우저", sections: tabs, layout: "tabs" },
+  ];
+  assert.deepEqual(await probeSidebarSets(s), want);
+  assert.deepEqual(s.state.settings.values.sets, want);
+  assert.deepEqual(s.calls.filter(([kind]) => kind === "run").at(-1), ["run", "core.settings.set", { patch: { sets: want }, scope: "common" }]);
+  assert.equal(s.cleanups.length, 1, "the sets are restored when the check ends");
+
+  const grid = workbench(starterLayout());
+  grid.state.settings.values.sets = [{ id: "set-grid", title: "격자", sections: ["files.tree"], layout: "grid" }];
+  await assert.rejects(probeSidebarSets(grid), /the layout probe declares no set of the layout grid of the set set-grid/);
+  await assert.rejects(probeSidebarSets(workbench(starterLayout())), /the configuration holds no sidebar set/);
+});
+
+test("the settings dialog is shown when the modal web view of a main page shows it, and on the mygo host when core.modal names it", async () => {
+  const shown = (state) => {
+    const waited = [];
+    const s = {
+      get: async (name) => { if (name !== "host.window") throw new Error(`unexpected status ${name}`); return state["host.window"]; },
+      until: async (name, predicate, message) => {
+        waited.push(name);
+        if (!predicate(state[name])) throw new Error(message);
+        return state[name];
+      },
+    };
+    return { s, waited };
+  };
+  const page = shown({ "host.window": { pageProcess: 7, modal: { id: "settings", shown: true } } });
+  await settingsShown(page.s, "not shown");
+  assert.deepEqual(page.waited, ["host.window"]);
+  await assert.rejects(settingsShown(shown({ "host.window": { pageProcess: 7, modal: { id: "settings", shown: false } } }).s, "not shown"), /not shown/);
+
+  const mygo = shown({ "host.window": { pageProcess: null, modal: null }, "core.modal": { id: "settings", mode: "dialog", document: null } });
+  await settingsShown(mygo.s, "not shown");
+  assert.deepEqual(mygo.waited, ["core.modal"]);
+  await assert.rejects(settingsShown(shown({ "host.window": { pageProcess: null, modal: null }, "core.modal": null }).s, "not shown"), /not shown/);
 });

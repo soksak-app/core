@@ -9,7 +9,7 @@ import test from "node:test";
 import { currentEventOffsets, readEvents, untilEventLine, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
-import { fresh, reading } from "./fixture.mjs";
+import { fresh, reading, settingsShown } from "./fixture.mjs";
 import { documentPoint, fieldPoint, inputProbeTab } from "./input-probe.mjs";
 
 const REGISTRY_COMMAND = "workbench.command";
@@ -232,12 +232,7 @@ for (const app of Object.values(APPS)) {
     await focusedDocument(s);
     await s.run("core.settings.open");
     const webView = (await s.get("host.window")).pageProcess !== null;
-    if (webView) {
-      await s.until("host.window", (window) => window.modal?.id === "settings" && window.modal.shown,
-        "the settings dialog did not become visible");
-    } else {
-      await s.until("core.modal", (modal) => modal?.id === "settings", "the settings dialog is not the open modal");
-    }
+    await settingsShown(s, "the settings dialog was not shown");
     const owner = webView ? "modal" : "workbench";
     const modalWindow = await s.get("host.window");
     assert.equal(modalWindow.responder?.owner, owner,

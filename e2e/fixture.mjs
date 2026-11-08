@@ -6,7 +6,7 @@
 // of the focused card.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
@@ -45,15 +45,35 @@ export function probeListSections(path = LAYOUT_PROBE_MANIFEST) {
 }
 
 /**
- * The sets that the layout probe declares, as common sets that a check stores: each keeps its title, layout and sections and takes
- * the id `check-<id>`. A check configuration holds the sets of environment.json, whose sections name plugins that a fixture
- * configuration does not load, and such a section is kept in its set and not shown (docs/spec/plugins.md#plugins-that-are-not-loaded),
- * so a check that compares the shown sections with a set stores these sets.
+ * Gives each common sidebar set of the configuration the sections of the set that the layout probe declares with its layout, and
+ * keeps its id, title and layout, so that every link of the configuration shows sections of a loaded plugin. The sets of
+ * environment.json name sections of plugins that a fixture configuration does not load, which a sidebar keeps and does not show
+ * (docs/spec/plugins.md#plugins-that-are-not-loaded), and they replace the default sets of the plugins
+ * (docs/spec/plugins.md#default-sidebar-sets). keepCommonSettings restores the sets when the check ends. Returns the stored sets.
  */
-export function probeSets(path = LAYOUT_PROBE_MANIFEST) {
-  const sets = JSON.parse(readFileSync(path, "utf8")).sidebars?.sets ?? [];
-  if (sets.length < 2) throw new Error(`${path} declares fewer than two sidebar sets`);
-  return sets.map(({ id, title, layout, sections }) => ({ id: `check-${id}`, title, layout, sections }));
+export async function probeSidebarSets(s, path = LAYOUT_PROBE_MANIFEST) {
+  const probe = JSON.parse(readFileSync(path, "utf8")).sidebars?.sets ?? [];
+  await keepCommonSettings(s);
+  const sets = (await s.get("core.settings")).values.sets.map((set) => {
+    const like = probe.find((item) => item.layout === set.layout);
+    if (!like) throw new Error(`the layout probe declares no set of the layout ${set.layout} of the set ${set.id}`);
+    return { ...set, sections: like.sections };
+  });
+  if (sets.length === 0) throw new Error("the configuration holds no sidebar set");
+  await s.run("core.settings.set", { patch: { sets }, scope: "common" });
+  return sets;
+}
+
+/**
+ * Waits until the settings dialog that core.settings.open opened is shown. A host with a main page shows it in a native modal web
+ * view, which host.window reports shown; the mygo workbench draws it itself, and core.modal names it while it is open
+ * (docs/spec/exposure.md, docs/spec/native-modals.md).
+ */
+export async function settingsShown(s, message) {
+  if ((await s.get("host.window")).pageProcess !== null) {
+    return s.until("host.window", (window) => window.modal?.id === "settings" && window.modal.shown, message);
+  }
+  return s.until("core.modal", (modal) => modal?.id === "settings", message);
 }
 
 /**

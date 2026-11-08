@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh, replacePlaceholders, START_PLUGIN, startTab } from "./fixture.mjs";
+import { fresh, replacePlaceholders, settingsShown, START_PLUGIN, startTab } from "./fixture.mjs";
 import { projectRecords } from "./projects-file.mjs";
 // A plugin that the fixture registry never installs (e2e/fixtures/absent-plugins.json).
 import absentPlugins from "./fixtures/absent-plugins.json" with { type: "json" };
@@ -58,10 +58,10 @@ async function press(s, name, key, value) {
   await s.run(command.name, params);
 }
 
-/** Waits until the settings modal is open and the native modal is displayed. */
+/** Waits until the settings modal is open and shown (settingsShown). */
 async function openSettings(s) {
   await s.run("core.settings.open");
-  await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "settings did not render");
+  await settingsShown(s, "settings did not render");
 }
 
 /** Closes the settings modal. */
