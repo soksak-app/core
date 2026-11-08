@@ -203,9 +203,10 @@ test("a run installs the index of its application into a new configuration folde
     ["prepare", "start", ["/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3", "--config-dir", configDir]],
   ]);
   assert.equal(plan.prepare[3].app, "baseline-wailsv3");
-  assert.deepEqual(plan.cleanup.map((step) => [step.phase, step.kind, step.by, step.app ?? step.paths]), [
-    ["cleanup", "quit", "menu", "baseline-wailsv3"],
-    ["cleanup", "remaining", undefined, [configRoot, "/baseline/target/release/wailsv3/soksak.app"]],
+  // The release bundles are macOS applications, so the quit and the remaining check use the platform operations of macOS.
+  assert.deepEqual(plan.cleanup.map((step) => [step.phase, step.kind, step.by, step.app ?? step.paths, step.platform]), [
+    ["cleanup", "quit", "menu", "baseline-wailsv3", "darwin"],
+    ["cleanup", "remaining", undefined, [configRoot, "/baseline/target/release/wailsv3/soksak.app"], "darwin"],
   ]);
 });
 
@@ -390,9 +391,32 @@ async function readOccluded(configDir) {
 }
 
 /**
+ * The process list of the platform for the fixture applications of `session`, in the records of listProcesses: each application whose
+ * endpoint.json names a process that still runs, with the command line that started it.
+ */
+function fixtureProcesses(session) {
+  return async () => {
+    const configs = join(session, "configs");
+    if (!existsSync(configs)) return [];
+    const records = [];
+    for (const run of readdirSync(configs)) {
+      for (const name of readdirSync(join(configs, run))) {
+        const configDir = join(configs, run, name);
+        const endpoint = join(configDir, "endpoint.json");
+        if (!existsSync(endpoint)) continue;
+        const { pid } = JSON.parse(readFileSync(endpoint, "utf8"));
+        try { process.kill(pid, 0); } catch (error) { if (error.code === "ESRCH") continue; throw error; }
+        records.push({ pid, ppid: process.pid, executable: process.execPath, arguments: `${process.execPath} ${join(FIXTURES, "application.mjs")} --config-dir ${configDir}` });
+      }
+    }
+    return records;
+  };
+}
+
+/**
  * The context of runUnit for a fixture application: the application serves the refresh rate and the backing scale that the test sets
- * in its environment, the readings of the start conditions are injected, and each target writes, under the measurement key of each
- * entry of its row, the reading of `values` for the id of that entry.
+ * in its environment, the readings of the start conditions and the process list are injected, and each target writes, under the
+ * measurement key of each entry of its row, the reading of `values` for the id of that entry.
  */
 function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, values = {} } = {}) {
   const environment = { B3_FIXTURE_REFRESH_RATE: String(refreshRate), B3_FIXTURE_BACKING_SCALE: String(backingScale), B3_FIXTURE_EXIT: exit ? "1" : "0" };
@@ -412,7 +436,7 @@ function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, 
   const context = {
     goals, session, write: (line) => lines.push(line), benchmarks: BENCHMARKS,
     readStart: async () => ({ loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0.01 }),
-    loadAverage: () => [1, 2, 3],
+    loadAverage: () => [1, 2, 3], processes: fixtureProcesses(session),
     runTarget: async (command, { target }) => {
       targets.push(target);
       const owned = goals.values.filter((value) => value.target === target && Object.hasOwn(values, value.id));

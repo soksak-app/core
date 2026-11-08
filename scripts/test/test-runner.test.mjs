@@ -441,9 +441,12 @@ test("a test file that does not exit after its tests ended fails at the exit lim
     'process.on("exit", () => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30000); });',
   ].join("\n") + "\n");
   const runFolder = join(folder, "run");
+  // The stacks of the platform (scripts/platform/platform.js) are replaced by a record that names the process it was taken of.
+  const sampled = [];
+  const stacks = async (pid, path) => { sampled.push(pid); writeFileSync(path, `Call graph:\n    stacks of process ${pid}\n`); return path; };
   t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    const outcome = run([eventsOf(file, { eventLimitMs: 20000, exitLimitMs: 1000 })], { concurrency: 1, run: { id: "exit", folder: runFolder } });
+    const outcome = run([eventsOf(file, { eventLimitMs: 20000, exitLimitMs: 1000 })], { concurrency: 1, run: { id: "exit", folder: runFolder }, stacks });
     await untilOutput(join(runFolder, "001-events.log"), '"type":"test:summary"');
     t.mock.timers.tick(1000);
     const result = (await outcome).results.get("events");
@@ -454,6 +457,7 @@ test("a test file that does not exit after its tests ended fails at the exit lim
       assert.ok(path.startsWith(`${runFolder}/`), `${path} is not in the folder of the run`);
       assert.match(readFileSync(path, "utf8"), /Call graph:/, `${path} holds no thread stacks`);
     }
+    assert.ok(sampled.length > 0, "no process of the file was sampled");
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }

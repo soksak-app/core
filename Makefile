@@ -302,10 +302,10 @@ WINDOWS_RUST_TARGET = x86_64-pc-windows-msvc
 check-windows-rust: check-cargo
 	@$(dir $(CARGO))rustup target list --installed | grep -qx '$(WINDOWS_RUST_TARGET)' || { echo "the Rust target $(WINDOWS_RUST_TARGET) is not installed; run rustup target add $(WINDOWS_RUST_TARGET)" >&2; exit 1; }
 	@echo "START: Rust host library cargo check --target $(WINDOWS_RUST_TARGET)"
-	@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET)
+	@$(CARGO_ENV) $(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET)
 	@echo "PASS: Rust host library for $(WINDOWS_RUST_TARGET)"
 	@echo "START: Rust host library cargo check --target $(WINDOWS_RUST_TARGET) --features diagnostics"
-	@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics
+	@$(CARGO_ENV) $(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics
 	@echo "PASS: Rust diagnostics host library for $(WINDOWS_RUST_TARGET)"
 
 # Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.

@@ -445,8 +445,11 @@ test("quit deadline closes a pending RPC and runs the remaining quit and process
   const next = { request: async (method) => method === "status.get" ? MENUS : null, close() { nextClosed++; } };
   const { lines, write } = recorder();
   const item = (app, configDir) => ({ name: `quit ${app}`, phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app, configDir });
+  const listed = [];
+  const processes = async ({ platform }) => { listed.push(platform); return []; };
   const pending = runPlan([item("first", firstDir), item("next", nextDir), { name: "remaining processes", phase: "cleanup", kind: "remaining", paths: [], platform: "darwin" }],
-    { write, children: new Map([["first", { exitCode: 0, signalCode: null }], ["next", { exitCode: 0, signalCode: null }]]), connectClient: async ({ configDir }) => configDir === firstDir ? first : next });
+    { write, children: new Map([["first", { exitCode: 0, signalCode: null }], ["next", { exitCode: 0, signalCode: null }]]), connectClient: async ({ configDir }) => configDir === firstDir ? first : next,
+      processes });
   t.after(async () => { release(null); await pending; });
   await requested;
   t.mock.timers.tick(60_000);
@@ -458,6 +461,7 @@ test("quit deadline closes a pending RPC and runs the remaining quit and process
   assert.equal(nextClosed, 1);
   assert.ok(lines.some((line) => line.startsWith("passed quit next")), lines.join("\n"));
   assert.ok(lines.some((line) => line.startsWith("passed remaining processes")), lines.join("\n"));
+  assert.deepEqual(listed, ["darwin"]);
 });
 
 /** A started application that exits with status 0 on SIGTERM, as a host ends after its quit, once it handles the signal. */
@@ -528,12 +532,20 @@ test("a quit step ends when the process that holds the configuration lock exits,
   await new Promise((resolve) => started.once("exit", resolve));
   const fake = await startFakeEndpoint({ "status.get": () => MENUS, "command.run": () => null });
   t.after(() => fake.close());
-  const holder = spawn("lockf", [join(fake.configDir, "process.lock"), process.execPath, "-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"]);
+  // The lock release wait of the platform is replaced by one that returns when the holder exits, as the kernel wakes the wait of the
+  // platform when the owner of the lock exits (scripts/test/platform/darwin/end-to-end.test.mjs checks the wait of macOS).
+  const lock = join(fake.configDir, "process.lock");
+  writeFileSync(lock, "");
+  const holder = spawn(process.execPath, ["-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"], { stdio: ["ignore", "pipe", "ignore"] });
   t.after(() => holder.kill());
+  const holderExit = new Promise((resolve) => holder.once("exit", resolve));
   await new Promise((resolve) => holder.stdout.once("data", resolve));
+  const waits = [];
+  const lockRelease = async (path, seconds, { platform }) => { waits.push([path, seconds, platform]); await holderExit; return true; };
   const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: fake.configDir }],
-    { write: () => {}, children: new Map([["app", started]]) });
+    { write: () => {}, children: new Map([["app", started]]), lockRelease });
   assert.deepEqual(failures, []);
+  assert.deepEqual(waits, [[lock, 60, "darwin"]]);
   assert.notEqual(holder.exitCode, null, "the quit step ended while the process that holds process.lock was running");
 });
 

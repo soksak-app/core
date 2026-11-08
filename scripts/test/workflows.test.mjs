@@ -215,6 +215,9 @@ test('the linux-node job runs the headless owner tests on Linux after the locked
   assert.ok(install >= 0 && owners > install, 'linux-node does not install the locked dependencies before the headless owner tests');
   assert.match(list[owners].text, /run: make -C core test-headless-owners$/m);
   assert.match(list[owners].text, /npm_config_offline: 'true'/);
+  const tools = list.findIndex((step) => step.name === 'Install the system tools of the owners');
+  assert.ok(tools >= 0 && tools < install, 'linux-node does not install the system tools of the owners before the locked install');
+  assert.match(list[tools].text, /sudo apt-get install --yes zsh clang pkg-config unzip build-essential python3$/m);
   assert.ok(list.some((step) => step.name === 'Reject lockfile changes'), 'linux-node does not reject lockfile changes');
   const gate = ciJob('required');
   assert.match(gate, /^ {6}- linux-node$/m, 'the required gate does not need linux-node');

@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { macosMinimum } from "./macos-minimum.mjs";
+import { objectiveCSyntaxTree, PlatformOperationNotImplemented } from "./platform/platform.js";
 import { tableCells } from "./markdown-table.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
@@ -443,9 +443,8 @@ export const MAIN_THREAD_FREE = {
 const mainThreadFree = (name) => Object.keys(MAIN_THREAD_FREE)
   .some((key) => key.endsWith("*") ? name.startsWith(key.slice(0, -1)) : name === key);
 
-// The flags of the cgo preambles and Objective-C files of the darwin layer, which cgo passes with the #cgo CFLAGS lines; the
-// preamble file starts with the prolog of cgo, which includes stddef.h.
-const CLANG_FLAGS = ["-x", "objective-c", "-fmodules", "-fblocks", `-mmacosx-version-min=${macosMinimum()}`, "-w", "-fsyntax-only", "-Xclang", "-ast-dump=json"];
+// The preamble file starts with the prolog of cgo, which includes stddef.h; the macros of the #cgo CFLAGS lines are passed to the
+// compiler of the platform (objectiveCSyntaxTree of scripts/platform/platform.js).
 const PREAMBLE_PROLOG = "#include <stddef.h>\n";
 
 /**
@@ -543,14 +542,16 @@ function enclosing(entry) {
  * - No native function, no Objective-C message and no block runs inside hostRunOnWorker or ON_WORKER.
  *
  * go/parser reads the Go files (scripts/cgo-sources.go): the preamble, the #cgo CFLAGS, the //export functions and the calls of
- * C functions. clang reads each preamble and each Objective-C file and dumps its AST as JSON, with the macros expanded and each
- * called function resolved to its declaration; a function that a header of native/darwin/src declares is a native function.
+ * C functions. The Objective-C compiler of the platform (clang with the Apple frameworks on macOS; objectiveCSyntaxTree of
+ * scripts/platform/platform.js) reads each preamble and each Objective-C file and dumps its AST as JSON, with the macros expanded
+ * and each called function resolved to its declaration; a function that a header of native/darwin/src declares is a native function.
  * Two other parsers do not meet the check: cmd/cgo translates a package only with the pkg-config package soksak-darwin, which
  * native/darwin installs with the built library and the structure job of CI does not build; tree-sitter-objc does not expand
  * ON_MAIN and ON_WORKER, whose first argument is a type, and does not resolve which header declares a called function. The
- * files are written to a temporary folder of their own, which the audit removes.
+ * files are written to a temporary folder of their own, which the audit removes. A platform without that compiler rejects with
+ * PlatformOperationNotImplemented.
  */
-export function auditMainThreadCalls(sources) {
+export async function auditMainThreadCalls(sources, { platform } = {}) {
   const folder = mkdtempSync(join(tmpdir(), "main-thread-audit-"));
   try {
     for (const [path, text] of Object.entries(sources)) {
@@ -558,14 +559,14 @@ export function auditMainThreadCalls(sources) {
       mkdirSync(dirname(join(folder, path)), { recursive: true });
       writeFileSync(join(folder, path), text);
     }
-    return auditFolder(folder, Object.keys(sources));
+    return await auditFolder(folder, Object.keys(sources), platform);
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
 }
 
 /** Audits the files of paths that auditMainThreadCalls wrote into folder. */
-function auditFolder(folder, paths) {
+async function auditFolder(folder, paths, platform) {
   const layerFiles = paths.filter(mainThreadImplementation);
   const goFiles = layerFiles.filter((path) => path.endsWith(".go"));
   const goSources = goFiles.length === 0 ? [] : JSON.parse(execFileSync("go", ["run", `${ROOT}scripts/cgo-sources.go`],
@@ -588,9 +589,9 @@ function auditFolder(folder, paths) {
   for (const unit of units) {
     let dump;
     try {
-      dump = execFileSync("clang", [...CLANG_FLAGS, ...defines, "-I", nativeFolder, "-I", join(folder, MAIN_THREAD_LAYER), unit.file],
-        { cwd: folder, encoding: "utf8", maxBuffer: 1 << 30, stdio: ["ignore", "pipe", "pipe"] });
+      dump = await objectiveCSyntaxTree(unit.file, { platform, cwd: folder, defines, includes: [nativeFolder, join(folder, MAIN_THREAD_LAYER)] });
     } catch (error) {
+      if (error instanceof PlatformOperationNotImplemented) throw error;
       throw new Error(`${unit.path}: clang failed: ${error.stderr || error.message}`, { cause: error });
     }
     const main = join(folder, unit.file);
@@ -684,7 +685,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   for (const file of tracked.filter((path) => path.startsWith(COMMAND_SOURCES) && path.endsWith(".rs"))) {
     errors.push(...findUndecodedCommandArguments(readFileSync(`${ROOT}${file}`, "utf8"), file));
   }
-  errors.push(...auditMainThreadCalls(Object.fromEntries(tracked
+  errors.push(...await auditMainThreadCalls(Object.fromEntries(tracked
     .filter(mainThreadSource)
     .map((path) => [path, readFileSync(`${ROOT}${path}`, "utf8")]))));
   const stubErrors = findStubs(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8"));

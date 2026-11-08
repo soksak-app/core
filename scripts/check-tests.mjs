@@ -143,7 +143,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
-  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]) }),
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/platform.js", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".js", ".c"]) }),
   lane("audit of the running documents", "js-ts", ["e2e/audit-surfaces.mjs"], ["scripts/test/audit-surfaces.test.mjs"]),
   lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs", "apps/browser/check/**/*.mjs"], { sharedTests: true }),
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
@@ -296,7 +296,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "function onlyList(only) {" },
       { file: "Makefile", symbol: "@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/" },
-      { file: "Makefile", symbol: "@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics" },
+      { file: "Makefile", symbol: "@$(CARGO_ENV) $(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics" },
       { file: ".github/workflows/ci.yml", symbol: "run: make -C core test-headless-owners" },
       { file: ".github/workflows/ci.yml", symbol: "run: rustup target add x86_64-pc-windows-msvc" },
       { file: ".github/workflows/ci.yml", symbol: "run: make -C core check-windows-rust" },
@@ -11864,7 +11864,7 @@ const FEATURE_LINKS = [
   {
     id: "F346",
     implementation: [
-      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir, action, platform)" },
+      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir, action, platform, lockRelease)" },
     ],
     tests: [
       { file: "scripts/test/test-app.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },

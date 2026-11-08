@@ -7,13 +7,13 @@ import { spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
-import { sampleProcess } from '@soksak/window-check/stall-sample.mjs';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
 import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from './test-command.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
+import { processStacks } from './platform/platform.js';
 import { processWarnings } from './node-warnings.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
@@ -176,7 +176,7 @@ function endGroup(pgid, leader) {
  * ended and the test fails with the names of the leftovers. When the item declares a limit, the group is ended at that limit, and the
  * timeout names the leftovers other than the test process.
  */
-function runOne(item, limitMs, env, outputPath) {
+function runOne(item, limitMs, env, outputPath, stacks) {
   return new Promise((resolve) => {
     const started = performance.now();
     const chunks = [];
@@ -222,7 +222,7 @@ function runOne(item, limitMs, env, outputPath) {
         try {
           for (const member of runningMembers(child.pid)) {
             const file = join(dirname(outputPath), `${basename(outputPath, '.log')}.exit-${member.pid}.sample.txt`);
-            try { samples.push(await sampleProcess(member.pid, file)); } catch (error) { errors.push(error.message); }
+            try { samples.push(await stacks(member.pid, file)); } catch (error) { errors.push(error.message); }
           }
         } catch (error) { errors.push(`the process group ${child.pid} could not be read: ${error.message}`); }
         const failed = errors.length > 0 ? `; sample errors: ${errors.join('; ')}` : '';
@@ -382,12 +382,15 @@ function runOne(item, limitMs, env, outputPath) {
  * starts; the line `WAIT <name>` names the test that waits for it. `run` (`{id, folder}`), when given, passes the identifier and the folder to each
  * test as `SOKSAK_RUN_ID` and the folder as `SOKSAK_RUN_FOLDER`, stores the output of every test in the folder, and keeps `manifest.json` there with each test, its status,
  * its start and its end in microseconds; the manifest is rewritten when a test starts and when it ends.
+ * `stacks(pid, file)`, when given, records the thread stacks of a process that did not exit at its exit limit; the default is the
+ * operation of the platform (scripts/platform/platform.js).
  */
 export async function runTests(options) {
   validate(options);
   const { tests, concurrency, write } = options;
   const heartbeatMs = options.heartbeatMs ?? 10_000;
   const slowCount = options.slowCount ?? 10;
+  const stacks = options.stacks ?? processStacks;
   const begun = performance.now();
   const running = new Map();
   const results = new Map();
@@ -430,7 +433,7 @@ export async function runTests(options) {
       if (item.build) {
         write(`BUILD ${item.name} (limit ${seconds(item.build.timeoutMs)}s)`);
         const built = await runOne({ name: item.name, command: item.build.command, args: item.build.args, cwd: item.cwd, env: item.env },
-          item.build.timeoutMs, env, outputPath);
+          item.build.timeoutMs, env, outputPath, stacks);
         const ended = `${seconds(built.elapsedMs)}s${built.detail ? ` ${built.detail}` : ''}`;
         if (entry) {
           entry.build = { status: built.status, elapsed_ms: Math.round(built.elapsedMs), detail: built.detail };
@@ -445,7 +448,7 @@ export async function runTests(options) {
       }
       if (result === null) {
         write(`RUN  ${item.name} (${running.size} running, ${limit === undefined ? 'no runner limit' : `limit ${seconds(limit)}s`})`);
-        result = await runOne(item, limit, env, outputPath);
+        result = await runOne(item, limit, env, outputPath, stacks);
       }
       running.delete(item.name);
       if (entry) {

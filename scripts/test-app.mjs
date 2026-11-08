@@ -67,7 +67,7 @@ export function newConfigRoot(root) {
  * platform performs that operation. The plan resolves the application executables of the platform, so a platform that does not
  * implement the application artifact fails before any step starts an application.
  */
-export async function e2ePlan({ root, configRoot, script, native, whenIdle, candidate, artifacts, only, runFolder, platform = process.platform }) {
+export async function e2ePlan({ root, configRoot, script, native, whenIdle, candidate, artifacts, only, runFolder, platform }) {
   if (candidate && (artifacts !== undefined || only !== undefined)) throw new Error('candidate acceptance rejects ordinary selection or artifact overrides');
   if (artifacts) validateOrdinaryArtifacts(artifacts);
   if (artifacts && !isAbsolute(configRoot)) throw new Error('ordinary configuration root must be absolute');
@@ -217,7 +217,7 @@ async function startApplication(item, children) {
   }
 }
 
-export async function quitApplication(item, children, since, write, connectClient = connect) {
+export async function quitApplication(item, children, since, write, connectClient = connect, lockRelease = waitForLockRelease) {
   const child = children.get(item.app);
   let client;
   let expired = false;
@@ -260,23 +260,23 @@ export async function quitApplication(item, children, since, write, connectClien
   }
   // Retain the existing lock-holder proof, including a replacement process
   // after relaunch. A timeout above is a failed Quit, never a forced shutdown.
-  await lockReleased(item.configDir, action, item.platform);
+  await lockReleased(item.configDir, action, item.platform, lockRelease);
 }
 
 /**
  * Waits until no process holds `<config-dir>/process.lock` (docs/spec/endpoint.md). The started process is not always the owner:
  * diagnostics.host.relaunch replaces it with a new process. The lock release wait of the platform returns when the owner exits.
  */
-async function lockReleased(configDir, action, platform) {
+async function lockReleased(configDir, action, platform, lockRelease) {
   const lock = join(configDir, 'process.lock');
   if (!existsSync(lock)) return;
-  if (!await waitForLockRelease(lock, QUIT_LIMIT_MS / 1000, { platform })) {
+  if (!await lockRelease(lock, QUIT_LIMIT_MS / 1000, { platform })) {
     throw new Error(`the process that holds ${lock} did not exit in ${QUIT_LIMIT_MS / 1000}s after ${action}`);
   }
 }
 
-async function checkRemaining(item) {
-  const found = remainingProcesses(await listProcesses({ platform: item.platform }), item.paths);
+async function checkRemaining(item, processes) {
+  const found = remainingProcesses(await processes({ platform: item.platform }), item.paths);
   if (found.length > 0) throw new Error(`${found.length} processes remain: ${found.join('; ')}`);
 }
 
@@ -295,8 +295,10 @@ async function runNative(item, interrupted) {
  * Runs the steps in order and returns the failures as `<step>: <reason>`. `children` holds the started applications by name, so a quit
  * step reaches the application of an earlier start step. An abort of `interrupted`, whose reason is the name of the signal, ends the
  * running command, skips the later steps that are not cleanup steps and runs the cleanup steps, so the applications and their services end.
+ * `lockRelease` and `processes` are the lock release wait and the process list of the platform; a test passes its own readers.
  */
-export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {}, connectClient = connect }) {
+export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {}, connectClient = connect,
+  lockRelease = waitForLockRelease, processes = listProcesses }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
@@ -322,9 +324,9 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
       // A cleanup step runs to its end after an interrupt, because it ends what the earlier steps started.
       if (item.kind === 'run') await runCommand(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'start') await startApplication(item, children);
-      else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient);
+      else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);
-      else if (item.kind === 'remaining') await checkRemaining(item);
+      else if (item.kind === 'remaining') await checkRemaining(item, processes);
       else if (item.kind === 'capture') await capture(item.capture);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);
       if (interrupted?.aborted && item.phase !== 'cleanup') throw interruptedBy(interrupted);

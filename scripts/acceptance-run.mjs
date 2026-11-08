@@ -22,7 +22,8 @@ const byComponent = (a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.i
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const requireValue = (condition, message) => { if (!condition) throw new Error(`candidate acceptance: ${message}`); };
 const configDir = (root, app) => join(root, `soksak-check-${app}`);
-const executable = async ({ bundle, app }) => (await applicationExecutables(bundle, app)).application;
+// `platform` names the system whose application layout the bundles have; undefined selects the running system.
+const executable = async ({ bundle, app }, platform) => (await applicationExecutables(bundle, app, { platform })).application;
 
 /** One checkout's complete tracked inputs; the subset hashes retain test and dependency ownership. */
 export async function sourceIdentity(root) {
@@ -133,16 +134,16 @@ async function checkAssets(context) {
 }
 
 /** Uses the candidate's public installer in an empty reference configuration to bind release bytes to installed trees. */
-export async function prepareCandidate(input, { install = installReference, remove = rm, signal } = {}) {
-  return prepareArtifactInputs(input, { install, remove, signal, candidate: true });
+export async function prepareCandidate(input, { install = installReference, remove = rm, signal, platform } = {}) {
+  return prepareArtifactInputs(input, { install, remove, signal, platform, candidate: true });
 }
 
 /** Ordinary prebuilt runs share the frozen component schema and actual installer verification, not candidate publication claims. */
-export async function prepareOrdinaryArtifacts(input, { install = installReference, remove = rm, signal } = {}) {
-  return prepareArtifactInputs(input, { install, remove, signal, candidate: false });
+export async function prepareOrdinaryArtifacts(input, { install = installReference, remove = rm, signal, platform } = {}) {
+  return prepareArtifactInputs(input, { install, remove, signal, platform, candidate: false });
 }
 
-async function prepareArtifactInputs(input, { install, remove, signal, candidate }) {
+async function prepareArtifactInputs(input, { install, remove, signal, platform, candidate }) {
   const context = structuredClone(input);
   requireValue(context.schema === 1 && (!candidate || context.candidate) && context.registry, 'candidate context schema must be 1');
   requireValue(same(context.hosts?.map(({ app }) => app).sort(), CANDIDATE_HOSTS), 'candidate context must name every candidate host exactly once');
@@ -165,7 +166,7 @@ async function prepareArtifactInputs(input, { install, remove, signal, candidate
     requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'registry bytes changed while the private copy was prepared');
     const reference = join(directory, 'reference');
     await mkdir(reference);
-    const installer = (await applicationExecutables(context.hosts[0].bundle, context.hosts[0].app)).sok;
+    const installer = (await applicationExecutables(context.hosts[0].bundle, context.hosts[0].app, { platform })).sok;
     const bundleBefore = await hashTree(context.hosts[0].bundle);
     await install(installer, ['registry', 'use', context.registry.path, '--config-dir', reference], { signal });
     // Candidate scope is its pack; ordinary scope is its explicit full cohort.
@@ -182,16 +183,16 @@ async function prepareArtifactInputs(input, { install, remove, signal, candidate
 }
 
 /** Reads the actual endpoint process and every installed byte; a post-cleanup snapshot makes no live-process claim. */
-export async function collectAcceptanceInputs(root, context, configRoot, { live = true, identify = runningProcess } = {}) {
-  return collectArtifactInputs(root, context, configRoot, { live, identify, candidate: true });
+export async function collectAcceptanceInputs(root, context, configRoot, { live = true, identify = runningProcess, platform } = {}) {
+  return collectArtifactInputs(root, context, configRoot, { live, identify, platform, candidate: true });
 }
 
 /** Validates the same live executables and installed bytes while recording ordinary source state without a release claim. */
-export async function collectOrdinaryInputs(root, context, configRoot, { live = true, identify = runningProcess } = {}) {
-  return collectArtifactInputs(root, context, configRoot, { live, identify, candidate: false });
+export async function collectOrdinaryInputs(root, context, configRoot, { live = true, identify = runningProcess, platform } = {}) {
+  return collectArtifactInputs(root, context, configRoot, { live, identify, platform, candidate: false });
 }
 
-async function collectArtifactInputs(root, context, configRoot, { live, identify, candidate }) {
+async function collectArtifactInputs(root, context, configRoot, { live, identify, platform, candidate }) {
   await checkAssets(context);
   requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'frozen registry changed during acceptance');
   const index = await json(context.registry.path);
@@ -203,7 +204,7 @@ async function collectArtifactInputs(root, context, configRoot, { live, identify
   const hosts = [];
   for (const host of context.hosts) {
     const config = configDir(configRoot, host.app);
-    const file = await executable(host);
+    const file = await executable(host, platform);
     let processIdentity;
     if (live) {
       const endpoint = await json(join(config, 'endpoint.json'));

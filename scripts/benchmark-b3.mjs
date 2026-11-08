@@ -81,8 +81,10 @@ import { FRAME_RECORDS, traceSettings } from './measure-trace.mjs';
 import { B3_MEASUREMENTS, B3_SETTINGS } from '../e2e/benchmark/measurements.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+/** The system of the release bundles that the applications run from; the quit and the remaining check of a run use its platform operations. */
+const SYSTEM = 'darwin';
 /** The platform of the releases that the applications install. */
-const PLATFORM = 'darwin-arm64';
+const PLATFORM = `${SYSTEM}-arm64`;
 /** The interval over which the CPU share of fseventsd is read before a run. */
 const FSEVENTSD_INTERVAL_S = 5;
 /** The applications of a session in the order of each round of runs: name, host and build. */
@@ -350,8 +352,8 @@ export function unitPlan({ application, configRoot, configDir, pluginIds }) {
       { name: `start ${name}`, phase: 'prepare', kind: 'start', app: name, configDir, output: join(configRoot, `${name}.out`), argv: [application.executable, '--config-dir', configDir] },
     ],
     cleanup: [
-      { name: `quit ${name}`, phase: 'cleanup', kind: 'quit', by: 'menu', app: name, configDir },
-      { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, application.bundle] },
+      { name: `quit ${name}`, phase: 'cleanup', kind: 'quit', by: 'menu', app: name, configDir, platform: SYSTEM },
+      { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, application.bundle], platform: SYSTEM },
     ],
   };
 }
@@ -595,13 +597,13 @@ async function readStartConditions() {
  * conditions, the display, the values of the targets, the installed releases, the load average at the end and the failures of the run.
  * `context` holds the goals, the session folder, the baseline record, the trace state, the B3_MEASUREMENTS and the B3_SETTINGS of
  * the e2e benchmarks (`benchmarks`), the records file, `write` for the step lines,
- * and the readings and the target runner, which tests inject.
+ * and the readings, the target runner, and the process list and the lock release wait of the platform (`processes`, `lockRelease`), which tests inject.
  */
 export async function runUnit(unit, context) {
   const {
     goals, session, write, baseline = null, trace = RUN_TRACE, benchmarks, recordsFile = 'runs.jsonl', prefix = '', interrupted,
     readStart = readStartConditions, display = readDisplay, activate = activateWindow, loadAverage = loadavg, runTarget = runTargetCommand,
-    targetsOf = (scenario) => scenarioTargets(goals, scenario), accessibility = () => trusted() === true,
+    targetsOf = (scenario) => scenarioTargets(goals, scenario), accessibility = () => trusted() === true, processes, lockRelease,
   } = context;
   const { application } = unit;
   const name = `${prefix}${unit.scenarios.join('+')}-${unit.run}-${application.name}`;
@@ -629,7 +631,7 @@ export async function runUnit(unit, context) {
     const index = readJson(application.index);
     const plan = unitPlan({ application, configRoot, configDir, pluginIds: index.plugins.map((plugin) => plugin.id) });
     const children = new Map();
-    const started = await runPlan(plan.prepare, { write, children, interrupted });
+    const started = await runPlan(plan.prepare, { write, children, interrupted, processes, lockRelease });
     failures.push(...started);
     let plugins = [];
     if (started.length === 0) {
@@ -675,7 +677,7 @@ export async function runUnit(unit, context) {
     } catch (error) {
       failures.push(error.message);
     }
-    failures.push(...await runPlan(plan.cleanup, { write, children }));
+    failures.push(...await runPlan(plan.cleanup, { write, children, processes, lockRelease }));
   }
   const end = { loadAverage: loadAverage() };
   const records = unit.scenarios.map((scenario) => ({

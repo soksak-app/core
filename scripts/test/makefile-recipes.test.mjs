@@ -162,7 +162,8 @@ function trackedMakefiles() {
 function knownTargets(folder) {
   const goal = "no-such-goal-of-the-recipe-test";
   const result = spawnSync("make", ["-pRrq", "-C", folder, "--no-print-directory", goal], { cwd: root, encoding: "utf8", timeout: 60000 });
-  assert.ok(result.stderr.includes(`No rule to make target \`${goal}'`), result.stderr);
+  // GNU Make 3.81 quotes the target as `goal', GNU Make 4 as 'goal'.
+  assert.match(result.stderr, new RegExp(`No rule to make target [\`']${goal}'`), result.stderr);
   const explicit = new Set();
   const patterns = [];
   const lines = result.stdout.split("\n");

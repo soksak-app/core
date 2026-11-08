@@ -440,6 +440,8 @@ test('the macOS static inventory excludes Windows-only Go tests', () => {
     cwd: root,
     patterns: ['./packages/sok/go/...'],
     id: 'macOS Wails sok source inventory',
+    // The inventory of the macOS target, whatever system lists it.
+    env: { ...process.env, GOOS: 'darwin', GOARCH: 'arm64' },
   });
   assert.ok(files.includes('packages/sok/go/tests/platform/darwin/private_files_test.go'));
   assert.ok(!files.includes('packages/sok/go/tests/platform/linux/process_wait_test.go'));

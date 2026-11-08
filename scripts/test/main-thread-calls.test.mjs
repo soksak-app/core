@@ -26,7 +26,7 @@ const mainThread = [
 ].join("\n");
 const base = { [HEADER]: header, ["native/darwin/src/main_thread.h"]: mainThread };
 
-test("main-thread audit accepts native dispatch installation and queries without dispatching them", { timeout: 30000 }, () => {
+test("main-thread audit accepts native dispatch installation and queries without dispatching them", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     "native/darwin/src/main_thread.h": mainThread + "\n#include <stdbool.h>\nvoid hostInstallMainThread(void (*worker)(void (^)(void)), void (*main)(void (^)(void)));\nvoid hostMainThreadInstalled(bool *worker, bool *main);",
@@ -36,16 +36,16 @@ test("main-thread audit accepts native dispatch installation and queries without
       'static void installed(void) { bool worker, main; hostMainThreadInstalled(&worker, &main); }',
     ].join("\n"), 'func configure() { C.install(); C.installed() }'),
   };
-  assert.deepEqual(auditMainThreadCalls(files), []);
+  assert.deepEqual(await auditMainThreadCalls(files), []);
 });
 
-test("main-thread audit accepts native startup signal masking without dispatch", { timeout: 30000 }, () => {
+test("main-thread audit accepts native startup signal masking without dispatch", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     "native/darwin/src/signals.h": "int sp_block_async_signals(void);",
     [`${LAYER}/termination.go`]: goFile('#include "signals.h"', "func prepare() { C.sp_block_async_signals() }"),
   };
-  assert.deepEqual(auditMainThreadCalls(files), []);
+  assert.deepEqual(await auditMainThreadCalls(files), []);
 });
 
 /** Returns a Go file of the darwin layer with the preamble and the Go body. */
@@ -55,7 +55,7 @@ function goFile(preamble, body) {
 
 const exported = "//export goWindowClosed\nfunc goWindowClosed() {}\n";
 
-test("main-thread audit protects registered native callback entries with the same worker boundary", { timeout: 30000 }, () => {
+test("main-thread audit protects registered native callback entries with the same worker boundary", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     "native/darwin/src/host_callbacks.h": "void sp_host_callback_ready(unsigned long context);",
@@ -66,13 +66,13 @@ test("main-thread audit protects registered native callback entries with the sam
       'static void invalid(void) { sp_host_callback_ready(17); }',
     ].join("\n"), "func drive() { C.valid(); C.invalid(); C.sp_host_callback_ready(17) }"),
   };
-  const errors = auditMainThreadCalls(files);
+  const errors = await auditMainThreadCalls(files);
   assert.equal(errors.length, 2, errors.join("\n"));
   assert.match(errors[0], /sp_host_callback_ready.*outside hostRunOnWorker or ON_WORKER/);
   assert.match(errors[1], /Go calls callback sp_host_callback_ready directly/);
 });
 
-test("main-thread audit accepts exported callbacks that run through the worker", { timeout: 30000 }, () => {
+test("main-thread audit accepts exported callbacks that run through the worker", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     [`${LAYER}/window.go`]: goFile([
@@ -83,10 +83,10 @@ test("main-thread audit accepts exported callbacks that run through the worker",
       "static int windowHit(void) { return ON_WORKER(int, goWindowHit()); }",
     ].join("\n"), `${exported}//export goWindowHit\nfunc goWindowHit() C.int { return 0 }\n`),
   };
-  assert.deepEqual(auditMainThreadCalls(files), []);
+  assert.deepEqual(await auditMainThreadCalls(files), []);
 });
 
-test("main-thread audit rejects an exported callback that C calls directly", { timeout: 30000 }, () => {
+test("main-thread audit rejects an exported callback that C calls directly", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     [`${LAYER}/window.go`]: goFile([
@@ -94,12 +94,12 @@ test("main-thread audit rejects an exported callback that C calls directly", { t
       "static void windowClosed(void) { goWindowClosed(); }",
     ].join("\n"), exported),
   };
-  assert.deepEqual(auditMainThreadCalls(files), [
+  assert.deepEqual(await auditMainThreadCalls(files), [
     `${LAYER}/window.go:7: goWindowClosed is exported to C and is referenced outside hostRunOnWorker or ON_WORKER`,
   ]);
 });
 
-test("main-thread audit rejects an exported callback that an Objective-C file passes to native code", { timeout: 30000 }, () => {
+test("main-thread audit rejects an exported callback that an Objective-C file passes to native code", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     [`${LAYER}/window.go`]: goFile("", exported),
@@ -115,12 +115,12 @@ test("main-thread audit rejects an exported callback that an Objective-C file pa
       "@end",
     ].join("\n"),
   };
-  assert.deepEqual(auditMainThreadCalls(files), [
+  assert.deepEqual(await auditMainThreadCalls(files), [
     `${LAYER}/webview.m:7: goWindowClosed is exported to C and is referenced outside hostRunOnWorker or ON_WORKER`,
   ]);
 });
 
-test("main-thread audit rejects a native call that Go makes directly instead of through a main_ wrapper", { timeout: 30000 }, () => {
+test("main-thread audit rejects a native call that Go makes directly instead of through a main_ wrapper", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     [`${LAYER}/window.go`]: goFile([
@@ -135,12 +135,12 @@ test("main-thread audit rejects a native call that Go makes directly instead of 
       "const text = \"C.sp_window_close(window)\"",
     ].join("\n")),
   };
-  assert.deepEqual(auditMainThreadCalls(files), [
+  assert.deepEqual(await auditMainThreadCalls(files), [
     `${LAYER}/window.go:14: Go calls the native function sp_window_close directly; call a main_ wrapper that runs it through hostRunOnMain or ON_MAIN`,
   ]);
 });
 
-test("main-thread audit rejects a preamble function that Go calls and that uses AppKit outside the main thread", { timeout: 30000 }, () => {
+test("main-thread audit rejects a preamble function that Go calls and that uses AppKit outside the main thread", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     [`${LAYER}/window.go`]: goFile([
@@ -163,7 +163,7 @@ test("main-thread audit rejects a preamble function that Go calls and that uses 
       "}",
     ].join("\n")),
   };
-  assert.deepEqual(auditMainThreadCalls(files), [
+  assert.deepEqual(await auditMainThreadCalls(files), [
     `${LAYER}/window.go:14: sp_window_close runs on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN`,
     `${LAYER}/window.go:19: Go calls closeWindow, which calls closeOnMain (line 9), which calls the native function sp_window_close (line 8) outside hostRunOnMain or ON_MAIN`,
     `${LAYER}/window.go:20: Go calls orderOut, which sends an Objective-C message (line 10) outside hostRunOnMain or ON_MAIN`,
@@ -171,7 +171,7 @@ test("main-thread audit rejects a preamble function that Go calls and that uses 
   ]);
 });
 
-test("main-thread audit counts a call of a block as a call of a native function", { timeout: 30000 }, () => {
+test("main-thread audit counts a call of a block as a call of a native function", { timeout: 30000 }, async () => {
   const files = {
     ...base,
     // A main-thread function that runs its block directly before an installation does not count for its callers.
@@ -200,7 +200,7 @@ test("main-thread audit counts a call of a block as a call of a native function"
       "}",
     ].join("\n")),
   };
-  assert.deepEqual(auditMainThreadCalls(files), [
+  assert.deepEqual(await auditMainThreadCalls(files), [
     `${LAYER}/layout.go:13: a block is called on the worker inside hostRunOnWorker or ON_WORKER; run it through hostRunOnMain or ON_MAIN`,
     `${LAYER}/layout.go:19: Go calls finishOutside, which calls a block (line 9) outside hostRunOnMain or ON_MAIN`,
     `${LAYER}/layout.go:20: Go calls finishNamed, which calls a block (line 10) outside hostRunOnMain or ON_MAIN`,
@@ -216,7 +216,7 @@ test("main-thread audit names the thread-safe native functions with a reason", {
   }
 });
 
-test("main-thread audit reads the darwin layer of the Go language host library through hostRunOnWorker and hostRunOnMain", { timeout: 30000 }, () => {
+test("main-thread audit reads the darwin layer of the Go language host library through hostRunOnWorker and hostRunOnMain", { timeout: 30000 }, async () => {
   const layer = "packages/host/go/src/platform/darwin";
   const worker = [
     "void hostRunOnWorker(void (^task)(void));",
@@ -234,7 +234,7 @@ test("main-thread audit reads the darwin layer of the Go language host library t
       "static void windowClosedAtOnce(void) { goWindowClosed(); }",
     ].join("\n"), exported),
   };
-  assert.deepEqual(auditMainThreadCalls(files), [
+  assert.deepEqual(await auditMainThreadCalls(files), [
     `${layer}/window.go:9: goWindowClosed is exported to C and is referenced outside hostRunOnWorker or ON_WORKER`,
   ]);
 });
@@ -250,38 +250,38 @@ function migratedFiles(implementation, body = "func use() { C.main_fixture() }")
   };
 }
 
-test("main-thread audit rejects unguarded AppKit in a canonical wrapper reached through generated Wails bindings", { timeout: 30000 }, () => {
-  const errors = auditMainThreadCalls(migratedFiles('void main_fixture(void) { [NSApp terminate:nil]; }'));
+test("main-thread audit rejects unguarded AppKit in a canonical wrapper reached through generated Wails bindings", { timeout: 30000 }, async () => {
+  const errors = await auditMainThreadCalls(migratedFiles('void main_fixture(void) { [NSApp terminate:nil]; }'));
   assert.equal(errors.length, 1, errors.join("\n"));
   assert.match(errors[0], /packages\/host\/wailsv3.*Go calls main_fixture.*Objective-C message.*outside hostRunOnMain or ON_MAIN/);
 });
 
-test("main-thread audit follows guarded canonical wrapper definitions across the generated binding boundary", { timeout: 30000 }, () => {
-  assert.deepEqual(auditMainThreadCalls(migratedFiles('static void perform(void) { [NSApp terminate:nil]; }\nvoid main_fixture(void) { hostRunOnMain(^{ perform(); }); }')), []);
+test("main-thread audit follows guarded canonical wrapper definitions across the generated binding boundary", { timeout: 30000 }, async () => {
+  assert.deepEqual(await auditMainThreadCalls(migratedFiles('static void perform(void) { [NSApp terminate:nil]; }\nvoid main_fixture(void) { hostRunOnMain(^{ perform(); }); }')), []);
 });
 
-test("main-thread audit rejects direct native calls from generated Wails bindings", { timeout: 30000 }, () => {
+test("main-thread audit rejects direct native calls from generated Wails bindings", { timeout: 30000 }, async () => {
   const files = migratedFiles('void main_fixture(void) {}', 'func use() { C.sp_window_close(nil) }');
   files[GENERATED_BINDING] = goFile('#include "window_facts.h"', 'func use() { C.sp_window_close(nil) }');
-  const errors = auditMainThreadCalls(files);
+  const errors = await auditMainThreadCalls(files);
   assert.equal(errors.length, 1, errors.join("\n"));
   assert.match(errors[0], /Go calls the native function sp_window_close directly/);
 });
 
-test("main-thread audit enforces registered callback worker boundaries in canonical native wrapper sources", { timeout: 30000 }, () => {
+test("main-thread audit enforces registered callback worker boundaries in canonical native wrapper sources", { timeout: 30000 }, async () => {
   const files = migratedFiles('void main_fixture(void) { sp_host_callback_ready(17); }');
   files["native/darwin/src/host_callbacks.h"] = "void sp_host_callback_ready(unsigned long context);";
   files[CANONICAL_WRAPPER] = '#include "host_callbacks.h"\n' + files[CANONICAL_WRAPPER];
-  let errors = auditMainThreadCalls(files);
+  let errors = await auditMainThreadCalls(files);
   assert.equal(errors.length, 1, errors.join("\n"));
   assert.match(errors[0], /host_api_fixture.m.*sp_host_callback_ready.*outside hostRunOnWorker or ON_WORKER/);
   files[CANONICAL_WRAPPER] = files[CANONICAL_WRAPPER].replace('sp_host_callback_ready(17);', 'hostRunOnWorker(^{ sp_host_callback_ready(17); });');
-  assert.deepEqual(auditMainThreadCalls(files), []);
+  assert.deepEqual(await auditMainThreadCalls(files), []);
 });
 
-test("main-thread audit copies canonical private headers without replacing their declarations", { timeout: 30000 }, () => {
+test("main-thread audit copies canonical private headers without replacing their declarations", { timeout: 30000 }, async () => {
   const files = migratedFiles('void main_fixture(void) { hostRunOnMain(^{ privateClose(); }); }');
   files["native/darwin/src/private/fixture.h"] = "void privateClose(void);";
   files[CANONICAL_WRAPPER] = '#include "private/fixture.h"\n' + files[CANONICAL_WRAPPER];
-  assert.deepEqual(auditMainThreadCalls(files), []);
+  assert.deepEqual(await auditMainThreadCalls(files), []);
 });

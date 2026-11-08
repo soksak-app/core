@@ -325,6 +325,13 @@ jobs:
       - uses: ./core/.github/actions/setup-rust
         with:
           root: core
+      # The owners run these system tools: zsh for the ZLE fixture (e2e/check-zsh), clang for the AST dumps of the host API and
+      # callback headers, pkg-config for the native package files, unzip for the candidate files, and the C++ toolchain and
+      # Python with which pnpm builds the file watcher of @parcel/watcher from source.
+      - name: Install the system tools of the owners
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes zsh clang pkg-config unzip build-essential python3
       - name: Fetch locked Node dependencies
         run: pnpm -C core install --frozen-lockfile
       - name: Headless owner tests

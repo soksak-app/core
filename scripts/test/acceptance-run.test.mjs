@@ -10,6 +10,8 @@ import { collectAcceptanceInputs, finishAcceptanceRun, prepareCandidate, prepare
 
 const hosts = ['mygo', 'tauriv2', 'wailsv3'];
 const platform = 'darwin-arm64';
+// The fixture bundles have the layout of the macOS application, which the module reads on any system.
+const system = 'darwin';
 async function put(file, value) {
   await mkdir(join(file, '..'), { recursive: true });
   await writeFile(file, typeof value === 'string' ? value : JSON.stringify(value));
@@ -113,47 +115,47 @@ test('ordinary reference verifies every explicit plugin beyond the starter pack 
   };
   const ordinary = structuredClone(f.context);
   delete ordinary.candidate;
-  const prepared = await prepareOrdinaryArtifacts(ordinary, { install });
+  const prepared = await prepareOrdinaryArtifacts(ordinary, { platform: system, install });
   t.after(() => prepared.dispose());
   assert.deepEqual(calls, ['fixture', 'extra'], 'ordinary reference must execute the real installer for all explicit plugins');
   assert.deepEqual(prepared.context.registry.components.map(({ id }) => id).sort(), ['extra', 'fixture']);
   for (const entry of prepared.context.registry.components) assert.match(entry.treeSha256, /^[0-9a-f]{64}$/);
   calls.length = 0;
-  await assert.rejects(prepareCandidate(f.context, { install }), /installed component cohort differs/);
+  await assert.rejects(prepareCandidate(f.context, { platform: system, install }), /installed component cohort differs/);
   assert.deepEqual(calls, ['fixture'], 'candidate keeps its original declared-pack-only policy');
 });
 
 test('candidate reference installation binds the frozen registry payload to the exact enabled installed cohort', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
-  const prepared = await prepareCandidate(f.context, { install: f.install });
+  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
   t.after(() => prepared.dispose());
   assert.notEqual(prepared.context.registry.path, f.context.registry.path);
   assert.equal(await hashFile(prepared.context.registry.path), f.context.registry.sha256);
   assert.deepEqual(f.calls.map(([, args]) => args.slice(0, 3)), [['registry', 'use', prepared.context.registry.path], ['plugin', 'install', 'fixture']]);
   assert.ok(f.calls.every(([command]) => command === join(f.context.hosts[0].bundle, 'Contents/MacOS/sok')));
-  const snapshot = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify });
+  const snapshot = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
   assert.equal(snapshot.dirty, false);
   assert.deepEqual(snapshot.hosts.map(({ app, pid }) => [app, pid]), [['mygo', 100], ['tauriv2', 101], ['wailsv3', 102]]);
   assert.equal(snapshot.hosts[0].componentsSha256, hashValue(prepared.context.registry.components));
   for (const changed of [{ text: 'changed payload' }, { enabled: false }, { version: '0.0.2' }, { extra: true }]) {
     await installed(join(f.configRoot, 'soksak-check-tauriv2'), changed);
-    await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify }), /component|cohort|enabled|version/);
+    await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify }), /component|cohort|enabled|version/);
   }
 });
 
 test('candidate sidecar evidence binds the scoped dependency platform release and installed executable bytes', { timeout: 10000 }, async (t) => {
   const f = await fixture(t, { worker: {} });
-  const prepared = await prepareCandidate(f.context, { install: f.install });
+  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
   t.after(() => prepared.dispose());
-  const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify });
+  const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
   assert.equal(prepared.context.registry.components[1].id, '@fixture/worker');
   assert.equal(before.hosts[0].componentsSha256, hashValue(prepared.context.registry.components));
   const altered = structuredClone(f.context);
   altered.registry.components[1].releaseSha256 = '3'.repeat(64);
-  await assert.rejects(prepareCandidate(altered, { install: f.install }), /release checksum/);
+  await assert.rejects(prepareCandidate(altered, { platform: system, install: f.install }), /release checksum/);
   for (const worker of [{ version: '0.0.2' }, { text: 'another executable' }]) {
     await installed(join(f.configRoot, 'soksak-check-tauriv2'), { worker });
-    await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify }), /version|verified release payload/);
+    await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify }), /version|verified release payload/);
   }
 });
 
@@ -173,27 +175,27 @@ test('candidate source identity detects source, helper and dependency edits inde
 
 test('candidate input identity follows installed dependency bytes and links beyond tracked lock declarations', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
-  const prepared = await prepareCandidate(f.context, { install: f.install });
+  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
   t.after(() => prepared.dispose());
   await symlink('fixture', join(f.root, 'node_modules/fixture-link'));
   await symlink('.', join(f.root, 'node_modules/node_modules'));
-  const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify });
+  const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
   await put(join(f.root, 'node_modules/fixture/index.js'), 'changed installed dependency');
-  const after = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify });
+  const after = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
   assert.equal(after.dirty, false);
   assert.equal(after.dependenciesSha256, before.dependenciesSha256);
   assert.notEqual(after.installedDependenciesSha256, before.installedDependenciesSha256);
   await symlink(f.folder, join(f.root, 'node_modules/external'));
-  await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify }), /dependency.*outside|outside.*dependency/);
+  await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify }), /dependency.*outside|outside.*dependency/);
 });
 
 test('candidate reference installation rejects altered index bytes and a different selected cohort', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
   const altered = structuredClone(f.context);
   altered.registry.sha256 = 'f'.repeat(64);
-  await assert.rejects(prepareCandidate(altered, { install: f.install }), /registry bytes/);
+  await assert.rejects(prepareCandidate(altered, { platform: system, install: f.install }), /registry bytes/);
   assert.equal(f.calls.length, 0, 'an unverified index must not reach an installer');
-  await assert.rejects(prepareCandidate(f.context, { install: async (_command, args) => {
+  await assert.rejects(prepareCandidate(f.context, { platform: system, install: async (_command, args) => {
     if (args[0] === 'plugin') await installed(args.at(-1), { extra: true });
   } }), /cohort/);
 });
@@ -205,6 +207,7 @@ test('candidate reference cleanup reports its failure together with the installe
   let retained;
   t.after(async () => { if (retained) await rm(retained, { recursive: true, force: true }); });
   await assert.rejects(prepareCandidate(f.context, {
+    platform: system,
     install: async () => { throw installError; },
     remove: async (directory) => { retained = directory; throw cleanupError; },
   }), (error) => error instanceof AggregateError && sameErrors(error.errors, [installError, cleanupError]));
@@ -221,7 +224,7 @@ async function writeRun(f, prepared, { fileStatus = 'pass', auditStatus = 'pass'
     tests: [{ name: 'e2e/benchmark.test.mjs', status: fileStatus }] });
   await put(join(runFolder, 'judgment.json'), { schema: 1, run: judgmentRun,
     tests: hosts.map((app) => ({ app, name: `${app}: required`, result: 'pass' })), audit: { status: auditStatus, findings } });
-  const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { identify: f.identify });
+  const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
   const after = structuredClone(before);
   after.hosts[0].pid += 1;
   afterChange?.(after);
@@ -234,7 +237,7 @@ async function writeRun(f, prepared, { fileStatus = 'pass', auditStatus = 'pass'
 
 test('candidate acceptance keeps real manifest results and rejects failed audits, stale identities and failed cleanup', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
-  const prepared = await prepareCandidate(f.context, { install: f.install });
+  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
   t.after(() => prepared.dispose());
   const valid = await writeRun(f, prepared);
   assert.deepEqual(valid.run.errors, []);
@@ -254,7 +257,7 @@ test('candidate acceptance keeps real manifest results and rejects failed audits
 test('candidate report exports only complete matching acceptance without local paths', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
   f.context.candidate.localPath = f.folder;
-  const prepared = await prepareCandidate(f.context, { install: f.install });
+  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
   t.after(() => prepared.dispose());
   const { runFolder } = await writeRun(f, prepared);
   const output = join(f.folder, 'report.json');
