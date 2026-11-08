@@ -232,11 +232,6 @@
       "reason": "Checks that the bytes the terminal sidecar writes to the PTY match what an independent receiver reads, which is the terminal sidecar's own contract."
     },
     {
-      "file": "e2e/input-records.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a typed key leaves a record in every layer of the input path (native, host, workbench, sidecar request). The terminal and its VT sidecar only carry the key; a new fake fixture capability would replace them: an echo surface backed by a fake sidecar that logs the key it receives as `sidecar.*.request`."
-    },
-    {
       "file": "e2e/late-reply.test.mjs",
       "owner": "core",
       "reason": "Checks that the host discards a surface reply that arrives after its surface closed (exposure relay). It only opens a browser tab to have a surface; `plain-view` can replace it."
