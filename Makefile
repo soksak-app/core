@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits install-hooks check-boundaries check-platform-files check-windows-build check-host-files check-app-tests create-test-certificates test-app-terminal-sidebar-current test-app-terminal-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands
+.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-host-files check-app-tests create-test-certificates test-app-terminal-sidebar-current test-app-terminal-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -34,17 +34,26 @@ check-commits:
 	@test -n "$(RANGE)" || { echo "make check-commits RANGE=<revision range>" >&2; exit 2; }
 	@pnpm exec sok-check commits $(RANGE)
 
+# Checks that each commit of RANGE, which holds one or more revision ranges separated by spaces, keeps every closed checklist item closed and
+# removes an open item only through a retirement record of the changelog pair. Example: make check-checklist-history RANGE=origin/main..HEAD
+check-checklist-history:
+	@test -n "$(RANGE)" || { echo "make check-checklist-history RANGE=<revision range>" >&2; exit 2; }
+	@pnpm exec sok-check docs --range "$(RANGE)"
+
 # Sets the git hook folder of this checkout to .githooks. The commit-msg hook checks the commit message form.
 install-hooks:
 	@git config core.hooksPath .githooks
 
-# Runs before a push (the pre-push hook of `make install-hooks`): the commit messages of RANGE, because a published commit message is kept.
+# Runs before a push (the pre-push hook of `make install-hooks`): the commit messages of RANGE, because a published commit message is kept,
+# and the checklist history of RANGE, because a published commit that reopens a closed item or removes an open one is kept too: the
+# kit compares each commit of RANGE with its first parent, which the check of the working tree against HEAD does not see after a rebase.
 # CI runs every other check on the pushed commits, a later commit corrects a failure, and the release gate releases only a green run.
 # The pre-push hook sets RANGE to the commits of each pushed ref (scripts/push-range.mjs). Without RANGE, the commits are origin/main..HEAD:
 # the commits that the remote main branch does not have. This range exists on every branch, while @{upstream}..HEAD fails with git exit 128
 # on a branch without an upstream, which a new branch has until its first push.
 check-push:
 	@$(MAKE) --no-print-directory check-commits RANGE="$(or $(RANGE),origin/main..HEAD)"
+	@$(MAKE) --no-print-directory check-checklist-history RANGE="$(or $(RANGE),origin/main..HEAD)"
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 check-release: build-wailsv3-release build-tauriv2-release build-mygo-release

@@ -1901,6 +1901,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F529",
+    implementation: [
+      { file: "Makefile", symbol: "check-checklist-history:" },
+      { file: "scripts/check-docs.mjs", symbol: "import { checkCompletedItems, retiredChecklistItems } from \"@soksak/kit/checklist\";" },
+    ],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    expected: "The checklist checks come from the pinned kit, and a push and CI check the checklist history of their range.",
+    levels: ["unit"],
+  },
+  {
     id: "F686-2",
     implementation: [
       { file: "packages/host/go/src/callback/handle.go", symbol: "func NewHandle(value any) Handle {" },
@@ -3879,7 +3889,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-288",
-    implementation: [{ file: "scripts/checklist.mjs", symbol: "export function checkCompletedItems(" }],
+    implementation: [{ file: "scripts/check-docs.mjs", symbol: "checkCompletedItems(previous, source, file, retired.ids)" }],
     tests: [
       { file: "scripts/test/checklist.test.mjs", id: "open, active and blocked checklist items cannot be removed without a paired retirement record" },
     ],
@@ -7927,7 +7937,7 @@ const FEATURE_LINKS = [
   {
     id: "F222",
     implementation: [{ file: ".githooks/pre-push", symbol: "check-push" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
     expected: "The pre-push hook runs make -C with the form the workflow test requires, with the range of the pushed refs.",
     levels: ["unit"],
   },
@@ -8483,8 +8493,8 @@ const FEATURE_LINKS = [
   {
     id: "F170",
     implementation: [{ file: "Makefile", symbol: "check-push:" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
-    expected: "A push checks only its commit messages before it leaves the checkout, and CI runs the structure, format and clippy checks.",
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    expected: "A push checks its commit messages and its checklist history before it leaves the checkout, and CI runs both on the range of its event with the structure, format and clippy checks.",
     levels: ["unit"],
   },
   {
@@ -9885,7 +9895,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "V1",
-    implementation: [{ file: "scripts/checklist.mjs", symbol: "checkCompletedItems" }],
+    implementation: [{ file: "scripts/check-docs.mjs", symbol: "checkCompletedItems(previous, source, file, retired.ids)" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist permits translated text and linked follow-up identifiers" }],
     expected: "The canonical English and Korean checklist keeps the same identifiers, nesting, and states, preserves completed scope, and records only evidence-backed completion claims.",
     levels: ["unit"],
@@ -9958,7 +9968,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "G1.3",
-    implementation: [{ file: "scripts/checklist.mjs", symbol: "checkCompletedItems" }],
+    implementation: [{ file: "scripts/check-docs.mjs", symbol: "checkCompletedItems(previous, source, file, retired.ids)" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist preserves completed scope" }],
     expected: "Checklist translations and completed identifiers remain structurally synchronized and cannot be silently reopened.",
     levels: ["unit"],
@@ -12477,8 +12487,8 @@ const FEATURE_LINKS = [
   {
     id: "F274",
     implementation: [{ file: "Makefile", symbol: "because a published commit message is kept" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message check, and ci runs the structure, format and clippy checks" }],
-    expected: "A push checks only its commit messages before it leaves the checkout, and CI runs every other check.",
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    expected: "A push checks its commit messages and its checklist history before it leaves the checkout, and CI runs every other check.",
     levels: ["unit"],
   },
   {

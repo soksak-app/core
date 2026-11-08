@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { absolute, markdownLinks } from "./markdown-links.mjs";
 import { tableCells } from "./markdown-table.mjs";
-import { auditCommittedEvidenceWording, auditHistoricalScopeWording, auditModalParitySnapshotWording, checkChangelogTranslations, checkChecklistTranslations, checkCompletedItems, checkSpecificationIds, conflictMarkerErrors, retiredChecklistItems } from "./checklist.mjs";
+import { checkCompletedItems, retiredChecklistItems } from "@soksak/kit/checklist";
+import { auditCommittedEvidenceWording, auditHistoricalScopeWording, auditModalParitySnapshotWording, checkChangelogTranslations, checkChecklistTranslations, checkSpecificationIds, conflictMarkerErrors } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));

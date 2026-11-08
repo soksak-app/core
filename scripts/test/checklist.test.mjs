@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checklistCounts, checkChangelogTranslations, checkSpecificationIds, retiredChecklistItems } from "../checklist.mjs";
+import { checklistCounts, checkChangelogTranslations, checkSpecificationIds } from "../checklist.mjs";
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";
@@ -127,13 +127,6 @@ test("open, active and blocked checklist items cannot be removed without a paire
     assert.notEqual(result.status, 0, `documentation audit accepted the removal of a [${state}] item`);
     assert.match(result.stderr, /open checklist item G1 was removed; record its completion or closure, or retire it/);
   }
-});
-
-test("retirement records require a reason and the same IDs in both translations", () => {
-  const noReason = retiredChecklistItems("- Retired checklist entry `G1`:\n", "- 체크리스트 항목 `G1` 폐기:\n");
-  assert.match(noReason.errors.join("\n"), /requires a reason/);
-  const mismatch = retiredChecklistItems("- Retired checklist entry `G1`: mistaken entry.\n", "- 체크리스트 항목 `G2` 폐기: 잘못된 항목.\n");
-  assert.match(mismatch.errors.join("\n"), /entries differ between changelog translations/);
 });
 
 test("checklist permits an explicitly blocked item with a cause and retry condition", { timeout: 3000 }, (t) => {

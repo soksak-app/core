@@ -82,7 +82,7 @@ test('the release workflow runs no stored data migration step and no release ste
   assert.equal(existsSync(join(ROOT, 'scripts', 'release-step.sh')), false, 'the release step script is removed');
 });
 
-test('the push check runs only the commit message check, and ci runs the structure, format and clippy checks', () => {
+test('the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks', () => {
   const ci = read('.github/workflows/ci.yml');
   const targets = (name) => {
     const step = steps(ci).find((item) => item.name === name);
@@ -92,12 +92,22 @@ test('the push check runs only the commit message check, and ci runs the structu
   // The check of the event catalog and of the event sources is a structure check of CI: a source change that removes an emitter fails its run.
   assert.ok(targets('Structure checks').includes('check-events'), 'the structure step of ci.yml does not run check-events');
   for (const name of ['Go format checks', 'Rust format and clippy checks']) assert.ok(targets(name).length > 0, `ci.yml step ${name} runs no target`);
-  // A published commit message is kept, so the push checks it before it leaves the checkout; a later commit corrects any other
-  // failure, and the release gate releases only a green run of CI.
-  const recipe = /^check-push:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
+  // A published commit message and a published checklist change are kept, so the push checks both before they leave the checkout;
+  // a later commit corrects any other failure, and the release gate releases only a green run of CI.
+  const makefile = read('Makefile');
+  const recipe = /^check-push:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(makefile);
   assert.ok(recipe, 'the Makefile has no check-push target');
-  assert.deepEqual(recipe[1].trim().split('\n').map((line) => line.trim()),
-    ['@$(MAKE) --no-print-directory check-commits RANGE="$(or $(RANGE),origin/main..HEAD)"'], 'check-push runs a check other than the commit messages');
+  assert.deepEqual(recipe[1].trim().split('\n').map((line) => line.trim()), [
+    '@$(MAKE) --no-print-directory check-commits RANGE="$(or $(RANGE),origin/main..HEAD)"',
+    '@$(MAKE) --no-print-directory check-checklist-history RANGE="$(or $(RANGE),origin/main..HEAD)"',
+  ], 'check-push runs a check other than the commit messages and the checklist history');
+  // The range is one argument of the kit command, which splits it into its revision ranges.
+  assert.match(makefile, /^check-checklist-history:\n\t@test -n "\$\(RANGE\)" \|\| [^\n]*\n\t@pnpm exec sok-check docs --range "\$\(RANGE\)"\n/m);
+  const history = steps(ci).find((item) => item.name === 'Checklist history');
+  const messages = steps(ci).find((item) => item.name === 'Commit messages');
+  assert.ok(history, 'ci.yml has no step Checklist history');
+  assert.equal(history.text.replace('check-checklist-history', 'check-commits').replace('Checklist history', 'Commit messages'), messages.text,
+    'the checklist history step of ci.yml does not run on the range and the condition of the commit message step');
   assert.match(read('.githooks/pre-push'), /make -C "\$\(git rev-parse --show-toplevel\)" check-push/);
 });
 
