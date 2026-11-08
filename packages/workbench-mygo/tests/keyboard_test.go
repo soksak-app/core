@@ -43,7 +43,7 @@ func keyboardAddTab(t *testing.T, f *shellFixture, card string) map[string][]str
 	t.Helper()
 	f.run("core.card.focus", map[string]string{"card": card})
 	f.click("core.card.add", card)
-	f.click("core.picker.item", "terminal")
+	f.click("core.picker.item", "textprobe")
 	_, tabs := keyboardCards(t, f)
 	return tabs
 }
@@ -59,15 +59,15 @@ func TestTheKeyboardFollowsTheFocusRing(t *testing.T) {
 		{"opening a project", func(*testing.T, *shellFixture, *surfaceHost, string) {}},
 		{"a new tab", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
 			f.click("core.card.add", other)
-			f.click("core.picker.item", "terminal")
+			f.click("core.picker.item", "textprobe")
 		}},
 		{"a new tab of another card", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
 			f.click("core.card.add", other)
-			f.click("core.picker.item", "browser")
+			f.click("core.picker.item", "boxprobe")
 		}},
 		{"a split", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
 			f.click("core.card.split-x", other)
-			f.click("core.picker.item", "terminal")
+			f.click("core.picker.item", "textprobe")
 		}},
 		{"a press on a tab", func(t *testing.T, f *shellFixture, _ *surfaceHost, other string) {
 			tabs := keyboardAddTab(t, f, other)
@@ -395,7 +395,7 @@ func TestAnAddedTabHoldsTheKeyboardBeforeTheCommandAnswers(t *testing.T) {
 	cards, _ := keyboardCards(t, f)
 	f.run("core.card.focus", map[string]string{"card": cards[0]})
 	f.settle()
-	answer, calls, target := keyboardAnswer(t, f, stored, "core.card.add-tab", map[string]string{"card": cards[0], "plugin": "terminal"})
+	answer, calls, target := keyboardAnswer(t, f, stored, "core.card.add-tab", map[string]string{"card": cards[0], "plugin": "textprobe"})
 	tab := answer.(map[string]string)["tab"]
 	if !strings.HasSuffix(calls, "syncSurfaces presentSurfaces surfaceFocus") || target == nil || *target != tab {
 		t.Fatalf("core.card.add-tab answered %s when the host had the calls %q and the keyboard in %s", tab, calls, describeTarget(target))
@@ -435,7 +435,7 @@ func TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement(t *testin
 	stored.orderMu.Lock()
 	stored.presentGate = nil
 	stored.orderMu.Unlock()
-	raw, err := json.Marshal(map[string]string{"card": cards[0], "plugin": "terminal"})
+	raw, err := json.Marshal(map[string]string{"card": cards[0], "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}

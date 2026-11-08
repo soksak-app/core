@@ -114,11 +114,11 @@ func (r *viewRelay) emit(name string, data map[string]any) {
 func (r *viewRelay) surface() string {
 	r.t.Helper()
 	for id, surface := range r.stored.lastSurfaces(r.t) {
-		if surface["plugin"] == "terminal" {
+		if surface["plugin"] == "textprobe" {
 			return id
 		}
 	}
-	r.t.Fatal("no surface of the terminal plugin")
+	r.t.Fatal("no surface of the textprobe plugin")
 	return ""
 }
 
@@ -169,14 +169,14 @@ func (r *viewRelay) request(n int) map[string]any {
 func TestACommandOfAViewRunsInThatView(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	r.ask(9, "command.run", `{"name": "terminal.input", "params": {"data": "ls\r"}}`)
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {"data": "ls\r"}}`)
 	request := r.request(0)
-	if request["surface"] != surface || request["command"] != "terminal.input" || request["generation"] != float64(1) ||
+	if request["surface"] != surface || request["command"] != "textprobe.input" || request["generation"] != float64(1) ||
 		!reflect.DeepEqual(request["params"], map[string]any{"data": "ls\r"}) {
 		t.Fatalf("the view received %v", request)
 	}
-	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "terminal", "id": request["id"], "result": map[string]any{"written": 3}})
+	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "textprobe", "id": request["id"], "result": map[string]any{"written": 3}})
 	if reply := r.answer(9); !reflect.DeepEqual(reply["result"], map[string]any{"written": float64(3)}) {
 		t.Fatalf("the reply is %v", reply)
 	}
@@ -193,14 +193,14 @@ func TestTheRegistrationOfACommandFollowsItsDeclaration(t *testing.T) {
 			t.Fatalf("the reply is %v", reply)
 		}
 	}
-	refused("terminal.none", "surface "+surface+" registered undeclared command terminal.none")
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	refused("terminal.input", "command terminal.input is already registered")
-	r.ask(9, "command.run", `{"name": "terminal.none", "params": {}}`)
+	refused("textprobe.none", "surface "+surface+" registered undeclared command textprobe.none")
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	refused("textprobe.input", "command textprobe.input is already registered")
+	r.ask(9, "command.run", `{"name": "textprobe.none", "params": {}}`)
 	if failure := r.answer(9)["error"].(map[string]any); failure["code"] != float64(workbench.UnknownName) {
 		t.Fatalf("the reply is %v", failure)
 	}
-	r.ask(10, "command.run", `{"name": "terminal.close", "params": {}}`)
+	r.ask(10, "command.run", `{"name": "textprobe.close", "params": {}}`)
 	if failure := r.answer(10)["error"].(map[string]any); failure["code"] != float64(workbench.Unregistered) {
 		t.Fatalf("the reply is %v", failure)
 	}
@@ -209,10 +209,10 @@ func TestTheRegistrationOfACommandFollowsItsDeclaration(t *testing.T) {
 func TestAFailedCommandOfAViewKeepsItsCode(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	r.ask(9, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	request := r.request(0)
-	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "terminal", "id": request["id"], "error": map[string]any{"code": 1002, "message": "no session"}})
+	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "textprobe", "id": request["id"], "error": map[string]any{"code": 1002, "message": "no session"}})
 	if failure := r.answer(9)["error"].(map[string]any); failure["code"] != float64(1002) || failure["message"] != "no session" {
 		t.Fatalf("the reply is %v", failure)
 	}
@@ -221,10 +221,10 @@ func TestAFailedCommandOfAViewKeepsItsCode(t *testing.T) {
 func TestAViewThatDoesNotReplyEndsItsCommandAtTheDeclaredLimit(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.close"})
-	r.ask(9, "command.run", `{"name": "terminal.close", "params": {}}`)
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.close"})
+	r.ask(9, "command.run", `{"name": "textprobe.close", "params": {}}`)
 	failure := r.answer(9)["error"].(map[string]any)
-	if failure["code"] != float64(workbench.Failed) || failure["message"] != "command terminal.close did not reply within 40ms" {
+	if failure["code"] != float64(workbench.Failed) || failure["message"] != "command textprobe.close did not reply within 40ms" {
 		t.Fatalf("the reply is %v", failure)
 	}
 }
@@ -232,21 +232,21 @@ func TestAViewThatDoesNotReplyEndsItsCommandAtTheDeclaredLimit(t *testing.T) {
 func TestAPostOfAReplacedViewSettlesItsCommand(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
 	r.post = func(map[string]any) (any, error) {
 		return map[string]any{"cancelled": true, "sourceGeneration": 1}, nil
 	}
-	r.ask(9, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	if reply := r.answer(9); !reflect.DeepEqual(reply["result"], map[string]any{"cancelled": true, "sourceGeneration": float64(1)}) {
 		t.Fatalf("the reply is %v", reply)
 	}
 	r.post = func(map[string]any) (any, error) { return "later", nil }
-	r.ask(10, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.ask(10, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	if failure := r.answer(10)["error"].(map[string]any); failure["message"] != "native command post returned an invalid disposition" {
 		t.Fatalf("the reply is %v", failure)
 	}
 	r.post = func(map[string]any) (any, error) { return nil, errors.New("no document") }
-	r.ask(11, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.ask(11, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	if failure := r.answer(11)["error"].(map[string]any); failure["message"] != "no document" {
 		t.Fatalf("the reply is %v", failure)
 	}
@@ -256,8 +256,8 @@ func TestAStatusOfAViewAnswersThroughItsSubscription(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
 	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
-	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "terminal.screen"}})
-	r.ask(9, "status.get", `{"name": "terminal.screen"}`)
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
+	r.ask(9, "status.get", `{"name": "textprobe.screen"}`)
 	var pushed map[string]any
 	r.f.until(func() bool {
 		r.mu.Lock()
@@ -282,8 +282,8 @@ func TestAWatchedStatusOfAViewReachesTheHost(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
 	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
-	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "terminal.screen"}})
-	r.ask(9, "status.watch", `{"name": "terminal.screen"}`)
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
+	r.ask(9, "status.watch", `{"name": "textprobe.screen"}`)
 	var id any
 	r.f.until(func() bool {
 		r.mu.Lock()
@@ -294,7 +294,7 @@ func TestAWatchedStatusOfAViewReachesTheHost(t *testing.T) {
 		id = r.pushed[0]["data"].(map[string]any)["id"]
 		return true
 	})
-	changed := map[string]any{"name": "changed", "payload": map[string]any{"name": "terminal.screen", "value": "one", "version": 1}}
+	changed := map[string]any{"name": "changed", "payload": map[string]any{"name": "textprobe.screen", "value": "one", "version": 1}}
 	r.call(surface, "runtime.native.call", changed)
 	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": id}})
 	r.answer(9)
@@ -303,10 +303,10 @@ func TestAWatchedStatusOfAViewReachesTheHost(t *testing.T) {
 		defer r.mu.Unlock()
 		return len(r.changed) == 1
 	})
-	if got := r.changed[0]; got != `{"name":"terminal.screen","value":"one"}` {
+	if got := r.changed[0]; got != `{"name":"textprobe.screen","value":"one"}` {
 		t.Fatalf("the host received %s", got)
 	}
-	reply := viewCall(t, r.f, r.stored, surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "terminal.screen", "value": "one", "version": 0}})
+	reply := viewCall(t, r.f, r.stored, surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "textprobe.screen", "value": "one", "version": 0}})
 	if failure, _ := reply["error"].(map[string]any); failure == nil || !strings.Contains(failure["message"].(string), "positive integer version") {
 		t.Fatalf("the reply is %v", reply)
 	}
@@ -315,8 +315,8 @@ func TestAWatchedStatusOfAViewReachesTheHost(t *testing.T) {
 func TestARequestForAViewWithoutASubscriptionIsRefused(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "terminal.screen"}})
-	r.ask(9, "status.get", `{"name": "terminal.screen"}`)
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
+	r.ask(9, "status.get", `{"name": "textprobe.screen"}`)
 	if failure := r.answer(9)["error"].(map[string]any); failure["code"] != float64(workbench.Gone) {
 		t.Fatalf("the reply is %v", failure)
 	}
@@ -325,13 +325,13 @@ func TestARequestForAViewWithoutASubscriptionIsRefused(t *testing.T) {
 func TestAViewRunsACommandThatItRegistered(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 6, "command": "terminal.input", "params": map[string]any{"data": "x"}}})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 6, "command": "textprobe.input", "params": map[string]any{"data": "x"}}})
 	request := r.request(0)
-	if request["surface"] != surface || request["command"] != "terminal.input" {
+	if request["surface"] != surface || request["command"] != "textprobe.input" {
 		t.Fatalf("the view received %v", request)
 	}
-	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "terminal", "id": request["id"], "result": "done"})
+	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "textprobe", "id": request["id"], "result": "done"})
 	r.f.until(func() bool {
 		for _, reply := range r.stored.replies {
 			if reply["id"] == float64(6) {
@@ -345,10 +345,10 @@ func TestAViewRunsACommandThatItRegistered(t *testing.T) {
 func TestAClosedSurfaceLeavesTheChoice(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
 	r.emit("exposure-registered", map[string]any{"surface": surface, "closed": true})
 	r.f.settle()
-	r.ask(9, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	if failure := r.answer(9)["error"].(map[string]any); failure["code"] != float64(workbench.Unregistered) {
 		t.Fatalf("the reply is %v", failure)
 	}
@@ -358,16 +358,16 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
 	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
-	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "terminal.screen"}})
-	reply := viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "browser.page"})
-	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch browser.page is neither a core status nor a status of terminal" {
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
+	reply := viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "boxprobe.page"})
+	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch boxprobe.page is neither a core status nor a status of textprobe" {
 		t.Fatalf("the reply is %v", reply)
 	}
-	reply = viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "terminal.screen", "surface": "tab-none"})
-	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch surface tab-none is not a surface of terminal" {
+	reply = viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "textprobe.screen", "surface": "tab-none"})
+	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch surface tab-none is not a surface of textprobe" {
 		t.Fatalf("the reply is %v", reply)
 	}
-	r.call(surface, "runtime.status.watch", map[string]any{"name": "terminal.screen", "surface": surface})
+	r.call(surface, "runtime.status.watch", map[string]any{"name": "textprobe.screen", "surface": surface})
 	var id any
 	r.f.until(func() bool {
 		r.mu.Lock()
@@ -379,7 +379,7 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 		return true
 	})
 	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": id}})
-	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "terminal.screen", "value": "one", "version": 1}})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "textprobe.screen", "value": "one", "version": 1}})
 	var status map[string]any
 	r.f.until(func() bool {
 		r.mu.Lock()
@@ -392,10 +392,10 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 		}
 		return false
 	})
-	if !reflect.DeepEqual(status, map[string]any{"name": "terminal.screen", "surface": surface, "value": "one"}) {
+	if !reflect.DeepEqual(status, map[string]any{"name": "textprobe.screen", "surface": surface, "value": "one"}) {
 		t.Fatalf("the view received %v", status)
 	}
-	r.call(surface, "runtime.status.unwatch", map[string]any{"name": "terminal.screen", "surface": surface})
+	r.call(surface, "runtime.status.unwatch", map[string]any{"name": "textprobe.screen", "surface": surface})
 	r.f.until(func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
@@ -411,7 +411,7 @@ func TestARightClickInAViewOpensTheMenuOfItsPlugin(t *testing.T) {
 		t.Fatalf("the view call answered %v", answer)
 	}
 	menu := r.f.menu()
-	if menu.Title != "터미널" || !slices.Equal(menu.keys(), []string{"terminal.close"}) {
+	if menu.Title != "터미널" || !slices.Equal(menu.keys(), []string{"textprobe.close"}) {
 		t.Fatalf("the menu is %+v", menu)
 	}
 }
@@ -443,9 +443,9 @@ func TestTheSurfaceStatusListsWhatTheViewRegistered(t *testing.T) {
 	if listed := exposes(); len(listed) != 0 {
 		t.Fatalf("a view that registered nothing lists %v", listed)
 	}
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
 	r.f.until(func() bool { return len(exposes()) == 1 })
-	if listed := exposes(); !reflect.DeepEqual(listed, []any{"command terminal.input"}) {
+	if listed := exposes(); !reflect.DeepEqual(listed, []any{"command textprobe.input"}) {
 		t.Fatalf("the view lists %v", listed)
 	}
 }
@@ -469,7 +469,7 @@ func TestAStartedViewReachesAWatchWithoutAFrame(t *testing.T) {
 	if strings.Contains(last, `"phase":"ready"`) {
 		t.Fatalf("a surface without a view is ready: %s", last)
 	}
-	r.emit("view-call", map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "cancel": true})
+	r.emit("view-call", map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 5, "cancel": true})
 	r.f.pending.drain(t)
 	value, err := r.f.shell.Registry().Read("core.surfaces")
 	if err != nil {
@@ -501,9 +501,9 @@ func TestARegistrationReachesAWatchWithoutAFrame(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	r.emit("exposure-registered", map[string]any{"surface": surface, "kind": "command", "name": "terminal.input"})
+	r.emit("exposure-registered", map[string]any{"surface": surface, "kind": "command", "name": "textprobe.input"})
 	r.f.pending.drain(t)
-	if !strings.Contains(last, "command terminal.input") {
+	if !strings.Contains(last, "command textprobe.input") {
 		t.Fatalf("the watch holds %s", last)
 	}
 }
@@ -515,8 +515,8 @@ func TestANewDocumentOfASurfaceRegistersItsCommandsAgain(t *testing.T) {
 	surface := r.surface()
 	register := func(generation, id int) map[string]any {
 		t.Helper()
-		r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": generation, "id": id,
-			"command": "runtime.command.register", "params": map[string]any{"name": "terminal.input"}}})
+		r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": generation, "id": id,
+			"command": "runtime.command.register", "params": map[string]any{"name": "textprobe.input"}}})
 		r.f.settle()
 		for _, reply := range r.stored.replies {
 			if reply["id"] == float64(id) && reply["generation"] == float64(generation) {

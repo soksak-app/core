@@ -246,19 +246,19 @@ func TestAnUnloadedTabGetsTheHistoryOfItsRegionBack(t *testing.T) {
 const sectionsDocument = `{"plugins": [
 	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
 		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
-	{"id": "browser", "package": "b", "version": "1.0.0", "manifest": {"id": "browser", "name": "브라우저", "description": "browser", "sections": [
-		{"id": "browser.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}},
-		{"id": "browser.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
-		{"id": "browser.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
-		{"id": "browser.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}},
-	{"id": "files", "package": "f", "version": "1.0.0", "manifest": {"id": "files", "name": "파일", "description": "files", "sections": [
-		{"id": "files.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
-		{"id": "files.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}]}`
+	{"id": "boxprobe", "package": "b", "version": "1.0.0", "manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "sections": [
+		{"id": "boxprobe.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}},
+		{"id": "boxprobe.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+		{"id": "boxprobe.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+		{"id": "boxprobe.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}},
+	{"id": "fieldprobe", "package": "f", "version": "1.0.0", "manifest": {"id": "fieldprobe", "name": "파일", "description": "fieldprobe", "sections": [
+		{"id": "fieldprobe.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
+		{"id": "fieldprobe.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}]}`
 
 // sectionsSet is the common settings whose left sidebar shows the sections as tabs, files.tree first.
 func sectionsSet() map[string]any {
 	return map[string]any{"sets": []any{map[string]any{"id": "set-all", "title": "전체", "layout": "tabs",
-		"sections": []any{"files.tree", "browser.tabs", "files.bookmarks"}}}, "links": []any{map[string]any{"place": "left", "plugin": nil, "set": "set-all"}}}
+		"sections": []any{"fieldprobe.tree", "boxprobe.tabs", "fieldprobe.bookmarks"}}}, "links": []any{map[string]any{"place": "left", "plugin": nil, "set": "set-all"}}}
 }
 
 // sectionsApp opens the project of an application whose left sidebar shows the sections as tabs.
@@ -299,9 +299,9 @@ func (f *tabApp) surfaceOf(id string) map[string]any {
 }
 
 const (
-	sectionTree      = "spc-aaaaaa/left/files.tree"
-	sectionTabs      = "spc-aaaaaa/left/browser.tabs"
-	sectionBookmarks = "spc-aaaaaa/left/files.bookmarks"
+	sectionTree      = "spc-aaaaaa/left/fieldprobe.tree"
+	sectionTabs      = "spc-aaaaaa/left/boxprobe.tabs"
+	sectionBookmarks = "spc-aaaaaa/left/fieldprobe.bookmarks"
 )
 
 // The memory saver observes the section surfaces with the tabs: a hidden section that declares unload starts unloaded and has no view,
@@ -329,7 +329,7 @@ func TestAHiddenSectionThatDeclaresUnloadStartsUnloaded(t *testing.T) {
 	if listed == nil || listed["kind"] != "section" || listed["sidebar"] != "left" || listed["visible"] != false || listed["state"] != "unloaded" {
 		t.Fatalf("core.surfaces lists the unloaded section as %v", listed)
 	}
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "boxprobe.tabs"})
 	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
 		t.Fatalf("the shown section is %v", surface)
 	}
@@ -344,8 +344,8 @@ func TestAHiddenSectionThatDeclaresUnloadStartsUnloaded(t *testing.T) {
 // Memory pressure unloads a hidden section that declares unload, and the next show restores it.
 func TestPressureUnloadsAHiddenSection(t *testing.T) {
 	f, stored := sectionsApp(t)
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "files.tree"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "boxprobe.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "fieldprobe.tree"})
 	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != false {
 		t.Fatalf("the section that was shown is %v", surface)
 	}
@@ -361,7 +361,7 @@ func TestPressureUnloadsAHiddenSection(t *testing.T) {
 		t.Fatal("pressure unloaded a section without a declaration")
 	}
 	f.app.Emit(f.window, "memory-pressure", map[string]any{"level": "normal", "seq": 2})
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "boxprobe.tabs"})
 	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
 		t.Fatalf("the shown section is %v", surface)
 	}
@@ -373,23 +373,23 @@ func TestPressureUnloadsAHiddenSection(t *testing.T) {
 // A section view writes its state under the declaration of its section, which is not the declaration of a tab of its plugin.
 func TestASectionWritesItsStateUnderItsOwnDeclaration(t *testing.T) {
 	f, stored := sectionsApp(t)
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "boxprobe.tabs"})
 	call := func(surface, plugin, command string, params any) map[string]any {
 		t.Helper()
 		f.app.Emit(f.window, "view-call", map[string]any{"surface": surface, "plugin": plugin, "generation": 1, "id": 9, "command": command, "params": params})
 		f.settle()
 		return stored.replies[len(stored.replies)-1]
 	}
-	if reply := call(sectionTabs, "browser", "tab.state.write", "short"); reply["error"] != nil {
+	if reply := call(sectionTabs, "boxprobe", "tab.state.write", "short"); reply["error"] != nil {
 		t.Fatalf("the write is %v", reply)
 	}
-	if reply := call(sectionTabs, "browser", "tab.state.read", nil); reply["error"] != nil || reply["result"] != "short" {
+	if reply := call(sectionTabs, "boxprobe", "tab.state.read", nil); reply["error"] != nil || reply["result"] != "short" {
 		t.Fatalf("the read is %v", reply)
 	}
-	if reply := call(sectionTabs, "browser", "tab.state.write", "more than sixteen bytes"); reply["error"] == nil {
+	if reply := call(sectionTabs, "boxprobe", "tab.state.write", "more than sixteen bytes"); reply["error"] == nil {
 		t.Fatalf("a write over maxBytes is %v", reply)
 	}
-	if reply := call(sectionTree, "files", "tab.state.write", "short"); reply["error"] == nil {
+	if reply := call(sectionTree, "fieldprobe", "tab.state.write", "short"); reply["error"] == nil {
 		t.Fatalf("a section without the declaration wrote its state: %v", reply)
 	}
 }
@@ -476,8 +476,8 @@ func delaySections(t *testing.T, common map[string]any) (*tabApp, *surfaceHost, 
 // The delay unloads a section that a person hid, as it does a hidden tab, and the next show restores it.
 func TestTheDelayUnloadsAHiddenSection(t *testing.T) {
 	f, stored, time := delaySections(t, sectionsSet())
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "files.tree"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "boxprobe.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "fieldprobe.tree"})
 	time.tick(memoryDelayMinutes*minute - 1)
 	f.settle()
 	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != false {
@@ -494,7 +494,7 @@ func TestTheDelayUnloadsAHiddenSection(t *testing.T) {
 	if surface := stored.lastSurfaces(t)[sectionBookmarks]; surface == nil {
 		t.Fatal("the delay unloaded a section without a declaration")
 	}
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "boxprobe.tabs"})
 	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
 		t.Fatalf("the shown section is %v", surface)
 	}
@@ -520,7 +520,7 @@ func TestASetLinkedAfterTheStartHoldsNoPageOfAHiddenSection(t *testing.T) {
 	if surface := surfaces[sectionBookmarks]; surface == nil || surface["visible"] != false {
 		t.Fatalf("after the link the hidden section without a declaration is %v", surface)
 	}
-	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "browser.tabs"})
+	f.command("core.sidebar.section.select", map[string]string{"sidebar": "left", "section": "boxprobe.tabs"})
 	if surface := stored.lastSurfaces(t)[sectionTabs]; surface == nil || surface["visible"] != true {
 		t.Fatalf("the shown section is %v", surface)
 	}

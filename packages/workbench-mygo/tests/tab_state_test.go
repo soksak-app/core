@@ -221,9 +221,9 @@ func TestARemovalCancelsThePendingWriteOfTheTab(t *testing.T) {
 }
 
 func TestLoadReconciliationRemovesEachOrphanEntryWithAnEvent(t *testing.T) {
-	store := &stateStore{document: `{"format":1,"tabs":{"a":{"kept":true},"gone":{"label":"x"},"lost":{"kept":true},"spc-aaaaaa/left/files.tree":{"state":{"format":1,"value":{}}}}}`}
+	store := &stateStore{document: `{"format":1,"tabs":{"a":{"kept":true},"gone":{"label":"x"},"lost":{"kept":true},"spc-aaaaaa/left/fieldprobe.tree":{"state":{"format":1,"value":{}}}}}`}
 	states, _, events, _ := openStates(t, store)
-	kept := shown("a", "b", "spc-aaaaaa/left/files.tree")
+	kept := shown("a", "b", "spc-aaaaaa/left/fieldprobe.tree")
 	states.Reconcile(func(tab string) bool { return kept[tab] }, func() {})
 	equal(t, store.puts, []statePut{{"gone", nil}, {"lost", nil}})
 	var orphans []savedEvent

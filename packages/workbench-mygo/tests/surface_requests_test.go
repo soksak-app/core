@@ -18,9 +18,9 @@ import (
 // terminalExposes are the declarations of a plugin with a status, two commands and an element.
 func terminalExposes() workbench.Exposes {
 	return workbench.Exposes{
-		Status:   []json.RawMessage{json.RawMessage(`{"name": "terminal.screen"}`)},
-		Commands: []json.RawMessage{json.RawMessage(`{"name": "terminal.input"}`), json.RawMessage(`{"name": "terminal.close", "timeout": 2500}`)},
-		Element:  []json.RawMessage{json.RawMessage(`{"name": "terminal.view"}`)},
+		Status:   []json.RawMessage{json.RawMessage(`{"name": "textprobe.screen"}`)},
+		Commands: []json.RawMessage{json.RawMessage(`{"name": "textprobe.input"}`), json.RawMessage(`{"name": "textprobe.close", "timeout": 2500}`)},
+		Element:  []json.RawMessage{json.RawMessage(`{"name": "textprobe.view"}`)},
 	}
 }
 
@@ -44,11 +44,11 @@ func newSurfaceRequests(t *testing.T) *surfaceRequests {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &surfaceRequests{registry: workbench.NewRegistry(declared), plugins: map[string]string{"tab-a": "terminal", "tab-b": "terminal", "tab-c": "browser",
-		"space/left/files": "terminal"}, frames: map[string][2]float64{}, unloaded: map[string]bool{}}
+	f := &surfaceRequests{registry: workbench.NewRegistry(declared), plugins: map[string]string{"tab-a": "textprobe", "tab-b": "textprobe", "tab-c": "boxprobe",
+		"space/left/fieldprobe": "textprobe"}, frames: map[string][2]float64{}, unloaded: map[string]bool{}}
 	f.relay = newRelay(t, f.registry)
 	f.reply = func(map[string]any) (any, error) { return map[string]any{"result": "done"}, nil }
-	if err := f.registry.Declare("terminal", terminalExposes()); err != nil {
+	if err := f.registry.Declare("textprobe", terminalExposes()); err != nil {
 		t.Fatal(err)
 	}
 	f.links = workbench.SurfaceLinks{
@@ -106,14 +106,14 @@ func (f *surfaceRequests) refuses(params string, code int, message string) {
 
 func TestAPluginDeclaresItsOwnNamesOnce(t *testing.T) {
 	f := newSurfaceRequests(t)
-	foreign := workbench.Exposes{Commands: []json.RawMessage{json.RawMessage(`{"name": "browser.go"}`)}}
-	if err := f.registry.Declare("terminal", foreign); err == nil || err.Error() != "command browser.go does not belong to terminal" {
+	foreign := workbench.Exposes{Commands: []json.RawMessage{json.RawMessage(`{"name": "boxprobe.go"}`)}}
+	if err := f.registry.Declare("textprobe", foreign); err == nil || err.Error() != "command boxprobe.go does not belong to textprobe" {
 		t.Fatalf("the foreign name gave %v", err)
 	}
-	if err := f.registry.Declare("terminal", terminalExposes()); err == nil || err.Error() != "status terminal.screen is declared twice" {
+	if err := f.registry.Declare("textprobe", terminalExposes()); err == nil || err.Error() != "status textprobe.screen is declared twice" {
 		t.Fatalf("the second declaration gave %v", err)
 	}
-	if err := f.registry.Declare("terminal", workbench.Exposes{Status: []json.RawMessage{json.RawMessage(`{}`)}}); err == nil {
+	if err := f.registry.Declare("textprobe", workbench.Exposes{Status: []json.RawMessage{json.RawMessage(`{}`)}}); err == nil {
 		t.Fatal("an entry without a name was declared")
 	}
 }
@@ -132,13 +132,13 @@ func TestTheListHoldsThePluginNamesWithTheirRegistration(t *testing.T) {
 		t.Fatalf("the list has no %s %s", key, name)
 		return false
 	}
-	if registered("commands", "terminal.input") || registered("status", "terminal.screen") || registered("element", "terminal.view") {
+	if registered("commands", "textprobe.input") || registered("status", "textprobe.screen") || registered("element", "textprobe.view") {
 		t.Fatal("a name that no surface registered is registered")
 	}
-	f.register("tab-a", "command", "terminal.input")
-	f.register("tab-a", "status", "terminal.screen")
-	f.register("tab-a", "element", "terminal.view")
-	if !registered("commands", "terminal.input") || !registered("status", "terminal.screen") || !registered("element", "terminal.view") {
+	f.register("tab-a", "command", "textprobe.input")
+	f.register("tab-a", "status", "textprobe.screen")
+	f.register("tab-a", "element", "textprobe.view")
+	if !registered("commands", "textprobe.input") || !registered("status", "textprobe.screen") || !registered("element", "textprobe.view") {
 		t.Fatal("a registered name is not registered")
 	}
 	f.register("tab-a", "status", "core.surface.input")
@@ -153,9 +153,9 @@ func TestARegistrationThatTheDeclarationRefusesIsAnError(t *testing.T) {
 		event workbench.SurfaceRegistered
 		text  string
 	}{
-		{workbench.SurfaceRegistered{Surface: "tab-a", Kind: "command", Name: "terminal.none"}, "surface tab-a registered undeclared command terminal.none"},
+		{workbench.SurfaceRegistered{Surface: "tab-a", Kind: "command", Name: "textprobe.none"}, "surface tab-a registered undeclared command textprobe.none"},
 		{workbench.SurfaceRegistered{Surface: "tab-a", Kind: "command", Name: "core.card.split"}, "surface tab-a registered undeclared command core.card.split"},
-		{workbench.SurfaceRegistered{Surface: "tab-c", Kind: "command", Name: "terminal.input"}, "surface tab-c of plugin browser cannot register terminal.input"},
+		{workbench.SurfaceRegistered{Surface: "tab-c", Kind: "command", Name: "textprobe.input"}, "surface tab-c of plugin boxprobe cannot register textprobe.input"},
 	}
 	for _, each := range cases {
 		if err := f.registry.Registered(each.event); err == nil || err.Error() != each.text {
@@ -163,21 +163,21 @@ func TestARegistrationThatTheDeclarationRefusesIsAnError(t *testing.T) {
 		}
 	}
 	// The registration of a surface that the window closed meanwhile names no surface, and its end follows.
-	if err := f.registry.Registered(workbench.SurfaceRegistered{Surface: "tab-gone", Kind: "command", Name: "terminal.input"}); err != nil {
+	if err := f.registry.Registered(workbench.SurfaceRegistered{Surface: "tab-gone", Kind: "command", Name: "textprobe.input"}); err != nil {
 		t.Fatal(err)
 	}
-	f.refuses(`{"name": "terminal.input", "params": {}}`, workbench.Unregistered, "command terminal.input is not registered")
+	f.refuses(`{"name": "textprobe.input", "params": {}}`, workbench.Unregistered, "command textprobe.input is not registered")
 }
 
 func TestARequestChoosesTheSurfaceOfItsName(t *testing.T) {
 	f := newSurfaceRequests(t)
-	input := `{"name": "terminal.input", "params": {"data": "x"}}`
-	f.refuses(`{"name": "terminal.none", "params": {}}`, workbench.UnknownName, "unknown command terminal.none")
-	f.refuses(input, workbench.Unregistered, "command terminal.input is not registered")
-	f.register("space/left/files", "command", "terminal.input")
-	f.refuses(input, workbench.Unregistered, "command terminal.input is not registered")
-	f.register("tab-a", "command", "terminal.input")
-	f.register("tab-b", "command", "terminal.input")
+	input := `{"name": "textprobe.input", "params": {"data": "x"}}`
+	f.refuses(`{"name": "textprobe.none", "params": {}}`, workbench.UnknownName, "unknown command textprobe.none")
+	f.refuses(input, workbench.Unregistered, "command textprobe.input is not registered")
+	f.register("space/left/fieldprobe", "command", "textprobe.input")
+	f.refuses(input, workbench.Unregistered, "command textprobe.input is not registered")
+	f.register("tab-a", "command", "textprobe.input")
+	f.register("tab-b", "command", "textprobe.input")
 	chosen := func() any {
 		t.Helper()
 		reply := f.ask("command.run", input)
@@ -194,25 +194,25 @@ func TestARequestChoosesTheSurfaceOfItsName(t *testing.T) {
 		t.Fatalf("the first preferred surface that registered was not chosen: %v", got)
 	}
 	f.preferred = nil
-	f.register("tab-a", "command", "terminal.input")
+	f.register("tab-a", "command", "textprobe.input")
 	if got := chosen(); got != "tab-a" {
 		t.Fatalf("a repeated registration did not move the surface last: %v", got)
 	}
-	named := `{"name": "terminal.input", "params": {}, "surface": "tab-b"}`
+	named := `{"name": "textprobe.input", "params": {}, "surface": "tab-b"}`
 	f.ask("command.run", named)
 	last := f.forwards[len(f.forwards)-1]
 	if last["surface"] != "tab-b" || last["method"] != "command.run" {
 		t.Fatalf("the forward is %v", last)
 	}
-	if !reflect.DeepEqual(last["params"], map[string]any{"name": "terminal.input", "params": map[string]any{}, "surface": "tab-b"}) {
+	if !reflect.DeepEqual(last["params"], map[string]any{"name": "textprobe.input", "params": map[string]any{}, "surface": "tab-b"}) {
 		t.Fatalf("the forward changed the params: %v", last["params"])
 	}
-	f.refuses(`{"name": "terminal.input", "params": {}, "surface": "tab-c"}`, workbench.Unregistered, "surface tab-c has not registered command terminal.input")
-	f.refuses(`{"name": "terminal.input", "params": {}, "surface": 7}`, workbench.InvalidParams, "surface must be a string")
+	f.refuses(`{"name": "textprobe.input", "params": {}, "surface": "tab-c"}`, workbench.Unregistered, "surface tab-c has not registered command textprobe.input")
+	f.refuses(`{"name": "textprobe.input", "params": {}, "surface": 7}`, workbench.InvalidParams, "surface must be a string")
 	f.unloaded["tab-c"] = true
-	f.refuses(`{"name": "terminal.input", "params": {}, "surface": "tab-c"}`, workbench.Unregistered, "tab tab-c is unloaded")
-	f.ask("command.run", `{"name": "terminal.input", "params": {}, "surface": "space/left/files"}`)
-	if got := f.forwards[len(f.forwards)-1]["surface"]; got != "space/left/files" {
+	f.refuses(`{"name": "textprobe.input", "params": {}, "surface": "tab-c"}`, workbench.Unregistered, "tab tab-c is unloaded")
+	f.ask("command.run", `{"name": "textprobe.input", "params": {}, "surface": "space/left/fieldprobe"}`)
+	if got := f.forwards[len(f.forwards)-1]["surface"]; got != "space/left/fieldprobe" {
 		t.Fatalf("a section that a request names was not chosen: %v", got)
 	}
 	if err := f.registry.Registered(workbench.SurfaceRegistered{Surface: "tab-a", Closed: true}); err != nil {
@@ -224,18 +224,18 @@ func TestARequestChoosesTheSurfaceOfItsName(t *testing.T) {
 	if err := f.registry.Registered(workbench.SurfaceRegistered{Surface: "tab-b", Closed: true}); err != nil {
 		t.Fatal(err)
 	}
-	f.refuses(input, workbench.Unregistered, "command terminal.input is not registered")
+	f.refuses(input, workbench.Unregistered, "command textprobe.input is not registered")
 }
 
 func TestAForwardCarriesTheDeclaredTimeoutAndTheReplyOfTheSurface(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "command", "terminal.input")
-	f.register("tab-a", "command", "terminal.close")
-	f.ask("command.run", `{"name": "terminal.input", "params": {}}`)
+	f.register("tab-a", "command", "textprobe.input")
+	f.register("tab-a", "command", "textprobe.close")
+	f.ask("command.run", `{"name": "textprobe.input", "params": {}}`)
 	if _, present := f.forwards[0]["timeout"]; present {
 		t.Fatalf("a command without a timeout forwarded %v", f.forwards[0])
 	}
-	f.ask("command.run", `{"name": "terminal.close", "params": {}}`)
+	f.ask("command.run", `{"name": "textprobe.close", "params": {}}`)
 	if f.forwards[1]["timeout"] != float64(2500) {
 		t.Fatalf("the forward is %v", f.forwards[1])
 	}
@@ -243,15 +243,15 @@ func TestAForwardCarriesTheDeclaredTimeoutAndTheReplyOfTheSurface(t *testing.T) 
 		t.Fatal("two forwards have one id")
 	}
 	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
-	if reply := f.ask("command.run", `{"name": "terminal.input", "params": {}}`); reply["result"] != nil {
+	if reply := f.ask("command.run", `{"name": "textprobe.input", "params": {}}`); reply["result"] != nil {
 		t.Fatalf("a reply without a result answered %v", reply)
 	}
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"error": map[string]any{"code": 1005, "message": "no reply"}}, nil
 	}
-	f.refuses(`{"name": "terminal.input", "params": {}}`, 1005, "no reply")
+	f.refuses(`{"name": "textprobe.input", "params": {}}`, 1005, "no reply")
 	f.reply = func(map[string]any) (any, error) { return nil, errors.New("no window") }
-	f.refuses(`{"name": "terminal.input", "params": {}}`, workbench.Failed, "no window")
+	f.refuses(`{"name": "textprobe.input", "params": {}}`, workbench.Failed, "no window")
 }
 
 func TestAForwardedCommandIsRecordedWhenItEnds(t *testing.T) {
@@ -262,37 +262,37 @@ func TestAForwardedCommandIsRecordedWhenItEnds(t *testing.T) {
 		names = append(names, name)
 		failures = append(failures, failure)
 	})
-	f.register("tab-a", "command", "terminal.input")
-	f.ask("command.run", `{"name": "terminal.input", "params": {}}`)
+	f.register("tab-a", "command", "textprobe.input")
+	f.ask("command.run", `{"name": "textprobe.input", "params": {}}`)
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"error": map[string]any{"code": 1002, "message": "gone"}}, nil
 	}
-	f.ask("command.run", `{"name": "terminal.input", "params": {}}`)
-	if strings.Join(names, " ") != "terminal.input terminal.input" || failures[0] != nil || failures[1] == nil {
+	f.ask("command.run", `{"name": "textprobe.input", "params": {}}`)
+	if strings.Join(names, " ") != "textprobe.input textprobe.input" || failures[0] != nil || failures[1] == nil {
 		t.Fatalf("recorded %v with %v", names, failures)
 	}
 }
 
 func TestTheStatusAndTheElementOfASurfaceAreForwarded(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "status", "terminal.screen")
-	f.register("tab-a", "element", "terminal.view")
+	f.register("tab-a", "status", "textprobe.screen")
+	f.register("tab-a", "element", "textprobe.view")
 	f.reply = func(map[string]any) (any, error) { return map[string]any{"result": map[string]any{"rows": 2}}, nil }
-	if got := f.ask("status.get", `{"name": "terminal.screen"}`)["result"]; !reflect.DeepEqual(got, map[string]any{"rows": float64(2)}) {
+	if got := f.ask("status.get", `{"name": "textprobe.screen"}`)["result"]; !reflect.DeepEqual(got, map[string]any{"rows": float64(2)}) {
 		t.Fatalf("the status is %v", got)
 	}
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"result": map[string]any{"x": 3, "y": 4, "width": 10, "height": 20, "zoom": 1}}, nil
 	}
-	f.refuses2("element.rect", `{"name": "terminal.view"}`, workbench.Failed, "surface tab-a has no valid applied frame")
+	f.refuses2("element.rect", `{"name": "textprobe.view"}`, workbench.Failed, "surface tab-a has no valid applied frame")
 	f.frames["tab-a"] = [2]float64{100, 50}
 	want := map[string]any{"x": float64(103), "y": float64(54), "width": float64(10), "height": float64(20), "zoom": float64(1),
 		"document": map[string]any{"x": float64(0), "y": float64(0)}}
-	if got := f.ask("element.rect", `{"name": "terminal.view"}`)["result"]; !reflect.DeepEqual(got, want) {
+	if got := f.ask("element.rect", `{"name": "textprobe.view"}`)["result"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("the rectangle is %v", got)
 	}
 	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
-	if reply := f.ask("element.act", `{"name": "terminal.view", "action": "click"}`); reply["result"] != nil {
+	if reply := f.ask("element.act", `{"name": "textprobe.view", "action": "click"}`); reply["result"] != nil {
 		t.Fatalf("the action answered %v", reply)
 	}
 	if last := f.forwards[len(f.forwards)-1]; last["method"] != "element.act" {
@@ -303,23 +303,23 @@ func TestTheStatusAndTheElementOfASurfaceAreForwarded(t *testing.T) {
 // An open dialog stands over a surface: the rectangle stays and an action does not reach the surface (docs/spec/exposure.md).
 func TestAnOpenDialogRefusesAnActionOnASurfaceElementAndKeepsItsPlace(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "element", "terminal.view")
+	f.register("tab-a", "element", "textprobe.view")
 	f.frames["tab-a"] = [2]float64{100, 50}
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"result": map[string]any{"x": 3, "y": 4, "width": 10, "height": 20, "zoom": 1}}, nil
 	}
 	f.behind = true
-	if got := f.ask("element.rect", `{"name": "terminal.view"}`)["result"].(map[string]any); got["x"] != float64(103) || got["y"] != float64(54) {
+	if got := f.ask("element.rect", `{"name": "textprobe.view"}`)["result"].(map[string]any); got["x"] != float64(103) || got["y"] != float64(54) {
 		t.Fatalf("the rectangle is %v", got)
 	}
 	forwards := len(f.forwards)
-	f.refuses2("element.act", `{"name": "terminal.view", "action": "click"}`, 1010, "element terminal.view is behind the open dialog and takes no action")
+	f.refuses2("element.act", `{"name": "textprobe.view", "action": "click"}`, 1010, "element textprobe.view is behind the open dialog and takes no action")
 	if len(f.forwards) != forwards {
 		t.Fatalf("the action reached the surface: %v", f.forwards[len(f.forwards)-1])
 	}
 	f.behind = false
 	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
-	if reply := f.ask("element.act", `{"name": "terminal.view", "action": "click"}`); reply["error"] != nil {
+	if reply := f.ask("element.act", `{"name": "textprobe.view", "action": "click"}`); reply["error"] != nil {
 		t.Fatalf("after the dialog the action answered %v", reply)
 	}
 }
@@ -339,57 +339,57 @@ func (f *surfaceRequests) deliver(surface, name, value string, version int64) {
 
 func TestAWatchOfASurfaceFollowsItsVersions(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "status", "terminal.screen")
+	f.register("tab-a", "status", "textprobe.screen")
 	f.reply = func(request map[string]any) (any, error) {
 		// The surface sends the current value as it starts the watch, before its reply.
 		if request["method"] == "status.watch" {
-			f.deliver("tab-a", "terminal.screen", `"first"`, 1)
+			f.deliver("tab-a", "textprobe.screen", `"first"`, 1)
 		}
 		return map[string]any{}, nil
 	}
-	if reply := f.ask("status.watch", `{"name": "terminal.screen"}`); reply["result"] != nil {
+	if reply := f.ask("status.watch", `{"name": "textprobe.screen"}`); reply["result"] != nil {
 		t.Fatalf("the watch answered %v", reply)
 	}
-	if !reflect.DeepEqual(f.forwards[0]["params"], map[string]any{"name": "terminal.screen"}) {
+	if !reflect.DeepEqual(f.forwards[0]["params"], map[string]any{"name": "textprobe.screen"}) {
 		t.Fatalf("the watch forwarded %v", f.forwards[0])
 	}
-	if got := <-f.changes; got != `{"name":"terminal.screen","value":"first"}` {
+	if got := <-f.changes; got != `{"name":"textprobe.screen","value":"first"}` {
 		t.Fatalf("the change is %s", got)
 	}
-	f.deliver("tab-a", "terminal.screen", `"old"`, 1)
-	f.deliver("tab-b", "terminal.screen", `"other"`, 9)
-	f.deliver("tab-a", "terminal.screen", `"second"`, 2)
-	if got := <-f.changes; got != `{"name":"terminal.screen","value":"second"}` {
+	f.deliver("tab-a", "textprobe.screen", `"old"`, 1)
+	f.deliver("tab-b", "textprobe.screen", `"other"`, 9)
+	f.deliver("tab-a", "textprobe.screen", `"second"`, 2)
+	if got := <-f.changes; got != `{"name":"textprobe.screen","value":"second"}` {
 		t.Fatalf("the change is %s", got)
 	}
-	f.ask("status.watch", `{"name": "terminal.screen"}`)
+	f.ask("status.watch", `{"name": "textprobe.screen"}`)
 	if len(f.forwards) != 1 {
 		t.Fatalf("a repeated watch forwarded %v", f.forwards)
 	}
 	// A second watch of a name that the surface follows receives from version 0, so it receives the current value again.
-	f.ask("status.watch", `{"name": "terminal.screen", "surface": "tab-a"}`)
-	if got := <-f.changes; got != `{"name":"terminal.screen","surface":"tab-a","value":"first"}` {
+	f.ask("status.watch", `{"name": "textprobe.screen", "surface": "tab-a"}`)
+	if got := <-f.changes; got != `{"name":"textprobe.screen","surface":"tab-a","value":"first"}` {
 		t.Fatalf("the change is %s", got)
 	}
-	f.deliver("tab-a", "terminal.screen", `"third"`, 3)
+	f.deliver("tab-a", "textprobe.screen", `"third"`, 3)
 	seen := map[string]bool{<-f.changes: true, <-f.changes: true}
-	if !seen[`{"name":"terminal.screen","value":"third"}`] || !seen[`{"name":"terminal.screen","surface":"tab-a","value":"third"}`] {
+	if !seen[`{"name":"textprobe.screen","value":"third"}`] || !seen[`{"name":"textprobe.screen","surface":"tab-a","value":"third"}`] {
 		t.Fatalf("the changes are %v", seen)
 	}
-	f.ask("status.unwatch", `{"name": "terminal.screen"}`)
+	f.ask("status.unwatch", `{"name": "textprobe.screen"}`)
 	if last := f.forwards[len(f.forwards)-1]; last["method"] == "status.unwatch" {
 		t.Fatal("an unwatch ended the watch that another request shares")
 	}
-	f.ask("status.unwatch", `{"name": "terminal.screen", "surface": "tab-a"}`)
-	if last := f.forwards[len(f.forwards)-1]; last["method"] != "status.unwatch" || !reflect.DeepEqual(last["params"], map[string]any{"name": "terminal.screen"}) {
+	f.ask("status.unwatch", `{"name": "textprobe.screen", "surface": "tab-a"}`)
+	if last := f.forwards[len(f.forwards)-1]; last["method"] != "status.unwatch" || !reflect.DeepEqual(last["params"], map[string]any{"name": "textprobe.screen"}) {
 		t.Fatalf("the forward is %v", last)
 	}
 	count := len(f.forwards)
-	f.ask("status.unwatch", `{"name": "terminal.screen"}`)
+	f.ask("status.unwatch", `{"name": "textprobe.screen"}`)
 	if len(f.forwards) != count {
 		t.Fatalf("an unwatch of no watch forwarded %v", f.forwards[count:])
 	}
-	f.deliver("tab-a", "terminal.screen", `"late"`, 4)
+	f.deliver("tab-a", "textprobe.screen", `"late"`, 4)
 	select {
 	case got := <-f.changes:
 		t.Fatalf("a value after the end of the watch reached the host: %s", got)
@@ -399,12 +399,12 @@ func TestAWatchOfASurfaceFollowsItsVersions(t *testing.T) {
 
 func TestAWatchThatTheSurfaceRefusesEnds(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "status", "terminal.screen")
+	f.register("tab-a", "status", "textprobe.screen")
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"error": map[string]any{"code": 1002, "message": "no value"}}, nil
 	}
-	f.refuses2("status.watch", `{"name": "terminal.screen"}`, 1002, "no value")
-	f.ask("status.watch", `{"name": "terminal.screen"}`)
+	f.refuses2("status.watch", `{"name": "textprobe.screen"}`, 1002, "no value")
+	f.ask("status.watch", `{"name": "textprobe.screen"}`)
 	if len(f.forwards) != 2 {
 		t.Fatalf("the refused watch stayed: %v", f.forwards)
 	}
@@ -412,20 +412,20 @@ func TestAWatchThatTheSurfaceRefusesEnds(t *testing.T) {
 
 func TestAClosedSurfaceEndsItsWatches(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "status", "terminal.screen")
+	f.register("tab-a", "status", "textprobe.screen")
 	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
-	f.ask("status.watch", `{"name": "terminal.screen"}`)
+	f.ask("status.watch", `{"name": "textprobe.screen"}`)
 	if err := f.registry.Registered(workbench.SurfaceRegistered{Surface: "tab-a", Closed: true}); err != nil {
 		t.Fatal(err)
 	}
-	f.deliver("tab-a", "terminal.screen", `"late"`, 1)
+	f.deliver("tab-a", "textprobe.screen", `"late"`, 1)
 	select {
 	case got := <-f.changes:
 		t.Fatalf("a closed surface reached the host: %s", got)
 	default:
 	}
-	f.register("tab-a", "status", "terminal.screen")
-	f.ask("status.watch", `{"name": "terminal.screen"}`)
+	f.register("tab-a", "status", "textprobe.screen")
+	f.ask("status.watch", `{"name": "textprobe.screen"}`)
 	if len(f.forwards) != 2 {
 		t.Fatalf("the watch of the closed surface stayed: %v", f.forwards)
 	}
@@ -442,33 +442,33 @@ func (f *surfaceRequests) last() map[string]any {
 
 func TestAControlOfASurfaceRunsItsCommandOnThatSurface(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "command", "terminal.input")
-	f.register("tab-b", "command", "terminal.input")
+	f.register("tab-a", "command", "textprobe.input")
+	f.register("tab-b", "command", "textprobe.input")
 	var result any
 	var failure error
-	f.registry.RunOn("terminal.input", nil, "tab-a", func(value any, err error) { result, failure = value, err })
+	f.registry.RunOn("textprobe.input", nil, "tab-a", func(value any, err error) { result, failure = value, err })
 	if failure != nil || string(result.(json.RawMessage)) != `"done"` {
 		t.Fatalf("the run answered %v %v", result, failure)
 	}
-	if got := f.last(); got["surface"] != "tab-a" || !reflect.DeepEqual(got["params"], map[string]any{"name": "terminal.input", "params": map[string]any{}, "surface": "tab-a"}) {
+	if got := f.last(); got["surface"] != "tab-a" || !reflect.DeepEqual(got["params"], map[string]any{"name": "textprobe.input", "params": map[string]any{}, "surface": "tab-a"}) {
 		t.Fatalf("the forward is %v", got)
 	}
-	f.registry.RunOn("terminal.input", nil, "tab-c", func(_ any, err error) { failure = err })
-	if failure == nil || failure.Error() != "surface tab-c has not registered command terminal.input" {
+	f.registry.RunOn("textprobe.input", nil, "tab-c", func(_ any, err error) { failure = err })
+	if failure == nil || failure.Error() != "surface tab-c has not registered command textprobe.input" {
 		t.Fatalf("the run gave %v", failure)
 	}
 }
 
 func TestAViewRunsTheCommandsOfItsPlugin(t *testing.T) {
 	f := newSurfaceRequests(t)
-	f.register("tab-a", "command", "terminal.input")
-	f.register("tab-b", "command", "terminal.input")
-	f.register("space/left/files", "command", "terminal.input")
+	f.register("tab-a", "command", "textprobe.input")
+	f.register("tab-b", "command", "textprobe.input")
+	f.register("space/left/fieldprobe", "command", "textprobe.input")
 	run := func(surface, caller string) (any, error) {
 		t.Helper()
 		var surfaceOf any
 		var failure error
-		f.registry.RunOwned("terminal.input", json.RawMessage(`{"data": "x"}`), json.RawMessage(`["cid"]`), "terminal", surface, caller, func(_ any, err error) {
+		f.registry.RunOwned("textprobe.input", json.RawMessage(`{"data": "x"}`), json.RawMessage(`["cid"]`), "textprobe", surface, caller, func(_ any, err error) {
 			failure = err
 			if err == nil {
 				surfaceOf = f.last()["surface"]
@@ -482,7 +482,7 @@ func TestAViewRunsTheCommandsOfItsPlugin(t *testing.T) {
 	if params := f.last()["params"].(map[string]any); !reflect.DeepEqual(params["cids"], []any{"cid"}) {
 		t.Fatalf("the cause did not follow: %v", params)
 	}
-	if got, err := run("", "space/left/files"); err != nil || got != "space/left/files" {
+	if got, err := run("", "space/left/fieldprobe"); err != nil || got != "space/left/fieldprobe" {
 		t.Fatalf("a section that runs its own command gave %v %v", got, err)
 	}
 	if got, err := run("", "tab-c"); err != nil || got != "tab-b" {
@@ -492,11 +492,11 @@ func TestAViewRunsTheCommandsOfItsPlugin(t *testing.T) {
 	if got, err := run("", ""); err != nil || got != "tab-a" {
 		t.Fatalf("the preferred surface gave %v %v", got, err)
 	}
-	if _, err := run("tab-c", ""); err == nil || err.Error() != "surface tab-c has not registered command terminal.input" {
+	if _, err := run("tab-c", ""); err == nil || err.Error() != "surface tab-c has not registered command textprobe.input" {
 		t.Fatalf("a surface of another plugin gave %v", err)
 	}
-	f.plugins = map[string]string{"tab-a": "browser", "tab-b": "browser"}
-	if _, err := run("", ""); err == nil || err.Error() != "owner terminal has not registered command terminal.input" {
+	f.plugins = map[string]string{"tab-a": "boxprobe", "tab-b": "boxprobe"}
+	if _, err := run("", ""); err == nil || err.Error() != "owner textprobe has not registered command textprobe.input" {
 		t.Fatalf("no surface of the owner gave %v", err)
 	}
 }
@@ -505,15 +505,15 @@ func TestAnObserverFollowsTheSurfaceThatHoldsTheStatus(t *testing.T) {
 	f := newSurfaceRequests(t)
 	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
 	var values []any
-	stop := f.registry.Observe("terminal.screen", nil, false, func(value any) { values = append(values, value) })
+	stop := f.registry.Observe("textprobe.screen", nil, false, func(value any) { values = append(values, value) })
 	if len(values) != 1 || values[0] != nil {
 		t.Fatalf("an observer without a surface received %v", values)
 	}
-	f.register("tab-a", "status", "terminal.screen")
+	f.register("tab-a", "status", "textprobe.screen")
 	if last := f.last(); last["method"] != "status.watch" || last["surface"] != "tab-a" {
 		t.Fatalf("the forward is %v", last)
 	}
-	f.deliver("tab-a", "terminal.screen", `"one"`, 1)
+	f.deliver("tab-a", "textprobe.screen", `"one"`, 1)
 	if len(values) != 2 || string(values[1].(json.RawMessage)) != `"one"` {
 		t.Fatalf("the observer received %v", values)
 	}
@@ -523,15 +523,15 @@ func TestAnObserverFollowsTheSurfaceThatHoldsTheStatus(t *testing.T) {
 	default:
 	}
 	// A request of the host that names the surface shares the watch and stays after an unwatch of nothing else.
-	f.ask("status.watch", `{"name": "terminal.screen", "surface": "tab-a"}`)
+	f.ask("status.watch", `{"name": "textprobe.screen", "surface": "tab-a"}`)
 	if len(f.forwards) != 1 {
 		t.Fatalf("the shared watch forwarded %v", f.forwards)
 	}
-	f.ask("status.unwatch", `{"name": "terminal.screen", "surface": "tab-a"}`)
+	f.ask("status.unwatch", `{"name": "textprobe.screen", "surface": "tab-a"}`)
 	if len(f.forwards) != 1 {
 		t.Fatalf("the unwatch ended the watch of the observer: %v", f.forwards)
 	}
-	f.register("tab-b", "status", "terminal.screen")
+	f.register("tab-b", "status", "textprobe.screen")
 	if len(f.forwards) != 3 || f.forwards[1]["method"] != "status.unwatch" || f.forwards[1]["surface"] != "tab-a" ||
 		f.forwards[2]["method"] != "status.watch" || f.forwards[2]["surface"] != "tab-b" {
 		t.Fatalf("the watch did not move: %v", f.forwards)
@@ -547,7 +547,7 @@ func TestAnObserverFollowsTheSurfaceThatHoldsTheStatus(t *testing.T) {
 		t.Fatalf("the end of the observer forwarded %v", last)
 	}
 	count := len(values)
-	f.deliver("tab-a", "terminal.screen", `"late"`, 9)
+	f.deliver("tab-a", "textprobe.screen", `"late"`, 9)
 	if len(values) != count {
 		t.Fatalf("an ended observer received %v", values)
 	}
@@ -558,12 +558,12 @@ func TestAnExactObserverFollowsOnlyItsSurface(t *testing.T) {
 	f.reply = func(map[string]any) (any, error) { return map[string]any{}, nil }
 	wanted := "tab-b"
 	var values []any
-	f.register("tab-a", "status", "terminal.screen")
-	f.registry.Observe("terminal.screen", &wanted, true, func(value any) { values = append(values, value) })
+	f.register("tab-a", "status", "textprobe.screen")
+	f.registry.Observe("textprobe.screen", &wanted, true, func(value any) { values = append(values, value) })
 	if len(f.forwards) != 0 || len(values) != 1 || values[0] != nil {
 		t.Fatalf("the observer followed another surface: %v %v", f.forwards, values)
 	}
-	f.register("tab-b", "status", "terminal.screen")
+	f.register("tab-b", "status", "textprobe.screen")
 	if last := f.last(); last["surface"] != "tab-b" {
 		t.Fatalf("the forward is %v", last)
 	}
@@ -575,17 +575,17 @@ func TestAFailedObservationIsReported(t *testing.T) {
 	links := f.links
 	links.Failed = func(err error) { failures = append(failures, err.Error()) }
 	f.registry.Link(links)
-	f.register("tab-a", "status", "terminal.screen")
+	f.register("tab-a", "status", "textprobe.screen")
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"error": map[string]any{"code": workbench.Gone, "message": "ended"}}, nil
 	}
-	stop := f.registry.Observe("terminal.screen", nil, false, func(any) {})
+	stop := f.registry.Observe("textprobe.screen", nil, false, func(any) {})
 	stop()
 	f.reply = func(map[string]any) (any, error) {
 		return map[string]any{"error": map[string]any{"code": workbench.Failed, "message": "no value"}}, nil
 	}
-	f.registry.Observe("terminal.screen", nil, false, func(any) {})
-	if len(failures) != 1 || failures[0] != "terminal.screen on tab-a: no value" {
+	f.registry.Observe("textprobe.screen", nil, false, func(any) {})
+	if len(failures) != 1 || failures[0] != "textprobe.screen on tab-a: no value" {
 		t.Fatalf("the failures are %v", failures)
 	}
 }
@@ -599,14 +599,14 @@ func TestTheRegistryHoldsNoCopyOfTheDeclarations(t *testing.T) {
 	exposes := workbench.Exposes{}
 	written := 0
 	for i := range 1000 {
-		raw := json.RawMessage(fmt.Sprintf(`{"name": "terminal.command-%d", "description": %q, "params": {"type": "object",
+		raw := json.RawMessage(fmt.Sprintf(`{"name": "textprobe.command-%d", "description": %q, "params": {"type": "object",
 			"properties": {"surface": {"type": "string"}, "text": {"type": "string"}}}}`, i, strings.Repeat("word ", 40)))
 		exposes.Commands = append(exposes.Commands, raw)
 		written += len(raw)
 	}
 	n := heldBytes(func() any {
 		registry := workbench.NewRegistry(declared)
-		if err := registry.Declare("terminal", exposes); err != nil {
+		if err := registry.Declare("textprobe", exposes); err != nil {
 			t.Fatal(err)
 		}
 		return registry

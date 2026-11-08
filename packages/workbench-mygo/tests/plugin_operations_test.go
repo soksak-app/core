@@ -426,7 +426,7 @@ func TestACompleteStarterJobIsNotRepeated(t *testing.T) {
 
 // The action of a tab is a .ui-button of the page: the page background, and only its edge changes under the pointer.
 func TestTheInstallOfATabHasTheLookOfAButtonOfThePage(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"terminal": {"1.0.0"}})}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"textprobe": {"1.0.0"}})}
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
@@ -456,7 +456,7 @@ func TestTheInstallOfATabHasTheLookOfAButtonOfThePage(t *testing.T) {
 }
 
 func TestATabOfAPluginThatIsNotLoadedOffersItsInstall(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"terminal": {"1.0.0"}})}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"textprobe": {"1.0.0"}})}
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
@@ -467,20 +467,20 @@ func TestATabOfAPluginThatIsNotLoadedOffersItsInstall(t *testing.T) {
 		t.Fatalf("the tab offers no install: %q", f.tester.Texts())
 	}
 	f.click("core.card.placeholder-action", "")
-	if !slices.Contains(plugins.runs, "install terminal") {
+	if !slices.Contains(plugins.runs, "install textprobe") {
 		t.Fatalf("the operations are %v", plugins.runs)
 	}
-	plugins.plugins["terminal"]["enabled"] = false
+	plugins.plugins["textprobe"]["enabled"] = false
 	f.shell.Event("window-active", nil)
 	f.settle()
-	if !slices.Contains(f.tester.Texts(), fmt.Sprintf("%s 플러그인을 사용하지 않습니다.", "terminal")) {
+	if !slices.Contains(f.tester.Texts(), fmt.Sprintf("%s 플러그인을 사용하지 않습니다.", "textprobe")) {
 		t.Fatalf("the tab of a disabled plugin says %q", f.tester.Texts())
 	}
 }
 
 // The line of a placeholder is a paragraph of the page: its margin of one line and the gap of the placeholder stand between it and the button.
 func TestThePlaceholderStandsAsThePageStandsIt(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"terminal": {"1.0.0"}})}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"textprobe": {"1.0.0"}})}
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
@@ -514,7 +514,7 @@ func TestThePlaceholderStandsAsThePageStandsIt(t *testing.T) {
 // A tab of a plugin that the window did not load is listed in core.surfaces with its plugin, visible and the reason of its placeholder,
 // and a placeholder row has no frames, entries or page status (docs/spec/plugins.md).
 func TestSurfacesListATabOfAPluginThatIsNotLoadedWithItsPlaceholderReason(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"terminal": {"1.0.0"}})}
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"textprobe": {"1.0.0"}})}
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
@@ -532,12 +532,12 @@ func TestSurfacesListATabOfAPluginThatIsNotLoadedWithItsPlaceholderReason(t *tes
 		return rows
 	}
 	rows := placeholders()
-	if len(rows) != 2 || rows["browser"]["placeholder"] != "missing" {
+	if len(rows) != 2 || rows["boxprobe"]["placeholder"] != "missing" {
 		t.Fatalf("the placeholder rows of core.surfaces are %v", rows)
 	}
-	terminal := rows["terminal"]
+	terminal := rows["textprobe"]
 	if terminal["placeholder"] != "missing" || terminal["visible"] != true || terminal["kind"] != "tab" || terminal["surface"] == "" {
-		t.Fatalf("the placeholder row of the terminal tab is %v", terminal)
+		t.Fatalf("the placeholder row of the textprobe tab is %v", terminal)
 	}
 	for _, field := range []string{"declared", "applied", "exposes", "status", "state", "dim"} {
 		if _, ok := terminal[field]; ok {
@@ -545,10 +545,10 @@ func TestSurfacesListATabOfAPluginThatIsNotLoadedWithItsPlaceholderReason(t *tes
 		}
 	}
 	f.click("core.card.placeholder-action", "")
-	plugins.plugins["terminal"]["enabled"] = false
+	plugins.plugins["textprobe"]["enabled"] = false
 	f.shell.Event("window-active", nil)
 	f.settle()
-	if rows := placeholders(); rows["terminal"]["placeholder"] != "disabled" || rows["browser"]["placeholder"] != "missing" {
+	if rows := placeholders(); rows["textprobe"]["placeholder"] != "disabled" || rows["boxprobe"]["placeholder"] != "missing" {
 		t.Fatalf("the placeholder rows of a disabled plugin are %v", rows)
 	}
 }

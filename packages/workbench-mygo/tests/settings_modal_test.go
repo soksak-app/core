@@ -499,10 +499,10 @@ func TestDraggingTheHeaderMovesTheCardInsideTheWindow(t *testing.T) {
 }
 
 func TestTheEnvironmentValueReplacesTheDefaultOfThePlugin(t *testing.T) {
-	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"terminal","package":"terminal","version":"1.0.0","manifest":{"id":"terminal",
-		"name":"Terminal","description":"the terminal","contributes":{},"settings":{"cursor.shape":{"type":"enum","label":"모양","values":["bar","block"],"default":"bar"}}}}]}`})
+	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"textprobe","package":"textprobe","version":"1.0.0","manifest":{"id":"textprobe",
+		"name":"Terminal","description":"the textprobe","contributes":{},"settings":{"cursor.shape":{"type":"enum","label":"모양","values":["bar","block"],"default":"bar"}}}}]}`})
 	f.click("core.chrome.settings", "")
-	if got := f.settingValues()["terminal.cursor.shape"]; got != "block" {
+	if got := f.settingValues()["textprobe.cursor.shape"]; got != "block" {
 		t.Fatalf("the setting is %v", got)
 	}
 }

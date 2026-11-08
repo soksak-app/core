@@ -155,7 +155,7 @@ func TestTheCloseMarkOfATabHasTheHeightOfThePage(t *testing.T) {
 // A section name has the weight of the page, which is lighter than bold.
 func TestASectionNameHasTheWeightOfThePage(t *testing.T) {
 	f := sidebarShell(t)
-	name := element(t, f.tester, "core.sidebar.section.name", "left/files.tree")
+	name := element(t, f.tester, "core.sidebar.section.name", "left/fieldprobe.tree")
 	var semibold float32
 	ui.NewTester(func(c *ui.Context) {
 		semibold, _ = c.MeasureText(0, ui.Span{Text: name.Label, Size: 11.5, Weight: 600})
@@ -169,8 +169,8 @@ func TestASectionNameHasTheWeightOfThePage(t *testing.T) {
 // and stands in the middle of its head: 11.5 points × 1.45.
 func TestASectionNameHasTheLineHeightOfTheChromeMetrics(t *testing.T) {
 	f := sidebarShell(t)
-	head := f.box("core.sidebar.section.header", "left/files.tree")
-	name := f.box("core.sidebar.section.name", "left/files.tree")
+	head := f.box("core.sidebar.section.header", "left/fieldprobe.tree")
+	name := f.box("core.sidebar.section.name", "left/fieldprobe.tree")
 	if want := float32(11.5 * 1.45); !designNear(name.H, want) {
 		t.Fatalf("the name is %v tall at y %v, want %v", name.H, name.Y, want)
 	}
@@ -185,13 +185,13 @@ func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
 	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
-	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "element", "name": "terminal.view"}})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "element", "name": "textprobe.view"}})
 	ask := func(id int) map[string]any {
 		t.Helper()
 		r.mu.Lock()
 		seen := len(r.pushed)
 		r.mu.Unlock()
-		r.ask(id, "element.rect", `{"name": "terminal.view"}`)
+		r.ask(id, "element.rect", `{"name": "textprobe.view"}`)
 		var pushed map[string]any
 		r.f.until(func() bool {
 			r.mu.Lock()

@@ -494,10 +494,11 @@ func (h *storedHost) installedDocument() string {
 	return h.installed
 }
 
-// environment reads the environment declaration of the application, which the shell receives from the assets of the application.
+// environment reads the test environment: the form of the environment declaration of an application, whose cards, settings and
+// sidebar sets name the probe plugins of these tests.
 func environment(t testing.TB) []byte {
 	t.Helper()
-	text, err := os.ReadFile(filepath.Join("testdata", "application-environment.json"))
+	text, err := os.ReadFile(filepath.Join("testdata", "test-environment.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

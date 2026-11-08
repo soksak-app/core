@@ -84,7 +84,7 @@ func TestADividerShowsAGripAtItsCenter(t *testing.T) {
 // A boundary is a line at its coordinate. Where a card crosses it, it follows the fullRule setting.
 func TestABoundaryDrawsItsLine(t *testing.T) {
 	f, left, right := splitShell(t)
-	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "bottom", "plugin": "terminal"})
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "bottom", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}

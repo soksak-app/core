@@ -422,10 +422,10 @@ func TestTheSetsAndLinksAreCheckedAsThePageChecksThem(t *testing.T) {
 func TestAWindowTakesALinkThatTheSettingsKeep(t *testing.T) {
 	f := sidebarShell(t)
 	links := []any{map[string]any{"place": "left", "plugin": nil, "set": "set-install"},
-		map[string]any{"place": "window-right", "plugin": "browser", "set": "set-browser"},
+		map[string]any{"place": "window-right", "plugin": "boxprobe", "set": "set-boxprobe"},
 		map[string]any{"place": "card-left", "plugin": "other", "set": "other.side"}}
 	f.run("core.settings.set", map[string]any{"patch": map[string]any{"links": links}})
-	if name := element(t, f.tester, "core.sidebar.section.name", "left/files.tree"); name.Label != "파일 트리" {
+	if name := element(t, f.tester, "core.sidebar.section.name", "left/fieldprobe.tree"); name.Label != "파일 트리" {
 		t.Fatalf("the left sidebar shows %q", name.Label)
 	}
 }

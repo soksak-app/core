@@ -41,7 +41,7 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	if status := element(t, f.tester, "core.card.sidebar.status", item); status.Label != "왼쪽 사이드바 · 탐색기" {
 		t.Fatalf("the status line says %q", status.Label)
 	}
-	if name := element(t, f.tester, "core.sidebar.section.name", item+"/files.tree"); name.Label != "파일 트리" {
+	if name := element(t, f.tester, "core.sidebar.section.name", item+"/fieldprobe.tree"); name.Label != "파일 트리" {
 		t.Fatalf("the name of the section is %q", name.Label)
 	}
 	box := f.box("core.card", card)
@@ -244,12 +244,12 @@ func sectionSurface(t *testing.T, stored *surfaceHost, tail string) map[string]a
 
 func TestASectionStandsInItsSurface(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
-	surface := sectionSurface(t, stored, "/left/files.tree")
-	if surface == nil || surface["visible"] != true || surface["plugin"] != "files" {
+	surface := sectionSurface(t, stored, "/left/fieldprobe.tree")
+	if surface == nil || surface["visible"] != true || surface["plugin"] != "fieldprobe" {
 		t.Fatalf("the section surface is %v", surface)
 	}
 	start := surface["start"].(map[string]any)["section"].(map[string]any)
-	if start["id"] != "files.tree" || start["sidebar"] != "left" || start["card"] != nil {
+	if start["id"] != "fieldprobe.tree" || start["sidebar"] != "left" || start["card"] != nil {
 		t.Fatalf("the start value of the section is %v", start)
 	}
 	if page := surface["composition"].(map[string]any)["page"]; page != "ui/tree.html" {
@@ -298,19 +298,19 @@ func (f *shellFixture) sectionOf(sidebar, section string) sectionState {
 // Closing a surface ends its in-flight calls (docs/spec/native-surfaces.md): a section that the space left has no view to answer.
 func TestACallOfASectionThatTheSpaceLeftIsDropped(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
-	left := f.sectionOf("left", "files.bookmarks").SurfaceID
+	left := f.sectionOf("left", "fieldprobe.bookmarks").SurfaceID
 	f.run("core.space.add", nil)
 	f.settle()
 	if _, held := stored.lastSurfaces(t)[left]; held {
 		t.Fatalf("the space left the section %s, and the host still holds it", left)
 	}
 	before := len(stored.replies)
-	f.shell.Event("view-call", []any{map[string]any{"surface": left, "plugin": "files", "generation": 1, "id": 7, "command": "runtime.data.get", "params": map[string]string{"key": "marks"}}})
+	f.shell.Event("view-call", []any{map[string]any{"surface": left, "plugin": "fieldprobe", "generation": 1, "id": 7, "command": "runtime.data.get", "params": map[string]string{"key": "marks"}}})
 	f.settle()
 	if len(stored.replies) != before {
 		t.Fatalf("the ended section got the reply %v", stored.replies[len(stored.replies)-1])
 	}
-	f.shell.Event("view-call", []any{map[string]any{"surface": left, "plugin": "files", "generation": 1, "id": 8, "command": "runtime.error", "params": map[string]string{"where": "files bookmarks", "text": "late"}}})
+	f.shell.Event("view-call", []any{map[string]any{"surface": left, "plugin": "fieldprobe", "generation": 1, "id": 8, "command": "runtime.error", "params": map[string]string{"where": "fieldprobe bookmarks", "text": "late"}}})
 	f.settle()
 	if len(stored.replies) != before {
 		t.Fatalf("the ended section got the reply %v", stored.replies[len(stored.replies)-1])
@@ -322,29 +322,29 @@ func TestACallOfASectionThatTheSpaceLeftIsDropped(t *testing.T) {
 
 func TestASectionIsMountedOnceItsViewAnswers(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
-	loading := f.sectionOf("left", "files.tree")
+	loading := f.sectionOf("left", "fieldprobe.tree")
 	if loading.Mounted || loading.Phase == nil || *loading.Phase != "loading" {
 		t.Fatalf("a section whose view did not answer is %+v", loading)
 	}
 	viewCall(t, f, stored, loading.SurfaceID, "runtime.settings.read", nil)
-	ready := f.sectionOf("left", "files.tree")
+	ready := f.sectionOf("left", "fieldprobe.tree")
 	if !ready.Mounted || ready.Phase == nil || *ready.Phase != "ready" || ready.Error != nil {
 		t.Fatalf("a section whose view answered is %+v", ready)
 	}
 	// A folded section keeps its surface, as a hidden tab does.
-	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "files.tree"})
-	if folded := f.sectionOf("left", "files.tree"); !folded.Folded || !folded.Mounted || *folded.Phase != "ready" {
+	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "fieldprobe.tree"})
+	if folded := f.sectionOf("left", "fieldprobe.tree"); !folded.Folded || !folded.Mounted || *folded.Phase != "ready" {
 		t.Fatalf("a folded section is %+v", folded)
 	}
 }
 
 func TestASectionShowsThatItsViewStopped(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
-	id := f.sectionOf("left", "files.tree").SurfaceID
+	id := f.sectionOf("left", "fieldprobe.tree").SurfaceID
 	viewCall(t, f, stored, id, "runtime.settings.read", nil)
 	f.shell.Event("view-stopped", []any{map[string]any{"surface": id, "reason": "the view stopped"}})
 	f.settle()
-	stopped := f.sectionOf("left", "files.tree")
+	stopped := f.sectionOf("left", "fieldprobe.tree")
 	if stopped.Mounted || stopped.Phase == nil || *stopped.Phase != "error" || stopped.Error == nil || *stopped.Error != "the view stopped" {
 		t.Fatalf("a section whose view stopped is %+v", stopped)
 	}
@@ -354,13 +354,13 @@ func TestASectionShowsThatItsViewStopped(t *testing.T) {
 func TestASectionOfAnUnselectedTabHasItsSurfaceHidden(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
 	card := f.tabbedCards()[0]
-	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "left", "set": "set-browser"})
-	tail := "/" + card + ":left/browser.history"
+	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "left", "set": "set-boxprobe"})
+	tail := "/" + card + ":left/boxprobe.history"
 	surface := sectionSurface(t, stored, tail)
 	if surface == nil || surface["visible"] != false {
 		t.Fatalf("the section of the unselected tab has the surface %v", surface)
 	}
-	f.run("core.sidebar.section.select", map[string]string{"sidebar": card + ":left", "section": "browser.history"})
+	f.run("core.sidebar.section.select", map[string]string{"sidebar": card + ":left", "section": "boxprobe.history"})
 	surface = sectionSurface(t, stored, tail)
 	if surface == nil || surface["visible"] != true || surface["w"].(float64) <= 0 || surface["h"].(float64) <= 0 {
 		t.Fatalf("the section of the selected tab has the surface %v", surface)
@@ -369,12 +369,12 @@ func TestASectionOfAnUnselectedTabHasItsSurfaceHidden(t *testing.T) {
 
 func TestAFoldedSectionKeepsItsSurfaceHidden(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
-	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "files.tree"})
-	if surface := sectionSurface(t, stored, "/left/files.tree"); surface == nil || surface["visible"] != false {
+	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "fieldprobe.tree"})
+	if surface := sectionSurface(t, stored, "/left/fieldprobe.tree"); surface == nil || surface["visible"] != false {
 		t.Fatalf("the folded section has the surface %v", surface)
 	}
-	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "files.tree"})
-	if surface := sectionSurface(t, stored, "/left/files.tree"); surface == nil || surface["visible"] != true {
+	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "fieldprobe.tree"})
+	if surface := sectionSurface(t, stored, "/left/fieldprobe.tree"); surface == nil || surface["visible"] != true {
 		t.Fatalf("the open section has the surface %v", surface)
 	}
 }
@@ -383,7 +383,7 @@ func TestACardSectionFollowsItsCardAndEndsWithItsSide(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)
 	card := f.tabbedCards()[0]
 	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "left", "set": "set-install"})
-	tail := "/" + card + ":left/files.tree"
+	tail := "/" + card + ":left/fieldprobe.tree"
 	surface := sectionSurface(t, stored, tail)
 	if surface == nil || surface["visible"] != true {
 		t.Fatalf("the section of the card has the surface %v", surface)
@@ -407,12 +407,12 @@ func TestACardSectionFollowsItsCardAndEndsWithItsSide(t *testing.T) {
 // A window takes the sets and the links of the settings at once, and they start as the declared ones.
 func TestTheSettingsHoldTheSetsAndLinksOfTheSidebars(t *testing.T) {
 	f := sidebarShell(t)
-	f.run("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-browser"})
+	f.run("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-boxprobe"})
 	if status := element(t, f.tester, "core.sidebar.status", "left"); status.Label != "왼쪽 창 사이드바" {
 		t.Fatalf("the status line says %q", status.Label)
 	}
 	element(t, f.tester, "core.sidebar.tabs", "left")
-	if f.has("core.sidebar.section.name", "left/files.tree") {
+	if f.has("core.sidebar.section.name", "left/fieldprobe.tree") {
 		t.Fatal("the left sidebar keeps the set of the environment")
 	}
 	f.run("core.settings.sets.create", nil)

@@ -116,7 +116,7 @@ func TestTheRecordOfADragHoldsTheBoundaryBeforeTheDragAndAfterEachStep(t *testin
 func TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns(t *testing.T) {
 	f, stored := surfaceShell(t)
 	left := f.tabbedCards()[0]
-	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns(t *testing.T) 
 func TestAFailedLastPlacementAnswersItsFailure(t *testing.T) {
 	f, stored := surfaceShell(t)
 	left := f.tabbedCards()[0]
-	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -44,7 +44,7 @@ func splitShell(t *testing.T) (*shellFixture, string, string) {
 	t.Helper()
 	f := viewShell(t)
 	left := f.tabbedCards()[0]
-	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestCoreCardSplitAnswersTheCardAndTheTab(t *testing.T) {
 			f := viewShell(t)
 			source := f.tabbedCards()[0]
 			before := len(f.tabbedCards())
-			made, err := f.answer("core.card.split", map[string]string{"card": source, "side": side, "plugin": "terminal"})
+			made, err := f.answer("core.card.split", map[string]string{"card": source, "side": side, "plugin": "textprobe"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -128,7 +128,7 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 		{"left", "right", "no card left"},
 		{source, "middle", "unknown side middle; use left, right, top or bottom"},
 	} {
-		if _, err := f.answer("core.card.split", map[string]string{"card": c.card, "side": c.side, "plugin": "terminal"}); err == nil || err.Error() != c.want {
+		if _, err := f.answer("core.card.split", map[string]string{"card": c.card, "side": c.side, "plugin": "textprobe"}); err == nil || err.Error() != c.want {
 			t.Errorf("the split of %s toward %s failed with %v, want %s", c.card, c.side, err, c.want)
 		}
 	}
@@ -137,7 +137,7 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	f.settle()
 	for range 4 {
 		card := f.tabbedCards()[len(f.tabbedCards())-1]
-		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "terminal"}); err != nil {
+		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "textprobe"}); err != nil {
 			if want := "card " + card + " cannot split toward right"; err.Error() != want {
 				t.Fatalf("the split failed with %v, want %s", err, want)
 			}
@@ -306,7 +306,7 @@ func TestASplitEndsTheHoldOfADivider(t *testing.T) {
 	x, y := box.X+box.W/2, box.Y+box.H/2
 	f.tester.Press(x, y)
 	f.tester.Frame()
-	third, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	third, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +324,7 @@ func TestASplitEndsTheHoldOfADivider(t *testing.T) {
 // press goes on holding the boundary to its end. The element of the press keeps its key, so no other divider repeats it.
 func TestDividerDragGoesOnPastALineThatItDrops(t *testing.T) {
 	f, left, middle := splitShell(t)
-	made, err := f.answer("core.card.split", map[string]string{"card": middle, "side": "right", "plugin": "terminal"})
+	made, err := f.answer("core.card.split", map[string]string{"card": middle, "side": "right", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +395,7 @@ func TestWindowSidebarsAreDrawnAsCards(t *testing.T) {
 // the plane.
 func TestThePlaneHasTheGapOfThePage(t *testing.T) {
 	f := openedShell(t)
-	left, terminal := f.box("core.card", "left"), f.box("core.card", "terminal")
+	left, terminal := f.box("core.card", "left"), f.box("core.card", "textprobe")
 	if got := terminal.X - (left.X + left.W); got != 12 {
 		t.Fatalf("the cards are %v apart, want 12", got)
 	}
@@ -418,12 +418,12 @@ func viewShell(t *testing.T) *shellFixture {
 func TestANewTabCarriesTheMarkOfItsPlugin(t *testing.T) {
 	f := viewShell(t)
 	card := f.tabbedCards()[0]
-	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "browser"})
+	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "boxprobe"})
 	f.settle()
 	if !f.tester.HasText("www 탭 1") {
 		t.Fatalf("the texts are %q", f.tester.Texts())
 	}
-	f.run("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "terminal"})
+	f.run("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "textprobe"})
 	f.settle()
 	if !f.tester.HasText("◊ 탭 2") {
 		t.Fatalf("the texts are %q", f.tester.Texts())
@@ -953,7 +953,7 @@ func TestTabsAndSpacesCountApart(t *testing.T) {
 	}
 	f.run("core.space.activate", map[string]string{"id": spaces[0].(map[string]any)["id"].(string)})
 	f.settle()
-	f.run("core.card.add-tab", map[string]string{"card": first, "plugin": "terminal"})
+	f.run("core.card.add-tab", map[string]string{"card": first, "plugin": "textprobe"})
 	f.settle()
 	if got := title(first); !strings.HasSuffix(got, "탭 2") {
 		t.Fatalf("the layout went on as %q", got)
@@ -974,7 +974,7 @@ func TestCardSplitDistinguishesMissingEmptyAndNullSide(t *testing.T) {
 		{name: "null", present: true, expected: "unknown side null; use left, right, top or bottom"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			argument := map[string]any{"card": card, "plugin": "terminal"}
+			argument := map[string]any{"card": card, "plugin": "textprobe"}
 			if c.present {
 				argument["side"] = c.side
 			}

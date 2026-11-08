@@ -17,10 +17,10 @@ func sidebarShell(t *testing.T) *shellFixture {
 
 func TestAProjectShowsTheFixedSidebarsOfTheEnvironment(t *testing.T) {
 	f := sidebarShell(t)
-	if name := element(t, f.tester, "core.sidebar.section.name", "left/files.tree"); name.Label != "파일 트리" {
+	if name := element(t, f.tester, "core.sidebar.section.name", "left/fieldprobe.tree"); name.Label != "파일 트리" {
 		t.Fatalf("the name of the section is %q", name.Label)
 	}
-	element(t, f.tester, "core.sidebar.section.name", "left/files.bookmarks")
+	element(t, f.tester, "core.sidebar.section.name", "left/fieldprobe.bookmarks")
 	// Texts lists the text of a line and its label.
 	lines := 0
 	for _, text := range f.tester.Texts() {
@@ -128,16 +128,16 @@ func TestTheChromeShowsAndHidesASidebar(t *testing.T) {
 
 func TestAFoldedSectionIsStoredWithTheSpace(t *testing.T) {
 	f := sidebarShell(t)
-	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "files.tree"})
+	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "fieldprobe.tree"})
 	f.settle()
-	if _, ok := keyed(f.tester.ElementTree(), "core.sidebar.section.divider", "left/files.bookmarks"); ok {
+	if _, ok := keyed(f.tester.ElementTree(), "core.sidebar.section.divider", "left/fieldprobe.bookmarks"); ok {
 		t.Fatal("a divider lies next to the folded section")
 	}
 	encoded, err := json.Marshal(f.host.projects[0]["spaces"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(encoded), `folded\":[\"files.tree\"]`) && !strings.Contains(string(encoded), `"folded":["files.tree"]`) {
+	if !strings.Contains(string(encoded), `folded\":[\"fieldprobe.tree\"]`) && !strings.Contains(string(encoded), `"folded":["fieldprobe.tree"]`) {
 		t.Fatalf("the stored spaces are %s", encoded)
 	}
 }
