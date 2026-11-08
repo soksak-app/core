@@ -57,12 +57,10 @@ void sp_region_caret(void *region, double x, double y, double w, double h);
 
 // Diagnostic builds can give the region a controlled input context. NULL restores AppKit's context. The region retains
 // the supplied context. Production builds omit this test interface.
-#ifdef SOKSAK_DIAGNOSTIC
 void sp_region_set_input_context(void *region, void *context);
 // Writes the stable 16-byte token with which an opt-in frame identity tags every frame of the region, whichever IOSurface
 // carries the frame (docs/spec/diagnostics.md). Diagnostic builds only.
 void sp_region_identity_token(void *region, unsigned char token[16]);
-#endif
 
 // Stores the string that is exposed as the accessibility value.
 void sp_region_text(void *region, const char *utf8);
