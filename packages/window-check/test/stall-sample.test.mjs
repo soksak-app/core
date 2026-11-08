@@ -116,7 +116,7 @@ test("a page that does not reply records the host and its page processes and nam
   const { sampleStall } = await import("../stall-sample.mjs");
   const sampled = [];
   const files = await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
-    sample: (pid, file) => { sampled.push([pid, file]); return file; } });
+    sample: (pid, file) => { sampled.push([pid, file]); return file; }, flock: async () => null });
   assert.deepEqual(sampled, [[10, "/x/logs/stall-10-7.txt"], [12, "/x/logs/stall-10-7-page-12.txt"], [13, "/x/logs/stall-10-7-page-13.txt"]]);
   assert.deepEqual(files, sampled.map(([, file]) => file));
 });
@@ -141,7 +141,7 @@ test("a page process that already ended does not cost the records of the host an
   const results = await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7, sample: (pid, file) => {
     if (pid === 12) throw new Error("sample 12 exited with 255: process 12 no longer appears to be running");
     return file;
-  } });
+  }, flock: async () => null });
   assert.deepEqual(results, [
     "/x/logs/stall-10-7.txt",
     "page 12 not sampled: sample 12 exited with 255: process 12 no longer appears to be running",
@@ -175,7 +175,7 @@ test("a request pending past 3 s starts the host and page samples in the same tu
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const started = [];
   const sample = async () => (await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
-    sample: (pid, file) => { started.push(pid); return file; } })).join(", ");
+    sample: (pid, file) => { started.push(pid); return file; }, flock: async () => null })).join(", ");
   const reports = [];
   void within(new Promise(() => {}), 10_000, "wailsv3 status.get host.windows", sample, (text) => reports.push(text), () => {});
   t.mock.timers.tick(2999);
@@ -215,4 +215,133 @@ test("native stall sampling keeps the check event loop responsive", { timeout: 1
   } finally {
     await task;
   }
+});
+
+// The sample of a page process whose render queue waits in flock, as /usr/bin/sample of macOS 27 writes it, and of one
+// that waits in no flock. Only the section of the tops of the stacks is read.
+const FLOCK_SAMPLE = [
+  "Call graph:",
+  "    1700 Thread_9697167   DispatchQueue_1: com.apple.main-thread  (serial)",
+  "      1700 start  (in dyld) + 6688  [0x18113be80]",
+  "    1700 Thread_9697170   DispatchQueue_42: com.apple.CoreAnimation.render-queue  (serial)",
+  "      1700 flock  (in libsystem_kernel.dylib) + 8  [0x1814d0cdc]",
+  "",
+  "Total number in stack (recursive counted multiple, when >=5):",
+  "",
+  "Sort by top of stack, same collapsed (when >= 5):",
+  "        flock  (in libsystem_kernel.dylib)        1700",
+  "        mach_msg2_trap  (in libsystem_kernel.dylib)        1700",
+  "",
+  "Binary Images:",
+  "",
+].join("\n");
+const IDLE_SAMPLE = FLOCK_SAMPLE.replace("        flock  (in libsystem_kernel.dylib)        1700\n", "");
+
+// The field output of `lsof -n -P -F pcftn -p 12`: the mapped executable, a pipe, the shader cache and a database.
+const LSOF_PAGE = "p12\ncWebContent\nftxt\ntREG\nn/System/WebContent\nf2\ntPIPE\nn->0x1\nf7\ntREG\nn/c/metal/shaders.data\nf9\ntREG\nn/c/web.db\n";
+// The answer of the lock probe for both files: a lock of flock on the cache and a lock of fcntl of process 12 on the database.
+const PROBE_PAGE = "locked\t-1\t/c/metal/shaders.data\nlocked\t12\t/c/web.db\n";
+const opener = (pid, command, fd) => `p${pid}\nc${command}\nf${fd}\ntREG\nn/c/metal/shaders.data\n`;
+
+// An executor that answers each command of the flock reading from outputs, by its program and its last argument.
+function commands(outputs, calls) {
+  return async (command, args) => {
+    calls.push([command, ...args]);
+    const answer = outputs[`${command} ${args.at(-1)}`];
+    if (answer === undefined) throw new Error(`no answer for ${command} ${args.join(" ")}`);
+    return answer;
+  };
+}
+
+test("a page process that waits in flock names the file it waits for and the process that holds its lock", async () => {
+  const { flockWait, sampleStall } = await import("../stall-sample.mjs");
+  const calls = [];
+  const run = commands({
+    "/usr/sbin/lsof 12": { status: 0, stdout: LSOF_PAGE, stderr: "" },
+    "/usr/bin/perl /c/web.db": { status: 0, stdout: PROBE_PAGE, stderr: "" },
+    "/usr/sbin/lsof /c/metal/shaders.data": { status: 0, stdout: opener(12, "WebContent", 7) + opener(31, "MTLCompilerService", 4), stderr: "" },
+  }, calls);
+  const read = async (file) => { assert.equal(file, "/x/logs/stall-10-7-page-12.txt"); return FLOCK_SAMPLE; };
+  const records = await sampleStall({ host: 10, pages: [12], directory: "/x/logs", time: 7, sample: (pid, file) => file,
+    flock: (pid, file) => flockWait(pid, file, { run, read }) });
+  assert.deepEqual(records, ["/x/logs/stall-10-7.txt",
+    "/x/logs/stall-10-7-page-12.txt; flock.file=/c/metal/shaders.data; flock.holder=31 MTLCompilerService"]);
+  assert.deepEqual(calls.map(([command, ...args]) => [command, args[0] === "-e" ? ["-e", "<probe>", ...args.slice(2)] : args].flat()), [
+    ["/usr/sbin/lsof", "-n", "-P", "-F", "pcftn", "-p", "12"],
+    ["/usr/bin/perl", "-e", "<probe>", "--", "/c/metal/shaders.data", "/c/web.db"],
+    ["/usr/sbin/lsof", "-n", "-P", "-F", "pcftn", "--", "/c/metal/shaders.data"],
+  ]);
+});
+
+test("a flock wait whose holder cannot be identified names why in the record", async () => {
+  const { flockWait, flockFields } = await import("../stall-sample.mjs");
+  const wait = (openers) => flockWait(12, "/x/page.txt", { read: async () => FLOCK_SAMPLE, run: commands({
+    "/usr/sbin/lsof 12": { status: 0, stdout: LSOF_PAGE },
+    "/usr/bin/perl /c/web.db": { status: 0, stdout: PROBE_PAGE },
+    "/usr/sbin/lsof /c/metal/shaders.data": { status: 0, stdout: openers },
+  }, []) }).then(flockFields);
+  assert.equal(await wait(opener(12, "WebContent", 7) + opener(31, "WebContent", 4) + opener(32, "WebContent", 5)),
+    "; flock.file=/c/metal/shaders.data; flock.holder.error=one of the processes that have the file open holds it: 31 WebContent, 32 WebContent");
+  assert.equal(await wait(opener(12, "WebContent", 7)),
+    "; flock.file=/c/metal/shaders.data; flock.holder.error=no other process of this user has /c/metal/shaders.data open");
+  // A process that has the file open twice may hold the lock on one description and wait on the other.
+  assert.equal(await wait(opener(12, "WebContent", 7) + "f8\ntREG\nn/c/metal/shaders.data\n"),
+    "; flock.file=/c/metal/shaders.data; flock.holder=12 WebContent");
+});
+
+test("a flock wait whose file cannot be identified names why in the record", async () => {
+  const { flockWait, flockFields } = await import("../stall-sample.mjs");
+  const wait = (lsof, probe) => flockWait(12, "/x/page.txt", { read: async () => FLOCK_SAMPLE, run: commands({
+    "/usr/sbin/lsof 12": { status: 0, stdout: lsof },
+    "/usr/bin/perl /c/web.db": { status: 0, stdout: probe },
+  }, []) }).then(flockFields);
+  assert.equal(await wait("p12\ncWebContent\nftxt\ntREG\nn/System/WebContent\n", ""), "; flock.file.error=process 12 has no regular file open");
+  assert.equal(await wait(LSOF_PAGE, "none\t/c/metal/shaders.data\nlocked\t12\t/c/web.db\n"),
+    "; flock.file.error=no file that process 12 has open holds a lock of flock");
+  assert.equal(await wait(LSOF_PAGE, "locked\t-1\t/c/metal/shaders.data\nlocked\t-1\t/c/web.db\n"),
+    "; flock.file.error=2 files that process 12 has open hold a lock of flock: /c/metal/shaders.data, /c/web.db");
+  assert.equal(await wait(LSOF_PAGE, "locked\t-1\t/c/metal/shaders.data\nerror\tPermission denied\t/c/web.db\n"),
+    "; flock.file.error=the lock of /c/web.db not read: Permission denied");
+});
+
+test("a page process that waits in no flock has no flock fields in its record", async () => {
+  const { flockWait, sampleStall } = await import("../stall-sample.mjs");
+  const calls = [];
+  const records = await sampleStall({ host: 10, pages: [12], directory: "/x/logs", time: 7, sample: (pid, file) => file,
+    flock: (pid, file) => flockWait(pid, file, { run: commands({}, calls), read: async () => IDLE_SAMPLE }) });
+  assert.deepEqual(records, ["/x/logs/stall-10-7.txt", "/x/logs/stall-10-7-page-12.txt"]);
+  assert.deepEqual(calls, []);
+});
+
+test("a flock wait that cannot be read is named in the record with the reason", async () => {
+  const { flockWait, sampleStall } = await import("../stall-sample.mjs");
+  const record = async (read, run) => (await sampleStall({ host: 10, pages: [12], directory: "/x/logs", time: 7, sample: (pid, file) => file,
+    flock: (pid, file) => flockWait(pid, file, { run, read }) }))[1];
+  assert.equal(await record(async () => FLOCK_SAMPLE, async () => ({ status: 1, stdout: "", stderr: "" })),
+    "/x/logs/stall-10-7-page-12.txt; flock.error=/usr/sbin/lsof -n -P -F pcftn -p 12 exited with 1: no standard error");
+  assert.equal(await record(async () => "Call graph:\n", commands({}, [])),
+    "/x/logs/stall-10-7-page-12.txt; flock.error=the sample has no section \"Sort by top of stack, same collapsed\"");
+  assert.equal(await record(async () => FLOCK_SAMPLE, commands({ "/usr/sbin/lsof 12": { status: 0, stdout: LSOF_PAGE },
+    "/usr/bin/perl /c/web.db": { status: 0, stdout: "locked\t-1\t/c/metal/shaders.data\n" } }, [])),
+  "/x/logs/stall-10-7-page-12.txt; flock.error=the lock probe answered 1 of 2 files");
+});
+
+test("lsof and the lock probe of macOS name the file and the holder of a real flock wait", { timeout: 20000 }, async (t) => {
+  const { spawn } = await import("node:child_process");
+  const { realpathSync, writeFileSync } = await import("node:fs");
+  const { flockWait } = await import("../stall-sample.mjs");
+  const folder = realpathSync(mkdtempSync(join(tmpdir(), "stall-flock-")));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const file = join(folder, "shaders.data");
+  writeFileSync(file, "");
+  const started = (script, word) => new Promise((resolve, reject) => {
+    const child = spawn("/usr/bin/perl", ["-e", script, file], { stdio: ["ignore", "pipe", "ignore"] });
+    t.after(() => child.kill("SIGKILL"));
+    child.on("error", reject);
+    child.stdout.on("data", (data) => { if (String(data).includes(word)) resolve(child); });
+  });
+  const holder = await started('use Fcntl ":flock"; $| = 1; open(my $f, "<", $ARGV[0]) or die; flock($f, LOCK_EX) or die; print "held\\n"; sleep 60', "held");
+  const waiter = await started('use Fcntl ":flock"; $| = 1; open(my $f, "<", $ARGV[0]) or die; print "opened\\n"; flock($f, LOCK_EX) or die; sleep 60', "opened");
+  assert.deepEqual(await flockWait(waiter.pid, "/x/page.txt", { read: async () => FLOCK_SAMPLE }),
+    { file, holder: { pid: holder.pid, command: "perl" } });
 });

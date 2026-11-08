@@ -2,7 +2,8 @@
 // reports its result or its failure, so no sample process outlives the check (F292-47).
 import assert from "node:assert/strict";
 import * as childProcess from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { mock } from "node:test";
@@ -21,7 +22,7 @@ mock.module("node:child_process", {
         return;
       }
       if (command !== "/usr/bin/sample") throw new Error(`unexpected execFile: ${command}`);
-      running.push({ pid: Number(args[0]), callback });
+      running.push({ pid: Number(args[0]), file: args[args.indexOf("-file") + 1], callback });
     },
   },
 });
@@ -30,11 +31,16 @@ mock.module("../event-log.mjs", {
 });
 const { finishSession, Session } = await import("../app.mjs");
 
+// The top-of-stack section of a report of /usr/bin/sample whose threads wait in the run loop of the process.
+const SAMPLE_REPORT = "Sort by top of stack, same collapsed (when >= 5):\n        mach_msg2_trap  (in libsystem_kernel.dylib)        876\n        __workq_kernreturn  (in libsystem_kernel.dylib)        876\n";
+
 const settle = async () => { for (let turn = 0; turn < 20; turn++) await new Promise((resolve) => setImmediate(resolve)); };
 
 // A session whose request answers when the check calls answer, after the stall timer has started the samples.
 function stalledSession(t) {
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-session-"));
+  // The host of a running application holds the logs folder of its configuration, where the samples write their reports.
+  mkdirSync(join(configDir, "logs"));
   t.after(() => rmSync(configDir, { recursive: true, force: true }));
   let answer;
   const client = {
@@ -68,7 +74,12 @@ test("the session finish waits for a stall sample that a request answered after 
   const finish = finishSession(check, session, () => {}).then(() => { finished = true; });
   await settle();
   assert.equal(finished, false, "the session finished while its stall sample processes still ran");
-  for (const { callback } of running) callback(null, "", "");
+  // A sample that ends writes its report file in the form of /usr/bin/sample; its threads wait in no flock here.
+  for (const { file, callback } of running) {
+    assert.ok(existsSync(dirname(file)), `the folder of the sample report ${file} does not exist`);
+    writeFileSync(file, SAMPLE_REPORT);
+    callback(null, "", "");
+  }
   await finish;
   const logs = join(session.app.configDir, "logs").replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   assert.deepEqual(diagnostics.filter((line) => line.startsWith("stall sample")).map((line) => new RegExp(

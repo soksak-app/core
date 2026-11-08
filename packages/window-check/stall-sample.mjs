@@ -2,7 +2,7 @@
 // not answer within the limit can be seen only then, so the check records every thread of the host process at that
 // moment with sample of macOS. A process of the same user can be sampled without privilege.
 import { execFile } from "node:child_process";
-import { statfs } from "node:fs/promises";
+import { readFile, statfs } from "node:fs/promises";
 import { loadavg } from "node:os";
 import { join } from "node:path";
 
@@ -127,15 +127,143 @@ export async function pageProcesses(host, run = runProcess) {
 }
 
 /**
+ * Whether a thread of the process that the text of sample describes waited in flock(2). A thread that waits there is at
+ * the top of its stack in `flock` of libsystem_kernel, and sample lists the top of each stack in the section `Sort by top
+ * of stack, same collapsed`, one frame in each line with its count, until an empty line. It fails when the text has no
+ * such section, because then no answer can be read from it.
+ */
+export function waitsInFlock(text) {
+  const lines = String(text).split("\n");
+  const start = lines.findIndex((line) => line.startsWith("Sort by top of stack, same collapsed"));
+  if (start === -1) throw new Error("the sample has no section \"Sort by top of stack, same collapsed\"");
+  const end = lines.findIndex((line, index) => index > start && line.trim() === "");
+  return lines.slice(start + 1, end === -1 ? lines.length : end)
+    .some((line) => /^\s+flock\s+\(in libsystem_kernel\.dylib\)\s+\d+\s*$/.test(line));
+}
+
+/**
+ * The open files of the field output of `lsof -F pcftn` (lsof(8), OUTPUT FOR OTHER PROGRAMS), as { pid, command, fd,
+ * type, name }. Each line is one field: its first character names it (`p` process, `c` command, `f` descriptor, `t` type,
+ * `n` name) and the rest is its value; a `p` line starts a process and an `f` line starts a file of that process. It
+ * fails on a line of another field or a file before its process, because the output then is not what was asked for.
+ */
+export function lsofFiles(stdout) {
+  const files = [];
+  let owner = null;
+  for (const line of String(stdout).split("\n")) {
+    if (line === "") continue;
+    const [field, value] = [line[0], line.slice(1)];
+    if (field === "p") owner = { pid: Number(value), command: null };
+    else if (owner === null) throw new Error(`lsof printed the field ${JSON.stringify(line)} before a process`);
+    else if (field === "c") owner.command = value;
+    else if (field === "f") files.push({ pid: owner.pid, command: owner.command, fd: value, type: null, name: null });
+    else if (field !== "t" && field !== "n") throw new Error(`lsof printed the field ${JSON.stringify(line)}, which was not asked for`);
+    else if (files.length === 0 || files.at(-1).pid !== owner.pid) throw new Error(`lsof printed the field ${JSON.stringify(line)} before a file`);
+    else files.at(-1)[field === "t" ? "type" : "name"] = value;
+  }
+  return files;
+}
+
+// The probe of the locks of files. F_GETLK of fcntl(2) with a write lock over the whole file answers the first lock of
+// another open file description that conflicts with it, a shared or an exclusive one. For a lock of flock(2) its l_pid is
+// -1, because such a lock belongs to an open file description and not to a process; for a lock of fcntl it is the pid
+// of the owner. struct flock of macOS is { off_t l_start; off_t l_len; pid_t l_pid; short l_type; short l_whence; }.
+// No program of macOS other than perl calls fcntl for another file, and lsof reports no lock of flock on macOS.
+const LOCK_PROBE = 'use Fcntl; for my $path (@ARGV) { my $f; unless (open($f, "<", $path)) { print "error\\t$!\\t$path\\n"; next } ' +
+  'my $s = pack("q q l s s", 0, 0, 0, F_WRLCK, 0); unless (fcntl($f, F_GETLK, $s)) { print "error\\t$!\\t$path\\n"; next } ' +
+  'my (undef, undef, $pid, $type) = unpack("q q l s s", $s); print $type == F_UNLCK ? "none\\t$path\\n" : "locked\\t$pid\\t$path\\n" }';
+
+/**
+ * The locks of paths that the output of LOCK_PROBE names, in the order of paths, as { path, lock } with lock `none`, or
+ * { pid } of the holder (-1 for a lock of flock), or { error } when the probe could not open or ask the file. It fails
+ * when the output does not answer each path in its order.
+ */
+export function probedLocks(paths, stdout) {
+  const lines = String(stdout).split("\n").filter((line) => line !== "");
+  if (lines.length !== paths.length) throw new Error(`the lock probe answered ${lines.length} of ${paths.length} files`);
+  return paths.map((path, index) => {
+    const fields = lines[index].split("\t");
+    const answered = fields.slice(fields[0] === "none" ? 1 : 2).join("\t");
+    if (answered !== path) throw new Error(`the lock probe answered ${JSON.stringify(lines[index])} for ${path}`);
+    if (fields[0] === "none") return { path, lock: "none" };
+    if (fields[0] === "locked" && /^-?\d+$/.test(fields[1])) return { path, lock: { pid: Number(fields[1]) } };
+    if (fields[0] === "error") return { path, lock: { error: fields[1] } };
+    throw new Error(`the lock probe answered ${JSON.stringify(lines[index])} for ${path}`);
+  });
+}
+
+// The stdout of a command of the flock reading, or its failure with the command and its reason.
+async function commandOutput(run, command, args) {
+  const result = await run(command, args);
+  const named = `${command} ${args.join(" ")}`;
+  if (result.error) throw new Error(`${named}: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`${named} exited with ${result.status}: ${String(result.stderr).trim() || "no standard error"}`);
+  return String(result.stdout);
+}
+
+/**
+ * The file that process pid waits for in flock(2) and the process that holds its lock, read when the sample of pid in
+ * file shows a thread in flock, as { file } or { fileError } and, with a file, { holder: { pid, command } } or
+ * { holderError }. It is null when no thread waited in flock. macOS names no holder of a lock of flock, so the holder is
+ * read from the files open:
+ * - the file is the one regular file that pid has open on a numbered descriptor (`lsof -p`) and that holds a lock of
+ *   flock (LOCK_PROBE); a file of none or of several is named as fileError.
+ * - a lock of flock belongs to an open file description, so its holder has the file open: the holder is the one process
+ *   other than pid that has the file open (`lsof -- <file>`), or pid itself when it has the file open more than once.
+ *   No such process, or several, is named as holderError. lsof sees the processes of the same user only.
+ * It fails with the reason when sample text, lsof or the probe cannot be read.
+ *
+ * run(command, args)  an executor that resolves to a process result ({status, stdout, stderr}). read(file) resolves to
+ * the text of file. The checks replace both.
+ */
+export async function flockWait(pid, file, { run = runProcess, read = (path) => readFile(path, "utf8") } = {}) {
+  if (!waitsInFlock(await read(file))) return null;
+  const open = lsofFiles(await commandOutput(run, "/usr/sbin/lsof", ["-n", "-P", "-F", "pcftn", "-p", String(pid)]))
+    .filter((entry) => entry.pid === pid && /^\d+$/.test(entry.fd) && entry.type === "REG");
+  const paths = [...new Set(open.map((entry) => entry.name))];
+  if (paths.length === 0) return { fileError: `process ${pid} has no regular file open` };
+  const locks = probedLocks(paths, await commandOutput(run, "/usr/bin/perl", ["-e", LOCK_PROBE, "--", ...paths]));
+  const unread = locks.filter(({ lock }) => lock.error !== undefined);
+  if (unread.length > 0) return { fileError: `the lock of ${unread.map(({ path, lock }) => `${path} not read: ${lock.error}`).join(", ")}` };
+  const flocked = locks.filter(({ lock }) => lock.pid === -1).map(({ path }) => path);
+  if (flocked.length === 0) return { fileError: `no file that process ${pid} has open holds a lock of flock` };
+  if (flocked.length > 1) return { fileError: `${flocked.length} files that process ${pid} has open hold a lock of flock: ${flocked.join(", ")}` };
+  const [path] = flocked;
+  const openers = lsofFiles(await commandOutput(run, "/usr/sbin/lsof", ["-n", "-P", "-F", "pcftn", "--", path]));
+  const own = openers.filter((entry) => entry.pid === pid).length;
+  const candidates = [...new Map(openers.filter((entry) => entry.pid !== pid || own > 1)
+    .map((entry) => [entry.pid, { pid: entry.pid, command: entry.command }])).values()];
+  if (candidates.length === 1) return { file: path, holder: candidates[0] };
+  if (candidates.length === 0) return { file: path, holderError: `no other process of this user has ${path} open` };
+  return { file: path, holderError: `one of the processes that have the file open holds it: ${candidates.map((c) => `${c.pid} ${c.command}`).join(", ")}` };
+}
+
+/** The fields of the stall record of a page process for the answer of flockWait, or "" when it waited in no flock. */
+export function flockFields(wait) {
+  if (wait === null) return "";
+  if (wait.fileError !== undefined) return `; flock.file.error=${wait.fileError}`;
+  const holder = wait.holder !== undefined ? `flock.holder=${wait.holder.pid} ${wait.holder.command}` : `flock.holder.error=${wait.holderError}`;
+  return `; flock.file=${wait.file}; ${holder}`;
+}
+
+/**
  * Records the threads of the host host that did not answer and of its page processes pages in directory, and returns
  * for each process that file or the reason why it could not be recorded. The page may be read again and a WebContent
  * process may have ended, so when one process cannot be recorded the others are still recorded. It fails with the
  * reason when the host cannot be recorded. The file names share the host pid and time.
  */
-export async function sampleStall({ host, pages, directory, time = Date.now(), sample = sampleProcess }) {
+export async function sampleStall({ host, pages, directory, time = Date.now(), sample = sampleProcess, flock = flockWait }) {
   const base = join(directory, `stall-${host}-${time}`);
-  const results = await Promise.allSettled([host, ...pages].map(async (pid, index) =>
-    sample(pid, index === 0 ? `${base}.txt` : `${base}-page-${pid}.txt`)));
+  const results = await Promise.allSettled([host, ...pages].map(async (pid, index) => {
+    if (index === 0) return sample(pid, `${base}.txt`);
+    const file = await sample(pid, `${base}-page-${pid}.txt`);
+    // A page process that waits in flock names the file and the holder of its lock; a failed reading is named instead.
+    try {
+      return `${file}${flockFields(await flock(pid, file))}`;
+    } catch (error) {
+      return `${file}; flock.error=${error.message}`;
+    }
+  }));
   if (results[0].status === "rejected") {
     const errors = results.filter((result) => result.status === "rejected").map((result) => result.reason);
     if (errors.length === 1) throw errors[0];

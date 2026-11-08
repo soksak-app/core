@@ -1901,6 +1901,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F292-70-3",
+    implementation: [
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function waitsInFlock(text) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function lsofFiles(stdout) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function probedLocks(paths, stdout) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export function flockFields(wait) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a page process that waits in flock names the file it waits for and the process that holds its lock" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a flock wait whose holder cannot be identified names why in the record" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a flock wait whose file cannot be identified names why in the record" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a page process that waits in no flock has no flock fields in its record" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a flock wait that cannot be read is named in the record with the reason" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "lsof and the lock probe of macOS name the file and the holder of a real flock wait" },
+    ],
+    expected: "A stall record of a page process that waits in flock names the file it waits for and the process that holds its lock, or names why either cannot be read.",
+    levels: ["unit"],
+  },
+  {
     id: "F512",
     implementation: [{ file: "scripts/check-docs.mjs", symbol: "import { headingAnchors } from \"@soksak/kit/docs\";" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "check-docs fails on a section reference of a source, a message or a text whose document or anchor is missing" }],

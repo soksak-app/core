@@ -32,6 +32,18 @@ Diagnostic recording은 native stream 소유권이 퇴역한 뒤 finish가 넘�
 
 `<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다. 응답 정지 sample은 애플리케이션이 아니라 창 검사 harness가 쓴다. 응답하지 않는 host는 자신을 sample할 수 없기 때문이며, harness는 이어서 `diagnostics.stall.dump`를 보내 host가 파일 경로를 event로 저장하게 한다.
 
+harness는 sample 하나를 record 하나로 알린다. 각 파일의 경로를 `, `로 이은 뒤 `host.stall.dump at <boot>:<seq>` 또는 host가 저장하지 않은 이유가 온다. page process의 record는 그 경로이거나 `page <pid> not sampled: <reason>`이다. page process의 sample에서 한 thread가 `libsystem_kernel`의 `flock`에서 stack의 맨 위에 있으면(`sample`의 `Sort by top of stack, same collapsed` 구역), 그 경로 뒤에 그 대기의 field가 각각 `; ` 뒤에 붙는다.
+
+| Field | 값 |
+|---|---|
+| `flock.file=<path>` | process가 번호 있는 descriptor로 연 regular file 가운데(`lsof -n -P -F pcftn -p <pid>`) `fcntl(F_GETLK)`가 `l_pid` -1인 lock을 찾는 단 하나의 파일. macOS에서 `flock`의 lock은 이 형태다 |
+| `flock.holder=<pid> <command>` | `flock.file` 뒤. 기다리는 process 말고 그 파일을 연 단 하나의 process(`lsof -n -P -F pcftn -- <path>`), 또는 기다리는 process가 그 파일을 두 번 이상 열었으면 그 process. `flock`의 lock은 open file description에 속하기 때문이다 |
+| `flock.holder.error=<reason>` | `flock.file` 뒤, `flock.holder` 대신. 그런 process가 없거나, 파일을 연 process가 여럿이다 |
+| `flock.file.error=<reason>` | 둘 대신. 연 regular file이 없거나, `flock`의 lock을 가진 파일이 없거나 여럿이거나, lock을 읽지 못한 파일이 있다 |
+| `flock.error=<reason>` | 모두 대신. sample, `lsof` 또는 lock probe를 읽지 못했다 |
+
+macOS는 `flock`의 lock을 가진 process를 알려 주지 않는다. `lsof`는 그 lock을 보고하지 않고 `F_GETLK`는 `l_pid` -1로 답하므로, holder는 그 파일을 연 process에서 읽는다. `lsof`는 같은 user의 process만 본다. lock probe는 `/usr/bin/perl`의 `fcntl(F_GETLK)`이다. macOS에서 다른 파일의 lock을 묻는 program은 이것뿐이다. `flock`에서 기다리지 않는 page process의 record에는 이 field가 없다.
+
 ScreenCaptureKit frame event의 `displayTime`은 WindowServer가 해당 capture frame을 표시한 mach absolute time이다. Capture callback이 실행된 시각이 아니며 모든 display refresh를 보고하지도 않는다. `minimumFrameInterval`은 수신 update 간격을 제한할 수 있는 희망 최소 간격이며 그 cadence로 update를 보장하지 않는다. 따라서 capture trace만으로 capture sample 누락과 애플리케이션의 실제 pixel presentation 간격이 길어진 경우를 구분할 수 없다. Presentation 비교는 표시된 drawable을 보고하는 문서화된 신호를 사용하고 캡처된 pixel을 정확한 drawable identity와 연결해야 한다. Rendering callback이나 refresh notification만으로 해당 pixel의 표시를 입증할 수 없다. ScreenCaptureKit은 바뀌지 않은 pixel ID를 여러 complete sample에서 다시 보고할 수 있다. 새 drawable을 뜻하는 값은 아니므로 각 sample과 display time을 보존한다. 고유 ID가 빠지면 비교는 불완전하다. ScreenCaptureKit의 캡처 frame 표시 시각과 drawable 표시 시각은 별도 API 관측값이다. 각 source의 cadence를 변환해 비교하고 signed offset을 기록하되, 일치하는 pixel의 timestamp가 같거나 앞뒤 순서가 정해졌다고 가정하지 않는다.
 
 Capture마다 `callback-status.jsonl`은 ScreenCaptureKit callback 하나당 record 하나를 쓰며 최대 4096개까지 보존한다. `callbackTime`, `writeStartTime`, `writeCompleteTime`, `displayTime`, `imageMatchStartTime`, `imageMatchCompleteTime`, `identityDecodeEnqueueStartTime`, `identityDecodeEnqueueCompleteTime`은 값이 있으면 raw mach absolute tick을 10진 문자열로 기록한다. 단계가 실행되지 않은 tick 필드는 JSON `null`이다. Vision은 비동기로 실행하므로 callback record의 `frameIdentityDecodeStartTime`과 `frameIdentityDecodeCompleteTime`은 계속 `null`이다. `machTimebaseNumerator`와 `machTimebaseDenominator`는 해당 callback에서 읽은 timebase다. Image-match tick은 `sp_image_capture_match_sample` 호출을 감싼다. Identity enqueue tick은 source/region snapshot, ROI 복사, bounded decoder admission을 감싸며 Vision 실행 시간은 포함하지 않는다. 각 decoded-frame row는 `decodeEnqueuedTime`, `decodeStartTime`, `decodeCompleteTime`을 raw Mach tick으로 기록하고 해당 row에서 Vision이 실행되지 않으면 `null`로 남긴다. `writeCompleteTime`은 동기 callback 처리가 끝난 시각이며 비동기 frame writer 또는 identity decoder 완료 시각은 아니다. 이 측정은 변환 duration을 추가하지 않는다. 비동기 QR decoder timing과 짧은 callback latency만으로 capture frame cadence를 입증하지 않는다. IME 기능 acceptance는 [검증](verification.ko.md)의 stage-proof contract를 따르며 capture gap은 별도 측정으로 남긴다. 단계 tick이 빠졌다고 0 duration으로 간주하지 않는다.
