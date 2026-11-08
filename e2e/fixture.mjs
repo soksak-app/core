@@ -29,6 +29,19 @@ export const replacePlaceholders = (s) => start.replacePlaceholders(s, START_PLU
 /** Waits until the active tab of the focused card is a ready START_PLUGIN tab that registered START_ENTRIES and returns it. */
 export const startTab = (s) => start.startTab(s, { startPlugin: START_PLUGIN, startEntries: START_ENTRIES });
 
+/**
+ * Paints the document region of the START_PLUGIN tab `surface` (inset 8pt in its view) in the CSS colour `colour` and returns once
+ * the document reports it. The document applies a posted colour once its script listens, which its first report tells; a colour
+ * posted before its load commits is refused, and one posted before its script listens is lost
+ * (docs/spec/native-surfaces.md#document-regions).
+ */
+export async function paintProbeDocument(s, surface, colour) {
+  await s.until("layoutprobe.document", (value) => value?.reported === true, `the document of ${surface} did not report`, { surface });
+  await s.run("layoutprobe.document.color", { color: colour }, surface);
+  await s.until("layoutprobe.document", (value) => value?.color === colour,
+    `${surface} did not paint its document region ${colour}`, { surface });
+}
+
 /** The manifest of the layout probe (e2e/fixtures/layout-probe/layoutprobe/plugin.json). */
 const LAYOUT_PROBE_MANIFEST = fileURLToPath(new URL("fixtures/layout-probe/layoutprobe/plugin.json", import.meta.url));
 

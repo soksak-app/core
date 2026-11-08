@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, paintProbeDocument } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { rasterRow } from "./outside.mjs";
 
@@ -16,12 +16,7 @@ const MEASURED = [30, 30, 30];
  * region (inset 8pt in the view) covers. The check drags the bottom boundary of the card, so the top and the right edge do not move.
  */
 async function probeMarks(s, surface) {
-  const colour = `rgb(${MEASURED.join(", ")})`;
-  // The document applies a posted colour once its script listens, which its first report tells; a colour posted before its load
-  // commits is refused, and one posted before its script listens is lost (docs/spec/native-surfaces.md#document-regions).
-  await s.until("layoutprobe.document", (value) => value.reported === true, `the document of ${surface} did not report`, { surface });
-  await s.run("layoutprobe.document.color", { color: colour }, surface);
-  await s.until("layoutprobe.document", (value) => value.color === colour, `${surface} did not paint its document region`, { surface });
+  await paintProbeDocument(s, surface, `rgb(${MEASURED.join(", ")})`);
   await s.presented();
   const frame = (await s.get("host.window")).surfaces.find((item) => item.id === surface)?.frame;
   if (!frame?.width) throw new Error(`the start surface ${surface} has no declared frame`);
