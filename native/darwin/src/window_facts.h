@@ -38,8 +38,8 @@ char *sp_window_facts(void *window, void *view);
 char *sp_window_color_space_facts(void *window);
 
 // Hit test result {view, main, identifier, hit} at window coordinates (x, y). view is the address of the
-// WKWebView that contains the point and is 0 when there is none. main tells whether that web view is the
-// main page. identifier is the identifier of the hit view. hit is {class, frame} and is null when there is
+// WKWebView that contains the point and is 0 when there is none. main tells whether the point is on the workbench: the
+// registered main web view, or, in a window without one, a view that is in no web view and outside view. identifier is the identifier of the hit view. hit is {class, frame} and is null when there is
 // no leaf view. frame is in window coordinates with the top left of the content area as the origin.
 // view is the view that holds the container of the surface hosts. Returns NULL when there is no window or view is not in it.
 char *sp_window_hit(void *window, void *view, double x, double y);

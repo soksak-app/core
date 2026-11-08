@@ -271,7 +271,12 @@ char *sp_window_hit(void *handle, void *surfaceView, double x, double y) {
             @"frame": windowRect(window, [hit convertRect:hit.bounds toView:nil]),
         };
     }
-    return copyJSON(@{ @"view": @((unsigned long long)(uintptr_t)owner), @"main": owner && owner == mainWebview(window) ? @YES : @NO,
+    // The workbench is the registered main web view; a window without one draws its workbench in the views outside its web views and
+    // outside the view that holds its surface hosts.
+    WKWebView *registered = mainWebview(window);
+    BOOL workbench = registered ? owner != nil && owner == registered
+        : hit != nil && owner == nil && ![hit isDescendantOf:(NSView *)surfaceView];
+    return copyJSON(@{ @"view": @((unsigned long long)(uintptr_t)owner), @"main": @(workbench),
         @"identifier": hit.identifier ?: @"", @"hit": hitFacts });
 }
 
