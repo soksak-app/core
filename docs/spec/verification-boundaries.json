@@ -182,11 +182,6 @@
       "reason": "Checks opt-in capture identity against the presented image and during drag (capture) and uses the terminal as the image; replace with a fixture view that presents identity-marked frames (floor-page plus identity)."
     },
     {
-      "file": "e2e/capture-still.test.mjs",
-      "owner": "core",
-      "reason": "Checks a still PNG's native bounds and the settings modal in stills, with the terminal only as default content; plain-view probe."
-    },
-    {
       "file": "e2e/card-fullscreen.test.mjs",
       "owner": "core",
       "reason": "Checks card fullscreen geometry, tab switch and refused layout tools, with terminal or browser tabs as vehicles; plain-view probe tabs."
@@ -225,11 +220,6 @@
       "file": "e2e/editor.test.mjs",
       "owner": "plugin:editor",
       "reason": "Editor opening, saving, save error and ask-before-close of its documents (its save-close core part is already covered by the save-close probe)."
-    },
-    {
-      "file": "e2e/event-log.test.mjs",
-      "owner": "core",
-      "reason": "Checks the host event log and the trace (logging); one test traces sidecar memory, which should come from a fixture plugin with a fake sidecar process."
     },
     {
       "file": "e2e/files.test.mjs",
@@ -275,11 +265,6 @@
       "file": "e2e/input-records.test.mjs",
       "owner": "core",
       "reason": "Checks that a typed key leaves a record in every layer of the input path (native, host, workbench, sidecar request). The terminal and its VT sidecar only carry the key; a new fake fixture capability would replace them: an echo surface backed by a fake sidecar that logs the key it receives as `sidecar.*.request`."
-    },
-    {
-      "file": "e2e/late-reply.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the host discards a surface reply that arrives after its surface closed (exposure relay). It only opens a browser tab to have a surface; `plain-view` can replace it."
     },
     {
       "file": "e2e/library.test.mjs",
@@ -427,11 +412,6 @@
       "reason": "Checks that a full-screen card lists the space's apps by card and switches to a picked one. `plain-view` tabs would replace terminal and browser."
     },
     {
-      "file": "e2e/surface-sync-turn.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a surface layout runs in one main-thread turn. `plain-view` would replace the terminal card."
-    },
-    {
       "file": "e2e/tab-press-keys.test.mjs",
       "owner": "core",
       "reason": "Checks that keys right after a tab press are held and reach the tab whole (native-surfaces keyboard). A keyboard-echo `plain-view` would replace the terminal."
@@ -445,11 +425,6 @@
       "file": "e2e/terminal-font.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks the terminal's font.family fallback and wide-glyph centering."
-    },
-    {
-      "file": "e2e/terminal-fullscreen-fit.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a view's region returns to the card geometry in the same presentation that ends card full screen. A fixture that reports its size would replace the terminal's rows and columns."
     },
     {
       "file": "e2e/terminal-hidden-reload.test.mjs",
