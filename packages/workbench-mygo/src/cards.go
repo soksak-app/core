@@ -242,7 +242,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			})
 			return
 		}
-		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true)
+		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true, false)
 	})
 }
 
@@ -508,19 +508,23 @@ func (s *Shell) headTools(id string) []headTool {
 // drawTools draws the tools of a card.
 func (s *Shell) drawTools(c *ui.Context, id string) {
 	for _, tool := range s.headTools(id) {
-		button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled)
+		button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed)
 		if tool.Do == "fullscreen" {
 			button.Checked(tool.Pressed)
 		}
 	}
 }
 
-// headButton draws a button of a card head with an icon.
-func (s *Shell) headButton(c *ui.Context, name, command, item string, params any, title string, icon *ui.SVG, enabled bool) ui.Element {
+// headButton draws a button of a card head with an icon. A pressed switch is drawn in the focus color, also under the pointer
+// (.chrome__act[aria-pressed=true] of packages/workbench/app.css).
+func (s *Shell) headButton(c *ui.Context, name, command, item string, params any, title string, icon *ui.SVG, enabled, pressed bool) ui.Element {
 	button := s.binder.Press(c, name, command, item, params)
 	s.anchored(name+"/"+item, button)
 	s.dressHeadButton(button, title, !enabled)
 	color := s.headIconColor(button)
+	if pressed {
+		color = s.palette.Focus
+	}
 	button.Children(func() {
 		ui.Icon(c, icon).Size(s.metrics.cardIcon, s.metrics.cardIcon).TextColor(color)
 	})

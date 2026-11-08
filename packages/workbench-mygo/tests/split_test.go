@@ -995,3 +995,38 @@ func TestCardSplitDistinguishesMissingEmptyAndNullSide(t *testing.T) {
 		})
 	}
 }
+
+// focusInk counts the pixels of box that are drawn in the focus color, within the tolerance of e2e/card-fullscreen.test.mjs.
+func (f *shellFixture) focusInk(box ui.Rect) int {
+	f.t.Helper()
+	focus := opaque(f.palette().Focus)
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / f.tester.ElementTree()[0].Bounds.W
+	within := func(a, b uint8) bool { return int(a)-int(b) <= 40 && int(b)-int(a) <= 40 }
+	count := 0
+	for x := int(box.X * scale); x < int((box.X+box.W)*scale); x++ {
+		for y := int(box.Y * scale); y < int((box.Y+box.H)*scale); y++ {
+			if pixel := image.RGBAAt(x, y); within(pixel.R, focus.R) && within(pixel.G, focus.G) && within(pixel.B, focus.B) {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// The fullscreen tool of a fullscreen card is a pressed switch, which the page draws in the focus color whether or not the pointer
+// is over it (.chrome__act[aria-pressed=true] of packages/workbench/app.css); the close tool beside it keeps the muted color.
+func TestThePressedFullscreenToolIsDrawnInTheFocusColor(t *testing.T) {
+	f := narrowCard(t, 1, "a")
+	f.settle()
+	if ink := f.focusInk(f.box("core.card.fullscreen", "main")); ink != 0 {
+		t.Fatalf("the fullscreen tool of a card that is not fullscreen has %d pixels of the focus color", ink)
+	}
+	f.click("core.card.fullscreen", "main")
+	f.tester.Move(1, 1)
+	f.settle()
+	icon, closing := f.focusInk(f.box("core.card.fullscreen", "main")), f.focusInk(f.box("core.card.close", "main"))
+	if icon == 0 || closing != 0 {
+		t.Fatalf("the pressed fullscreen tool is not drawn in the focus color: icon %d px, close %d px", icon, closing)
+	}
+}
