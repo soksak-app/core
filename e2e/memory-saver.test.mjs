@@ -74,7 +74,7 @@ for (const app of Object.values(APPS)) {
     await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 },
       log: { lifecycle: "info" }, reads: ["workbench.tab.restored", "workbench.tab.unloaded", "workbench.tab.unload.skipped"] }));
     const pages = await serve(s);
-    const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok") });
+    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     s.cleanup(async () => {
       await s.windows(1, "the page was not ready for the cleanup");

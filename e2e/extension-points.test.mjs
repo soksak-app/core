@@ -19,7 +19,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);
-    const folder = fixtureRegistry({ sok: join(dirname(app.binary), "sok") });
+    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     s.cleanup(async () => {
       await s.windows(1, "the page was not ready for the cleanup");

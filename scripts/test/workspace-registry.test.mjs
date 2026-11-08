@@ -174,9 +174,9 @@ function workspaceFixture(t) {
 
 const releaseText = (out, name) => readFileSync(join(out, "releases", name), "utf8");
 
-test("SIDECARS=diagnostic releases each sidecar with PROFILE=release FEATURES=diagnostics and records the revision of each sidecar repository", { timeout: 30000 }, (t) => {
+test("SIDECARS=diagnostic releases each sidecar with PROFILE=release FEATURES=diagnostics and records the revision of each sidecar repository", { timeout: 30000 }, async (t) => {
   const fixture = workspaceFixture(t);
-  const result = buildWorkspaceRegistry(fixture.sok, fixture.out, { sidecars: "diagnostic", root: fixture.root });
+  const result = await buildWorkspaceRegistry(fixture.sok, fixture.out, { sidecars: "diagnostic", root: fixture.root });
   assert.deepEqual(result, { index: join(fixture.out, "index.json"), plugins: 1, sidecars: 2, packs: 1 });
   assert.equal(releaseText(fixture.out, "scope-sidecar-engine-0.0.2-linux-x64.tgz"), "release|diagnostics");
   assert.equal(releaseText(fixture.out, "scope-sidecar-files-0.0.3-linux-x64.tgz"), "built");
@@ -187,11 +187,11 @@ test("SIDECARS=diagnostic releases each sidecar with PROFILE=release FEATURES=di
   ] });
 });
 
-test("the default registry releases each sidecar as its make release builds it and removes the revision record of an earlier diagnostic run", { timeout: 30000 }, (t) => {
+test("the default registry releases each sidecar as its make release builds it and removes the revision record of an earlier diagnostic run", { timeout: 30000 }, async (t) => {
   const fixture = workspaceFixture(t);
   mkdirSync(fixture.out);
   writeFileSync(join(fixture.out, "sidecar-revisions.json"), JSON.stringify({ sidecars: [] }));
-  buildWorkspaceRegistry(fixture.sok, fixture.out, { root: fixture.root });
+  await buildWorkspaceRegistry(fixture.sok, fixture.out, { root: fixture.root });
   assert.equal(releaseText(fixture.out, "scope-sidecar-engine-0.0.2-linux-x64.tgz"), "|");
   assert.equal(releaseText(fixture.out, "scope-sidecar-files-0.0.3-linux-x64.tgz"), "built");
   assert.equal(existsSync(join(fixture.out, "sidecar-revisions.json")), false);
@@ -281,12 +281,12 @@ function diagnosticRegistry(t) {
   return { work, registry, release, sok: fakeSok(work), out: join(work, "registry-public") };
 }
 
-test("PLUGINS=public writes the public plugin entries beside the sidecar entries of make build-registry SIDECARS=diagnostic and builds no release", { timeout: 30000 }, (t) => {
+test("PLUGINS=public writes the public plugin entries beside the sidecar entries of make build-registry SIDECARS=diagnostic and builds no release", { timeout: 30000 }, async (t) => {
   const fixture = diagnosticRegistry(t);
   mkdirSync(join(fixture.out, "plugins"), { recursive: true });
   writeFileSync(join(fixture.out, "plugins", "earlier.json"), "{}");
   const index = publicIndex([publicVersion("0.0.1", { [ENGINE]: "0.0.1" }), publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
-  const result = buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index);
+  const result = await buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index);
   assert.deepEqual(result, { index: join(fixture.out, "index.json"), plugins: 2, sidecars: 1, packs: 1,
     dropped: [{ id: "probe", version: "0.0.1", sidecar: ENGINE, range: "0.0.1" }] });
   const file = (...path) => JSON.parse(readFileSync(join(fixture.out, ...path), "utf8"));
@@ -299,16 +299,16 @@ test("PLUGINS=public writes the public plugin entries beside the sidecar entries
   assert.equal(existsSync(join(fixture.out, "core.json")), false);
 });
 
-test("PLUGINS=public fails when the checkout holds no sidecar releases of make build-registry SIDECARS=diagnostic", { timeout: 30000 }, (t) => {
+test("PLUGINS=public fails when the checkout holds no sidecar releases of make build-registry SIDECARS=diagnostic", { timeout: 30000 }, async (t) => {
   const index = publicIndex([publicVersion("0.0.2", { [ENGINE]: "^0.0.2" })]);
   const fixture = diagnosticRegistry(t);
   rmSync(fixture.release);
-  assert.throws(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
+  await assert.rejects(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
     /sidecars\/scope-sidecar-engine\.json: release .*scope-sidecar-engine-0\.0\.2-linux-x64\.tgz of linux-x64 is missing; run make build-registry SIDECARS=diagnostic first$/);
   rmSync(join(fixture.registry, "sidecar-revisions.json"));
-  assert.throws(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
+  await assert.rejects(() => buildPublicRegistry(fixture.sok, fixture.out, fixture.registry, index),
     /registry\/sidecar-revisions\.json is missing: --plugins public lists the sidecar releases that make build-registry SIDECARS=diagnostic writes; run make build-registry SIDECARS=diagnostic first$/);
-  assert.throws(() => buildPublicRegistry(fixture.sok, fixture.registry, fixture.registry, index),
+  await assert.rejects(() => buildPublicRegistry(fixture.sok, fixture.registry, fixture.registry, index),
     /^Error: --out .*registry is the folder of the sidecar releases; PLUGINS=public writes another folder$/);
 });
 

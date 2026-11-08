@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { FIXTURES, buildFixtureRegistry, fixtureSources, npmSidecarRelease, pluginEntry, pnpmPack, repositoryText,
+import { FIXTURES, STEP_TIMEOUT_MS, buildFixtureRegistry, fixtureSources, npmSidecarRelease, pluginEntry, pnpmPack, repositoryText,
   sidecarEntry, sidecarFileName } from "../fixture-registry.mjs";
 
 const SHA = "a".repeat(64);
@@ -53,7 +53,7 @@ test("the sources of the fixture registry are exactly the plugin folders and fak
   assert.deepEqual(fixtureSources(), { plugins, sidecars: folders("sidecars/**/sidecar.json") });
 });
 
-test("the fixture registry packs every fixture plugin into the pack fixtures and reads no path outside e2e/fixtures and no index", { timeout: 5000 }, (t) => {
+test("the fixture registry packs every fixture plugin into the pack fixtures and reads no path outside e2e/fixtures and no index", { timeout: 5000 }, async (t) => {
   const { plugins, sidecars } = fixtureSources();
   const out = mkdtempSync(join(tmpdir(), "fixture-registry-"));
   t.after(() => rmSync(out, { recursive: true, force: true }));
@@ -69,10 +69,10 @@ test("the fixture registry packs every fixture plugin into the pack fixtures and
   const released = [];
   let built;
   try {
-    built = buildFixtureRegistry("/bin/sok", out, {
-      pack: (dir, releases) => { packed.push(dir); return { release: join(releases, `${packed.length}.tgz`), sha256: SHA }; },
-      release: (dir, releases) => { released.push(dir); return { release: join(releases, "s.tgz"), sha256: SHA, platform: "darwin-arm64" }; },
-      build: (binary, folder) => ({ binary, folder }),
+    built = await buildFixtureRegistry("/bin/sok", out, {
+      pack: async (dir, releases) => { packed.push(dir); return { release: join(releases, `${packed.length}.tgz`), sha256: SHA }; },
+      release: async (dir, releases) => { released.push(dir); return { release: join(releases, "s.tgz"), sha256: SHA, platform: "darwin-arm64" }; },
+      build: async (binary, folder) => ({ binary, folder }),
     });
   } finally {
     mock.restoreAll();
@@ -88,15 +88,15 @@ test("the fixture registry packs every fixture plugin into the pack fixtures and
     { name: "fixtures", description: "Every fake plugin of the core fixtures.", plugins: ids });
   assert.deepEqual(fs.readdirSync(join(out, "plugins")).sort(), ids.map((id) => `${id}.json`).sort());
   assert.deepEqual(JSON.parse(readFileSync(join(out, "revoked.json"), "utf8")), { plugins: [], sidecars: [] });
-  // The module imports only Node.js built-ins and the platform selector and names no address, so it reads no registry index or
+  // The module imports only Node.js built-ins, the platform selector and the command supervision and names no address, so it reads no registry index or
   // plugin repository.
   const source = readFileSync(MODULE, "utf8");
   assert.deepEqual([...source.matchAll(/^import .* from "([^"]+)";$/gm)].map(([, from]) => from).filter((from) => !from.startsWith("node:")),
-    ["./platform/platform.js"]);
+    ["./platform/platform.js", "./test-command.mjs"]);
   assert.doesNotMatch(source, /https?:\/\/|\bfetch\(|target\/registry|workspace-registry/);
 });
 
-test("a fake sidecar of the fixtures is released with npm pack under its platform name and listed as the sidecar of its plugin", { timeout: 60000 }, (t) => {
+test("a fake sidecar of the fixtures is released with npm pack under its platform name and listed as the sidecar of its plugin", { timeout: 60000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "fixture-registry-root-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const sidecar = join(root, "sidecars", "worker");
@@ -116,13 +116,60 @@ test("a fake sidecar of the fixtures is released with npm pack under its platfor
   assert.deepEqual(fixtureSources(root), { plugins: [plugin], sidecars: [sidecar] });
   const out = join(root, "registry");
   const builds = [];
-  buildFixtureRegistry("/bin/sok", out, { root, pack: pnpmPack, release: (dir, releases) => npmSidecarRelease(dir, releases, "linux-x64"),
-    build: (binary, folder) => builds.push([binary, folder]) });
-  assert.deepEqual(builds, [["/bin/sok", out]]);
+  const signal = new AbortController().signal;
+  await buildFixtureRegistry("/bin/sok", out, { root, signal, pack: pnpmPack,
+    release: (dir, releases, options) => npmSidecarRelease(dir, releases, { ...options, platform: "linux-x64" }),
+    build: async (binary, folder, options) => builds.push([binary, folder, options]) });
+  assert.deepEqual(builds, [["/bin/sok", out, { signal, timeoutMs: undefined }]]);
   const entry = JSON.parse(readFileSync(join(out, "sidecars", "sok-check-worker.json"), "utf8"));
   const release = entry.versions[0].releases["linux-x64"];
   assert.equal(fileURLToPath(release.url), join(resolve(out), "releases", "sok-check-worker-0.0.1-linux-x64.tgz"));
   assert.match(release.sha256, /^[0-9a-f]{64}$/);
   assert.equal(entry.versions[0].protocol, 1);
   assert.deepEqual(JSON.parse(readFileSync(join(out, "plugins", "user.json"), "utf8")).versions[0].sidecars, { "@sok-check/worker": "^0.0.1" });
+});
+
+/** A fixtures root of one plugin and a folder that puts first on PATH a pnpm that sleeps; the test restores PATH. */
+function slowPackFixture(t) {
+  const work = mkdtempSync(join(tmpdir(), "fixture-registry-slow-"));
+  const plugin = join(work, "fixtures", "probe");
+  mkdirSync(plugin, { recursive: true });
+  writeFileSync(join(plugin, "plugin.json"), JSON.stringify({ id: "probe", name: "Probe" }));
+  writeFileSync(join(plugin, "package.json"), JSON.stringify({ name: "@sok-check/probe", version: "0.0.1", repository: "https://example.invalid/core" }));
+  mkdirSync(join(work, "bin"));
+  writeFileSync(join(work, "bin", "pnpm"), "#!/bin/sh\nexec sleep 30\n");
+  chmodSync(join(work, "bin", "pnpm"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${join(work, "bin")}:${path}`;
+  t.after(() => {
+    process.env.PATH = path;
+    rmSync(work, { recursive: true, force: true });
+  });
+  return { root: join(work, "fixtures"), plugin, out: join(work, "registry") };
+}
+
+test("a pack that exceeds the step limit fails the fixture registry build with the step that timed out", { timeout: 20000 }, async (t) => {
+  const fixture = slowPackFixture(t);
+  const builds = [];
+  const started = performance.now();
+  await assert.rejects(buildFixtureRegistry("/bin/sok", fixture.out, { root: fixture.root, timeoutMs: 300, build: async () => builds.push("build") }),
+    (error) => error.message.startsWith(`pack ${fixture.plugin}: timeout: `));
+  assert.ok(performance.now() - started < 10000, "the build did not stop at the step limit");
+  assert.deepEqual(builds, []);
+});
+
+test("an aborted signal stops the fixture registry build in its running step", { timeout: 20000 }, async (t) => {
+  const fixture = slowPackFixture(t);
+  const controller = new AbortController();
+  const builds = [];
+  const started = performance.now();
+  const build = buildFixtureRegistry("/bin/sok", fixture.out, { root: fixture.root, signal: controller.signal, build: async () => builds.push("build") });
+  setTimeout(() => controller.abort(), 300);
+  await assert.rejects(build, (error) => error.message.startsWith(`pack ${fixture.plugin}: cancelled: `));
+  assert.ok(performance.now() - started < 10000, "the build did not stop at the abort");
+  assert.deepEqual(builds, []);
+});
+
+test("the fixture registry bounds each step at 30000 ms", { timeout: 1000 }, () => {
+  assert.equal(STEP_TIMEOUT_MS, 30000);
 });

@@ -34,7 +34,7 @@ for (const app of Object.values(APPS)) {
       await withB3Out(b3Target(process.env, B3_MEASUREMENTS["view-drag"]), async (run) => {
         const terminal = await fresh(s, fixtureSettings(B3_SETTINGS["view-drag"]["0"]));
         const prepared = OPTIONS.floor
-          ? await prepareFloorDrag(t, s, await openFloorPage(s), app.configDir)
+          ? await prepareFloorDrag(t, s, await openFloorPage(s, { signal: t.signal }), app.configDir)
           : await prepareTerminalDrag(t, s, terminal, app.configDir);
         const { pageProcess } = await s.get("host.window");
         await runViewDrag({ options: OPTIONS, pageProcess, steps: {

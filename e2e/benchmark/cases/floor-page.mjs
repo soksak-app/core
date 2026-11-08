@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { buildFixtureRegistry } from "../../../scripts/fixture-registry.mjs";
+import { combineFailures } from "../../../scripts/test-command.mjs";
 import { pluginChangeApplied } from "../../fixture.mjs";
 
 /** The floor page plugin: its id and its folder. */
@@ -18,18 +19,26 @@ export const FLOOR_PAGE = Object.freeze({
   folder: fileURLToPath(new URL("../../fixtures/view-drag/floor-page/", import.meta.url)),
 });
 
+const removeFolder = (folder) => rmSync(folder, { recursive: true, force: true });
+
 /**
- * A new registry folder that holds the fixture registry (scripts/fixture-registry.mjs): every plugin of e2e/fixtures packed, the pack
- * fixtures and the index that the `sok registry build` of the executable `sok` writes. `build` writes it; a failed build removes the
- * folder. The caller removes the folder.
+ * Resolves with a new registry folder that holds the fixture registry (scripts/fixture-registry.mjs): every plugin of e2e/fixtures
+ * packed, the pack fixtures and the index that the `sok registry build` of the executable `sok` writes. `build` writes it under
+ * `signal`, each of its commands within the step limit of the fixture registry. A failed build removes the folder with `remove`; when
+ * the removal also fails, the build rejects with an AggregateError of both. The caller removes the folder.
  */
-export function fixtureRegistry({ sok, build = buildFixtureRegistry }) {
+export async function fixtureRegistry({ sok, signal, build = buildFixtureRegistry, remove = removeFolder }) {
   const folder = mkdtempSync(join(tmpdir(), "soksak-fixture-registry-"));
   try {
-    build(sok, folder);
+    await build(sok, folder, { signal });
   } catch (error) {
-    rmSync(folder, { recursive: true, force: true });
-    throw error;
+    let cleanupError = null;
+    try {
+      remove(folder);
+    } catch (cleanup) {
+      cleanupError = cleanup;
+    }
+    throw combineFailures(error, cleanupError);
   }
   return folder;
 }
@@ -44,17 +53,18 @@ async function pluginChange(s, run, action) {
 /**
  * Installs the floor page in the application of the session `s` from a fixture registry and opens it as the active tab of the terminal
  * card; returns the surface of the tab. The cleanups close the tab, remove the plugin, set the registry of the application back and
- * remove the registry folder. `registry()` writes the fixture registry, `applied(s, run, action)` runs a plugin change and waits until
- * it is applied, and `remove(folder)` removes the registry folder.
+ * remove the registry folder. `signal` cancels the build of the fixture registry. `registry()` writes the fixture registry,
+ * `applied(s, run, action)` runs a plugin change and waits until it is applied, and `remove(folder)` removes the registry folder.
  */
 export async function openFloorPage(s, {
-  registry = () => fixtureRegistry({ sok: join(dirname(s.app.binary), "sok") }),
+  signal,
+  registry = () => fixtureRegistry({ sok: join(dirname(s.app.binary), "sok"), signal }),
   applied = pluginChange,
   remove = (folder) => rmSync(folder, { recursive: true, force: true }),
 } = {}) {
   const { plugin } = FLOOR_PAGE;
   const before = await s.get("core.plugins");
-  const folder = registry();
+  const folder = await registry();
   s.cleanup(() => remove(folder));
   s.cleanup(async () => {
     if ((await s.get("core.plugins")).plugins.find((row) => row.id === plugin)?.installed) {

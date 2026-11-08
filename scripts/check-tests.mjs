@@ -1373,11 +1373,11 @@ const FEATURE_LINKS = [
   {
     id: "F502-2-5",
     implementation: [
-      { file: "scripts/workspace-registry.mjs", symbol: "export function buildWorkspaceRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export async function buildWorkspaceRegistry(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function sourceRevision(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function checkOptions(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export function publicRegistryEntries(" },
-      { file: "scripts/workspace-registry.mjs", symbol: "export function buildPublicRegistry(" },
+      { file: "scripts/workspace-registry.mjs", symbol: "export async function buildPublicRegistry(" },
       { file: "scripts/workspace-registry.mjs", symbol: "export async function readIndex(" },
     ],
     tests: [
@@ -11598,7 +11598,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/rust/src/registry.rs", symbol: "pub(crate) fn check_release_modules" },
       { file: "packages/sok/go/src/registry.go", symbol: "func checkReleaseModules" },
-      { file: "scripts/fixture-registry.mjs", symbol: "export function pnpmPack(" },
+      { file: "scripts/fixture-registry.mjs", symbol: "export async function pnpmPack(" },
     ],
     tests: [
       { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_entry_outside_package" },
