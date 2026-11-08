@@ -15,7 +15,7 @@ import { assertDragPerformance, assertHeldStatesShown, assertRoundTrips, measure
   transactionCadence } from "../../drag-measurement.mjs";
 import { outside } from "../../outside.mjs";
 import { declaredSlotInsets, effectiveCardCornerRadiusPt, measureViewFrameGeometry, VIEW_GEOMETRY_COLOR_TOLERANCE }
-  from "../../view-frame-geometry.mjs";
+  from "@soksak/window-check/view-frame-geometry.mjs";
 
 /** The floor page plugin: its id and its folder. */
 export const FLOOR_PAGE = Object.freeze({

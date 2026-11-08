@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { drag } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { valueProof } from "@soksak/window-check/view-content.mjs";
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "../../view-frame-geometry.mjs";
+import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "@soksak/window-check/view-frame-geometry.mjs";
 import { mapViewContentFramesToCapture, monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
   selectOneShotViewSourceFrame, withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
 

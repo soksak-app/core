@@ -30,6 +30,8 @@
     "./start.mjs": "./start.mjs",
     "./test-app.mjs": "./test-app.mjs",
     "./view-content.mjs": "./view-content.mjs",
+    "./view-frame-geometry.mjs": "./view-frame-geometry.mjs",
+    "./view-process-footprint.mjs": "./view-process-footprint.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -60,6 +62,8 @@
     "test-app.mjs",
     "soksak-test-app.mjs",
     "view-content.mjs",
+    "view-frame-geometry.mjs",
+    "view-process-footprint.mjs",
     "fixtures/"
   ],
   "bin": {

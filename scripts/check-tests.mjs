@@ -12507,8 +12507,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.14-5-4",
-    implementation: [{ file: "e2e/view-process-footprint.mjs", symbol: "export function parsePhysicalFootprint(" }],
-    tests: [{ file: "e2e/test/view-process-footprint.test.mjs", id: "physical footprint parser requires one safe positive byte row" }],
+    implementation: [{ file: "packages/window-check/view-process-footprint.mjs", symbol: "export function parsePhysicalFootprint(" }],
+    tests: [{ file: "packages/window-check/test/view-process-footprint.test.mjs", id: "physical footprint parser requires one safe positive byte row" }],
     expected: "The actual OS byte-footprint header yields one positive value for the requested process.",
     levels: ["unit"],
   },
@@ -12669,8 +12669,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.14-5-3",
-    implementation: [{ file: "e2e/view-process-footprint.mjs", symbol: "export function viewDocumentHistoryInventory(" }],
-    tests: [{ file: "e2e/test/view-process-footprint.test.mjs", id: "an unstarted child document has no PID footprint or document-history row" }],
+    implementation: [{ file: "packages/window-check/view-process-footprint.mjs", symbol: "export function viewDocumentHistoryInventory(" }],
+    tests: [{ file: "packages/window-check/test/view-process-footprint.test.mjs", id: "an unstarted child document has no PID footprint or document-history row" }],
     expected: "Unstarted documents remain evidence without becoming measured or shared processes.",
     levels: ["unit"],
   },

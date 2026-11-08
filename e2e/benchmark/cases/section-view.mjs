@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
 
 import { validateDiagnostics } from "@soksak/plugin-api";
 import { START_PLUGIN } from "../../fixture.mjs";
-import { effectiveCardCornerRadiusPt } from "../../view-frame-geometry.mjs";
+import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, waitForViewReadiness } from "../../view-metrics-collection.mjs";
 import { activeCoreTheme, markerDragObservation, markerLayoutObservation, requireMarkerColor } from "./marker-view.mjs";
 

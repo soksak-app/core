@@ -6,7 +6,7 @@ import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mj
 import { valueProof } from "@soksak/window-check/view-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
-  viewRootProcessPids } from "./view-process-footprint.mjs";
+  viewRootProcessPids } from "@soksak/window-check/view-process-footprint.mjs";
 
 const PROCESS_REQUEST = "host.trace.view.process-request";
 const PROCESS_READY = "host.trace.view.process-ready";

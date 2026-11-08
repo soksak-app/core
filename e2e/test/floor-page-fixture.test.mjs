@@ -7,7 +7,7 @@ import test from "node:test";
 import { checkViewPage, validateManifest } from "@soksak/plugin-api";
 import { dragGeometryFrame, FLOOR_COLOUR, FLOOR_PAGE, measureFloorLayoutFrame, openFloorPage, writeDragLayouts }
   from "../benchmark/cases/floor-page.mjs";
-import { findFirstChangedSlotFrame } from "../view-frame-geometry.mjs";
+import { findFirstChangedSlotFrame } from "@soksak/window-check/view-frame-geometry.mjs";
 
 const read = (path) => readFileSync(join(FLOOR_PAGE.folder, path), "utf8");
 

@@ -1,4 +1,4 @@
-import { pixel } from "@soksak/window-check/frame.mjs";
+import { pixel } from "./frame.mjs";
 
 export const VIEW_GEOMETRY_COLOR_TOLERANCE = 4;
 const DEFAULT_TOLERANCE = VIEW_GEOMETRY_COLOR_TOLERANCE;
