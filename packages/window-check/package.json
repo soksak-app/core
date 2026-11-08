@@ -27,6 +27,7 @@
     "./stall-sample.mjs": "./stall-sample.mjs",
     "./text-difference.mjs": "./text-difference.mjs",
     "./catalog.mjs": "./catalog.mjs",
+    "./start.mjs": "./start.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -52,7 +53,8 @@
     "stall-sample.mjs",
     "text-difference.mjs",
     "catalog.mjs",
-    "core-events.json"
+    "core-events.json",
+    "start.mjs"
   ],
   "bin": {
     "sok-repeat": "./repeat.mjs"
