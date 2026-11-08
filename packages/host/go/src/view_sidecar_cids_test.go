@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// contract: sidecars.view-send.uncorrelated-cids-are-accepted
 func TestViewSidecarSendPreservesUncorrelatedCidsCarriers(t *testing.T) {
 	for _, suffix := range []string{"", `,"cids":null`, `,"cids":[]`} {
 		raw := json.RawMessage(`{"source":"probe","generation":1,"sidecar":"worker","surface":"probe","body":{}` + suffix + `}`)

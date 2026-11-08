@@ -6,6 +6,7 @@ use crate::framework::Channel;
 use crate::windows::WindowData;
 use std::sync::Arc;
 
+// contract: sidecars.window-send.mount-during-start-ends-the-admission, sidecars.window-send.absence-ticket-ends-with-its-request
 #[test]
 fn window_sidecar_admission_cannot_enter_a_view_mounted_during_process_start() {
     let executable = crate::test_folder::Folder::new();
@@ -68,6 +69,7 @@ fn window_sidecar_admission_cannot_enter_a_view_mounted_during_process_start() {
     );
 }
 
+// contract: sidecars.window-send.mount-during-start-ends-the-admission, sidecars.window-send.absence-ticket-ends-with-its-request
 #[test]
 fn window_sidecar_admission_cannot_revive_after_mounted_view_retires() {
     let executable = crate::test_folder::Folder::new();
@@ -135,6 +137,7 @@ fn window_sidecar_admission_cannot_revive_after_mounted_view_retires() {
     );
 }
 
+// contract: sidecars.window-send.other-surface-mount-keeps-the-admission, sidecars.window-send.absence-ticket-ends-with-its-request
 #[test]
 fn background_startup_keeps_authority_when_an_unrelated_surface_mounts() {
     let executable = crate::test_folder::Folder::new();
@@ -201,6 +204,7 @@ fn background_startup_keeps_authority_when_an_unrelated_surface_mounts() {
     );
 }
 
+// contract: sidecars.window-send.absence-ticket-ends-with-its-request
 #[test]
 fn background_ticket_is_released_after_pre_enqueue_errors() {
     let folder = crate::test_folder::Folder::new();

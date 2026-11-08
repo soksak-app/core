@@ -2,6 +2,7 @@
 //! in the Go host.
 use super::ViewSidecarSendRequest;
 
+// contract: sidecars.view-send.uncorrelated-cids-are-accepted
 #[test]
 fn view_sidecar_send_preserves_uncorrelated_cids_carriers() {
     for suffix in ["", r#","cids":null"#, r#","cids":[]"#] {

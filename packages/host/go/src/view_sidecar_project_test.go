@@ -50,18 +50,21 @@ func requireMountedSidecarRoot(t *testing.T, s *Surfaces, service *sidecar, want
 	}
 }
 
+// contract: sidecars.view-send.root-is-the-project-of-its-mount
 func TestMountedViewFirstSidecarSendKeepsStartProjectAfterWindowProjectClears(t *testing.T) {
 	s, service, _ := mountedSidecarProject(t)
 	s.shown, s.root = "", ""
 	requireMountedSidecarRoot(t, s, service, "/fixture/project-a")
 }
 
+// contract: sidecars.view-send.root-is-the-project-of-its-mount
 func TestMountedViewFirstSidecarSendDoesNotBorrowAnotherCurrentProject(t *testing.T) {
 	s, service, _ := mountedSidecarProject(t)
 	s.shown, s.root = "project-b", "/fixture/project-b"
 	requireMountedSidecarRoot(t, s, service, "/fixture/project-a")
 }
 
+// contract: view.origin.retired-callback-is-cancelled
 func TestRetiredMountedViewCannotForwardALateSidecarRequest(t *testing.T) {
 	s, service, _ := mountedSidecarProject(t)
 	channel, ok := s.documents.view("probe-surface")
@@ -81,6 +84,7 @@ func TestRetiredMountedViewCannotForwardALateSidecarRequest(t *testing.T) {
 	}
 }
 
+// contract: sidecars.view-send.new-mount-sends-its-own-project
 func TestRecreatedViewSidecarRootUsesItsNewCommittedMountProject(t *testing.T) {
 	s, service, fake := mountedSidecarProject(t)
 	old, _ := s.documents.view("probe-surface")

@@ -15,6 +15,7 @@ func encodedViewSidecarSend(t *testing.T, s *Surfaces, generation uint64) json.R
 	return raw
 }
 
+// contract: sidecars.view-send.requires-a-safe-generation-and-its-own-surface
 func TestViewSidecarSendRequiresTheOriginalSafeGenerationAndOwnSession(t *testing.T) {
 	valid := `{"source":"probe-surface","generation":1,"sidecar":"fixture-sidecar","surface":"probe-surface","body":{},"cids":[]}`
 	if _, err := viewSidecarSendRequestFrom(json.RawMessage(valid)); err != nil {
@@ -34,6 +35,7 @@ func TestViewSidecarSendRequiresTheOriginalSafeGenerationAndOwnSession(t *testin
 	}
 }
 
+// contract: sidecars.view-send.retired-generation-sends-nothing, sidecars.view-send.new-mount-sends-its-own-project
 func TestViewSidecarSendNeverBorrowsTheSuccessorGenerationOrMountRoot(t *testing.T) {
 	s, service, fake := mountedSidecarProject(t)
 	old, _ := s.documents.view("probe-surface")
@@ -77,6 +79,7 @@ func TestViewSidecarSendNeverBorrowsTheSuccessorGenerationOrMountRoot(t *testing
 	}
 }
 
+// contract: sidecars.window-send.mounted-view-surface-is-refused
 func TestWindowSidecarSendCannotImplicitlyAcquireAMountedViewGeneration(t *testing.T) {
 	s, service, _ := mountedSidecarProject(t)
 	if err := s.windowSidecarSend(context.Background(), service.name, "probe-surface", json.RawMessage(`{}`), nil); err == nil {

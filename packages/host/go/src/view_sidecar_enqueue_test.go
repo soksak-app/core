@@ -11,6 +11,7 @@ import (
 // Hold actual process admission AFTER mounted A's host send has begun. The
 // standard synctest barrier waits for its channel block, not a guessed delay.
 // Retirement/remount must prevent a NEW A session from being enqueued later.
+// contract: sidecars.view-send.generation-retired-during-start-creates-no-session
 func TestMountedSidecarEnqueueCannotCreateSessionAfterItsGenerationRetires(t *testing.T) {
 	s, service, fake := mountedSidecarProject(t)
 	synctest.Test(t, func(t *testing.T) {
@@ -57,6 +58,7 @@ func TestMountedSidecarEnqueueCannotCreateSessionAfterItsGenerationRetires(t *te
 }
 
 // A mounted view send that the full outbox refuses commits no session: no surface, owner or root is recorded.
+// contract: sidecars.view-send.full-queue-creates-no-session
 func TestAFullOutboxDoesNotCreateAMountedSession(t *testing.T) {
 	s, service, _ := mountedSidecarProject(t)
 	service.outbox = make(chan queuedLine, 1)

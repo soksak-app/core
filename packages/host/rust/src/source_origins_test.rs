@@ -83,6 +83,7 @@ fn an_old_generation_does_not_post_to_a_replacement_source() {
     );
 }
 
+// contract: sidecars.window-send.absence-ticket-ends-with-its-request
 #[test]
 fn canceled_background_ticket_unregisters_without_invalidating_other_calls() {
     let origins = super::ViewSourceOrigins::default();

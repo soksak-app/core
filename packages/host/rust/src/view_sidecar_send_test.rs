@@ -5,6 +5,7 @@ use crate::framework::Channel;
 use crate::windows::WindowData;
 use std::sync::Arc;
 
+// contract: sidecars.view-send.requires-a-safe-generation-and-its-own-surface
 #[test]
 fn view_sidecar_send_requires_the_original_safe_generation_and_own_session() {
     let parse = |raw: &str| {
@@ -29,6 +30,7 @@ fn view_sidecar_send_requires_the_original_safe_generation_and_own_session() {
     }
 }
 
+// contract: sidecars.view-send.retired-generation-sends-nothing
 #[test]
 fn view_sidecar_send_never_borrows_the_successor_generation_or_mount_root() {
     let folder = crate::test_folder::Folder::new();
@@ -64,6 +66,7 @@ fn view_sidecar_send_never_borrows_the_successor_generation_or_mount_root() {
     );
 }
 
+// contract: sidecars.window-send.mounted-view-surface-is-refused
 #[test]
 fn window_sidecar_send_cannot_implicitly_acquire_a_mounted_view_generation() {
     let folder = crate::test_folder::Folder::new();

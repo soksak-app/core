@@ -4,6 +4,7 @@ use super::view_sidecar_project_test::MountedOwner;
 use crate::windows::WindowData;
 use std::sync::Arc;
 
+// contract: sidecars.window-send.start-rechecks-the-surface-root
 #[test]
 fn background_sidecar_admission_rechecks_root_after_process_start() {
     let executable = crate::test_folder::Folder::new();

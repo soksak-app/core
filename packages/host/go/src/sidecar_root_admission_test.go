@@ -8,6 +8,7 @@ import (
 	"testing/synctest"
 )
 
+// contract: sidecars.window-send.start-rechecks-the-surface-root
 func TestBackgroundSidecarAdmissionRechecksRootAfterProcessStart(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	synctest.Test(t, func(t *testing.T) {

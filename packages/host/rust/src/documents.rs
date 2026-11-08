@@ -3918,6 +3918,8 @@ pub fn view_sidecar_send<O: crate::sidecars::Owner>(
         &request.sidecar,
         &request.surface,
         &request.body,
+        // default: cids is optional; a send that names no correlation identifier, with an absent or null member, sends none
+        // (docs/spec/sidecars.md).
         request.cids.as_deref().unwrap_or(&[]),
         &authority,
     )

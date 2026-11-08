@@ -5,6 +5,7 @@ use crate::framework::Channel;
 use crate::windows::WindowData;
 use std::sync::Arc;
 
+// contract: sidecars.view-send.generation-retired-during-start-creates-no-session
 #[test]
 fn mounted_sidecar_enqueue_cannot_create_session_after_its_generation_retires() {
     let executable = crate::test_folder::Folder::new();
@@ -69,6 +70,7 @@ fn mounted_sidecar_enqueue_cannot_create_session_after_its_generation_retires() 
     );
 }
 
+// contract: sidecars.view-send.full-queue-creates-no-session
 #[test]
 fn a_full_outbox_does_not_create_a_mounted_session() {
     let folder = crate::test_folder::Folder::new();

@@ -83,14 +83,17 @@ fn require_root(current: &str, replace: bool) {
         "actual outbound root must belong to this exact committed mount, not the current window project"
     );
 }
+// contract: sidecars.view-send.root-is-the-project-of-its-mount
 #[test]
 fn mounted_view_sidecar_keeps_project_after_window_clear() {
     require_root("", false);
 }
+// contract: sidecars.view-send.root-is-the-project-of-its-mount
 #[test]
 fn mounted_view_sidecar_never_borrows_other_current_project() {
     require_root("/fixture/project-b", false);
 }
+// contract: sidecars.view-send.new-mount-sends-its-own-project
 #[test]
 fn recreated_mounted_view_sidecar_uses_new_project() {
     require_root("/fixture/project-c", true);

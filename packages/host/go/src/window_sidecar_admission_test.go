@@ -10,10 +10,12 @@ import (
 	"unsafe"
 )
 
+// contract: sidecars.window-send.mount-during-start-ends-the-admission
 func TestWindowSidecarAdmissionCannotEnterAViewMountedDuringProcessStart(t *testing.T) {
 	testWindowSidecarMountDuringStart(t, false)
 }
 
+// contract: sidecars.window-send.mount-during-start-ends-the-admission
 func TestWindowSidecarAdmissionCannotReviveAfterMountedViewRetires(t *testing.T) {
 	testWindowSidecarMountDuringStart(t, true)
 }
@@ -76,6 +78,7 @@ func testWindowSidecarMountDuringStart(t *testing.T, retire bool) {
 	})
 }
 
+// contract: sidecars.window-send.absence-ticket-ends-with-its-request, sidecars.window-send.other-surface-mount-keeps-the-admission
 func TestWindowSidecarAbsenceTicketsEndWithTheActualRequest(t *testing.T) {
 	for _, outcome := range []string{"success", "full outbox", "cancel", "unrelated source"} {
 		t.Run(outcome, func(t *testing.T) {

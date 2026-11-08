@@ -157,6 +157,18 @@ let compositionRevision = 0;
  * (docs/spec/native-surfaces.md#region-lifetime). After it, a detach or an unsubscribe of the release drops only the
  * page-side handle and does not call the host; a region that the page detaches while the surface stays placed calls it.
  */
+/**
+ * Admits one sidecar send of a surface with lifetime. A place that leaves the surface out ends its sidecar sessions in the host, so a
+ * send after the release, such as the end of the session that the dispose of the module sends, has no session and is not sent; a host
+ * send would open a session without a project root. A send while that place runs waits for its outcome (placeSurfaces).
+ */
+function admitSidecarSend(lifetime, run) {
+  // default: the released surface has no sidecar session, and the reply of a send without a session is null (placeSurfaces).
+  if (lifetime.released) return Promise.resolve(null);
+  if (lifetime.suspended) return new Promise((resolve, reject) => lifetime.held.push({ run, resolve, reject }));
+  return run();
+}
+
 function pageRuntime(surface, scoped, compositionReady, lifetime) {
   const invoke = (name, payload) => scoped.native.call(name, payload);
   const hostClose = (name, payload) => (lifetime.released ? Promise.resolve(null) : invoke(name, payload));
@@ -205,15 +217,10 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
     },
     sidecar: (...args) => {
       const port = scoped.sidecar(...args);
-      return { ...port, send: (id, body, cids) => {
-        // A place that leaves the surface out ends its sidecar sessions in the host, so a send after the release, such as the end
-        // of the session that the dispose of the module sends, has no session and is not sent; a host send would open a session
-        // without a project root. A send while that place runs waits for its outcome (placeSurfaces).
-        if (lifetime.released) return Promise.resolve(null);
-        if (lifetime.suspended) return new Promise((resolve, reject) => lifetime.held.push({ run: () => port.send(id, body, cids), resolve, reject }));
-        return port.send(id, body, cids);
-      } };
+      return { ...port, send: (id, body, cids) => admitSidecarSend(lifetime, () => port.send(id, body, cids)) };
     },
+    // The send of a view call passes the same admission as the send of the page (admitSidecarSend).
+    admitSidecarSend: (run) => admitSidecarSend(lifetime, run),
   };
 }
 
@@ -645,8 +652,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       sidecar: { send: (id, body, cids, name) => {
         if (!surface.sidecars.includes(name)) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar ${name}`);
         if (id !== surface.surfaceId) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar surface ${id}`);
-        return sendViewSidecar({ source: surface.surfaceId, generation: receivedSourceGeneration,
-          sidecar: name, surface: id, body, cids });
+        return page.admitSidecarSend(() => sendViewSidecar({ source: surface.surfaceId, generation: receivedSourceGeneration,
+          sidecar: name, surface: id, body, cids }));
       } },
     } };
     const runCall = () => {

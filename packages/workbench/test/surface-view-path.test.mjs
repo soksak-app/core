@@ -48,6 +48,8 @@ async function harness(t, { refuse = new Set() } = {}) {
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
+    // The private view sidecar bridge records each send of a view that reaches a sidecar.
+    sendViewSidecar: async ({ body }) => { sent.push(body); return null; },
     native: true,
     documents,
     onSurfacePrepared: () => () => {},
@@ -63,9 +65,7 @@ async function harness(t, { refuse = new Set() } = {}) {
           calls.push({ name, payload });
           if (refuse.has(name)) throw new Error(`the host refused ${name}`);
           return null;
-        } },
-        // The sidecar port of the surface records each send that reaches a sidecar.
-        sidecar: () => ({ send: async (id, body) => { sent.push(body); return null; }, on: async () => () => {}, onFailure: async () => () => {} }) };
+        } } };
     },
   } });
   const modules = await import(`../surface-modules.js?view-path-${++instance}`);
@@ -329,7 +329,7 @@ test("a sidecar send of a view waits for a failed place that leaves the view out
   h.modules.authorizeSurface(id);
   await h.modules.mountSurface(h.slot, { ...viewOf(id, "fixture-plain", false), sidecars: ["fixture-sidecar"] });
   await h.modules.waitSurfaceCompositionDeclared(id);
-  const send = (op) => ({ id: "probe", sidecar: "fixture-sidecar", body: { op }, cids: [] });
+  const send = (op) => ({ id, sidecar: "fixture-sidecar", body: { op }, cids: [] });
   let during;
   await assert.rejects(h.modules.placeSurfaces(async () => {
     during = h.viewCall("runtime.sidecar.send", send("input"));

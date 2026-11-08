@@ -1671,10 +1671,13 @@ impl<O: Owner> Sidecars<O> {
             .core
             .state
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the surface roots, which are only read; the
+            // panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .roots
             .get(surface)
             .cloned()
+            // default: a surface with no recorded directory starts from the current project root of the window.
             .unwrap_or_else(|| authority.root.clone());
         if root.is_empty() {
             return Err(format!("sidecar {name}: surface {surface} has no project"));

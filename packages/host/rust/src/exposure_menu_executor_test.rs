@@ -7,6 +7,7 @@ enum Step {
     Finished(Result<(), String>),
 }
 
+// contract: menu.select.runs-after-the-framework-callback-unwinds
 #[test]
 fn native_menu_action_runs_after_the_framework_callback_unwinds() {
     let (_app, framework) = crate::test_framework::application_with_queue();
@@ -46,6 +47,7 @@ fn native_menu_action_runs_after_the_framework_callback_unwinds() {
     assert_eq!(action_rx.recv().unwrap(), ("Edit".into(), "Copy".into()));
 }
 
+// contract: menu.select.answers-the-failure-of-the-item
 #[test]
 fn native_menu_action_preserves_its_actual_failure() {
     assert_eq!(
@@ -62,6 +64,7 @@ fn native_menu_action_preserves_its_actual_failure() {
     );
 }
 
+// contract: menu.select.queue-refusal-performs-nothing
 #[test]
 fn native_menu_queue_failure_does_not_perform_the_action() {
     let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
