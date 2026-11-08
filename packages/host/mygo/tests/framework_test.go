@@ -423,6 +423,7 @@ func TestARestartedWorkbenchDrawsNoFrameBeforeItsFirstScreen(t *testing.T) {
 	window.Show()
 	draws := func() int { return strings.Count(strings.Join(workbench.Received(), "\n"), "draw restarted") }
 	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown restarted") })
+	workbench.HoldFirstScreen()
 	window.StartWorkbench()
 	before := draws()
 	window.Window().Invalidate()
@@ -432,6 +433,26 @@ func TestARestartedWorkbenchDrawsNoFrameBeforeItsFirstScreen(t *testing.T) {
 	}
 	mygo.RunOnMain(window.FirstScreen)
 	support.Wait(t, "the frame of the first screen", func() bool { return draws() > before })
+}
+
+// The first visible frame of a new window is the first screen of its workbench (docs/spec/native-host.md#page-start), so the window
+// goes on the screen once the frame of that screen is drawn, not with the first frame of the window.
+// contract: mygo.framework.start-builds-the-workbench
+func TestAWindowGoesOnTheScreenWithTheFirstScreenOfItsWorkbench(t *testing.T) {
+	_, workbench, window := support.Open(t, "first")
+	workbench.HoldFirstScreen()
+	window.Show()
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown first") })
+	time.Sleep(250 * time.Millisecond)
+	if window.Window().IsVisible() {
+		t.Fatal("the window went on the screen before the first screen of its workbench")
+	}
+	before := len(workbench.Received())
+	mygo.RunOnMain(window.FirstScreen)
+	support.Wait(t, "the window on the screen", window.Window().IsVisible)
+	if !slices.Contains(workbench.Received()[before:], "draw first") {
+		t.Fatalf("the window went on the screen without a frame of its first screen: %v", workbench.Received()[before:])
+	}
 }
 
 // contract: mygo.framework.start-builds-the-workbench

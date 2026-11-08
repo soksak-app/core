@@ -189,6 +189,20 @@ func TestAStartShowsItsFirstScreenOnceTheProjectIsShown(t *testing.T) {
 	}
 }
 
+// The first window of a launch that names no project shows the library as its first screen, before the window is ready.
+func TestAStartAtTheLibraryShowsItsFirstScreenBeforeTheWindowIsReady(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.shown = func() { stored.note("firstScreen") }
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	snapshot, first, ready := slices.Index(stored.calls, "workspace"), slices.Index(stored.calls, "firstScreen"), slices.Index(stored.calls, "windowReady")
+	if snapshot < 0 || first < snapshot || ready < first || strings.Count(strings.Join(stored.calls, " "), "firstScreen") != 1 {
+		t.Fatalf("the start called %v", stored.calls)
+	}
+}
+
 // A start that cannot read the workspace shows that failure as its first screen.
 func TestAStartThatFailsShowsItsFailureAsItsFirstScreen(t *testing.T) {
 	stored := &storedHost{failing: map[string]error{"workspace": errors.New("no store")}}
