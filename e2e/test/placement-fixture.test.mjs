@@ -6,6 +6,8 @@ async function prepare(target, others) {
   assert.equal(typeof fixtures.prepareOcclusionFixture,"function","placement fixture must own inactive cohort preparation");
   return fixtures.prepareOcclusionFixture(target,others);
 }
+// The height of the title bar that a window frame holds above its content area in this fake host.
+const TITLE_BAR=28;
 function cohort({external=false,targetName="mygo",failure=null}={}) {
   const calls=[],cleanups=[];
   const rows=[{name:"wailsv3",x:0},{name:"tauriv2",x:600},{name:"mygo",x:300}].map(({name,x})=>({
@@ -20,11 +22,16 @@ function cohort({external=false,targetName="mygo",failure=null}={}) {
     row.get=async status=>{
       if(status==="host.screens")return [{visible:{x:0,y:39,width:1800,height:1000}}];
       assert.equal(status,"host.window");
-      return {frame:{...row.frame},occluded:row===target?covered():false,active:false,
-        activationObservation:{count:"0",registered:true}};
+      return {frame:{...row.frame},content:{width:row.frame.width,height:row.frame.height-TITLE_BAR},
+        occluded:row===target?covered():false,active:false,activationObservation:{count:"0",registered:true}};
     };
     row.run=async(command,params)=>{
-      calls.push({app:row.app.name,command,params});assert.equal(command,"host.window.move");
+      calls.push({app:row.app.name,command,params});
+      if(command==="host.window.resize"){
+        Object.assign(row.frame,{width:params.width,height:params.height+TITLE_BAR});
+        return;
+      }
+      assert.equal(command,"host.window.move");
       if(failure===row.app.name && params.x!==row.frame.x)throw new Error("owned cohort move failed");
       Object.assign(row.frame,params);
     };
@@ -132,4 +139,28 @@ test("a check uncovers its window from the windows of the other check applicatio
   assert.equal(f.target.frame.x,0);
   assert.ok(f.others.every(row=>row.frame.x===600));
   assert.equal(f.cleanups.length,1);
+});
+
+test("the restoration gives back the whole frame that the preparation recorded, its size included",async()=>{
+  const f=cohort(),original=f.rows.map(row=>({...row.frame}));
+  await prepare(f.target,f.others);
+  // The check resized its window while the cohort was parked.
+  Object.assign(f.target.frame,{width:1220,height:908});
+  await f.cleanups[0]();
+  assert.deepEqual(f.rows.map(row=>row.frame),original);
+  assert.deepEqual(f.calls.filter(call=>call.command==="host.window.resize"),
+    [{app:"mygo",command:"host.window.resize",params:{width:1200,height:760-TITLE_BAR}}]);
+});
+
+test("a failed restoration names the cause of each window that it did not restore",async()=>{
+  const f=cohort();
+  await prepare(f.target,f.others);
+  const wails=f.rows.find(row=>row.app.name==="wailsv3");
+  wails.run=async()=>{throw new Error("wailsv3 refused the move");};
+  await assert.rejects(f.cleanups[0](),(error)=>{
+    assert.ok(error instanceof AggregateError);
+    assert.match(error.message,/placement owned cohort restoration failed/);
+    assert.match(error.message,/wailsv3-window: wailsv3 refused the move/);
+    return true;
+  });
 });

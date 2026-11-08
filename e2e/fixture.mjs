@@ -159,11 +159,13 @@ export async function prepareOcclusionFixture(target, otherWindows) {
   const before = await target.get("host.window"), count = inactiveCount(before);
   const [screen] = await target.get("host.screens"), area = screen?.visible;
   if (!validFrame(before.frame) || !validFrame(area)) throw new Error("placement fixture preparation has invalid public screen/window geometry");
-  const snapshots = [{ session: target, frame: { ...before.frame }, count }];
+  // The restoration gives back the whole recorded frame: the content size through host.window.resize, then the origin.
+  const snapshots = [{ session: target, frame: { ...before.frame }, content: { width: before.content.width, height: before.content.height }, count }];
   for (const session of otherWindows) {
     const state = await session.get("host.window");
     if (!validFrame(state.frame)) throw new Error("placement fixture preparation has invalid owned cohort geometry");
-    snapshots.push({ session, frame: { ...state.frame }, count: inactiveCount(state) });
+    snapshots.push({ session, frame: { ...state.frame }, content: { width: state.content.width, height: state.content.height },
+      count: inactiveCount(state) });
   }
   for (const { frame } of snapshots) {
     if (frame.width>area.width || frame.y<area.y || frame.y+frame.height>area.y+area.height)
@@ -173,18 +175,27 @@ export async function prepareOcclusionFixture(target, otherWindows) {
   // that fails after earlier windows have already moved.
   if (snapshots.length) target.cleanup(async () => {
     const failures = [];
-    for (const { session, frame, count: originalCount } of snapshots) {
+    for (const { session, frame, content, count: originalCount } of snapshots) {
       try {
-        const state = await session.get("host.window");
+        let state = await session.get("host.window");
+        if (state.frame.width !== frame.width || state.frame.height !== frame.height) {
+          await session.run("host.window.resize", content);
+          state = await session.get("host.window");
+        }
         if (state.frame.x !== frame.x || state.frame.y !== frame.y)
           await session.run("host.window.move", { x: frame.x, y: frame.y });
         const restored = await session.until("host.window", value =>
           ["x","y","width","height"].every(field=>value.frame[field]===frame[field]),
         "placement fixture did not restore the exact owned cohort frame");
         if (inactiveCount(restored) !== originalCount) throw new Error("placement cohort activation count changed during restoration");
-      } catch (error) { failures.push(error); }
+      } catch (error) {
+        failures.push(new Error(`${session.app.name} ${session.window}: ${error?.message ?? error}`, { cause: error }));
+      }
     }
-    if (failures.length) throw new AggregateError(failures,"placement owned cohort restoration failed");
+    // The message names each cause, because a log of the check shows the message of an AggregateError without its errors.
+    if (failures.length) {
+      throw new AggregateError(failures, `placement owned cohort restoration failed: ${failures.map((failure) => failure.message).join("; ")}`);
+    }
   });
   const parked = [];
   for (const { session, frame, count: originalCount } of snapshots) {
