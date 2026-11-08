@@ -1937,6 +1937,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F686-10",
+    implementation: [
+      { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function runViewDrag(" },
+      { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function completeViewDrag(" },
+      { file: "e2e/drag-measurement.mjs", symbol: "export function assertDragPerformance(" },
+    ],
+    tests: [
+      { file: "e2e/test/view-drag-case.test.mjs", id: "valid view drags publish third-stage B3 values before a captured threshold failure" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "view-drag judgment preserves both invalid third metrics and captured threshold failures" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "a structurally invalid captured drag prevents the third drag and metric publication" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "a third-stage collection failure preserves the valid captured threshold failure exactly once" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "a structurally valid captured drag over the targets is measured without a verdict, and its assertPerformance throws the threshold error" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "a valid captured drag over the targets publishes third-drag B3 values and then fails with its original threshold error" },
+      { file: "e2e/test/view-drag-case.test.mjs", id: "a third-drag metric failure and a valid captured threshold failure both surface with their original errors" },
+    ],
+    expected: "A structurally valid captured drag publishes the third-drag B3 values before its captured performance is judged, a structural capture failure aborts at once, and a metric failure and a threshold failure both surface with their original errors.",
+    levels: ["unit"],
+  },
+  {
     id: "F686-2",
     implementation: [
       { file: "packages/host/go/src/callback/handle.go", symbol: "func NewHandle(value any) Handle {" },

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { TERMINAL_DRAG_PLAN } from "../benchmark/cases/terminal.mjs";
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
+import { assertDragPerformance, measureDragPerformance } from "../drag-measurement.mjs";
 import { completeViewDrag, dragProcesses, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
 
 test("the benchmark defers captured thresholds until valid third-drag measurements are published", { timeout: 5000 }, () => {
@@ -77,6 +78,60 @@ test("a third-stage collection failure preserves the valid captured threshold fa
     (error) => error instanceof AggregateError && error.errors.length === 2 &&
       error.errors[0] === collectionFailure && error.errors[1] === threshold);
   assert.equal(judgments, 1, "a valid capture must be judged even when third-stage collection fails");
+});
+
+/** Frame times, lag and refresh rate of a structurally valid captured drag that exceeds the unchanged cadence and latency targets. */
+const SLOW_DRAG = Object.freeze({ times: [0, 36, 72], lag: { lag: 100, median: 40, p90: 70 }, refreshRate: 60 });
+/** A captured drag whose assertPerformance applies assertDragPerformance to SLOW_DRAG and records each error it throws in `judged`. */
+function slowCapture(judged) {
+  return { frameCount: 50, assertPerformance() {
+    try { return assertDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshRate); }
+    catch (error) { judged.push(error); throw error; }
+  } };
+}
+
+test("a structurally valid captured drag over the targets is measured without a verdict, and its assertPerformance throws the threshold error",
+  { timeout: 5000 }, () => {
+    const measured = measureDragPerformance(SLOW_DRAG.times, SLOW_DRAG.lag, SLOW_DRAG.refreshRate);
+    assert.equal(measured.targetsMet, false, "a valid slow capture is measured, not rejected, before assertPerformance");
+    assert.deepEqual(measured.exceeded, ["cadence", "p90", "worst"]);
+    const judged = [];
+    assert.throws(() => slowCapture(judged).assertPerformance(), (error) => error === judged[0] && /drag performance targets exceeded/.test(error.message));
+  });
+
+test("a valid captured drag over the targets publishes third-drag B3 values and then fails with its original threshold error", { timeout: 5000 }, async () => {
+  const calls = [];
+  const judged = [];
+  const measurements = {};
+  const steps = recordingSteps(calls);
+  steps.capturedDrag = async () => { calls.push("captured drag"); return slowCapture(judged); };
+  steps.record = async (gesture) => { calls.push("record start"); const result = await gesture(); calls.push("record end"); return { result, records: THIRD_DRAG }; };
+  steps.publish = async ({ recorded }) => {
+    calls.push("publish");
+    Object.assign(measurements, viewDragB3Values("frame-records", { recorded, gcLoop: false }));
+  };
+  await assert.rejects(runViewDrag({ options: { accessibility: false, floor: false, gcLoop: false }, pageProcess: null, steps }),
+    (error) => judged.length === 1 && error === judged[0]);
+  assert.deepEqual(calls.slice(calls.indexOf("captured drag")), ["captured drag", "frames quiet", "frame records", 'conditions "frame-records"',
+    "record start", "uncaptured drag", "record end", "publish"]);
+  assert.deepEqual(measurements, { dragFrameP90Ms: 4, dragStepP90Ms: 1.5, dragFirstFrameMs: 3 });
+});
+
+test("a third-drag metric failure and a valid captured threshold failure both surface with their original errors", { timeout: 5000 }, async () => {
+  const judged = [];
+  let metricFailure;
+  const steps = recordingSteps([]);
+  steps.capturedDrag = async () => slowCapture(judged);
+  steps.record = async (gesture) => { await gesture(); return null; };
+  steps.publish = async ({ recorded }) => {
+    try { viewDragB3Values("frame-records", { recorded, gcLoop: false }); }
+    catch (error) { metricFailure = error; throw error; }
+  };
+  await assert.rejects(runViewDrag({ options: { accessibility: false, floor: false, gcLoop: false }, pageProcess: 812, steps }),
+    (error) => error instanceof AggregateError && error.message === "view-drag measurements and captured performance failed" &&
+      error.errors.length === 2 && error.errors[0] === metricFailure && error.errors[1] === judged[0]);
+  assert.equal(judged.length, 1, "a metric failure must not hide or repeat the captured threshold judgment");
+  assert.match(metricFailure.message, /writes the U7 records of the third drag/);
 });
 
 test("the view drag takes ACCESSIBILITY, FLOOR and GC_LOOP as unset or 1", { timeout: 5000 }, () => {
