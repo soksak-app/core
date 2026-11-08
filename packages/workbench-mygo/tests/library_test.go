@@ -163,6 +163,25 @@ func TestTheOpenProjectsFollowTheStore(t *testing.T) {
 	}
 }
 
+// A project that another window removed leaves the registry of this window when the store changes, and the window that showed it ends
+// it and shows the library (docs/spec/projects.md#settings).
+func TestAProjectThatAnotherWindowRemovedLeavesTheWindow(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	stored.mu.Lock()
+	stored.projects = nil
+	stored.mu.Unlock()
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+	if projects := status[[]map[string]any](t, f.shellFixture, "core.projects"); len(projects) != 0 {
+		t.Fatalf("the window still lists %v", projects)
+	}
+	if screen := status[map[string]any](t, f.shellFixture, "core.screen")["screen"]; screen != "library" {
+		t.Fatalf("the window shows %v", screen)
+	}
+}
+
 // Closing the shown project shows another project of the window and never opens one that the window did not open.
 func TestClosingTheShownProjectLeavesTheSavedOnes(t *testing.T) {
 	f, saved, opened := savedAndOpened(t, &storedHost{})
