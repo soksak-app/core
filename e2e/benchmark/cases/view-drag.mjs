@@ -2,19 +2,20 @@
 // without capture under the default policy through `diagnostics.drag` with `native: true` and the plan of the captured drag, the
 // captured drag under the default policy and, after `frames` of host.window has not changed for 3 seconds (3 seconds on a window whose
 // `frames` is null), a drag without capture under the policy that stores the class `frame` at `debug` (FRAME_RECORDS of
-// scripts/measure-trace.mjs), whose U7 records it reads on a window without a main page. It reads the CPU time and the peak footprint
-// of each process of the application before and after the first drag. SOKSAK_ACCESSIBILITY=1 reads the elements of the window through
-// the accessibility API before the drags; SOKSAK_FLOOR=1 drags a card whose view page is a plain page without plugin code;
-// SOKSAK_GC_LOOP=1 turns `diagnostics.gc.loop` on before the third drag and off after it, on a window whose host.window reports
-// pageProcess null. This module holds the order of the steps and the figures; the benchmark gives the steps of a running application.
+// scripts/measure-trace.mjs), whose U7 records it reads on a window without a main page. Every drag moves the left edge of a card whose
+// active tab is the floor page view (cases/floor-page.mjs), a fixture page that draws one colour and runs no plugin code. It reads the
+// CPU time and the peak footprint of each process of the application before and after the first drag. SOKSAK_ACCESSIBILITY=1 reads the
+// elements of the window through the accessibility API before the drags; SOKSAK_GC_LOOP=1 turns `diagnostics.gc.loop` on before the
+// third drag and off after it, on a window whose host.window reports pageProcess null. This module holds the order of the steps and the
+// figures; the benchmark gives the steps of a running application.
 import { readFootprint } from "../../../scripts/footprints.mjs";
 import { readCpuSeconds } from "../../../scripts/measure-app-usage.mjs";
 import { FRAME_RECORDS } from "../../../scripts/measure-trace.mjs";
 import { gestureB3Values } from "./gesture-records.mjs";
-import { TERMINAL_DRAG_PLAN } from "./terminal.mjs";
+import { VIEW_DRAG_PLAN } from "./floor-page.mjs";
 
 /** The first drag: the plan of the captured drag, delivered as native input of the primary button without capture. */
-export const NATIVE_DRAG_PLAN = Object.freeze({ ...TERMINAL_DRAG_PLAN, native: true });
+export const NATIVE_DRAG_PLAN = Object.freeze({ ...VIEW_DRAG_PLAN, native: true });
 
 /** Reads a switch of the view drag: unset is off and 1 is on; any other value is an error that names it. */
 function option(env, name) {
@@ -24,9 +25,9 @@ function option(env, name) {
   throw new Error(`${name} must be unset or 1, not ${JSON.stringify(value)}`);
 }
 
-/** The switches of the view drag from the environment: SOKSAK_ACCESSIBILITY, SOKSAK_FLOOR and SOKSAK_GC_LOOP. */
+/** The switches of the view drag from the environment: SOKSAK_ACCESSIBILITY and SOKSAK_GC_LOOP. */
 export function viewDragOptions(env) {
-  return { accessibility: option(env, "SOKSAK_ACCESSIBILITY"), floor: option(env, "SOKSAK_FLOOR"), gcLoop: option(env, "SOKSAK_GC_LOOP") };
+  return { accessibility: option(env, "SOKSAK_ACCESSIBILITY"), gcLoop: option(env, "SOKSAK_GC_LOOP") };
 }
 
 /**

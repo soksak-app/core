@@ -47,7 +47,7 @@ test("the B3 values of the resize catch-up are its verdict in the state captured
       new Error("the resize catch-up measures in the states captured and frame-records of B3_MEASUREMENTS, not \"0\""));
   });
 
-test("each recorded frame of a maximise is judged with the geometry rule of the terminal drag", { timeout: 5000 }, () => {
+test("each recorded frame of a maximise is judged with the geometry rule of the view drag on the floor page", { timeout: 5000 }, () => {
   const insets = { left: 5, top: 10, right: 5, bottom: 10 };
   const measured = (time, cardRight, nativeRight) => ({ timeMs: time, cardRectPt: { left: 0, top: 0, right: cardRight, bottom: 80 },
     nativeRectPt: { left: 5, top: 10, right: nativeRight, bottom: 70 } });
@@ -61,7 +61,7 @@ test("each recorded frame of a maximise is judged with the geometry rule of the 
   assert.deepEqual(resizeGeometry("maximising", decoded.slice(0, 2), { cornerRadiusPt: 8, slotInsetsPt: insets, measure }),
     { passed: true, maxErrorPt: 0, limitPt: 2 });
   assert.throws(() => assertResizeGeometry("maximising", resizeGeometry("maximising", decoded, { cornerRadiusPt: 8, slotInsetsPt: insets, measure })),
-    new Error("maximising: the native rectangle of the terminal is 3 pt from its card slot in a recorded frame, more than 2 pt"));
+    new Error("maximising: the rectangle of the floor page view is 3 pt from its card slot in a recorded frame, more than 2 pt"));
   assert.throws(() => resizeGeometry("restoring", [{ unreadable: true }], { cornerRadiusPt: 8, slotInsetsPt: insets, measure }),
-    new Error("restoring: recorded frame 0 has no terminal geometry: no content of the measurement color"));
+    new Error("restoring: recorded frame 0 has no floor page geometry: no content of the measurement color"));
 });

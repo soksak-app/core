@@ -1631,11 +1631,10 @@ const FEATURE_LINKS = [
       { file: "e2e/benchmark/cases/gesture-records.mjs", symbol: "export function gestureB3Values(prefix, records, { firstFrame }) {" },
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export async function runViewDrag({ options, pageProcess, steps }) {" },
       { file: "e2e/benchmark/cases/view-drag.mjs", symbol: "export function viewDragB3Values(state, { firstDrag, recorded, gcLoop }) {" },
-      { file: "e2e/benchmark/cases/floor-page.mjs", symbol: "export async function openFloorPage(s, {" },
+      { file: "e2e/benchmark/cases/floor-page.mjs", symbol: "export async function openFloorPage(s, { card } = {}) {" },
       { file: "e2e/real/hid.mjs", symbol: "export function readWindowElements(app) {" },
-      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureTerminalLayoutFrame }) {" },
+      { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureFloorLayoutFrame }) {" },
       { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeB3Values(state, { recorded }) {" },
-      { file: "e2e/benchmark/cases/terminal.mjs", symbol: "export async function runTerminalViewBenchmark(t, app, plugin, baselinesMs) {" },
       { file: "e2e/view-metrics-collection.mjs", symbol: "export const TAB_PLACEMENT = Object.freeze({" },
       { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {" },
       { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {" },
@@ -1659,11 +1658,10 @@ const FEATURE_LINKS = [
       { file: "e2e/test/view-drag-case.test.mjs", id: "the B3 values of the view drag are the first-drag figures in the state 0 and the U7 figures of the third drag in the state frame-records" },
       { file: "e2e/test/floor-page-fixture.test.mjs", id: "the floor page is a view whose page draws the measurement colour and runs no code but the declaration of its composition" },
       { file: "e2e/test/hid-elements.test.mjs", id: "the elements of the windows of an application are counted by their accessibility role" },
-      { file: "e2e/test/resize-case.test.mjs", id: "each recorded frame of a maximise is judged with the geometry rule of the terminal drag" },
+      { file: "e2e/test/resize-case.test.mjs", id: "each recorded frame of a maximise is judged with the geometry rule of the view drag on the floor page" },
       { file: "e2e/test/resize-case.test.mjs", id: "the B3 values of the resize catch-up are its verdict in the state captured and the U7 figures of the maximise in the state frame-records" },
       { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
       { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the performance goals, and a growth at or above it fails the benchmark" },
-      { file: "e2e/test/terminal-view-metrics-case.test.mjs", id: "the term view descriptor reads the statuses and commands of the term plugin" },
       { file: "e2e/test/view-metrics-collection.test.mjs", id: "a view descriptor without a placement is refused by every collector with an error that names the descriptor" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose plugin does not declare the three entries of the section-view contract fails with its plugin and section" },
       { file: "e2e/test/section-view-case.test.mjs", id: "the declaration of a plugin that has sections and no surface is a valid diagnostics declaration" },
@@ -4272,10 +4270,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/benchmark/cases/hwp.mjs",
       "symbol": "export function measureHwpPaintFrame("
-    },
-    {
-      "file": "e2e/benchmark/cases/terminal.mjs",
-      "symbol": "export function terminalRasterTargetRectPt("
     }
   ],
   "tests": [
@@ -4302,10 +4296,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/test/hwp-view-metrics-case.test.mjs",
       "id": "HWP paint geometry measures the magenta HTML marker separately from cyan native bounds"
-    },
-    {
-      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
-      "id": "terminal convergence target comes from the visible native raster region"
     }
   ],
   "expected": "The earliest source-backed captured final paint meets two-frame, 33 ms and 2 pt convergence limits independently of eventual presentation, with exact target identity and stable later paint.",
@@ -4368,17 +4358,17 @@ const FEATURE_LINKS = [
   "id": "F239-231",
   "implementation": [
     {
-      "file": "e2e/benchmark/cases/terminal.mjs",
-      "symbol": "startContentTrace:"
+      "file": "e2e/view-metrics-collection.mjs",
+      "symbol": "export async function withViewContentTrace("
     }
   ],
   "tests": [
     {
-      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
-      "id": "terminal view descriptor reads browser history and controls only the diagnostic frame observer"
+      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "id": "generic content trace brackets the successful start command with native clock reads"
     }
   ],
-  "expected": "The terminal observer-start consumer accepts the current successful source-clock reply and leaves clock validation to the shared bracket owner.",
+  "expected": "The observer-start consumer of a view content trace accepts the current successful source-clock reply and leaves clock validation to the shared bracket owner.",
   "levels": [
     "unit"
   ]
@@ -4409,10 +4399,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/benchmark/cases/hwp.mjs",
       "symbol": "async function dragObservation("
-    },
-    {
-      "file": "e2e/benchmark/cases/terminal.mjs",
-      "symbol": "async function terminalDragObservation("
     }
   ],
   "tests": [
@@ -4431,10 +4417,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/test/editor-view-metrics-case.test.mjs",
       "id": "editor motion evidence keeps source timing and mapped capture without per-source placement"
-    },
-    {
-      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
-      "id": "terminal source content mapping retains source interval and capture time without placement association"
     },
     {
       "file": "e2e/test/hwp-view-metrics-case.test.mjs",
@@ -4541,10 +4523,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/test/hwp-view-metrics-case.test.mjs",
       "id": "HWP descriptor waits for its declared document status exposure"
-    },
-    {
-      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
-      "id": "terminal view descriptor reads browser history and controls only the diagnostic frame observer"
     }
   ],
   "expected": "View source frames map to conservative native monotonic intervals from the successful start command bracket; ambiguous rows are preserved while one-shot and drag evidence require guaranteed ordering and coverage.",
@@ -5613,7 +5591,7 @@ const FEATURE_LINKS = [
     id: "F212.14-3",
     implementation: [
       { file: "e2e/drag-measurement.mjs", symbol: "committing: spread(" },
-      { file: "e2e/benchmark/cases/terminal.mjs", symbol: "transactionCadence: transactionCadence(run.layouts)" },
+      { file: "e2e/benchmark/cases/floor-page.mjs", symbol: "transactionCadence: transactionCadence(run.layouts)" },
     ],
     tests: [
       { file: "e2e/test/drag-measurement.test.mjs", id: "transaction cadence includes commit waiting and total transaction duration" },

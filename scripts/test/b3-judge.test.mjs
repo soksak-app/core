@@ -202,13 +202,13 @@ test("make check-b3 judges a session folder against docs/spec/performance-goals.
   const records = lines.map((line) => JSON.parse(line));
   const moves = records.filter((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G8-S1-pointer-move-p90"));
   for (const entry of moves.slice(0, Math.ceil(goals.runs / 2))) entry.values["G8-S1-pointer-move-p90"] = 8.34;
-  const verdict = records.find((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G4-S7-term-view"));
-  verdict.values["G4-S7-term-view"] = "failed";
+  const verdict = records.find((entry) => entry.application === "mygo" && Object.hasOwn(entry.values, "G4-S7-section-view"));
+  verdict.values["G4-S7-section-view"] = "failed";
   writeFileSync(join(path, "runs.jsonl"), `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`);
   const failed = judge();
   assert.equal(failed.status, 2, `make reports the exit status 1 of the judge as 2: ${failed.stdout}${failed.stderr}`);
   assert.match(failed.stdout, /^failed G8-S1-pointer-move-p90 mygo: median 8\.34, at most 8\.33 ms$/m);
-  assert.match(failed.stdout, /^failed G4-S7-term-view mygo: runs (passed )*failed( passed)*, equals passed$/m);
+  assert.match(failed.stdout, /^failed G4-S7-section-view mygo: runs (passed )*failed( passed)*, equals passed$/m);
   assert.match(failed.stdout, new RegExp(`^failed session ${path}: 2 failures$`, "m"));
 });
 

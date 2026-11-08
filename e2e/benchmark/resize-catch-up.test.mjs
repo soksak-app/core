@@ -1,7 +1,7 @@
 // Measures the time in which the layout stays behind the window after a maximise and a restore, and judges it against the catch-up
 // limit of the resize case (cases/resize.mjs). The window check e2e/resize.test.mjs keeps the same frames and judges only the behaviour.
-// On a window whose host.window reports pageProcess null it also judges each recorded frame with the geometry rule of the terminal drag
-// and then runs a maximise and restore without capture under the trace state of the frame records, whose U7 records must be complete.
+// On a window whose host.window reports pageProcess null it also judges each recorded frame with the geometry rule of the view drag on the
+// floor page fixture view and then runs a maximise and restore without capture under the trace state of the frame records, whose U7 records must be complete.
 // Each state asserts the settings of B3_SETTINGS before it measures. B3 output (SOKSAK_B3_OUT and SOKSAK_B3_TRACE, cases/b3-run.mjs):
 // the keys of resize-catch-up in B3_MEASUREMENTS of measurements.mjs for the state; the state captured writes the verdict with the
 // conditions of the captured maximise and restore, and the state frame-records writes the U7 figures of the maximise without capture

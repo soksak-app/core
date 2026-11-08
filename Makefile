@@ -727,11 +727,11 @@ test-app-shutdown:
 # B3_OUT=FILE writes the B3 output of the benchmark to FILE (e2e/benchmark/cases/b3-run.mjs). The view drag and the resize catch-up
 # measure in two states and take with B3_OUT the state TRACE, one of the state names of the benchmark in B3_MEASUREMENTS of
 # e2e/benchmark/measurements.mjs: TRACE=0|frame-records for the view drag and TRACE=captured|frame-records for the resize catch-up; the
-# view drag takes ACCESSIBILITY=1, FLOOR=1 and GC_LOOP=1 (e2e/benchmark/cases/view-drag.mjs). The benchmark refuses a value that it does
+# view drag takes ACCESSIBILITY=1 and GC_LOOP=1 (e2e/benchmark/cases/view-drag.mjs). The benchmark refuses a value that it does
 # not take.
 B3_BENCHMARK_ENV = $(if $(B3_OUT),SOKSAK_B3_OUT="$(abspath $(B3_OUT))") $(if $(TRACE),SOKSAK_B3_TRACE="$(TRACE)")
 benchmark-view-drag:
-	@$(B3_BENCHMARK_ENV) $(if $(ACCESSIBILITY),SOKSAK_ACCESSIBILITY="$(ACCESSIBILITY)") $(if $(FLOOR),SOKSAK_FLOOR="$(FLOOR)") \
+	@$(B3_BENCHMARK_ENV) $(if $(ACCESSIBILITY),SOKSAK_ACCESSIBILITY="$(ACCESSIBILITY)") \
 	  $(if $(GC_LOOP),SOKSAK_GC_LOOP="$(GC_LOOP)") pnpm -F @soksak/e2e run benchmark:view-drag
 
 benchmark-resize-catch-up:

@@ -458,30 +458,6 @@
       }
     },
     {
-      "id": "G4-S7-terminal-view",
-      "goal": "G4",
-      "scenario": "S7",
-      "target": "e2e/benchmark/terminal-view.test.mjs",
-      "measurement": "verdict",
-      "unit": "verdict",
-      "over": "each",
-      "bound": {
-        "equals": "passed"
-      }
-    },
-    {
-      "id": "G4-S7-term-view",
-      "goal": "G4",
-      "scenario": "S7",
-      "target": "e2e/benchmark/term-view.test.mjs",
-      "measurement": "verdict",
-      "unit": "verdict",
-      "over": "each",
-      "bound": {
-        "equals": "passed"
-      }
-    },
-    {
       "id": "G4-S7-section-view",
       "goal": "G4",
       "scenario": "S7",

@@ -82,11 +82,6 @@
       "reason": "Measures the editor's process footprint and views."
     },
     {
-      "file": "e2e/benchmark/cases/floor-page.mjs",
-      "owner": "core",
-      "reason": "Already uses the floor-page fixture; it borrows the terminal geometry colour only as a constant, which should move into the fixture or harness."
-    },
-    {
       "file": "e2e/benchmark/cases/hwp.mjs",
       "owner": "plugin:hwp",
       "reason": "Checks HWP document history, studio bounds and native marker replies."
@@ -102,11 +97,6 @@
       "reason": "Generic marker-colour layout and drag measurement harness that names editor and section views only as users; it needs a fixture view that paints `markerColor`."
     },
     {
-      "file": "e2e/benchmark/cases/resize.mjs",
-      "owner": "core",
-      "reason": "Maximise and restore gesture harness that reuses the terminal drag geometry rule; replace with a floor-page fixture view."
-    },
-    {
       "file": "e2e/benchmark/cases/section-view.mjs",
       "owner": "core",
       "reason": "Measures the section-view contract over whatever plugins are installed (measurement harness); replace with a fixture plugin that declares a section view."
@@ -115,16 +105,6 @@
       "file": "e2e/benchmark/cases/split-load.mjs",
       "owner": "core",
       "reason": "Split, resize, reload and WebView churn stress on host RSS, with terminal or browser as tabs; replace with plain-view probe tabs."
-    },
-    {
-      "file": "e2e/benchmark/cases/terminal.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Terminal and term view descriptors and screen reads; the shared geometry rule should move to the harness or floor-page. Also covers term."
-    },
-    {
-      "file": "e2e/benchmark/cases/view-drag.mjs",
-      "owner": "core",
-      "reason": "Drives the view drag sequence (drag and capture) and needs the terminal only for layout; replace with the view-drag floor-page fixture."
     },
     {
       "file": "e2e/benchmark/editor-footprint.test.mjs",
@@ -140,21 +120,6 @@
       "file": "e2e/benchmark/hwp-view.test.mjs",
       "owner": "plugin:hwp",
       "reason": "Measures HWP process, history, layout, drag and reclaim."
-    },
-    {
-      "file": "e2e/benchmark/term-view.test.mjs",
-      "owner": "plugin:term",
-      "reason": "Measures the term view's process and frame contract."
-    },
-    {
-      "file": "e2e/benchmark/terminal-view.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Measures the terminal view's process and frame contract."
-    },
-    {
-      "file": "e2e/benchmark/view-drag.test.mjs",
-      "owner": "core",
-      "reason": "View drag benchmark of the host and capture; it defaults to the terminal view and should always use the view-drag floor-page fixture."
     },
     {
       "file": "e2e/browser-cohort-upgrade.test.mjs",
@@ -532,11 +497,6 @@
       "reason": "Unit tests of the editor benchmark case (editor process footprint, editor geometry)."
     },
     {
-      "file": "e2e/test/floor-page-fixture.test.mjs",
-      "owner": "core",
-      "reason": "Tests the floor-page measurement fixture and the fixture registry. It opens the floor page in the terminal card and builds on the workspace registry; it should open in a `plain-view` card from a registry of fixtures only."
-    },
-    {
       "file": "e2e/test/host-public-parity.test.mjs",
       "owner": "core",
       "reason": "Unit test of public host parity checking. Terminal and browser are only plugin ids in synthetic data; replace them with fixture ids."
@@ -592,11 +552,6 @@
       "reason": "Tests how the terminal's cell screen and backgrounds are read and sampled (wrapped command output, cell rows), which is terminal screen content."
     },
     {
-      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
-      "owner": "mixed",
-      "reason": "\"the term view descriptor reads the statuses and commands of the term plugin\" -> plugin:term; \"the shell of a terminal view is the check shell of its plugin\" -> plugin:terminal; \"terminal view descriptor reads browser history and controls only the diagnostic frame obse…\" -> core (view-drag fixture with history/frame-observer capability); \"terminal source content mapping retains source interval…\" -> core (capture/measurement harness, view-drag fixture); \"terminal layout geometry excludes captured focus-corner colors…\" -> core (view-drag fixture); \"terminal geometry background uses one distinctive OSC 11 color…\" -> plugin:terminal; \"terminal drag layout evidence is written before frame analysis\" -> core (view-drag fixture); \"terminal drag geometry keeps four measured card and raster edges…\" -> core (view-drag fixture with a native raster region); \"terminal convergence target comes from the visible native raster region\" -> core (view-drag fixture with a native raster region)"
-    },
-    {
       "file": "e2e/test/view-content.test.mjs",
       "owner": "mixed",
       "reason": "\"view content reads the value that holds the shown text of each plugin\" -> plugin cohort (browser/editor/hwp/term/terminal), so it should move to each plugin; \"terminal content readiness preserves omitted blank cell characters\" -> plugin:terminal; \"view content refuses a missing, wrong or not presented value\" -> core (plain-view with a content-read command); \"view pixel crops include the capture content origin and scale once\" -> core (capture, any fixture); \"view pixel crops reject clipping and incomplete pixel storage\" -> core (capture, any fixture)"
@@ -605,11 +560,6 @@
       "file": "e2e/test/view-display.test.mjs",
       "owner": "core",
       "reason": "Tests the view-display checker (recording, readiness, blank view, capture offset, presentation joins) and uses \"terminal\" only as a placeholder plugin id. Replace with plain-view plus a content-verifier/readiness capability."
-    },
-    {
-      "file": "e2e/test/view-drag-case.test.mjs",
-      "owner": "core",
-      "reason": "Tests the B3 view-drag benchmark mechanics (native input drags, process CPU and footprint, GC_LOOP, judgment) and has no real-plugin references. It already fits the view-drag fixture."
     },
     {
       "file": "e2e/text-size.test.mjs",

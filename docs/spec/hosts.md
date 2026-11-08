@@ -784,8 +784,6 @@ The values of the goals, each with the scenario and the target that measure it a
 | `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | `verdict` | verdict | each run | passed | — |
 | `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | `verdict` | verdict | each run | passed | — |
 | `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | `verdict` | verdict | each run | passed | — |
-| `G4-S7-terminal-view` | G4 | S7 | `e2e/benchmark/terminal-view.test.mjs` | `verdict` | verdict | each run | passed | — |
-| `G4-S7-term-view` | G4 | S7 | `e2e/benchmark/term-view.test.mjs` | `verdict` | verdict | each run | passed | — |
 | `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | `verdict` | verdict | each run | passed | — |
 | `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | `verdict` | verdict | each run | passed | — |
 | `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1` | `applicationCpuPerFrameMs` | ms | median | at most 1.6 ms | each other host and baseline host |
