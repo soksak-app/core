@@ -101,7 +101,6 @@ pub fn start_host(config: &Path) -> Result<EventLog, String> {
     // A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
     system.pull_native_events(&mut [0u8; 1])?;
     system.set_event_boot(process_boot())?;
-    system.observe_activity()?;
     start(Options {
         directory: config.join("logs"),
         role: "host".into(),
@@ -128,6 +127,20 @@ pub fn start_host(config: &Path) -> Result<EventLog, String> {
             }
         })),
     })
+}
+
+/// Applies and watches the policy file of the host writer (`start_log_policy`) and then installs the activity observers of the
+/// platform. The native ring stores only errors until the first policy reaches it (docs/spec/logging.md#policy), so the observers
+/// register after it, and the policy in force decides whether their registration records are stored. The watch stops when the
+/// observers cannot be installed, because the result is dropped.
+pub fn start_host_log_policy(
+    log: &std::sync::Arc<EventLog>,
+    applied: Option<crate::log_policy::PolicyApplied>,
+) -> Result<crate::log_policy::LogPolicyWatch, String> {
+    let system = crate::platform::current()?;
+    let watch = crate::log_policy::start_log_policy(log, applied)?;
+    system.observe_activity()?;
+    Ok(watch)
 }
 
 /// Ends the event log of a process that is shutting down: `flush_observers` stores the tail of the counted sources of the native

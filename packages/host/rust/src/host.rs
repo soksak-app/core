@@ -247,9 +247,10 @@ pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
         endpoint::report_unrecorded_end(&end);
     }
     // The policy of the event log is the file log-policy.json, which the host and every process watch
-    // (docs/spec/logging.md#classes-and-policy).
+    // (docs/spec/logging.md#classes-and-policy). The activity observers start after the first policy is applied, so their
+    // registration records meet that policy.
     let policy_app = app.clone();
-    let policy_watch = log_policy::start_log_policy(
+    let policy_watch = event_log::start_host_log_policy(
         &events,
         Some(log_policy::log_policy_announcer(
             &events,
