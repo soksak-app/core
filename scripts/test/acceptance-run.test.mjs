@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { hashFile, hashTree, hashValue } from '../candidate-identity.mjs';
 import { decodeAcceptanceReport } from '../candidate-report.mjs';
-import { collectAcceptanceInputs, finishAcceptanceRun, prepareCandidate, sourceIdentity, writeAcceptanceReport } from '../acceptance-run.mjs';
+import { collectAcceptanceInputs, finishAcceptanceRun, prepareCandidate, prepareOrdinaryArtifacts, sourceIdentity, writeAcceptanceReport } from '../acceptance-run.mjs';
 
 const hosts = ['mygo', 'tauriv2', 'wailsv3'];
 const platform = 'darwin-arm64';
@@ -90,6 +90,38 @@ async function fixture(t, { worker } = {}) {
   const identify = async (_root, entry) => ({ ...entry, sha256: await hashFile(entry.executable) });
   return { folder, root, context, configRoot, install, calls, identify };
 }
+
+test('ordinary reference verifies every explicit plugin beyond the starter pack while candidate stays pack-only', { timeout: 10000 }, async (t) => {
+  const f = await fixture(t);
+  const index = JSON.parse(await readFile(f.context.registry.path, 'utf8'));
+  index.plugins.push({ id: 'extra', versions: [{ version: '0.0.1', release: { url: 'https://example.invalid/extra.tgz', sha256: '3'.repeat(64) } }] });
+  await put(f.context.registry.path, index);
+  f.context.registry.sha256 = await hashFile(f.context.registry.path);
+  f.context.registry.components.push({ kind: 'plugin', id: 'extra', version: '0.0.1', releaseSha256: '3'.repeat(64) });
+  const calls = [], byConfig = new Map();
+  const install = async (_command, args) => {
+    if (args[0] !== 'plugin') return;
+    const config = args.at(-1);
+    const ids = byConfig.get(config) ?? new Set();
+    ids.add(args[2]); byConfig.set(config, ids); calls.push(args[2]);
+    await installed(config, { extra: ids.has('extra') });
+    if (ids.has('extra')) {
+      await put(join(config, 'plugins/extra/0.0.1/package.json'), { name: '@fixture/extra', version: '0.0.1' });
+      await put(join(config, 'plugins/extra/0.0.1/plugin.json'), { id: 'extra' });
+      await put(join(config, 'plugins/extra/0.0.1/index.js'), 'extra plugin bytes');
+    }
+  };
+  const ordinary = structuredClone(f.context);
+  delete ordinary.candidate;
+  const prepared = await prepareOrdinaryArtifacts(ordinary, { install });
+  t.after(() => prepared.dispose());
+  assert.deepEqual(calls, ['fixture', 'extra'], 'ordinary reference must execute the real installer for all explicit plugins');
+  assert.deepEqual(prepared.context.registry.components.map(({ id }) => id).sort(), ['extra', 'fixture']);
+  for (const entry of prepared.context.registry.components) assert.match(entry.treeSha256, /^[0-9a-f]{64}$/);
+  calls.length = 0;
+  await assert.rejects(prepareCandidate(f.context, { install }), /installed component cohort differs/);
+  assert.deepEqual(calls, ['fixture'], 'candidate keeps its original declared-pack-only policy');
+});
 
 test('candidate reference installation binds the frozen registry payload to the exact enabled installed cohort', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);

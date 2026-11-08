@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -580,12 +581,12 @@ func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
 		t.Fatalf("an unacknowledged image detach failed the page start: %v", err)
 	}
 	<-service.outbox
-	err := surfaces.SidecarSend("fixture-sidecar", "surface-a", json.RawMessage(`{"open":{}}`), nil)
+	err := surfaces.windowSidecarSend(context.Background(), "fixture-sidecar", "surface-a", json.RawMessage(`{"open":{}}`), nil)
 	if err == nil || !strings.Contains(err.Error(), "image detach sidecar fixture-sidecar surface surface-a image view generation 7") ||
 		!strings.HasSuffix(err.Error(), "is pending") {
 		t.Fatalf("send of the pending surface returned %v, want the pending detach", err)
 	}
-	if err := surfaces.SidecarSend("fixture-sidecar", "surface-b", json.RawMessage(`{"open":{}}`), nil); err != nil {
+	if err := surfaces.windowSidecarSend(context.Background(), "fixture-sidecar", "surface-b", json.RawMessage(`{"open":{}}`), nil); err != nil {
 		t.Fatalf("send of another surface: %v", err)
 	}
 	savedFramework := framework

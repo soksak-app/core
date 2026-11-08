@@ -134,8 +134,17 @@ async function checkAssets(context) {
 
 /** Uses the candidate's public installer in an empty reference configuration to bind release bytes to installed trees. */
 export async function prepareCandidate(input, { install = installReference, remove = rm, signal } = {}) {
+  return prepareArtifactInputs(input, { install, remove, signal, candidate: true });
+}
+
+/** Ordinary prebuilt runs share the frozen component schema and actual installer verification, not candidate publication claims. */
+export async function prepareOrdinaryArtifacts(input, { install = installReference, remove = rm, signal } = {}) {
+  return prepareArtifactInputs(input, { install, remove, signal, candidate: false });
+}
+
+async function prepareArtifactInputs(input, { install, remove, signal, candidate }) {
   const context = structuredClone(input);
-  requireValue(context.schema === 1 && context.candidate && context.registry, 'candidate context schema must be 1');
+  requireValue(context.schema === 1 && (!candidate || context.candidate) && context.registry, 'candidate context schema must be 1');
   requireValue(same(context.hosts?.map(({ app }) => app).sort(), CANDIDATE_HOSTS), 'candidate context must name every candidate host exactly once');
   context.hosts.sort((a, b) => a.app.localeCompare(b.app));
   requireValue(context.registry.components?.length > 0, 'candidate component cohort is required');
@@ -159,7 +168,9 @@ export async function prepareCandidate(input, { install = installReference, remo
     const installer = join(context.hosts[0].bundle, 'Contents', 'MacOS', 'sok');
     const bundleBefore = await hashTree(context.hosts[0].bundle);
     await install(installer, ['registry', 'use', context.registry.path, '--config-dir', reference], { signal });
-    for (const id of pack.plugins) await install(installer, ['plugin', 'install', id, '--config-dir', reference], { signal });
+    // Candidate scope is its pack; ordinary scope is its explicit full cohort.
+    const referencePlugins = candidate ? pack.plugins : expectedPlugins;
+    for (const id of referencePlugins) await install(installer, ['plugin', 'install', id, '--config-dir', reference], { signal });
     requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'registry changed during reference installation');
     requireValue(await hashTree(context.hosts[0].bundle) === bundleBefore, 'candidate installer bundle changed during reference installation');
     context.registry.components = await installedComponents(reference, context, index, false);
@@ -172,12 +183,23 @@ export async function prepareCandidate(input, { install = installReference, remo
 
 /** Reads the actual endpoint process and every installed byte; a post-cleanup snapshot makes no live-process claim. */
 export async function collectAcceptanceInputs(root, context, configRoot, { live = true, identify = runningProcess } = {}) {
+  return collectArtifactInputs(root, context, configRoot, { live, identify, candidate: true });
+}
+
+/** Validates the same live executables and installed bytes while recording ordinary source state without a release claim. */
+export async function collectOrdinaryInputs(root, context, configRoot, { live = true, identify = runningProcess } = {}) {
+  return collectArtifactInputs(root, context, configRoot, { live, identify, candidate: false });
+}
+
+async function collectArtifactInputs(root, context, configRoot, { live, identify, candidate }) {
   await checkAssets(context);
   requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'frozen registry changed during acceptance');
   const index = await json(context.registry.path);
   const source = await sourceIdentity(root);
-  requireValue(source.head === context.candidate.sha, 'candidate checkout does not match its artifact commit');
-  requireValue(source.dirty === false, 'candidate checkout is dirty');
+  if (candidate) {
+    requireValue(source.head === context.candidate.sha, 'candidate checkout does not match its artifact commit');
+    requireValue(source.dirty === false, 'candidate checkout is dirty');
+  }
   const hosts = [];
   for (const host of context.hosts) {
     const config = configDir(configRoot, host.app);

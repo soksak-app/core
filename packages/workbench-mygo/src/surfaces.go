@@ -366,6 +366,18 @@ func (s *Shell) holdSurface(surface *heldSurface) {
 // standSurface seats a surface in the frame at box, in window coordinates, and draws its native view. The host holds a new surface
 // from the next placement.
 func (s *Shell) standSurface(c *ui.Context, surface *heldSurface, box layout.Rect) {
+	// A surface declaration names the frame on the backing grid, independently
+	// of the later native placement answer. Keep the stored plane fractional.
+	window, err := s.windowView()
+	if err != nil {
+		s.failWindowRead(err)
+		return
+	}
+	if _, err := layout.DeviceGridSize(0, window.Scale); err != nil {
+		s.fail(err)
+		return
+	}
+	box = DevicePixels(box, window.Scale)
 	id := surface.tab.ID
 	s.surfaces.drawn[id] = box
 	s.holdSurface(surface)

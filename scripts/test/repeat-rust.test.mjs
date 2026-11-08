@@ -12,6 +12,43 @@ import { cargoTargetArgs, runRustTests } from '../rust-tests.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 
+for (const profile of ['release', 'owner-custom']) {
+  test(`Rust CLI forwards ${profile} profile to build and both doctest paths`, (t) => {
+    const directory = fakeCargo(t);
+    const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs', '--package', 'fixture', '--profile', profile,
+      '--test', 'src/lib.rs - doc_example (line 3)'], { cwd: root, env: { ...process.env, CARGO: join(directory, 'cargo') }, encoding: 'utf8', timeout: 60000 });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
+    const testCalls = calls.filter((line) => line.startsWith('test '));
+    assert.equal(testCalls.length, 3, 'build, doctest listing and actual doctest execution');
+    for (const call of testCalls) assert.ok(call.includes(`--profile ${profile}`), call);
+    assert.ok(calls.find((line) => line.startsWith('metadata '))?.includes('--profile') === false, 'metadata accepts no Cargo profile');
+  });
+}
+
+test('make repeat-rust forwards its explicit Cargo profile without changing test selection', (t) => {
+  const directory = fakeCargo(t);
+  const result = spawnSync('make', ['repeat-rust', 'PACKAGE=fixture', 'COUNT=1', 'RUST_PROFILE=release', 'TEST=src/lib.rs - doc_example (line 3)'],
+    { cwd: root, env: { ...process.env, HOME: directory, CARGO_HOME: join(directory, '.cargo'), PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000 });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  for (const call of readFileSync(join(directory, 'args'), 'utf8').trim().split('\n').filter((line) => line.startsWith('test '))) {
+    assert.ok(call.includes('--profile release'), call);
+  }
+});
+
+test('runRustTests rejects empty and nonstring profiles before invoking Cargo', async (t) => {
+  const directory = fakeCargo(t), previous = process.env.CARGO;
+  process.env.CARGO = join(directory, 'cargo');
+  try {
+    for (const profile of ['', ' ', null, 1, false]) {
+      await assert.rejects(runRustTests({ manifest: 'Cargo.toml', package: 'fixture', profile, count: 1, timeoutMs: 1000, write() {} }), /--profile must be a nonempty Cargo profile name/);
+      assert.equal(existsSync(join(directory, 'args')), false, 'invalid profile reached Cargo');
+    }
+  } finally {
+    if (previous === undefined) delete process.env.CARGO; else process.env.CARGO = previous;
+  }
+});
+
 for (const stage of ['compiler', 'metadata']) {
   test(`Rust owner CLI reports captured Cargo ${stage} failure output`, (t) => {
     const { directory, targetLog } = targetCargo(t);

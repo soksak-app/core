@@ -31,6 +31,7 @@ impl Owner for FakeOwner {
     fn root(&self) -> Result<String, String> {
         Ok(self.root.clone())
     }
+
     fn deliver(&self, message: Message) {
         let _ = self.sent.send(message);
     }

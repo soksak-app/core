@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F502-4: Bind private view-sidecar requests to their original source generation and committed project, cancel queued work on retirement, and synchronize final admission with retirement. Reject conflicting project roots after service startup and create session records only after successful enqueue. Remove obsolete capture-current paths. Per-call background ownership also prevents mount-then-retire resurrection without invalidating unrelated surfaces or retaining history. The 13 Rust owners, 30 adjacent Go host owners and 164 native workbench owners pass; rebuilt application parity remains open.
+
+- F502-12: Add parent-owned ordinary focused runs against an explicit three-host artifact context and a fresh configuration root. Verify the complete installed plugin cohort without weakening candidate provenance or lifecycle audits. All 40 runner owners pass; the rebuilt application lifecycle run remains open.
+
 - F696-4: Compare renderer revision fields strictly without depending on JSON key order. All twelve provider owners pass after the reordered-field RED; the controlled mygo Browser collector and run audit pass, while pixel/earliest-frame and remaining OCR acceptance stay open.
 
 - F696-4: Preserve every physical row of fractional document snapshots through the exact original public image representation at native backing scale. Keep strict PNG geometry, issued QR and renderer revision checks. Verify all 24 native cases, including exact encoded first and final rows; actual application reference association remains open.

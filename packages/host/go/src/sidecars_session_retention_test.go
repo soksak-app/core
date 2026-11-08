@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"reflect"
@@ -354,7 +355,7 @@ func TestARequestOfAPageInAWindowWithNoProjectIsRefusedDuringARetain(t *testing.
 	s.root = ""
 	var refused error
 	kept := sendDuringARetain(t, s, func(c *Sidecars, name string) {
-		refused = s.SidecarSend(name, "tab-of-a-closed-project", json.RawMessage(`{"operation":"open"}`), nil)
+		refused = s.windowSidecarSend(context.Background(), name, "tab-of-a-closed-project", json.RawMessage(`{"operation":"open"}`), nil)
 	})
 	if refused == nil {
 		t.Fatal("the request of a page in a window with no project was not refused")

@@ -130,6 +130,8 @@ test("Tauri page regions expose operations but only composition places geometry"
   await host.call("viewSidecarRoute", { surface: "s1", generation: 2, sidecar: "x", id: "s1", on: false });
   assert.deepEqual(recorded.at(-1), ["view_sidecar_route", { request: { surface: "s1", generation: 2, sidecar: "x", id: "s1", on: false } }]);
   // An invalid argument is reported as a rejected promise, like the Wails runtime. Every call of the main page goes through settlingCalls.
+  await host.call("viewSidecarSend", { source: "s1", generation: 2, sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });
+  assert.deepEqual(recorded.at(-1), ["view_sidecar_send", { request: { source: "s1", generation: 2, sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] } }]);
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });
   assert.deepEqual(recorded.at(-1), ["sidecar_send", { sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] }]);
   await host.call("imageCaret", { surface: "s1", name: "img", x: 1, y: 2, width: 3, height: 4 });

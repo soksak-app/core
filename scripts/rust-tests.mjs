@@ -5,7 +5,7 @@
 // executable for them. A test that does not end is killed at its limit and reported with its name and elapsed time, and the next
 // test still runs.
 // Usage: node scripts/rust-tests.mjs --manifest <Cargo.toml> --package <package> [--features <list>] [--test-target lib|test:<name>] [--test <name>]
-//   [--count <n>] [--timeout <seconds>]
+//   [--profile <Cargo profile>] [--count <n>] [--timeout <seconds>]
 import { execFileSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { loadavg } from 'node:os';
@@ -76,10 +76,13 @@ async function packageOf(manifest, pkg) {
  * `<executable> --exact <name>` or, for a documentation test, as `cargo test --doc -- <name>`. Resolves with the exit status: 0 when
  * every test of every run passed and ran.
  */
-export async function runRustTests({ manifest, package: pkg, features, testTarget, test, count, timeoutMs, write }) {
+export async function runRustTests({ manifest, package: pkg, features, profile, testTarget, test, count, timeoutMs, write }) {
+  if (profile !== undefined && (typeof profile !== 'string' || !/^[A-Za-z0-9_-]+$/.test(profile))) {
+    throw new Error('--profile must be a nonempty Cargo profile name');
+  }
   const targetArgs = cargoTargetArgs(testTarget);
   const cargoArgs = ['test', '--locked', '-q', '--manifest-path', manifest, '-p', pkg,
-    ...(features ? ['--features', features] : []), ...targetArgs];
+    ...(features ? ['--features', features] : []), ...(profile === undefined ? [] : ['--profile', profile]), ...targetArgs];
   const executables = testExecutables(await cargo([...cargoArgs, '--no-run', '--message-format=json']));
   const { folder: cwd, doctests } = await packageOf(manifest, pkg);
   if (executables.length === 0 && (!doctests || testTarget !== undefined)) throw new Error(`${pkg} has no test executables`);
@@ -132,6 +135,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       manifest: { type: 'string', default: 'Cargo.toml' },
       package: { type: 'string' },
       features: { type: 'string' },
+      profile: { type: 'string' },
       'test-target': { type: 'string' },
       test: { type: 'string' },
       count: { type: 'string', default: '1' },
@@ -146,7 +150,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     throw new Error(`--timeout must be seconds from 0 up to 600, found ${JSON.stringify(values.timeout)}`);
   }
   runRustTests({
-    manifest: values.manifest, package: values.package, features: values.features, testTarget: values['test-target'],
+    manifest: values.manifest, package: values.package, features: values.features, profile: values.profile, testTarget: values['test-target'],
     test: values.test, count, timeoutMs,
     write: (line) => process.stdout.write(`${line}\n`),
   }).then((code) => { process.exitCode = code; }, (error) => {

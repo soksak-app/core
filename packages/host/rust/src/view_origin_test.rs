@@ -603,6 +603,7 @@ fn a_view_process_end_retires_its_origin_before_replacement_registration() {
                 &data.view_source_events,
                 "probe-surface",
                 "probe",
+                super::ViewProject::Unbound,
             )
             .expect("the replacement source is registered");
             replacement_generation = Some(replacement.generation);

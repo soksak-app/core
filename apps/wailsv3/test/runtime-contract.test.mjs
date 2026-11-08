@@ -99,6 +99,8 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["SidecarListen", [{ sidecar: "x", id: "s1", on: true }]]);
   await host.call("viewSidecarRoute", { surface: "s1", generation: 2, sidecar: "x", id: "s1", on: false });
   assert.deepEqual(recorded.at(-1), ["ViewSidecarRoute", [{ surface: "s1", generation: 2, sidecar: "x", id: "s1", on: false }]]);
+  await host.call("viewSidecarSend", { source: "s1", generation: 2, sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });
+  assert.deepEqual(recorded.at(-1), ["ViewSidecarSend", [{ source: "s1", generation: 2, sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] }]]);
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });
   assert.deepEqual(recorded.at(-1), ["SidecarSend", ["x", "s1", { value: 1 }, ["b1.7"]]]);
   await host.call("imageAttach", { surface: "s1", name: "img", sidecar: "x" });

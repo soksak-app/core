@@ -24,6 +24,7 @@ impl Owner for TestOwner {
     fn root(&self) -> Result<String, String> {
         Ok("/".to_string())
     }
+
     fn deliver(&self, _message: Message) {}
     fn deliver_failure(&self, _failure: Failure) {}
 }

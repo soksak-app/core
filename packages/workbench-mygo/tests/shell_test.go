@@ -72,7 +72,11 @@ type storedHost struct {
 	failing map[string]error
 	// policies holds the policy of each log call that stores one, and traces the action of each performance call.
 	policies []map[string]string
-	traces   []string
+	// policyBatches captures what actually reached the host before each policy transition.
+	policyBatches [][]map[string]any
+	// holdWorkspace keeps an actual settings handler pending for retirement owners.
+	holdWorkspace <-chan struct{}
+	traces        []string
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
 	// classes is the policy in force that the host call log answers; none stores the errors.
@@ -108,6 +112,7 @@ func (h *storedHost) log(_ context.Context, argument json.RawMessage) (any, erro
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		h.policies = append(h.policies, request.Classes)
+		h.policyBatches = append(h.policyBatches, slices.Clone(h.batches))
 		return nil, nil
 	case "policy-read":
 		if h.classes != nil {
@@ -390,6 +395,9 @@ func (h *storedHost) projectOpen(argument json.RawMessage) (any, error) {
 }
 
 func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
+	if h.holdWorkspace != nil {
+		<-h.holdWorkspace
+	}
 	var request struct {
 		Kind    string
 		ID      string

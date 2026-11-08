@@ -4,8 +4,9 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { fresh, recordCatalog } from "./fixture.mjs";
+import { publicHostState, comparePublicHostStates } from "./host-public-parity.mjs";
 import { orderNames } from "@soksak/window-check/order-names.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
@@ -82,9 +83,9 @@ async function layoutState(s) {
  * Connects to every application of the session. The tests below are registered only when requiresAll holds, so APPS holds
  * every application here and each open returns a session.
  */
-async function all(t) {
+async function all(t, apps = Object.values(APPS)) {
   const sessions = {};
-  for (const app of Object.values(APPS)) sessions[app.name] = await open(t, app);
+  for (const app of apps) sessions[app.name] = await open(t, app);
   return sessions;
 }
 
@@ -95,7 +96,7 @@ const comparison = (sessions) => {
 };
 
 if (requiresAll(process.env)) test("every host answers the same page the same way", async (t) => {
-  const sessions = await all(t);
+  const sessions = await all(t, MAIN_PAGE_APPS);
   const dragged = {};
   const results = {};
   const logs = {};
@@ -186,7 +187,7 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
 });
 
 if (requiresAll(process.env)) test("every host lays out the same page the same way after a resize", async (t) => {
-  const sessions = await all(t);
+  const sessions = await all(t, MAIN_PAGE_APPS);
   const rested = {};
   for (const [name, s] of Object.entries(sessions)) {
     // The call records show which phase of presentSurfaces held a commit that does not settle. The settled-commit wait reads
@@ -210,6 +211,51 @@ if (requiresAll(process.env)) test("every host lays out the same page the same w
     assert.equal(rested[other].answer, rested[baseline].answer,
       `${other} and ${baseline} place the same surfaces differently at ${SIZE.width}x${SIZE.height}`);
   }
+});
+
+/** A stable public state owns its own native frames and hits, without page transcripts. */
+async function readPublicState(s, normalize) {
+  const surfaces=await s.until("core.surfaces",rows=>rows.some(row=>row.visible) && rows.filter(row=>row.visible).every(row=>
+    row.declared && row.applied && ["x","y","w","h"].every(key=>row.declared[key]===row.applied[key])),
+  "the public surface declarations were not applied exactly");
+  await s.presented();
+  const [layout,grid,modal]=await Promise.all([layoutState(s),s.get("core.grid"),s.get("core.settings-modal")]);
+  const hits={};
+  for(const row of surfaces.filter(row=>row.visible)) {
+    const native=layout.window.surfaces.filter(value=>value.id===row.surface);
+    assert.equal(native.length,1,`surface ${row.surface} has no unique native frame for its hit query`);
+    const frame=native[0].frame;
+    // The first backing-pixel row lies in the view root rather than its content
+    // region. Modal routing is checked at this same independently owned point.
+    hits[row.surface]=await s.run("host.hit",{x:frame.x+frame.width/2,y:frame.y+0.5/layout.window.scale});
+  }
+  return publicHostState({layout,grid,surfaces,modal,hits,normalize});
+}
+
+if (requiresAll(process.env)) test("every host preserves public surface, hit and layout parity through drag, resize and settings", {timeout:180000}, async(t)=>{
+  const sessions=await all(t);
+  const states={};
+  for(const [name,s] of Object.entries(sessions)) {
+    await fresh(s);
+    const names=orderNames();
+    const normalize=text=>names(Object.values(APPS).reduce((value,app)=>value.replaceAll(app.configDir,"<config-dir>"),text));
+    states[name]={fresh:await readPublicState(s,normalize)};
+    await drag(s,PLAN);
+    states[name].afterDrag=await readPublicState(s,normalize);
+    assert.deepEqual(states[name].afterDrag.geometry,states[name].fresh.geometry,`${name} drag return changed its stable public state`);
+    await s.run("host.window.resize",SIZE);
+    await s.until("host.window",value=>value.content.width===SIZE.width && value.content.height===SIZE.height,"the native window did not take the public resize");
+    await s.until("core.window.workbench",value=>value.width===SIZE.width && value.height===SIZE.height,"the workbench did not take the public resize");
+    states[name].resized=await readPublicState(s,normalize);
+    await s.run("core.settings.open");
+    await s.until("core.settings-modal",value=>value.open,"the public settings modal did not open");
+    states[name].settingsOpen=await readPublicState(s,normalize);
+    await s.run("core.settings.close");
+    await s.until("core.settings-modal",value=>!value.open,"the public settings modal did not close");
+    states[name].settingsClosed=await readPublicState(s,normalize);
+    assert.deepEqual(states[name].settingsClosed.geometry,states[name].resized.geometry,`${name} settings close changed its stable public state`);
+  }
+  comparePublicHostStates(states);
 });
 
 /** The menu table of the host contract specification. The declaration is the reference, so the check reads it from the specification file. */

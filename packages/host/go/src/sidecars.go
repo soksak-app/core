@@ -626,13 +626,20 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 // SendFromPage sends a request of a page. A page outlives the close of its project for a moment, and its request then starts
 // no session: a session has the root of its project.
 func (c *Sidecars) SendFromPage(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
+	return c.sendFromPageGuarded(context.Background(), owner, name, surface, body, cids, nil)
+}
+
+func (c *Sidecars) sendFromPageGuarded(ctx context.Context, owner SidecarOwner, name, surface string, body json.RawMessage, cids []string, admit func() (func(), error)) error {
 	c.mu.Lock()
-	_, known := c.roots[surface]
+	root, known := c.roots[surface]
 	c.mu.Unlock()
-	if !known && owner.ProjectRoot() == "" {
-		return fmt.Errorf("sidecar %s: surface %s has no project", name, surface)
+	if !known {
+		root = owner.ProjectRoot()
+		if root == "" {
+			return fmt.Errorf("sidecar %s: surface %s has no project", name, surface)
+		}
 	}
-	return c.send(owner, name, surface, body, cids)
+	return c.sendAtRootGuarded(ctx, owner, name, surface, root, body, cids, admit)
 }
 
 // send is the send of SendWithCids.
@@ -642,6 +649,16 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawM
 	c.mu.Unlock()
 	if !known {
 		root = owner.ProjectRoot()
+	}
+	return c.sendAtRoot(owner, name, surface, root, body, cids)
+}
+
+func (c *Sidecars) sendAtRoot(owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string) error {
+	return c.sendAtRootGuarded(context.Background(), owner, name, surface, root, body, cids, nil)
+}
+func (c *Sidecars) sendAtRootGuarded(ctx context.Context, owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string, admit func() (func(), error)) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	// The JSON serialization is done outside the mutex.
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Cids: cids, Body: body})
@@ -692,6 +709,9 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawM
 	if c.stopped {
 		return fmt.Errorf("sidecars are stopped")
 	}
+	if existing, known := c.roots[surface]; known && existing != root {
+		return fmt.Errorf("sidecar %s: surface %s mounted project differs from its retained session", name, surface)
+	}
 	if _, _, ok := c.declaration(name); !ok {
 		return c.undeclared(name)
 	}
@@ -707,7 +727,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawM
 		}
 		return fmt.Errorf("sidecar %s: restart limit", name)
 	}
-	process, started, err := c.process(name, nil)
+	process, started, err := c.processContext(ctx, name, nil)
 	if err != nil {
 		return err
 	}
@@ -719,17 +739,32 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawM
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
 	}
-	outdatedChanged = (started || !process.surfaces[surface] || c.owners[surface] == nil) && c.outdated(process)
-	process.surfaces[surface] = true
-	c.owners[surface] = owner
-	// A surface of a window that shows no project has no session to keep: no retain list can name it without a root.
-	if _, ok := c.roots[surface]; !ok && root != "" {
-		c.roots[surface] = root
+	// processContext released c.mu: another request may have committed a
+	// different root for this same surface while the process started.
+	if existing, known := c.roots[surface]; known && existing != root {
+		return fmt.Errorf("sidecar %s: surface %s mounted project differs from its retained session", name, surface)
+	}
+	if admit != nil {
+		release, err := admit()
+		if err != nil {
+			return err
+		}
+		defer release()
+	} else if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	// Sends to the channel without blocking. When the channel is full, it returns the "is not keeping up" error.
 	select {
 	case process.outbox <- queue(line):
+		outdatedChanged = (started || !process.surfaces[surface] || c.owners[surface] == nil) && c.outdated(process)
+		process.surfaces[surface] = true
+		c.owners[surface] = owner
+		// A surface of a window that shows no project has no session to keep: no retain list can name it without a root.
+		if _, ok := c.roots[surface]; !ok && root != "" {
+			c.roots[surface] = root
+		}
+
 		if process.closedSurfaces != nil {
 			delete(process.closedSurfaces, surface)
 		}
@@ -1562,7 +1597,15 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 // of a lost persistent connection that runs this start, nil for a send or a retain. While the restart limit stops the sidecar, it starts nothing;
 // a counted start failure of a persistent service can stop it (docs/spec/persistent-services.md#service-transport).
 func (c *Sidecars) process(name string, lost *revival) (process *sidecar, started bool, err error) {
+	return c.processContext(context.Background(), name, lost)
+}
+
+// The caller owns c.mu. Cancellation stops only this waiter, never a shared launch.
+func (c *Sidecars) processContext(ctx context.Context, name string, lost *revival) (process *sidecar, started bool, err error) {
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
 		if process, ok := c.running[name]; ok {
 			return process, false, nil
 		}
@@ -1574,7 +1617,12 @@ func (c *Sidecars) process(name string, lost *revival) (process *sidecar, starte
 			break
 		}
 		c.mu.Unlock()
-		<-wait
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			c.mu.Lock()
+			return nil, false, ctx.Err()
+		}
 		c.mu.Lock()
 	}
 	if c.restartStopped(name) {

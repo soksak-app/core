@@ -679,7 +679,14 @@ pub fn set_view_channel(text: &str) -> Result<(), String> {
 /// The view channel of one view surface: the plugin, the ready document, which is the page identity of the view, and the
 /// performance.timeOrigin that the ready document states. An empty document and a zero time origin mean that no ready document
 /// is recorded (docs/spec/plugin-processes.md, rule 4).
+#[derive(Clone)]
+enum ViewProject {
+    Unbound,
+    Bound(Option<String>),
+}
+
 struct ViewChannel {
+    project: ViewProject,
     plugin: String,
     document: String,
     time_origin: f64,
@@ -1002,6 +1009,16 @@ impl ViewChannels {
 
     /// Registers a view before its native document loads and returns its local callback identity.
     fn register_origin(&self, surface: &str, plugin: &str, generation: u64) -> ViewOrigin {
+        self.register_origin_project(surface, plugin, generation, ViewProject::Unbound)
+    }
+
+    fn register_origin_project(
+        &self,
+        surface: &str,
+        plugin: &str,
+        generation: u64,
+        project: ViewProject,
+    ) -> ViewOrigin {
         let origin = ViewOrigin {
             instance: std::sync::Arc::new(()),
             generation,
@@ -1009,6 +1026,7 @@ impl ViewChannels {
         self.lock().insert(
             surface.to_string(),
             ViewChannel {
+                project,
                 plugin: plugin.to_string(),
                 document: String::new(),
                 time_origin: 0.0,
@@ -1447,15 +1465,34 @@ pub fn create_view(
     Err(reason)
 }
 
+fn register_view_source_with_start(
+    origins: &ViewSourceOrigins,
+    views: &ViewChannels,
+    events: &ViewSourceEventStream,
+    surface: &str,
+    plugin: &str,
+    start: &ViewStart,
+) -> Result<ViewOrigin, String> {
+    register_view_source(
+        origins,
+        views,
+        events,
+        surface,
+        plugin,
+        ViewProject::Bound(start.project.as_ref().map(|project| project.root.clone())),
+    )
+}
+
 fn register_view_source(
     origins: &ViewSourceOrigins,
     views: &ViewChannels,
     events: &ViewSourceEventStream,
     surface: &str,
     plugin: &str,
+    project: ViewProject,
 ) -> Result<ViewOrigin, String> {
     let generation = origins.issue_view(surface)?;
-    let origin = views.register_origin(surface, plugin, generation);
+    let origin = views.register_origin_project(surface, plugin, generation, project);
     if let Err(error) = events.send(
         "view-source-registered",
         crate::source_origins::view_source_origin_event(plugin, Some(surface), generation),
@@ -1535,12 +1572,13 @@ pub(crate) fn sync_view(
         Ok(handle) => handle,
         Err(_) => {
             data.documents.reserve(&key)?;
-            let origin = register_view_source(
+            let origin = register_view_source_with_start(
                 &data.view_source_origins,
                 data.documents.views(),
                 &data.view_source_events,
                 surface,
                 plugin,
+                &start,
             )?;
             let generation = origin.generation;
             match attach_view(
@@ -3740,3 +3778,147 @@ mod view_origin_tests;
 #[cfg(test)]
 #[path = "../tests/view_source_origins/view_generation_test.rs"]
 mod view_generation_tests;
+
+#[cfg(test)]
+#[path = "view_sidecar_project_test.rs"]
+mod view_sidecar_project_test;
+
+/// Private main-workbench bridge. Plugin runtime.sidecar.send carries no source authority.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ViewSidecarSendRequest {
+    pub source: String,
+    pub generation: u64,
+    pub sidecar: String,
+    pub surface: String,
+    pub body: Box<serde_json::value::RawValue>,
+    pub cids: Option<Vec<String>>,
+}
+impl ViewSidecarSendRequest {
+    fn check(&self) -> Result<(), String> {
+        if self.source.is_empty() || self.source != self.surface {
+            return Err("view sidecar source must equal its session surface".into());
+        }
+        if self.generation == 0 {
+            return Err("view sidecar source generation must be positive".into());
+        }
+        crate::source_origins::validate_view_source_generation_limit(
+            self.generation,
+            "view sidecar",
+        )?;
+        if self.sidecar.is_empty() {
+            return Err("view sidecar name must not be empty".into());
+        }
+        Ok(())
+    }
+}
+
+/// Private native-view authority. Its root and exact origin are copied together;
+/// admission holds both retirement ledgers through the nonblocking enqueue.
+enum SidecarOrigin<'a> {
+    View(ViewOrigin),
+    Background(crate::source_origins::BackgroundTicket<'a>),
+}
+pub(crate) struct ViewSidecarAuthority<'a> {
+    data: &'a crate::windows::WindowData,
+    surface: String,
+    origin: SidecarOrigin<'a>,
+    pub(crate) root: String,
+}
+pub(crate) struct ViewSidecarLease<'a> {
+    _source: std::sync::MutexGuard<'a, crate::source_origins::ViewSourceOriginsState>,
+    _views: std::sync::MutexGuard<'a, HashMap<String, ViewChannel>>,
+}
+impl ViewSidecarAuthority<'_> {
+    pub(crate) fn lease(&self) -> Result<ViewSidecarLease<'_>, String> {
+        let source = match &self.origin {
+            SidecarOrigin::View(origin) => self
+                .data
+                .view_source_origins
+                .lease_current(&self.surface, origin.generation)?,
+            SidecarOrigin::Background(ticket) => ticket.lease()?,
+        };
+        let views = self.data.documents.views().lock();
+        let live = match &self.origin {
+            SidecarOrigin::View(origin) => views.get(&self.surface).is_some_and(|view| {
+                view.origin.generation == origin.generation
+                    && std::sync::Arc::ptr_eq(&view.origin.instance, &origin.instance)
+            }),
+            SidecarOrigin::Background(_) => !views.contains_key(&self.surface),
+        };
+        if !live {
+            return Err(format!("sidecar source {} changed ownership", self.surface));
+        }
+        Ok(ViewSidecarLease {
+            _source: source,
+            _views: views,
+        })
+    }
+}
+
+pub fn view_sidecar_send<O: crate::sidecars::Owner>(
+    data: &crate::windows::WindowData,
+    sidecars: &crate::sidecars::Sidecars<O>,
+    owner: &O,
+    request: ViewSidecarSendRequest,
+) -> Result<(), String> {
+    request.check()?;
+    let authority = {
+        let _source = data
+            .view_source_origins
+            .lease_current(&request.source, request.generation)?;
+        let views = data.documents.views().lock();
+        let view = views
+            .get(&request.source)
+            .filter(|view| view.origin.generation == request.generation)
+            .ok_or_else(|| format!("view source {} is retired", request.source))?;
+        let root = match &view.project {
+            ViewProject::Bound(Some(root)) if !root.is_empty() => root.clone(),
+            _ => {
+                return Err(format!(
+                    "mounted surface {} has no committed project",
+                    request.source
+                ));
+            }
+        };
+        ViewSidecarAuthority {
+            data,
+            surface: request.source.clone(),
+            origin: SidecarOrigin::View(view.origin.clone()),
+            root,
+        }
+    };
+    sidecars.send_from_view(
+        owner,
+        &request.sidecar,
+        &request.surface,
+        &request.body,
+        request.cids.as_deref().unwrap_or(&[]),
+        &authority,
+    )
+}
+
+/// Generic window/background boundary. Native-view sends use view_sidecar_send.
+pub fn window_sidecar_send<O: crate::sidecars::Owner>(
+    data: &crate::windows::WindowData,
+    sidecars: &crate::sidecars::Sidecars<O>,
+    owner: &O,
+    sidecar: &str,
+    surface: &str,
+    body: &serde_json::value::RawValue,
+    cids: &[String],
+) -> Result<(), String> {
+    let ticket = data.view_source_origins.background_ticket(surface)?;
+    if data.documents.views().has(surface) {
+        return Err(format!(
+            "mounted surface {surface} requires original view source authority"
+        ));
+    }
+    let authority = ViewSidecarAuthority {
+        data,
+        surface: surface.to_string(),
+        origin: SidecarOrigin::Background(ticket),
+        root: owner.root()?,
+    };
+    sidecars.send_from_window(owner, sidecar, surface, body, cids, &authority)
+}

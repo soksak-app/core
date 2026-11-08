@@ -1,5 +1,5 @@
 import { createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
-import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
+import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime, sendViewSidecar } from "./host.js";
 import { surfaceErrorText } from "./surface-status.js";
 import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
 import { shownSectionSurfaces } from "./section-surfaces.js";
@@ -526,13 +526,6 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     startProject: () => viewStartProjectOf(surface.surfaceId),
     runtime: {
       native: gate,
-      sidecar: {
-        // A view names the sidecar of its send; the name must be the one the surface declares, so no other sidecar is reached.
-        send: (id, body, cids, name) => {
-          if (!surface.sidecars.includes(name)) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar ${name}`);
-          return page.sidecar().send(id, body, cids);
-        },
-      },
       // Whether a surface is a surface of the plugin in the window, which a status watch with surface checks (view-calls.js).
       holdsSurface: (plugin, watched) => registry.holdsSurface(plugin, watched),
       // The surface menu of a right click in the view (view-calls.js): a section declares no menu, and the frame moves the point into the window.
@@ -648,7 +641,14 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     const receivedGeneration = documentGeneration;
     const receivedSourceGeneration = event.generation;
     const receivedPending = pending;
-    const receivedOptions = { ...options, pending: receivedPending };
+    const receivedOptions = { ...options, pending: receivedPending, runtime: { ...options.runtime,
+      sidecar: { send: (id, body, cids, name) => {
+        if (!surface.sidecars.includes(name)) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar ${name}`);
+        if (id !== surface.surfaceId) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar surface ${id}`);
+        return sendViewSidecar({ source: surface.surfaceId, generation: receivedSourceGeneration,
+          sidecar: name, surface: id, body, cids });
+      } },
+    } };
     const runCall = () => {
       if (closing.aborted || receivedGeneration !== documentGeneration ||
           receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {

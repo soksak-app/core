@@ -9,13 +9,64 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startFakeEndpoint } from "@soksak/client/testing";
-import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan } from "../test-app.mjs";
+import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan, validateOrdinaryArtifacts } from "../test-app.mjs";
 
 const node = (code) => [process.execPath, "-e", code];
 // The limit of a test of a start step is the limit of the step (START_LIMIT_MS, 60 s) and some more: at a high load of the file system
 // events service the watch of the folder can become active after that limit, and the read at the limit then ends the step.
 const START_TEST_LIMIT_MS = 70000;
 const step = (name, phase, code) => ({ name, phase, kind: "run", argv: node(code), env: {} });
+
+test("ordinary focused acceptance owns explicit prebuilt artifacts and unchanged quit paths", () => {
+  const artifacts = {
+    schema: 1,
+    hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })),
+    registry: { path: "/prebuilt/registry/index.json", components: [{ kind: "plugin", id: "declared-plugin" }] },
+  };
+  const plan = e2ePlan({ root: "/source", configRoot: "/configuration/fresh", script: "test-app", artifacts, only: "window-end.test.mjs" });
+  for (const host of artifacts.hosts) {
+    assert.equal(plan.find((item) => item.name === `start ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok-${host.app}`);
+    assert.deepEqual(plan.find((item) => item.name === `registry ${host.app}`).argv,
+      [`${host.bundle}/Contents/MacOS/sok`, "registry", "use", artifacts.registry.path, "--config-dir", `/configuration/fresh/soksak-check-${host.app}`]);
+    assert.equal(plan.find((item) => item.name === `install declared-plugin ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok`);
+  }
+  const checks = plan.find((item) => item.name === "window checks");
+  assert.deepEqual(checks.argv.slice(-2), ["--only", "window-end.test.mjs"]);
+  assert.equal(checks.env.SOKSAK_CANDIDATE_RUN_FOLDER, undefined, "ordinary focus must not claim full candidate acceptance");
+  assert.deepEqual(plan.filter((item) => item.kind === "quit").map(({ app, by }) => [app, by]), [["wailsv3", "menu"], ["tauriv2", "menu"], ["mygo", "key"]]);
+  assert.deepEqual(plan.find((item) => item.kind === "remaining").paths, ["/configuration/fresh", "/prebuilt/wailsv3.app", "/prebuilt/tauriv2.app", "/prebuilt/mygo.app"]);
+  assert.ok(!plan.some((item) => item.argv?.includes("install-plugins")), "explicit artifacts cannot use default debug installer");
+});
+
+test("candidate plans reject ordinary file selection and artifact overrides", () => {
+  const candidate = { hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })), registry: { path: "/candidate/index.json", components: [] } };
+  for (const extra of [{ only: "window-end.test.mjs" }, { artifacts: candidate }]) {
+    assert.throws(() => e2ePlan({ root: "/source", configRoot: "/configuration", script: "test-app", candidate, ...extra }), /candidate.*(selection|artifacts|override)/);
+  }
+});
+
+test("ordinary artifact input rejects relative paths, incomplete hosts and existing configuration data", (t) => {
+  const input = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })), registry: { path: "/prebuilt/index.json" } };
+  assert.equal(validateOrdinaryArtifacts(input), input);
+  const change = (fn) => { const value = structuredClone(input); fn(value); return value; };
+  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts[0].bundle = "relative.app"; })), /bundle must be absolute/);
+  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.registry.path = "relative.json"; })), /registry path must be absolute/);
+  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts.pop(); })), /every host exactly once/);
+  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts[0].app = v.hosts[1].app; })), /every host exactly once/);
+  assert.throws(() => validateOrdinaryArtifacts(input, "relative-config"), /absolute new directory/);
+  const existing = workspace(t);
+  writeFileSync(join(existing, "retained.txt"), "existing user state");
+  assert.throws(() => validateOrdinaryArtifacts(input, existing), /existing data is never overwritten/);
+  assert.equal(readFileSync(join(existing, "retained.txt"), "utf8"), "existing user state");
+});
+
+test("candidate CLI rejects all ordinary options before reading context or starting applications", () => {
+  for (const args of [["--only", "window-end.test.mjs"], ["--artifacts", "/must-not-read.json"], ["--config-root", "/must-not-create"]]) {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("../test-app.mjs", import.meta.url)), "--script", "test-app", "--candidate", "/must-not-read.json", ...args], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /candidate acceptance rejects ordinary/);
+  }
+});
 
 test("candidate acceptance has a make entrypoint that requires explicit context and script without rebuilding", { timeout: 10000 }, () => {
   const cwd = fileURLToPath(new URL('../../', import.meta.url));

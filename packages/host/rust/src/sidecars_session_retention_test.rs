@@ -251,6 +251,7 @@ impl Owner for SessionOwner {
     fn root(&self) -> Result<String, String> {
         Ok(ROOT.to_string())
     }
+
     fn deliver(&self, _message: Message) {}
     fn deliver_failure(&self, _failure: Failure) {}
 }
@@ -270,6 +271,7 @@ impl Owner for ShownOwner {
     fn root(&self) -> Result<String, String> {
         Ok(self.0.lock().unwrap().clone())
     }
+
     fn deliver(&self, _message: Message) {}
     fn deliver_failure(&self, _failure: Failure) {}
 }
@@ -279,7 +281,7 @@ fn raw(text: &str) -> Box<RawValue> {
 }
 
 /// The persistent sidecar fixture-sidecar that the plugin probe depends on. Its service endpoint is in config.
-fn declared<O: Owner>(executable: &Path, config: &Path) -> Sidecars<O> {
+pub(crate) fn declared<O: Owner>(executable: &Path, config: &Path) -> Sidecars<O> {
     Sidecars::new(
         &[SidecarDeclaration {
             name: SIDECAR.to_string(),
@@ -297,6 +299,13 @@ fn declared<O: Owner>(executable: &Path, config: &Path) -> Sidecars<O> {
 /// The service of fixture-sidecar in config. It answers hello, retain, close-owner and shutdown, and it sends each request
 /// line that it reads to the returned receiver. It does not answer a close, so a closed surface stays in the closing list.
 fn service(config: &Path) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
+    service_with_hello_gate(config, None)
+}
+
+pub(crate) fn service_with_hello_gate(
+    config: &Path,
+    mut hello_gate: Option<Receiver<()>>,
+) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
     let directory = config.join("services/echo");
     std::fs::create_dir_all(&directory).unwrap();
     let socket = directory.join("fixture.sock");
@@ -325,6 +334,10 @@ fn service(config: &Path) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
             requests.send(request.clone()).unwrap();
             let reply = match request["operation"].as_str() {
                 Some("hello") => {
+                    if let Some(gate) = hello_gate.take() {
+                        gate.recv()
+                            .expect("the owning test releases the actual hello response");
+                    }
                     // The service is of the installed version, so a retain replaces nothing.
                     serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": "0.0.1"})
                 }
@@ -607,4 +620,109 @@ fn logical_retain_closes_a_persistent_session_absent_from_the_layout() {
         serde_json::json!([]),
         "logical retain included tab-removed after its layout ended"
     );
+}
+
+/// A connected production sender with a real serialized outbox and no process.
+pub(crate) fn mounted_project_wire<O: Owner>(
+    config: &Path,
+) -> (Sidecars<O>, impl Fn() -> serde_json::Value) {
+    let (sidecars, read) = mounted_project_probe_wire::<O>(config);
+    (sidecars, move || {
+        read().expect("the production sender queued an actual request")
+    })
+}
+
+pub(crate) fn mounted_project_probe_wire<O: Owner>(
+    config: &Path,
+) -> (Sidecars<O>, impl Fn() -> Option<serde_json::Value>) {
+    let sidecars = declared::<O>(config, config);
+    let (sender, receiver) = sync_channel(4);
+    sidecars.core.state.lock().unwrap().running.insert(
+        SIDECAR.into(),
+        Process {
+            child: None,
+            outbox: sender,
+            writing: Arc::new(AtomicUsize::new(0)),
+            persistent: None,
+            surfaces: HashSet::new(),
+            closed_surfaces: HashSet::new(),
+        },
+    );
+    (sidecars, move || match receiver.try_recv() {
+        Ok(Outgoing::Line(line)) => Some(serde_json::from_slice(&line.bytes).unwrap()),
+        Ok(_) => panic!("unexpected non-line"),
+        Err(TryRecvError::Empty) => None,
+        Err(error) => panic!("outbox closed: {error}"),
+    })
+}
+
+/// A real full production outbox, before any source owns a session.
+pub(crate) fn mounted_full_project_wire<O: Owner>(
+    config: &Path,
+) -> (Sidecars<O>, impl Fn() -> bool) {
+    let (sidecars, _read) = mounted_project_probe_wire::<O>(config);
+    let core = sidecars.core.clone();
+    {
+        let state = core.state.lock().unwrap();
+        let process = state.running.get(SIDECAR).unwrap();
+        for _ in 0..4 {
+            assert!(
+                process
+                    .outbox
+                    .try_send(Outgoing::Line(super::QueuedLine::new(b"{}\n".to_vec())))
+                    .is_ok()
+            );
+        }
+    }
+    // Keep the receiver alive throughout admission, exactly as a stalled writer.
+    (sidecars, move || {
+        let _keep_receiver = &_read;
+        let state = core.state.lock().unwrap();
+        state.roots.contains_key("probe-surface")
+            || state.owners.contains_key("probe-surface")
+            || state
+                .running
+                .get(SIDECAR)
+                .unwrap()
+                .surfaces
+                .contains("probe-surface")
+    })
+}
+
+pub(crate) fn background_race_sidecars<O: Owner>(
+    executable: &Path,
+    config: &Path,
+) -> (Sidecars<O>, impl Fn() -> serde_json::Value) {
+    let declarations = [SIDECAR, "fixture-ready"].map(|name| SidecarDeclaration {
+        name: name.into(), folder: executable.to_path_buf(),
+        data: serde_json::to_vec(&serde_json::json!({"executable": if name == SIDECAR { "echo" } else { "true" }, "displayName":"soksak://sidecar/probe", "protocol":1,"transport":"persistent"})).unwrap(),
+        error: None, version: "0.0.1".into(), dependents: vec!["probe".into()],
+    });
+    let sidecars = Sidecars::new(&declarations, config.to_path_buf()).unwrap();
+    let (sender, receiver) = sync_channel(4);
+    sidecars.core.state.lock().unwrap().running.insert(
+        "fixture-ready".into(),
+        Process {
+            child: None,
+            outbox: sender,
+            writing: Arc::new(AtomicUsize::new(0)),
+            persistent: None,
+            surfaces: HashSet::new(),
+            closed_surfaces: HashSet::new(),
+        },
+    );
+    (sidecars, move || {
+        match receiver
+            .try_recv()
+            .expect("ready producer accepted its actual request")
+        {
+            Outgoing::Line(line) => serde_json::from_slice(&line.bytes).unwrap(),
+            _ => panic!("unexpected non-line"),
+        }
+    })
+}
+
+pub(crate) fn has_surface_session<O: Owner>(sidecars: &Sidecars<O>, surface: &str) -> bool {
+    let state = sidecars.core.state.lock().unwrap();
+    state.roots.contains_key(surface) || state.owners.contains_key(surface) || state.running.values().any(|process| process.surfaces.contains(surface))
 }

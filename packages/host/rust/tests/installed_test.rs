@@ -397,6 +397,7 @@ impl Owner for Window {
     fn root(&self) -> Result<String, String> {
         Ok("/projects/a".into())
     }
+
     fn deliver(&self, _message: Message) {}
     fn deliver_failure(&self, failure: Failure) {
         panic!("unexpected sidecar failure: {failure:?}");

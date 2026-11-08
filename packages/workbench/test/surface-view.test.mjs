@@ -1162,6 +1162,7 @@ test("a view sends only to a sidecar its surface declares and a send to another 
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
+    sendViewSidecar: async ({ surface: id, body, cids }) => { sent.push({ id, body, cids }); return null; },
     native: true,
     onSurfacePrepared: () => () => {},
     surfaceContextRuntime: (surface, declarations) => {
@@ -1195,7 +1196,7 @@ test("a view sends only to a sidecar its surface declares and a send to another 
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: ["fixture-sidecar"], composition };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
   const sendFrom = (id, sidecar) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id, command: "runtime.sidecar.send",
-    params: { id: "probe", sidecar, body: { n: id }, cids: [] } });
+    params: { id: surfaceId, sidecar, body: { n: id }, cids: [] } });
   try {
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
@@ -1208,7 +1209,7 @@ test("a view sends only to a sidecar its surface declares and a send to another 
     sendFrom(2, "fixture-sidecar");
     await settle();
     assert.deepEqual(replies.at(-1), { id: 2, result: null, page: pageOf(dom), generation: 1 }, "a send to the declared sidecar was refused");
-    assert.deepEqual(sent, [{ id: "probe", body: { n: 2 }, cids: [] }]);
+    assert.deepEqual(sent, [{ id: surfaceId, body: { n: 2 }, cids: [] }]);
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();
@@ -1361,6 +1362,10 @@ test("a view process end cancels its pending work across restart and accepts new
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
+    sendViewSidecar: async ({ body }) => {
+      if (body.id === "old") { oldSendStarted(); return new Promise((resolve) => { resolveOldSend = resolve; }); }
+      return null;
+    },
     native: true,
     onSurfacePrepared: () => () => {},
     surfaceContextRuntime: (surface, declarations) => {
@@ -1415,7 +1420,7 @@ test("a view process end cancels its pending work across restart and accepts new
     const call = nativeListeners.get("view-call");
     call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
     await settle(() => replies.some(({ id }) => id === 10));
-    call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { id: "old" } } });
+    call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: surfaceId, sidecar: "fixture-sidecar", body: { id: "old" } } });
     await oldSendStartedPromise;
     const ended = nativeListeners.get("view-process-ended");
     assert.equal(typeof ended, "function", "the mounted surface listens for host view-process end");
@@ -1597,6 +1602,7 @@ test("closing a view cancels a pending call reply and removes its sidecar route"
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
+    sendViewSidecar: async () => { sendStarted(); return new Promise((resolve) => { resolveSend = resolve; }); },
     native: true,
     onSurfacePrepared: () => () => {},
     surfaceContextRuntime: (surface, declarations) => {
@@ -1643,7 +1649,7 @@ test("closing a view cancels a pending call reply and removes its sidecar route"
     const call = listeners.get("view-call");
     call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
     await new Promise((resolve) => setImmediate(resolve));
-    call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 2 } } });
+    call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: surfaceId, sidecar: "fixture-sidecar", body: { n: 2 } } });
     await sendStartedPromise;
     await disposeSurface(surfaceId);
     ended = true;
@@ -1887,4 +1893,36 @@ test("a forwarded run of a command that the view registered runs on the page por
     await disposeSurface(surfaceId);
     dom.window.close();
   }
+});
+
+test("a validated native view call uses only the private sidecar bridge with its original generation", {timeout:5000}, async t => {
+  const dom=new JSDOM("<main><div id=slot></div></main>",{url:"http://localhost/"});
+  globalThis.document=dom.window.document;
+  dom.window.ResizeObserver=class{observe(){} disconnect(){}};
+  dom.window.requestAnimationFrame=()=>1;dom.window.cancelAnimationFrame=()=>{};
+  const listeners=sourceListenerMap(),typed=[],generic=[];
+  let replied;const reply=new Promise(resolve=>{replied=resolve;});
+  const actualHost=await import("../host.js");
+  t.mock.module("../host.js",{exports:{...actualHost,native:true,onSurfacePrepared:()=>()=>{},
+    sendViewSidecar:async request=>{typed.push(structuredClone(request));return null;},
+    surfaceContextRuntime:(surface,declarations)=>{
+      const runtime=actualHost.surfaceContextRuntime(surface,declarations);
+      return {...runtime,sidecar:()=>({send:async(...args)=>{generic.push(args);return null;}}),native:{...runtime.native,
+        on:async(name,listener)=>{listeners.set(name,listener);return()=>{};},
+        call:async(name)=>{if(name==="viewReply")replied();return null;}}};
+    },
+  }});
+  const {mountSurface,authorizeSurface,disposeSurface}=await import("../surface-modules.js?typed-view-sidecar-source");
+  const pluginId="fixture-typed-sidecar",surfaceId="fixture-typed-sidecar-source",sidecar="@fixture/sidecar";
+  recordOrigin(surfaceId,null,"test fixture");registerPlugin({id:pluginId,surface:()=>null});
+  const surface={module:null,surfaceId,pluginId,declarations:{status:[],commands:[],element:[]},sidecars:[sidecar],composition:{kind:"view",page:"ui/page.html"}};
+  try {
+    authorizeSurface(surfaceId);seedViewSource(pluginId,surfaceId,41);
+    await mountSurface(document.querySelector("#slot"),surface,{onState:()=>{}});
+    listeners.get("view-call")({surface:surfaceId,plugin:pluginId,generation:41,id:1,command:"runtime.sidecar.send",
+      params:{id:surfaceId,sidecar,body:{generation:999},cids:["op-1"]}});
+    await reply;
+    assert.deepEqual(typed,[{source:surfaceId,generation:41,sidecar,surface:surfaceId,body:{generation:999},cids:["op-1"]}]);
+    assert.deepEqual(generic,[],"native view operations must not enter generic/window sidecarSend");
+  } finally {await disposeSurface(surfaceId);dom.window.close();}
 });

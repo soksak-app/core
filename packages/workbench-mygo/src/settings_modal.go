@@ -803,6 +803,12 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 			s.fail(err)
 			return
 		}
+		// The observer has queued the real workspace completion before this
+		// answer. Only the final pending write may request the latest policy;
+		// followDiagnostics drains those records before closing either gate.
+		if err := s.followDiagnostics(); err != nil {
+			s.fail(err)
+		}
 		s.options.Invalidate()
 	})
 }
@@ -1253,14 +1259,31 @@ func (s *Shell) followDiagnostics() error {
 			classes[name] = level
 		}
 	}
-	if text := jsonText(classes); text != s.diagnostics.policy {
+	if text := jsonText(classes); text != s.diagnostics.policy && s.settings.saving == 0 {
 		s.diagnostics.policy = text
-		s.events.Follow(map[string]any{"classes": classes})
-		s.calls.Call("log", map[string]any{"action": "policy", "classes": classes}, func(_ any, err error) {
-			if err != nil {
-				s.diagnostics.policy = ""
-				s.fail(err)
+		// A settings operation changes this policy itself. Its completed
+		// workspace call must reach the host before either producer or writer
+		// gate changes. Flush acknowledges the actual batches, without making
+		// up a completion or allowing an event through a closed gate.
+		s.events.Flush(func() {
+			if s.events.ended || s.calls.ended.Load() || text != s.diagnostics.policy {
+				return
 			}
+			if s.settings.saving != 0 {
+				// A newer write arrived while the batch was in flight. Its
+				// answer will request the newest effective policy again.
+				s.diagnostics.policy = ""
+				return
+			}
+			s.events.Follow(map[string]any{"classes": classes})
+			s.calls.Call("log", map[string]any{"action": "policy", "classes": classes}, func(_ any, err error) {
+				if err != nil {
+					if text == s.diagnostics.policy {
+						s.diagnostics.policy = ""
+					}
+					s.fail(err)
+				}
+			})
 		})
 	}
 	action := "off"

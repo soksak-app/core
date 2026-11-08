@@ -85,7 +85,7 @@ type dividerGrip struct {
 // page, so the grab area takes the pointer only in its parts outside the views that the frame draws, each edge of a view at the
 // device pixel where the framework stands it. A window whose scale cannot be read draws no grab area.
 func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
-	window, err := s.options.Window()
+	window, err := s.windowView()
 	if err != nil {
 		s.failWindowRead(err)
 		return nil

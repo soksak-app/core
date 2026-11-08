@@ -82,3 +82,16 @@ fn an_old_generation_does_not_post_to_a_replacement_source() {
         "current generation was not posted exactly once"
     );
 }
+
+#[test]
+fn canceled_background_ticket_unregisters_without_invalidating_other_calls() {
+    let origins = super::ViewSourceOrigins::default();
+    let keep = origins.background_ticket("keep").unwrap();
+    let canceled = origins.background_ticket("cancel").unwrap();
+    assert_eq!(origins.pending_background_calls(), 2);
+    drop(canceled);
+    assert_eq!(origins.pending_background_calls(), 1);
+    assert!(keep.lease().is_ok());
+    drop(keep);
+    assert_eq!(origins.pending_background_calls(), 0);
+}

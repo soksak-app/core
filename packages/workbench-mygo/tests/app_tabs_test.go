@@ -595,3 +595,21 @@ func TestAHiddenTabOfAProjectOpenedLaterStartsUnloaded(t *testing.T) {
 		t.Fatalf("the shown tab is %v", surface)
 	}
 }
+
+func TestColdHiddenSurfaceStatusKeepsThePublicCompositionKind(t *testing.T) {
+	stored := &surfaceHost{}
+	stored.common = map[string]any{"memorySaver": false}
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"), tab("tab-cccccc", "plain"))}
+	f := newTabApp(t, stored, hiddenTabsDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	for _, id := range []string{"tab-bbbbbb", "tab-cccccc"} {
+		row := f.surfaceOf(id)
+		if row == nil || row["visible"] != false || row["composition"] != "view" {
+			t.Errorf("a cold hidden retained view must expose the same public kind string: %s %+v", id, row)
+		}
+		held := stored.lastSurfaces(t)[id]
+		if held == nil || held["composition"] == nil {
+			t.Errorf("the internal hidden composition configuration was lost: %s %+v", id, held)
+		}
+	}
+}

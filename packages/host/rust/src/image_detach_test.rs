@@ -23,6 +23,7 @@ impl Owner for TestOwner {
     fn root(&self) -> Result<String, String> {
         Ok("/project".to_string())
     }
+
     fn deliver(&self, _message: Message) {}
     fn deliver_failure(&self, _failure: Failure) {}
 }
@@ -41,6 +42,7 @@ impl Owner for SupplierOwner {
     fn root(&self) -> Result<String, String> {
         Ok("/project".to_string())
     }
+
     fn deliver(&self, message: Message) {
         self.messages
             .send(message)

@@ -133,7 +133,7 @@ export const REGION_HOST_CALLS = new Set([
 
 // The host calls of the view bridge (docs/spec/native-surfaces.md#view-surfaces, view channel). The page sends them itself, so a
 // plugin never reaches them.
-export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply", "viewSidecarRoute"]);
+export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply", "viewSidecarRoute", "viewSidecarSend"]);
 
 // The host commands that plugin code may send through its native handle (docs/spec/native-surfaces.md#view-surfaces). A plugin
 // reaches a host command only through this allowlist: a command that is not listed is refused, so a command added to the host

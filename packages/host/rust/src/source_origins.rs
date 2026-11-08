@@ -22,9 +22,11 @@ pub(crate) fn validate_view_source_generation_limit(
 }
 
 #[derive(Default)]
-struct ViewSourceOriginsState {
+pub(crate) struct ViewSourceOriginsState {
     floor: u64,
     views: BTreeMap<String, u64>,
+    background_floor: u64,
+    background_calls: BTreeMap<u64, String>,
 }
 
 #[derive(Serialize)]
@@ -60,6 +62,34 @@ pub(crate) fn post_if_generation_current(
     post()
 }
 
+/// A single pending background call. Only outstanding calls occupy the registry.
+pub(crate) struct BackgroundTicket<'a> {
+    owner: &'a ViewSourceOrigins,
+    id: u64,
+    surface: String,
+}
+impl BackgroundTicket<'_> {
+    pub(crate) fn lease(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, ViewSourceOriginsState>, String> {
+        let state = self.owner.lock();
+        if state.background_calls.get(&self.id) != Some(&self.surface)
+            || state.views.contains_key(&self.surface)
+        {
+            return Err(format!(
+                "background source {} changed ownership",
+                self.surface
+            ));
+        }
+        Ok(state)
+    }
+}
+impl Drop for BackgroundTicket<'_> {
+    fn drop(&mut self) {
+        self.owner.lock().background_calls.remove(&self.id);
+    }
+}
+
 impl ViewSourceOrigins {
     fn lock(&self) -> std::sync::MutexGuard<'_, ViewSourceOriginsState> {
         // default: an interrupted issuance may leave a gap in the monotonic floor; ended generations also have no map
@@ -76,6 +106,9 @@ impl ViewSourceOrigins {
             .ok_or_else(|| {
                 "view source generation exceeds the JavaScript safe integer limit".to_string()
             })?;
+        state
+            .background_calls
+            .retain(|_, pending| pending != surface);
         state.floor = generation;
         state.views.insert(surface.to_string(), generation);
         Ok(generation)
@@ -88,6 +121,45 @@ impl ViewSourceOrigins {
         }
         state.views.remove(surface);
         true
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_background_calls(&self) -> usize {
+        self.lock().background_calls.len()
+    }
+
+    pub(crate) fn background_ticket(&self, surface: &str) -> Result<BackgroundTicket<'_>, String> {
+        let mut state = self.lock();
+        if state.views.contains_key(surface) {
+            return Err(format!(
+                "mounted surface {surface} requires original view source authority"
+            ));
+        }
+        let id = state
+            .background_floor
+            .checked_add(1)
+            .ok_or_else(|| "background call ticket space exhausted".to_string())?;
+        state.background_floor = id;
+        state.background_calls.insert(id, surface.to_string());
+        Ok(BackgroundTicket {
+            owner: self,
+            id,
+            surface: surface.to_string(),
+        })
+    }
+
+    pub(crate) fn lease_current(
+        &self,
+        surface: &str,
+        generation: u64,
+    ) -> Result<std::sync::MutexGuard<'_, ViewSourceOriginsState>, String> {
+        let state = self.lock();
+        if state.views.get(surface) != Some(&generation) {
+            return Err(format!(
+                "view source {surface} generation {generation} is retired"
+            ));
+        }
+        Ok(state)
     }
 
     pub(crate) fn current_view(&self, surface: &str) -> Option<u64> {

@@ -959,3 +959,39 @@ func TestTabsAndSpacesCountApart(t *testing.T) {
 		t.Fatalf("the layout went on as %q", got)
 	}
 }
+
+func TestCardSplitDistinguishesMissingEmptyAndNullSide(t *testing.T) {
+	f := viewShell(t)
+	card := f.tabbedCards()[0]
+	for _, c := range []struct {
+		name     string
+		side     any
+		present  bool
+		expected string
+	}{
+		{name: "missing", expected: "unknown side undefined; use left, right, top or bottom"},
+		{name: "empty", side: "", present: true, expected: "unknown side ; use left, right, top or bottom"},
+		{name: "null", present: true, expected: "unknown side null; use left, right, top or bottom"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			argument := map[string]any{"card": card, "plugin": "terminal"}
+			if c.present {
+				argument["side"] = c.side
+			}
+			before, err := json.Marshal(f.cardsOf())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.answer("core.card.split", argument); err == nil || err.Error() != c.expected {
+				t.Errorf("split side %s: got %v, expected %q", c.name, err, c.expected)
+			}
+			after, err := json.Marshal(f.cardsOf())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != string(before) {
+				t.Fatalf("refused split changed the stored cards: %s -> %s", before, after)
+			}
+		})
+	}
+}

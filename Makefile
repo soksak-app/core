@@ -209,10 +209,13 @@ BENCH_TIMEOUT ?= 300
 ifneq ($(origin TEST_TARGET),undefined)
 export TEST_TARGET
 endif
+ifneq ($(origin RUST_PROFILE),undefined)
+export RUST_PROFILE
+endif
 test-rust-alone: check-cargo
 	@case "$(PACKAGE)" in '') echo "test-rust-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@$(CARGO_ENV) $(CARGO) test --locked -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
-	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --count 1 --timeout $(TEST_TIMEOUT)
+	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(filter undefined,$(origin RUST_PROFILE)),,--profile "$$RUST_PROFILE") --count 1 --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of a Rust package COUNT times in sequence. With TEST, runs only the test of that name.
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
@@ -227,7 +230,7 @@ benchmark-go:
 repeat-rust: check-cargo
 	@case "$(PACKAGE)" in '') echo "repeat-rust requires PACKAGE=<cargo package> COUNT=<n> [TEST_TARGET=lib|test:<target>] [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-rust requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(filter undefined,$(origin TEST_TARGET)),,--test-target "$$TEST_TARGET") $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT)
+	@$(CARGO_ENV) node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(filter undefined,$(origin RUST_PROFILE)),,--profile "$$RUST_PROFILE") $(if $(filter undefined,$(origin TEST_TARGET)),,--test-target "$$TEST_TARGET") $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of the Go packages of PACKAGE COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
 # GO_LDFLAGS forwards caller-selected generic linker flags; it has no platform-specific default.

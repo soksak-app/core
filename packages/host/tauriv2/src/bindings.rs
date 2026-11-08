@@ -428,9 +428,8 @@ fn sidecar_send(
     soksak_host::windows::window_data(&window)?
         .images
         .pending_detach_error(&surface)?;
-    window
-        .state::<WindowSidecars>()
-        .send_from_page(&window, &sidecar, &surface, &body, &cids)
+    let data = soksak_host::windows::window_data(&window)?;
+    documents::window_sidecar_send(&data, &window.state::<WindowSidecars>(), &window, &sidecar, &surface, &body, &cids)
 }
 
 /// The surface list that every project layout holds.
@@ -654,6 +653,19 @@ async fn view_sidecar_route(
         Ok(())
     })
     .await
+}
+
+/// Sends for the original validated native-view incarnation, independently of background sends.
+#[tauri::command]
+async fn view_sidecar_send(webview:Webview,request:Argument<documents::ViewSidecarSendRequest>)->Result<(),String> {
+    let Argument(request)=request;
+    blocking(move||{
+        let window=webview.window();
+        soksak_host::exposure::authorize_main_caller(webview.label(),window.label(),"view sidecar send")?;
+        let data=soksak_host::windows::window_data(&window)?;
+        data.images.pending_detach_error(&request.surface)?;
+        documents::view_sidecar_send(&data,&window.state::<WindowSidecars>(),&window,request)
+    }).await
 }
 
 /// Receives the reply of the main page to a call request of a view (docs/spec/native-surfaces.md#view-surfaces).

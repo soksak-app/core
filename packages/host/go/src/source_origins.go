@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"errors"
 	"sync"
 )
@@ -12,6 +13,43 @@ type sourceOrigins struct {
 	mu    sync.Mutex
 	floor uint64
 	views map[string]uint64
+	// absences owns only in-flight window requests, never historical surfaces.
+	absences map[string]map[*sourceAbsence]struct{}
+}
+
+type sourceAbsence struct {
+	origins *sourceOrigins
+	surface string
+	invalid bool // read and written only under origins.mu
+}
+
+// watchAbsence captures one background lifetime. A same-surface registration
+// ends it permanently, even if that view retires before the request resumes.
+func (o *sourceOrigins) watchAbsence(surface string) (*sourceAbsence, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if _, mounted := o.views[surface]; mounted {
+		return nil, errors.New("surface requires viewSidecarSend with its original source generation")
+	}
+	if o.absences == nil {
+		o.absences = map[string]map[*sourceAbsence]struct{}{}
+	}
+	if o.absences[surface] == nil {
+		o.absences[surface] = map[*sourceAbsence]struct{}{}
+	}
+	ticket := &sourceAbsence{origins: o, surface: surface}
+	o.absences[surface][ticket] = struct{}{}
+	return ticket, nil
+}
+
+func (ticket *sourceAbsence) release() {
+	o := ticket.origins
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	delete(o.absences[ticket.surface], ticket)
+	if len(o.absences[ticket.surface]) == 0 {
+		delete(o.absences, ticket.surface)
+	}
 }
 
 type sourceOriginSnapshot struct {
@@ -41,6 +79,9 @@ func (o *sourceOrigins) create(surface string) (uint64, error) {
 	}
 	o.floor++
 	generation := o.floor
+	for ticket := range o.absences[surface] {
+		ticket.invalid = true
+	}
 	o.views[surface] = generation
 	return generation, nil
 }
@@ -72,4 +113,21 @@ func (o *sourceOrigins) snapshot() sourceOriginSnapshot {
 		views[surface] = generation
 	}
 	return sourceOriginSnapshot{Floor: o.floor, Views: views}
+}
+
+// WithViewSource carries host-issued source identity through an internal Go
+// call context. It is not a plugin parameter or a replacement for admission.
+func WithViewSource(ctx context.Context, surface string, generation uint64) context.Context {
+	return context.WithValue(ctx, viewSourceContextKey{}, viewSourceContext{surface: surface, generation: generation})
+}
+
+type viewSourceContextKey struct{}
+type viewSourceContext struct {
+	surface    string
+	generation uint64
+}
+
+func viewSourceOf(ctx context.Context) (viewSourceContext, bool) {
+	value, ok := ctx.Value(viewSourceContextKey{}).(viewSourceContext)
+	return value, ok
 }

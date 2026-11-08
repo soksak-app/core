@@ -459,6 +459,13 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	registeredEvent := false
 	if err == nil {
 		s.documents.registerView(surfaceID, plugin, generation, handle)
+		if !s.documents.bindViewProject(surfaceID, generation, start.Project) {
+			s.documents.unregisterView(surfaceID, generation)
+			s.sourceOriginState().retire(surfaceID, generation)
+			system.CloseDocument(handle)
+			s.takeBackDocumentName(key)
+			return fmt.Errorf("surface %q lost its mount before project binding", surfaceID)
+		}
 		if !s.documents.Set(key, handle) {
 			s.documents.unregisterView(surfaceID, generation)
 			s.sourceOriginState().retire(surfaceID, generation)
@@ -1494,10 +1501,14 @@ const viewChannelMarker = 1
 // viewChannel is the channel of one view surface: the plugin of its view and its ready document. An empty document means that no
 // ready document is recorded.
 type viewChannel struct {
-	plugin     string
-	generation uint64
-	handle     unsafe.Pointer
-	document   string
+	// Captured from the committed ViewStart before page load. This belongs to
+	// this generation, not the window's later shown project or a first send.
+	projectRoot  string
+	projectBound bool
+	plugin       string
+	generation   uint64
+	handle       unsafe.Pointer
+	document     string
 	// timeOrigin is the performance.timeOrigin that the ready document states; its page.start must state the same value.
 	timeOrigin float64
 	// processReady is set by the first ready message of the view, which writes host.trace.view.process-ready once.
@@ -1575,6 +1586,22 @@ func (d *Documents) registerView(surface, plugin string, generation uint64, hand
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.views[surface] = &viewChannel{plugin: plugin, generation: generation, handle: handle, calls: map[uint64]string{}}
+}
+
+// bindViewProject copies the exact mount context; a nil project is explicitly
+// projectless and never borrows the window's current project.
+func (d *Documents) bindViewProject(surface string, generation uint64, project *SurfaceProject) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok || channel.generation != generation || channel.projectBound {
+		return false
+	}
+	if project != nil {
+		channel.projectRoot = project.Root
+	}
+	channel.projectBound = true
+	return true
 }
 
 // unregisterView removes a view channel only when generation still owns the surface.

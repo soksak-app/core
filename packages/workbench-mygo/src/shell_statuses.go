@@ -93,19 +93,19 @@ type railGroup struct {
 
 // surfaceStatus is an entry of the status core.surfaces.
 type surfaceStatus struct {
-	Surface     string          `json:"surface"`
-	Plugin      string          `json:"plugin"`
-	Visible     bool            `json:"visible"`
-	Dim         bool            `json:"dim"`
-	Declared    *layout.Rect    `json:"declared"`
-	Applied     *layout.Rect    `json:"applied"`
-	Exposes     []string        `json:"exposes"`
-	Status      any             `json:"status"`
-	Placeholder *string         `json:"placeholder"`
-	Composition json.RawMessage `json:"composition"`
-	Kind        string          `json:"kind"`
-	Sidebar     *string         `json:"sidebar"`
-	State       string          `json:"state"`
+	Surface     string       `json:"surface"`
+	Plugin      string       `json:"plugin"`
+	Visible     bool         `json:"visible"`
+	Dim         bool         `json:"dim"`
+	Declared    *layout.Rect `json:"declared"`
+	Applied     *layout.Rect `json:"applied"`
+	Exposes     []string     `json:"exposes"`
+	Status      any          `json:"status"`
+	Placeholder *string      `json:"placeholder"`
+	Composition *string      `json:"composition"`
+	Kind        string       `json:"kind"`
+	Sidebar     *string      `json:"sidebar"`
+	State       string       `json:"state"`
 }
 
 // optionalText returns the status member of a text that a surface may not have reported.
@@ -382,11 +382,14 @@ func (s *Shell) surfacesState() []surfaceStatus {
 			box = held.box
 		}
 		entry := surfaceStatus{Surface: id, Plugin: unit.ID, Visible: visible, Dim: s.surfaceDimmed(id), Declared: &box, Exposes: s.registry.EntriesOf(id),
-			Status: s.surfacePhase(id), Composition: held.composition, Kind: "tab", State: s.surfaceMemoryState(id)}
+			Status: s.surfacePhase(id), Composition: optionalText(unit.Declaration.Kind), Kind: "tab", State: s.surfaceMemoryState(id)}
 		if applied, ok := s.surfaces.applied[id]; ok && visible {
 			entry.Applied = &applied
 		}
 		if held.section != nil {
+			// Sections have their own validated view composition, independent
+			// of whether their plugin declares a tab surface.
+			entry.Composition = optionalText("view")
 			entry.Kind = "section"
 			entry.Sidebar = &held.section.Sidebar
 		}
@@ -404,7 +407,7 @@ func (s *Shell) unloadedSections() []surfaceStatus {
 			continue
 		}
 		rows = append(rows, surfaceStatus{Surface: seat.SurfaceID, Plugin: seat.Plugin, Declared: &layout.Rect{}, Exposes: s.registry.EntriesOf(seat.SurfaceID),
-			Status: s.surfacePhase(seat.SurfaceID), Composition: seat.Composition, Kind: "section", Sidebar: &seat.Sidebar, State: "unloaded"})
+			Status: s.surfacePhase(seat.SurfaceID), Composition: optionalText("view"), Kind: "section", Sidebar: &seat.Sidebar, State: "unloaded"})
 	}
 	return rows
 }
@@ -506,7 +509,7 @@ func (s *Shell) registerStatuses() {
 	})
 	s.registry.Status("core.rail", func() any { return s.railState() })
 	s.registry.Status("core.window.workbench", func() any {
-		window, err := s.options.Window()
+		window, err := s.windowView()
 		if err != nil {
 			s.failWindowRead(err)
 			return nil

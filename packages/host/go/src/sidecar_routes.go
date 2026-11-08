@@ -172,3 +172,36 @@ func viewSidecarRouteRequestFrom(raw json.RawMessage) (ViewSidecarRouteRequest, 
 	}
 	return req, nil
 }
+
+// ViewSidecarSendRequest is the private source-bound view-host wire.
+type ViewSidecarSendRequest struct {
+	Source     string          `json:"source"`
+	Generation uint64          `json:"generation"`
+	Sidecar    string          `json:"sidecar"`
+	Surface    string          `json:"surface"`
+	Body       json.RawMessage `json:"body,nullvalue"`
+	Cids       []string        `json:"cids,omitempty"`
+}
+
+func viewSidecarSendRequestFrom(raw json.RawMessage) (ViewSidecarSendRequest, error) {
+	const call = "viewSidecarSend"
+	req, err := argument[ViewSidecarSendRequest]("request", raw)
+	if err != nil {
+		return ViewSidecarSendRequest{}, err
+	}
+	for _, field := range []struct{ name, text string }{{"source", req.Source}, {"surface", req.Surface}, {"sidecar", req.Sidecar}} {
+		if err := nonEmpty(call, field.name, field.text); err != nil {
+			return ViewSidecarSendRequest{}, err
+		}
+	}
+	if req.Generation == 0 {
+		return ViewSidecarSendRequest{}, fmt.Errorf("%s has no source generation", call)
+	}
+	if req.Generation > maxSourceGeneration {
+		return ViewSidecarSendRequest{}, fmt.Errorf("%s source generation exceeds the JavaScript safe integer limit", call)
+	}
+	if req.Source != req.Surface {
+		return ViewSidecarSendRequest{}, fmt.Errorf("surface %s cannot send to sidecar surface %s", req.Source, req.Surface)
+	}
+	return req, nil
+}

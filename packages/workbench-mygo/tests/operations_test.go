@@ -54,6 +54,83 @@ func (f *shellFixture) chain(stored *storedHost, first string, calls ...string) 
 	return starts[0]["fields"].(map[string]any)
 }
 
+func TestSettingsPolicyClosesOnlyAfterItsOperationChainDrains(t *testing.T) {
+	stored := recordingCommands(&storedHost{common: map[string]any{}})
+	f := newShell(t, stored)
+	stored.batches = nil
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"diagnostics.log": map[string]string{}}, "scope": "common"})
+	fields := f.chain(stored, "workbench.settings.change", "workspace")
+	if fields["actor"] != "core.settings.set" || fields["keys"] != "diagnostics.log" {
+		t.Fatalf("wrong settings operation: %v", fields)
+	}
+	if len(stored.policies) == 0 || stored.policies[len(stored.policies)-1]["call"] != "error" {
+		t.Fatalf("new requested policy was not eventually applied: %v", stored.policies)
+	}
+	starts := stored.written("workbench.settings.change")
+	flushed := false
+	for _, event := range stored.policyBatches[len(stored.policyBatches)-1] {
+		if event["event"] == "workbench.call" && fmt.Sprint(event["cids"]) == fmt.Sprint(starts[0]["cids"]) {
+			flushed = true
+		}
+	}
+	if !flushed {
+		t.Fatal("the new policy reached the host before the real settings completion batch drained")
+	}
+}
+
+func TestQueuedSettingsWritesApplyOnlyTheLatestPolicyAfterBothCompletions(t *testing.T) {
+	stored := recordingCommands(&storedHost{common: map[string]any{}})
+	f := newShell(t, stored)
+	stored.batches = nil
+	before := len(stored.policies)
+	for _, policy := range []string{`{}`, `{"call":"info"}`} {
+		f.shell.Registry().RunLater("core.settings.set", json.RawMessage(`{"patch":{"diagnostics.log":`+policy+`},"scope":"common"}`), func(_ any, err error) {
+			if err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	f.settle()
+	f.flush()
+	if len(stored.policies) != before+1 || stored.policies[before]["call"] != "info" {
+		t.Fatalf("queued writes did not coalesce to the latest policy: %v", stored.policies[before:])
+	}
+	starts := stored.written("workbench.settings.change")
+	if len(starts) != 2 {
+		t.Fatalf("settings operation starts: %v", starts)
+	}
+	for _, start := range starts {
+		completed := false
+		for _, event := range stored.policyBatches[before] {
+			if event["event"] == "workbench.call" && fmt.Sprint(event["cids"]) == fmt.Sprint(start["cids"]) {
+				completed = true
+			}
+		}
+		if !completed {
+			t.Fatalf("new policy preceded completed settings call %v", start["cids"])
+		}
+	}
+}
+
+func TestRetiredSettingsCompletionDoesNotApplyPolicy(t *testing.T) {
+	stored := recordingCommands(&storedHost{common: map[string]any{}})
+	app, window, queue, _ := fixtureApp(t, stored)
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	before := len(stored.policies)
+	release := make(chan struct{})
+	stored.holdWorkspace = release
+	app.Emit(window, "exposure-request", map[string]any{"id": 77, "method": "command.run", "params": json.RawMessage(`{"name":"core.settings.set","params":{"patch":{"diagnostics.log":{}},"scope":"common"}}`)})
+	queue.drain(t)
+	app.Close(window)
+	close(release)
+	queue.drain(t)
+	if len(stored.policies) != before {
+		t.Fatalf("retired settings answer applied a policy: %v", stored.policies[before:])
+	}
+}
+
 func TestAPluginOperationIsAChain(t *testing.T) {
 	plugins := &pluginsHost{plugins: map[string]map[string]any{"beta": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}}
 	f := pluginShell(t, plugins, `{"plugins":[]}`)

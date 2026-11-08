@@ -41,6 +41,7 @@ impl Owner for FakeOwner {
     fn root(&self) -> Result<String, String> {
         Ok(self.root.clone())
     }
+
     fn deliver(&self, _message: Message) {}
     fn deliver_failure(&self, failure: Failure) {
         eprintln!("sidecar failure: {failure:?}");

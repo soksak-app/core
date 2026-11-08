@@ -44,7 +44,9 @@ type surfaceHost struct {
 	// now is the clock of the window, which only a test moves.
 	now time.Time
 	// window is the state of the window that core.window.workbench reads.
-	window workbench.WindowView
+	window          workbench.WindowView
+	windowReads     int
+	viewWindowReads []int
 	// windowFailure is the error of each read of the state of the window.
 	windowFailure error
 	// presentFailure and declareFailure are the errors of each presentSurfaces and compositionDeclare.
@@ -206,7 +208,7 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		return nil, json.Unmarshal(argument, &h.clipboard)
 	}
 	h.debug.serve(table)
-	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "exposureRegister", "documentAttach", "viewRequest", "notify", "notificationRemove"} {
+	for _, name := range []string{"viewSidecarRoute", "sidecarListen", "viewEvent", "compositionPlace", "imageAttach", "sidecarSend", "viewSidecarSend", "exposureRegister", "documentAttach", "viewRequest", "notify", "notificationRemove"} {
 		table[name] = func(_ context.Context, argument json.RawMessage) (any, error) {
 			// Each host call runs on a goroutine of its own.
 			h.hostNameMu.Lock()
@@ -299,13 +301,17 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Reload:      func() { f.reloads++ },
 		Elements:    fixtureElements{f},
 		Tabs:        stored.tabs,
-		Window:      func() (workbench.WindowView, error) { return stored.window, stored.windowFailure },
+		Window:      func() (workbench.WindowView, error) { stored.windowReads++; return stored.window, stored.windowFailure },
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.shell = shell
-	f.tester = ui.NewTester(shell.View, 1200, 800)
+	f.tester = ui.NewTester(func(c *ui.Context) {
+		before := stored.windowReads
+		shell.View(c)
+		stored.viewWindowReads = append(stored.viewWindowReads, stored.windowReads-before)
+	}, 1200, 800)
 	shell.Start()
 	f.settle()
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
@@ -654,9 +660,19 @@ func TestAViewFillsTheCardBetweenItsHeadAndItsFoot(t *testing.T) {
 			}
 		}
 		surface := stored.lastSurfaces(t)[data.Tabs[0].ID]
-		if got := []float64{surface["x"].(float64), surface["y"].(float64), surface["w"].(float64), surface["h"].(float64)}; !slices.Equal(got,
-			[]float64{float64(box.X) + cardBorder, float64(box.Y) + cardBorder + head, float64(box.W) - 2*cardBorder, float64(box.H) - 2*cardBorder - head - foot}) {
-			t.Fatalf("the view of the card %+v stands at %v", box, got)
+		scale := stored.window.Scale
+		x, y, w, h := surface["x"].(float64), surface["y"].(float64), surface["w"].(float64), surface["h"].(float64)
+		got := []float64{x * scale, y * scale, (x + w) * scale, (y + h) * scale}
+		want := []float64{math.Round((float64(box.X) + cardBorder) * scale),
+			math.Round(float64(top.Y+top.H) * scale), math.Round((float64(box.X+box.W) - cardBorder) * scale),
+			math.Round(float64(status.Y) * scale)}
+		if !slices.Equal(got, want) {
+			t.Fatalf("the declared view of card %+v has physical edges %v, want exact card/header/footer edges %v at scale %v", box, got, want, scale)
+		}
+		for _, edge := range got {
+			if edge != math.Round(edge) {
+				t.Fatalf("the declared view edge %v is not an actual backing-pixel edge", edge)
+			}
 		}
 	}
 }
@@ -687,8 +703,11 @@ func TestAViewTouchesTheHeadAndTheFootOfItsCard(t *testing.T) {
 				if len(node.Children) != 1 {
 					t.Fatalf("the slot %+v holds %d elements", node.Bounds, len(node.Children))
 				}
-				if view := node.Children[0].Bounds; view != node.Bounds {
-					t.Errorf("the view %+v does not fill the slot %+v", view, node.Bounds)
+				view, slot := node.Children[0].Bounds, node.Bounds
+				viewEdges := []float64{device(view.X), device(view.Y), device(view.X + view.W), device(view.Y + view.H)}
+				slotEdges := []float64{device(slot.X), device(slot.Y), device(slot.X + slot.W), device(slot.Y + slot.H)}
+				if !slices.Equal(viewEdges, slotEdges) {
+					t.Errorf("the view %+v has physical edges %v and does not fill the slot %+v with physical edges %v at scale %v", view, viewEdges, slot, slotEdges, scale)
 				}
 				views = append(views, node.Children[0].Bounds)
 			}
@@ -1583,5 +1602,111 @@ func TestTheErrorOfTheActiveTabIsRecordedWhenItAppears(t *testing.T) {
 	}
 	if got := viewCallShowing(t, f, stored, surface, "tab.error", "late"); !slices.Equal(got, want) {
 		t.Fatalf("the records of the error shown again are %q", got)
+	}
+}
+
+// The declaration names the native frame, whose edges share the device grid
+// with the painted card chrome; the stored plane may remain fractional.
+func TestSurfaceDeclarationsUseTheFrameBackingPixelEdges(t *testing.T) {
+	for _, scale := range []float64{1, 2} {
+		t.Run(fmt.Sprint(scale), func(t *testing.T) {
+			f, stored := surfaceShell(t)
+			stored.window.Scale = scale
+			stored.elements = true
+			f.tester.SetScale(float32(scale))
+			f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
+			f.settle()
+			rows := status[[]struct {
+				Surface  string                       `json:"surface"`
+				Visible  bool                         `json:"visible"`
+				Declared struct{ X, Y, W, H float64 } `json:"declared"`
+			}](t, f, "core.surfaces")
+			requests := stored.lastSurfaces(t)
+			checked := 0
+			for _, row := range rows {
+				if !row.Visible {
+					continue
+				}
+				checked++
+				box := row.Declared
+				for _, edge := range []float64{box.X, box.Y, box.X + box.W, box.Y + box.H} {
+					if edge*scale != math.Round(edge*scale) {
+						t.Errorf("surface %s declares an edge outside its actual backing-pixel grid: edge=%v scale=%v frame=%+v", row.Surface, edge, scale, box)
+					}
+				}
+				request := requests[row.Surface]
+				for key, expected := range map[string]float64{"x": box.X, "y": box.Y, "w": box.W, "h": box.H} {
+					if request[key] != expected {
+						t.Errorf("surface %s status and host declaration differ at %s: %v versus %v", row.Surface, key, expected, request[key])
+					}
+				}
+			}
+			if checked == 0 {
+				t.Fatal("no visible native surface declaration was checked")
+			}
+		})
+	}
+}
+
+func TestSurfaceStatusExposesOnlyTheDeclaredCompositionKind(t *testing.T) {
+	var document struct {
+		Plugins []map[string]any `json:"plugins"`
+	}
+	if err := json.Unmarshal([]byte(installedDocument), &document); err != nil {
+		t.Fatal(err)
+	}
+	document.Plugins = append(document.Plugins, map[string]any{"id": "no-view", "package": "@scope/plugin-no-view", "version": "1.0.0",
+		"manifest": map[string]any{"id": "no-view", "name": "No view", "description": "No surface declaration", "contributes": map[string]any{}, "mark": "n", "icon": "<path d=\"M1 1h14\"/>"}})
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, _ := surfaceShellOf(t, string(encoded))
+	rows := status[[]map[string]any](t, f, "core.surfaces")
+	checkedView := false
+	for _, row := range rows {
+		switch row["plugin"] {
+		case "browser":
+			checkedView = true
+			if row["composition"] != "view" {
+				t.Errorf("public composition must be the declared kind string, not renderer configuration: %v", row)
+			}
+		case "no-view":
+			t.Errorf("a contribution-only plugin has no mounted surface row: %v", row)
+		}
+	}
+	if !checkedView {
+		t.Fatalf("fixture must cover a view composition: %v", rows)
+	}
+	checkedAbsent := false
+	for _, plugin := range f.pluginStatus().Plugins {
+		if plugin.ID == "no-view" {
+			checkedAbsent = true
+			if plugin.Composition != nil {
+				t.Errorf("the actual contribution-only plugin must expose null composition: %+v", plugin)
+			}
+		}
+	}
+	if !checkedAbsent {
+		t.Fatal("the valid contribution-only plugin is absent from public plugin status")
+	}
+}
+
+func TestSurfaceDeclarationsShareOneWindowObservationPerView(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.elements = true
+	stored.viewWindowReads = nil
+	f.tester.Frame()
+	f.settle()
+	if len(stored.lastSurfaces(t)) < 2 {
+		t.Fatal("the read-budget fixture needs multiple real surface declarations")
+	}
+	if len(stored.viewWindowReads) == 0 {
+		t.Fatal("no actual public Shell.View build was observed")
+	}
+	for index, reads := range stored.viewWindowReads {
+		if reads != 1 {
+			t.Errorf("view build %d read the native WindowView port %d times, expected one shared frame-owned observation", index, reads)
+		}
 	}
 }

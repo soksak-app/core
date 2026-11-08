@@ -7,6 +7,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -650,19 +651,131 @@ func (s *Surfaces) shownProjectValue() *SurfaceProject {
 	return &SurfaceProject{ID: s.shown, Root: s.root}
 }
 
-// SidecarSend passes a message that a surface page of this window sent to a sidecar.
-func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids []string) error {
+// A captured source lease never substitutes a successor's mount context. Its
+// final admission is linearized with sourceOrigins.retire and view removal.
+type mountedSidecarLease struct {
+	ctx        context.Context
+	origins    *sourceOrigins
+	documents  *Documents
+	surface    string
+	generation uint64
+	root       string
+}
+
+func (s *Surfaces) mountedSidecarLease(ctx context.Context, surface string, expected uint64) (*mountedSidecarLease, error) {
+	if expected == 0 || expected > maxSourceGeneration {
+		return nil, errors.New("surface-closed")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.documents == nil {
+		return nil, errors.New("surface-closed")
+	}
+	origins := s.sourceOriginState()
+	origins.mu.Lock()
+	defer origins.mu.Unlock()
+	s.documents.mu.Lock()
+	defer s.documents.mu.Unlock()
+	channel, ok := s.documents.views[surface]
+	if !ok {
+		return nil, errors.New("surface-closed")
+	}
+	if origins.views[surface] != channel.generation || expected != channel.generation {
+		return nil, errors.New("surface-closed")
+	}
+	if !channel.projectBound {
+		return nil, fmt.Errorf("surface %s mount project is not committed", surface)
+	}
+	if channel.projectRoot == "" {
+		return nil, fmt.Errorf("mounted surface %s has no project", surface)
+	}
+	return &mountedSidecarLease{ctx: ctx, origins: origins, documents: s.documents, surface: surface, generation: channel.generation, root: channel.projectRoot}, nil
+}
+func (lease *mountedSidecarLease) admit() (func(), error) {
+	lease.origins.mu.Lock()
+	lease.documents.mu.Lock()
+	unlock := func() { lease.documents.mu.Unlock(); lease.origins.mu.Unlock() }
+	channel, ok := lease.documents.views[lease.surface]
+	if err := lease.ctx.Err(); err != nil {
+		unlock()
+		return nil, err
+	}
+	if !ok || lease.origins.views[lease.surface] != lease.generation || channel.generation != lease.generation ||
+		!channel.projectBound || channel.projectRoot != lease.root {
+		unlock()
+		return nil, errors.New("surface-closed")
+	}
+	return unlock, nil
+}
+func (s *Surfaces) sidecarSendContext(ctx context.Context, generation uint64, name, surface string, body json.RawMessage, cids []string) error {
 	if err := s.pendingImageDetachError(surface); err != nil {
 		return err
 	}
-	return s.sidecars.SendFromPage(s, name, surface, body, cids)
-}
-
-func (s *Surfaces) sidecarSendFrom(viewID uint64, name, surface string, body json.RawMessage, cids []string) error {
-	if err := s.authorizeSurface(viewID, surface); err != nil {
+	lease, err := s.mountedSidecarLease(ctx, surface, generation)
+	if err != nil {
 		return err
 	}
-	return s.SidecarSend(name, surface, body, cids)
+	return s.sidecars.sendAtRootGuarded(ctx, s, name, surface, lease.root, body, cids, lease.admit)
+}
+
+// sendViewSidecar never borrows a successor for an old source-bound request.
+func (s *Surfaces) sendViewSidecar(ctx context.Context, req ViewSidecarSendRequest) error {
+	if origin, ok := viewSourceOf(ctx); req.Source == "" || req.Source != req.Surface || req.Generation == 0 || req.Generation > maxSourceGeneration || (ok && (origin.surface != req.Source || origin.generation != req.Generation)) {
+		return errors.New("surface-closed")
+	}
+	return s.sidecarSendContext(ctx, req.Generation, req.Sidecar, req.Source, req.Body, req.Cids)
+}
+
+// windowSidecarSend is a separate window/background owner, never a view fallback.
+func (s *Surfaces) windowSidecarSend(ctx context.Context, name, surface string, body json.RawMessage, cids []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, ok := viewSourceOf(ctx); ok {
+		return errors.New("view sidecar sends require their original source generation")
+	}
+	ticket, err := s.sourceOriginState().watchAbsence(surface)
+	if err != nil {
+		return err
+	}
+	defer ticket.release()
+	if s.documents != nil {
+		if _, mounted := s.documents.view(surface); mounted {
+			return fmt.Errorf("mounted surface %s requires viewSidecarSend with its original source generation", surface)
+		}
+	}
+	if err := s.pendingImageDetachError(surface); err != nil {
+		return err
+	}
+	documents := s.documents
+	admit := func() (func(), error) {
+		ticket.origins.mu.Lock()
+		if documents != nil {
+			documents.mu.Lock()
+		}
+		unlock := func() {
+			if documents != nil {
+				documents.mu.Unlock()
+			}
+			ticket.origins.mu.Unlock()
+		}
+		if err := ctx.Err(); err != nil {
+			unlock()
+			return nil, err
+		}
+		_, active := ticket.origins.views[surface]
+		mounted := false
+		if documents != nil {
+			_, mounted = documents.views[surface]
+		}
+		if ticket.invalid || active || mounted {
+			unlock()
+			return nil, fmt.Errorf("mounted surface %s requires viewSidecarSend with its original source generation", surface)
+		}
+		return unlock, nil
+	}
+	return s.sidecars.sendFromPageGuarded(ctx, s, name, surface, body, cids, admit)
 }
 
 // SidecarReconnected sends the picture configure of a persistent sidecar again when its connection is made again after it was lost

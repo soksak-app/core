@@ -1,15 +1,25 @@
 // Checks the display order, the background, the input, the move, the resize and the removal of a modal.
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, MAIN_PAGE_APPS, open, recordingFolders } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
+import { fresh as prepare } from "./fixture.mjs";
+import { parseState } from "../packages/workbench/debug-state.js";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals } from "./terminal-screen.mjs";
 import { readStillCapture } from "./still-capture.mjs";
+
+// Functional paint checks explicitly render covered windows without activation.
+// This preparation does not change production benchmark visibility requirements.
+async function fresh(s, options) {
+  await prepare(s, options);
+  s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+  await s.request("diagnostics.window.draw-covered", { draw: true });
+  await s.presented();
+}
 
 // The native workbench owns its dialog claim only until that workbench ends.
 // Reload directly under settings: preparing another fixture here would erase
@@ -165,15 +175,16 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     const { frames: directory } = await s.request("diagnostics.capture.start", {});
-    s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
+    s.trackRecording(directory);
     let displayed = 0;
     let stopped;
     try {
       await s.run("core.settings.open");
       s.cleanup(() => s.run("core.settings.close"));
-      // open of core.settings-modal is a state of the main page. modal.shown of host.window reports whether the modal is on the screen.
-      await s.until("host.window", (w) => w.modal?.id === "settings" && w.modal.shown, "settings was not shown");
+      await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
       ({ displayed } = await s.presented());
+      const card = await s.rect("core.settings-modal.card");
+      assert.ok(card.width > 0 && card.height > 0, "the actual named settings card was not rendered");
     } finally {
       stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 });
     }
@@ -293,8 +304,9 @@ for (const app of MAIN_PAGE_APPS) {
     const card = await s.rect("core.settings-modal.card");
     await s.click(card.x + card.width / 2, card.y + card.height - 8);
     await s.press("Escape");
-    await s.act("core.settings-modal.scrim", "dispatch", { event: { type: "pointerdown" } });
-    await s.act("core.settings-modal.scrim", "dispatch", { event: { type: "keydown", key: "Escape" } });
+    await s.click(point.x, point.y); // A real native click on the scrim must not dismiss the dialog.
+    await assert.rejects(s.act("core.settings-modal.scrim", "dispatch", { event: { type: "pointerdown" } }), /behind the open dialog and takes no action/);
+    await assert.rejects(s.act("core.settings-modal.scrim", "dispatch", { event: { type: "keydown", key: "Escape" } }), /behind the open dialog and takes no action/);
     await s.presented();
     assert.equal((await s.get("core.settings-modal")).open, true, "background clicks and Escape must not dismiss settings");
     settingsAboveSurfaces(await s.get("host.window"));
@@ -384,10 +396,8 @@ for (const app of Object.values(APPS)) {
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
     // Opening the view writes a still capture of each window into logs/captures; the check removes the folders it caused.
-    s.cleanup(() => {
-      for (const folder of recordingFolders(s.app.configDir)) {
-        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
-      }
+    s.cleanup(async () => {
+      for (const path of (await s.get("core.debug")).captures) s.trackRecording(dirname(path));
     });
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     const opened = await s.until("core.debug", (debug) => debug.open && debug.recorded !== null && debug.entries.length > 0,
@@ -401,11 +411,13 @@ for (const app of Object.values(APPS)) {
     assert.ok(opened.entries.every((file) => file.path.startsWith("logs/") && file.size >= 0 && file.modified > 0),
       `a listed file is outside logs/ or has no size and time: ${JSON.stringify(opened.entries)}`);
     assert.equal((await s.get("core.screen")).modal, "debug");
-    await s.until("host.window", (w) => w.modal?.id === "debug" && w.modal.shown, "the debug view was not shown");
+    await s.presented();
+    const card = await s.rect("core.debug.card");
+    assert.ok(card.width > 0 && card.height > 0, "the actual named debug card was not rendered");
     // The state file holds the host, the versions, the windows and the page statuses.
-    const state = JSON.parse(readFileSync(join(s.app.configDir, opened.recorded), "utf8"));
+    const state = parseState(opened.recorded, readFileSync(join(s.app.configDir, opened.recorded), "utf8"), false);
     assert.equal(state.host, app.name);
-    assert.ok(state.versions.core && state.versions.macos && state.windows.length > 0 && state.page.length > 0,
+    assert.ok(state.versions.core && state.versions.macos && state.windows.length > 0 && Object.keys(state.workbench).length > 0,
       `the state file is incomplete: ${Object.keys(state)}`);
     // Viewing shows the whole content of a text file; the state file does not change while the view is open.
     const stateText = readFileSync(join(s.app.configDir, opened.recorded), "utf8");
@@ -423,12 +435,17 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual({ path: image.viewing.path, size: image.viewing.size, length: image.viewing.length }, { path: capture.path, size: capture.size, length: 0 });
     // The modal has the height of the card with the loaded image: the image is shown whole (at its width of the card) inside the
     // modal and not cut to the first rows of pixels. The frame of the modal follows the load of the image, so the check waits for it.
+    await s.presented();
     const picture = await s.rect("core.debug.image");
-    const shown = await s.until("host.window", (host) => host.modal?.frame && host.modal.frame.height >= picture.height / 2,
-      "the modal did not take the height of the card with the image");
+    const shown = await s.rect("core.debug.card");
+    const cardFrame = { x: shown.document.x + shown.x, y: shown.document.y + shown.y, width: shown.width, height: shown.height };
+    const pictureFrame = { x: picture.document.x + picture.x, y: picture.document.y + picture.y, width: picture.width, height: picture.height };
+    assert.ok(cardFrame.height >= picture.height / 2, "the actual named debug card did not take the image height");
     assert.ok(picture.height >= 100, `the image of the capture is only ${picture.height} points high in the debug view`);
-    assert.ok(picture.y + picture.height <= shown.modal.frame.y + shown.modal.frame.height + 1,
-      `the image is cut by the modal: image ${JSON.stringify(picture)}, modal ${JSON.stringify(shown.modal.frame)}`);
+    assert.ok(pictureFrame.x >= cardFrame.x - 1 && pictureFrame.y >= cardFrame.y - 1
+      && pictureFrame.x + pictureFrame.width <= cardFrame.x + cardFrame.width + 1
+      && pictureFrame.y + pictureFrame.height <= cardFrame.y + cardFrame.height + 1,
+      `the image is cut by the modal: image ${JSON.stringify(pictureFrame)}, modal ${JSON.stringify(cardFrame)}`);
     await s.run("core.debug.list");
     await assert.rejects(s.run("core.debug.save", { path: "settings.json" }),
       /debug: settings.json is not a file under logs\//);
@@ -445,10 +462,8 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
-    s.cleanup(() => {
-      for (const folder of recordingFolders(s.app.configDir)) {
-        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
-      }
+    s.cleanup(async () => {
+      for (const path of (await s.get("core.debug")).captures) s.trackRecording(dirname(path));
     });
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
@@ -476,10 +491,8 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
-    s.cleanup(() => {
-      for (const folder of recordingFolders(s.app.configDir)) {
-        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
-      }
+    s.cleanup(async () => {
+      for (const path of (await s.get("core.debug")).captures) s.trackRecording(dirname(path));
     });
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
@@ -503,13 +516,11 @@ for (const app of Object.values(APPS)) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the debug timeline follows the event files, stops, and catches up when it resumes`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    await fresh(s, { log: { call: "debug" }, reads: ["workbench.command"] });
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
-    s.cleanup(() => {
-      for (const folder of recordingFolders(s.app.configDir)) {
-        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
-      }
+    s.cleanup(async () => {
+      for (const path of (await s.get("core.debug")).captures) s.trackRecording(dirname(path));
     });
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
@@ -541,10 +552,8 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const titles = HELP_TITLES[(await s.get("host.menu")).language];
     s.cleanup(() => s.run("core.debug.close"));
-    s.cleanup(() => {
-      for (const folder of recordingFolders(s.app.configDir)) {
-        if (!s.recordingsBefore.includes(folder)) rmSync(join(s.app.configDir, "logs", "captures", folder), { recursive: true, force: true });
-      }
+    s.cleanup(async () => {
+      for (const path of (await s.get("core.debug")).captures) s.trackRecording(dirname(path));
     });
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     const opened = await s.until("core.debug", (debug) => debug.open && debug.recorded !== null && debug.entries.length > 0,

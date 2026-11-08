@@ -50,6 +50,14 @@ type cardParam struct {
 	Plugin string `json:"plugin"`
 }
 
+// splitCardParam retains the side field's presence until its declared error is
+// formed; JSON null and an absent field are distinct protocol values.
+type splitCardParam struct {
+	Card   string          `json:"card"`
+	Side   json.RawMessage `json:"side"`
+	Plugin string          `json:"plugin"`
+}
+
 type addTabParam struct {
 	Card   string          `json:"card"`
 	Plugin string          `json:"plugin"`
@@ -197,11 +205,19 @@ func (s *Shell) register() {
 		s.options.Invalidate()
 		return nil
 	})
-	command(s, "core.card.split", func(value cardParam) (any, error) {
+	command(s, "core.card.split", func(value splitCardParam) (any, error) {
+		side := "undefined"
+		if len(value.Side) != 0 {
+			if string(value.Side) == "null" {
+				side = "null"
+			} else if err := json.Unmarshal(value.Side, &side); err != nil {
+				return nil, fmt.Errorf("core.card.split: %w", err)
+			}
+		}
 		if err := s.requirePlane(); err != nil {
 			return nil, err
 		}
-		return s.splitCard(value.Card, value.Side, value.Plugin)
+		return s.splitCard(value.Card, side, value.Plugin)
 	})
 	command(s, "core.card.close", func(value cardParam) (any, error) {
 		if err := s.requirePlane(); err != nil {

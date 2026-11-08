@@ -67,7 +67,7 @@ func (s *Shell) verifyLater() {
 
 // verifyPlane runs the verification of the drawn plane.
 func (s *Shell) verifyPlane() ([]VerifyRow, error) {
-	window, err := s.options.Window()
+	window, err := s.windowView()
 	if err != nil {
 		return nil, err
 	}

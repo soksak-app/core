@@ -182,6 +182,13 @@ func (p *lifecyclePlatform) CloseImage(image unsafe.Pointer) {
 // platform that records its documents. The clock is the clock of the lifecycle.
 func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecyclePlatform, unsafe.Pointer) {
 	t.Helper()
+	return newLifecycleSurfacesWithStart(t, clock, nullOriginStart())
+}
+
+// newLifecycleSurfacesWithStart shares the complete lifecycle-owned dependencies
+// while installing the caller's actual immutable start before the first load.
+func newLifecycleSurfacesWithStart(t *testing.T, clock *fakeClock, start ViewStart) (*Surfaces, *lifecyclePlatform, unsafe.Pointer) {
+	t.Helper()
 	fake := &lifecyclePlatform{ended: map[unsafe.Pointer]func(){}, responsiveness: map[unsafe.Pointer]func(bool){}, scripts: map[unsafe.Pointer][]string{}}
 	saved := system
 	system = fake
@@ -190,7 +197,7 @@ func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecycle
 	native := unsafe.Pointer(new(int))
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, nullOriginStart()); err != nil {
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, start); err != nil {
 		t.Fatalf("first sync of the view: %v", err)
 	}
 	return s, fake, native

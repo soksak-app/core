@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F502-4: Private view-sidecar 요청을 원래 source generation과 commit된 프로젝트에 귀속하고 retire 시 대기 작업을 취소하며 최종 허용을 retirement와 동기화한다. Service 시작 뒤 프로젝트 root 충돌을 거부하고 enqueue 성공 뒤에만 session 기록을 생성한다. 이전 current-generation 획득 경로를 제거했다. 요청별 background 소유권으로 mount 후 retire된 요청의 부활도 방지하며 다른 surface를 무효화하거나 과거 기록을 유지하지 않는다. Rust owner 13개, 인접 Go host owner 30개, native workbench owner 164개가 통과했으며 재빌드한 앱의 parity 검증은 남아 있다.
+
+- F502-12: 명시적인 세 host artifact context와 새 configuration root로 부모가 소유하는 일반 집중 실행을 추가했다. Candidate provenance와 lifecycle audit 기준을 유지하면서 설치된 전체 plugin cohort를 검증한다. Runner owner 40개가 모두 통과했으며 재빌드한 앱의 lifecycle 실행은 남아 있다.
+
 - F696-4: JSON key 순서에 의존하지 않고 renderer revision의 필드를 엄격히 비교한다. 필드 순서를 바꾼 RED 뒤 provider owner 12개가 모두 통과하고 controlled mygo Browser collector와 run audit도 통과했다. Pixel·가장 이른 frame 증명과 나머지 OCR 인수는 열린 상태다.
 
 - F696-4: Native backing scale에서 정확한 원본 공개 image representation을 사용해 소수점 문서 snapshot의 모든 물리 행을 보존한다. PNG geometry·발급 QR·renderer revision 검사는 유지한다. 첫 행과 마지막 행의 정확한 encoded pixel을 포함한 native 24개 사례가 통과하며 실제 application reference 연결은 남아 있다.

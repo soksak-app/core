@@ -343,3 +343,41 @@ test("the first sidecar request waits until the failure listener is installed", 
     installListener = undefined;
   }
 });
+
+test("private view sidecar authority survives the shared ordered IPC queue unchanged", async () => {
+  const host = await import("../host.js");
+  assert.equal(typeof host.sendViewSidecar,"function","the private view-sidecar bridge must preserve original source authority");
+  calls.length=0;
+  let entered,release;
+  const blocked=new Promise(resolve=>{release=resolve;});
+  const started=new Promise(resolve=>{entered=resolve;});
+  answerCall=async(name,payload)=>{
+    if(name==="sidecarSend" && payload.body.operation==="blocking") {entered();await blocked;}
+    return null;
+  };
+  try {
+    const sidecar="@fixture/typed-shared-queue";
+    const first=host.surfaceContextRuntime({surfaceId:"background",sidecars:[sidecar]}).sidecar().send("background",{operation:"blocking"});
+    await started;
+    const original={source:"same-source",surface:"same-source",generation:41,sidecar,body:{operation:"old-A"},cids:["a"]};
+    const old=host.sendViewSidecar(original);
+    original.generation=42;
+    const current=host.sendViewSidecar({...original,body:{operation:"new-B"},cids:["b"]});
+    assert.equal(calls.filter(([name])=>name==="viewSidecarSend").length,0,"view IPC overtook the blocked window send");
+    release();await Promise.all([first,old,current]);
+    assert.deepEqual(calls.filter(([name])=>name==="sidecarSend"||name==="viewSidecarSend"),[
+      ["sidecarSend",{sidecar,surface:"background",body:{operation:"blocking"},cids:[]}],
+      ["viewSidecarSend",{source:"same-source",surface:"same-source",generation:41,sidecar,body:{operation:"old-A"},cids:["a"]}],
+      ["viewSidecarSend",{source:"same-source",surface:"same-source",generation:42,sidecar,body:{operation:"new-B"},cids:["b"]}],
+    ]);
+  } finally {release();answerCall=undefined;}
+});
+
+test("the private view sidecar bridge rejects missing or redirected source authority", async () => {
+  const host=await import("../host.js");
+  assert.equal(typeof host.sendViewSidecar,"function","private view-sidecar entry must be implemented");
+  for(const change of [request=>{delete request.generation;},request=>{request.generation=0;},request=>{request.surface="other";}]) {
+    const request={source:"owned",surface:"owned",generation:1,sidecar:"@fixture/typed-authority",body:{},cids:[]};change(request);
+    await assert.rejects(Promise.resolve().then(()=>host.sendViewSidecar(request)),/authority|generation|source/);
+  }
+});

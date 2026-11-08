@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -37,6 +39,8 @@ type viewPending struct{ done bool }
 
 // viewState is what the workbench holds for the document of a view.
 type viewState struct {
+	ctx        context.Context
+	cancel     context.CancelFunc
 	generation uint64
 	revision   uint64
 	pending    map[uint64]*viewPending
@@ -67,6 +71,9 @@ type viewState struct {
 
 // end ends the calls of the page to a view whose document ended.
 func (v *viewState) end() {
+	if v.cancel != nil {
+		v.cancel()
+	}
 	for key, stop := range v.observed {
 		delete(v.observed, key)
 		stop()
@@ -172,6 +179,9 @@ func (s *Shell) viewCall(data []any) {
 		return
 	}
 	view.generation = call.Generation
+	if view.cancel == nil {
+		view.ctx, view.cancel = context.WithCancel(host.WithViewSource(s.calls.ctx, call.Surface, call.Generation))
+	}
 	pending := &viewPending{}
 	view.pending[call.ID] = pending
 	answer := func(result any, err error) {
@@ -218,7 +228,7 @@ func viewFields[T any](call viewCallEvent) (T, error) {
 // surfaceCall runs a host call of the surface of the view, after the host calls that the view made before it.
 func (s *Shell) surfaceCall(call viewCallEvent, name string, fields map[string]any, answer viewAnswer) {
 	fields["surface"] = call.Surface
-	s.calls.CallInOrder("view:"+call.Surface, name, fields, answer)
+	s.calls.withContext(s.surfaces.views[call.Surface].ctx).CallInOrder("view:"+call.Surface, name, fields, answer)
 }
 
 // region is the named fields of a region call.
@@ -387,11 +397,11 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if fields.ID != call.Surface {
 			return fmt.Errorf("surface %s cannot send to sidecar surface %s", call.Surface, fields.ID)
 		}
-		request := map[string]any{"sidecar": fields.Sidecar, "surface": call.Surface, "body": fields.Body}
+		request := map[string]any{"source": call.Surface, "generation": call.Generation, "sidecar": fields.Sidecar, "surface": call.Surface, "body": fields.Body, "cids": []string{}}
 		if len(fields.Cids) > 0 {
 			request["cids"] = fields.Cids
 		}
-		s.calls.CallInOrder("sidecar:"+fields.Sidecar, "sidecarSend", request, answer)
+		s.calls.withContext(view.ctx).CallInOrder("sidecar:"+fields.Sidecar, "viewSidecarSend", request, answer)
 	case "runtime.sidecar.on":
 		fields, err := viewFields[struct {
 			ID      string `json:"id"`

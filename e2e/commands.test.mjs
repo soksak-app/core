@@ -8,6 +8,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
+import { retainDesignStateCapture } from "./still-capture.mjs";
 
 /** The card with the card id. */
 const cardOf = (grid, id) => grid?.cards.find((c) => c.id === id);
@@ -119,12 +120,26 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings-modal.scope", { scope: "common" });
     await s.until("core.settings-modal", (modal) => modal.scope === "common", "settings did not select common scope");
 
+    await s.presented();
+    const beforeCard = await s.rect("core.settings-modal.card");
+    const beforeOrigin = { x: beforeCard.document.x + beforeCard.x, y: beforeCard.document.y + beforeCard.y };
+    assert.deepEqual(beforeOrigin, { x: opened.card.x, y: opened.card.y },
+      "the actual named settings card must match its public position before moving");
     await s.run("core.settings-modal.move", { dx: 40, dy: 20 });
     const moved = await s.until("core.settings-modal",
       (modal) => modal.card.x === opened.card.x + 40 && modal.card.y === opened.card.y + 20,
       "core.settings-modal.move did not move the card by 40,20");
-    await s.until("core.modal", (modal) => modal?.document?.rect.x === moved.card.x && modal.document.rect.y === moved.card.y,
-      "the native modal document did not follow the card");
+    // This named element is shared by native and WebView modals. Its declared
+    // document origin is applied once; core.modal.document exists only for
+    // hosts that render the modal in a WebView.
+    await s.presented();
+    const afterCard = await s.rect("core.settings-modal.card");
+    const afterOrigin = { x: afterCard.document.x + afterCard.x, y: afterCard.document.y + afterCard.y };
+    assert.deepEqual(afterOrigin, { x: moved.card.x, y: moved.card.y },
+      "the actual named settings card did not follow its public moved position");
+    assert.deepEqual({ dx: afterOrigin.x - beforeOrigin.x, dy: afterOrigin.y - beforeOrigin.y }, { dx: 40, dy: 20 },
+      "the actual named settings card did not move by exactly 40,20");
+    await retainDesignStateCapture(s, t, "settings-command-moved");
 
     const mode = (await s.get("core.settings")).values.mode;
     const other = mode === "dark" ? "light" : "dark";

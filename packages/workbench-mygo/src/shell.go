@@ -362,6 +362,11 @@ type Shell struct {
 	verification  *Verification
 	// verifying tells that the step that gives a watcher the verification waits to run, and building that a frame builds.
 	verifying, building bool
+	// A View build shares one native window observation, including its error.
+	// The fields are cleared at both boundaries and never serve outside View.
+	frameWindowRead    bool
+	frameWindow        WindowView
+	frameWindowFailure error
 	// diagnostics holds the policy and the trace switch that the host received last.
 	diagnostics struct{ policy, trace string }
 	// started is set once the host took the first state of the shell, changed once plugins changed before that, and reloading while the
@@ -686,10 +691,31 @@ func (s *Shell) newTabID() string {
 // baseName is the title of a new project of the folder root.
 func baseName(root string) string { return path.Base(root) }
 
+// windowView observes the public window port once within a View build. Outside
+// that build every caller observes current state; an error is never a fallback.
+func (s *Shell) windowView() (WindowView, error) {
+	if !s.building {
+		return s.options.Window()
+	}
+	if !s.frameWindowRead {
+		s.frameWindow, s.frameWindowFailure = s.options.Window()
+		s.frameWindowRead = true
+	}
+	return s.frameWindow, s.frameWindowFailure
+}
+
 // View draws the workbench of the window.
 func (s *Shell) View(c *ui.Context) {
+	s.frameWindowRead = false
+	s.frameWindow = WindowView{}
+	s.frameWindowFailure = nil
 	s.building = true
-	defer func() { s.building = false }()
+	defer func() {
+		s.building = false
+		s.frameWindowRead = false
+		s.frameWindow = WindowView{}
+		s.frameWindowFailure = nil
+	}()
 	s.exposedFocus.Frame(c)
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)

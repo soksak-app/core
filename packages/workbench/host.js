@@ -125,17 +125,46 @@ if (bridge) bridge.on("page-reload", () => bridge.reload());
 const orderedSidecars = new Map();
 function orderedSidecarPort(name) {
   if (!orderedSidecars.has(name)) {
+    let failureOwner;
     orderedSidecars.set(name, orderedSidecar({
-      // The request must be sent after the failure listener is installed so that a failure caused by the request is not missed.
-      send: (surface, body, cids) => listenSidecarFailures()
-        .then(() => bridge.call("sidecarSend", { sidecar: name, surface, body, cids })),
-    // Separately from the rejection that the caller receives, a failed send is written to the application log.
+      send: (surface, request, cids) => {
+        // orderedSidecar finishes its failure callback before starting the next
+        // transport, so this owner belongs to this exact serialized operation.
+        failureOwner = request.kind;
+        return listenSidecarFailures().then(() => {
+          if (request.kind === "window") return bridge.call("sidecarSend", { sidecar: name, surface, body: request.body, cids });
+          if (request.kind === "view") return bridge.call("viewSidecarSend", {
+            source: request.source, generation: request.generation, sidecar: name, surface, body: request.body, cids,
+          });
+          throw new TypeError("ordered sidecar request has no declared owner");
+        });
+      },
     }, (error) => {
-      // default: the thrown value may not be an Error, so when it has no message the value itself is written as it is.
+      // View calls return this rejection to their original source owner, which
+      // records a real failure or expected retirement cancellation. Do not also
+      // mislabel a retired view as a window/background application error.
+      if (failureOwner === "view") return;
       report(`sidecar ${name}: send failed: ${error?.message ?? error}`);
     }));
   }
   return orderedSidecars.get(name);
+}
+
+/** Private native-view bridge. Authority comes from the validated host view-call
+ * envelope, never public plugin parameters or a later current-source lookup. */
+export function sendViewSidecar(request) {
+  if (!request || typeof request !== "object" || Array.isArray(request)
+    || Object.keys(request).some(key => !["source","generation","sidecar","surface","body","cids"].includes(key)))
+    throw new TypeError("view sidecar authority has undeclared fields");
+  const { source, generation, sidecar, surface, body, cids = [] } = request;
+  if (typeof source !== "string" || !source || surface !== source)
+    throw new TypeError("view sidecar source authority must equal its session surface");
+  if (!Number.isSafeInteger(generation) || generation < 1)
+    throw new TypeError("view sidecar generation authority must be a positive safe integer");
+  if (typeof sidecar !== "string" || !sidecar || !Array.isArray(cids) || cids.some(cid => typeof cid !== "string"))
+    throw new TypeError("view sidecar authority requires a sidecar and correlation identifiers");
+  // Capture immutable primitive authority before entering the shared queue.
+  return orderedSidecarPort(sidecar).send(surface, { kind: "view", source, generation, body }, [...cids]);
 }
 
 /*
@@ -221,7 +250,7 @@ export function windowSidecar(name) {
   if (!bridge) return null;
   return {
     // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#messages).
-    send: (surface, body, cids) => orderedSidecarPort(name).send(surface, body, cids),
+    send: (surface, body, cids) => orderedSidecarPort(name).send(surface, { kind: "window", body }, cids),
     on: (surface, listener) => onSidecarMessage(name, surface, listener),
     onFailure: (surface, listener) => onSidecarFailure(name, surface, listener),
   };
@@ -324,7 +353,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       const ordered = orderedSidecarPort(sidecarName);
       return {
         send: (id, body, cids) => id === surfaceId
-          ? ordered.send(surfaceId, body, cids)
+          ? ordered.send(surfaceId, { kind: "window", body }, cids)
           : Promise.reject(new Error(`surface ${surfaceId} cannot send to sidecar surface ${id}`)),
         on: (id, fn) => id === surfaceId
           ? onSidecarMessage(sidecarName, surfaceId, fn)

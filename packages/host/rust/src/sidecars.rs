@@ -97,7 +97,7 @@ impl std::fmt::Display for ResponseError {
     }
 }
 
-/// The window that owns a surface. It provides the root of sidecar messages and receives events.
+/// The window that owns a sidecar session and supplies its background project root.
 pub trait Owner: Clone + Send + 'static {
     /// The value that distinguishes the owning window.
     fn key(&self) -> String;
@@ -1649,6 +1649,63 @@ impl<O: Owner> Sidecars<O> {
             state.roots.get(surface).cloned().unwrap_or(current)
         };
 
+        self.send_at_root(owner, name, surface, root, body, cids, None)
+    }
+
+    pub(crate) fn send_from_window(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        body: &RawValue,
+        cids: &[String],
+        authority: &crate::documents::ViewSidecarAuthority<'_>,
+    ) -> Result<(), String> {
+        let root = self
+            .core
+            .state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .roots
+            .get(surface)
+            .cloned()
+            .unwrap_or_else(|| authority.root.clone());
+        if root.is_empty() {
+            return Err(format!("sidecar {name}: surface {surface} has no project"));
+        }
+        self.send_at_root(owner, name, surface, root, body, cids, Some(authority))
+    }
+
+    pub(crate) fn send_from_view(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        body: &RawValue,
+        cids: &[String],
+        authority: &crate::documents::ViewSidecarAuthority<'_>,
+    ) -> Result<(), String> {
+        self.send_at_root(
+            owner,
+            name,
+            surface,
+            authority.root.clone(),
+            body,
+            cids,
+            Some(authority),
+        )
+    }
+
+    fn send_at_root(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        root: String,
+        body: &RawValue,
+        cids: &[String],
+        authority: Option<&crate::documents::ViewSidecarAuthority<'_>>,
+    ) -> Result<(), String> {
         // The JSON serialization is done outside the mutex.
         let mut line = serde_json::to_vec(&Request {
             surface,
@@ -1725,6 +1782,7 @@ impl<O: Owner> Sidecars<O> {
         // an earlier connection loss, this call sends the connection notification (V5-106). If the start fails, the
         // error of this send conveys that failure to the caller.
         let (mut state, started) = Core::ensure(&self.core, state, name, None)?;
+        let lease = authority.map(|authority| authority.lease()).transpose()?;
         let restarted = started && state.unannounced_loss.remove(name);
         // The lock was released during the start, so the owner of the surface is checked again.
         if let Some(other) = state.owners.get(surface)
@@ -1732,23 +1790,21 @@ impl<O: Owner> Sidecars<O> {
         {
             return Err(format!("surface {surface} belongs to another window"));
         }
-        let owner_added = state
-            .owners
-            .insert(surface.to_string(), owner.clone())
-            .is_none();
-        // A surface of a window that shows no project has no session to keep: no retain list can name it without a root.
-        if !root.is_empty() {
-            state
-                .roots
-                .entry(surface.to_string())
-                .or_insert_with(|| root.clone());
+        if state
+            .roots
+            .get(surface)
+            .is_some_and(|existing| existing != &root)
+        {
+            return Err(format!(
+                "sidecar {name}: surface {surface} mounted project differs from its retained session"
+            ));
         }
+        let owner_added = !state.owners.contains_key(surface);
         let process = state.running.get_mut(name).expect("started above");
         // New ownership or a service start changes the outdated session count. The status is enqueued under the
         // state lock, and UI invalidation runs after unlock.
         let outdated_changed = (started || !process.surfaces.contains(surface) || owner_added)
             && is_outdated(&self.core, name, process);
-        process.surfaces.insert(surface.to_string());
 
         // It sends to the channel without blocking. When the channel is full, it returns an "is not keeping up" error.
         let delivered = process
@@ -1757,7 +1813,16 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|_| format!("sidecar {name} is not keeping up"));
         if delivered.is_ok() {
             process.closed_surfaces.remove(surface);
-            if process.persistent.is_some() {
+            process.surfaces.insert(surface.to_string());
+            let persistent = process.persistent.is_some();
+            state.owners.insert(surface.to_string(), owner.clone());
+            if !root.is_empty() {
+                state
+                    .roots
+                    .entry(surface.to_string())
+                    .or_insert_with(|| root.clone());
+            }
+            if persistent {
                 state
                     .persistent_surfaces
                     .entry(surface.to_string())
@@ -1777,6 +1842,7 @@ impl<O: Owner> Sidecars<O> {
                 );
             }
         }
+        drop(lease);
         if outdated_changed {
             publish_status(&state);
         }
@@ -4409,6 +4475,7 @@ impl Owner for Window {
             .clone();
         Ok(root)
     }
+
     fn sidecar_reconnected(&self, sidecar: &str) {
         if let Err(error) = crate::composition::refresh_sidecar_rasters(self, sidecar) {
             log_error(
@@ -4555,7 +4622,7 @@ mod lock_test;
 
 #[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
-mod session_retention_test;
+pub(crate) mod session_retention_test;
 
 #[cfg(all(test, unix))]
 #[path = "sidecars_read_deadline_test.rs"]

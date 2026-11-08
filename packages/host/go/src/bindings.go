@@ -564,7 +564,20 @@ func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfac
 	if err != nil {
 		return err
 	}
-	return s.sidecarSendFrom(uint64(s.window.ID()), name, surface, body, cids)
+	return s.windowSidecarSend(ctx, name, surface, body, cids)
+}
+
+// ViewSidecarSend sends only for the original host-issued view generation.
+func (h *Host) ViewSidecarSend(ctx context.Context, raw json.RawMessage) error {
+	req, err := viewSidecarSendRequestFrom(raw)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.sendViewSidecar(ctx, req)
 }
 
 // nativeCall is one call that bridge.js sent.
@@ -637,7 +650,10 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 		if err := nativeArgs(call, nativeArg{"sidecar", &key}, nativeArg{"surface", &id}, nativeArg{"body", &body}, nativeArg{"cids", &cids}); err != nil {
 			return nil, err
 		}
-		return nil, s.sidecarSendFrom(viewID, key, id, body, cids)
+		if viewID != uint64(s.window.ID()) {
+			return nil, fmt.Errorf("view sidecar sends require their original source generation")
+		}
+		return nil, s.windowSidecarSend(context.Background(), key, id, body, cids)
 	case "CompositionDeclare":
 		var req CompositionDeclareRequest
 		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {

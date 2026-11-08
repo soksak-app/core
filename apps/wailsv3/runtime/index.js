@@ -92,6 +92,7 @@ const METHOD = {
   documentPost: "DocumentPost",
   viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
   viewSidecarRoute: "ViewSidecarRoute",
+  viewSidecarSend: "ViewSidecarSend",
   sidecarListen: "SidecarListen",
   viewSourceOrigins: "ViewSourceOrigins",
   documentDetach: "DocumentDetach",
