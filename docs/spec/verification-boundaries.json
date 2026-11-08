@@ -20,11 +20,6 @@
       "file": "e2e/test/terminal-screen.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Tests how the terminal's cell screen and backgrounds are read and sampled (wrapped command output, cell rows), which is terminal screen content."
-    },
-    {
-      "file": "scripts/test/candidate-acceptance.test.mjs",
-      "owner": "environment",
-      "reason": "Tests candidate acceptance and publication of release components (`kind: 'plugin', id: 'terminal'` release digests), which is cohort release evidence."
     }
   ]
 }
