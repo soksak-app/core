@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { assertReceivedUnchanged, documentFocused, focusedCard, imageFocused, inputDocument, insertedText, presentsTransaction,
-  readyRasterProbe, transactionMatchesKey, typedText } from "../input-probe.mjs";
+  readyRasterProbe, tabElementIndex, transactionMatchesKey, typedText } from "../input-probe.mjs";
 
 test("the document of input transactions folds commits, deletions and the last preedit as a plain text client", { timeout: 5000 }, () => {
   const transactions = [
@@ -103,4 +103,17 @@ test("a raster probe that a check makes ready draws its image regions covered be
     params?.draw === true);
   const frame = calls.findIndex(([kind, name]) => kind === "until" && name === "rasterprobe.frame");
   assert.ok(covered >= 0 && covered < frame, `the window draws covered before the frame wait: ${JSON.stringify(calls)}`);
+});
+
+test("the element index of a tab counts the tabs of the cards before its card", () => {
+  // The tab elements core.card.tab of a window are numbered across every card in the order of core.grid, so the second raster
+  // probe tab of the focused lower card follows the tab of the upper card and the tabs before it in its own card.
+  const grid = { cards: [
+    { id: "left", fixed: true, tabs: [] },
+    { id: "terminal", tabs: [{ id: "tab-layout-1" }] },
+    { id: "browser", tabs: [{ id: "tab-layout-2" }, { id: "tab-raster-1" }, { id: "tab-raster-2" }] },
+  ] };
+  assert.equal(tabElementIndex(grid, "tab-raster-2"), 3);
+  assert.equal(tabElementIndex(grid, "tab-layout-1"), 0);
+  assert.throws(() => tabElementIndex(grid, "tab-absent"), /tab-absent/);
 });
