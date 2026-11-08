@@ -9,14 +9,18 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { readEventErrors } from "@soksak/window-check/event-log.mjs";
 import { fresh } from "./fixture.mjs";
+import { RASTER } from "./raster-probe.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a rejected installed plugin manifest is shown and logged and the page starts without that plugin`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    // Changes the manifest of the installed terminal plugin to the earlier form that lists the sidecar in sidecars instead of dependencies.
+    // Changes the manifest of the installed raster probe, the fixture plugin that depends on a sidecar, to the earlier form that
+    // lists the sidecar in sidecars instead of dependencies.
     const installed = JSON.parse(readFileSync(join(s.app.configDir, "plugins", "installed.json"), "utf8"));
-    const record = installed.plugins.terminal;
+    const record = installed.plugins[RASTER];
+    assert.ok(record, `the configuration has no installed ${RASTER}: ${Object.keys(installed.plugins).join(", ")}`);
+    const { name: packageName } = JSON.parse(readFileSync(join(s.app.configDir, record.path, "package.json"), "utf8"));
     const file = join(s.app.configDir, record.path, "plugin.json");
     const original = readFileSync(file, "utf8");
     const manifest = JSON.parse(original);
@@ -28,7 +32,9 @@ for (const app of Object.values(APPS)) {
     });
     writeFileSync(file, JSON.stringify({ ...rest, sidecars: Object.keys(dependencies) }, null, 2));
 
-    const pattern = /^error workbench workbench: installed plugin terminal \S+ \(@soksak\/plugin-terminal\): plugin\.json: unknown field sidecars/;
+    const quoted = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+    const pattern = new RegExp(`^error workbench workbench: installed plugin ${RASTER} ${quoted(record.version)} ` +
+      `\\(${quoted(packageName)}\\): plugin\\.json: unknown field sidecars`);
     s.expectError(pattern);
     // The page starts without the refused plugin, so the reload reports ready, and the error display wrote the refusal to the log.
     await s.run("host.window.reload");
