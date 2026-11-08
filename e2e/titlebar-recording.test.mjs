@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
 import test from "node:test";
 
-import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
+import { APPS, open, requireUncovered } from "@soksak/window-check/app.mjs";
 import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
@@ -26,10 +26,7 @@ async function setFrame(s, factor) {
 /** The button rectangle of the window to record and the refresh rate of the display. An occluded window is not measured because WebKit draws it less. */
 async function recordable(s) {
   const window = await s.get("host.window");
-  if (window.occluded) {
-    throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window)}, so WebKit renders it less often. ` +
-      "Nothing was measured: uncover the window, without activating the application, and run the check again.");
-  }
+  requireUncovered(s, window);
   assert.equal(window.controls.length, 3, `the window reports ${window.controls.length} buttons`);
   assert.ok(window.controls.every((button) => !button.hidden), "a window button is hidden");
   return { buttons: window.controls, refreshRate: window.refreshRate };
