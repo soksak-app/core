@@ -28,11 +28,14 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
 	"github.com/soksak-app/core/packages/host/mygo/tests/support"
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 var (
 	_ host.Framework = (*adapter.Framework)(nil)
 	_ host.Frontend  = (*adapter.Frontend)(nil)
+	// The workbench of the application draws in the windows of the adapter.
+	_ workbench.Painted = (*adapter.Frontend)(nil)
 )
 
 // quitHelper names the child process of the quit test.
@@ -412,6 +415,46 @@ func TestAClosingHookKeepsOrClosesTheWindow(t *testing.T) {
 	}
 }
 
+// WebKit keeps the previous page of a reload on the screen until the new page renders its first screen, so a shown window keeps its last
+// frame from the start of its new workbench until that workbench shows its first screen (docs/spec/native-host.md#page-start).
+// contract: mygo.framework.start-builds-the-workbench
+func TestARestartedWorkbenchDrawsNoFrameBeforeItsFirstScreen(t *testing.T) {
+	_, workbench, window := support.Open(t, "restarted")
+	window.Show()
+	draws := func() int { return strings.Count(strings.Join(workbench.Received(), "\n"), "draw restarted") }
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown restarted") })
+	workbench.HoldFirstScreen()
+	window.StartWorkbench()
+	before := draws()
+	window.Window().Invalidate()
+	time.Sleep(250 * time.Millisecond)
+	if drawn := draws() - before; drawn != 0 {
+		t.Fatalf("the window drew %d frames of its new workbench before its first screen", drawn)
+	}
+	mygo.RunOnMain(window.FirstScreen)
+	support.Wait(t, "the frame of the first screen", func() bool { return draws() > before })
+}
+
+// The first visible frame of a new window is the first screen of its workbench (docs/spec/native-host.md#page-start), so the window
+// goes on the screen once the frame of that screen is drawn, not with the first frame of the window.
+// contract: mygo.framework.start-builds-the-workbench
+func TestAWindowGoesOnTheScreenWithTheFirstScreenOfItsWorkbench(t *testing.T) {
+	_, workbench, window := support.Open(t, "first")
+	workbench.HoldFirstScreen()
+	window.Show()
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown first") })
+	time.Sleep(250 * time.Millisecond)
+	if window.Window().IsVisible() {
+		t.Fatal("the window went on the screen before the first screen of its workbench")
+	}
+	before := len(workbench.Received())
+	mygo.RunOnMain(window.FirstScreen)
+	support.Wait(t, "the window on the screen", window.Window().IsVisible)
+	if !slices.Contains(workbench.Received()[before:], "draw first") {
+		t.Fatalf("the window went on the screen without a frame of its first screen: %v", workbench.Received()[before:])
+	}
+}
+
 // contract: mygo.framework.start-builds-the-workbench
 func TestStartWorkbenchClosesAndBuildsTheWorkbench(t *testing.T) {
 	_, workbench, window := support.Open(t, "restart")
@@ -463,6 +506,45 @@ func TestTheLayoutObserverReportsTheTransactionOfAWindow(t *testing.T) {
 	if got := <-reports; got != "ended" {
 		t.Fatalf("the second report is %q", got)
 	}
+}
+
+// A frame that presents with the transaction keeps its drawable until the commit, and the frames after it wait for the commit. So the
+// preparation holds the frames of its window until it asks for the frame of the transaction, or a frame drawn meanwhile would take
+// the drawable of the transaction and the frame of the transaction would wait for the commit that waits for it.
+// contract: mygo.framework.frame-reports-reach-the-counters
+func TestAPreparationHoldsTheFramesOfItsWindowUntilItAsksForItsFrame(t *testing.T) {
+	framework, workbench, window := support.Open(t, "prepared")
+	if err := framework.ObserveLayout(); err != nil {
+		t.Fatal(err)
+	}
+	window.Show()
+	draws := func() int { return strings.Count(strings.Join(workbench.Received(), "\n"), "draw prepared") }
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown prepared") })
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := window.NativeWindow()
+	ready := make(chan bool, 1)
+	mygo.RunOnMain(func() { err = system.BeginLayout(native, 1, func(allowed bool) { ready <- allowed }) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !<-ready {
+		t.Fatal("the transaction of the window did not start")
+	}
+	before := draws()
+	window.Window().Invalidate()
+	time.Sleep(250 * time.Millisecond)
+	if drawn := draws() - before; drawn != 0 {
+		t.Fatalf("the window drew %d frames in its preparation before it asked for the frame of the transaction", drawn)
+	}
+	var committed bool
+	mygo.RunOnMain(func() { committed = system.CommitLayout(native, 1) })
+	if !committed {
+		t.Fatal("the transaction of the window did not commit")
+	}
+	support.Wait(t, "the frame after the transaction", func() bool { return draws() > before })
 }
 
 // contract: mygo.framework.frame-reports-reach-the-counters

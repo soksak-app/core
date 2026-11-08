@@ -33,11 +33,18 @@ type Frontend struct {
 	frames *host.WindowFrames
 
 	mu sync.Mutex
-	// ready is true once the window drew its first frame, and shown once the host asked to show it.
-	ready, shown bool
+	// ready is true once the window drew its first frame, shown once the host asked to show it, and revealed once the window went on
+	// the screen with the first screen of its workbench.
+	ready, shown, revealed bool
+	// revealing belongs to the main thread: the next frame of the window draws the first screen of its workbench, and the window goes
+	// on the screen once that frame returns.
+	revealing bool
 	// held and released belong to the main thread: whether the adapter holds the frames of the window, and what waits for its release.
 	held     bool
 	released []func()
+	// starting belongs to the main thread: the window holds its frames from the start of its workbench until that workbench shows its
+	// first screen.
+	starting bool
 	// placed belongs to the main thread: the surface host of each native view element and the box that the element last gave it.
 	placed map[uintptr]placedSurface
 	// address belongs to the main thread: the address of the window, which names the project that it shows.
@@ -125,19 +132,17 @@ func (f *Frontend) elementSurface(view uintptr) (unsafe.Pointer, bool) {
 func (f *Frontend) started() {
 	view := f.framework.workbench.Build(f)
 	f.view.Store(&view)
-	// The window was created hidden and shows when its first frame is drawn, as the main page of the other hosts reveals its window
-	// after the first load (docs/spec/hosts.md#operation-groups).
+	// The window was created hidden, and its workbench starts after its first frame, because a command reads the elements of the last
+	// frame. The window goes on the screen with the first screen of its workbench (FirstScreen), as the other hosts reveal a window
+	// once the first load of its main page ended (docs/spec/native-host.md#page-start).
 	f.window.OnReadyToShow(func() {
 		f.mu.Lock()
 		first := !f.ready
 		f.ready = true
 		shown := f.shown
 		f.mu.Unlock()
-		if shown {
-			f.window.Show()
-			if first {
-				routine.Go("workbench-start", f.startHeld)
-			}
+		if shown && first {
+			routine.Go("workbench-start", f.startHeld)
 		}
 	})
 	// A listener makes the window take the files that no element of the workbench takes (docs/spec/native-surfaces.md).
@@ -274,22 +279,37 @@ func (f *Frontend) Invalidate() { f.window.Invalidate() }
 // a background of its own shows this color.
 func (f *Frontend) SetBackdrop(color string) error { return f.window.SetBackgroundColor(color) }
 
-// Show puts the window on the screen, once the window drew its first frame. The host shows a window after it holds the window, so
-// the workbench starts its host calls here.
+// Show puts the window on the screen once its workbench showed its first screen (FirstScreen). The host shows a window after it holds
+// the window, so the workbench starts its host calls here.
 func (f *Frontend) Show() {
 	f.mu.Lock()
 	first := !f.shown
 	f.shown = true
-	ready := f.ready
+	ready, revealed := f.ready, f.revealed
 	f.mu.Unlock()
+	if revealed {
+		f.window.Show()
+	}
 	// A window answers commands once its workbench started, and they read the elements of its last frame, so a window that drew
 	// no frame starts its workbench with its first frame.
-	if ready {
-		f.window.Show()
-		if first {
-			routine.Go("workbench-start", f.startHeld)
-		}
+	if ready && first {
+		routine.Go("workbench-start", f.startHeld)
 	}
+}
+
+// drawn follows a frame that the view of the window built: the frame of the first screen puts the window on the screen once it
+// returned, as a window that is ready to show does. Call it on the main thread.
+func (f *Frontend) drawn() {
+	if !f.revealing {
+		return
+	}
+	f.revealing = false
+	mygo.App.WhenReady(func() {
+		f.mu.Lock()
+		f.revealed = true
+		f.mu.Unlock()
+		f.window.Show()
+	})
 }
 
 // WindowEventSource adds listener to the mygo event of a window event of the port and reports whether the framework has that
@@ -377,9 +397,10 @@ func AwaitPresentation(name string, notice func(func(mygo.Presentation, error)) 
 }
 
 // AfterPresentation is the presentation notice of the workbench: done runs after the frame of this step presented. In a layout
-// transaction the window holds its frames from inside that notice, so that no later frame presents before the transaction ends.
-// A diagnostics recording holds the time of this call as the request of the frame of the transaction and the time of the notice as its
-// presentation.
+// transaction the preparation held the frames of the window from its start, so the frame that this call asks for is the one frame of
+// the window in the transaction: the call releases the window and holds it again from inside that notice, so that no later frame
+// presents before the transaction ends. A diagnostics recording holds the time of this call as the request of the frame of the
+// transaction and the time of the notice as its presentation.
 func (f *Frontend) AfterPresentation(done func(err error)) error {
 	recorded := func() {}
 	if f.framework.transaction {
@@ -390,6 +411,7 @@ func (f *Frontend) AfterPresentation(done func(err error)) error {
 		if capturer, ok := system.(platform.Capturer); ok {
 			recorded = capturer.LayoutTraceRequested()
 		}
+		f.release()
 	}
 	return f.presented(false, func(err error) {
 		if err == nil && f.framework.transaction {
@@ -420,9 +442,10 @@ func (f *Frontend) hold() {
 	}
 }
 
-// release lets the window draw and runs what waited for it. Call it on the main thread.
+// release lets the window draw and runs what waited for it. A window whose new workbench has not shown its first screen keeps its
+// hold. Call it on the main thread.
 func (f *Frontend) release() {
-	if !f.held {
+	if !f.held || f.starting {
 		return
 	}
 	f.held = false
@@ -450,18 +473,44 @@ func (f *Frontend) Address() string { return f.address }
 func (f *Frontend) SetAddress(address string) { f.address = address }
 
 // StartWorkbench ends the workbench of the window and builds it again. A workbench of a window that the host holds starts at once.
+// A shown window keeps its last frame until the new workbench shows its first screen (FirstScreen), as WebKit keeps the previous
+// page of a reload on the screen until the new page renders (docs/spec/native-host.md#page-start).
 func (f *Frontend) StartWorkbench() {
+	var shown bool
 	mygo.RunOnMain(func() {
+		f.mu.Lock()
+		shown = f.shown
+		f.mu.Unlock()
+		if shown {
+			f.hold()
+			f.starting = true
+		}
 		f.framework.workbench.Close(f)
 		view := f.framework.workbench.Build(f)
 		f.view.Store(&view)
 	})
 	f.window.Invalidate()
-	f.mu.Lock()
-	shown := f.shown
-	f.mu.Unlock()
 	if shown {
 		routine.Go("workbench-start", f.startHeld)
+	}
+}
+
+// FirstScreen tells the window that its workbench shows its first screen. A window that did not go on the screen yet goes on it with
+// the frame of that screen, and a restarted workbench lets its window draw again, unless a layout transaction holds the window,
+// whose end releases it. Call it on the main thread.
+func (f *Frontend) FirstScreen() {
+	if f.starting {
+		f.starting = false
+		if !f.framework.transaction {
+			f.release()
+		}
+	}
+	f.mu.Lock()
+	revealed := f.revealed
+	f.mu.Unlock()
+	if !revealed && !f.revealing {
+		f.revealing = true
+		f.window.Invalidate()
 	}
 }
 

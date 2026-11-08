@@ -544,6 +544,7 @@ func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declar
 		Reload:      func() { stored.reloads++ },
 		Located:     func(project string) { stored.located = project },
 		Backdrop:    func(color string) error { stored.backdrops = append(stored.backdrops, color); return nil },
+		FirstScreen: func() {},
 	})
 	if err != nil {
 		t.Fatal(err)

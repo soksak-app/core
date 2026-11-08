@@ -29,6 +29,22 @@ type appWindow struct {
 	restarts int
 	// address is the address of the window, which names the project that it shows.
 	address string
+	// shown records each first screen that the workbench of the window shows.
+	shown func()
+}
+
+// note records name among the calls, as a step of the window that the start of the workbench takes between its host calls.
+func (h *storedHost) note(name string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.calls = append(h.calls, name)
+}
+
+// FirstScreen records that the workbench of the window shows its first screen.
+func (w *appWindow) FirstScreen() {
+	if w.shown != nil {
+		w.shown()
+	}
 }
 
 // Address returns the address of the window.
@@ -151,6 +167,53 @@ func TestAStartShowsTheProjectOfTheAddress(t *testing.T) {
 	}
 	if window.address != "/?project="+id {
 		t.Fatalf("the address is %s", window.address)
+	}
+}
+
+// A reload keeps the last frame of the window until the new workbench shows its first screen: the project of the address with its
+// cards, before the window is ready (docs/spec/native-host.md#page-start).
+func TestAStartShowsItsFirstScreenOnceTheProjectIsShown(t *testing.T) {
+	opened := openedShell(t)
+	stored := opened.host
+	id := stored.projects[0]["id"].(string)
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.address = "/?project=" + id
+	window.shown = func() { stored.note("firstScreen") }
+	stored.calls = nil
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	shown, first, ready := slices.Index(stored.calls, "projectShown"), slices.Index(stored.calls, "firstScreen"), slices.Index(stored.calls, "windowReady")
+	if shown < 0 || first < shown || ready < first || strings.Count(strings.Join(stored.calls, " "), "firstScreen") != 1 {
+		t.Fatalf("the start called %v", stored.calls)
+	}
+}
+
+// The first window of a launch that names no project shows the library as its first screen, before the window is ready.
+func TestAStartAtTheLibraryShowsItsFirstScreenBeforeTheWindowIsReady(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.shown = func() { stored.note("firstScreen") }
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	snapshot, first, ready := slices.Index(stored.calls, "workspace"), slices.Index(stored.calls, "firstScreen"), slices.Index(stored.calls, "windowReady")
+	if snapshot < 0 || first < snapshot || ready < first || strings.Count(strings.Join(stored.calls, " "), "firstScreen") != 1 {
+		t.Fatalf("the start called %v", stored.calls)
+	}
+}
+
+// A start that cannot read the workspace shows that failure as its first screen.
+func TestAStartThatFailsShowsItsFailureAsItsFirstScreen(t *testing.T) {
+	stored := &storedHost{failing: map[string]error{"workspace": errors.New("no store")}}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.shown = func() { stored.note("firstScreen") }
+	app.Build(window)
+	app.Shown(window)
+	queue.until(t, func() bool { return len(stored.written("workbench.record.error")) == 1 })
+	queue.drain(t)
+	if !slices.Contains(stored.calls, "firstScreen") {
+		t.Fatalf("the failed start called %v", stored.calls)
 	}
 }
 
