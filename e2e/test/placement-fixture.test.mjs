@@ -113,3 +113,23 @@ test("placement preparation exposes the target at the normal left edge and resto
   await f.cleanups[0]();
   assert.deepEqual(f.rows.map(row=>row.frame),original);
 });
+
+test("a check uncovers its window from the windows of the other check applications, which it opens inactive",async(t)=>{
+  const f=cohort(),opened=[];
+  const peers=Object.fromEntries(f.others.map(row=>[row.app.name,{
+    get:async status=>{assert.equal(status,"host.windows");return [{window:row.window}];},
+    on:window=>{assert.equal(window,row.window);return row;},
+  }]));
+  const apps={wailsv3:{name:"wailsv3"},tauriv2:{name:"tauriv2"},mygo:{name:"mygo"},absent:{name:"absent"}};
+  const openApp=async(context,app,options)=>{
+    assert.equal(context,t);opened.push([app.name,options]);
+    return peers[app.name]??null;
+  };
+  assert.equal(typeof fixtures.uncoverFromCheckWindows,"function","the fixture owns the uncovering of a check window");
+  const result=await fixtures.uncoverFromCheckWindows(t,f.target,{apps,openApp});
+  assert.deepEqual(opened,[["wailsv3",{inactive:true}],["tauriv2",{inactive:true}],["absent",{inactive:true}]]);
+  assert.equal(result.baseline.occluded,false);
+  assert.equal(f.target.frame.x,0);
+  assert.ok(f.others.every(row=>row.frame.x===600));
+  assert.equal(f.cleanups.length,1);
+});

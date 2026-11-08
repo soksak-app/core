@@ -6,6 +6,7 @@
 // of the focused card.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { APPS, open } from "@soksak/window-check/app.mjs";
 import { untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
@@ -41,6 +42,18 @@ export function probeListSections(path = LAYOUT_PROBE_MANIFEST) {
   const list = sets.find((item) => item.id === "list");
   if (!Array.isArray(list?.sections) || list.sections.length === 0) throw new Error(`${path} declares no sections of its set list`);
   return list.sections;
+}
+
+/**
+ * The sets that the layout probe declares, as common sets that a check stores: each keeps its title, layout and sections and takes
+ * the id `check-<id>`. A check configuration holds the sets of environment.json, whose sections name plugins that a fixture
+ * configuration does not load, and such a section is kept in its set and not shown (docs/spec/plugins.md#plugins-that-are-not-loaded),
+ * so a check that compares the shown sections with a set stores these sets.
+ */
+export function probeSets(path = LAYOUT_PROBE_MANIFEST) {
+  const sets = JSON.parse(readFileSync(path, "utf8")).sidebars?.sets ?? [];
+  if (sets.length < 2) throw new Error(`${path} declares fewer than two sidebar sets`);
+  return sets.map(({ id, title, layout, sections }) => ({ id: `check-${id}`, title, layout, sections }));
 }
 
 /**
@@ -141,4 +154,23 @@ export async function prepareOcclusionFixture(target, otherWindows) {
     "placement fixture preparation remains occluded after owned cohort moves", { timeout: 2000 });
   if (inactiveCount(baseline) !== count) throw new Error("placement target activation count changed during preparation");
   return { before, baseline, parked };
+}
+
+/**
+ * Uncovers the window of `s` from the windows of the other check applications: it opens each of `apps` but the application of `s`
+ * inactive (an application outside the required set opens as null and owns no window), and parks their windows through
+ * prepareOcclusionFixture, which restores every frame when the check ends. The check windows overlap, and the mygo window, centred
+ * between the two others, is covered whole; a display measurement requires a window that reports `occluded` false, because WebKit
+ * renders a covered window less often (`host.window`, docs/spec/exposure.md#host-entries), and a check orders no window in front of
+ * the windows of other applications (docs/spec/hosts.md#launch-activation).
+ */
+export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = open } = {}) {
+  const otherWindows = [];
+  for (const other of Object.values(apps)) {
+    if (other.name === s.app.name) continue;
+    const peer = await openApp(t, other, { inactive: true });
+    if (peer === null) continue;
+    for (const window of await peer.get("host.windows")) otherWindows.push(peer.on(window.window));
+  }
+  return prepareOcclusionFixture(s, otherWindows);
 }

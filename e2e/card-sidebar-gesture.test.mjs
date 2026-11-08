@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
@@ -37,6 +37,8 @@ for (const app of Object.values(APPS)) {
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
       const { plugin } = await fresh(s);
+      // The check windows overlap and can cover this one whole; the measurement needs a window that is not occluded.
+      await uncoverFromCheckWindows(t, s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
       const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === plugin));
       assert.ok(card, `no ${plugin} card`);
