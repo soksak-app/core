@@ -65,7 +65,13 @@ static NSTimeInterval spareDelay = 1;
 @end
 
 // Image region implementation.
-@interface SPImageRegion : NSView <NSTextInputClient>
+@interface SPImageRegion : NSView <NSTextInputClient> {
+@public
+    // The stable token of the region that an opt-in frame identity tags each presented frame with
+    // (docs/spec/diagnostics.md): random, made when the region is created and kept until it closes. The token of the IOSurface
+    // of a frame is not it, since a supplier in the lease mode presents frames from several surfaces.
+    uint8_t identityToken[16];
+}
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
@@ -1641,6 +1647,7 @@ void *sp_region_create(void *surfaceHandle, const char *name, sp_region_event ev
     if (!surface || !name || !event || !surface.window) return NULL;
 
     SPImageRegion *view = [[SPImageRegion alloc] initWithFrame:NSZeroRect];
+    arc4random_buf(view->identityToken, sizeof view->identityToken);
     view.event = event;
     view.context = context;
     view.webSurface = surface;
@@ -1836,11 +1843,11 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
             NSString *regionNonce = nil;
             NSString *issuedPayload = nil;
             char *identityError = NULL;
-            if (!sp_image_capture_match_identity_region_nonce(nonce, &regionNonce, &identityError)) {
+            if (!sp_image_capture_match_identity_region_nonce(view->identityToken, &regionNonce, &identityError)) {
                 identityFailure = [NSString stringWithUTF8String:identityError ?: "region nonce derivation failed"];
             }
             free(identityError); identityError = NULL;
-            if (!identityFailure && !sp_image_capture_match_identity_issue(nonce, identity,
+            if (!identityFailure && !sp_image_capture_match_identity_issue(view->identityToken, identity,
                 &issuedPayload, &identityError)) {
                 identityFailure = [NSString stringWithUTF8String:identityError ?: "source identity issuance failed"];
             }
@@ -1860,7 +1867,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
                 taggedPresentation = copyTaggedPresentation(presentation, taggedPixels, imageStride);
                 if (!taggedPresentation) identityFailure = @"frame identity tagged IOSurface presentation could not be copied";
             }
-            if (!identityFailure && !sp_image_capture_match_identity_record(nonce, identity, roi,
+            if (!identityFailure && !sp_image_capture_match_identity_record(view->identityToken, identity, roi,
                 taggedPixels.bytes, imageWidth, imageHeight, imageStride, colorSpaceName, &identityError)) {
                 identityFailure = [NSString stringWithUTF8String:identityError ?: "tagged source artifact was not accepted"];
             }
@@ -1875,7 +1882,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
             if (!identityFailure) displayContents = (__bridge id)taggedPresentation;
             else if (issuedPayload) {
                 char *evictionError = NULL;
-                if (!sp_image_capture_match_identity_evict(nonce, identity, &evictionError))
+                if (!sp_image_capture_match_identity_evict(view->identityToken, identity, &evictionError))
                     sp_log_error("frame identity", evictionError ?: "failed to remove an unpresented issued payload");
                 free(evictionError);
             }
@@ -1987,6 +1994,11 @@ void sp_region_caret(void *handle, double x, double y, double w, double h) {
 void sp_region_set_input_context(void *handle, void *context) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     ((SPImageRegion *)handle).givenInputContext = (NSTextInputContext *)context;
+}
+
+void sp_region_identity_token(void *handle, unsigned char token[16]) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    memcpy(token, ((SPImageRegion *)handle)->identityToken, sizeof ((SPImageRegion *)handle)->identityToken);
 }
 #endif
 

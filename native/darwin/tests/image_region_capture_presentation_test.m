@@ -242,7 +242,9 @@ static void runPresentationCase(BOOL tagged, BOOL lease) { @autoreleasepool {
     NSSet<NSString *> *issuedPayloads = nil;
     if (tagged) {
         char *payloadError = NULL;
-        BOOL copiedPayloads = sp_image_capture_match_identity_copy_payloads(nonce, &issuedPayloads, &payloadError);
+        unsigned char regionToken[16] = {0};
+        if (region) sp_region_identity_token(region, regionToken);
+        BOOL copiedPayloads = sp_image_capture_match_identity_copy_payloads(regionToken, &issuedPayloads, &payloadError);
         check(copiedPayloads && issuedPayloads.count == 1,
             [NSString stringWithFormat:@"the active region exposes exactly its actual issued payload (%s)", payloadError ?: ""]);
         free(payloadError);
