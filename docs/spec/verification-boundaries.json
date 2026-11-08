@@ -152,11 +152,6 @@
       "reason": "Checks that the official CLI upgrade of browser keeps the starter cohort (including sidecar-files and sidecar-vt-alacritty) ready."
     },
     {
-      "file": "e2e/browser.test.mjs",
-      "owner": "mixed",
-      "reason": "the browser document region navigates, takes native input, and follows its surface: plugin:browser; a browser without an address hides its document region and shows the empty state: plugin:browser; the address field shows each loaded address and keeps text being typed: plugin:browser; the browser history buttons draw the core icons at the card header button size: plugin:browser; document site data lives in the configuration directory: core (document region data store, plain-view probe with a document region); a new browser card opens the home setting or starts empty: plugin:browser; a placement that keeps a shown document in place does not hide it: core (view placement, plain-view probe document region); browser document focus and isolation: plugin:browser; browser documents follow host theme pixels for existing, new, and reloaded documents: core (theme propagation, probe document that reports its colour scheme); the address bar paints the card colour in light and dark modes: plugin:browser; a site: plugin:browser; a change of the color scheme reaches the document of a browser card at once: core (probe colour-scheme status); a change of the color scheme reaches the document of a hidden browser card: core (probe colour-scheme status); the browser document zoom follows the pressed card: plugin:browser; the browser records its navigation, load and address commit in the event log: plugin:browser; a quit with a browser tab reads its sessions once and calls no page after the window: core (quit and view lifetime, save-close or unload probe)."
-    },
-    {
       "file": "e2e/capture-covered.test.mjs",
       "owner": "core",
       "reason": "Checks that a still capture of a covered window holds the document region (capture); replace the browser with a plain-view probe whose document can change colour on command."

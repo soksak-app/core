@@ -2473,9 +2473,9 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench-mygo/tests/tab_state_test.go", id: "TestEachReadOfTheSessionsOfATabRecordsItsCause" },
       { file: "packages/workbench/test/tab-session.test.mjs", id: "each read of the sessions of a tab records its cause" },
-      { file: "e2e/browser.test.mjs", id: "a quit with a browser tab reads its sessions once and calls no page after the window" },
+      { file: "e2e/document-region.test.mjs", id: "a quit with a document region tab reads its sessions once and calls no page after the window" },
     ],
-    expected: "A quit while a browser tab holds a document region reads the sessions of the tab once with the cause flush and calls no page after its window is gone.",
+    expected: "A quit while a tab holds a document region reads the sessions of the tab once with the cause flush and calls no page after its window is gone.",
     levels: ["unit", "application"],
   },
   {
@@ -4009,12 +4009,11 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-292",
-    implementation: [{ file: "e2e/browser.test.mjs", symbol: "traceRows(readEvents(" }],
+    implementation: [{ file: "e2e/document-region.test.mjs", symbol: "traceRows(readEvents(" }],
     tests: [
-      { file: "e2e/browser.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
-      { file: "e2e/browser.test.mjs", id: "a browser without an address hides its document region and shows the empty state" },
+      { file: "e2e/document-region.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
     ],
-    expected: "The placement check reads the applied placements from host.trace.surface and the empty state check expects the root document of the browser view at the empty state.",
+    expected: "The placement check reads the applied placements from host.trace.surface.",
     levels: ["application"],
   },
   {
@@ -6267,7 +6266,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "native/darwin/tests/window_facts_test.m", id: "document webview focus is reported" },
-      { file: "e2e/browser.test.mjs", id: "browser document focus and isolation" },
     ],
     expected: "A single click inside a browser document makes that document the native first responder, and a later click in another document transfers focus without leaving the first document focused.",
     levels: ["native", "application"],
@@ -6309,7 +6307,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
-      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
       { file: "e2e/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
@@ -6326,7 +6324,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
-      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
@@ -6356,17 +6354,6 @@ const FEATURE_LINKS = [
     ],
     expected: "The first native click focuses a terminal and the next character is accepted without a second click.",
     levels: ["unit", "native", "application"],
-  },
-  {
-    id: "F0.1.3",
-    implementation: [
-      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_key" },
-    ],
-    tests: [
-      { file: "e2e/browser.test.mjs", id: "browser document region navigates" },
-    ],
-    expected: "The first address entry replaces the selected URL instead of appending to it, while later clicks retain caret editing.",
-    levels: ["unit", "application"],
   },
   {
     id: "F0.2",
@@ -6726,7 +6713,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
       { file: "e2e/terminal.test.mjs", id: "the terminal font follows the pressed card's text size" },
-      { file: "e2e/browser.test.mjs", id: "the browser document zoom follows the pressed card's text size" },
     ],
     expected: "Command =, -, and 0 change the text size of the last pressed card or of the frame and every card: DOM content by CSS zoom, terminal cells by font size, and browser documents by page zoom, while the plane stays inside the window.",
     levels: ["unit", "application"],
@@ -10225,8 +10211,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/documents.rs", symbol: "set_document_appearance" },
       { file: "packages/host/go/src/documents.go", symbol: "SetDocumentAppearance" },
     ],
-    tests: [{ file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" }],
-    expected: "Existing, newly split, and reloaded browser documents apply the current host theme before presentation and retain their explicit HTTP(S) location.",
+    tests: [{ file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" }],
+    expected: "Existing, newly split, and reloaded documents apply the current host theme before presentation.",
     levels: ["unit", "native", "application"],
   },
   {
@@ -10235,7 +10221,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/theme.rs", symbol: "set" },
       { file: "packages/host/go/src/theme.go", symbol: "SetTheme" },
     ],
-    tests: [{ file: "e2e/browser.test.mjs", id: "a site's appearance remains independent of the host theme" }],
+    tests: [{ file: "e2e/document-region.test.mjs", id: "a document's own appearance remains independent of the host theme" }],
     expected: "A local document that fixes its own colour keeps that colour when the host switches light to dark, the region receives the host color scheme, and its URL remains unchanged.",
     levels: ["application"],
   },
