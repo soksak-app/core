@@ -402,9 +402,10 @@ test('the release publishes the packed releases that plugins and sidecars build 
   // Each application zip holds the sok of its host, so the release publishes no second copy of sok.
   assert.doesNotMatch(text, /dist\/sok-/, 'the release publishes sok outside the application bundles');
   assert.match(pack.text, /make -C native\/darwin\/process-identity\n/);
-  for (const folder of ['packages/plugin-api', 'native/darwin/process-identity']) {
-    assert.match(pack.text, new RegExp(`pnpm -C ${folder} pack --pack-destination "\\$PWD/dist"`), `${folder} is not packed into dist`);
-  }
+  // The script packs every release package and names their workspace dependencies by their release files.
+  assert.match(pack.text, /make -C native\/darwin\/process-identity\n\s+node scripts\/pack-release-packages\.mjs dist\n/,
+    'the release packages are not packed into dist after the process identity library is built');
+  assert.doesNotMatch(pack.text, /pnpm -C \S+ pack/, 'a release package is packed without the release addresses of its workspace dependencies');
   const upload = list.find((step) => /upload-artifact/.test(step.text));
   assert.match(upload.text, /path: core\/dist\/\*\n/, 'the upload of release-wailsv3 does not hold every file of dist');
   assert.ok(list.indexOf(pack) < list.indexOf(upload), 'the packed releases are made after the upload');

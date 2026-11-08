@@ -9,6 +9,7 @@ import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateNativeTests, candidateScr
 import { applicationExecutables, releaseKey } from './platform/platform.js';
 import { hashFile, hashTree, hashValue } from './candidate-identity.mjs';
 import { decodeAcceptanceReport, MAX_REPORT_BYTES } from './candidate-report.mjs';
+import { RELEASE_PACKAGES, releaseFileName } from './pack-release-packages.mjs';
 
 const digest = (value) => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 const sorted = (values) => [...values].sort();
@@ -123,11 +124,11 @@ function refuse(errors) { if (errors.length) throw new Error(errors.join('\n'));
 
 /** The exact published release filenames, one bundle of each candidate host and the packages, derived from the candidate's own package declarations. */
 export async function candidateAssetNames(root) {
-  const manifests = await Promise.all(['packages/plugin-api/package.json', 'native/darwin/process-identity/package.json'].map((path) => jsonFile(join(root, path))));
+  const manifests = await Promise.all(RELEASE_PACKAGES.map((folder) => jsonFile(join(root, folder, 'package.json'))));
   const version = manifests[0].version;
   if (!/^\d+\.\d+\.\d+$/.test(version) || manifests.some((m) => m.version !== version)) throw new Error('candidate package versions differ');
   return { version, names: [...CANDIDATE_HOSTS.map((host) => `soksak-${version}-${releaseKey(host, CANDIDATE_PLATFORM)}.zip`),
-    ...manifests.map((m) => `${m.name.replace(/^@/, '').replace('/', '-')}-${version}.tgz`)].sort() };
+    ...manifests.map((m) => releaseFileName(m.name, version))].sort() };
 }
 
 /** Reuses canonical scripts and native runner arguments; the report cannot choose its required subset. */

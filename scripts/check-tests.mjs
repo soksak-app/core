@@ -12120,9 +12120,25 @@ const FEATURE_LINKS = [
   },
   {
     id: "F320",
-    implementation: [{ file: ".github/workflows/release.yml", symbol: "pnpm -C packages/plugin-api pack --pack-destination" }],
+    implementation: [{ file: ".github/workflows/release.yml", symbol: "node scripts/pack-release-packages.mjs dist" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the release publishes the packed releases that plugins and sidecars build with and sok only inside the bundles" }],
     expected: "The core release publishes sok only inside its application zips.",
+    levels: ["unit"],
+  },
+  {
+    id: "F715-4",
+    implementation: [
+      { file: "scripts/pack-release-packages.mjs", symbol: "export function releaseManifest" },
+      { file: "scripts/pack-release-packages.mjs", symbol: "export function packReleasePackages" },
+      { file: ".github/workflows/release.yml", symbol: "node scripts/pack-release-packages.mjs dist" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "RELEASE_PACKAGES.map((folder) => jsonFile(join(root, folder, 'package.json')))" },
+    ],
+    tests: [
+      { file: "scripts/test/pack-release-packages.test.mjs", id: "a workspace dependency of a published package becomes the release address of that package" },
+      { file: "scripts/test/pack-release-packages.test.mjs", id: "the packed window check packages resolve from the core release and hold their exported modules" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication hashes the exact downloaded files and complete bundle contents" },
+    ],
+    expected: "The core release packs @soksak/window-check, @soksak/client and @soksak/log-contract beside @soksak/plugin-api, each workspace dependency of a packed manifest is the release file of that package in the same core release, every module that the exports of a packed package name is in its release file, and the publication gate requires the five packed packages.",
     levels: ["unit"],
   },
   {
