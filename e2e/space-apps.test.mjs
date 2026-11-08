@@ -7,37 +7,40 @@ import { fresh } from "./fixture.mjs";
 
 const card = (grid, id) => grid.cards.find((item) => item.id === id);
 const panes = (grid) => grid.cards.filter((item) => item.pane !== null);
+/** The card of the grid that holds the tab surface. */
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a fullscreen card lists the apps of the space by card and switches to a picked one`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    // Adds one more tab of B to the layout A | (B / C). A is the terminal card of the fixture.
+    const { surface, plugin } = await fresh(s);
+    // Adds one more tab of B to the layout A | (B / C). A is the card of the start tab.
     const start = panes(await s.get("core.grid"));
-    for (const extra of start.filter((item) => item.id !== "terminal")) await s.run("core.card.close", { card: extra.id });
-    const b = (await s.run("core.card.split", { card: "terminal", side: "right", plugin: "browser" })).card;
-    const c = (await s.run("core.card.split", { card: b, side: "bottom", plugin: "browser" })).card;
-    await s.run("core.card.add-tab", { card: b, plugin: "terminal" });
+    const a = cardOf(await s.get("core.grid"), surface);
+    for (const extra of start.filter((item) => item.id !== a)) await s.run("core.card.close", { card: extra.id });
+    const b = (await s.run("core.card.split", { card: a, side: "right", plugin })).card;
+    const c = (await s.run("core.card.split", { card: b, side: "bottom", plugin })).card;
+    await s.run("core.card.add-tab", { card: b, plugin });
     const grid = await s.until("core.grid", (value) => card(value, b)?.tabs.length === 2 && card(value, c),
       "the arrangement A | (B / C) did not appear");
 
-    await s.run("core.card.fullscreen", { card: "terminal" });
-    await s.until("core.grid", (value) => value.fullscreen === "terminal", "the card did not become fullscreen");
+    await s.run("core.card.fullscreen", { card: a });
+    await s.until("core.grid", (value) => value.fullscreen === a, "the card did not become fullscreen");
     // The button is at the very front of the full-screen card header.
-    const index = panes(grid).findIndex((item) => item.id === "terminal");
+    const index = panes(grid).findIndex((item) => item.id === a);
     const button = await s.rect("core.card.space-apps", index);
     const tab = await s.rect("core.card.tab", 0);
     assert.ok(button.width > 0 && button.x < tab.x, `the space apps button is not at the front: ${JSON.stringify({ button, tab })}`);
     await s.click((button.document?.x ?? 0) + button.x + button.width / 2, (button.document?.y ?? 0) + button.y + button.height / 2);
     const menu = await s.until("core.picker", (picker) => picker.open, "the space apps list did not open");
     assert.match(menu.title, /^스페이스 앱 4개$/);
-    assert.deepEqual(menu.items.map((item) => item.group), ["terminal", b, b, c],
+    assert.deepEqual(menu.items.map((item) => item.group), [a, b, b, c],
       `the groups do not follow the arrangement: ${JSON.stringify(menu.items)}`);
-    assert.equal(menu.items.find((item) => item.active)?.group, "terminal");
+    assert.equal(menu.items.find((item) => item.active)?.group, a);
 
     // A title and an item of the same depth have the same icon x and the same name x (the title follows the groups order of core.picker and the item follows the items order).
     // The check environment cannot create a tab of a plugin that is not loaded, so only the items of loaded plugins are measured.
-    assert.deepEqual(menu.groups.map((group) => group.id), ["terminal", b, c],
+    assert.deepEqual(menu.groups.map((group) => group.id), [a, b, c],
       `the headings do not follow the arrangement: ${JSON.stringify(menu.groups)}`);
     // The selection layer is hidden from the main document while the native view draws, so the columns are measured when opened and reported as columns of core.picker.
     assert.equal(menu.columns.items.length, menu.items.length);

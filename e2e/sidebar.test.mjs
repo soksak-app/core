@@ -1,11 +1,10 @@
 // Sidebar check: checks the place, folding and width change of an inset sidebar, and that the sections of a set are mounted in the list and tabs layouts.
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { readEventLines, currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { cardSidebar, fresh } from "./fixture.mjs";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
@@ -14,12 +13,48 @@ import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 const GRIP = 0;
 /** Width (pt) of the boundary line that remains on a folded sidebar. */
 const DIVIDER = 6;
+/** The second layout probe: a plugin without sections or sidebar defaults. */
+const SECOND = "layoutprobe2";
+/** The sections of the inset card sidebar on the start card. */
+const CARD_SECTIONS = ["layoutprobe.alpha", "layoutprobe.beta"];
+/** The left window sidebar: a fill section and a section of a declared height. */
+const LEFT_SECTIONS = ["layoutprobe.fill", "layoutprobe.beta"];
+/** The probe section that follows the core statuses core.sidebars and core.surfaces. */
+const FOLLOW = "layoutprobe.follow";
+
+/**
+ * Puts an active tab of the second probe on the card of the start layout that does not hold the start tab surface, so that the start
+ * card is the only card that shows the start plugin. Returns the ids of the two cards as `{own, other}`.
+ */
+async function soleStartCard(s, surface) {
+  const grid = await s.get("core.grid");
+  const own = grid.cards.find((card) => card.tabs?.some((tab) => tab.id === surface)).id;
+  const other = grid.cards.find((card) => card.id !== own && card.tabs?.length > 0)?.id;
+  assert.ok(other, "the start layout has no second card with tabs");
+  const { tab } = await s.run("core.card.add-tab", { card: other, plugin: SECOND });
+  s.cleanup(() => s.run("core.tab.close", { tab }));
+  await s.until("core.grid", (value) => value.cards.find((card) => card.id === other)?.active === tab,
+    `the ${SECOND} tab did not become active`);
+  return { own, other };
+}
+
+/**
+ * Stores a common set `id` of `sections` in `layout` and links it to `place` for `plugin` (null: the general choice).
+ * keepCommonSettings restores the sets and the links when the check ends.
+ */
+async function linkSet(s, { id, sections, layout = "list", place, plugin = null }) {
+  await keepCommonSettings(s);
+  const sets = (await s.get("core.settings")).values.sets;
+  await s.run("core.settings.set", { patch: { sets: [...sets, { id, title: id, sections, layout }] }, scope: "common" });
+  await s.run("core.settings.link", { place, plugin, set: id, scope: "common" });
+}
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an inset sidebar stands inside its card and folds or resizes without changing the card`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    await terminalCardSidebar(s);
+    const { surface } = await fresh(s);
+    await soleStartCard(s, surface);
+    await cardSidebar(s, { sections: CARD_SECTIONS });
     const railed = (grid) => grid.cards.filter((card) => card.id.startsWith("rail-"));
     const grid = await s.until("core.grid", (value) => railed(value).length === 0 && value.cards.some((card) => card.sidebars?.left),
       "no card holds an inset sidebar");
@@ -101,102 +136,49 @@ const press = async (s, name, index) => {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a combined set mounts every section in list layout and switches sections in tabs layout`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    await terminalCardSidebar(s);
-    const cardSidebar = "terminal:left";
+    const { surface } = await fresh(s);
+    const { own } = await soleStartCard(s, surface);
+    const set = "check-combined";
+    await cardSidebar(s, { set, sections: CARD_SECTIONS });
+    const inset = `${own}:left`;
+    const [first, second] = CARD_SECTIONS;
     const of = (sidebars, id) => sidebars.find((item) => item.sidebar === id);
     const mounted = (item, ids) => item && ids.every((id) => item.sections.find((value) => value.id === id)?.mounted);
 
-    // list: the set of the terminal card sidebar mounts both sections.
-    let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, cardSidebar), ["files.tree", "files.bookmarks"]),
-      "the terminal card sidebar did not mount both sections");
-    const listed = of(sidebars, cardSidebar);
+    // list: the set of the card sidebar of the start card mounts both sections.
+    let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, inset), CARD_SECTIONS),
+      "the card sidebar of the start card did not mount both sections");
+    const listed = of(sidebars, inset);
     assert.equal(listed.layout, "list");
     assert.deepEqual(listed.sections.map((item) => [item.id, item.folded, item.error]),
-      [["files.tree", false, null], ["files.bookmarks", false, null]]);
-    const terminalCard = (await s.get("core.grid")).cards.find((card) => card.id === "terminal");
-    assert.deepEqual([listed.card, listed.surface], ["terminal", terminalCard.active], "the sections received the focused card and tab");
+      [[first, false, null], [second, false, null]]);
+    const startCard = (await s.get("core.grid")).cards.find((card) => card.id === own);
+    assert.deepEqual([listed.card, listed.surface], [own, startCard.active], "the sections received the focused card and tab");
     // Pressing the header with a native click folds that section.
-    await press(s, "core.sidebar.section.header", indexOf(sidebars, "list", cardSidebar, "files.bookmarks"));
-    sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.sections[1].folded === true,
+    await press(s, "core.sidebar.section.header", indexOf(sidebars, "list", inset, second));
+    sidebars = await s.until("core.sidebars", (value) => of(value, inset)?.sections[1].folded === true,
       "a click on the header did not fold the section");
-    assert.equal(of(sidebars, cardSidebar).sections[0].folded, false);
+    assert.equal(of(sidebars, inset).sections[0].folded, false);
 
     // tabs: changing the same set to tabs mounts only the chosen section.
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-files" ? { ...set, layout: "tabs" } : set) },
+    await s.run("core.settings.set", { patch: { sets: sets.map((item) => item.id === set ? { ...item, layout: "tabs" } : item) },
       scope: "common" });
-    sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.layout === "tabs" && mounted(of(value, cardSidebar), ["files.tree"]),
+    sidebars = await s.until("core.sidebars", (value) => of(value, inset)?.layout === "tabs" && mounted(of(value, inset), [first]),
       "the tabs layout did not mount the first section");
-    assert.equal(of(sidebars, cardSidebar).tab, "files.tree");
+    assert.equal(of(sidebars, inset).tab, first);
     // A section of an unselected tab keeps its surface and is hidden (docs/spec/plugins.md#sections).
     const hidden = async (section, message) => {
-      const { surfaceId } = of(await s.get("core.sidebars"), cardSidebar).sections.find((value) => value.id === section);
+      const { surfaceId } = of(await s.get("core.sidebars"), inset).sections.find((value) => value.id === section);
       await s.until("core.surfaces", (all) => all.find((item) => item.surface === surfaceId)?.visible === false, message);
     };
-    await hidden("files.bookmarks", "a section of an unselected tab is shown");
-    await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", cardSidebar, "files.bookmarks"));
-    sidebars = await s.until("core.sidebars", (value) => of(value, cardSidebar)?.tab === "files.bookmarks" && mounted(of(value, cardSidebar), ["files.bookmarks"]),
+    await hidden(second, "a section of an unselected tab is shown");
+    await press(s, "core.sidebar.section.tab", indexOf(sidebars, "tabs", inset, second));
+    sidebars = await s.until("core.sidebars", (value) => of(value, inset)?.tab === second && mounted(of(value, inset), [second]),
       "a click on the tab did not show its section");
-    await hidden("files.tree", "the section of the previous tab stayed shown");
+    await hidden(first, "the section of the previous tab stayed shown");
 
-    await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: cardSidebar, section: "files.bookmarks" }), /does not use the list layout/);
-  });
-}
-
-/** Loopback server that serves a document whose title is the path name. It is closed when the check ends. */
-async function serveTitles(s) {
-  const server = createServer((request, response) => {
-    const name = new URL(request.url, "http://127.0.0.1").pathname.slice(1);
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    // inspect has one element and one image request.
-    if (name === "untitled") { response.end("<!doctype html><body>untitled"); return; }
-    response.end(name === "inspect"
-      ? `<!doctype html><title>inspect</title><body><div id="box" class="a b"><img src="/pixel"></div>`
-      : `<!doctype html><title>${name}</title><body>${name}`);
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  s.cleanup(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
-  return `http://127.0.0.1:${server.address().port}`;
-}
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: the browser sections mount as section views beside the card's browser navigation`, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const base = await serveTitles(s);
-    const sidebar = "right";
-    const sections = ["browser.tabs", "browser.history"];
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser" ? { ...set, sections, layout: "list" } : set) },
-      scope: "common" });
-    await s.run("core.card.focus", { card: "browser" });
-    const of = (sidebars) => sidebars.find((item) => item.sidebar === sidebar);
-    const sidebars = await s.until("core.sidebars", (value) => of(value)?.set === "set-browser"
-      && sections.every((id) => of(value).sections.find((item) => item.id === id)?.mounted && of(value).sections.find((item) => item.id === id)?.phase === "ready"),
-    "the right sidebar did not mount the browser section views");
-    const surface = of(sidebars).surface;
-    assert.ok(surface, "the browser sections received the browser tab");
-    const surfaces = await s.get("core.surfaces");
-    for (const { surfaceId } of of(sidebars).sections) {
-      assert.ok(surfaces.some((item) => item.kind === "section" && item.sidebar === sidebar && item.surface === surfaceId),
-        `core.surfaces does not list the section surface ${surfaceId}`);
-    }
-
-    // The two opened documents are the navigation of the browser tab that the sections follow.
-    for (const name of ["one", "two"]) {
-      await s.run("browser.navigate", { url: `${base}/${name}` }, surface);
-      await s.until("browser.location", (at) => at.url === `${base}/${name}` && !at.loading && at.title === name,
-        `the browser did not load ${name}`, { surface });
-    }
-
-    // The card's browser tabs list both tabs, and the added tab becomes active.
-    const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
-    await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === "browser")?.active === tab,
-      "the added browser tab did not become active");
-    const tabs = (await s.get("core.grid")).cards.find((card) => card.id === "browser").tabs;
-    assert.deepEqual(tabs.map((item) => item.id), [surface, tab]);
+    await assert.rejects(s.run("core.sidebar.section.fold", { sidebar: inset, section: second }), /does not use the list layout/);
   });
 }
 
@@ -216,9 +198,9 @@ async function headerRuleContrast(s, rect) {
   await s.request("diagnostics.capture.start", {});
   const result = await s.request("diagnostics.capture.stop", { after: displayed });
   try {
-    const files = frames(result.frames);
-    assert.ok(files.length > 0, "the header capture produced no frames");
-    const frame = readFrame(files.at(-1));
+    const captured = frames(result.frames);
+    assert.ok(captured.length > 0, "the header capture produced no frames");
+    const frame = readFrame(captured.at(-1));
     // Measures near the right end of the header, avoiding the name glyphs.
     const x = Math.round((rect.x + rect.width - 6) * frame.scale);
     const rule = pixel(frame, x, Math.ceil((rect.y + rect.height) * frame.scale) - 1);
@@ -249,10 +231,13 @@ const rects = async (s, name) => {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a sidebar starts with its sections and lines up its header and status rules with the neighbouring cards`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    // The right sidebar is shown as the right override of the terminal, which is the focused card.
-    await terminalCardSidebar(s);
-    await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
+    const { surface, plugin } = await fresh(s);
+    const { own } = await soleStartCard(s, surface);
+    const inset = `${own}:left`;
+    // The right sidebar is shown as the right override of the start plugin, which the focused start card shows.
+    await cardSidebar(s, { sections: CARD_SECTIONS });
+    await linkSet(s, { id: "check-left", sections: LEFT_SECTIONS, place: "left" });
+    await linkSet(s, { id: "check-right", sections: ["layoutprobe.alpha", "layoutprobe.fill"], place: "window-right", plugin });
     const locate = async (sidebar) => {
       const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === sidebar)?.sections.every((item) => item.mounted),
         `sidebar ${sidebar} did not mount its sections`);
@@ -285,89 +270,34 @@ for (const app of Object.values(APPS)) {
     const ratio = await headerRuleContrast(s, (await locate("left")).header);
     assert.ok(ratio >= DESIGN_RULE_CONTRAST, `the header rule contrast ${ratio.toFixed(3)} is below the design's ${DESIGN_RULE_CONTRAST.toFixed(3)}`);
     // The sidebar inside the card shares the card header line, so the first section starts right below that header.
-    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "terminal:left"), "the inset sidebar was not drawn");
+    await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === inset), "the inset sidebar was not drawn");
     const cardHeader = (await rects(s, "core.card.header")).reduce((a, b) => (b.y < a.y ? b : a));
-    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "terminal:left")?.sections.every((item) => item.mounted),
+    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === inset)?.sections.every((item) => item.mounted),
       "the inset sidebar did not mount its sections");
-    const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === "terminal:left"));
-    assert.ok(near(box.y, cardHeader.y + cardHeader.height), `terminal: the inset sections start at ${box.y}, the card header ends at ${cardHeader.y + cardHeader.height}`);
+    const box = await s.rect("core.sidebar", sidebars.findIndex((item) => item.sidebar === inset));
+    assert.ok(near(box.y, cardHeader.y + cardHeader.height), `${inset}: the inset sections start at ${box.y}, the card header ends at ${cardHeader.y + cardHeader.height}`);
     // The sidebar inside the card ends with its own status line, not the status line of the window sidebar, and that line is placed on the same line as the footer of the card content
     // (docs/spec/example-model.md).
     const inside = (rect) => rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width;
     assert.deepEqual((await rects(s, "core.sidebar.status")).filter(inside), [], "the inset sidebar has a window sidebar status line");
-    const own = (await rects(s, "core.card.sidebar.status")).find(inside);
-    assert.ok(own && near(box.y + box.height, own.y), `terminal: the inset sections end at ${box.y + box.height}, its status line starts at ${own?.y}`);
-    const footer = (await rects(s, "core.card.status")).find((rect) => rect.x >= box.x + box.width - 0.5 && rect.y >= box.y && near(rect.y, own.y));
-    assert.ok(footer, `terminal: the inset status line at ${own.y} is not in one row with the content footer`);
-  });
-}
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: the browser DOM and network sections list the document's elements and requests`, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const base = await serveTitles(s);
-    const sidebar = "right";
-    const sections = ["browser.dom", "browser.network"];
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser" ? { ...set, sections, layout: "list" } : set) },
-      scope: "common" });
-    await s.run("core.card.focus", { card: "browser" });
-    const of = (sidebars) => sidebars.find((item) => item.sidebar === sidebar);
-    const sidebars = await s.until("core.sidebars", (value) => of(value)?.set === "set-browser"
-      && sections.every((id) => of(value).sections.find((item) => item.id === id)?.mounted),
-    "the right sidebar did not mount the DOM and network sections");
-    const surface = of(sidebars).surface;
-    await s.run("browser.navigate", { url: `${base}/inspect` }, surface);
-    // browser.elements is a tree of element labels nested by depth, and browser.requests is a list of `<type> <address>` items.
-    const treeOf = (value) => {
-      const flat = (nodes, depth) => nodes.flatMap((node) => [`${depth}:${node.label}`, ...flat(node.children ?? [], depth + 1)]);
-      return flat(value.elements.find((element) => element.kind === "tree")?.nodes ?? [], 0);
-    };
-    const listOf = (value) => (value.elements.find((element) => element.kind === "list")?.items ?? []).map((item) => item.label);
-    const elements = await s.until("browser.elements", (value) => treeOf(value).some((label) => label.includes("#box")),
-      "browser.elements did not report the document's elements", { surface });
-    assert.deepEqual(treeOf(elements), ["0:html", "1:head", "2:title", "1:body", "2:div#box.a.b", "3:img"]);
-    const requests = await s.until("browser.requests", (value) => listOf(value).includes(`img ${base}/pixel`),
-      "browser.requests did not report the image request", { surface });
-    assert.deepEqual(listOf(requests), [`navigation ${base}/inspect`, `img ${base}/pixel`]);
-    await s.until("core.sidebars", (value) => of(value)?.sections.every((item) => item.phase === "ready" && item.error === null),
-      "the DOM and network section views did not report ready");
-  });
-}
-
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: a browser tab shows the document title or the address and the tabs section mounts`, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
-    const base = await serveTitles(s);
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser"
-      ? { ...set, sections: ["browser.tabs"], layout: "list" } : set) }, scope: "common" });
-    await s.run("core.card.focus", { card: "browser" });
-    const of = (sidebars) => sidebars.find((item) => item.sidebar === "right");
-    const sidebars = await s.until("core.sidebars", (value) => of(value)?.sections.find((item) => item.id === "browser.tabs")?.mounted,
-      "the right sidebar did not mount the tabs section");
-    const surface = of(sidebars).surface;
-    const label = (grid) => grid.cards.flatMap((card) => card.tabs).find((tab) => tab.id === surface)?.label;
-
-    await s.run("browser.navigate", { url: `${base}/titled` }, surface);
-    await s.until("core.grid", (grid) => label(grid) === "titled", "the tab did not show the document title");
-    await s.run("browser.navigate", { url: `${base}/untitled` }, surface);
-    await s.until("core.grid", (grid) => label(grid) === `${base}/untitled`, "the tab did not show the address of an untitled document");
+    const insetLine = (await rects(s, "core.card.sidebar.status")).find(inside);
+    assert.ok(insetLine && near(box.y + box.height, insetLine.y), `${inset}: the inset sections end at ${box.y + box.height}, its status line starts at ${insetLine?.y}`);
+    const footer = (await rects(s, "core.card.status")).find((rect) => rect.x >= box.x + box.width - 0.5 && rect.y >= box.y && near(rect.y, insetLine.y));
+    assert.ok(footer, `${inset}: the inset status line at ${insetLine.y} is not in one row with the content footer`);
   });
 }
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: tabs-layout tabs keep their full names on one line at the strip height`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    await terminalCardSidebar(s);
+    const { surface } = await fresh(s);
+    const { own, other } = await soleStartCard(s, surface);
+    const set = "check-tabs";
+    await cardSidebar(s, { set, sections: CARD_SECTIONS });
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-files" ? { ...set, layout: "tabs" } : set) },
+    await s.run("core.settings.set", { patch: { sets: sets.map((item) => item.id === set ? { ...item, layout: "tabs" } : item) },
       scope: "common" });
+    await linkSet(s, { id: "check-second", sections: ["layoutprobe.fill", FOLLOW], layout: "tabs", place: "window-right", plugin: SECOND });
     const check = async (sidebar) => {
       const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === sidebar)?.layout === "tabs",
         `sidebar ${sidebar} did not draw tabs`);
@@ -383,9 +313,9 @@ for (const app of Object.values(APPS)) {
         assert.ok(near(tab.height, strip.height), `${sidebar}: tab ${item.sections[index].id} is ${tab.height} pt high in a ${strip.height} pt strip`);
       }
     };
-    await check("terminal:left");
-    // When the browser card is focused, the right sidebar shows the browser set of the tabs layout.
-    await s.run("core.card.focus", { card: "browser" });
+    await check(`${own}:left`);
+    // When the card of the second probe is focused, the right sidebar shows the override set of that plugin in the tabs layout.
+    await s.run("core.card.focus", { card: other });
     await check("right");
   });
 }
@@ -394,7 +324,8 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a section header's name stays in place when sections fold and sits alike in every header`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    // The left set (file tree, bookmarks) is the first list sidebar in the document.
+    // The left set (a fill section and a section of a declared height) is the first list sidebar in the document.
+    await linkSet(s, { id: "check-left", sections: LEFT_SECTIONS, place: "left" });
     const sidebars = await s.until("core.sidebars", (value) => value[0]?.sidebar === "left" && value[0].layout === "list"
       && value[0].sections.length >= 2, "the left sidebar did not draw two list sections");
     const [one, two] = sidebars[0].sections;
@@ -424,58 +355,58 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a fill section takes the sidebar height the other sections leave and gives it up when folded`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    // The left set is the file tree (fill) and the bookmarks (content height). The left sidebar is the first sidebar in the document.
+    // The left set is the fill section (tree) and a section of a declared height (marks). The left sidebar is the first sidebar in
+    // the document.
+    await linkSet(s, { id: "check-left", sections: LEFT_SECTIONS, place: "left" });
+    const [tree, marks] = LEFT_SECTIONS;
     const ready = (value) => value[0]?.sidebar === "left" && value[0].sections.every((item) => item.mounted);
     await s.until("core.sidebars", ready, "the left sidebar did not mount its sections");
     const measure = async () => {
       const box = await s.rect("core.sidebar", 0);
-      const [tree, marks] = [await s.rect("core.sidebar.section", 0), await s.rect("core.sidebar.section", 1)];
+      const [treeBox, marksBox] = [await s.rect("core.sidebar.section", 0), await s.rect("core.sidebar.section", 1)];
       const [treeHead, marksHead] = [await s.rect("core.sidebar.section.header", 0), await s.rect("core.sidebar.section.header", 1)];
-      return { box, tree, marks, treeHead, marksHead };
+      return { box, tree: treeBox, marks: marksBox, treeHead, marksHead };
     };
     const open1 = await measure();
-    // The height of the tree body is the height that the sidebar leaves after the bookmarks and the tree header.
+    // The height of the fill body is the height that the sidebar leaves after the declared-height section and the fill header.
     const room = open1.box.height - open1.marks.height - open1.treeHead.height;
     const body = open1.tree.height - open1.treeHead.height;
-    assert.ok(Math.abs(body - room) <= 1, `the tree body is ${body} pt, the room is ${room} pt`);
-    assert.ok(open1.marks.height < open1.box.height / 3, `the bookmarks section stretched to ${open1.marks.height} pt`);
+    assert.ok(Math.abs(body - room) <= 1, `the fill body is ${body} pt, the room is ${room} pt`);
+    assert.ok(open1.marks.height < open1.box.height / 3, `the declared-height section stretched to ${open1.marks.height} pt`);
 
-    // Folding the bookmarks gives their space to the tree.
-    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.bookmarks" });
-    await s.until("core.sidebars", (value) => value[0].sections[1].folded === true, "the bookmarks did not fold");
+    // Folding the declared-height section gives its space to the fill section.
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: marks });
+    await s.until("core.sidebars", (value) => value[0].sections[1].folded === true, "the declared-height section did not fold");
     const marksFolded = await measure();
     assert.ok(Math.abs(marksFolded.tree.height - (marksFolded.box.height - marksFolded.marksHead.height)) <= 1,
-      `the tree is ${marksFolded.tree.height} pt after the bookmarks folded in a ${marksFolded.box.height} pt sidebar`);
-    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.bookmarks" });
-    await s.until("core.sidebars", (value) => value[0].sections[1].folded === false, "the bookmarks did not unfold");
+      `the fill section is ${marksFolded.tree.height} pt after the declared-height section folded in a ${marksFolded.box.height} pt sidebar`);
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: marks });
+    await s.until("core.sidebars", (value) => value[0].sections[1].folded === false, "the declared-height section did not unfold");
 
-    // Folding the tree leaves only the header, and the bookmarks of content height do not grow.
-    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.tree" });
-    await s.until("core.sidebars", (value) => value[0].sections[0].folded === true, "the tree did not fold");
+    // Folding the fill section leaves only its header, and the declared-height section does not grow.
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: tree });
+    await s.until("core.sidebars", (value) => value[0].sections[0].folded === true, "the fill section did not fold");
     const treeFolded = await measure();
-    assert.ok(Math.abs(treeFolded.tree.height - treeFolded.treeHead.height) <= 0.5, "a folded tree kept more than its header");
+    assert.ok(Math.abs(treeFolded.tree.height - treeFolded.treeHead.height) <= 0.5, "a folded fill section kept more than its header");
     assert.ok(Math.abs(treeFolded.marks.height - open1.marks.height) <= 0.5,
-      `the bookmarks changed from ${open1.marks.height} to ${treeFolded.marks.height} pt when the tree folded`);
-    await s.run("core.sidebar.section.fold", { sidebar: "left", section: "files.tree" });
+      `the declared-height section changed from ${open1.marks.height} to ${treeFolded.marks.height} pt when the fill section folded`);
+    await s.run("core.sidebar.section.fold", { sidebar: "left", section: tree });
   });
 }
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: sections that follow a core status mount without an error after a reload`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    s.cleanup(() => s.run("core.settings.reset", { key: "sets" }));
+    const { plugin } = await fresh(s);
     const sidebar = "right";
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-browser" ? { ...set, sections: ["browser.tabs"], layout: "list" } : set) },
-      scope: "common" });
-    await s.run("core.card.focus", { card: "browser" });
-    const mounted = (value) => value.find((item) => item.sidebar === sidebar)?.sections.find((item) => item.id === "browser.tabs")?.mounted;
-    await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs");
+    // The right sidebar of the focused start card shows the probe section that follows core.sidebars and core.surfaces.
+    await linkSet(s, { id: "check-follow", sections: [FOLLOW], place: "window-right", plugin });
+    const mounted = (value) => value.find((item) => item.sidebar === sidebar)?.sections.find((item) => item.id === FOLLOW)?.mounted;
+    await s.until("core.sidebars", mounted, `the right sidebar did not mount ${FOLLOW}`);
     const offsets = currentEventOffsets(s.app.configDir);
     // Sections are mounted asynchronously after the first screen. The core state that they follow must already be registered at that time (docs/spec/plugins.md#sections).
     await s.run("host.window.reload");
-    await s.until("core.sidebars", mounted, "the right sidebar did not mount browser.tabs after the reload");
+    await s.until("core.sidebars", mounted, `the right sidebar did not mount ${FOLLOW} after the reload`);
     await s.presented();
     await s.flushLog();
     const errors = readEventLines(s.app.configDir, offsets).lines.filter((line) => line.includes("is not registered"));
@@ -490,6 +421,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const { left } = (await s.get("core.settings")).values;
     s.cleanup(() => s.run("core.settings.set", { patch: { left }, scope: "common" }));
+    await linkSet(s, { id: "check-left", sections: LEFT_SECTIONS, place: "left" });
     await s.run("core.settings.set", { patch: { left: true }, scope: "common" });
     await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "left"), "the left window sidebar is not shown");
     const listed = (await s.request("exposure.list")).element.find((entry) => entry.name === "core.sidebar.fold");

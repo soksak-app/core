@@ -1,4 +1,5 @@
-// Approval-gated activation checks for the native input client lifecycle.
+// Approval-gated activation checks for the native input client lifecycle. The image region of the raster probe carries the native
+// input client of core, and `rasterprobe.input` logs each input transaction with the echo of its sidecar.
 // This file is selected explicitly; it is not part of the default window checks.
 import assert from "node:assert/strict";
 import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -10,54 +11,13 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
 import { compareAppKitReference } from "../ime-reference-steps.mjs";
-import { ensureTerminals, presentedScreen, readScreenUntil } from "../../terminal-screen.mjs";
-import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptMatches,
-  terminalLineBeforeCursor, visibleInputBeforeCursor, readTerminalObservationSnapshot,
-  terminalComposeMatchesPreedit, terminalObserverStatusesMatch, startTerminalStatusObserver,
-  waitForTerminalStage, waitForStateEvent } from "../terminal-ime-document.mjs";
-
-
-async function focusedTerminal(s, surface) {
-  await s.keepPointerOutside();
-  const view = await s.rect("terminal.view", undefined, surface);
-  const x = view.document.x + view.x + view.width / 2;
-  const y = view.document.y + view.y + view.height / 2;
-  await s.pointer(x, y, "move", { activate: true });
-  await s.click(x, y);
-  await s.run("terminal.focus", {}, surface);
-  await s.until("host.window", (host) => host.active && host.key &&
-    host.regions.some((region) => region.surface === surface && region.focused),
-  "the terminal did not become the focused view of the active key window");
-  await s.until("terminal.cursor", (cursor) => cursor.focused,
-    "the terminal did not report native focus", { surface });
-}
-
-async function startInputTrace(s, surface) {
-  await s.run("terminal.ime.trace", { action: "start" }, surface);
-  let active = true;
-  s.cleanup(async () => {
-    if (active) await s.run("terminal.ime.trace", { action: "stop" }, surface);
-  });
-  return async () => {
-    const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
-    active = false;
-    assert.equal(trace.overflow, false, "the native input trace overflowed");
-    assert.ok(trace.entries.length > 0, "the native input trace is empty");
-    return trace.entries;
-  };
-}
+import { assertReceivedUnchanged, focusImageActive, focusedCard, imageRegion, inputDocument, insertedText, lastTransaction,
+  rasterProbeTab, receivedAfter, transactionMatchesKey, untilDocument } from "../../input-probe.mjs";
 
 
 async function preserveInputSource(s) {
   const original = (await s.request("diagnostics.input.source")).source;
   s.cleanup(() => s.request("diagnostics.input.source", { restore: original }));
-}
-
-function insertedText(entries) {
-  const { native } = inputTraceTransactions(entries);
-  return native.flatMap((entry) => entry.actions
-    .filter((action) => action.type === "insert")
-    .map((action) => action.text)).join("");
 }
 
 async function preserveGestureCapture(s, artifactDir, label) {
@@ -98,32 +58,26 @@ for (const app of Object.values(APPS)) {
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
-      const [terminal] = await ensureTerminals(s, 1);
-      const surface = terminal.surface;
-      await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
-        "the shell prompt did not appear");
+      const { surface } = await rasterProbeTab(s);
       await preserveInputSource(s);
-      await focusedTerminal(s, surface);
+      await focusImageActive(s, surface);
       await compareAppKitReference(s, [
         { source: "latin" }, { key: "d" }, { key: "d" }, { key: "d" }, { source: "korean" },
         { key: "g" }, { key: "k" }, { key: "s" }, { key: "r" }, { key: "m" }, { key: "f" }, { key: "Space" },
       ], "ddd한글 ", ["", "d", "dd", "ddd", "ddd", "dddㅎ", "ddd하", "ddd한", "ddd한ㄱ", "ddd한그", "ddd한글", "ddd한글 "]);
-      await focusedTerminal(s, surface);
-      const stopTrace = await startInputTrace(s, surface);
+      await focusImageActive(s, surface);
+      const start = await lastTransaction(s, surface);
 
       assert.equal((await s.request("diagnostics.input.source", { select: "latin" })).current, "latin");
       for (const key of ["d", "d", "d"]) await s.press(key);
-      await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("ddd")),
-        "latin input did not reach the terminal before Korean input");
+      await untilDocument(s, surface, start, "ddd", "latin input did not reach the region before Korean input");
       assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
       for (const key of ["g", "k", "s", "r", "m", "f", "Space"]) await s.press(key);
-      await s.until("terminal.compose", (compose) => compose.text === "",
-        "Space did not end the Korean composition", { surface });
-      const lines = await readScreenUntil(s, surface,
-        (rows) => rows.some((line) => line.endsWith("ddd한글")),
-        "the committed ddd한글 text did not reach the PTY");
-      assert.ok(!lines.some((line) => /[ㄱ-ㅣ]/.test(line)), "uncommitted jamo reached the PTY");
-      const entries = await stopTrace();
+      await s.until("rasterprobe.input", (input) => input.preedit?.text === "", "Space did not end the Korean composition", { surface });
+      await untilDocument(s, surface, start, "ddd한글 ", "the committed ddd한글 text did not reach the region");
+      const entries = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
+      assertReceivedUnchanged(entries, `${app.name} F8-9`);
+      assert.ok(!/[ㄱ-ㅣ]/.test(insertedText(entries)), "uncommitted jamo was committed");
       assert.equal(insertedText(entries), "ddd한글 ", "native inserts did not commit ddd한글 once in order");
       t.diagnostic(`${app.name}: F8-9 expected document ddd한글 and one committed trailing space`);
     });
@@ -131,29 +85,22 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: F143 gksk resyllabifies to 하나`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
-    const [terminal] = await ensureTerminals(s, 1);
-    const surface = terminal.surface;
-    await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
-      "the shell prompt did not appear");
+    const { surface } = await rasterProbeTab(s);
     await preserveInputSource(s);
-    await focusedTerminal(s, surface);
+    await focusImageActive(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
     await compareAppKitReference(s, ["g", "k", "s", "k", "Space", "Enter"], "하나 \n", ["ㅎ", "하", "한", "하나", "하나 ", "하나 \n"]);
-    await focusedTerminal(s, surface);
+    await focusImageActive(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
-    const stopTrace = await startInputTrace(s, surface);
-    assert.equal((await s.request("diagnostics.input.source", { select: "korean" })).current, "korean");
+    const start = await lastTransaction(s, surface);
     for (const key of ["g", "k", "s", "k", "Space"]) await s.press(key);
-    await s.until("terminal.compose", (compose) => compose.text === "",
-      "Space did not end the Korean resyllabification", { surface });
-    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("하나")),
-      "the Korean 2-Set sequence gksk did not produce 하나");
+    await s.until("rasterprobe.input", (input) => input.preedit?.text === "", "Space did not end the Korean resyllabification", { surface });
+    await untilDocument(s, surface, start, "하나 ", "the Korean 2-Set sequence gksk did not produce 하나");
     await s.press("Enter");
-    const lines = await readScreenUntil(s, surface,
-      (rows) => rows.some((line) => line.includes("하나: command not found")),
-      "the shell did not receive the committed syllables 하나");
-    assert.ok(!lines.some((line) => /[ㄱ-ㅣ]/.test(line)), "uncommitted jamo reached the PTY");
-    const entries = await stopTrace();
+    await untilDocument(s, surface, start, "하나 \n", "the region did not receive Enter after the committed syllables 하나");
+    const entries = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
+    assertReceivedUnchanged(entries, `${app.name} F143`);
+    assert.ok(!/[ㄱ-ㅣ]/.test(insertedText(entries)), "uncommitted jamo was committed");
     assert.equal(insertedText(entries), "하나 ", "native inserts did not commit 하나 once in order");
     t.diagnostic(`${app.name}: F143 expected document 하나 and one committed trailing space`);
   });
@@ -193,85 +140,36 @@ for (const app of Object.values(APPS)) {
         opened = await lifecycle.run("core.project.open", { root: projectRoot, color: "#7db4ff" });
         await lifecycle.until("core.project", (value) => value?.id === opened.id,
           "the lifecycle project did not become current");
-        const [terminal] = await ensureTerminals(lifecycle, 1);
-        const surface = terminal.surface;
-        await readScreenUntil(lifecycle, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
-          "the lifecycle shell prompt did not appear");
+        const { surface } = await rasterProbeTab(lifecycle, { card: focusedCard(await lifecycle.get("core.grid")).id });
         await preserveInputSource(lifecycle);
-        await focusedTerminal(lifecycle, surface);
+        await focusImageActive(lifecycle, surface);
         assert.equal((await lifecycle.request("diagnostics.input.source", { select: "korean" })).current, "korean");
-        await compareAppKitReference(lifecycle, [...Array(8).fill("k"), "Backspace", "Space"], `${"ㅏ".repeat(7)} `,
-          [...Array.from({ length: 8 }, (_, index) => "ㅏ".repeat(index + 1)), "ㅏ".repeat(7), `${"ㅏ".repeat(7)} `]);
-        await focusedTerminal(lifecycle, surface);
+        const keys = [...Array(8).fill("k"), "Backspace", "Space"];
+        const documents = [...Array.from({ length: 8 }, (_, index) => "ㅏ".repeat(index + 1)), "ㅏ".repeat(7), `${"ㅏ".repeat(7)} `];
+        await compareAppKitReference(lifecycle, keys, documents.at(-1), documents);
+        await focusImageActive(lifecycle, surface);
         assert.equal((await lifecycle.request("diagnostics.input.source", { select: "korean" })).current, "korean");
-        const baselineScreen = await presentedScreen(lifecycle, surface);
-        const baselineCompose = await lifecycle.get("terminal.compose", surface);
-        const baselineCursor = await lifecycle.get("terminal.cursor", surface);
-        const promptText = terminalLineBeforeCursor(baselineScreen, baselineCursor,
-          `${app.name} lifecycle baseline`);
-        const prompt = { row: baselineCursor.row, col: 0, text: promptText };
         const artifactRoot = join(s.app.configDir, "logs", "ime-lifecycle", app.name);
         mkdirSync(artifactRoot, { recursive: true });
         const artifactDir = mkdtempSync(join(artifactRoot, `${cycleLabel}-`));
         t.diagnostic(`lifecycle observations: ${artifactDir}`);
-        writeFileSync(join(artifactDir, "baseline.json"), JSON.stringify({
-          screen: baselineScreen, compose: baselineCompose, cursor: baselineCursor, prompt,
-        }, null, 2));
-        const statusWaiters = new Set();
-        const observer = await startTerminalStatusObserver(lifecycle, surface, () => {
-          for (const notify of statusWaiters) notify();
-        });
-        s.cleanup(() => observer.stop());
         const stopCapture = await preserveGestureCapture(lifecycle, artifactDir, "approved-eight-vowels-backspace-space");
         assert.equal((await lifecycle.request("diagnostics.input.source", { select: "korean" })).current, "korean");
-        const stopTrace = await startInputTrace(lifecycle, surface);
-        for (const key of Array(8).fill("k").concat("Backspace", "Space")) await lifecycle.press(key);
-        const expectedDocument = `${"ㅏ".repeat(7)} `;
-        let attempt = 0;
-        const completed = await waitForTerminalStage(observer.events, async () => {
-          const snapshot = await readTerminalObservationSnapshot({
-            readCompose: () => lifecycle.get("terminal.compose", surface),
-            readCursor: () => lifecycle.get("terminal.cursor", surface),
-            readScreen: () => presentedScreen(lifecycle, surface),
-            readHost: async () => { await lifecycle.presented(); return lifecycle.get("host.window"); },
-          });
-          const { currentCompose: compose, currentCursor: cursor, screen, host } = snapshot;
-          const region = host.regions.find(item => item.surface === surface && item.name === "view");
-          const coherent = terminalComposeMatchesPreedit(compose, cursor) &&
-            terminalObserverStatusesMatch(observer.events,
-              { compose: baselineCompose, cursor: baselineCursor, screen: baselineScreen },
-              { compose, cursor, screen }, false) &&
-            region?.presented?.generation === screen.frame.generation &&
-            region.presented.raster === screen.frame.raster && region.presented.sequence >= screen.frame.sequence;
-          const document = coherent ? visibleInputBeforeCursor(screen, cursor, prompt, compose.text,
-            `${app.name} cycle ${cycleLabel} completed document`) : null;
-          const observed = { coherent: Boolean(coherent), document, snapshot };
-          writeFileSync(join(artifactDir, `completed-observation-${++attempt}.json`), JSON.stringify(observed, null, 2));
-          return observed;
-        }, (offset, timeout) => waitForStateEvent(observer.events, offset, notify => {
-          statusWaiters.add(notify);
-          return () => statusWaiters.delete(notify);
-        }, `cycle ${cycleLabel}: completed document`, timeout), expectedDocument, `cycle ${cycleLabel}: Space`);
-        const { screen: completedScreen, currentCompose: completedCompose, currentCursor: completedCursor } = completed.snapshot;
-        const actualDocument = completed.document;
-        writeFileSync(join(artifactDir, "completed-document.json"), JSON.stringify({
-          expectedDocument, actualDocument, screen: completedScreen,
-          compose: completedCompose, cursor: completedCursor,
-        }, null, 2));
-        assert.equal(actualDocument, expectedDocument,
-          `cycle ${cycleLabel}: committed screen plus current marked buffer differs from AppKit`);
-        const entries = await stopTrace();
+        const start = await lastTransaction(lifecycle, surface);
+        for (const key of keys) await lifecycle.press(key);
+        const expectedDocument = documents.at(-1);
+        await untilDocument(lifecycle, surface, start, expectedDocument,
+          `cycle ${cycleLabel}: the committed text plus the current marked text differs from AppKit`);
+        const entries = await receivedAfter(lifecycle, surface, start, `cycle ${cycleLabel}: the sidecar did not echo the input`);
         writeFileSync(join(artifactDir, "native-input-transactions.json"), JSON.stringify(entries, null, 2));
-        const { native } = assertInputTraceDelivery(entries);
+        assertReceivedUnchanged(entries, `cycle ${cycleLabel}`);
+        assert.equal(inputDocument(entries), expectedDocument, `cycle ${cycleLabel}: the region document differs from AppKit`);
         for (const [key, expectedCount] of [["k", 8], ["Backspace", 1], ["Space", 1]]) {
-          const receipts = native.filter((transaction) => terminalInputReceiptMatches(
-            entries.filter((entry) => entry.cids?.[0] === transaction.cids[0]), key));
+          const receipts = entries.filter((transaction) => transactionMatchesKey(transaction, key));
           assert.equal(receipts.length, expectedCount,
-            `cycle ${cycleLabel}: the trace has ${receipts.length} ${key} receipts, expected ${expectedCount}`);
+            `cycle ${cycleLabel}: the log has ${receipts.length} ${key} receipts, expected ${expectedCount}`);
         }
-        assert.ok(insertedText(entries).includes(" "),
-          `cycle ${cycleLabel}: the trace did not record the committed Space`);
-        await observer.stop();
+        assert.ok(insertedText(entries).includes(" "), `cycle ${cycleLabel}: the log did not record the committed Space`);
         await stopCapture();
 
         let currentSurface = surface;
@@ -279,18 +177,20 @@ for (const app of Object.values(APPS)) {
           await lifecycle.run("core.project.close", { id: opened.id });
           await lifecycle.until("host.windows", (windows) => windows.find((item) => item.window === lifecycle.window)?.project === null,
             `cycle ${cycleLabel}, pass ${pass}: the closed project remained shown`);
-          await lifecycle.until("host.window", (host) => !host.regions.some((region) => region.surface === currentSurface),
-            `cycle ${cycleLabel}, pass ${pass}: the terminal image region remained attached after project close`);
+          await lifecycle.until("host.window", (host) => imageRegion(host, currentSurface) === undefined,
+            `cycle ${cycleLabel}, pass ${pass}: the image region remained attached after project close`);
           assert.equal(await lifecycle.get("core.workbench.error"), null,
             `cycle ${cycleLabel}, pass ${pass}: project close reported an application error`);
           opened = await lifecycle.run("core.project.open", { root: projectRoot, color: "#7db4ff" });
           await lifecycle.until("core.project", (value) => value?.id === opened.id,
             `cycle ${cycleLabel}, pass ${pass}: the project did not reopen`);
-          const [replacement] = await ensureTerminals(lifecycle, 1);
+          const grid = await lifecycle.until("core.grid", (value) => value?.cards?.some((card) => !card.fixed && card.tabs?.length),
+            `cycle ${cycleLabel}, pass ${pass}: the reopened project has no card with tabs`);
+          const replacement = await rasterProbeTab(lifecycle, { card: focusedCard(grid).id });
           currentSurface = replacement.surface;
           await lifecycle.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === currentSurface && item.visible),
-            `cycle ${cycleLabel}, pass ${pass}: the terminal view did not register after reopen`);
-          await lifecycle.get("terminal.session", currentSurface);
+            `cycle ${cycleLabel}, pass ${pass}: the raster probe view did not register after reopen`);
+          await lifecycle.get("rasterprobe.session", currentSurface);
           assert.equal(await lifecycle.get("core.workbench.error"), null,
             `cycle ${cycleLabel}, pass ${pass}: project reopen reported an application error`);
         }

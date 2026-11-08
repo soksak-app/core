@@ -9,6 +9,8 @@ import { fresh } from "./fixture.mjs";
 import { checkLinkedPanels } from "./linked-panels.mjs";
 import { gripInk, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
 import { readPng } from "@soksak/window-check/png.mjs";
+/** The card of the grid that holds the tab surface. */
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface));
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 
 for (const app of Object.values(APPS)) {
@@ -71,11 +73,11 @@ for (const app of Object.values(APPS)) {
 
   // In a user release, left/right/top were assigned 190 points each on the shell card, but the native surface was almost as wide as the card
   // (V5-116-4-11-2). The check measures together, for the same assignment, the native rectangle, the grip registration, and the agreement of DOM and native.
-  test(`${app.name}: left, right and top panels on the terminal card reserve their space in the native surface`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: left, right and top panels on the start card reserve their space in the native surface`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.id === "terminal");
-    assert.ok(card, "the fixture has no terminal card");
+    const { surface: start } = await fresh(s);
+    const card = cardOf(await s.get("core.grid"), start);
+    assert.ok(card, "the fixture has no card of the start tab");
     const set = (await s.get("core.settings")).values.sets[0];
     for (const side of ["left", "right", "top"]) {
       await s.run("core.card.sidebar.set", { card: card.id, side, set: set.id });
@@ -97,8 +99,8 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(off, [], `the native surface does not leave the panel space: ${JSON.stringify({ expected,
       applied: surface.applied, card: measured, sidebars: measured.sidebars })}`);
     const drawn = (await s.get("core.sidebars")).filter((item) => item.sidebar.startsWith(`${card.id}:`));
-    assert.deepEqual(drawn.map((item) => item.sidebar).sort(), ["terminal:left", "terminal:right", "terminal:top"],
-      "the terminal card does not draw exactly its three assigned panels");
+    assert.deepEqual(drawn.map((item) => item.sidebar).sort(), ["left", "right", "top"].map((side) => `${card.id}:${side}`),
+      "the start card does not draw exactly its three assigned panels");
     // Each card panel has one grip with an input region.
     const panels = (await s.get("core.sidebars")).filter((item) => /:(left|right|top|bottom)$/.test(item.sidebar));
     for (let index = 0; index < panels.length; index++) {
@@ -107,16 +109,16 @@ for (const app of Object.values(APPS)) {
     }
     const failed = (await s.get("core.verify")).rows.filter((row) => !row.ok);
     assert.deepEqual(failed, [], "DOM and native geometry disagree");
-    t.diagnostic(`terminal panels ${JSON.stringify({ expected, applied: surface.applied })}`);
+    t.diagnostic(`start card panels ${JSON.stringify({ expected, applied: surface.applied })}`);
   });
 
   // A drag passes fractional sizes. The card border, the divider, and the prepared surface rectangle use the device pixel grid
   // (docs/spec/native-surfaces.md). Even for a size off the grid, the display is on the grid, and the declaration and the application must be equal (V5-115-1-3).
   test(`${app.name}: fractional panel sizes place the native surface on the device-pixel grid`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.id === "terminal");
-    assert.ok(card, "the fixture has no terminal card");
+    const { surface: start } = await fresh(s);
+    const card = cardOf(await s.get("core.grid"), start);
+    assert.ok(card, "the fixture has no card of the start tab");
     const set = (await s.get("core.settings")).values.sets[0];
     const scale = (await s.get("host.window")).scale;
     const sizes = { left: 120.5, top: 130.25, right: 140.75 };
@@ -128,7 +130,7 @@ for (const app of Object.values(APPS)) {
     const measured = (await s.get("core.grid")).cards.find((item) => item.id === card.id);
     for (const [side, size] of Object.entries(sizes)) assert.equal(measured.sidebars[side].size, size, `${side} size was not kept`);
     const surface = (await s.surfaces()).find((item) => item.surface === measured.active);
-    assert.ok(surface?.applied, "the terminal surface is not presented");
+    assert.ok(surface?.applied, "the start surface is not presented");
     const onGrid = (value) => Math.abs(value * scale - Math.round(value * scale)) < 1e-6;
     const edges = { left: surface.applied.x, top: surface.applied.y, right: surface.applied.x + surface.applied.w,
       bottom: surface.applied.y + surface.applied.h };
@@ -143,10 +145,10 @@ for (const app of Object.values(APPS)) {
   // reaches the minimum size (docs/spec/example-model.md).
   test(`${app.name}: a click opens a side folded for lack of space and a drag opens a folded side under the pointer`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { plugin } = await fresh(s);
     await keepCommonSettings(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((tab) => tab.plugin === "terminal"));
-    assert.ok(card, "no terminal card");
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((tab) => tab.plugin === plugin));
+    assert.ok(card, `no ${plugin} card`);
     const set = (await s.get("core.settings")).values.sets[0];
     for (const side of ["top", "bottom"]) await s.run("core.card.sidebar.set", { card: card.id, side, set: set.id });
     const panelsOf = (grid) => grid.cards.find((item) => item.id === card.id).sidebars;
@@ -201,10 +203,11 @@ for (const app of Object.values(APPS)) {
     const grid0 = await s.get("core.grid");
     let card0 = grid0.cards.find((item) => item.tabs.length);
     assert.ok(card0, "no content card to hold panels");
-    // The tab switch check always uses a tab of another plugin. If the card has none, it adds a browser tab instead of moving a tab of another card.
+    // The tab switch check always uses a tab of another plugin. If the card has none, it adds a tab of the second layout probe
+    // instead of moving a tab of another card.
     // Moving it would leave that card empty, remove it, and change the layout.
     if (!card0.tabs.some((tab) => tab.plugin !== card0.tabs.find((item) => item.id === card0.active).plugin)) {
-      const { tab } = await s.run("core.card.add-tab", { card: card0.id, plugin: "browser" });
+      const { tab } = await s.run("core.card.add-tab", { card: card0.id, plugin: "layoutprobe2" });
       s.cleanup(() => s.run("core.tab.close", { tab }));
       await s.run("core.tab.select", { tab: card0.active });
     }
@@ -352,19 +355,20 @@ for (const app of Object.values(APPS)) {
   // (docs/spec/example-model.md).
   test(`${app.name}: a card sidebar ends in its own status line and the content footer spans only the content`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface: start } = await fresh(s);
+    const own = cardOf(await s.get("core.grid"), start).id;
     const set = (await s.get("core.settings")).values.sets[0];
-    await s.run("core.card.sidebar.set", { card: "terminal", side: "left", set: set.id });
-    await s.run("core.card.sidebar.size", { card: "terminal", side: "left", size: 190 });
+    await s.run("core.card.sidebar.set", { card: own, side: "left", set: set.id });
+    await s.run("core.card.sidebar.size", { card: own, side: "left", size: 190 });
     await s.presented();
     const grid = await s.get("core.grid");
-    const card = grid.cards.find((item) => item.id === "terminal");
+    const card = grid.cards.find((item) => item.id === own);
     const box = { x: grid.plane.x + card.x, y: grid.plane.y + card.y, w: card.w, h: card.h };
     const within = (r) => r.x >= box.x - 0.5 && r.x + r.width <= box.x + box.w + 0.5 && r.y >= box.y - 0.5 && r.y + r.height <= box.y + box.h + 0.5;
     const footers = [];
     for (let index = 0; index < grid.cards.filter((item) => item.tabs.length > 0).length; index++) footers.push(await s.rect("core.card.status", index));
     const footer = footers.find(within);
-    assert.ok(footer, `the terminal card has no content footer: ${JSON.stringify({ box, footers })}`);
+    assert.ok(footer, `the start card has no content footer: ${JSON.stringify({ box, footers })}`);
     const content = box.x + 1 + 190;
     assert.ok(Math.abs(footer.x - content) <= 1 && Math.abs(footer.x + footer.width - (box.x + box.w - 1)) <= 1
       && Math.abs(footer.y + footer.height - (box.y + box.h - 1)) <= 1,
@@ -374,7 +378,7 @@ for (const app of Object.values(APPS)) {
       `the left sidebar does not end in its status line at the bottom of the card: ${JSON.stringify({ status, box })}`);
     assert.ok(Math.abs(status.y - footer.y) <= 0.5 && status.height === footer.height,
       `the sidebar status line and the content footer are not one row: ${JSON.stringify({ status, footer })}`);
-    const text = (await s.get("core.sidebars")).find((item) => item.sidebar === "terminal:left");
+    const text = (await s.get("core.sidebars")).find((item) => item.sidebar === `${own}:left`);
     assert.ok(text, "the left card sidebar is not drawn");
   });
 }
@@ -383,14 +387,15 @@ for (const app of Object.values(APPS)) {
   // The card head has a collapse/expand button for each face that the card shows. A collapsed face is opened again with the button of the head (docs/spec/example-model.md).
   test(`${app.name}: the card header has a fold control for each sidebar the card shows`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface: start } = await fresh(s);
+    const own = cardOf(await s.get("core.grid"), start).id;
     const listed = (await s.request("exposure.list")).element.find((entry) => entry.name === "core.card.sidebar.fold");
     assert.ok(listed, "the card header fold control is not declared");
     const set = (await s.get("core.settings")).values.sets[0];
-    for (const side of ["top", "left"]) await s.run("core.card.sidebar.set", { card: "terminal", side, set: set.id });
+    for (const side of ["top", "left"]) await s.run("core.card.sidebar.set", { card: own, side, set: set.id });
     await s.presented();
     const grid = await s.get("core.grid");
-    const card = grid.cards.find((item) => item.id === "terminal");
+    const card = grid.cards.find((item) => item.id === own);
     const header = { x: grid.plane.x + card.x, y: grid.plane.y + card.y, w: card.w, h: 32 };
     const controls = [];
     // The number of buttons in the head is the number of faces that all cards show.
@@ -399,13 +404,13 @@ for (const app of Object.values(APPS)) {
       const rect = await s.rect("core.card.sidebar.fold", index);
       if (rect.x >= header.x && rect.x + rect.width <= header.x + header.w && rect.y >= header.y && rect.y + rect.height <= header.y + header.h) controls.push(rect);
     }
-    assert.equal(controls.length, 2, `the terminal card header shows ${controls.length} fold controls for two sides`);
+    assert.equal(controls.length, 2, `the start card header shows ${controls.length} fold controls for two sides`);
     const left = controls[1];
     await s.click(left.x + left.width / 2, left.y + left.height / 2);
-    await s.until("core.grid", (value) => value.cards.find((item) => item.id === "terminal")?.sidebars.left?.collapsed === true,
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === own)?.sidebars.left?.collapsed === true,
       "the header control did not fold the left sidebar");
     await s.click(left.x + left.width / 2, left.y + left.height / 2);
-    await s.until("core.grid", (value) => value.cards.find((item) => item.id === "terminal")?.sidebars.left?.collapsed === false,
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === own)?.sidebars.left?.collapsed === false,
       "the header control did not open the folded left sidebar again");
   });
 }
@@ -415,20 +420,21 @@ for (const app of Object.values(APPS)) {
   // (docs/spec/example-model.md).
   test(`${app.name}: a folded sidebar strip next to a card divider keeps each input to its own control`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    // Splits the terminal card to the right so that two ordinary cards share a vertical boundary, and collapses the right sidebar of the left card.
-    await s.run("core.card.split", { card: "terminal", side: "right", plugin: "terminal" });
+    const { surface: start, plugin } = await fresh(s);
+    const own = cardOf(await s.get("core.grid"), start).id;
+    // Splits the start card to the right so that two ordinary cards share a vertical boundary, and collapses the right sidebar of the left card.
+    await s.run("core.card.split", { card: own, side: "right", plugin });
     const set = (await s.get("core.settings")).values.sets[0];
-    await s.run("core.card.sidebar.set", { card: "terminal", side: "right", set: set.id });
+    await s.run("core.card.sidebar.set", { card: own, side: "right", set: set.id });
     const fold = async () => {
-      await s.run("core.card.sidebar.toggle", { card: "terminal", side: "right" });
-      await s.until("core.grid", (value) => value.cards.find((item) => item.id === "terminal").sidebars.right.collapsed === true,
+      await s.run("core.card.sidebar.toggle", { card: own, side: "right" });
+      await s.until("core.grid", (value) => value.cards.find((item) => item.id === own).sidebars.right.collapsed === true,
         "the right sidebar did not fold");
       await s.presented();
     };
     await fold();
     const grid = await s.get("core.grid");
-    const card = grid.cards.find((item) => item.id === "terminal");
+    const card = grid.cards.find((item) => item.id === own);
     const edge = grid.plane.x + card.x + card.w;
     const y = grid.plane.y + card.y + card.h / 2;
     // The divider receives the gap up to the outer edge of the card, and the sidebar handle receives the collapsed band inside the card border.
@@ -459,7 +465,7 @@ for (const app of Object.values(APPS)) {
       await s.click(x, y);
       const pointer = await s.until("core.pointer", (value) => value.sequence > before && value.up !== null, `the press at ${x} did not arrive`);
       const after = await s.get("core.grid");
-      const open = after.cards.find((item) => item.id === "terminal").sidebars.right.collapsed === false;
+      const open = after.cards.find((item) => item.id === own).sidebars.right.collapsed === false;
       if (open) await fold();
       return [pointer.down, open, after.lines.x];
     };

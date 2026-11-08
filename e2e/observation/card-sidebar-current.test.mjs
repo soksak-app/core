@@ -1,4 +1,5 @@
-// Observes the right-hand settings of the terminal and the return from the full screen while it preserves the user tabs and settings of the current window.
+// Observes the saved card-right setting of the plugin of an active tab and the return from the full screen while it preserves the user
+// tabs and settings of the current window. The observed card is the first card whose active tab has a saved card-right link of its plugin.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
@@ -6,16 +7,19 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
 for (const app of Object.values(APPS))
-  test(`${app.name}: current terminal right sidebar follows saved plugin settings`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: current card right sidebar follows saved plugin settings`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     const settings = (await s.get("core.settings")).values;
     const initial = await s.get("core.grid");
     assert.equal(initial.fullscreen, null, "start observation from normal card presentation");
-    const target = initial.cards.find((card) => card.tabs.find((tab) => tab.id === card.active)?.plugin === "terminal");
-    assert.ok(target, "active terminal card is required");
-    const link = settings.links.find((link) => link.place === "card-right" && link.plugin === "terminal");
-    assert.ok(link, "a saved terminal card-right assignment is required");
-    assert.equal(target.sidebars.right?.set, link.set, "saved terminal setting is suppressed by the card selection");
+    const linkOf = (card) => {
+      const plugin = card.tabs?.find((tab) => tab.id === card.active)?.plugin;
+      return settings.links.find((link) => link.place === "card-right" && link.plugin === plugin && plugin !== undefined);
+    };
+    const target = initial.cards.find(linkOf);
+    assert.ok(target, "a card whose active tab has a saved card-right assignment of its plugin is required");
+    const link = linkOf(target);
+    assert.equal(target.sidebars.right?.set, link.set, `saved ${link.plugin} setting is suppressed by the card selection`);
     const original = (await s.get("core.layout")).state;
     const recording = await s.request("diagnostics.capture.start", {});
     let stop,
@@ -40,8 +44,8 @@ for (const app of Object.values(APPS))
       assert.equal(bar.orientation, "vertical");
       assert.ok(bar.rect.w > 0 && bar.rect.h > 0);
       const native = (await s.get("core.surfaces")).find((surface) => surface.surface === target.active);
-      assert.ok(native?.applied, "terminal native rectangle is absent");
-      assert.ok(native.applied.w <= card.w - bar.rect.w, "terminal covers its right sidebar");
+      assert.ok(native?.applied, "the native rectangle of the active tab is absent");
+      assert.ok(native.applied.w <= card.w - bar.rect.w, "the active tab covers its right sidebar");
       assert.deepEqual(
         (await s.get("core.verify")).rows.filter((row) => !row.ok),
         [],

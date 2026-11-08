@@ -1,5 +1,6 @@
-// Checks that Escape during a composition of the macOS Korean input method in a focused terminal view ends the composition as
-// it does in a same-window AppKit reference, without forwarding a workbench command. The subject is the composition of the OS
+// Checks that Escape during a composition of the macOS Korean input method in a focused image region ends the composition as it
+// does in a same-window AppKit reference, without forwarding a workbench command. The image region is that of the raster probe,
+// whose `rasterprobe.input` logs each input transaction of the native input client of core. The subject is the composition of the OS
 // input method, which serves only the key window of the active application, so this check activates the application and
 // selects the input source of the person.
 import assert from "node:assert/strict";
@@ -9,8 +10,9 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
-import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
 import { compareAppKitReference } from "./ime-reference-steps.mjs";
+import { assertReceivedUnchanged, focusImageActive, inputDocument, lastTransaction, rasterProbeTab, receivedAfter,
+  untilDocument } from "../input-probe.mjs";
 
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";
@@ -43,43 +45,29 @@ function traceCommands(events, name) {
   return events.filter((event) => event.event === REGISTRY_COMMAND && event.fields?.name === name);
 }
 
-async function focusedTerminal(s) {
-  const [terminal] = await ensureTerminals(s, 1);
-  const surface = terminal.surface;
-  await s.keepPointerOutside();
-  const view = await s.rect("terminal.view", undefined, surface);
-  const point = { x: view.document.x + view.x + view.width / 2,
-    y: view.document.y + view.y + view.height / 2 };
-  await s.pointer(point.x, point.y, "move", { activate: true });
-  await s.click(point.x, point.y);
-  await s.until("host.window", (window) => window.active && window.key && window.responder?.surface === surface,
-    "the terminal view did not become the active first-responder owner");
-  return { terminal, surface };
-}
-
 for (const app of Object.values(APPS)) {
   test(`${app.name}: IME Escape ends view composition as it does in AppKit`, { timeout: 90000 }, async (t) => {
     const s = await openProbe(t, app);
-    const { surface } = await focusedTerminal(s);
+    const { surface } = await rasterProbeTab(s);
+    await focusImageActive(s, surface);
     await s.selectInputSource("korean");
     await compareAppKitReference(s, ["g", "k", "s", "Escape"], "한", ["ㅎ", "하", "한", "한"]);
-    await focusedTerminal(s);
+    await focusImageActive(s, surface);
+    const start = await lastTransaction(s, surface);
     const recording = await s.record();
-    // The recording starts before the first key and remains active through the committed screen after Escape.
+    // The recording starts before the first key and remains active through the committed document after Escape.
     for (const [key, expected] of [["g", "ㅎ"], ["k", "하"], ["s", "한"]]) {
       await s.press(key);
-      await s.until("terminal.compose", (compose) => compose.text === expected,
+      await s.until("rasterprobe.input", (input) => input.preedit?.text === expected,
         `the Korean input method did not produce ${expected}`, { surface });
     }
     const offsets = currentEventOffsets(s.app.configDir);
     await s.press("Escape");
-    await s.until("terminal.compose", (compose) => compose.text === "",
-      "Escape did not end the active composition", { surface });
-    const linesAfter = await readScreenUntil(s, surface,
-      (lines) => lines.some((line) => line.trimEnd().endsWith("한")),
-      "Escape did not commit the AppKit reference text into the terminal document");
-    assert.ok(linesAfter.some((line) => line.trimEnd().endsWith("한")),
-      `the terminal document does not end in the committed AppKit text: ${JSON.stringify(linesAfter)}`);
+    await s.until("rasterprobe.input", (input) => input.preedit?.text === "", "Escape did not end the active composition", { surface });
+    await untilDocument(s, surface, start, "한", "Escape did not commit the AppKit reference text into the region document");
+    const log = await receivedAfter(s, surface, start, "the sidecar did not echo the input transactions");
+    assertReceivedUnchanged(log, `${app.name} IME Escape`);
+    assert.equal(inputDocument(log), "한", `the region document does not end in the committed AppKit text: ${JSON.stringify(log)}`);
     const gestureEnd = await s.presented();
     const stopped = await recording.stop({ after: gestureEnd.displayed + 100 });
     const captured = frames(recording.frames).map(readFrame);

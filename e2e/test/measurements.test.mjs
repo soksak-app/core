@@ -23,7 +23,7 @@ test("B3_MEASUREMENTS names the B3 keys of each benchmark, and of each trace sta
     "term-view": ["verdict"],
     "section-view": ["verdict"],
     "editor-footprint": ["verdict"],
-    "input-latency": ["terminalMedianMs", "terminalP90Ms", "termMedianMs", "termP90Ms"],
+    "input-latency": ["fieldMedianMs", "fieldP90Ms", "documentMedianMs", "documentP90Ms"],
   });
 });
 

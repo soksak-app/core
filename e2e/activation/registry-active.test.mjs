@@ -3,16 +3,19 @@
 // a focused window becomes the key window only in the active application; the virtual key window comes only from input and
 // refuses makeKeyAndOrderFront: (docs/spec/exposure.md#virtual-key-window), so this check activates the application.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { buildFixtureRegistry, nextPatch, readIndex } from "../../scripts/fixture-registry.mjs";
+import { fixtureRegistry } from "../benchmark/cases/floor-page.mjs";
 import { fresh, restoreRegistry, useRegistry } from "../fixture.mjs";
 
-const REGISTRY = fileURLToPath(new URL("../../target/registry/", import.meta.url));
+/** The fixture plugin that the registry later lists in a newer version. */
+const PLUGIN = "probeplain";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a window that becomes active reads the registry again`, { timeout: 90000 }, async (t) => {
@@ -26,8 +29,14 @@ for (const app of Object.values(APPS)) {
     await s.pointer(content.width / 2, content.height / 2, "move", { activate: true });
     await s.until("host.window", (state) => state.active && state.key, "the window did not become the active key window");
     const before = await s.get("core.plugins");
-    const installed = before.plugins.find((row) => row.id === "browser").installed.version;
-    const index = JSON.parse(readFileSync(join(REGISTRY, "index.json"), "utf8"));
+    const installed = before.plugins.find((row) => row.id === PLUGIN).installed.version;
+    const newer = nextPatch(installed);
+    // The registry starts as a copy of the fixture registry of the application; the later registry is a fixture registry that lists
+    // the plugin in its installed version and the next one.
+    const { index } = readIndex(before.registry);
+    const later = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal,
+      build: (sok, out, options) => buildFixtureRegistry(sok, out, { ...options, versions: { [PLUGIN]: [{ version: installed }, { version: newer }] } }) });
+    s.cleanup(() => rmSync(later, { recursive: true, force: true }));
     const folder = realpathSync(mkdtempSync(join(tmpdir(), "soksak-plugin-active-")));
     const projectRoot = join(folder, "project");
     mkdirSync(projectRoot);
@@ -55,16 +64,13 @@ for (const app of Object.values(APPS)) {
     await s.run("core.project.open", { root: projectRoot, color: "#7fe3b0" });
     const windows = await s.windows(2, "the project window did not open");
     const child = s.on(windows.find((item) => item.window !== s.window).window);
-    const browser = index.plugins.find((plugin) => plugin.id === "browser");
-    const newer = `${installed.split(".").slice(0, 2).join(".")}.${Number(installed.split(".")[2]) + 1}`;
-    browser.versions.push({ ...structuredClone(browser.versions.at(-1)), version: newer });
-    writeFileSync(file, JSON.stringify(index));
+    writeFileSync(file, JSON.stringify(readIndex(pathToFileURL(join(later, "index.json")).href).index));
     assert.deepEqual((await s.get("core.plugins")).updates, [], "the window read the registry before it became active");
 
     // Opening the project of the first window makes the host focus that window, which then reads the registry.
     await child.run("core.project.open", { root: mainRoot, color: "#ffb36b" });
     const read = await s.until("core.plugins", (value) => value.updates.length > 0,
       "the window did not read the registry when it became active");
-    assert.deepEqual(read.updates, [{ id: "browser", installed, latest: newer }]);
+    assert.deepEqual(read.updates, [{ id: PLUGIN, installed, latest: newer }]);
   });
 }

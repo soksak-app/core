@@ -71,7 +71,7 @@
       },
       {
         "name": "layoutprobe.document",
-        "description": "The document of the region: its address, whether it reported, its color scheme, its visibility (shown, hidden or occluded), its stored site data value and its content color.",
+        "description": "The document of the region: its address, whether it reported, its color scheme, its visibility (shown, hidden or occluded), its visibilitychange count since it loaded, its stored site data value and its content color.",
         "schema": {
           "type": "object",
           "properties": {
@@ -80,6 +80,7 @@
             "scheme": { "type": ["string", "null"], "enum": ["light", "dark", null] },
             "document": { "type": ["string", "null"], "enum": ["visible", "hidden", null] },
             "visibility": { "type": ["string", "null"], "enum": ["shown", "hidden", "occluded", null] },
+            "changes": { "type": ["integer", "null"] },
             "stored": { "type": ["string", "null"] },
             "color": { "type": ["string", "null"] }
           }
@@ -114,6 +115,9 @@
         "params": { "type": "object", "properties": { "path": { "type": ["string", "null"] } } }, "result": { "type": "null" } },
       { "name": "layoutprobe.document.color", "description": "Paints the content of the region document in a CSS color.",
         "params": { "type": "object", "properties": { "color": { "type": "string" } } }, "result": { "type": "null" } },
+      { "name": "layoutprobe.open", "description": "Runs core.file.open with the path from the view and answers the opened tab, or the failure message without failing.",
+        "params": { "type": "object", "properties": { "path": { "type": "string" } } },
+        "result": { "type": "object", "properties": { "tab": { "type": ["string", "null"] }, "error": { "type": ["string", "null"] } } } },
       { "name": "layoutprobe.document.store", "description": "Writes a value into the local storage of the region document under the key of this tab.",
         "params": { "type": "object", "properties": { "value": { "type": "string" } } }, "result": { "type": "null" } }
     ],

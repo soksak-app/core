@@ -579,41 +579,41 @@
       "relative": true
     },
     {
-      "id": "G7-S8-terminal-median",
+      "id": "G7-S8-field-median",
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
-      "measurement": "terminalMedianMs",
+      "measurement": "fieldMedianMs",
       "unit": "ms",
       "over": "median",
       "relative": true
     },
     {
-      "id": "G7-S8-terminal-p90",
+      "id": "G7-S8-field-p90",
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
-      "measurement": "terminalP90Ms",
+      "measurement": "fieldP90Ms",
       "unit": "ms",
       "over": "median",
       "relative": true
     },
     {
-      "id": "G7-S8-term-median",
+      "id": "G7-S8-document-median",
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
-      "measurement": "termMedianMs",
+      "measurement": "documentMedianMs",
       "unit": "ms",
       "over": "median",
       "relative": true
     },
     {
-      "id": "G7-S8-term-p90",
+      "id": "G7-S8-document-p90",
       "goal": "G7",
       "scenario": "S8",
       "target": "e2e/input-latency.test.mjs",
-      "measurement": "termP90Ms",
+      "measurement": "documentP90Ms",
       "unit": "ms",
       "over": "median",
       "relative": true

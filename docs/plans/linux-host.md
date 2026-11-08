@@ -136,7 +136,7 @@ Each item is a sub-item of R2-7 and is entered in [features](../features.md) bef
 3. R2-7-6 — Process, endpoint, signals, standard error, identity, quit request (groups 1, 25–30). Verification: `make test-hosts` cases on Linux; a tracked test for the Query End answer.
 4. R2-7-7 — Windows and webviews (groups 2–8, 31): reparenting into host containers, transparency, reveal, full screen, header bar. Verification: native C tests per module; both hosts open a ready window on Linux.
 5. R2-7-8 — Surfaces, shapes, input monitoring, and the layout transaction (groups 9, 10, 14, 15). Verification: the geometry and presentation window checks under X11.
-6. R2-7-9 — Document regions (group 11). Verification: `browser.test.mjs` document-data and navigation cases.
+6. R2-7-9 — Document regions (group 11). Verification: `document-region.test.mjs` document-data case.
 7. R2-7-10 — Frame transport in the host (group 12, D4) with a contract case for the `memfd` token and its rejections. Verification: host contract cases with a test-owned supplier.
 8. R2-7-11 — vt sidecar Linux renderer (D3) in the sidecar repository, entered in its own checklist. Verification: the sidecar's frame tests on Linux; a terminal window check on both hosts.
 9. R2-7-12 — Image region keyboard, IME, and accessibility (group 13). Verification: activation-tier IME checks run with the user's approval.

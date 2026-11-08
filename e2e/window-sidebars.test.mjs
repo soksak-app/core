@@ -1,12 +1,32 @@
-// Checks the plugin overrides of the fixed left and right sidebars and the combined border with real host records.
+// Checks the plugin overrides of the fixed left and right sidebars and the combined border with real host records. The layout probe
+// has a window-right override and the second layout probe has none, so a tab of each shows the override and the general choice.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 import { railPixels } from "./rail.mjs";
+/** The plugin without a window sidebar override. */
+const PLAIN = "layoutprobe2";
+
+/**
+ * Stores two list sets of layout probe sections and links one as the general left choice and the other as the window-right override
+ * of `plugin`; keepCommonSettings restores the sets and the links when the check ends.
+ */
+async function probeLinks(s, plugin) {
+  await keepCommonSettings(s);
+  const sets = (await s.get("core.settings")).values.sets;
+  const left = { id: "check-left", title: "Left", sections: ["layoutprobe.beta", "layoutprobe.follow"], layout: "list" };
+  const right = { id: "check-right", title: "Right", sections: ["layoutprobe.alpha", "layoutprobe.fill"], layout: "list" };
+  await s.run("core.settings.set", { patch: { sets: [...sets, left, right] }, scope: "common" });
+  await s.run("core.settings.link", { place: "left", plugin: null, set: left.id, scope: "common" });
+  await s.run("core.settings.link", { place: "window-right", plugin, set: right.id, scope: "common" });
+}
+
+/** The card of the grid that holds the tab surface. */
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
 const geometry = (grid) =>
   grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })).sort((a, b) => a.id.localeCompare(b.id));
 function borders(frame, grid, cards) {
@@ -31,10 +51,11 @@ for (const app of Object.values(APPS))
     console.info(`START ${app.name}: fixed sidebar overrides`);
     const s = await open(t, app);
     t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-    await fresh(s);
+    const { surface, plugin } = await fresh(s);
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-    // Adds a browser tab to a terminal card to put the tab of another plugin in one card.
-    const { tab: added } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
+    await probeLinks(s, plugin);
+    // Adds a tab of the second layout probe to the start card to put the tab of another plugin in one card.
+    const { tab: added } = await s.run("core.card.add-tab", { card: cardOf(await s.get("core.grid"), surface), plugin: PLAIN });
     s.cleanup(() => s.run("core.tab.close", { tab: added }));
     const initial = await s.get("core.grid");
     const target = initial.cards.find((card) => new Set(card.tabs.map((tab) => tab.plugin)).size > 1);
@@ -130,12 +151,12 @@ for (const app of Object.values(APPS))
       const final = captured.at(-1);
       railPixels(final, observations.at(-1).grid, observations.at(-1).rail);
       assert.ok(
-        observations.some((item) => item.plugin === "terminal" && item.rail.groups.length === 0),
-        "terminal selection did not remove plugin rail",
+        observations.some((item) => item.plugin === PLAIN && item.rail.groups.length === 0),
+        `${PLAIN} selection did not remove plugin rail`,
       );
       assert.ok(
-        observations.some((item) => item.plugin === "browser" && item.rail.groups.length === 1),
-        "browser override was not measured",
+        observations.some((item) => item.plugin === plugin && item.rail.groups.length === 1),
+        `${plugin} override was not measured`,
       );
       t.diagnostic(
         `fixed windows=${windows.map((card) => card.id)}; selections=${observations.map((item) => `${item.plugin}:${item.rail.groups.length}`)}; frames=${captured.length}; gap=${stop.longestGap}ms`,
@@ -152,7 +173,8 @@ for (const app of Object.values(APPS))
     { timeout: 60000 },
     async (t) => {
       const s = await open(t, app);
-      await fresh(s);
+      const { surface, plugin } = await fresh(s);
+      await probeLinks(s, plugin);
       const links = (await s.get("core.settings")).values.links;
       const columns = async () =>
         (await s.get("core.grid")).cards
@@ -198,22 +220,26 @@ for (const app of Object.values(APPS))
         assert.deepEqual(await columns(), baseline, `${label}: a tab change moved or resized a fixed sidebar column`);
         t.diagnostic(`${label}: ${focused.id}/${tab.plugin}`);
       }
-      // Adds one more tab to the terminal card. Even when the active tab is moved, the card stays and the tab of another plugin becomes the context.
-      const before = (await s.get("core.grid")).cards.find((card) => card.id === "terminal");
-      const { tab: kept } = await s.run("core.card.add-tab", { card: "terminal", plugin: "browser" });
+      // Adds a tab of the second layout probe to the start card. Even when the active tab is moved, the card stays and the tab of
+      // another plugin becomes the context.
+      const grid = await s.get("core.grid");
+      const own = cardOf(grid, surface);
+      const other = grid.cards.find((card) => card.id !== own && card.tabs?.length).id;
+      const before = grid.cards.find((card) => card.id === own);
+      const { tab: kept } = await s.run("core.card.add-tab", { card: own, plugin: PLAIN });
       s.cleanup(() => s.run("core.tab.close", { tab: kept }));
       await s.run("core.tab.select", { tab: before.active });
-      await s.run("core.card.focus", { card: "terminal" });
-      await expectContext("terminal focus");
-      const terminal = (await s.get("core.grid")).cards.find((card) => card.id === "terminal");
-      const moved = terminal.tabs.find((item) => item.id === terminal.active);
-      await s.run("core.tab.move", { tab: moved.id, card: "browser", zone: "centre" });
-      await expectContext("tab moved into the browser card");
-      await s.run("core.card.focus", { card: "terminal" });
-      await expectContext("terminal after the move");
+      await s.run("core.card.focus", { card: own });
+      await expectContext("start card focus");
+      const start = (await s.get("core.grid")).cards.find((card) => card.id === own);
+      const moved = start.tabs.find((item) => item.id === start.active);
+      await s.run("core.tab.move", { tab: moved.id, card: other, zone: "centre" });
+      await expectContext("tab moved into the other card");
+      await s.run("core.card.focus", { card: own });
+      await expectContext("start card after the move");
       await s.run("core.tab.close", { tab: moved.id });
       await expectContext("moved tab closed");
-      await s.run("core.card.focus", { card: "browser" });
-      await expectContext("browser focus");
+      await s.run("core.card.focus", { card: other });
+      await expectContext("other card focus");
     },
   );

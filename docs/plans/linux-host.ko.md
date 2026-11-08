@@ -136,7 +136,7 @@ ancillary data 를 읽는 방법은 언어마다 다르다. Go 는 표준 라이
 3. R2-7-6 — 프로세스, endpoint, 신호, 표준 오류, 식별, 종료 요청(그룹 1, 25–30). 검증: Linux 의 `make test-hosts` case. Query End 응답의 tracked test.
 4. R2-7-7 — 창과 webview(그룹 2–8, 31): 호스트 container 로의 부모 변경, 투명, 표시, 전체 화면, header bar. 검증: module 별 네이티브 C 테스트. 두 호스트가 Linux 에서 준비된 창을 연다.
 5. R2-7-8 — 표면, 도형, 입력 감시, 배치 트랜잭션(그룹 9, 10, 14, 15). 검증: X11 에서의 기하와 표시 창 검사.
-6. R2-7-9 — 문서 영역(그룹 11). 검증: `browser.test.mjs` 의 문서 데이터와 navigation case.
+6. R2-7-9 — 문서 영역(그룹 11). 검증: `document-region.test.mjs` 의 문서 데이터 case.
 7. R2-7-10 — 호스트의 프레임 전송(그룹 12, D4)과 `memfd` token 및 그 거부의 계약 case. 검증: 테스트 소유 공급자를 쓰는 호스트 계약 case.
 8. R2-7-11 — 사이드카 저장소의 vt 사이드카 Linux renderer(D3). 그 저장소의 체크리스트에 등록한다. 검증: Linux 에서의 사이드카 프레임 테스트. 두 호스트의 터미널 창 검사.
 9. R2-7-12 — 그림 영역의 키보드, IME, 접근성(그룹 13). 검증: 사용자의 승인을 받아 실행하는 activation 단계 IME 검사.
