@@ -352,16 +352,6 @@
       "reason": "Checks the drawing of sidebar rails when adjacent or apart and in card full screen. A fixture plugin with a sidebar override would replace the terminal."
     },
     {
-      "file": "e2e/real/focus.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a real press on a native region never moves focus to another tab's text field (focus routing). Two fixtures would replace terminal and browser: `plain-view` and `extension-probe` with a webview text field."
-    },
-    {
-      "file": "e2e/real/input.test.mjs",
-      "owner": "core",
-      "reason": "Checks the real HID input path, modifier flags, sidebar divider fold, and pasteboard helpers. `plain-view` with a native region would replace the terminal."
-    },
-    {
       "file": "e2e/real/terminal.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Every test checks terminal behavior itself: selection, copy and paste, scrollback, scrollbar, OSC 8, mouse modes, keypad, fixture TUI, Finder drop. \"dividers and card icons show their cursors...\" is core (`view-drag`)."
@@ -595,11 +585,6 @@
       "file": "e2e/text-size.test.mjs",
       "owner": "core",
       "reason": "Tests that the core text-size commands enlarge the pressed card or frame, using the terminal's `terminal.session` cellHeight and `terminal.view` as the vehicle. Replace with plain-view exposing a text-size/scale status and a view element."
-    },
-    {
-      "file": "e2e/two-pointers.test.mjs",
-      "owner": "core",
-      "reason": "Tests routing of two native pointers, using the browser's `browser.navigate`/`browser.location` and `browser.document` as the vehicle. Replace with extension-probe/plain-view with a pointer-echo page that publishes a pointer status."
     },
     {
       "file": "e2e/view-content.mjs",

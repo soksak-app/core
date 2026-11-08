@@ -7,50 +7,54 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
-import { ensureTerminals } from "../terminal-screen.mjs";
+import { fieldPoint, imageFocused, imageRect, inputProbeTab, rasterProbeTab } from "../input-probe.mjs";
 import { readPasteboard, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { bringFront, click, post, requireTrusted } from "./hid.mjs";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a posted HID click reaches the terminal region through the window server`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a posted HID click reaches an image region through the window server`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
     await fresh(s);
-    const [terminal] = await ensureTerminals(s, 1);
-    const surface = terminal.surface;
+    // The image region of the raster probe takes the keyboard on a press of its view.
+    const { surface } = await rasterProbeTab(s);
     await s.presented();
-    const view = await s.rect("terminal.view", undefined, surface);
+    const view = await imageRect(s, surface);
     const point = await bringFront(s, app, view);
 
     post([{ type: "move", x: point.x, y: point.y }]);
     await s.until("host.window", (window) => Math.abs(window.pointer.x - point.x) < 1 && Math.abs(window.pointer.y - point.y) < 1,
       `the system pointer did not move to the posted point ${point.x},${point.y}`);
     click(point.x, point.y);
-    await s.until("host.window", (window) => window.regions.some((region) => region.surface === surface && region.focused),
-      "a posted click did not give the terminal region native focus");
+    await s.until("host.window", (window) => imageFocused(window, surface),
+      "a posted click did not give the image region native focus");
   });
 
   test(`${app.name}: an injected wheel keeps its own modifier flags while HID system reports Shift`, { timeout: 60000 }, async (t) => {
     requireTrusted();
     const s = await open(t, app);
     await fresh(s);
-    const [terminal] = await ensureTerminals(s, 1);
-    const surface = terminal.surface;
-    await s.run("terminal.input", { bytes: "i=0; while [ $i -lt 200 ]; do echo row$i; i=$((i+1)); done\r" }, surface);
-    await s.until("terminal.session", (session) => session.scrollback?.history > 20, "the rows did not exceed the screen", { surface });
-    const view = await s.rect("terminal.view", undefined, surface);
+    // The document of the view of the input probe reports each wheel event with its deltas and its modifiers.
+    const { surface } = await inputProbeTab(s);
+    const view = await s.rect("probeinput.field", undefined, surface);
     await bringFront(s, app, view);
     // Posts the Shift key state to the HID system. An event without an origin inherits this flag.
     post([{ type: "key", code: 56, down: true, modifiers: ["shift"] }]);
     s.cleanup(() => post([{ type: "key", code: 56, down: false }]));
     const seen = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
-    await s.pointer(view.document.x + view.x + view.width / 2, view.document.y + view.y + view.height / 2, "scroll", { deltaY: -120 });
+    const wheels = (await s.get("probeinput.field", surface)).wheels.at(-1)?.sequence ?? 0;
+    const point = await fieldPoint(s, surface);
+    await s.pointer(point.x, point.y, "scroll", { deltaY: -120 });
     const events = await s.until("core.surface.input", (list) => list.some((event) => event.sequence > seen && event.type === "wheel"),
-      "the injected wheel did not reach the terminal page", { surface });
+      "the injected wheel did not reach the view page", { surface });
     const wheel = events.find((event) => event.sequence > seen && event.type === "wheel");
     assert.deepEqual(wheel.modifiers, [], "the injected wheel carried inherited HID-system modifier flags");
-    await s.until("terminal.session", (value) => value.scrollback.offset > 0,
-      "the injected vertical wheel did not scroll the history while Shift was held", { surface });
+    // A wheel that carried Shift would turn into a horizontal scroll; the injected wheel stays vertical while Shift is held.
+    const { wheels: received } = await s.until("probeinput.field", (value) => value.wheels.some((entry) => entry.sequence > wheels),
+      "the injected wheel did not reach the view document", { surface });
+    const scroll = received.find((entry) => entry.sequence > wheels);
+    assert.ok(scroll.deltaY < 0 && scroll.deltaX === 0 && scroll.modifiers.length === 0,
+      `the injected vertical wheel did not stay vertical while Shift was held: ${JSON.stringify(scroll)}`);
   });
 
   test(`${app.name}: a posted click on the inset sidebar divider folds the sidebar and keeps its width`, { timeout: 60000 }, async (t) => {
