@@ -120,7 +120,11 @@ func (s *Shell) registerLibrary() {
 		}
 		return s.exposedFocus.Set("core.library.search", 0)
 	})
-	act(s, "core.library.open", func(value idParam) error { s.activate(value.ID); return nil })
+	// The opening reads the geometry store before it shows the project, so the command answers when the project is shown, and the
+	// answer of a command that asked for a frame waits for its placement (followCommand).
+	later(s, "core.library.open", func(value idParam, answer func(any, error)) {
+		s.activateThen(value.ID, func() { answer(nil, nil) })
+	})
 	later(s, "core.library.pin", func(value pinParam, answer func(any, error)) {
 		s.pinProject(value.ID, value.Pinned, answerNull(answer))
 	})
