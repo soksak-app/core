@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
-import { fresh, recordCatalog } from "./fixture.mjs";
+import { fresh, recordCatalog, START_PLUGIN } from "./fixture.mjs";
 import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { heldRepliesSent, lateReplyFindings } from "./late-reply.mjs";
 
@@ -19,7 +19,9 @@ for (const app of Object.values(APPS)) {
     // The observation of the late reply is a record of the host at the level info, and the transcript lines are records of the
     // page at the level info.
     await fresh(s, { log: { lifecycle: "info" }, reads: ["host.record.info", "workbench.record.info"] });
-    const { tab } = await s.run("core.card.add-tab", { card: "browser", plugin: "browser" });
+    const card = (await s.get("core.grid")).cards.find((item) => item.focused);
+    assert.ok(card, "the start layout has no focused card");
+    const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin: START_PLUGIN });
     // If the check fails before it closes the tab, it closes the remaining tab. The hold of the closed surface ends then as well.
     s.cleanup(async () => {
       if (holder(await s.get("core.grid"), tab)) await s.run("core.tab.close", { tab });
@@ -28,7 +30,7 @@ for (const app of Object.values(APPS)) {
     // starts; a request before that registration is answered by the main page, so the check waits for both.
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === tab && item.visible && item.status.phase === "ready" && item.exposes.includes("command core.surface.hit")),
-    "the new browser tab did not become ready with its command core.surface.hit");
+    "the new probe tab did not become ready with its command core.surface.hit");
     const transcript = await s.transcript(recordCatalog(s.app));
     s.cleanup(() => transcript.stop());
     const offsets = s.eventStart;

@@ -30,21 +30,22 @@ async function press(s, rect) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: text size commands enlarge the pressed card or the frame and keep the plane in the window`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface } = await fresh(s);
     s.cleanup(async () => {
       await s.run("core.settings.set", { patch: { textSize: 1 }, scope: "common" });
     });
-    const grid = await s.get("core.grid");
-    const terminalTab = grid.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
-    assert.ok(terminalTab, "the fixture has no terminal tab");
-    await s.run("core.tab.select", { tab: terminalTab.id });
-    const session = await s.until("terminal.session", (value) => value?.sessionId && value.cellHeight > 0 ? value : null,
-      "the terminal session did not start", { surface: terminalTab.id });
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === terminalTab.id));
+    // A tab of the second layout probe draws a line of text at 13 points times the text size of its surface and reports its height.
+    const start = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const { tab: probe } = await s.run("core.card.add-tab", { card: start.id, plugin: "layoutprobe2" });
+    s.cleanup(() => s.run("core.tab.close", { tab: probe }));
+    await s.run("core.tab.select", { tab: probe });
+    const before = await s.until("layoutprobe2.surface", (value) => value?.text?.factor === 1 && value.text.height > 0 ? value.text : null,
+      "the probe tab did not draw its text at text size 1", { surface: probe });
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === probe));
     await s.presented();
 
     // When a card is pressed, that card is the scope, and the menu item changes only the scale of that card.
-    await press(s, await s.rect("terminal.view", undefined, terminalTab.id));
+    await press(s, await s.rect("layoutprobe2.text", undefined, probe));
     await s.until("core.text", (value) => value.scope.kind === "card" && value.scope.card === card.id,
       "pressing the card did not make it the text size scope");
     const titles = await menuTitles(s);
@@ -53,11 +54,12 @@ for (const app of Object.values(APPS)) {
       "the menu item did not enlarge the pressed card");
     assert.equal(cardText.frame, 1, "enlarging a card must not change the frame factor");
     await s.presented();
-    // A terminal measures its cells again with the font size of 13pt multiplied by the scale (docs/spec/text-size.md).
-    const after = await s.until("terminal.session", (value) => value.cellHeight !== session.cellHeight ? value : null,
-      "the terminal cell height did not change with the card factor", { surface: terminalTab.id });
-    assert.ok(grew(session.cellHeight, after.cellHeight, 1.1),
-      `the terminal cell height must grow by the card factor: ${session.cellHeight} → ${after.cellHeight}`);
+    // The view receives the effective factor of its card and draws its text at 13pt multiplied by it (docs/spec/text-size.md).
+    const after = await s.until("layoutprobe2.surface", (value) => value.text.height !== before.height ? value.text : null,
+      "the probe text height did not change with the card factor", { surface: probe });
+    assert.equal(after.factor, 1.1, "the view did not receive the effective factor of its card");
+    assert.ok(grew(before.height, after.height, 1.1),
+      `the probe text height must grow by the card factor: ${before.height} → ${after.height}`);
 
     // The card scale is stored with the layout and stays after reading again.
     const documentBefore = (await s.get("core.window.workbench")).start;

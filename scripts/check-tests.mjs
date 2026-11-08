@@ -251,9 +251,9 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host document diagnostic bridges", "objective-c", ["native/darwin/src/host_api_document_draw_covered.m", "native/darwin/src/host_api_document_viewport_marker.m"], ["native/darwin/tests/document_draw_covered_test.m", "native/darwin/tests/document_viewport_marker_test.m", "e2e/design-hosts.test.mjs", "e2e/view-display.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs", "e2e/terminal-keyboard.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/terminal-view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs", "e2e/capture-frame-identity.test.mjs", "e2e/capture-document-frame-identity.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m", "e2e/real/terminal.test.mjs", "e2e/terminal-protocols.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
+  lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m", "e2e/real/terminal.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host link bridge", "objective-c", ["native/darwin/src/host_api_link.m"], ["native/darwin/tests/link_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin host notification bridge", "objective-c", ["native/darwin/src/host_api_notifications.m"], ["native/darwin/tests/notifications_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin host object and exit bridges", "objective-c", ["native/darwin/src/host_api_page_objects.m", "native/darwin/src/host_api_window_objects.m", "native/darwin/src/host_api_process_exit.m"], ["e2e/modal-release.test.mjs", "e2e/reload-memory.test.mjs", "e2e/benchmark/main-page-footprint.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -1866,7 +1866,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/session-inactive.test.mjs", id: "a failing session audit closes every session of the same check and reports every failure" },
       { file: "packages/window-check/test/session-inactive.test.mjs", id: "parent session audit failure ${failedIndex === 0 ? \"first\" : \"last\"} preserves every app's owned recording" },
       { file: "packages/window-check/test/session-inactive.test.mjs", id: "all successful session audits precede disposal and remove only that parent's owned recordings" },
-      { file: "e2e/semantic-screen.test.mjs", id: "hidden terminal and term screens notify through every inactive host session" },
+      { file: "e2e/hidden-status-watch.test.mjs", id: "hidden view statuses notify through every inactive host session" },
     ],
     expected: "One parent-owned hook finishes every acquired session and reports all failures before disposing recordings; first or last audit failure preserves every sibling's owned evidence, while a successful parent removes only its own new recordings and releases all connections and slots.",
     levels: ["unit", "application"],
@@ -1881,7 +1881,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestAWorkbenchStartingEndsItsPredecessorsDialogBackground" },
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground" },
-      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor terminal images and documents unblurred" },
+      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor raster images and documents unblurred" },
     ],
     expected: "Reload retires the previous workbench dialog background claim while preserving an independent current native dialog; successor images and documents are unblurred when no effective dialog remains.",
     levels: ["unit", "application"],
@@ -1896,9 +1896,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestEndedCallsAnswerNothingAndCallNothing" },
       { file: "packages/host/go/src/view_join_test.go", id: "TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent" },
-      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+      { file: "e2e/edit-menu-keys.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
     ],
-    expected: "Reload ends the previous mygo workbench calls: ended calls invoke and answer nothing, cancelled presentation tickets report no longer current, and actual terminal-edit reload completes before selection and menu copy/paste.",
+    expected: "Reload ends the previous mygo workbench calls: ended calls invoke and answer nothing, cancelled presentation tickets report no longer current, and the actual edit-menu-keys reload completes before selection and menu copy/paste.",
     levels: ["unit", "application"],
   },
   {
@@ -2520,7 +2520,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+C runs copy: once through the Copy item" },
       { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+V runs paste: once through the Paste item" },
-      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+      { file: "e2e/edit-menu-keys.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
     ],
     expected: "Virtual-key Command+C and Command+V take the menu/responder equivalent path once while another application remains active, with actual copy/paste verified on mygo, Wails and Tauri.",
     levels: ["unit", "application"],
@@ -2536,9 +2536,9 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region shows its document when the state is set while the window is covered" },
       { file: "native/darwin/tests/document_draw_covered_test.m", id: "the region of the other window still hides its document" },
-      { file: "e2e/capture-covered.test.mjs", id: "a still of a covered window holds the document of its browser tab and its changes" },
+      { file: "e2e/capture-covered.test.mjs", id: "a still of a covered window holds the document of its tab and its changes" },
     ],
-    expected: "While a window draws covered, a still of the covered window holds the document of its browser tab as before the cover and the changes made while covered; the regions of other windows keep hiding their documents.",
+    expected: "While a window draws covered, a still of the covered window holds the region document of its tab as before the cover and the changes made while covered; the regions of other windows keep hiding their documents.",
     levels: ["unit", "application"],
   },
   {
@@ -2554,7 +2554,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that closes without a region records the keys it drops" },
       { file: "packages/host/go/src/view_join_test.go", id: "TestAnImageRegionDeclarationKeepsTheKeysOfItsSurface" },
       { file: "packages/host/rust/src/surfaces_test.rs", id: "an_image_region_declaration_keeps_the_keys_of_its_surface" },
-      { file: "e2e/new-tab-keys.test.mjs", id: "keys typed as a new tab opens reach its terminal whole" },
+      { file: "e2e/new-tab-keys.test.mjs", id: "keys typed as a new tab opens reach its image region whole" },
     ],
     expected: "Keys typed before the image region of a surface shows reach the region in order, up to 256, and the keys over the limit or left at the close are recorded as dropped.",
     levels: ["native", "unit", "application"],
@@ -3991,13 +3991,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-299-4",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "markedRange: { location: 0, length: 2 }" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "diagnostic terminal entries inject preedit and record terminal input" }],
-    expected: "The compose check sends the markedRange that the terminal plugin requires and reads the preedit of the recorded input operation.",
-    levels: ["application"],
-  },
-  {
     id: "F239-298",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) unsent(" },
@@ -4018,13 +4011,6 @@ const FEATURE_LINKS = [
       { file: "e2e/document-region.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
     ],
     expected: "The placement check reads the applied placements from host.trace.surface.",
-    levels: ["application"],
-  },
-  {
-    id: "F239-294",
-    implementation: [{ file: "e2e/library.test.mjs", symbol: "const removed = folder.replace(" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" }],
-    expected: "The library check declares the three texts of the files tree failure that its folder removal causes and passes on both hosts.",
     levels: ["application"],
   },
   {
@@ -4203,7 +4189,7 @@ const FEATURE_LINKS = [
     },
     {
       "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "id": "document identity setup adds its editor tab only to editable pane cards"
+      "id": "document identity setup adds its root view tab only to editable pane cards"
     },
     {
       "file": "native/darwin/tests/document_core_root_test.m",
@@ -4836,25 +4822,6 @@ const FEATURE_LINKS = [
     ]
   },
   {
-    id: "F239-175",
-    implementation: [
-      {
-        file: "e2e/activation/ime-visual-capture.mjs",
-        symbol: "export function persistThenRequireVisualProof("
-      }
-    ],
-    tests: [
-      {
-        file: "e2e/test/activation/ime-visual-capture.test.mjs",
-        id: "visual proof preserves cadence measurements without a functional gap threshold"
-      }
-    ],
-    expected: "Complete IME visual proof preserves cadence measurements while missing proof remains a failure.",
-    levels: [
-      "unit"
-    ]
-  },
-  {
     id: "F239-176",
     implementation: [
       {
@@ -4898,10 +4865,6 @@ const FEATURE_LINKS = [
       {
         file: "e2e/activation/terminal-ime-document.mjs",
         symbol: "export async function readTerminalObservationSnapshot("
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        symbol: "readHost: async () =>"
       }
     ],
     tests: [
@@ -4940,10 +4903,6 @@ const FEATURE_LINKS = [
       {
         file: "e2e/activation/terminal-ime-document.mjs",
         symbol: "let stopping = null;"
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        symbol: "await stateObserver.stop();"
       }
     ],
     tests: [
@@ -4954,16 +4913,11 @@ const FEATURE_LINKS = [
       {
         file: "e2e/test/activation/terminal-ime-document.test.mjs",
         id: "terminal observer stop retries only subscriptions whose release did not succeed"
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        id: "eight Korean vowels and one Backspace retain an exact input trace"
       }
     ],
     expected: "Observation ends before offline analysis and repeated cleanup retries only unfinished subscription releases.",
     levels: [
-      "unit",
-      "application"
+      "unit"
     ]
   },
   {
@@ -4971,7 +4925,7 @@ const FEATURE_LINKS = [
     implementation: [
       {
         file: "e2e/activation/ime.test.mjs",
-        symbol: "const runRepeatedVowelScenario = async"
+        symbol: "for (const [index, key] of keys.entries())"
       }
     ],
     tests: [
@@ -4980,23 +4934,10 @@ const FEATURE_LINKS = [
         id: "eight Korean vowels and one Backspace retain an exact input trace"
       }
     ],
-    expected: "The complete approved two-host IME gesture retains matching documents, exact visual proof and error-free cleanup.",
+    expected: "The complete approved two-host IME gesture retains matching documents, each transaction received unchanged by the sidecar and error-free cleanup.",
     levels: [
       "application"
     ]
-  },
-  {
-    id: "F239-98",
-    implementation: [
-      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export async function startImeCapture(" },
-      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function attachImeFrameIdentities(" },
-    ],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "IME capture does not start when renderer metadata is absent" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "display time differs" },
-    ],
-    expected: "IME capture requires renderer metadata and opt-in identity capture, and joins each exact callback display time to its issued source identity.",
-    levels: ["unit"],
   },
   {
     id: "F239-146",
@@ -5176,25 +5117,14 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
-    id: "F239-47-36",
-    implementation: [
-      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario(t, \"zsh\")" },
-    ],
-    tests: [
-      { file: "e2e/activation/ime.test.mjs", id: "zsh ZLE redraw retains the eight-vowel Backspace and Space input trace" },
-    ],
-    expected: "The fixed zsh ZLE gesture preserves all reference documents and measured glyph/underline stages with complete captures and independent cadence metrics.",
-    levels: ["application"],
-  },
-  {
     id: "F239-180",
     implementation: [
-      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const completed = await waitForTerminalStage(" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "await untilDocument(lifecycle, surface, start, expectedDocument," },
     ],
     tests: [
       { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
     ],
-    expected: "Lifecycle completion waits for a coherent complete reference document and preserves isolated observations and complete decoded capture artifacts.",
+    expected: "Lifecycle completion waits for the complete reference document in the image region and preserves isolated observations and complete decoded capture artifacts.",
     levels: ["application"],
   },
   {
@@ -5225,22 +5155,22 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.12-2-2-4",
-    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    implementation: [{ file: "e2e/activation/view-focus.test.mjs", symbol: "async function recordGesture(" }],
     tests: [
       { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "an image region click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" },
     ],
     expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
     levels: ["unit", "application"],
   },
   {
     id: "F212.12-2-2-4-1",
-    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    implementation: [{ file: "e2e/activation/view-focus.test.mjs", symbol: "async function recordGesture(" }],
     tests: [
       { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "an image region click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" },
     ],
     expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
     levels: ["unit", "application"],
@@ -5385,7 +5315,7 @@ const FEATURE_LINKS = [
   {
     id: "F212.12-2-3",
     implementation: [
-      { file: "e2e/view-input.test.mjs", symbol: "const clickAddress =" },
+      { file: "e2e/view-input.test.mjs", symbol: "const clickField =" },
     ],
     tests: [
       { file: "e2e/view-input.test.mjs", id: "an inactive view retains input across main focus and handles picker Escape" },
@@ -5536,12 +5466,12 @@ const FEATURE_LINKS = [
     id: "F212.13",
     implementation: [
       { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
-      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario" },
+      { file: "e2e/activation/ime.test.mjs", symbol: "await compareAppKitReference(s, keys, documents.at(-1), documents);" },
     ],
     tests: [
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
     ],
-    expected: "Approved same-window AppKit and terminal activation inputs match all documents and measured glyph/underline stages with complete captures, restored baseline and clean shutdown.",
+    expected: "Approved same-window AppKit and image region activation inputs match all documents, each received unchanged by the sidecar, with restored baseline and clean shutdown.",
     levels: ["application"],
   },
   {
@@ -5554,7 +5484,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
       { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
       { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
-      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach the pages of the opened files" },
     ],
     expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
     levels: ["unit", "application"],
@@ -5569,7 +5499,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/view.test.mjs", id: "the injected script posts the ready message with a document identifier at document start" },
       { file: "packages/plugin-api/test/view.test.mjs", id: "host messages posted before createViewChannel() are delivered in order after the attach" },
       { file: "native/darwin/tests/view_channel_test.m", id: "the view configuration runs the channel script at document start" },
-      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach editor and HWP pages" },
+      { file: "e2e/view-start-handoff.test.mjs", id: "file-open parameters reach the pages of the opened files" },
     ],
     expected: "The view composition uses the staged document-start channel with ready and ordered queued delivery and completes two-host page start-value handoff.",
     levels: ["unit", "application"],
@@ -6165,9 +6095,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/surface-modules.js", symbol: "authorizeSurface" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
     ],
     expected: "Prepared native surfaces authorize their modules after host creation, including late registration replay, and rebuilt Tauri/Wails split-terminal checks reach a presented raster without an authorization or presentation timeout.",
     levels: ["unit", "application"],
@@ -6191,7 +6121,7 @@ const FEATURE_LINKS = [
   {
     id: "F0.5.8",
     implementation: [{ file: "packages/host/rust/src/surfaces.rs", symbol: "sync" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" }],
     expected: "Split-surface synchronization reads the AppKit scale factor on the main thread; a rebuilt Tauri host presents four split terminals without a foreign-exception crash.",
     levels: ["native", "application"],
   },
@@ -6203,8 +6133,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/surfaces.rs", symbol: "sync" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
     expected: "Endpoint and asynchronous split-path WebView and native window-handle lookups run through the AppKit main-thread executor; repeated split requests preserve native presentation and process survival on rebuilt Tauri.",
@@ -6214,8 +6144,8 @@ const FEATURE_LINKS = [
     id: "F0.5.9-2",
     implementation: [{ file: "packages/host/rust/src/windows.rs", symbol: "reload_surface_documents" }],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
     ],
     expected: "Main-document reload cleanup finishes before replacement surface images attach; repeated split tests do not leave a new image generation loading after old native image teardown.",
     levels: ["native", "application"],
@@ -6225,10 +6155,10 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "acquireWindowCheckSlot" }],
     tests: [
       { file: "e2e/test/app-contract.test.mjs", id: "window checks reject overlapping sessions that target the same application" },
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
     ],
     expected: "Same-application window checks cannot concurrently reset one app's native image generations; rebuilt Tauri and Wails split presentation cases pass with bounded output and no raster timeout.",
     levels: ["unit", "application"],
@@ -6237,12 +6167,12 @@ const FEATURE_LINKS = [
     id: "F0.5.9-4",
     implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
-      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
-      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "closing image region tabs reaps every session child without killing the shared service" },
     ],
     expected: "The Wails stale-page runtime response race is closed at WebViewDidCommitNavigation; the isolated sequential cases pass and the preserved application log contains no stopped runtime response.",
     levels: ["native", "application"],
@@ -6251,12 +6181,12 @@ const FEATURE_LINKS = [
     id: "F0.5.9-5",
     implementation: [{ file: "packages/host/go/src/windows.go", symbol: "reloadSurfaceDocuments" }],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
-      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
-      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "closing image region tabs reaps every session child without killing the shared service" },
     ],
     expected: "Wails main-document reload cleanup finishes before replacement surface images attach; the sequential split and cleanup cases pass without a raster presentation timeout.",
     levels: ["native", "application"],
@@ -6342,7 +6272,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "pointer" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "three terminal" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions" },
       { file: "native/darwin/tests/input_inject_test.m", id: "keys reach the focused field" },
     ],
     expected: "Native input reaches each of three terminal surfaces with exact focus, text, Enter, and isolation behavior.",
@@ -6655,7 +6585,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "detachAll" }],
     tests: [
       { file: "packages/plugin-api/test/surface-composition.test.mjs", id: "disposal waits for an in-flight placement before detaching regions" },
-      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a newly split image region presents its first native raster" },
     ],
     expected: "Closing a surface waits for its in-flight composition placement before detaching native regions; rebuilt Tauri and Wails split-terminal checks pass without composition-declaration errors.",
     levels: ["unit", "application"],
@@ -6716,7 +6646,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
-      { file: "e2e/terminal.test.mjs", id: "the terminal font follows the pressed card's text size" },
     ],
     expected: "Command =, -, and 0 change the text size of the last pressed card or of the frame and every card: DOM content by CSS zoom, terminal cells by font size, and browser documents by page zoom, while the plane stays inside the window.",
     levels: ["unit", "application"],
@@ -7128,9 +7057,9 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_result sp_input_key" },
     ],
     tests: [
-      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to the prompt, trace off and on" },
+      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to its arrival, trace off and on" },
     ],
-    expected: "Every injected Enter is answered by a prompt with the performance trace off, on and off again, and the measured times are reported.",
+    expected: "Every injected Enter arrives in the input probe field with the performance trace off, on and off again, and the measured times are reported.",
     levels: ["application"],
   },
   {
@@ -7881,7 +7810,7 @@ const FEATURE_LINKS = [
   {
     id: "F149",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
-    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
+    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" }],
     expected: "Typed English text and a composed Korean syllable pass through every layer of a running application and reach the PTY once.",
     levels: ["application"],
   },
@@ -9469,7 +9398,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) closeAnswered" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "closing terminal tabs reaps every PTY child without killing the shared service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "closing image region tabs reaps every session child without killing the shared service" },
     ],
     expected: "A terminal close answers only after the terminal service has reaped the PTY child, on both hosts.",
     levels: ["application"],
@@ -9980,10 +9909,10 @@ const FEATURE_LINKS = [
   {
     id: "F27",
     implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "the notification authorization of this application is not decided" },
+      { file: "e2e/view-surfaces.test.mjs", symbol: "the notification authorization of this application is not decided" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "an OSC 9 notification from a terminal out of view follows the system policy and then the tab policy" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a notification from a view out of view follows the system policy and then the tab policy" },
     ],
     expected: "The OSC 9 policy check of a bundled application names an undecided authorization and checks that the tab policy posts nothing new.",
     levels: ["application"],
@@ -9991,10 +9920,10 @@ const FEATURE_LINKS = [
   {
     id: "F24",
     implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "region.presented !== null" },
+      { file: "e2e/view-surfaces.test.mjs", symbol: "region.presented !== null" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a presentation that fails while the sidecar service is stopped leaves the next fixture and splits usable" },
     ],
     expected: "The window check of a failed terminal presentation waits while a region has not presented yet.",
     levels: ["application"],
@@ -10076,7 +10005,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/platform/darwin/system/host-structure.test.mjs", id: "host structure audit reports a clean paired-host graph" },
-      { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "a newly split image region presents its first native raster" },
     ],
     expected: "Audit infrastructure and bounded basic surface presentation are complete for both adapters, while uncovered restoration and IME scopes remain open rather than nominally active.",
     levels: ["unit", "application"],
@@ -10102,19 +10031,19 @@ const FEATURE_LINKS = [
   {
     id: "F1",
     implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "three terminals survive repeated divider drags and project returns" },
+      { file: "e2e/view-surfaces.test.mjs", symbol: "three image regions survive repeated divider drags and project returns" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" },
-      { file: "e2e/terminal.test.mjs", id: "terminal image follows a window resize" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" },
+      { file: "e2e/view-surfaces.test.mjs", id: "an image region follows a window resize" },
     ],
-    expected: "Current rebuilt Tauri and Wails windows preserve DOM/native containment and shell pixels through divider drags, while terminal resize preserves text, fixed cell metrics, and raster geometry.",
+    expected: "Current rebuilt Tauri and Wails windows preserve DOM/native containment and raster pixels through divider drags, while a window resize presents an image region raster that follows its grid and covers its region.",
     levels: ["unit", "application"],
   },
   {
     id: "F1.3",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" }],
     expected: "Three visible terminals complete six narrow-to-wide-and-back divider round trips in each of three project-return sets, with complete captures, no border intrusion, no white pixels, and no composition failure.",
     levels: ["application"],
   },
@@ -10204,7 +10133,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
     ],
     expected: "A complete divider recording keeps native content inside its card, keeps card and rail geometry aligned, contains no white surface frame, and returns to its initial position.",
     levels: ["native", "application"],
@@ -10252,15 +10181,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F1.2",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "ensureTerminals" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "ensureRasters" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" }],
     expected: "Three terminals retain sessions and presented native regions through repeated divider moves and project returns.",
     levels: ["application"],
   },
   {
     id: "F1.3-1",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "roundTripsPerSet" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals survive repeated divider drags and project returns" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "roundTripsPerSet" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions survive repeated divider drags and project returns" }],
     expected: "Rapid divider acceptance preserves complete draw transactions, native containment, text, and the declared return matrix.",
     levels: ["application"],
   },
@@ -10284,35 +10213,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "terminal cursor policy uses declared settings, persistence, and pixels" },
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
     ],
     expected: "Both rebuilt macOS hosts persist declared terminal cursor settings, reject invalid updates, render the effective policy in native pixels, and complete the first raster after a split without a presentation timeout.",
-    levels: ["unit", "native", "application"],
-  },
-  {
-    id: "F6",
-    implementation: [
-      { file: "e2e/terminal.test.mjs", symbol: "terminal file drop pastes quoted paths without executing" },
-    ],
-    tests: [
-      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
-      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
-      { file: "e2e/terminal.test.mjs", id: "inline image pixels follow scroll, resize, replacement, deletion, and cleanup" },
-    ],
-    expected: "The terminal selection, paste, file-drop, and inline-image contracts are implemented and verified through their unit and rebuilt native-host scenarios without input loss or unintended execution.",
-    levels: ["unit", "native", "application"],
-  },
-  {
-    id: "F6.4",
-    implementation: [
-      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub(crate) fn read" },
-      { file: "packages/host/go/src/clipboard.go", symbol: "func (h *Host) ClipboardRead" },
-    ],
-    tests: [
-      { file: "e2e/terminal.test.mjs", id: "native terminal selection renders and copies through one explicit paste" },
-    ],
-    expected: "Explicit terminal paste preserves text, inserts validated quoted file paths and owned PNG paths exactly once without a newline or automatic execution, and both native hosts preserve typed absent clipboard responses.",
     levels: ["unit", "native", "application"],
   },
   {
@@ -10323,9 +10226,9 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/exposure.go", symbol: "func (s *Surfaces) presented" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
-      { file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" },
     ],
     expected: "A native settle failure is returned as an explicit callback error instead of being converted into a generic 1005 timeout, and fresh Tauri/Wails split regressions remain usable afterward.",
     levels: ["native", "application"],
@@ -10337,7 +10240,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutCancel" },
     ],
     tests: [
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
     ],
     expected: "A Tauri presentation failure cancels the open native layout transaction and the next split remains usable; the bounded regression reports START/PASS and exits cleanly.",
     levels: ["native", "application"],
@@ -10351,10 +10254,10 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/rust/tests/images_test.rs", id: "missing_native_surface_requests_a_fresh_raster_configuration" },
       { file: "packages/host/rust/tests/images_test.rs", id: "frame_detached_before_main_thread_presentation_is_reported_as_stale" },
-      { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
-      { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
-      { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
-      { file: "e2e/terminal.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
+      { file: "e2e/view-surfaces.test.mjs", id: "newly split image region presents its first native raster" },
+      { file: "e2e/view-surfaces.test.mjs", id: "four split image regions complete native presentation without a host crash" },
+      { file: "e2e/view-surfaces.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
+      { file: "e2e/view-surfaces.test.mjs", id: "native presentation failure is explicit and the next split remains usable" },
     ],
     expected: "A missing IOSurface requests a fresh raster configuration, a detached frame is reported as explicit stale invalidation, and a rebuilt single-process Tauri host passes new, four, repeated, and failure-recovery split cases without a presentation error.",
     levels: ["unit", "application"],
@@ -10369,7 +10272,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Backspace during a composition edits it to 하 without PTY input" },
       { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Enter commits the edited syllable once and is reported after it" },
-      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" },
+      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" },
     ],
     expected: "The image-region client commits its local marked buffer once before following input, while Backspace can edit the current composition without sending a PTY key. The real-input-source result remains separately verified by its activation case.",
     levels: ["native", "application"],
@@ -10382,7 +10285,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "a surface drop names a command declared in the manifest's exposes" },
-      { file: "e2e/terminal.test.mjs", id: "terminal file drop pastes quoted paths without executing" },
       { file: "e2e/real/terminal.test.mjs", id: "a real Finder drag of a file and of an image pastes their quoted paths without executing" },
     ],
     expected: "A file dropped on a window reaches the native file drop view, which sends path URLs and the drop point; the page runs the drop command that the plugin of the surface under the point declares, and the terminal validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
@@ -10525,33 +10427,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-47-12",
-    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" },
-      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" },
-    ],
-    expected: "The visual calculator validates the producer screen.render metadata and its distinct capture pixel format, effective glyph colors, fractional geometry, and blink-off cursor representation.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-13",
-    implementation: [
-      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function mapCaptureRaster(" },
-      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function measureRenderedCell(" },
-    ],
-    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "raw glyph ink bounds preserve signed overhang and clip only to the raster" }],
-    expected: "Signed glyph and underline bounds retain their source coordinates, map through capture raster origin, and clip only to the raster while rejecting mismatched frame provenance.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-14",
-    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" }],
-    expected: "Cursor rectangle and color metadata are required only when the producer draws the cursor, including normal and difference blend rules.",
-    levels: ["unit"],
-  },
-  {
     id: "F268",
     implementation: [
       { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.message.frame-preedit" },
@@ -10604,16 +10479,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-47-17",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an advanced cursor frame against prior rows when identical rows suppress screen status" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "rejects future rows but reuses identical rows across a frame generation change" },
-    ],
-    expected: "Visual status indexing associates a cursor frame with the valid preceding screen rows even when identical rows suppress a new screen event, and rejects future row state.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-47-18",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function selectCoherentTerminalObservation(" }],
     tests: [
@@ -10621,16 +10486,6 @@ const FEATURE_LINKS = [
       { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
     ],
     expected: "The selected terminal observation is the latest coherent reread, screen, region and accepted event slice; an incoherent earlier read is not returned.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-19",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function planVisualStage(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "stage planning accepts prior base rows with the exact current overlay frame" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "requires coherent base screen presentation without equating a later overlay frame" },
-    ],
-    expected: "Visual stages retain the exact cursor overlay frame and use prior base-screen rows without requiring those distinct frames to have equal sequence identities.",
     levels: ["unit"],
   },
   {
@@ -10908,13 +10763,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-47-10",
-    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" }],
-    expected: "Renderer metadata is accepted only when its geometry and pixel layout belong to the measured frame.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-61",
     implementation: [
       { file: "packages/host/rust/src/platform/platform.rs", symbol: "pub struct ImagePresentation" },
@@ -10994,9 +10842,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-75",
-    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = terminalCards[0];" }],
-    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented terminal image" }],
-    expected: "The opt-in capture identity consumer binds the selected terminal card before creating the captured terminal.",
+    implementation: [{ file: "e2e/capture-frame-identity.test.mjs", symbol: "const targetCard = (await s.get(\"core.grid\")).cards.find((item) => item.focused);" }],
+    tests: [{ file: "e2e/capture-frame-identity.test.mjs", id: "opt-in capture identity matches the presented image of an image region" }],
+    expected: "The opt-in capture identity consumer binds the selected card before creating the captured image region.",
     levels: ["application"],
   },
   {
@@ -12306,14 +12154,14 @@ const FEATURE_LINKS = [
   {
     id: "F424",
     implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "a skipped test; assert its precondition" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "terminal source card not found" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "raster source card not found" }],
     expected: "A window check whose precondition fails reports a failure.",
     levels: ["application"],
   },
   {
     id: "F239-299",
-    implementation: [{ file: "e2e/terminal.test.mjs", symbol: "three terminals and two browsers keep one view web view each and one terminal service" }],
-    tests: [{ file: "e2e/terminal.test.mjs", id: "three terminals and two browsers keep one view web view each and one terminal service" }],
+    implementation: [{ file: "e2e/view-surfaces.test.mjs", symbol: "three image regions and two document views keep one view web view each and one sidecar service" }],
+    tests: [{ file: "e2e/view-surfaces.test.mjs", id: "three image regions and two document views keep one view web view each and one sidecar service" }],
     expected: "The terminal window checks follow the view contracts.",
     levels: ["application"],
   },
@@ -12739,34 +12587,6 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
-    id: "F239-98-1-1",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
-    expected: "Visual proof persistence requires complete cadence evidence and records measured outcomes before rejection.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-1",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
-    expected: "Complete visual results and cadence measurements are persisted before incomplete functional proof is rejected.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-2",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual indexing projects rows-only screen status without inventing a screen frame" }],
-    expected: "Visual input uses prior rows-only terminal screen status without inventing a screen frame identity.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-3",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function semanticRasterColorSpace(name)" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "source manifest loads only digest-verified frame-bound rasters" }],
-    expected: "The retained-source consumer maps the emitted CoreGraphics sRGB name to the semantic sRGB label and rejects unsupported names without changing raster bytes.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-93",
     implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function auditHostContract" }],
     tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the static audit reports each case of a host scope that no test declares" }],
@@ -12888,16 +12708,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
     ],
     expected: "Capture stop and layout failures preserve and report the folder returned by capture start.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-134",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexAcceptedFrameTrace(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "joins repeated screen messages to every exact accepted native frame tuple" },
-    ],
-    expected: "Visual screen records join only to accepted native frame tuples with exact trace and hash identity.",
     levels: ["unit"],
   },
   {
@@ -13035,13 +12845,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-158",
-    implementation: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", symbol: "@capture-fixture/sidecar" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" }],
-    expected: "Consumer capture fixtures retain wire behavior without naming a workspace sidecar implementation.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-155",
     implementation: [{ file: "packages/workbench/projects.js", symbol: "async function showProject(" }],
     tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "a reopened project restores inactive-space origins before retained views can start" }],
@@ -13058,8 +12861,8 @@ const FEATURE_LINKS = [
   {
     id: "F239-162",
     implementation: [{ file: "e2e/supplier-draw.mjs", symbol: "export function supplierDrawDurations(" }],
-    tests: [{ file: "e2e/test/supplier-draw.test.mjs", id: "supplier draw durations classify screen records without a raster" }],
-    expected: "Supplier draw measurements classify screen-only records, reject invalid raster metrics and await stored records through log notifications.",
+    tests: [{ file: "e2e/test/supplier-draw.test.mjs", id: "supplier draw durations read the paint time of every frame record of the fake sidecar" }],
+    expected: "Supplier draw measurements read the paint time of each frame record of the fake sidecar, reject invalid raster metrics and await stored records through log notifications.",
     levels: ["unit"],
   },
   {
@@ -13339,8 +13142,8 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
-      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "an image region view document fills its native frame before and after a divider drag" },
     ],
     expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
     levels: ["application"],
@@ -13400,8 +13203,8 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
-      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "an image region view document fills its native frame before and after a divider drag" },
     ],
     expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
     levels: ["application"],
@@ -13438,9 +13241,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-76",
-    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: 'await s.run("terminal.focus", {}, surface)' }],
+    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: "await focusImageActive(s, surface);" }],
     tests: [{ file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" }],
-    expected: "The declared terminal focus command establishes focus before the input trace.",
+    expected: "The declared raster probe focus command establishes image region focus before the input trace.",
     levels: ["application"],
   },
   {
@@ -13453,11 +13256,11 @@ const FEATURE_LINKS = [
   {
     id: "F239-47",
     implementation: [
-      { file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "function assertTerminalStageCoherent(" },
-      { file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function assertInputTraceDelivery(" },
+      { file: "e2e/activation/view-focus.test.mjs", symbol: "function assertImageRegionStages(" },
+      { file: "e2e/activation/view-focus.test.mjs", symbol: "async function assertDelivered(" },
     ],
-    tests: [{ file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" }],
-    expected: "Four native vowel keys match the same-window AppKit documents at coherent terminal frames and commit four vowels plus Space exactly once.",
+    tests: [{ file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" }],
+    expected: "Four native vowel keys match the same-window AppKit documents in the committed text and preedit of an image region and commit four vowels plus Space exactly once.",
     levels: ["application"],
   },
   {
@@ -13469,13 +13272,6 @@ const FEATURE_LINKS = [
     ],
     expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
     levels: ["unit", "application"],
-  },
-  {
-    id: "F239-98-4",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],
-    expected: "Tag-scoped visual proof evaluates the exact issued target despite unrelated incomplete source state.",
-    levels: ["unit"],
   },
   {
     id: "F239-111",
@@ -14597,7 +14393,9 @@ const NON_CAPABILITY_COMPLETIONS = new Set(["F676", "F673", "F510", "F664-1", "F
 // kit; the kit holds their implementation and tests. F239-170, F239-197, F239-247, F273 and F273-1 wrote rules of
 // the event source check, which F355-3-5 moves to the kit.
 // F596 is a change of the mygo fork: its tests are there, and no host draws through that plugin.
-const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
+// F6 is the selection, paste, file drop and inline image contract of the terminal plugin. F715-2 removes its window checks from
+// core, whose checks reach views only through fixtures; the terminal plugin repository checks it.
+const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.
@@ -14625,11 +14423,19 @@ const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "
 // F239-201, F239-229, F608 and F684 wrote the build target of the captured-text recognizer, the crop of a frame that it read and the
 // statement of its failure, which F696-4-4 removes with the recognizer: a window check reads the content of a view from the public
 // value that holds it.
-const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
+// F239-98, F239-98-1, F239-98-1-1, F239-98-2, F239-98-3, F239-98-4, F239-47-17, F239-47-19, F239-134, F239-158 and F239-175 wrote
+// the capture of a terminal IME composition, its stages and its visual proof, which F715-2 removes: the IME checks of core type
+// into the image region of the raster probe, and the glyph proof of a terminal belongs to the terminal plugin.
+// F239-47-10, F239-47-12, F239-47-13 and F239-47-14 wrote the measure of the glyphs, the underline and the cursor that a terminal
+// renders, which F715-2 removes with that proof.
+// F239-294 declared in the library check the files tree errors that its folder removal causes, which F715-2 removes: the core
+// window checks show no files section.
+const REMOVED_COMPLETIONS = new Set(["F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+  "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
-  "F239-201", "F239-229", "F608", "F684"]);
+  "F239-201", "F239-229", "F608", "F684", "F239-294"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

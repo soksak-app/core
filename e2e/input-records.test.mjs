@@ -1,6 +1,7 @@
-// A key typed into a terminal leaves a record in every layer of the input path, with the typed text and the time
-// (docs/spec/diagnostics.md#rules). The check types through the native input of the endpoint, then reads the records that the
-// typing appended to the event log of the application.
+// A key typed into an image region leaves a record in every layer of the input path, with the typed text and the time
+// (docs/spec/diagnostics.md#rules). The image region is that of the raster probe, whose sidecar records each request it receives
+// and whose `rasterprobe.input` logs each input transaction with the echo of the sidecar. The check types through the native input
+// of the endpoint, then reads the records that the typing appended to the event log of the application.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,64 +11,45 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { eventLine, currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh, reading } from "./fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
-import { ensureTerminals, readScreenUntil } from "./terminal-screen.mjs";
+import { assertReceivedUnchanged, imageFocused, imagePoint, lastTransaction, rasterProbeTab, receivedAfter, typedText } from "./input-probe.mjs";
 
-// The text of the bytes that a pty_read line of the terminal sidecar holds as hex; the event stores no text copy of the bytes
-// (docs/spec/replay.md#records). The line is `<level> <layer> <event>: <fields>`.
 /** The records of the input path that the check reads, all below `error`. */
 const READS = ["native.record.info", "native.input.key_down", "native.input.report", "host.trace.region", "host.trace.sidecar.send",
-  "host.input.relay", "workbench.call", "workbench.log.clock", "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write",
-  "sidecar.vt.pty_read"];
-
-function readText(line) {
-  const { hex } = JSON.parse(line.slice(line.indexOf(": ") + 2));
-  return Buffer.from(hex, "hex").toString("latin1");
-}
+  "host.input.relay", "workbench.call", "workbench.log.clock", "host.sidecar.request", "sidecar.rasterprobe.request"];
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a typed key leaves a record in every layer of the input path`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { performanceTrace: true, log: EVERY_LEVEL, reads: READS });
-    const [terminal] = await ensureTerminals(s, 1);
-    await s.until("terminal.session", (state) => Boolean(state.sessionId),
-      `${terminal.surface} did not open a sidecar session`, { surface: terminal.surface });
-    // The shell prints its prompt before it takes input.
-    await readScreenUntil(s, terminal.surface, (lines) => lines.some((line) => line.length > 0),
-      "the shell printed nothing");
-    const host = await s.get("host.window");
-    const region = host.regions.find((item) => item.surface === terminal.surface && item.name === "view");
-    assert.ok(region?.frame, `native terminal region ${terminal.surface} has no frame`);
+    // The raster probe opens its sidecar session before it reports ready.
+    const { surface } = await rasterProbeTab(s);
+    const point = await imagePoint(s, surface);
     // A press makes the region the first responder, as the person's click does.
-    await s.click(region.frame.x + region.frame.width / 2, region.frame.y + region.frame.height / 2);
+    await s.click(point.x, point.y);
     // The region takes the keyboard after the press has passed to the page, so the typing waits for the focus.
-    await s.until("host.window", (state) => state.regions.some((item) =>
-      item.surface === terminal.surface && item.name === "view" && item.focused),
-    `the terminal region ${terminal.surface} did not take the keyboard after the press`);
+    await s.until("host.window", (state) => imageFocused(state, surface),
+      `the image region ${surface} did not take the keyboard after the press`);
+    const start = await lastTransaction(s, surface);
 
     const eventOffsets = currentEventOffsets(s.app.configDir);
     // Enter does not pass through the input method, so it reaches the sidecar in an application that is not active.
     await s.key("Enter", "down");
     await s.key("Enter", "up");
-    await readScreenUntil(s, terminal.surface, (lines) => lines.filter((line) => line.startsWith("sh-")).length >= 2,
-      "the shell did not print a second prompt after Enter");
+    await s.until("rasterprobe.input", (input) => typedText(input.log.filter((entry) => entry.sequence > start)) === "\n",
+      "the image region did not report Enter", { surface });
+    const transactions = await receivedAfter(s, surface, start, "the sidecar did not echo the input transaction of Enter");
+    assertReceivedUnchanged(transactions, `${app.name} Enter`);
 
     // The native library stores its records in the ring of the process, the writer of the host pulls them at its next batch,
     // and the flush waits until they are in the event log.
     await s.flushLog();
-    // The sidecar writes its own event file in batches, so the check waits until the read of the prompt after Enter is in it.
-    await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.vt.pty_read") && readText(text).includes("sh-"), 10000,
-      reading(s.app, ["sidecar.vt.pty_read"]));
+    // The sidecar writes its own event file in batches, so the check waits until its record of the input request is in it.
+    await untilEventLine(s.app.configDir, eventOffsets, (text) => text.includes("sidecar.rasterprobe.request")
+      && text.includes('"operation":"input"'), 10000, reading(s.app, ["sidecar.rasterprobe.request"]));
     const events = readEvents(s.app.configDir, eventOffsets).events;
     const log = events.map((event) => ({ text: eventLine(event), ts: new Date(event.ts_us / 1000).toISOString() }));
-    // The trace of the page and of the host is in the event log.
-    // The terminal plugin stores the steps of its input path as plugin events `plugin.terminal.<event>` (docs/spec/plugins.md#logging),
-    // which are rows of the layer plugin beside the rows of the performance trace.
-    const prefix = "plugin.terminal.";
-    const pluginRows = events.filter((event) => event.event.startsWith(prefix)).map((event) => ({
-      layer: "plugin", event: event.event.slice(prefix.length), ts: new Date(event.ts_us / 1000).toISOString(),
-      ...(event.cids === undefined ? {} : { cids: event.cids }), ...event.fields,
-    }));
-    const trace = [...traceRows(events), ...pluginRows];
+    // The trace of the host is in the event log.
+    const trace = traceRows(events);
     // Each layer must hold the key with its own fields; `find` names the record that the layer lacks.
     const nativeLine = (pattern) => log.find((line) => pattern.test(line.text));
     const traced = (match) => trace.find(match);
@@ -76,7 +58,7 @@ for (const app of Object.values(APPS)) {
       const event = events.find(match);
       return event && { ts: new Date(event.ts_us / 1000).toISOString(), event };
     };
-    const forEnter = (record) => record.surface === terminal.surface;
+    const forEnter = (record) => record.surface === surface;
     // The input path carries the typed key as an action of the input report (docs/spec/native-surfaces.md).
     const enter = (actions) => Array.isArray(actions) && actions.some((action) => action.type === "key" && action.key === "Enter");
     const found = {
@@ -84,22 +66,13 @@ for (const app of Object.values(APPS)) {
       nativeKeyDown: typed((e) => e.event === "native.input.key_down" && e.fields.keyCode === 36),
       nativeReport: typed((e) => e.event === "native.input.report" && enter(JSON.parse(e.fields.report).actions)),
       hostRegion: traced((r) => r.layer === "host" && r.event === "region" && forEnter(r) && enter(r.body?.actions)),
-      pageRegion: traced((r) => r.layer === "plugin" && r.event === "region" && forEnter(r) && enter(r.actions)),
-      pageIme: traced((r) => r.layer === "plugin" && r.event === "ime" && forEnter(r) && enter(r.input?.actions)),
-      pageInput: traced((r) => r.layer === "plugin" && r.event === "input" && forEnter(r) && enter(r.actions)),
-      pageSend: traced((r) => r.layer === "plugin" && r.event === "send" && forEnter(r) && enter(r.body?.actions)),
-      pageSendResult: traced((r) => r.layer === "plugin" && r.event === "send.result" && r.operation === "input" && r.ok === true),
       hostSidecarSend: traced((r) => r.layer === "host" && r.event === "sidecar.send" && forEnter(r) && enter(r.body?.actions)),
-      vtRequest: traced((r) => r.layer === "vt-core" && r.event === "request" && r.operation === "input" && forEnter(r)
-        && enter(r.body?.body?.actions)),
-      ptyWrite: traced((r) => r.layer === "vt-core" && r.event === "pty_write" && r.hex === "0d"),
-      ptyRead: traced((r) => r.layer === "vt-core" && r.event === "pty_read" && Buffer.from(r.hex, "hex").toString("latin1").includes("sh-")),
     };
     const missing = Object.entries(found).filter(([, record]) => !record).map(([name]) => name);
     assert.deepEqual(missing, [], `${app.name}: the typed Enter left no record in: ${missing.join(", ")}`);
     // The identifier that the native layer assigned to the key is carried by every hop of the chain of the input
     // (docs/spec/logging.md#correlation-identifier): the report, the relay of the host, the call of the page that sends the
-    // request, and the request of the host to the sidecar.
+    // request, the request of the host to the sidecar, and the record of the sidecar that received it.
     const [cid] = found.nativeKeyDown.event.cids ?? [];
     assert.ok(cid, `${app.name}: native.input.key_down has no cids`);
     const hops = {
@@ -107,6 +80,8 @@ for (const app of Object.values(APPS)) {
       hostRelay: events.find((e) => e.event === "host.input.relay" && e.cids?.includes(cid)),
       pageCall: events.find((e) => e.event === "workbench.call" && e.fields.name === "sidecarSend" && e.cids?.includes(cid)),
       hostRequest: events.find((e) => e.event === "host.sidecar.request" && e.cids?.includes(cid)),
+      sidecarRequest: events.find((e) => e.event === "sidecar.rasterprobe.request" && e.fields.operation === "input" && forEnter(e)
+        && e.cids?.includes(cid)),
     };
     const unlinked = Object.entries(hops).filter(([, hop]) => !hop?.cids?.includes(cid)).map(([name]) => name);
     assert.deepEqual(unlinked, [], `${app.name}: the hops ${unlinked.join(", ")} do not carry ${cid}`);
@@ -122,7 +97,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(anchor, `${app.name}: ${main} holds no workbench.log.clock of the start ${hops.pageCall.start} before workbench.call`);
     const { trip_us: tripUs, resolution_us: resolutionUs } = anchor.fields;
     const halfTripUs = tripUs / 2 + resolutionUs;
-    const onPageClock = new Set(["workbench.call start", "workbench.call", "pageRegion", "pageSend"]);
+    const onPageClock = new Set(["workbench.call start", "workbench.call"]);
     // workbench.call is written when the call ends, and its micros is measured on the page clock, so its start, the end less micros,
     // carries one more resolution of the page clock than the end.
     const bound = (left, right) => (onPageClock.has(left) === onPageClock.has(right) ? 0
@@ -144,8 +119,8 @@ for (const app of Object.values(APPS)) {
     // clocks of the page and of the host allows the anchor bound rounded up to a millisecond, and one more for the rounding.
     const at = (record) => Date.parse(record.ts);
     // The injection record is written after the delivery, so it is not part of the order of the hops that the delivery causes.
-    const order = ["nativeKeyDown", "nativeReport", "hostRegion", "pageRegion", "pageSend", "hostSidecarSend",
-      "vtRequest", "ptyWrite", "ptyRead"];
+    found.sidecarRequest = { ts: new Date(hops.sidecarRequest.ts_us / 1000).toISOString(), event: hops.sidecarRequest };
+    const order = ["nativeKeyDown", "nativeReport", "hostRegion", "hostSidecarSend", "sidecarRequest"];
     for (let index = 1; index < order.length; index++) {
       const earlier = at(found[order[index - 1]]);
       const later = at(found[order[index]]);

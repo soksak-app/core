@@ -1,16 +1,16 @@
 // Probes of native-menu and modal key routing from a focused plugin view. The window takes the presses and the keys as the
 // virtual key window, and a key equivalent reaches the menu through the same path as in the key window of the active
 // application, so the application and the input source of the person stay as they are
-// (docs/spec/exposure.md#virtual-key-window).
+// (docs/spec/exposure.md#virtual-key-window). The input probe carries the view: its native document region reports the keys that
+// reach it, and the text field of its view reports its focus, value and caret.
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
 import test from "node:test";
 
 import { currentEventOffsets, readEvents, untilEventLine, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
 import { fresh, reading } from "./fixture.mjs";
-import { ensureTerminals } from "./terminal-screen.mjs";
+import { documentPoint, fieldPoint, inputProbeTab } from "./input-probe.mjs";
 
 const REGISTRY_COMMAND = "workbench.command";
 const MODAL_ANSWER = "workbench.trace.modal.answer";
@@ -57,58 +57,46 @@ function assertNoViewKeydown(events, after, label) {
   assert.deepEqual(forwarded, [], `${label}: native input reached the plugin view: ${JSON.stringify(forwarded)}`);
 }
 
-async function focusedTerminal(s) {
-  const [terminal] = await ensureTerminals(s, 1);
-  const surface = terminal.surface;
-  const view = await s.rect("terminal.view", undefined, surface);
-  const point = { x: view.document.x + view.x + view.width / 2,
-    y: view.document.y + view.y + view.height / 2 };
+// Gives the keyboard to the native document region of a new input probe tab, as a press of a person on the virtual key window.
+async function focusedDocument(s) {
+  const { surface } = await inputProbeTab(s);
+  const point = await documentPoint(s, surface);
   // A pointer move that presses nothing makes the window the virtual key window.
   await s.pointer(point.x, point.y, "move");
   await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
   await s.click(point.x, point.y);
-  await s.until("host.window", (window) => window.virtualKey && window.responder?.surface === surface,
-    "the terminal view did not become the first-responder owner of the virtual key window");
-  return { terminal, surface };
+  await s.until("host.window", (window) => window.virtualKey && window.responder?.surface === surface
+    && window.documents.some((item) => item.surface === surface && item.focused),
+  "the probe document did not become the first-responder owner of the virtual key window");
+  return { surface };
 }
 
-async function focusedBrowser(s) {
-  const browser = (await s.get("core.surfaces")).find((surface) => surface.plugin === "browser" && surface.visible);
-  assert.ok(browser, "the fixture has no visible browser view");
-  await s.until("core.surfaces", (all) => all.some((surface) => surface.surface === browser.surface
-    && surface.exposes.includes("status browser.address.text") && surface.exposes.includes("element browser.address")),
-  "the browser did not register its address field");
-  const url = await serveAddressPage(s);
-  await s.run("browser.navigate", { url }, browser.surface);
-  await s.until("browser.location", (location) => location.url === url && !location.loading && location.error === null,
-    "the local address fixture did not load", { surface: browser.surface });
-  const field = await s.rect("browser.address", undefined, browser.surface);
+// The keys down that the probe document received after the key `after`.
+async function documentKeysAfter(s, surface, after) {
+  return (await s.get("probeinput.document", surface)).keys.filter((key) => key.sequence > after && key.type === "keydown");
+}
+
+// The sequence of the last key of the probe document.
+const lastDocumentKey = async (s, surface) => (await s.get("probeinput.document", surface)).keys.at(-1)?.sequence ?? 0;
+
+/** The text of the view field that the routing cases copy. */
+const ROUTING_TEXT = "routing-sentinel";
+
+// Gives the keyboard to the text field of the view of a new input probe tab, as a press of a person on the virtual key window,
+// with the field holding ROUTING_TEXT.
+async function focusedField(s) {
+  const { surface } = await inputProbeTab(s);
+  await s.run("probeinput.select", { target: "field", value: ROUTING_TEXT, start: ROUTING_TEXT.length }, surface);
+  const field = await fieldPoint(s, surface);
   // A pointer move that presses nothing makes the window the virtual key window.
-  await s.pointer(field.x + field.width / 2, field.y + field.height / 2, "move");
-  await s.until("host.window", (window) => window.virtualKey,
-    "the browser window did not become the virtual key window");
-  await s.click(field.x + field.width / 2, field.y + field.height / 2);
-  await s.until("host.window", (window) => window.responder?.surface === browser.surface,
-    "the browser view did not become the first-responder owner");
-  await s.until("browser.address.text", (value) => value.focused && value.value === url,
-    "the browser address field did not report the focused local navigation address", { surface: browser.surface });
-  return { ...browser, routingURL: url };
-}
-
-async function serveAddressPage(s) {
-  const server = createServer((_request, response) => {
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    response.end("<!doctype html><title>keyboard routing</title>");
-  });
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  s.cleanup(() => new Promise((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
-    server.closeAllConnections();
-  }));
-  return `http://127.0.0.1:${server.address().port}/routing-sentinel`;
+  await s.pointer(field.x, field.y, "move");
+  await s.until("host.window", (window) => window.virtualKey, "the probe window did not become the virtual key window");
+  await s.click(field.x, field.y);
+  await s.until("host.window", (window) => window.responder?.surface === surface,
+    "the probe view did not become the first-responder owner");
+  await s.until("probeinput.field", (value) => value.focused && value.value === ROUTING_TEXT,
+    "the probe field did not report its focus and its text", { surface });
+  return { surface };
 }
 
 function injectedKeyEvents(events, key) {
@@ -138,14 +126,14 @@ function assertDeliveredKey(events, key, label, { downResponder } = {}) {
 
 // A key pressed while the picker loads waits for the picker and never reaches the view behind it
 // (docs/spec/native-modals.md#keyboard). The diagnostic hold of the modal document keeps the picker loading, so the check runs on
-// the applications that create modal web views (MAIN_PAGE_APPS); e2e/modal-escape-terminal.test.mjs presses a key as the picker
+// the applications that create modal web views (MAIN_PAGE_APPS); e2e/modal-escape-keys.test.mjs presses a key as the picker
 // opens on every application.
 for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: an Escape pressed while the page picker loads dismisses the picker once`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
-    const { surface } = await focusedTerminal(s);
+    const { surface } = await focusedDocument(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
-    assert.ok(card, "the terminal has no owning card");
+    assert.ok(card, "the probe has no owning card");
 
     let held = false;
     try {
@@ -155,6 +143,7 @@ for (const app of MAIN_PAGE_APPS) {
       await s.until("core.picker", (picker) => picker.open, "the held page picker did not open");
       await s.request("diagnostics.modal.held");
       const offsets = currentEventOffsets(s.app.configDir);
+      const before = await lastDocumentKey(s, surface);
       await s.press("Escape");
       // A key that waits is recorded at its turn, so no record of the Escape exists while the picker loads.
       const waiting = await traceEvents(s, offsets);
@@ -167,7 +156,8 @@ for (const app of MAIN_PAGE_APPS) {
       const events = await traceEvents(s, offsets);
       assertDeliveredKey(events, "Escape", "loading page-picker Escape");
       const reached = injectedKeyEvents(events, "Escape").map((event) => JSON.parse(event.fields.text).responder);
-      assert.ok(!reached.includes("SPImageRegion"), `the Escape that waited reached the terminal: ${JSON.stringify(reached)}`);
+      assert.deepEqual(await documentKeysAfter(s, surface, before), [],
+        `the Escape that waited reached the probe document: ${JSON.stringify(reached)}`);
       assert.equal(traceCommands(events, "core.picker.close").length, 0,
         "the Escape that waited must not run the view's core.picker.close command");
       assert.equal(await commandRuns(s, offsets, "core.modal.dismiss"), 1,
@@ -191,9 +181,9 @@ for (const app of MAIN_PAGE_APPS) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native picker Escape dismisses its modal once`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
-    const { surface } = await focusedTerminal(s);
+    const { surface } = await focusedDocument(s);
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
-    assert.ok(card, "the terminal has no owning card");
+    assert.ok(card, "the probe has no owning card");
     await s.run("core.card.menu", { card: card.id, menu: "add" });
     await s.until("core.picker", (picker) => picker.open, "the native picker did not open");
     const webView = (await s.get("host.window")).pageProcess !== null;
@@ -209,12 +199,14 @@ for (const app of Object.values(APPS)) {
     assert.equal(nativePicker.responder?.owner, webView ? "modal" : "workbench",
       `the ordinary picker does not own keyboard focus: ${JSON.stringify(nativePicker.responder)}`);
     const offsets = currentEventOffsets(s.app.configDir);
+    const before = await lastDocumentKey(s, surface);
     await s.press("Escape");
     await s.until("core.picker", (picker) => !picker.open, "native picker Escape did not close the picker");
     const events = await traceEvents(s, offsets);
     assertDeliveredKey(events, "Escape", "native picker Escape");
     const reached = injectedKeyEvents(events, "Escape").map((event) => JSON.parse(event.fields.text).responder);
-    assert.ok(!reached.includes("SPImageRegion"), `native picker Escape reached the terminal: ${JSON.stringify(reached)}`);
+    assert.deepEqual(await documentKeysAfter(s, surface, before), [],
+      `native picker Escape reached the probe document: ${JSON.stringify(reached)}`);
     if (!webView) {
       // The workbench draws the picker and holds the keyboard, so the Escape row of the picker layer runs core.picker.close
       // (docs/spec/exposure.md#keyboard-shortcuts); the view behind it received no Escape, as the responders above show.
@@ -237,7 +229,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: settings dialog Escape stays with the native modal responder`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
-    await focusedTerminal(s);
+    await focusedDocument(s);
     await s.run("core.settings.open");
     const webView = (await s.get("host.window")).pageProcess !== null;
     if (webView) {
@@ -272,26 +264,25 @@ for (const app of Object.values(APPS)) {
       "settings dialog Escape must not run a page picker command");
   });
 
-  test(`${app.name}: native cmd+c copies selected address text without view keydown`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: native cmd+c copies selected view field text without view keydown`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app, { clipboard: true });
-    const browser = await focusedBrowser(s);
-    const address = await s.get("browser.address.text", browser.surface);
-    assert.equal(address.value, browser.routingURL,
-      "the address field does not contain the declared local navigation fixture");
-    const before = await s.get("core.surface.input", browser.surface);
+    const probe = await focusedField(s);
+    const field = await s.get("probeinput.field", probe.surface);
+    assert.equal(field.value, ROUTING_TEXT, "the view field does not contain the declared routing text");
+    const before = await s.get("core.surface.input", probe.surface);
     writePasteboard([{ "public.utf8-plain-text": Buffer.from("ROUTING-SENTINEL").toString("base64") }]);
     const keys = currentEventOffsets(s.app.configDir);
     await s.press("a", { modifiers: ["command"] });
     const offsets = currentEventOffsets(s.app.configDir);
     await s.press("c", { modifiers: ["command"] });
     const copied = pasteboardText();
-    const input = await s.get("core.surface.input", browser.surface);
+    const input = await s.get("core.surface.input", probe.surface);
     // A failure states the injection record of each phase of cmd+a and cmd+c: the first responder, whether the key waited
     // behind the held input of the window, whether it was taken as a key equivalent and whether it typed a stated text.
     const keyEvents = await traceEvents(s, keys);
     const records = JSON.stringify(["a", "c"].flatMap((key) => injectedKeyEvents(keyEvents, key)
       .map((event) => JSON.parse(event.fields.text))));
-    assert.equal(copied, address.value, `native cmd+c did not copy the selected address text; key records ${records}`);
+    assert.equal(copied, field.value, `native cmd+c did not copy the selected field text; key records ${records}`);
     assertNoViewKeydown(input, before.at(-1)?.sequence ?? 0, `native cmd+a/c (key records ${records})`);
     assert.equal((await traceEvents(s, offsets)).filter((event) => event.event === REGISTRY_COMMAND).length, 0,
       "native cmd+c must not run a page command");
@@ -299,18 +290,18 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: native cmd+= runs the text-size menu command without view keydown`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
-    const browser = await focusedBrowser(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === browser.surface));
-    assert.ok(card, "the browser has no owning card");
+    const probe = await focusedField(s);
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === probe.surface));
+    assert.ok(card, "the probe has no owning card");
     await s.until("core.text", (value) => value.scope.kind === "card" && value.scope.card === card.id,
-      "the browser did not select its owning text-size scope");
-    const before = await s.get("core.surface.input", browser.surface);
+      "the probe did not select its owning text-size scope");
+    const before = await s.get("core.surface.input", probe.surface);
     const beforeScale = (await s.get("core.text")).cards[card.id];
     const offsets = currentEventOffsets(s.app.configDir);
     await s.press("=", { modifiers: ["command"] });
     await s.until("core.text", (value) => value.cards[card.id] > beforeScale,
       "native cmd+= did not run the text-larger menu command");
-    assertNoViewKeydown(await s.get("core.surface.input", browser.surface), before.at(-1)?.sequence ?? 0,
+    assertNoViewKeydown(await s.get("core.surface.input", probe.surface), before.at(-1)?.sequence ?? 0,
       "native cmd+=");
     assert.equal(await commandRuns(s, offsets, "core.text.larger"), 1,
       "native cmd+= must run core.text.larger exactly once");
@@ -345,25 +336,25 @@ for (const app of Object.values(APPS)) {
     });
   }
 
-  test(`${app.name}: focused browser keeps cmd+k when the library is hidden`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a focused view keeps cmd+k when the library is hidden`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
-    const { surface } = await focusedBrowser(s);
+    const { surface } = await focusedField(s);
     assert.equal((await s.get("core.screen")).screen, "workspace",
-      "the focused browser key case requires the library to be hidden");
+      "the focused view key case requires the library to be hidden");
     const focusedWindow = await s.get("host.window");
-    assert.equal(focusedWindow.virtualKey, true, "the focused browser window is not the virtual key window");
+    assert.equal(focusedWindow.virtualKey, true, "the focused view window is not the virtual key window");
     assert.equal(focusedWindow.responder?.surface, surface,
-      `the browser view does not own the key responder: ${JSON.stringify(focusedWindow.responder)}`);
+      `the probe view does not own the key responder: ${JSON.stringify(focusedWindow.responder)}`);
     const offsets = currentEventOffsets(s.app.configDir);
     await s.press("k", { modifiers: ["command"] });
     const events = await traceEvents(s, offsets);
-    assertDeliveredKey(events, "k", "focused browser cmd+k", { downResponder: "SPDocumentView" });
+    assertDeliveredKey(events, "k", "focused view cmd+k", { downResponder: "SPDocumentView" });
     // The shortcut table applies cmd+k only while the library is shown. With the library hidden,
     // the focused view owns its normal key handling and does not forward the workbench command.
     assert.equal(traceCommands(events, "core.library.search.focus").length, 0,
       "hidden-library cmd+k must not invoke the library-only workbench command");
     assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed"
-      && event.fields?.plugin === "browser" && event.fields?.command === "core.library.search.focus").length, 0,
+      && event.fields?.plugin === "probeinput" && event.fields?.command === "core.library.search.focus").length, 0,
     "hidden-library cmd+k must not report a failed forwarded command");
     assert.equal((await s.get("core.screen")).screen, "workspace",
       "hidden-library cmd+k changed the workspace screen");
@@ -371,7 +362,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: native shift+cmd+n opens and cleans up a library window`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
-    await focusedTerminal(s);
+    await focusedDocument(s);
     const initialWindows = await s.get("host.windows");
     const initialIDs = new Set(initialWindows.map((window) => window.window));
     s.cleanup(async () => {

@@ -77,20 +77,18 @@ for (const app of Object.values(APPS))
       console.info(`START ${app.name}: sidebar space acceptance`);
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-      await fresh(s);
+      const { plugin } = await fresh(s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-      const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === "terminal"));
-      assert.ok(card, "terminal card absent");
-      await s.run("core.tab.select", { tab: card.tabs.find((tab) => tab.plugin === "terminal").id });
+      const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === plugin));
+      assert.ok(card, `${plugin} card absent`);
+      await s.run("core.tab.select", { tab: card.tabs.find((tab) => tab.plugin === plugin).id });
       const settings = (await s.get("core.settings")).values;
-      const original = settings.sets.find(
-        (set) => set.sections.includes("files.tree") && set.sections.includes("files.bookmarks"),
-      );
-      assert.ok(original, "file set absent");
+      // Two fixed-height sections of the layout probe, shown as a list on three sides and as tabs on the right.
+      const sections = ["layoutprobe.alpha", "layoutprobe.beta"];
       const sets = [
         ...settings.sets,
-        { ...original, id: "space-list", title: "Space list", layout: "list" },
-        { ...original, id: "space-tabs", title: "Space tabs", layout: "tabs" },
+        { id: "space-list", title: "Space list", sections, layout: "list" },
+        { id: "space-tabs", title: "Space tabs", sections, layout: "tabs" },
       ];
       await s.run("core.settings.set", { patch: { sets }, scope: "common" });
       const choices = Object.fromEntries(

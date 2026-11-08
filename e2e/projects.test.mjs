@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, replacePlaceholders, START_PLUGIN, startTab } from "./fixture.mjs";
 import { projectRecords } from "./projects-file.mjs";
 import { frontmostApp } from "@soksak/window-check/frontmost.mjs";
 import { readEvents, currentEventOffsets, traceRows } from "@soksak/window-check/event-log.mjs";
@@ -106,11 +106,11 @@ for (const app of Object.values(APPS)) {
         `${label}: project did not become active`);
       await child.until("core.grid", (grid) => grid?.cards?.length > 0,
         `${label}: project grid did not render`);
-      const usable = (surface) => surface.visible && surface.plugin === "terminal" &&
-        surface.exposes.includes("status terminal.session");
-      const surfaces = await child.until("core.surfaces", (all) => all.some(usable),
-        `${label}: terminal surface did not become usable`);
-      await child.get("terminal.session", surfaces.find(usable).surface);
+      // The start layout of a project names plugins that the check application does not load, so probe tabs replace its placeholders.
+      await replacePlaceholders(child);
+      const { surface } = await startTab(child);
+      const view = await child.get("layoutprobe.view", surface);
+      assert.equal(view?.surface, surface, `${label}: the probe view did not report its surface`);
       await child.run("core.space.add");
       await child.run("core.projects.flush");
       return { id: opened.id, child };
@@ -282,6 +282,9 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("host.windows")).length, 2);
     assert.equal((await s.get("core.project")).id, third.id);
     assert.equal((await child.get("core.project")).id, second.id);
+    // Probe tabs replace the placeholders of the start layout of the third project, which the main window now shows.
+    await replacePlaceholders(s);
+    await startTab(s);
     const space = await child.run("core.space.add");
     await child.run("core.space.rename", { id: space.id, title: "Saved space" });
     await child.run("core.grid.size", { card: "right", axis: "x", size: 213 });
@@ -302,8 +305,8 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(saved.geometry, { x: beforeClose.x + 30, y: beforeClose.y + 20,
       width: beforeClose.width, height: beforeClose.height },
       `the saved geometry is not in window points (${JSON.stringify(beforeClose)})`);
-    await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === "terminal"),
-      "the main window must keep its terminal surface");
+    await s.until("core.surfaces", (list) => list.some((x) => x.visible && x.plugin === START_PLUGIN),
+      "the main window must keep its probe surface");
     await settings(s, { projectOpening: "windows" }, "common");
     await activate(s, second.id, "reopen the saved project in its own window");
     child = s.on(added(await s.windows(2, "saved project did not reopen"), [s.window]));
@@ -367,36 +370,45 @@ for (const app of Object.values(APPS)) {
     await settings(s, { projectOpening: "windows" }, "common");
     const opened = await s.run("core.project.open", { root, color: "#7fe3b0" });
     let child = s.on(added(await s.windows(2, "new project window did not open"), [s.window]));
-    const assertActiveTerminalViewReady = async (window, phase) => {
+    // The active view of each card of the project is a probe tab: probe tabs replace the placeholders of the start layout, which
+    // names plugins that the check application does not load, before the project is saved.
+    const mounted = (item, active) => active.has(item.surface) && item.plugin === START_PLUGIN && item.visible
+      && item.composition === "view" && item.status.phase === "ready" && item.applied;
+    const assertActiveViewsReady = async (window, phase) => {
       await window.until("core.grid", (grid) => grid?.cards.length > 0, `${phase}: project cards did not render`);
-      const active = new Set((await window.get("core.grid")).cards.map((card) => card.active).filter(Boolean));
-      const surfaces = await window.until("core.surfaces", (items) => items.some((item) =>
-        active.has(item.surface) && item.plugin === "terminal" && item.visible && item.composition === "view"
-        && item.status.phase === "ready" && item.applied),
-      `${phase}: the active terminal view did not mount and apply its composition`);
-      const surface = surfaces.find((item) =>
-        active.has(item.surface) && item.plugin === "terminal" && item.visible && item.composition === "view"
-        && item.status.phase === "ready" && item.applied);
-      assert.ok(surface, `${phase}: the active terminal view was absent from the satisfied surfaces status`);
-      await window.until("core.surface.document",
-        (value) => value?.readyState === "complete" && value.themed,
-        `${phase}: the active terminal view document did not become ready`, { surface: surface.surface });
-      await window.until("host.window", (state) => state.surfaces.find((item) =>
-        item.id === surface.surface && item.visible && item.frame.width > 0 && item.frame.height > 0),
-      `${phase}: the active terminal native surface was not placed`);
+      const grid = await window.get("core.grid");
+      const active = new Set(grid.cards.filter((card) => card.tabs?.find((tab) => tab.id === card.active)?.plugin === START_PLUGIN)
+        .map((card) => card.active));
+      assert.ok(active.size > 0, `${phase}: no card shows an active probe view: ${JSON.stringify(grid.cards)}`);
+      const surfaces = await window.until("core.surfaces", (items) =>
+        [...active].every((id) => items.some((item) => item.surface === id && mounted(item, active))),
+      `${phase}: the active probe views did not mount and apply their composition`);
+      const views = surfaces.filter((item) => mounted(item, active)).map((item) => item.surface).sort();
+      assert.deepEqual(views, [...active].sort(), `${phase}: an active probe view was absent from the satisfied surfaces status`);
+      for (const surface of views) {
+        await window.until("core.surface.document",
+          (value) => value?.readyState === "complete" && value.themed,
+          `${phase}: the active probe view document ${surface} did not become ready`, { surface });
+        await window.until("host.window", (state) => state.surfaces.find((item) =>
+          item.id === surface && item.visible && item.frame.width > 0 && item.frame.height > 0),
+        `${phase}: the active probe native surface ${surface} was not placed`);
+      }
       assert.equal(await window.get("core.workbench.error"), null, `${phase}: initial view mount reported an application error`);
-      return surface.surface;
+      return views;
     };
 
-    const firstSurface = await assertActiveTerminalViewReady(child, "new project window");
+    await child.until("core.grid", (grid) => grid?.cards.length > 0, "new project window: project cards did not render");
+    await replacePlaceholders(child);
+    await startTab(child);
+    const firstSurfaces = await assertActiveViewsReady(child, "new project window");
     await child.run("core.projects.flush");
     await child.close();
     await s.windows(1, "the first project window did not close");
 
     await s.run("core.project.activate", { id: opened.id });
     child = s.on(added(await s.windows(2, "saved project window did not reopen"), [s.window]));
-    const reopenedSurface = await assertActiveTerminalViewReady(child, "reopened saved project window");
-    assert.equal(reopenedSurface, firstSurface, "the saved active view changed its surface ID on reopen");
+    const reopenedSurfaces = await assertActiveViewsReady(child, "reopened saved project window");
+    assert.deepEqual(reopenedSurfaces, firstSurfaces, "the saved active views changed their surface IDs on reopen");
   });
 }
 
@@ -421,14 +433,21 @@ for (const app of Object.values(APPS)) {
     const saved = await s.run("core.project.open", { root, color: "#7fe3b0" });
     const child = s.on(added(await s.windows(2, "project window was not created"), [s.window]));
     await child.until("core.grid", (grid) => grid?.cards.length > 0, "the saved project did not render");
+    // Probe tabs replace the placeholders of the start layout, so that every saved tab belongs to a loaded plugin.
+    await replacePlaceholders(child);
+    await startTab(child);
     await child.run("core.projects.flush");
     await child.close();
     await s.windows(1, "project window did not close");
 
-    // A layout saved in another environment: the first tab of the shell card belongs to the plugin gone, which is not in this environment.
+    // A layout saved in another environment: the first tab of the first card with tabs belongs to the plugin gone, which is not in
+    // this environment.
     const records = read(join(config, "projects.json"));
     const record = projectRecords(records, "projects.json").find((p) => p.id === saved.id);
-    const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
+    const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.data?.tabs?.length > 0);
+    assert.ok(shell, "the saved layout holds no card with tabs");
+    assert.deepEqual(record.spaces.flatMap((x) => x.layout.state.cards.flatMap((c) => c.data?.tabs ?? [])).filter((tab) => tab.plugin !== START_PLUGIN), [],
+    "the saved layout holds a tab that is not a probe tab");
     shell.data.tabs[0].plugin = "gone";
     write(join(config, "projects.json"), records);
     const stored = readFileSync(join(config, "projects.json"), "utf8");
@@ -449,7 +468,7 @@ for (const app of Object.values(APPS)) {
     // Saving does not change that tab.
     await s.run("core.projects.flush");
     const after = projectRecords(read(join(config, "projects.json")), "projects.json").find((p) => p.id === saved.id);
-    const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === "terminal");
+    const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === shell.id);
     assert.equal(kept.data.tabs[0].plugin, "gone", "saving changed the tab of the plugin that is not loaded");
     assert.ok(stored.length > 0);
     await s.run("core.project.activate", { id: first.id });
@@ -496,10 +515,15 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a window that holds no open project reports no project`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
+    await keepCommonSettings(s);
     await s.run("core.settings.set", { patch: { left: true }, scope: "common" });
+    // The left sidebar of every window shows a stored set of two probe sections.
+    const sectionIds = ["layoutprobe.alpha", "layoutprobe.beta"];
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: [...sets, { id: "check-left", title: "Left", sections: sectionIds, layout: "list" }] },
+      scope: "common" });
+    await s.run("core.settings.link", { place: "left", plugin: null, set: "check-left", scope: "common" });
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-project-")));
-    const file = "project-close-check.txt";
-    writeFileSync(join(root, file), "F262-6\n");
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const project of await s.get("core.projects")) {
@@ -508,14 +532,14 @@ for (const app of Object.values(APPS)) {
       await s.run("core.projects.flush");
     });
     const project = async () => (await s.get("host.windows")).find((item) => item.window === s.window).project;
-    const filesSections = (sidebars) => {
+    const probeSections = (sidebars) => {
       const left = sidebars.find((item) => item.sidebar === "left");
-      return ["files.tree", "files.bookmarks"].map((id) => left?.sections.find((item) => item.id === id));
+      return sectionIds.map((id) => left?.sections.find((item) => item.id === id));
     };
     // A section surface id is qualified by the shown space (docs/spec/plugins.md#sections), which is known after the open.
-    let filesIds = [];
-    const filesSurfaces = (surfaces) => surfaces.filter((item) => item.kind === "section" && item.sidebar === "left"
-      && filesIds.includes(item.surface));
+    let probeIds = [];
+    const probeSurfaces = (surfaces) => surfaces.filter((item) => item.kind === "section" && item.sidebar === "left"
+      && probeIds.includes(item.surface));
     for (const item of await s.get("core.projects")) await s.run("core.project.close", { id: item.id });
     assert.equal(await s.get("core.project"), null, "the check did not start from the library");
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
@@ -523,33 +547,32 @@ for (const app of Object.values(APPS)) {
     const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === root,
       "the window did not report the opened project");
-    await s.until("core.sidebars", (sidebars) => filesSections(sidebars).every((section) => section?.mounted && section.phase === "ready"),
-      "the Files section views of the opened project were not mounted and ready");
+    await s.until("core.sidebars", (sidebars) => probeSections(sidebars).every((section) => section?.mounted && section.phase === "ready"),
+      "the probe section views of the opened project were not mounted and ready");
     const space = (await s.get("core.project")).activeSpaceId;
-    filesIds = [`${space}/left/files.tree`, `${space}/left/files.bookmarks`];
-    for (const surface of filesIds) {
+    probeIds = sectionIds.map((id) => `${space}/left/${id}`);
+    for (const surface of probeIds) {
       await s.until("core.surface.document", (doc) => doc !== null && doc.readyState === "complete" && doc.themed,
         `${surface} did not finish its document`, { surface });
     }
-    const sectionSurfacesBefore = filesSurfaces(await s.get("core.surfaces"));
-    assert.deepEqual(sectionSurfacesBefore.map((item) => item.surface).sort(), [...filesIds].sort(),
-      "the opened project did not register its two Files section surfaces");
-    assert.equal(await s.run("files.bookmarks.add", { path: file }, filesIds[0]), null);
+    const sectionSurfacesBefore = probeSurfaces(await s.get("core.surfaces"));
+    assert.deepEqual(sectionSurfacesBefore.map((item) => item.surface).sort(), [...probeIds].sort(),
+      "the opened project did not register its two probe section surfaces");
     await s.run("core.project.close", { id: opened.id });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the window still reports the closed project ${await project()}`);
-    await s.until("core.sidebars", (sidebars) => filesSections(sidebars).every((section) => section === undefined),
-      "the library still draws Files sidebar sections after project close");
-    await s.until("core.surfaces", (all) => filesSurfaces(all).length === 0,
+    await s.until("core.sidebars", (sidebars) => probeSections(sidebars).every((section) => section === undefined),
+      "the library still draws probe sidebar sections after project close");
+    await s.until("core.surfaces", (all) => probeSurfaces(all).length === 0,
       "the section surfaces of the closed project are still registered");
     assert.equal(await s.get("core.workbench.error"), null, "closing the shown project reported an application error");
     // The title of a window that shows the library does not hold the name of the closed project.
     const { title } = (await s.get("host.windows")).find((item) => item.window === s.window);
     assert.ok(!title.includes(basename(root)), `the window title still names the closed project: ${title}`);
-    // Reopening the project mounts its Files tree section again.
+    // Reopening the project mounts its first probe section again.
     await s.run("core.project.open", { root, color: "#7db4ff" });
-    await s.until("core.sidebars", (sidebars) => filesSections(sidebars)[0]?.mounted === true && filesSections(sidebars)[0].phase === "ready",
-      "the reopened project did not mount files.tree");
+    await s.until("core.sidebars", (sidebars) => probeSections(sidebars)[0]?.mounted === true && probeSections(sidebars)[0].phase === "ready",
+      `the reopened project did not mount ${sectionIds[0]}`);
   });
 
   test(`${app.name}: a covered window keeps its document visible and completes presentation commands`, { timeout: 60000 }, async (t) => {
