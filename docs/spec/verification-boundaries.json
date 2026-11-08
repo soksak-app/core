@@ -647,11 +647,6 @@
       "reason": "Tests the measurement harness (process attribution, sidecar sums, pointer step), using \"term\"/\"browser\" as sample ids. Replace with fixture ids (view-drag, plain-view, sidecar-probe)."
     },
     {
-      "file": "scripts/test/measure-terminal-redraw.test.mjs",
-      "owner": "core",
-      "reason": "Tests the redraw measurement harness (window server, presentedFrames, CPU per frame) for \"the plugin\" of a terminal tab. Replace with a fake fixture that presents an image region and accepts fixture rows (view-drag native raster)."
-    },
-    {
       "file": "scripts/test/native-pkgconfig.test.mjs",
       "owner": "tool",
       "reason": "Tests build targets (\"Rust clippy … avoids the workspace registry\", \"registry and workspace lint targets\") that guard against building real plugins. Keep it and reduce the expectations once the workspace registry is removed."

@@ -16,9 +16,9 @@ test("the text of a screen joins the characters of each row and counts an empty 
 });
 
 test("the options require the application, the plugin, the rows and the trace state, a rate from 1 to 120 and no surface", () => {
-  const base = ["--sok", "/bin/sok", "--config-dir", "/tmp/c", "--plugin", "probe", "--rows", "20", "--trace", "0"];
+  const base = ["--sok", "/bin/sok", "--config-dir", "/tmp/c", "--plugin", "rasterprobe", "--rows", "20", "--trace", "0"];
   assert.deepEqual(parseOptions(base),
-    { sok: "/bin/sok", configDir: "/tmp/c", plugin: "probe", rows: 20, rate: 20, interval: 10, trace: 0, b3Out: null, json: false });
+    { sok: "/bin/sok", configDir: "/tmp/c", plugin: "rasterprobe", rows: 20, rate: 20, interval: 10, trace: 0, b3Out: null, json: false });
   assert.equal(parseOptions([...base, "--b3-out", "/tmp/b3/S2.json"]).b3Out, "/tmp/b3/S2.json");
   assert.throws(() => parseOptions([...base, "--b3-out", "S2.json"]), /--b3-out must be an absolute path \(S2.json\)/);
   assert.throws(() => parseOptions(["--sok", "/bin/sok", "--config-dir", "/tmp/c", "--rows", "1", "--trace", "0"]), /required options/);
@@ -123,13 +123,13 @@ test("the measurement opens one tab of the plugin in a new project window of 760
     if (name === "core.card.add-tab") return { tab: "tab-1" };
     if (name === "core.tab.close") return { closed: true };
     if (name === "core.surfaces") {
-      return [{ kind: "tab", surface: "tab-1", plugin: "probe", exposes: ["command probe.input", "status probe.screen"], status: { phase: "ready", error: null } }];
+      return [{ kind: "tab", surface: "tab-1", plugin: "rasterprobe", exposes: ["command rasterprobe.input", "status rasterprobe.screen"], status: { phase: "ready", error: null } }];
     }
     return null;
   };
   const calls = [];
   const s = fakeSession(answer, "w1", calls);
-  const prepared = await prepareRedraw(s, "probe", "/var/tester/redraw-project");
+  const prepared = await prepareRedraw(s, "rasterprobe", "/var/tester/redraw-project");
   assert.deepEqual(calls.filter(([kind]) => kind !== "get"), [
     ["run", "w1", "core.window.new", {}],
     ["until", "w1", "host.windows", undefined],
@@ -137,13 +137,34 @@ test("the measurement opens one tab of the plugin in a new project window of 760
     ["run", "w2", "host.window.resize", { width: 760, height: 614 }],
     ["until", "w2", "host.window", undefined],
     ["until", "w2", "host.window", undefined],
-    ["run", "w2", "core.card.add-tab", { card: "c1", plugin: "probe" }],
+    ["run", "w2", "core.card.add-tab", { card: "c1", plugin: "rasterprobe" }],
     ["run", "w2", "core.tab.close", { tab: "t-old" }],
     ["until", "w2", "core.surfaces", undefined],
     ["until", "w2", "core.surfaces", undefined],
   ]);
   assert.equal(prepared.s.window, "w2");
   assert.deepEqual([prepared.tab, prepared.project], ["tab-1", "p2"]);
+});
+
+test("the measurement fails with the entry that the tab of the plugin did not register", async () => {
+  const windows = [{ window: "w1", ready: true }];
+  const answer = (kind, window, name) => {
+    if (name === "core.window.new") {
+      windows.push({ window: "w2", ready: true });
+      return null;
+    }
+    if (name === "host.windows") return windows.map((entry) => ({ ...entry }));
+    if (name === "core.project.open") return { id: "p2" };
+    if (name === "host.window") return redrawWindow();
+    if (name === "core.grid") return { cards: [{ id: "c1", fixed: false, tabs: [] }] };
+    if (name === "core.card.add-tab") return { tab: "tab-1" };
+    if (name === "core.surfaces") {
+      return [{ kind: "tab", surface: "tab-1", plugin: "rasterprobe", exposes: ["command rasterprobe.input"], status: { phase: "ready", error: null } }];
+    }
+    return null;
+  };
+  await assert.rejects(prepareRedraw(fakeSession(answer), "rasterprobe", "/var/tester/redraw-project"),
+    (error) => error.message === "the rasterprobe tab tab-1 did not register status rasterprobe.screen");
 });
 
 test("the measurement stops at a covered window before it opens the tab, because a covered region shows no screen of the fixture", async () => {
@@ -159,7 +180,7 @@ test("the measurement stops at a covered window before it opens the tab, because
     return null;
   };
   const calls = [];
-  await assert.rejects(prepareRedraw(fakeSession(answer, "w1", calls), "probe", "/var/tester/redraw-project"), /window w2 is covered/);
+  await assert.rejects(prepareRedraw(fakeSession(answer, "w1", calls), "rasterprobe", "/var/tester/redraw-project"), /window w2 is covered/);
   assert.equal(calls.some(([, , name]) => name === "core.card.add-tab"), false);
 });
 
@@ -220,7 +241,7 @@ test("the report adds the window server to the sums of the application, because 
   const rows = [{ role: "host", pid: 10, cpuSeconds: 1.5 }];
   const totals = { application: { cpuSeconds: 1.5 }, sidecars: { cpuSeconds: 0.3 }, total: { cpuSeconds: 1.8 } };
   const cost = { ...frameCost({ rows, totals, presented: 300, seconds: 10 }), windowServer: { pid: 77, cpuSeconds: 0.9, msPerFrame: 3 } };
-  const lines = formatReport({ plugin: "term", rows: 20, rate: 30, window: "w2", tab: "tab-1", seconds: 10, cost }).split("\n");
+  const lines = formatReport({ plugin: "rasterprobe", rows: 20, rate: 30, window: "w2", tab: "tab-1", seconds: 10, cost }).split("\n");
   assert.deepEqual(lines.slice(-5), [
     "application without sidecars 5.00 ms/frame",
     "sidecars 1.00 ms/frame",

@@ -111,9 +111,11 @@ measure-app-usage:
 # presents while its program rewrites ROWS rows at RATE frames per second (scripts/measure-terminal-redraw.mjs, docs/operations/examples.md):
 # after the trace state of TRACE=0|1, it opens one tab of PLUGIN, whose PLUGIN.input and PLUGIN.screen it uses, in a new project window of
 # 760 by 614 points and divides the CPU time by the change of presentedFrames of the region of that tab. B3_OUT writes the B3 record of the
-# measurement to that file as JSON. SOK defaults to the sok binary of target/debug.
+# measurement to that file as JSON. SOK defaults to the sok binary of target/debug. PLUGIN has no default: the caller names a plugin of the
+# installed environment, and the target gates nothing.
 measure-terminal-redraw:
 	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-redraw requires CONFIG_DIR=DIR PLUGIN=ID ROWS=N TRACE=0|1 [B3_OUT=FILE] [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(PLUGIN)" in '') echo "measure-terminal-redraw requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
 	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" --rows "$(ROWS)" --trace "$(TRACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10) $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
 # Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of

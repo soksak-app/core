@@ -1,6 +1,6 @@
 // Reports the CPU time that a shown terminal costs for each frame that its image region presents while its program rewrites ROWS rows at a
 // fixed rate (docs/operations/examples.md, G5 of docs/spec/hosts.md). It sets the trace state TRACE (scripts/measure-trace.mjs), opens a
-// new project window of 760 by 614 points with one tab of the terminal plugin PLUGIN through declared commands, starts
+// new project window of 760 by 614 points with one tab of the plugin PLUGIN through declared commands, starts
 // scripts/fixtures/status-redraw.mjs in that tab with `<plugin>.input`, waits until `<plugin>.screen` shows the start line of the fixture,
 // and ends that watch, because a watch of the screen relays every screen too. It then measures the CPU time of each process of the
 // application over INTERVAL seconds with measure-app-usage.mjs and divides it by the change of presentedFrames of the image region of the
@@ -10,6 +10,9 @@
 // frames per second, and closes the project window afterwards. It also prints the CPU time of the window server over the interval, which
 // draws the whole screen and belongs to no application, so it stays outside the sums of the application and the B3 record. Every error is
 // printed to stderr, and the exit status is 1 when an error occurred. `make measure-terminal-redraw` runs it.
+//
+// PLUGIN is an argument of the caller and has no default: the script names no plugin and measures a plugin of the installed environment
+// that exposes `<plugin>.input` and `<plugin>.screen`. A tab that does not register them fails with the missing entries. It gates nothing.
 //
 // --b3-out FILE writes the B3 output of a measurement without an error to FILE through writeB3Out of scripts/b3-out.mjs, with the
 // conditions of b3Conditions for the window of the measurement (redrawConditions). The keys, which B3_MEASUREMENTS lists, end in their
@@ -179,7 +182,8 @@ export async function readRedrawConditions({ s, status, trace, policy }) {
 /**
  * Opens a new window of the application of the session s, opens a project of the folder root in it, sets its content to 760 by 614
  * points and opens one tab of plugin in it, the only tab of its cards; waits until the tab registers `<plugin>.input` and
- * `<plugin>.screen`. Returns the session of the window, the tab and the id of the project.
+ * `<plugin>.screen`, and fails with the entries that the tab did not register. Returns the session of the window, the tab and the id of
+ * the project.
  */
 export async function prepareRedraw(s, plugin, root) {
   const w = await newWindow(s);
@@ -192,8 +196,16 @@ export async function prepareRedraw(s, plugin, root) {
   await w.until("host.window", (status) => status.occluded === false, `window ${w.window} is covered by another window`);
   const { tab } = await openOnlyTab(w, plugin);
   const entries = [`command ${plugin}.input`, `status ${plugin}.screen`];
-  await w.until("core.surfaces", (list) => list.some((surface) => surface.surface === tab && entries.every((entry) => surface.exposes?.includes(entry))),
-    `the ${plugin} tab ${tab} did not register ${entries.join(" and ")}`);
+  try {
+    await w.until("core.surfaces", (list) => list.some((surface) => surface.surface === tab && entries.every((entry) => surface.exposes?.includes(entry))),
+      `the ${plugin} tab ${tab} did not register ${entries.join(" and ")}`);
+  } catch (error) {
+    // default: a tab that core.surfaces does not list exposes nothing.
+    const exposes = (await w.get("core.surfaces")).find((surface) => surface.surface === tab)?.exposes ?? [];
+    const missing = entries.filter((entry) => !exposes.includes(entry));
+    if (missing.length === 0) throw error;
+    throw new Error(`the ${plugin} tab ${tab} did not register ${missing.join(" and ")}`, { cause: error });
+  }
   return { s: w, tab, project: project.id };
 }
 
