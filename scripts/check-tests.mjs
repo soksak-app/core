@@ -11813,6 +11813,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAProjectThatAnotherWindowRemovedLeavesTheWindow" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAWindowWhoseProjectAnotherWindowRemovedClosesWithoutAQuestion" },
       { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowMovedOverAnotherBeforeItsFirstScreenCoversIt" },
+      { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", id: "TestE2EAReloadRequestStartsTheWorkbenchAgain" },
       { file: "scripts/test/platform.test.mjs", id: "a quit by the key completes when the quit that the key down started closed the window before the key up" },
       { file: "native/darwin/tests/input_source_test.m", id: "a text input client without an input context is not an active text client" },
       { file: "e2e/test/fixture.test.mjs", id: "the document region of a layout probe tab is painted after its document reports and is ready once it reports the colour" },
