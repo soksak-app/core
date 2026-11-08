@@ -28,11 +28,14 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
 	"github.com/soksak-app/core/packages/host/mygo/tests/support"
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 var (
 	_ host.Framework = (*adapter.Framework)(nil)
 	_ host.Frontend  = (*adapter.Frontend)(nil)
+	// The workbench of the application draws in the windows of the adapter.
+	_ workbench.Painted = (*adapter.Frontend)(nil)
 )
 
 // quitHelper names the child process of the quit test.
@@ -410,6 +413,25 @@ func TestAClosingHookKeepsOrClosesTheWindow(t *testing.T) {
 	if !slices.Contains(workbench.Received(), "close closing") {
 		t.Fatalf("the workbench received %v", workbench.Received())
 	}
+}
+
+// WebKit keeps the previous page of a reload on the screen until the new page renders its first screen, so a shown window keeps its last
+// frame from the start of its new workbench until that workbench shows its first screen (docs/spec/native-host.md#page-start).
+// contract: mygo.framework.start-builds-the-workbench
+func TestARestartedWorkbenchDrawsNoFrameBeforeItsFirstScreen(t *testing.T) {
+	_, workbench, window := support.Open(t, "restarted")
+	window.Show()
+	draws := func() int { return strings.Count(strings.Join(workbench.Received(), "\n"), "draw restarted") }
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown restarted") })
+	window.StartWorkbench()
+	before := draws()
+	window.Window().Invalidate()
+	time.Sleep(250 * time.Millisecond)
+	if drawn := draws() - before; drawn != 0 {
+		t.Fatalf("the window drew %d frames of its new workbench before its first screen", drawn)
+	}
+	mygo.RunOnMain(window.FirstScreen)
+	support.Wait(t, "the frame of the first screen", func() bool { return draws() > before })
 }
 
 // contract: mygo.framework.start-builds-the-workbench

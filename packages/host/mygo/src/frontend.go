@@ -38,6 +38,9 @@ type Frontend struct {
 	// held and released belong to the main thread: whether the adapter holds the frames of the window, and what waits for its release.
 	held     bool
 	released []func()
+	// starting belongs to the main thread: the window holds its frames from the start of its workbench until that workbench shows its
+	// first screen.
+	starting bool
 	// placed belongs to the main thread: the surface host of each native view element and the box that the element last gave it.
 	placed map[uintptr]placedSurface
 	// address belongs to the main thread: the address of the window, which names the project that it shows.
@@ -422,9 +425,10 @@ func (f *Frontend) hold() {
 	}
 }
 
-// release lets the window draw and runs what waited for it. Call it on the main thread.
+// release lets the window draw and runs what waited for it. A window whose new workbench has not shown its first screen keeps its
+// hold. Call it on the main thread.
 func (f *Frontend) release() {
-	if !f.held {
+	if !f.held || f.starting {
 		return
 	}
 	f.held = false
@@ -452,18 +456,37 @@ func (f *Frontend) Address() string { return f.address }
 func (f *Frontend) SetAddress(address string) { f.address = address }
 
 // StartWorkbench ends the workbench of the window and builds it again. A workbench of a window that the host holds starts at once.
+// A shown window keeps its last frame until the new workbench shows its first screen (FirstScreen), as WebKit keeps the previous
+// page of a reload on the screen until the new page renders (docs/spec/native-host.md#page-start).
 func (f *Frontend) StartWorkbench() {
+	var shown bool
 	mygo.RunOnMain(func() {
+		f.mu.Lock()
+		shown = f.shown
+		f.mu.Unlock()
+		if shown {
+			f.hold()
+			f.starting = true
+		}
 		f.framework.workbench.Close(f)
 		view := f.framework.workbench.Build(f)
 		f.view.Store(&view)
 	})
 	f.window.Invalidate()
-	f.mu.Lock()
-	shown := f.shown
-	f.mu.Unlock()
 	if shown {
 		routine.Go("workbench-start", f.startHeld)
+	}
+}
+
+// FirstScreen tells the window that its workbench shows its first screen, so the window draws again, unless a layout transaction
+// holds it, whose end releases it. Call it on the main thread.
+func (f *Frontend) FirstScreen() {
+	if !f.starting {
+		return
+	}
+	f.starting = false
+	if !f.framework.transaction {
+		f.release()
 	}
 }
 
