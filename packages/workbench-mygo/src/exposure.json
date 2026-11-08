@@ -4174,6 +4174,16 @@
         "many": true
       },
       {
+        "name": "core.library.plugins.about",
+        "description": "The description lines of the plugin cards in workbench order, one for each plugin that has a description.",
+        "many": true
+      },
+      {
+        "name": "core.library.plugins.contribution",
+        "description": "The extension point contribution lines of the plugin cards in workbench order: the point, the number and the state of each contribution of the plugin, or its error.",
+        "many": true
+      },
+      {
         "name": "core.library.plugins.outdated",
         "description": "The rows of the outdated persistent services above the plugin cards, in sidecar order.",
         "many": true
