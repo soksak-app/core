@@ -26,14 +26,32 @@ export const RASTER_ENTRIES = Object.freeze(["status rasterprobe.view", "status 
 export const MEASURED = [30, 30, 30];
 export const MEASURED_HEX = `#${MEASURED.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 
+/** The sessions whose end already turns the covered drawing of drawCovered off. */
+const coveredSessions = new WeakSet();
+
+/**
+ * Makes the image regions of the window of the session `s` draw while the window is covered, until the check ends. A check starts
+ * its application without activation, so its window opens behind the windows of other applications and of the other check
+ * applications, where a covered window is the normal case, and the image regions of a covered window draw no raster
+ * (docs/spec/hosts.md#launch-activation, docs/spec/native-surfaces.md#image-regions). The window keeps reporting its occlusion.
+ */
+async function drawCovered(s) {
+  if (!coveredSessions.has(s)) {
+    coveredSessions.add(s);
+    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+  }
+  await s.request("diagnostics.window.draw-covered", { draw: true });
+}
+
 /**
  * Waits until the raster probe tab `surface` registered RASTER_ENTRIES, its sidecar opened its session and sent a frame, and
- * returns the session status.
+ * returns the session status. The window of `s` draws its image regions while it is covered (drawCovered).
  */
 export async function rasterReady(s, surface) {
   await s.registered(surface, RASTER_ENTRIES);
   const session = await s.until("rasterprobe.session", (value) => typeof value?.session === "string" && value.connected === true,
     `the raster probe ${surface} did not open a sidecar session`, { surface });
+  await drawCovered(s);
   await s.until("rasterprobe.frame", (frame) => frame !== null, `the raster probe ${surface} received no frame`, { surface });
   return session;
 }
