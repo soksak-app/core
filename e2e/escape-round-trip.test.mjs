@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { loadavg } from "node:os";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { fresh, reading } from "./fixture.mjs";
 
@@ -68,7 +68,9 @@ async function roundTripNs(s, app, card) {
   return ns;
 }
 
-for (const app of Object.values(APPS)) {
+// The native modal menu is a modal web view, which only the hosts with a main page create; the mygo workbench draws its picker and
+// closes it on Escape through core.picker.close (docs/spec/exposure.md#keyboard-shortcuts).
+for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: the Escape round trip of the native modal menu`, { timeout: HOST_TIMEOUT + 60000 }, async (t) => {
     const s = await open(t, app);
     t.diagnostic(`load average at start ${loads()}`);
