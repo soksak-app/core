@@ -18,7 +18,7 @@ const digest = 'b'.repeat(64);
 function fixture() {
   const candidate = { repository: 'example/core', workflow: '.github/workflows/release.yml', runId: 12, runAttempt: 2, sha, version: '0.0.39', artifacts: [{ id: 30, name: 'release-wailsv3' }, { id: 31, name: 'release-tauriv2' }, { id: 32, name: 'release-mygo' }] };
   const assets = ['wails.zip', 'tauri.zip', 'mygo.zip', 'api.tgz', 'native.tgz'].map((name) => ({ name, sha256: digest }));
-  const components = [{ kind: 'plugin', id: 'terminal', version: '1.0.0', releaseSha256: digest, treeSha256: digest }];
+  const components = [{ kind: 'plugin', id: 'layoutprobe', version: '0.0.1', treeSha256: digest }];
   const bundles = ['mygo', 'tauriv2', 'wailsv3'].map((app) => ({ app, bundleSha256: digest, executableSha256: digest }));
   const source = { head: sha, dirty: false, sourceSha256: digest, testsSha256: digest, dependenciesSha256: digest };
   const identity = { ...source, installedDependenciesSha256: digest, hosts: bundles.map((bundle) => ({ ...bundle, pid: 1, componentsSha256: hashValue(components) })) };
@@ -27,7 +27,7 @@ function fixture() {
     before: structuredClone(identity), after: structuredClone(identity), afterCleanup: { ...source, installedDependenciesSha256: digest, hosts: identity.hosts.map(({ pid, ...host }) => host) },
     tests: [{ name: 'e2e/required.test.mjs', status: 'pass' }], audit: { status: 'pass', findings: [], apps: ['mygo', 'tauriv2', 'wailsv3'] },
     plan: { status: 'pass', steps: required[0].steps.map((name) => ({ name, status: 'pass' })) }, native: { tests: [{ name: 'native_test', status: 'pass' }] } }));
-  return { report: { schema: 1, candidate, assets, registry: { sha256: digest, pack: 'default', components }, runs }, expected: structuredClone({ candidate, assets, bundles, source, required }) };
+  return { report: { schema: 1, candidate, assets, runs }, expected: structuredClone({ candidate, assets, bundles, source, required }) };
 }
 
 test('candidate acceptance requires complete matching evidence from two independent initial states', { timeout: 10000 }, () => {
@@ -46,7 +46,11 @@ for (const [name, change, error] of [
   ['candidate acceptance refuses mismatched candidate evidence', (r) => { r.candidate.runAttempt++; }, /candidate/],
   ['candidate acceptance refuses mismatched bytes evidence', (r) => { r.assets[0].sha256 = 'c'.repeat(64); }, /release files/],
   ['candidate acceptance refuses changed bundle evidence', (r) => { r.runs[0].after.hosts[0].bundleSha256 = 'c'.repeat(64); }, /bundle/],
-  ['candidate acceptance refuses changed component evidence', (r) => { r.runs[0].after.hosts[0].componentsSha256 = 'c'.repeat(64); }, /component/],
+  ['candidate acceptance refuses changed installed fixture evidence', (r) => { r.runs[0].after.hosts[0].componentsSha256 = 'c'.repeat(64); }, /installed fixture identity/],
+  ['candidate acceptance refuses installed fixtures that differ between runs', (r) => {
+    for (const phase of ['before', 'after', 'afterCleanup']) for (const host of r.runs[1][phase].hosts) host.componentsSha256 = 'c'.repeat(64);
+  }, /installed fixture identity/],
+  ['candidate acceptance refuses a report that names a registry', (r) => { r.registry = { sha256: digest, pack: 'starter', components: [] }; }, /names no registry/],
   ['candidate acceptance refuses changed installed dependency evidence', (r) => { r.runs[0].after.installedDependenciesSha256 = 'c'.repeat(64); }, /dependencies/],
   ['candidate acceptance refuses skipped evidence', (r) => { r.runs[0].tests[0].status = 'skip'; }, /pass/],
   ['candidate acceptance refuses failed evidence', (r) => { r.runs[0].tests[0].status = 'fail'; }, /pass/],
@@ -149,7 +153,7 @@ test('candidate policy reuses declared application scripts and native mode argum
 test('the complete current candidate policy fits the authenticated report input', { timeout: 10000 }, async (t) => {
   const root = fileURLToPath(new URL('../../', import.meta.url));
   const { report, expected } = fixture();
-  const required = await candidatePolicy(root, report);
+  const required = await candidatePolicy(root);
   const template = report.runs[0];
   report.runs = required.flatMap((policy, index) => [0, 1].map((initial) => ({ ...structuredClone(template),
     id: `candidate-00000000-0000-4000-8000-${String(index * 2 + initial).padStart(12, '0')}`,
@@ -178,7 +182,7 @@ test('candidate report transport rejects unsupported, corrupted and oversized in
 test('collected manifests round trip through the publication gate without a second result model', { timeout: 10000 }, async (t) => {
   const root = await rootFixture(t);
   const { report, expected } = fixture();
-  const context = { schema: 1, candidate: report.candidate, registry: report.registry, assets: [] };
+  const context = { schema: 1, candidate: report.candidate, assets: [] };
   for (const asset of report.assets) {
     const path = join(root, asset.name);
     await writeFile(path, `candidate ${asset.name}`);

@@ -670,10 +670,10 @@ check-release-mygo: build-mygo-release
 # end-to-end tests. They need a display, so they run only locally. test-app-activation runs the activation tier and test-app-real the
 # real-input tier, which a person approves because they activate the applications and change the input source; test-app-person runs
 # the checks that a person operates at the machine.
-# Each e2e target builds the three debug applications and the workspace registry, and scripts/test-app.mjs runs the window-check script
-# and the native end-to-end target of its tier in a new configuration root under target/e2e: it starts the applications, runs the
-# checks and quits the applications.
-E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo build-registry
+# Each e2e target builds the three debug applications, and scripts/test-app.mjs runs the window-check script and the native end-to-end
+# target of its tier in a new configuration root under target/e2e: it builds the fixture registry of e2e/fixtures into that root,
+# installs every fixture plugin into each application, starts the applications, runs the checks and quits the applications.
+E2E_BUILD = build-wailsv3 build-tauriv2 build-mygo
 # The registered Go TestE2E cases currently belong to the mygo adapter. The source
 # inventory in test-kinds.test.mjs rejects future cases outside this declared scope.
 # Display and activation requirements remain those of each case.

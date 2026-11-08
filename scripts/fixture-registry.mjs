@@ -137,6 +137,11 @@ export function fixtureSources(root = FIXTURES) {
   return { plugins: plugins.sort(), sidecars: sidecars.sort() };
 }
 
+/** The ids of the fixture plugins under root in the order of fixtureSources: the plugins of the pack `fixtures`. */
+export function fixturePluginIds(root = FIXTURES) {
+  return fixtureSources(root).plugins.map((dir) => read(join(dir, "plugin.json")).id);
+}
+
 /**
  * Writes the fixture registry folder out anew from the fixtures under root and creates index.json; resolves with the result of the
  * registry build. pack writes a plugin release, release writes a sidecar release, and build runs `sok registry build`; each receives

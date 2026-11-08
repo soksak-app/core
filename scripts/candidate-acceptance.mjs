@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateNativeTests, candidateScripts } from './candidate-policy.mjs';
 import { applicationExecutables, releaseKey } from './platform/platform.js';
-import { hashFile, hashTree, hashValue } from './candidate-identity.mjs';
+import { hashFile, hashTree } from './candidate-identity.mjs';
 import { decodeAcceptanceReport, MAX_REPORT_BYTES } from './candidate-report.mjs';
 import { RELEASE_PACKAGES, releaseFileName } from './pack-release-packages.mjs';
 
@@ -29,19 +29,9 @@ export function validateCandidateReport(report, { candidate, assets, bundles, so
   need(source?.head === candidate?.sha, 'publication source does not identify the selected candidate');
   const orderedAssets = (list) => Array.isArray(list) ? [...list].sort((a, b) => String(a.name).localeCompare(String(b.name))) : null;
   need(isDeepStrictEqual(orderedAssets(report.assets), orderedAssets(assets)), 'acceptance release files do not match the exact published bytes');
-  const registry = report.registry;
-  need(digest(registry?.sha256) && text(registry?.pack), 'missing frozen registry identity or install pack');
-  const components = registry?.components;
-  need(Array.isArray(components) && components.length > 0, 'missing installed component identities');
-  let componentsSha256;
-  if (Array.isArray(components)) {
-    const keys = components.map((c) => `${c.kind}:${c.id}`);
-    need(new Set(keys).size === keys.length, 'duplicate installed component identity');
-    need(isDeepStrictEqual(keys, sorted(keys)), 'component identities are not in canonical order');
-    for (const component of components) need(['plugin', 'sidecar'].includes(component.kind) && text(component.id)
-      && text(component.version) && digest(component.releaseSha256) && digest(component.treeSha256), 'incomplete component identity');
-    componentsSha256 = hashValue(components);
-  }
+  need(!('registry' in report), 'a candidate report names no registry: the runs install the fixtures of the candidate checkout');
+  // Every run installs the same fixtures of the same checkout, so every host of every phase of every run has one installed identity.
+  const componentsSha256 = report.runs?.[0]?.before?.hosts?.[0]?.componentsSha256;
   need(Array.isArray(report.runs) && report.runs.length > 0, 'missing acceptance runs');
   if (!Array.isArray(report.runs)) return errors;
   need(new Set(report.runs.map((r) => r.id)).size === report.runs.length, 'duplicate acceptance run');
@@ -70,7 +60,7 @@ export function validateCandidateReport(report, { candidate, assets, bundles, so
         const expected = bundles.find((bundle) => bundle.app === host.app);
         need(expected && host.bundleSha256 === expected.bundleSha256 && host.executableSha256 === expected.executableSha256,
           `${label}/${phase}/${host.app}: candidate bundle or executable differs from the published release`);
-        need(digest(host.componentsSha256) && host.componentsSha256 === componentsSha256, `${label}/${phase}/${host.app}: component identity differs from the verified cohort`);
+        need(digest(host.componentsSha256) && host.componentsSha256 === componentsSha256, `${label}/${phase}/${host.app}: installed fixture identity differs between hosts or runs`);
         if (phase !== 'afterCleanup') need(positive(host.pid), `${label}/${phase}/${host.app}: missing verified live PID`);
       }
     }
@@ -132,14 +122,14 @@ export async function candidateAssetNames(root) {
 }
 
 /** Reuses canonical scripts and native runner arguments; the report cannot choose its required subset. */
-export async function candidatePolicy(root, context) {
+export async function candidatePolicy(root) {
   const { discoverNodeTests } = await import('./node-tests.mjs');
   const { candidatePlanNames } = await import('./test-app.mjs');
   return Promise.all(candidateScripts(root).map(async (script) => {
     const native = candidateNativeTests(root, script);
     const tests = discoverNodeTests({ root, packages: ['e2e'], script }).tests.map((item) => item.name);
     if (!tests.length) throw new Error(`${script}: candidate policy declares no test files`);
-    return { script, tests, native, steps: await candidatePlanNames(context, script) };
+    return { script, tests, native, steps: await candidatePlanNames(script) };
   }));
 }
 
@@ -214,7 +204,7 @@ async function main(argv) {
   const { sourceIdentity } = await import('./acceptance-run.mjs');
   const source = await sourceIdentity(root);
   const files = await candidateFiles(root, resolve(directory));
-  const required = await candidatePolicy(root, report);
+  const required = await candidatePolicy(root);
   refuse(validateCandidateReport(report, { candidate, ...files, source, required }));
   process.stdout.write('Candidate acceptance matches the exact publication files and required outcomes.\n');
 }

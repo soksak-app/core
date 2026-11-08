@@ -1,22 +1,16 @@
 // Extends the existing window-check manifest with candidate inputs and its complete acceptance outcome.
 import { execFileSync } from 'node:child_process';
-import { lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { lstat, mkdir, readdir, readFile, readlink, realpath, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { hashFile, hashTree, hashValue } from './candidate-identity.mjs';
 import { CANDIDATE_HOSTS } from './candidate-policy.mjs';
 import { encodeAcceptanceReport } from './candidate-report.mjs';
+import { fixturePluginIds, fixtureSources } from './fixture-registry.mjs';
 import { runningProcess } from './test-evidence.mjs';
-import { runCommand } from './test-command.mjs';
-import { applicationExecutables, releasePlatform } from './platform/platform.js';
+import { applicationExecutables } from './platform/platform.js';
 
-async function installReference(command, args, { signal } = {}) {
-  const result = await runCommand({ id: `candidate reference ${args[0]} ${args[1]}`, command, args,
-    cwd: dirname(command), timeoutMs: 600000, signal });
-  if (result.status !== 'pass') throw new Error(`candidate reference installer ${result.status}: ${result.error?.message ?? result.stderr ?? result.exitCode}`);
-}
 const json = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const byComponent = (a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`);
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
@@ -87,39 +81,30 @@ async function componentDirectory(config, path) {
   return directory;
 }
 
-function releaseOf(index, component, platform) {
-  const collection = component.kind === 'plugin' ? index.plugins : index.sidecars;
-  const owner = collection?.find((item) => (component.kind === 'plugin' ? item.id : item.name) === component.id);
-  const version = owner?.versions?.find((item) => item.version === component.version);
-  const release = component.kind === 'plugin' ? version?.release : version?.releases?.[platform];
-  requireValue(release?.sha256 === component.releaseSha256, `component ${component.kind}:${component.id} release checksum differs from the frozen registry`);
-  const revoked = component.kind === 'plugin' ? index.revoked?.plugins : index.revoked?.sidecars;
-  requireValue(!revoked?.some((item) => (item.id ?? item.name) === component.id && item.version === component.version), `component ${component.id} is revoked`);
-  return release;
-}
-
-async function installedComponents(config, context, index, checkTree = true) {
+/**
+ * The installed components of a configuration: every plugin and sidecar of its installed.json with its version and the hash of its
+ * installed tree. The installed plugins must be exactly the enabled fixture plugins of the checkout `root` and the installed sidecars
+ * exactly its fake sidecars (docs/spec/plugin-processes.md#verification-boundaries), so a run that installed a real plugin fails.
+ */
+async function installedComponents(config, root) {
   const installed = await json(join(config, 'plugins', 'installed.json'));
   requireValue(installed?.format === 3 && installed.plugins && installed.sidecars, 'installed component format must be 3');
+  const fixtures = join(root, 'e2e', 'fixtures');
+  const sidecarNames = await Promise.all(fixtureSources(fixtures).sidecars.map(async (dir) => (await json(join(dir, 'package.json'))).name));
+  requireValue(same(Object.keys(installed.plugins).sort(), fixturePluginIds(fixtures).sort()), 'installed plugins differ from the fixture plugins of the checkout');
+  requireValue(same(Object.keys(installed.sidecars).sort(), sidecarNames.sort()), 'installed sidecars differ from the fake sidecars of the checkout');
   const actual = [
     ...Object.entries(installed.plugins).map(([id, entry]) => ({ kind: 'plugin', id, ...entry })),
     ...Object.entries(installed.sidecars).map(([id, entry]) => ({ kind: 'sidecar', id, ...entry })),
   ].sort(byComponent);
-  const expected = [...context.registry.components].sort(byComponent);
-  requireValue(same(actual.map(({ kind, id }) => [kind, id]), expected.map(({ kind, id }) => [kind, id])), 'installed component cohort differs from the frozen cohort');
   const components = [];
-  for (let i = 0; i < actual.length; i++) {
-    const item = actual[i], wanted = expected[i];
-    requireValue(item.version === wanted.version, `component ${item.id} version differs from the frozen cohort`);
+  for (const item of actual) {
     if (item.kind === 'plugin') requireValue(item.enabled === true, `component ${item.id} must be enabled`);
-    releaseOf(index, wanted, context.platform ?? releasePlatform());
     const directory = await componentDirectory(config, item.path);
     const pkg = await json(join(directory, 'package.json'));
     requireValue(pkg.version === item.version, `component ${item.id} package version differs from its installation`);
     if (item.kind === 'plugin') requireValue((await json(join(directory, 'plugin.json'))).id === item.id, `component ${item.id} has another plugin identity`);
-    const treeSha256 = await hashTree(directory);
-    if (checkTree || wanted.treeSha256 !== undefined) requireValue(treeSha256 === wanted.treeSha256, `component ${item.id} content differs from its verified release payload`);
-    components.push({ kind: item.kind, id: item.id, version: item.version, releaseSha256: wanted.releaseSha256, treeSha256 });
+    components.push({ kind: item.kind, id: item.id, version: item.version, treeSha256: await hashTree(directory) });
   }
   return components;
 }
@@ -133,53 +118,27 @@ async function checkAssets(context) {
   }
 }
 
-/** Uses the candidate's public installer in an empty reference configuration to bind release bytes to installed trees. */
-export async function prepareCandidate(input, { install = installReference, remove = rm, signal, platform } = {}) {
-  return prepareArtifactInputs(input, { install, remove, signal, platform, candidate: true });
+/**
+ * Validates the context of a candidate run: schema 1 with its candidate, every candidate host exactly once and the exact bytes of
+ * every asset. The run installs the fixture registry that it builds from the candidate checkout, so the context names no registry.
+ */
+export async function prepareCandidate(input) {
+  return prepareArtifactInputs(input, { candidate: true });
 }
 
-/** Ordinary prebuilt runs share the frozen component schema and actual installer verification, not candidate publication claims. */
-export async function prepareOrdinaryArtifacts(input, { install = installReference, remove = rm, signal, platform } = {}) {
-  return prepareArtifactInputs(input, { install, remove, signal, platform, candidate: false });
+/** Ordinary prebuilt runs share the context schema and asset validation, not candidate publication claims. */
+export async function prepareOrdinaryArtifacts(input) {
+  return prepareArtifactInputs(input, { candidate: false });
 }
 
-async function prepareArtifactInputs(input, { install, remove, signal, platform, candidate }) {
+async function prepareArtifactInputs(input, { candidate }) {
   const context = structuredClone(input);
-  requireValue(context.schema === 1 && (!candidate || context.candidate) && context.registry, 'candidate context schema must be 1');
+  requireValue(context.schema === 1 && (!candidate || context.candidate), 'candidate context schema must be 1');
   requireValue(same(context.hosts?.map(({ app }) => app).sort(), CANDIDATE_HOSTS), 'candidate context must name every candidate host exactly once');
   context.hosts.sort((a, b) => a.app.localeCompare(b.app));
-  requireValue(context.registry.components?.length > 0, 'candidate component cohort is required');
-  requireValue(new Set(context.registry.components.map(({ kind, id }) => `${kind}:${id}`)).size === context.registry.components.length, 'candidate component cohort contains duplicates');
   await checkAssets(context);
-  const bytes = await readFile(context.registry.path);
-  requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'registry bytes differ from the frozen checksum');
-  const index = JSON.parse(bytes);
-  const pack = index.packs?.find(({ name }) => name === context.registry.pack);
-  requireValue(Array.isArray(pack?.plugins) && pack.plugins.length > 0, 'candidate registry pack is missing or empty');
-  const expectedPlugins = context.registry.components.filter(({ kind }) => kind === 'plugin').map(({ id }) => id);
-  requireValue(pack.plugins.every((id) => expectedPlugins.includes(id)), 'candidate cohort omits a pack plugin');
-  const directory = await mkdtemp(join(tmpdir(), 'soksak-candidate-reference-'));
-  const dispose = () => remove(directory, { recursive: true, force: true });
-  try {
-    context.registry.path = join(directory, 'index.json');
-    await writeFile(context.registry.path, bytes, { mode: 0o400 });
-    requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'registry bytes changed while the private copy was prepared');
-    const reference = join(directory, 'reference');
-    await mkdir(reference);
-    const installer = (await applicationExecutables(context.hosts[0].bundle, context.hosts[0].app, { platform })).sok;
-    const bundleBefore = await hashTree(context.hosts[0].bundle);
-    await install(installer, ['registry', 'use', context.registry.path, '--config-dir', reference], { signal });
-    // Candidate scope is its pack; ordinary scope is its explicit full cohort.
-    const referencePlugins = candidate ? pack.plugins : expectedPlugins;
-    for (const id of referencePlugins) await install(installer, ['plugin', 'install', id, '--config-dir', reference], { signal });
-    requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'registry changed during reference installation');
-    requireValue(await hashTree(context.hosts[0].bundle) === bundleBefore, 'candidate installer bundle changed during reference installation');
-    context.registry.components = await installedComponents(reference, context, index, false);
-    return { context, dispose };
-  } catch (error) {
-    try { await dispose(); } catch (cleanup) { throw new AggregateError([error, cleanup], 'candidate reference installation and cleanup failed'); }
-    throw error;
-  }
+  // The run keeps no reference files, so there is nothing to remove.
+  return { context, dispose: async () => {} };
 }
 
 /** Reads the actual endpoint process and every installed byte; a post-cleanup snapshot makes no live-process claim. */
@@ -194,8 +153,6 @@ export async function collectOrdinaryInputs(root, context, configRoot, { live = 
 
 async function collectArtifactInputs(root, context, configRoot, { live, identify, platform, candidate }) {
   await checkAssets(context);
-  requireValue(await hashFile(context.registry.path) === context.registry.sha256, 'frozen registry changed during acceptance');
-  const index = await json(context.registry.path);
   const source = await sourceIdentity(root);
   if (candidate) {
     requireValue(source.head === context.candidate.sha, 'candidate checkout does not match its artifact commit');
@@ -212,7 +169,7 @@ async function collectArtifactInputs(root, context, configRoot, { live, identify
       requireValue(await realpath(endpoint.executable) === await realpath(file), `endpoint executable differs from candidate ${host.app}`);
       processIdentity = await identify(root, { pid: endpoint.pid, executable: file });
     }
-    const components = await installedComponents(config, context, index);
+    const components = await installedComponents(config, root);
     hosts.push({ app: host.app, ...(live ? { pid: processIdentity.pid } : {}),
       executableSha256: live ? processIdentity.sha256 : await hashFile(file),
       bundleSha256: await hashTree(host.bundle), componentsSha256: hashValue(components) });
@@ -230,8 +187,7 @@ const compactContext = (context) => ({ candidate: {
   runAttempt: context.candidate.runAttempt, sha: context.candidate.sha, version: context.candidate.version,
   artifacts: context.candidate.artifacts.map(({ id, name }) => ({ id, name })),
 },
-  assets: context.assets.map(({ name, sha256 }) => ({ name, sha256 })).sort((a, b) => a.name.localeCompare(b.name)),
-  registry: { sha256: context.registry.sha256, pack: context.registry.pack, components: [...context.registry.components].sort(byComponent) } });
+  assets: context.assets.map(({ name, sha256 }) => ({ name, sha256 })).sort((a, b) => a.name.localeCompare(b.name)) });
 
 /** Attaches actual outcomes to the existing manifest, including failures that a passing file or log row cannot represent. */
 export async function finishAcceptanceRun({ runFolder, context, script, initializationId, before, after, afterCleanup, plan, errors = [], finalize }) {
@@ -282,11 +238,9 @@ export async function writeAcceptanceReport(context, folders, output) {
     requireValue(acceptance?.schema === 1 && acceptance.run?.errors?.length === 0, 'acceptance run is incomplete or failed');
     requireValue(same(acceptance.candidate, compactContext(context).candidate), 'acceptance belongs to another candidate');
     requireValue(same(acceptance.assets, compactContext(context).assets), 'candidate assets differ between acceptance runs');
-    requireValue(acceptance.registry.sha256 === context.registry.sha256 && acceptance.registry.pack === context.registry.pack, 'frozen registry differs between acceptance runs');
-    if (records.length) requireValue(same(acceptance.registry, records[0].registry), 'installed cohort differs between acceptance runs');
     records.push(acceptance);
   }
-  const report = { schema: 1, candidate: records[0].candidate, assets: records[0].assets, registry: records[0].registry,
+  const report = { schema: 1, candidate: records[0].candidate, assets: records[0].assets,
     runs: records.map(({ run }) => run) };
   await writeFile(output, `${encodeAcceptanceReport(report)}\n`);
   return report;

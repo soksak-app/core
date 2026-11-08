@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { FIXTURES, STEP_TIMEOUT_MS, buildFixtureRegistry, fixtureSources, npmSidecarRelease, pluginEntry, pnpmPack, repositoryText,
+import { FIXTURES, STEP_TIMEOUT_MS, buildFixtureRegistry, fixturePluginIds, fixtureSources, npmSidecarRelease, pluginEntry, pnpmPack, repositoryText,
   sidecarEntry, sidecarFileName } from "../fixture-registry.mjs";
 
 const SHA = "a".repeat(64);
@@ -86,6 +86,7 @@ test("the fixture registry packs every fixture plugin into the pack fixtures and
   const ids = plugins.map((dir) => JSON.parse(readFileSync(join(dir, "plugin.json"), "utf8")).id);
   assert.deepEqual(JSON.parse(readFileSync(join(out, "packs", "fixtures.json"), "utf8")),
     { name: "fixtures", description: "Every fake plugin of the core fixtures.", plugins: ids });
+  assert.deepEqual(fixturePluginIds(), ids, "fixturePluginIds names the plugins of the pack fixtures in its order");
   assert.deepEqual(fs.readdirSync(join(out, "plugins")).sort(), ids.map((id) => `${id}.json`).sort());
   assert.deepEqual(JSON.parse(readFileSync(join(out, "revoked.json"), "utf8")), { plugins: [], sidecars: [] });
   // The module imports only Node.js built-ins, the platform selector and the command supervision and names no address, so it reads no registry index or

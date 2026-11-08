@@ -11,6 +11,7 @@ import test from "node:test";
 import { startFakeEndpoint } from "@soksak/client/testing";
 import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan, validateOrdinaryArtifacts, quitApplication } from "../test-app.mjs";
 import { applicationArtifact, applicationExecutables } from "../platform/platform.js";
+import { fixturePluginIds } from "../fixture-registry.mjs";
 
 const node = (code) => [process.execPath, "-e", code];
 // The limit of a test of a start step is the limit of the step (START_LIMIT_MS, 60 s) and some more: at a high load of the file system
@@ -22,14 +23,16 @@ test("ordinary focused acceptance owns explicit prebuilt artifacts and unchanged
   const artifacts = {
     schema: 1,
     hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })),
-    registry: { path: "/prebuilt/registry/index.json", components: [{ kind: "plugin", id: "declared-plugin" }] },
   };
-  const plan = await e2ePlan({ root: "/source", configRoot: "/configuration/fresh", script: "test-app", artifacts, only: "window-end.test.mjs", platform: "darwin" });
+  const plan = await e2ePlan({ root: "/source", configRoot: "/configuration/fresh", script: "test-app", artifacts, only: "window-end.test.mjs",
+    platform: "darwin", fixtures: ["probe"] });
+  assert.deepEqual(plan.find((item) => item.name === "fixture registry"), { name: "fixture registry", phase: "prepare", kind: "fixture-registry",
+    sok: "/prebuilt/wailsv3.app/Contents/MacOS/sok", out: "/configuration/fresh/fixture-registry" });
   for (const host of artifacts.hosts) {
     assert.equal(plan.find((item) => item.name === `start ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok-${host.app}`);
     assert.deepEqual(plan.find((item) => item.name === `registry ${host.app}`).argv,
-      [`${host.bundle}/Contents/MacOS/sok`, "registry", "use", artifacts.registry.path, "--config-dir", `/configuration/fresh/soksak-check-${host.app}`]);
-    assert.equal(plan.find((item) => item.name === `install declared-plugin ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok`);
+      [`${host.bundle}/Contents/MacOS/sok`, "registry", "use", "/configuration/fresh/fixture-registry/index.json", "--config-dir", `/configuration/fresh/soksak-check-${host.app}`]);
+    assert.equal(plan.find((item) => item.name === `install probe ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok`);
   }
   const checks = plan.find((item) => item.name === "window checks");
   assert.deepEqual(checks.argv.slice(-2), ["--only", "window-end.test.mjs"]);
@@ -40,18 +43,17 @@ test("ordinary focused acceptance owns explicit prebuilt artifacts and unchanged
 });
 
 test("candidate plans reject ordinary file selection and artifact overrides", async () => {
-  const candidate = { hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })), registry: { path: "/candidate/index.json", components: [] } };
+  const candidate = { hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })) };
   for (const extra of [{ only: "window-end.test.mjs" }, { artifacts: candidate }]) {
     await assert.rejects(() => e2ePlan({ root: "/source", configRoot: "/configuration", script: "test-app", candidate, ...extra }), /candidate.*(selection|artifacts|override)/);
   }
 });
 
 test("ordinary artifact input rejects relative paths, incomplete hosts and existing configuration data", (t) => {
-  const input = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })), registry: { path: "/prebuilt/index.json" } };
+  const input = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })) };
   assert.equal(validateOrdinaryArtifacts(input), input);
   const change = (fn) => { const value = structuredClone(input); fn(value); return value; };
   assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts[0].bundle = "relative.app"; })), /bundle must be absolute/);
-  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.registry.path = "relative.json"; })), /registry path must be absolute/);
   assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts.pop(); })), /every host exactly once/);
   assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts[0].app = v.hosts[1].app; })), /every host exactly once/);
   assert.throws(() => validateOrdinaryArtifacts(input, "relative-config"), /absolute new directory/);
@@ -175,7 +177,7 @@ test("a final configuration cleanup failure cannot leave passing candidate evide
   writeFileSync(join(runFolder, "judgment.json"), JSON.stringify({ run: "fixture", audit: { status: "pass", findings: [] },
     tests: selection.apps.map((app) => ({ app, result: "pass" })) }));
   const inputs = { head: "fixture", dirty: false, hosts: [] }, failures = [];
-  const context = { candidate: { artifacts: [] }, assets: [], registry: { sha256: "fixture", pack: "required", components: [] } };
+  const context = { candidate: { artifacts: [] }, assets: [] };
   await finishCandidate({ root, context, configRoot: join(root, "config"), runFolder, script: "benchmark:fixture",
     initializationId: "initial", inputs: { before: inputs, after: inputs }, steps: [{ name: "checks", status: "pass" }],
     failures, dispose: async () => {}, write: () => {} },
@@ -202,12 +204,12 @@ test("each run gets a new empty configuration root under target/e2e", { timeout:
 test("the plan prepares, starts the three applications, checks and quits them in this order", { timeout: 5000 }, async () => {
   const root = "/work";
   const configRoot = "/work/target/e2e/run";
-  const plan = await e2ePlan({ root, configRoot, script: "verify", native: "e2e", platform: "darwin" });
+  const plan = await e2ePlan({ root, configRoot, script: "verify", native: "e2e", platform: "darwin", fixtures: ["probe", "probe2"] });
   assert.deepEqual(plan.map((item) => [item.phase, item.name]), [
     ["prepare", "registry certificates"],
-    ["prepare", "install plugins wailsv3"],
-    ["prepare", "install plugins tauriv2"],
-    ["prepare", "install plugins mygo"],
+    ["prepare", "fixture registry"],
+    ...["wailsv3", "tauriv2", "mygo"].flatMap((app) => [
+      ["prepare", `registry ${app}`], ["prepare", `install probe ${app}`], ["prepare", `install probe2 ${app}`]]),
     ["prepare", "start wailsv3"],
     ["prepare", "start tauriv2"],
     ["prepare", "start mygo"],
@@ -237,7 +239,13 @@ test("the plan prepares, starts the three applications, checks and quits them in
   // A person quits through the quit item of the application menu or the quit key: the last application ends by the key.
   assert.deepEqual(plan.filter((item) => item.kind === "quit").map((item) => [item.app, item.by]),
     [["wailsv3", "menu"], ["tauriv2", "menu"], ["mygo", "key"]]);
-  assert.equal(checks.env.SOKSAK_CANDIDATE_REGISTRY, "file:///work/target/registry/index.json");
+  assert.equal(checks.env.SOKSAK_CANDIDATE_REGISTRY, "file:///work/target/e2e/run/fixture-registry/index.json");
+  // The debug bundles install the fixtures of the checkout through the sok of each bundle, and no step builds or installs the
+  // workspace registry.
+  assert.equal(plan.find((item) => item.name === "fixture registry").sok, "/work/target/debug/sok-wailsv3.app/Contents/MacOS/sok");
+  assert.deepEqual(plan.find((item) => item.name === "install probe2 mygo").argv, ["/work/target/debug/sok-mygo.app/Contents/MacOS/sok",
+    "plugin", "install", "probe2", "--config-dir", "/work/target/e2e/run/soksak-check-mygo"]);
+  assert.ok(!/install-plugins|target\/registry|build-registry|workspace-registry/.test(JSON.stringify(plan)), "the plan names the workspace registry");
   assert.deepEqual(checks.argv.slice(2, 4), ["--script", "verify"]);
   assert.ok(!checks.argv.includes("--when-idle"));
   assert.deepEqual(plan.find((item) => item.name === "native end-to-end tests"), { name: "native end-to-end tests", phase: "check", kind: "native",
@@ -267,8 +275,7 @@ test("test-app resolves the executables of each platform from its declared appli
       { name: "PlatformOperationNotImplemented", message: `applicationArtifact is not implemented on ${platform}` }, platform);
   }
   // Prebuilt artifacts name their artifacts, and the executables inside them still come from the platform declaration.
-  const artifacts = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}` })),
-    registry: { path: "/prebuilt/registry/index.json", components: [] } };
+  const artifacts = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}` })) };
   for (const platform of ["linux", "win32"]) {
     await assert.rejects(() => e2ePlan({ root, configRoot: "/configuration/fresh", script: "test-app", artifacts, platform }),
       { name: "PlatformOperationNotImplemented", message: `applicationExecutables is not implemented on ${platform}` }, platform);
@@ -326,22 +333,21 @@ test("a failed preparation skips the checks, runs the cleanup and names the fail
   assert.ok(lines.some((line) => /^passed end /.test(line)), lines.join("\n"));
 });
 
-test("a candidate plan uses its bundled installers and frozen registry without building the workspace", { timeout: 5000 }, async () => {
-  const candidate = {
-    hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })),
-    registry: { path: "/candidate/index.json", pack: "required", components: [{ kind: "plugin", id: "fixture" }] },
-  };
+test("a candidate plan builds the fixture registry of its checkout with its bundled installers and reads no context registry", { timeout: 5000 }, async () => {
+  const candidate = { hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })) };
   const plan = await e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app",
-    native: "test-app", candidate, runFolder: "/work/target/test-runs/candidate", platform: "darwin" });
+    native: "test-app", candidate, runFolder: "/work/target/test-runs/candidate", platform: "darwin", fixtures: ["fixture"] });
   assert.equal(plan.some((step) => step.argv?.includes("install-plugins")), false);
+  assert.deepEqual(plan.find((step) => step.name === "fixture registry"), { name: "fixture registry", phase: "prepare", kind: "fixture-registry",
+    sok: "/candidate/wailsv3.app/Contents/MacOS/sok", out: "/work/target/e2e/run/fixture-registry" });
   assert.deepEqual(plan.find((step) => step.name === "registry wailsv3").argv,
-    ["/candidate/wailsv3.app/Contents/MacOS/sok", "registry", "use", "/candidate/index.json", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
+    ["/candidate/wailsv3.app/Contents/MacOS/sok", "registry", "use", "/work/target/e2e/run/fixture-registry/index.json", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
   assert.deepEqual(plan.find((step) => step.name === "install fixture wailsv3").argv,
     ["/candidate/wailsv3.app/Contents/MacOS/sok", "plugin", "install", "fixture", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
   assert.equal(plan.find((step) => step.name === "start wailsv3").argv[0], "/candidate/wailsv3.app/Contents/MacOS/sok-wailsv3");
   const check = plan.find((step) => step.name === "window checks");
   assert.equal(check.env.SOKSAK_CANDIDATE_RUN_FOLDER, "/work/target/test-runs/candidate");
-  assert.equal(check.env.SOKSAK_CANDIDATE_REGISTRY, "file:///candidate/index.json");
+  assert.equal(check.env.SOKSAK_CANDIDATE_REGISTRY, "file:///work/target/e2e/run/fixture-registry/index.json");
   for (const app of candidate.hosts.map((host) => host.app)) {
     assert.equal(check.env[`SOKSAK_BINARY_${app.toUpperCase()}`], `/candidate/${app}.app/Contents/MacOS/sok-${app}`);
   }
@@ -641,7 +647,7 @@ test("each end-to-end target of the Makefile names prerequisites, a window-check
   const native = declared("native/darwin/Makefile");
   const build = /^E2E_BUILD = (.*)$/m.exec(makefile);
   assert.ok(build !== null, "the Makefile declares E2E_BUILD");
-  assert.ok(build[1].split(/\s+/).includes("build-registry"), "ordinary application targets must explicitly build their registry");
+  assert.ok(!build[1].split(/\s+/).some((target) => /registry/.test(target)), "the run builds the fixture registry; E2E_BUILD builds no registry");
   for (const prerequisite of build[1].split(/\s+/)) assert.ok(root.has(prerequisite), `E2E_BUILD: the Makefile declares no target ${prerequisite}`);
   const runs = [...makefile.matchAll(/^\t@node scripts\/test-app\.mjs --script (\S+)(?: --native (\S+))?/gm)];
   assert.ok(runs.length > 0, "the Makefile runs scripts/test-app.mjs");
@@ -649,4 +655,26 @@ test("each end-to-end target of the Makefile names prerequisites, a window-check
     assert.ok(scripts[script] !== undefined, `${line.trim()}: e2e/package.json declares no script ${script}`);
     if (target !== undefined) assert.ok(native.has(target), `${line.trim()}: native/darwin/Makefile declares no target ${target}`);
   }
+});
+
+test("a fixture registry step builds through the bounded build with the signal of the run, and its failure skips the checks", { timeout: 5000 }, async () => {
+  const interrupt = new AbortController();
+  const calls = [];
+  const item = { name: "fixture registry", phase: "prepare", kind: "fixture-registry", sok: "/bundle/sok", out: "/run/fixture-registry" };
+  assert.deepEqual(await runPlan([item], { write: () => {}, interrupted: interrupt.signal,
+    buildRegistry: async (sok, out, options) => { calls.push([sok, out, options.signal]); } }), []);
+  assert.deepEqual(calls, [["/bundle/sok", "/run/fixture-registry", interrupt.signal]]);
+  const { lines, write } = recorder();
+  const failures = await runPlan([item, step("checks", "check", ""), step("end", "cleanup", "")], { write,
+    buildRegistry: async () => { throw new Error("pack e2e/fixtures/probe exceeded 30000 ms"); } });
+  assert.deepEqual(failures, ["fixture registry: pack e2e/fixtures/probe exceeded 30000 ms"]);
+  assert.ok(lines.includes("skipped checks: fixture registry failed"), lines.join("\n"));
+  assert.ok(lines.some((line) => /^passed end /.test(line)), lines.join("\n"));
+});
+
+test("the plan installs every fixture plugin of e2e/fixtures by default", { timeout: 5000 }, async () => {
+  const plan = await e2ePlan({ root: "/work", configRoot: "/run", script: "test-app", platform: "darwin" });
+  const installs = plan.filter((item) => item.name.startsWith("install ") && item.name.endsWith(" mygo")).map((item) => item.argv[3]);
+  assert.deepEqual(installs, fixturePluginIds());
+  assert.ok(installs.includes("layoutprobe"), "the default tab of fresh is a fixture plugin");
 });

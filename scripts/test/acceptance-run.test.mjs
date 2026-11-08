@@ -43,6 +43,13 @@ async function fixture(t, { worker } = {}) {
   await put(join(root, 'source.mjs'), 'export const value = 1;');
   await put(join(root, 'e2e/package.json'), { scripts: { 'test-app': 'node --test one.test.mjs',
     'test-app:activation': 'node --test activation.test.mjs', 'benchmark:fixture': 'node --test benchmark.test.mjs' } });
+  // The fixtures of the checkout: one fixture plugin, and with worker one fake sidecar.
+  await put(join(root, 'e2e/fixtures/probe/plugin.json'), { id: 'fixture' });
+  await put(join(root, 'e2e/fixtures/probe/package.json'), { name: '@fixture/plugin', version: '0.0.1' });
+  if (worker) {
+    await put(join(root, 'e2e/fixtures/sidecars/worker/sidecar.json'), { protocol: 1, executable: 'sok-fixture' });
+    await put(join(root, 'e2e/fixtures/sidecars/worker/package.json'), { name: '@fixture/worker', version: '0.0.1' });
+  }
   await put(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9');
   execFileSync('git', ['init', '-q'], { cwd: root });
   execFileSync('git', ['add', '.'], { cwd: root });
@@ -50,26 +57,11 @@ async function fixture(t, { worker } = {}) {
     'commit', '-qm', 'fixture'], { cwd: root });
   await put(join(root, 'node_modules/fixture/index.js'), 'installed dependency bytes');
   const context = {
-    platform,
     schema: 1, candidate: { repository: 'fixture/core', workflow: 'release.yml', runId: 1, runAttempt: 1,
       sha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), version: '0.0.1', artifacts: [{ id: 1, name: 'candidate' }] },
-    assets: [], registry: { path: join(folder, 'registry.json'), pack: 'required', components: [
-      { kind: 'plugin', id: 'fixture', version: '0.0.1', releaseSha256: '1'.repeat(64) },
-    ] },
+    assets: [],
     hosts: hosts.map((app) => ({ app, bundle: join(folder, `${app}.app`) })),
   };
-  await put(context.registry.path, { format: 1, plugins: [{ id: 'fixture', versions: [{ version: '0.0.1',
-    release: { url: 'https://example.invalid/fixture.tgz', sha256: '1'.repeat(64) } }] }], sidecars: [],
-    packs: [{ name: 'required', plugins: ['fixture'] }], revoked: { plugins: [], sidecars: [] } });
-  if (worker) {
-    const index = JSON.parse(await readFile(context.registry.path, 'utf8'));
-    index.plugins[0].versions[0].sidecars = { '@fixture/worker': '^0.0.1' };
-    context.registry.components.push({ kind: 'sidecar', id: '@fixture/worker', version: '0.0.1', releaseSha256: '2'.repeat(64) });
-    index.sidecars.push({ name: '@fixture/worker', versions: [{ version: '0.0.1', protocol: 1,
-      releases: { [platform]: { url: 'https://example.invalid/worker.tgz', sha256: '2'.repeat(64) } } }] });
-    await put(context.registry.path, index);
-  }
-  context.registry.sha256 = await hashFile(context.registry.path);
   for (const host of context.hosts) {
     await put(join(host.bundle, 'Contents/MacOS', `sok-${host.app}`), `${host.app} executable`);
     await put(join(host.bundle, 'Contents/MacOS/sok'), 'candidate installer');
@@ -77,11 +69,6 @@ async function fixture(t, { worker } = {}) {
     await put(path, `${host.app} release`);
     context.assets.push({ name: `${host.app}.zip`, path, sha256: await hashFile(path) });
   }
-  const calls = [];
-  const install = async (command, args) => {
-    calls.push([command, args]);
-    if (args[0] === 'plugin') await installed(args.at(-1), { worker });
-  };
   const configRoot = join(folder, 'configs');
   for (const [index, host] of context.hosts.entries()) {
     const config = join(configRoot, `soksak-check-${host.app}`);
@@ -90,73 +77,62 @@ async function fixture(t, { worker } = {}) {
       executable: join(host.bundle, 'Contents/MacOS', `sok-${host.app}`) });
   }
   const identify = async (_root, entry) => ({ ...entry, sha256: await hashFile(entry.executable) });
-  return { folder, root, context, configRoot, install, calls, identify };
+  return { folder, root, context, configRoot, identify };
 }
 
-test('ordinary reference verifies every explicit plugin beyond the starter pack while candidate stays pack-only', { timeout: 10000 }, async (t) => {
+/** The installed component identity that a host snapshot of the configuration of app records. */
+async function componentsOf(f, app, { worker } = {}) {
+  const config = join(f.configRoot, `soksak-check-${app}`);
+  const components = [{ kind: 'plugin', id: 'fixture', version: '0.0.1', treeSha256: await hashTree(join(config, 'plugins/fixture/0.0.1')) }];
+  if (worker) components.push({ kind: 'sidecar', id: '@fixture/worker', version: '0.0.1', treeSha256: await hashTree(join(config, `sidecars/fixture-worker/0.0.1/${platform}`)) });
+  return hashValue(components);
+}
+
+test('candidate and ordinary preparation validate the context without a registry, an installer or a reference configuration', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
-  const index = JSON.parse(await readFile(f.context.registry.path, 'utf8'));
-  index.plugins.push({ id: 'extra', versions: [{ version: '0.0.1', release: { url: 'https://example.invalid/extra.tgz', sha256: '3'.repeat(64) } }] });
-  await put(f.context.registry.path, index);
-  f.context.registry.sha256 = await hashFile(f.context.registry.path);
-  f.context.registry.components.push({ kind: 'plugin', id: 'extra', version: '0.0.1', releaseSha256: '3'.repeat(64) });
-  const calls = [], byConfig = new Map();
-  const install = async (_command, args) => {
-    if (args[0] !== 'plugin') return;
-    const config = args.at(-1);
-    const ids = byConfig.get(config) ?? new Set();
-    ids.add(args[2]); byConfig.set(config, ids); calls.push(args[2]);
-    await installed(config, { extra: ids.has('extra') });
-    if (ids.has('extra')) {
-      await put(join(config, 'plugins/extra/0.0.1/package.json'), { name: '@fixture/extra', version: '0.0.1' });
-      await put(join(config, 'plugins/extra/0.0.1/plugin.json'), { id: 'extra' });
-      await put(join(config, 'plugins/extra/0.0.1/index.js'), 'extra plugin bytes');
-    }
-  };
+  const prepared = await prepareCandidate(f.context);
+  assert.deepEqual(prepared.context, f.context);
+  await prepared.dispose();
   const ordinary = structuredClone(f.context);
   delete ordinary.candidate;
-  const prepared = await prepareOrdinaryArtifacts(ordinary, { platform: system, install });
-  t.after(() => prepared.dispose());
-  assert.deepEqual(calls, ['fixture', 'extra'], 'ordinary reference must execute the real installer for all explicit plugins');
-  assert.deepEqual(prepared.context.registry.components.map(({ id }) => id).sort(), ['extra', 'fixture']);
-  for (const entry of prepared.context.registry.components) assert.match(entry.treeSha256, /^[0-9a-f]{64}$/);
-  calls.length = 0;
-  await assert.rejects(prepareCandidate(f.context, { platform: system, install }), /installed component cohort differs/);
-  assert.deepEqual(calls, ['fixture'], 'candidate keeps its original declared-pack-only policy');
+  assert.deepEqual((await prepareOrdinaryArtifacts(ordinary)).context, ordinary);
+  await assert.rejects(prepareCandidate(ordinary), /schema must be 1/);
+  const partial = structuredClone(f.context);
+  partial.hosts.pop();
+  await assert.rejects(prepareCandidate(partial), /every candidate host/);
+  const changed = structuredClone(f.context);
+  changed.assets[0].sha256 = 'f'.repeat(64);
+  await assert.rejects(prepareCandidate(changed), /asset .* changed/);
 });
 
-test('candidate reference installation binds the frozen registry payload to the exact enabled installed cohort', { timeout: 10000 }, async (t) => {
+test('collected inputs bind exactly the enabled installed fixtures of the checkout', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
-  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
-  t.after(() => prepared.dispose());
-  assert.notEqual(prepared.context.registry.path, f.context.registry.path);
-  assert.equal(await hashFile(prepared.context.registry.path), f.context.registry.sha256);
-  assert.deepEqual(f.calls.map(([, args]) => args.slice(0, 3)), [['registry', 'use', prepared.context.registry.path], ['plugin', 'install', 'fixture']]);
-  assert.ok(f.calls.every(([command]) => command === join(f.context.hosts[0].bundle, 'Contents/MacOS/sok')));
-  const snapshot = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
+  const { context } = await prepareCandidate(f.context);
+  const snapshot = await collectAcceptanceInputs(f.root, context, f.configRoot, { platform: system, identify: f.identify });
   assert.equal(snapshot.dirty, false);
   assert.deepEqual(snapshot.hosts.map(({ app, pid }) => [app, pid]), [['mygo', 100], ['tauriv2', 101], ['wailsv3', 102]]);
-  assert.equal(snapshot.hosts[0].componentsSha256, hashValue(prepared.context.registry.components));
-  for (const changed of [{ text: 'changed payload' }, { enabled: false }, { version: '0.0.2' }, { extra: true }]) {
-    await installed(join(f.configRoot, 'soksak-check-tauriv2'), changed);
-    await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify }), /component|cohort|enabled|version/);
+  assert.equal(snapshot.hosts[0].componentsSha256, await componentsOf(f, 'mygo'));
+  const tauri = join(f.configRoot, 'soksak-check-tauriv2');
+  await installed(tauri, { text: 'changed payload' });
+  const changed = await collectAcceptanceInputs(f.root, context, f.configRoot, { platform: system, identify: f.identify });
+  assert.notEqual(changed.hosts[1].componentsSha256, snapshot.hosts[1].componentsSha256, 'a changed installed tree must change the identity');
+  for (const [state, error] of [[{ enabled: false }, /enabled/], [{ extra: true }, /installed plugins differ from the fixture plugins/]]) {
+    await installed(tauri, state);
+    await assert.rejects(collectAcceptanceInputs(f.root, context, f.configRoot, { platform: system, identify: f.identify }), error);
   }
 });
 
-test('candidate sidecar evidence binds the scoped dependency platform release and installed executable bytes', { timeout: 10000 }, async (t) => {
+test('collected inputs bind the installed fake sidecars of the checkout and their executable bytes', { timeout: 10000 }, async (t) => {
   const f = await fixture(t, { worker: {} });
-  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
-  t.after(() => prepared.dispose());
-  const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
-  assert.equal(prepared.context.registry.components[1].id, '@fixture/worker');
-  assert.equal(before.hosts[0].componentsSha256, hashValue(prepared.context.registry.components));
-  const altered = structuredClone(f.context);
-  altered.registry.components[1].releaseSha256 = '3'.repeat(64);
-  await assert.rejects(prepareCandidate(altered, { platform: system, install: f.install }), /release checksum/);
-  for (const worker of [{ version: '0.0.2' }, { text: 'another executable' }]) {
-    await installed(join(f.configRoot, 'soksak-check-tauriv2'), { worker });
-    await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify }), /version|verified release payload/);
-  }
+  const { context } = await prepareCandidate(f.context);
+  const before = await collectAcceptanceInputs(f.root, context, f.configRoot, { platform: system, identify: f.identify });
+  assert.equal(before.hosts[0].componentsSha256, await componentsOf(f, 'mygo', { worker: true }));
+  const tauri = join(f.configRoot, 'soksak-check-tauriv2');
+  await installed(tauri, { worker: { text: 'another executable' } });
+  const after = await collectAcceptanceInputs(f.root, context, f.configRoot, { platform: system, identify: f.identify });
+  assert.notEqual(after.hosts[1].componentsSha256, before.hosts[1].componentsSha256);
+  await installed(tauri);
+  await assert.rejects(collectAcceptanceInputs(f.root, context, f.configRoot, { platform: system, identify: f.identify }), /installed sidecars differ/);
 });
 
 test('candidate source identity detects source, helper and dependency edits independently of HEAD', { timeout: 10000 }, async (t) => {
@@ -175,8 +151,7 @@ test('candidate source identity detects source, helper and dependency edits inde
 
 test('candidate input identity follows installed dependency bytes and links beyond tracked lock declarations', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
-  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
-  t.after(() => prepared.dispose());
+  const prepared = await prepareCandidate(f.context);
   await symlink('fixture', join(f.root, 'node_modules/fixture-link'));
   await symlink('.', join(f.root, 'node_modules/node_modules'));
   const before = await collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify });
@@ -188,34 +163,6 @@ test('candidate input identity follows installed dependency bytes and links beyo
   await symlink(f.folder, join(f.root, 'node_modules/external'));
   await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify }), /dependency.*outside|outside.*dependency/);
 });
-
-test('candidate reference installation rejects altered index bytes and a different selected cohort', { timeout: 10000 }, async (t) => {
-  const f = await fixture(t);
-  const altered = structuredClone(f.context);
-  altered.registry.sha256 = 'f'.repeat(64);
-  await assert.rejects(prepareCandidate(altered, { platform: system, install: f.install }), /registry bytes/);
-  assert.equal(f.calls.length, 0, 'an unverified index must not reach an installer');
-  await assert.rejects(prepareCandidate(f.context, { platform: system, install: async (_command, args) => {
-    if (args[0] === 'plugin') await installed(args.at(-1), { extra: true });
-  } }), /cohort/);
-});
-
-test('candidate reference cleanup reports its failure together with the installer failure', { timeout: 10000 }, async (t) => {
-  const f = await fixture(t);
-  const installError = new Error('reference installation failed');
-  const cleanupError = new Error('reference cleanup failed');
-  let retained;
-  t.after(async () => { if (retained) await rm(retained, { recursive: true, force: true }); });
-  await assert.rejects(prepareCandidate(f.context, {
-    platform: system,
-    install: async () => { throw installError; },
-    remove: async (directory) => { retained = directory; throw cleanupError; },
-  }), (error) => error instanceof AggregateError && sameErrors(error.errors, [installError, cleanupError]));
-});
-
-function sameErrors(actual, expected) {
-  return actual.length === expected.length && actual.every((error, index) => error === expected[index]);
-}
 
 async function writeRun(f, prepared, { fileStatus = 'pass', auditStatus = 'pass', findings = [], judgmentRun = 'run', cleanup = 'pass', afterChange } = {}) {
   const runFolder = join(f.folder, 'run');
@@ -237,8 +184,7 @@ async function writeRun(f, prepared, { fileStatus = 'pass', auditStatus = 'pass'
 
 test('candidate acceptance keeps real manifest results and rejects failed audits, stale identities and failed cleanup', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
-  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
-  t.after(() => prepared.dispose());
+  const prepared = await prepareCandidate(f.context);
   const valid = await writeRun(f, prepared);
   assert.deepEqual(valid.run.errors, []);
   assert.equal(valid.run.tests[0].status, 'pass');
@@ -257,8 +203,7 @@ test('candidate acceptance keeps real manifest results and rejects failed audits
 test('candidate report exports only complete matching acceptance without local paths', { timeout: 10000 }, async (t) => {
   const f = await fixture(t);
   f.context.candidate.localPath = f.folder;
-  const prepared = await prepareCandidate(f.context, { platform: system, install: f.install });
-  t.after(() => prepared.dispose());
+  const prepared = await prepareCandidate(f.context);
   const { runFolder } = await writeRun(f, prepared);
   const output = join(f.folder, 'report.json');
   await writeAcceptanceReport(f.context, [runFolder], output);
@@ -268,7 +213,8 @@ test('candidate report exports only complete matching acceptance without local p
   assert.ok(!JSON.stringify(report).includes(f.folder), 'context-only local fields must not enter the decoded report');
   assert.equal(report.runs.length, 1);
   assert.deepEqual(report.runs[0].errors, []);
-  assert.equal(report.registry.components[0].treeSha256, await hashTree(join(f.configRoot, 'soksak-check-tauriv2/plugins/fixture/0.0.1')));
+  assert.equal('registry' in report, false, 'a report names no registry');
+  assert.equal(report.runs[0].before.hosts[1].componentsSha256, await componentsOf(f, 'tauriv2'));
   await writeRun(f, prepared, { cleanup: 'fail' });
   await assert.rejects(writeAcceptanceReport(f.context, [runFolder], output), /failed|incomplete/);
 });
