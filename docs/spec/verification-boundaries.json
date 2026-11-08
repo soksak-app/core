@@ -47,11 +47,6 @@
       "reason": "Helper that crops terminal cells from a capture to check the IME preedit; it is terminal-specific and must be reduced to fixture pixel markers."
     },
     {
-      "file": "e2e/activation/terminal-view-focus.test.mjs",
-      "owner": "mixed",
-      "reason": "visible input preserves the prompt, handles wide cells, and ignores later blanks: plugin:terminal; sidecar screen facts preserve the numeric row count and frame cursor: plugin:terminal; terminal IME stage waits for cursor notification after composition changes: plugin:terminal; terminal IME stage waits for cursor movement when native preedit stays unchanged: plugin:terminal; terminal IME stage rereads coherent composition on a screen notification: plugin:terminal; terminal stage requires matching screen, cursor, and compose state: plugin:terminal; a terminal click accepts the same native keys as its AppKit reference: core (focus and key routing, plain-view probe key log); repeated Korean vowels stay visible before Space: core (IME, plain-view probe preedit status)."
-    },
-    {
       "file": "e2e/activation/view-ime-escape.test.mjs",
       "owner": "core",
       "reason": "Checks that Escape ends a view's composition without forwarding a workbench command (IME and keyboard routing); replace the terminal with a plain-view probe that has a text input and a command log."

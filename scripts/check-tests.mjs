@@ -247,7 +247,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host document diagnostic bridges", "objective-c", ["native/darwin/src/host_api_document_draw_covered.m", "native/darwin/src/host_api_document_viewport_marker.m"], ["native/darwin/tests/document_draw_covered_test.m", "native/darwin/tests/document_viewport_marker_test.m", "e2e/design-hosts.test.mjs", "e2e/view-display.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs", "e2e/terminal-keyboard.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/terminal-view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs", "e2e/capture-frame-identity.test.mjs", "e2e/capture-document-frame-identity.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m", "e2e/real/terminal.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host link bridge", "objective-c", ["native/darwin/src/host_api_link.m"], ["native/darwin/tests/link_test.m"], { testLanguage: "objective-c", sharedTests: true }),
@@ -5222,22 +5222,22 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.12-2-2-4",
-    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    implementation: [{ file: "e2e/activation/view-focus.test.mjs", symbol: "async function recordGesture(" }],
     tests: [
       { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "an image region click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" },
     ],
     expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
     levels: ["unit", "application"],
   },
   {
     id: "F212.12-2-2-4-1",
-    implementation: [{ file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "async function recordGesture(" }],
+    implementation: [{ file: "e2e/activation/view-focus.test.mjs", symbol: "async function recordGesture(" }],
     tests: [
       { file: "packages/window-check/test/frame.test.mjs", id: "complete capture cadence over 33 ms remains a measurement" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "a terminal click accepts the same native keys as its AppKit reference" },
-      { file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "an image region click accepts the same native keys as its AppKit reference" },
+      { file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" },
     ],
     expected: "The approved input path and complete callback artifacts pass functional acceptance while cadence remains a separate measurement.",
     levels: ["unit", "application"],
@@ -13463,11 +13463,11 @@ const FEATURE_LINKS = [
   {
     id: "F239-47",
     implementation: [
-      { file: "e2e/activation/terminal-view-focus.test.mjs", symbol: "function assertTerminalStageCoherent(" },
-      { file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function assertInputTraceDelivery(" },
+      { file: "e2e/activation/view-focus.test.mjs", symbol: "function assertImageRegionStages(" },
+      { file: "e2e/activation/view-focus.test.mjs", symbol: "async function assertDelivered(" },
     ],
-    tests: [{ file: "e2e/activation/terminal-view-focus.test.mjs", id: "repeated Korean vowels stay visible before Space" }],
-    expected: "Four native vowel keys match the same-window AppKit documents at coherent terminal frames and commit four vowels plus Space exactly once.",
+    tests: [{ file: "e2e/activation/view-focus.test.mjs", id: "repeated Korean vowels stay in the image region preedit before Space" }],
+    expected: "Four native vowel keys match the same-window AppKit documents in the committed text and preedit of an image region and commit four vowels plus Space exactly once.",
     levels: ["application"],
   },
   {
