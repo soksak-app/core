@@ -149,7 +149,13 @@ test("checkNames allows the exact core names and refuses the others", () => {
 
 test("boundary names distinguish declared window checks from core tests without permitting implementation reads", { timeout: 1000 }, () => {
   const names = new Set(corePackageNames());
-  assert.deepEqual(checkNames(names, ["e2e/browser-cohort-upgrade.test.mjs"]), []);
+  const declared = [
+    'import { APPS, open } from "@soksak/window-check/app.mjs";',
+    "for (const app of Object.values(APPS)) test(app.name, async (t) => { await open(t, app); });",
+    `const dependency = "${scoped("sidecar-probe")}";`,
+  ].join("\n");
+  assert.deepEqual(checkNames(names, ["e2e/window-check.test.mjs"], () => declared), [],
+    "a declared window check names the packages of its environment");
 
   const source = [
     'import { open as launch } from "@soksak/window-check/app.mjs";',
@@ -303,7 +309,7 @@ test("checkSpecReads refuses a read of docs/spec that specFiles of the package d
 test("checkTestPathReads discovers the declared e2e owner from the production package list", () => {
   const owners = corePackageFolders();
   assert.ok(owners.some((owner) => owner.dir === "e2e"), "the declared e2e package owns its window checks");
-  const file = "e2e/browser-cohort-upgrade.test.mjs";
+  const file = "e2e/memory-saver.test.mjs";
   const source = `${readFileSync(new URL(`../../${file}`, import.meta.url), "utf8")}\n` +
     `readFileSync(new URL("../packages/plugin-api/index.js", import.meta.url));\n`;
   assert.deepEqual(checkTestPathReads(owners, [file], () => source), [

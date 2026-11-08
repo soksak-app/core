@@ -1,25 +1,4 @@
 {
   "schema": 1,
-  "files": [
-    {
-      "file": "e2e/browser-cohort-upgrade.test.mjs",
-      "owner": "environment",
-      "reason": "Checks that the official CLI upgrade of browser keeps the starter cohort (including sidecar-files and sidecar-vt-alacritty) ready."
-    },
-    {
-      "file": "scripts/test/benchmark-b3.test.mjs",
-      "owner": "mixed",
-      "reason": "\"the surface plugins are the installed plugins whose manifest declares a surface\" -> core (fake manifests, but it reads plugins/term and plugins/files and should use e2e/fixtures manifests); \"the targets of a scenario come from the goals…\", \"the runs interleave the five applications…\", \"the sessions of B3 live beside the baseline record…\", \"the session folder holds the session and the baseline record…\", \"the run reads the declarations of the e2e benchmarks…\", \"the run conditions are read from injected readings…\" -> core (measurement harness; fixture data names term/browser and should use view-drag/plain-view ids)"
-    },
-    {
-      "file": "scripts/test/candidate-acceptance.test.mjs",
-      "owner": "environment",
-      "reason": "Tests candidate acceptance and publication of release components (`kind: 'plugin', id: 'terminal'` release digests), which is cohort release evidence."
-    },
-    {
-      "file": "scripts/test/fixtures/b3/baseline.json",
-      "owner": "core",
-      "reason": "B3 baseline data keyed by \"term\"/\"browser\". Re-key it to the view-drag/plain-view fixture ids."
-    }
-  ]
+  "files": []
 }
