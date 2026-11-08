@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { policyOfSetting, untilPolicy } from "@soksak/window-check/log-policy.mjs";
-import { valueProof } from "./view-content.mjs";
+import { valueProof } from "@soksak/window-check/view-content.mjs";
 import { allViewRootProcessPids, measureProcessGroup, physicalFootprintBytes, processGroupReclaimEvidence,
   viewDocumentHistoryInventory, viewProcessGroup, viewProcessPids, viewProcessSurfaces,
   viewRootProcessPids } from "./view-process-footprint.mjs";

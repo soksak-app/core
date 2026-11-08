@@ -4266,7 +4266,7 @@ const FEATURE_LINKS = [
       "symbol": "export const normalizeViewText"
     },
     {
-      "file": "e2e/view-content.mjs",
+      "file": "packages/window-check/view-content.mjs",
       "symbol": "normalizeViewText(actual).includes(normalizeViewText(expected))"
     }
   ],
@@ -5214,7 +5214,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/test/view-display.test.mjs", id: "view display rejects a readiness-only case without a content verifier" },
       { file: "e2e/test/view-display.test.mjs", id: "view display runs the content verifier of the case after the recording stops" },
-      { file: "e2e/test/view-content.test.mjs", id: "view content reads the text of the content read that the check names in the visible document region" },
+      { file: "packages/window-check/test/view-content.test.mjs", id: "view content reads the text of the content read that the check names in the visible document region" },
       { file: "e2e/test/view-content.test.mjs", id: "the content case of the plain view probe waits for its content read and proves the text of its region document" },
       { file: "e2e/view-display.test.mjs", id: "the plain view probe shows its content case in a card" },
     ],

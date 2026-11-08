@@ -29,6 +29,7 @@
     "./catalog.mjs": "./catalog.mjs",
     "./start.mjs": "./start.mjs",
     "./test-app.mjs": "./test-app.mjs",
+    "./view-content.mjs": "./view-content.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -58,6 +59,7 @@
     "start.mjs",
     "test-app.mjs",
     "soksak-test-app.mjs",
+    "view-content.mjs",
     "fixtures/"
   ],
   "bin": {
