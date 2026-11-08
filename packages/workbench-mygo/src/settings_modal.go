@@ -797,8 +797,11 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 	keys := slices.Concat(slices.Sorted(maps.Keys(patch)), remove)
 	cids := s.events.BeginOperation("workbench.settings.change", map[string]any{"scope": scope, "actor": s.settingsActor, "keys": strings.Join(keys, ",")})
 	s.settings.BeginSave()
+	write := s.settingsIssued
+	s.settingsIssued++
 	s.calls.Caused(cids).CallInOrder("workspace", "workspace", map[string]any{"kind": "settings", "id": id, "patch": patch, "remove": remove}, func(_ any, err error) {
 		s.settings.EndSave()
+		s.settingsAnswered(write, err)
 		if err != nil {
 			s.fail(err)
 			return
@@ -811,6 +814,45 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 		}
 		s.options.Invalidate()
 	})
+}
+
+// settingsWait is a command that waits for the settings writes from to before to, with the first failure among them.
+type settingsWait struct {
+	from, to int
+	err      error
+	done     func(err error)
+}
+
+// afterSettingsWrites runs done once the host answered every settings write that the shell made since it had made from writes, with
+// the first failure among the writes that it waited for: a command that changes the settings answers when they are written, as the
+// page answers after its store wrote them.
+func (s *Shell) afterSettingsWrites(from int, done func(err error)) {
+	if s.settingsWritten >= s.settingsIssued || s.settingsIssued == from {
+		done(nil)
+		return
+	}
+	s.settingsWaits = append(s.settingsWaits, &settingsWait{from: from, to: s.settingsIssued, done: done})
+}
+
+// settingsAnswered records the answer of the settings write and runs each command whose writes are all answered.
+func (s *Shell) settingsAnswered(write int, err error) {
+	s.settingsWritten++
+	waiting := s.settingsWaits[:0]
+	var ready []*settingsWait
+	for _, wait := range s.settingsWaits {
+		if err != nil && wait.err == nil && wait.from <= write && write < wait.to {
+			wait.err = err
+		}
+		if s.settingsWritten >= wait.to {
+			ready = append(ready, wait)
+		} else {
+			waiting = append(waiting, wait)
+		}
+	}
+	s.settingsWaits = waiting
+	for _, wait := range ready {
+		wait.done(wait.err)
+	}
 }
 
 // settingsChanged applies the settings after a change.

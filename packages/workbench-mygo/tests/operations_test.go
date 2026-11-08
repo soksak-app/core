@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
@@ -128,6 +131,33 @@ func TestRetiredSettingsCompletionDoesNotApplyPolicy(t *testing.T) {
 	queue.drain(t)
 	if len(stored.policies) != before {
 		t.Fatalf("retired settings answer applied a policy: %v", stored.policies[before:])
+	}
+}
+
+// A command that changes the settings answers once the host wrote them, so a reader of the settings file after the answer finds the
+// change, as the page answers after its store wrote them.
+func TestASettingsCommandAnswersAfterTheWrite(t *testing.T) {
+	stored := &storedHost{common: map[string]any{}}
+	app, window, queue, replies := fixtureApp(t, stored)
+	tester := ui.NewTester(app.Build(window), 1200, 800)
+	app.Shown(window)
+	window.settle(t, queue, tester)
+	release := make(chan struct{})
+	stored.holdWorkspace = release
+	app.Emit(window, "exposure-request", map[string]any{"id": 78, "method": "command.run",
+		"params": json.RawMessage(`{"name":"core.settings.set","params":{"patch":{"mode":"dark"},"scope":"common"}}`)})
+	window.settle(t, queue, tester)
+	answered := func() int {
+		return slices.IndexFunc(*replies, func(reply map[string]any) bool { return reply["id"] == float64(78) })
+	}
+	if at := answered(); at >= 0 {
+		t.Fatalf("core.settings.set answered %v before the host wrote the settings", (*replies)[at])
+	}
+	close(release)
+	window.settle(t, queue, tester)
+	at := answered()
+	if at < 0 || (*replies)[at]["error"] != nil {
+		t.Fatalf("core.settings.set did not answer after the write: the replies are %v", *replies)
 	}
 }
 

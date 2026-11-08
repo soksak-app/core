@@ -380,6 +380,10 @@ type Shell struct {
 	// belong to the main thread.
 	started, changed, applying, applyDue bool
 	applied                              []func(reloaded bool, err error)
+	// settingsIssued counts the settings writes that the shell made and settingsWritten those that the host answered, in their
+	// order; settingsWaits are the commands that wait for writes. They belong to the main thread.
+	settingsIssued, settingsWritten int
+	settingsWaits                   []*settingsWait
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.
