@@ -1,8 +1,40 @@
 package workbench_test
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
+
+// A call that is in flight when its surface closes gets no reply: closing the surface ends its calls, so the canceled host call of
+// the call reaches neither the view nor the error display (docs/spec/native-surfaces.md#view-surfaces).
+func TestACallInFlightWhenItsSurfaceClosesGetsNoReply(t *testing.T) {
+	gate := make(chan struct{})
+	stored := &surfaceHost{}
+	stored.calls = map[string]workbench.HostCall{"exposureRegister": func(ctx context.Context, _ json.RawMessage) (any, error) {
+		<-gate
+		return nil, ctx.Err()
+	}}
+	f := surfaceShellOn(t, installedDocument, stored)
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "textprobe"})
+	card := f.tabbedCards()[len(f.tabbedCards())-1]
+	surface := f.activeOf(card)
+	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 5,
+		"command": "runtime.native.call", "params": map[string]any{"name": "registered",
+			"payload": map[string]any{"kind": "element", "name": "textprobe.view"}}}})
+	f.pending.drain(t)
+	replies := len(stored.replies)
+	f.click("core.card.close", card)
+	close(gate)
+	f.settle()
+	for _, reply := range stored.replies[replies:] {
+		if reply["surface"] == surface {
+			t.Fatalf("the closed surface got the reply %v", reply)
+		}
+	}
+}
 
 // viewCallRecords returns the fields of the view call records that the shell wrote, by event name.
 func viewCallRecords(stored *surfaceHost) map[string][]map[string]any {

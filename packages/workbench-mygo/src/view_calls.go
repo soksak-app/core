@@ -72,6 +72,12 @@ type viewState struct {
 
 // end ends the calls of the page to a view whose document ended.
 func (v *viewState) end() {
+	// A call that crossed the end gets no reply: the document that made it ended, and the canceled host call that it waits for is
+	// no answer of the call.
+	for id, pending := range v.pending {
+		pending.done = true
+		delete(v.pending, id)
+	}
 	if v.cancel != nil {
 		v.cancel()
 	}
