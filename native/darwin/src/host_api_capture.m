@@ -17,12 +17,6 @@ static void documentFrameIdentityDoneBridge(void *context, const char *json, con
 bool scheduleDocumentFrameIdentityStart(void *document, uint64_t generation, uintptr_t context) {
 	return ON_MAIN(bool, sp_document_frame_identity_start(document, generation, documentFrameIdentityDoneBridge, (void *)context));
 }
-bool scheduleDocumentReferenceIdentityStart(void *document, uint64_t generation, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_reference_identity_start(document, generation, documentFrameIdentityDoneBridge, (void *)context));
-}
-bool scheduleDocumentReferenceObserve(void *document, uint64_t requestId, const char *directory, uintptr_t context) {
-	return ON_MAIN(bool, sp_document_reference_observe(document, requestId, directory, documentFrameIdentityDoneBridge, (void *)context));
-}
 bool scheduleDocumentFrameIdentityFreeze(uint64_t generation, uintptr_t context) {
 	return ON_MAIN(bool, sp_document_frame_identity_freeze(generation, documentFrameIdentityDoneBridge, (void *)context));
 }

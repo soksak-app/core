@@ -412,34 +412,3 @@ export function measureViewFrameGeometry(frame, {
     cardRectPt: rectPoint(cardRectPx, frame),
   };
 }
-
-
-/** Measures the declared card perimeter even before its target content exists.
- * The public pre-request rectangle supplies a seed, never recorded geometry. */
-export function measureViewCardFrameGeometry(frame, { targetRect, cornerRadiusPt, cardColor,
-  planeColor, borderColors, colorTolerance = DEFAULT_TOLERANCE } = {}) {
-  if (!frame || !Number.isSafeInteger(frame.width) || !Number.isSafeInteger(frame.height) ||
-      !Number.isSafeInteger(frame.stride) || frame.stride < frame.width * 4 ||
-      !frame.data || frame.data.length < frame.stride * frame.height ||
-      !Number.isFinite(frame.scale) || frame.scale <= 0 ||
-      !Number.isFinite(frame.contentScale) || frame.contentScale <= 0 ||
-      !Number.isFinite(frame.content?.x) || !Number.isFinite(frame.content?.y) ||
-      !Number.isFinite(frame.time) || frame.time < 0) throw new Error("card geometry requires a complete recorded frame");
-  requireColor(cardColor, "cardColor");
-  requireColor(planeColor, "planeColor");
-  if (!Array.isArray(borderColors) || !borderColors.length) throw new Error("card geometry requires border colors");
-  borderColors.forEach((color, index) => requireColor(color, `borderColors[${index}]`));
-  if (!Number.isFinite(cornerRadiusPt) || cornerRadiusPt < 0 ||
-      !Number.isInteger(colorTolerance) || colorTolerance < 0 || colorTolerance > 255) throw new Error("card geometry criteria are invalid");
-  if (!targetRect || ![targetRect.x, targetRect.y, targetRect.width, targetRect.height].every(Number.isFinite) ||
-      targetRect.width <= 0 || targetRect.height <= 0) throw new Error("card geometry requires its pre-request public rectangle");
-  const ratio = frame.scale * frame.contentScale;
-  const anchor = { x: Math.floor(frame.content.x * frame.scale + (targetRect.x + targetRect.width / 2) * ratio),
-    y: Math.floor(frame.content.y * frame.scale + (targetRect.y + targetRect.height / 2) * ratio) };
-  if (anchor.x < 0 || anchor.y < 0 || anchor.x >= frame.width || anchor.y >= frame.height) throw new Error("declared card seed is outside the recorded frame");
-  const cardRectPx = cardRectangle(frame,
-    { left: anchor.x, top: anchor.y, right: anchor.x + 1, bottom: anchor.y + 1 },
-    { targetRect, targetSeed: anchor, planeColor, cardColor, borderColors,
-      cornerRadiusPt, cornerRadiusPx: cornerRadiusPt * ratio, tolerance: colorTolerance });
-  return { timeMs: frame.time, cardRectPx, cardRectPt: rectPoint(cardRectPx, frame) };
-}

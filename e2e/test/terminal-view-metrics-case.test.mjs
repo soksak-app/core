@@ -11,7 +11,7 @@ import { terminalDragGeometryFrame, terminalSourceContentFrame,
   from "../benchmark/cases/terminal.mjs";
 import { TAB_PLACEMENT } from "../view-metrics-collection.mjs";
 
-function terminalLayoutFrame({ cardLeft, rootLeft, time, contentColor = TERMINAL_GEOMETRY_BACKGROUND }) {
+function terminalLayoutFrame({ cardLeft, rootLeft, time }) {
   const width = 1024;
   const height = 768;
   const stride = width * 4;
@@ -35,7 +35,7 @@ function terminalLayoutFrame({ cardLeft, rootLeft, time, contentColor = TERMINAL
   }
   const content = { left: rootLeft, top: 82, right: 948, bottom: 601 };
   for (let y = content.top; y < content.bottom; y++) {
-    for (let x = content.left; x < content.right; x++) paint(x, y, contentColor);
+    for (let x = content.left; x < content.right; x++) paint(x, y, TERMINAL_GEOMETRY_BACKGROUND);
   }
   for (const x of [card.left + 9, card.right - 10]) {
     for (const y of [card.top + 2, card.bottom - 3]) paint(x, y, focusCornerBlend);
@@ -216,20 +216,4 @@ test("the shell of a terminal view is the check shell of its plugin", { timeout:
   assert.deepEqual(Object.keys(terminalShellSettings("term")), ["term.shell"]);
   assert.deepEqual(terminalShellSettings("terminal"), {});
   assert.throws(() => terminalShellSettings("browser"), new Error("a terminal view is a view of the terminal or the term plugin, not browser"));
-});
-
-test("terminal card placement is measured in each frame independently of terminal content colors", { timeout: 5000 }, async () => {
-  const { measureViewCardFrameGeometry } = await import("../view-frame-geometry.mjs");
-  assert.equal(typeof measureViewCardFrameGeometry, "function", "startup needs its declared card perimeter before a terminal image exists");
-  for (const contentColor of [TERMINAL_GEOMETRY_BACKGROUND, [250, 250, 250]]) {
-    const frame = terminalLayoutFrame({ cardLeft: 200, rootLeft: 210, time: 10, contentColor });
-    const measured = measureViewCardFrameGeometry(frame, {
-      targetRect: { x: 100, y: 8, width: 375, height: 315.5 }, cornerRadiusPt: 8,
-      cardColor: [25, 27, 36], planeColor: [16, 17, 23], borderColors: [[43, 46, 61], [32, 28, 29]],
-    });
-    assert.equal(measured.timeMs, 10);
-    assert.deepEqual(measured.cardRectPt, { left: 100, top: 8, right: 475, bottom: 323.5 });
-    assert.equal(Object.hasOwn(measured, "surface"), false);
-    assert.equal(Object.hasOwn(measured, "regionToken"), false);
-  }
 });

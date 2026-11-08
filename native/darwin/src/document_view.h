@@ -162,21 +162,11 @@ void sp_document_frame_identity_after_target_update(void *document, void (^compl
 // Completion runs exactly once on the main thread; JSON and error are borrowed until the callback returns. The caller
 // keeps context alive until completion, including when the awaiting RPC reaches its own deadline.
 typedef void (*sp_document_frame_identity_reply)(void *context, const char *json, const char *error);
-// Observes the public renderer-owned reference of this exact root or attached
-// document, snapshots the native view, and rejects a changed provider revision.
-// request_id must be a positive JavaScript safe integer. Artifacts stay in directory on failure.
-// Completion owns context until called.
-bool sp_document_reference_observe(void *document, uint64_t request_id, const char *directory,
-    sp_document_frame_identity_reply reply, void *context);
 // Starts a capture-scoped visible QR producer in the current plugin root document. The caller supplies the active
 // host view generation. Call start on the main thread because document is owned by the native window registry.
 // Completion reports installation and initial draw acceptance, not presentation. Freeze and remove accept calls from
 // any thread and schedule WebKit work on the main thread; false means no callback will follow.
 bool sp_document_frame_identity_start(void *document, uint64_t generation,
-    sp_document_frame_identity_reply reply, void *context);
-// Starts the same capture-scoped producer on an exact host-resolved root or attached document.
-// This entry does not grant core-root privileges to an attached document.
-bool sp_document_reference_identity_start(void *document, uint64_t generation,
     sp_document_frame_identity_reply reply, void *context);
 // Freezes the producer without removing its last marker. Completion reports generated and actually advanced slot counts.
 bool sp_document_frame_identity_freeze(uint64_t generation, sp_document_frame_identity_reply reply, void *context);

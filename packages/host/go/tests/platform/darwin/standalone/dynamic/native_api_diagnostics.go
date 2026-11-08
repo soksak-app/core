@@ -242,26 +242,6 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.ScheduleDocumentFrameIdentityStart, address)
 	}
 	{
-		address, err := purego.Dlsym(library, "scheduleDocumentReferenceIdentityStart")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentReferenceIdentityStart: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentReferenceIdentityStart: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.ScheduleDocumentReferenceIdentityStart, address)
-	}
-	{
-		address, err := purego.Dlsym(library, "scheduleDocumentReferenceObserve")
-		if err != nil {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentReferenceObserve: %w", err)
-		}
-		if address == 0 {
-			return abi.DiagnosticFunctions{}, fmt.Errorf("native API scheduleDocumentReferenceObserve: symbol has a null address")
-		}
-		purego.RegisterFunc(&functions.ScheduleDocumentReferenceObserve, address)
-	}
-	{
 		address, err := purego.Dlsym(library, "sp_capture_clock")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_clock: %w", err)

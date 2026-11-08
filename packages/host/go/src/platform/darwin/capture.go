@@ -164,32 +164,6 @@ func (implementation) StartDocumentFrameIdentity(document unsafe.Pointer, genera
 	return nil
 }
 
-func (implementation) StartDocumentReferenceIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error {
-	if done == nil {
-		return errors.New("start document frame identity: completion callback is nil")
-	}
-	handle := handles.NewHandle(done)
-	if !bool(diagnosticNative.ScheduleDocumentReferenceIdentityStart(document, uint64(generation), uintptr(handle))) {
-		handle.Delete()
-		return errors.New("start document frame identity was not scheduled")
-	}
-	return nil
-}
-
-func (implementation) ObserveDocumentReference(document unsafe.Pointer, requestID uint64, directory string, done func(json.RawMessage, error)) error {
-	if done == nil {
-		return errors.New("document reference completion callback is nil")
-	}
-	path := native.CString(directory)
-	defer native.Free(unsafe.Pointer(path))
-	handle := handles.NewHandle(done)
-	if !diagnosticNative.ScheduleDocumentReferenceObserve(document, requestID, path, uintptr(handle)) {
-		handle.Delete()
-		return errors.New("document reference observation was not scheduled")
-	}
-	return nil
-}
-
 func (implementation) FreezeDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error {
 	return scheduleDocumentFrameIdentity("freeze", generation, done, func(handle uintptr) bool {
 		return bool(diagnosticNative.ScheduleDocumentFrameIdentityFreeze(uint64(generation), handle))

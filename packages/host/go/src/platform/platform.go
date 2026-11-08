@@ -137,15 +137,6 @@ type DocumentFrameIdentityCapture interface {
 	RemoveDocumentFrameIdentity(generation uint64, done func(json.RawMessage, error)) error
 }
 
-// DocumentReferenceCapture observes one exact native document using its public
-// renderer provider and native snapshot in the same validated revision lifetime.
-// Unsupported platforms do not implement this optional capability.
-type DocumentReferenceCapture interface {
-	StartDocumentReferenceIdentity(document unsafe.Pointer, generation uint64, done func(json.RawMessage, error)) error
-	ObserveDocumentReference(document unsafe.Pointer, requestID uint64, directory string,
-		done func(json.RawMessage, error)) error
-}
-
 // InputSources are the keyboard input source operations. Only the platform implementation of a diagnostic build (tag diagnostics) provides them, and
 // diagnostic code uses them by checking the value of Current() against this interface. Selection and key-view adoption are one main-thread operation.
 type InputSources interface {

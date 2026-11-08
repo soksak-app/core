@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 
 function frameIdentity(frame, label) {
   assert.ok(frame && Number.isInteger(frame.generation) && frame.generation > 0,
@@ -200,18 +199,6 @@ function captureCells(capture, source, cells) {
 
 function sameBytes(left, right) {
   return left.length === right.length && left.every((byte, index) => byte === right[index]);
-}
-
-/** Digests the SAME complete cell crops used by the exact composition check.
- * Capture bytes are read independently; no source digest is copied as evidence. */
-export function compositionPixelProof({ capture, source, cells }) {
-  const retained = cropCells(source, cells, "reference metric source");
-  const captured = captureCells(capture, source, cells);
-  assert.ok(retained.width === captured.width && retained.height === captured.height &&
-    sameBytes(retained.bytes, captured.bytes), "reference metric source/capture cell pixels differ");
-  return { sourceCellsSha256: createHash("sha256").update(retained.bytes).digest("hex"),
-    capturedCellsSha256: createHash("sha256").update(captured.bytes).digest("hex"),
-    byteCount: retained.bytes.length, cellCount: cells.length };
 }
 
 export function compositionFrameCandidates({ targetFrame, capture, sources, cells, cell, expectedState }) {

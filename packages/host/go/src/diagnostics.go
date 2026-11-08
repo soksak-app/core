@@ -949,22 +949,6 @@ func diagnosticCaptureDocumentIdentityStart(e *Endpoint, _ *endpointConn, params
 	if err != nil {
 		return nil, err
 	}
-	identity, ok := system.(platform.DocumentFrameIdentityCapture)
-	if !ok {
-		return nil, errors.New("document frame identity is not implemented on this platform")
-	}
-	return startDocumentFrameIdentity(s, request.Surface, request.Generation,
-		func() (unsafe.Pointer, error) {
-			return s.documentFrameIdentityRoot(request.Surface, request.Generation)
-		},
-		identity.StartDocumentFrameIdentity)
-}
-
-// One canonical pending-start owner is shared by root identity observations and
-// exact document references. Capture-stop retains cleanup ownership on timeout.
-func startDocumentFrameIdentity(s *Surfaces, surface string, generation uint64,
-	resolve func() (unsafe.Pointer, error),
-	start func(unsafe.Pointer, uint64, func(json.RawMessage, error)) error) (map[string]any, error) {
 	documentFrameIdentityMu.Lock()
 	defer documentFrameIdentityMu.Unlock()
 	active, selected := recording.FrameIdentityState()
@@ -982,32 +966,35 @@ func startDocumentFrameIdentity(s *Surfaces, surface string, generation uint64,
 			return nil, errors.New("a previous document frame identity start is still pending")
 		}
 	}
+	identity, ok := system.(platform.DocumentFrameIdentityCapture)
+	if !ok {
+		return nil, errors.New("document frame identity is not implemented on this platform")
+	}
 	if s.invoke == nil {
 		return nil, errors.New("document frame identity has no UI-thread dispatcher")
 	}
-	if err := recording.SelectFrameIdentitySource(surface, generation); err != nil {
+	if err := recording.SelectFrameIdentitySource(request.Surface, request.Generation); err != nil {
 		return nil, err
 	}
 	pending := make(chan documentFrameIdentityResult, 1)
 	pendingDocumentFrameIdentityStart = pending
 	var dispatchErr error
 	s.invoke(func() {
-		document, resolveErr := resolve()
+		document, resolveErr := s.documentFrameIdentityRoot(request.Surface, request.Generation)
 		if resolveErr != nil {
 			dispatchErr = resolveErr
 			return
 		}
-		dispatchErr = start(document, generation, func(reply json.RawMessage, err error) {
+		dispatchErr = identity.StartDocumentFrameIdentity(document, request.Generation, func(reply json.RawMessage, err error) {
 			pending <- documentFrameIdentityResult{reply: reply, err: err}
 		})
 	})
 	if dispatchErr != nil {
 		pendingDocumentFrameIdentityStart = nil
-		recording.ClearFrameIdentitySource(surface, generation)
+		recording.ClearFrameIdentitySource(request.Surface, request.Generation)
 		return nil, dispatchErr
 	}
 	var nativeReply json.RawMessage
-	var err error
 	select {
 	case result := <-pending:
 		pendingDocumentFrameIdentityStart = nil
@@ -1019,11 +1006,11 @@ func startDocumentFrameIdentity(s *Surfaces, surface string, generation uint64,
 		return nil, err
 	}
 	var reply map[string]any
-	if err := validateDocumentFrameIdentityStartReply(nativeReply, generation, &reply); err != nil {
+	if err := validateDocumentFrameIdentityStartReply(nativeReply, request.Generation, &reply); err != nil {
 		return nil, fmt.Errorf("native document frame identity start returned invalid JSON metadata: %s", nativeReply)
 	}
-	reply["surface"] = surface
-	reply["generation"] = generation
+	reply["surface"] = request.Surface
+	reply["generation"] = request.Generation
 	return reply, nil
 }
 
@@ -1265,12 +1252,8 @@ func documentFrameIdentityRemoved(raw json.RawMessage, generation uint64) error 
 }
 
 func awaitDocumentFrameIdentity(s *Surfaces, schedule func(func(json.RawMessage, error)) error) (json.RawMessage, error) {
-	return awaitDocumentObservation(s, "document frame identity", schedule)
-}
-
-func awaitDocumentObservation(s *Surfaces, owner string, schedule func(func(json.RawMessage, error)) error) (json.RawMessage, error) {
 	if s.invoke == nil {
-		return nil, errors.New(owner + " has no UI-thread dispatcher")
+		return nil, errors.New("document frame identity has no UI-thread dispatcher")
 	}
 	done := make(chan struct {
 		reply json.RawMessage
@@ -1286,17 +1269,17 @@ func awaitDocumentObservation(s *Surfaces, owner string, schedule func(func(json
 			if waitAbandoned {
 				callbackMu.Unlock()
 				if err != nil {
-					LogError(owner+" callback", err)
+					LogError("document frame identity callback", err)
 				}
 				return
 			}
 			if callbackCompleted {
 				callbackMu.Unlock()
-				duplicateErr := errors.New(owner + " callback completed more than once")
+				duplicateErr := errors.New("document frame identity callback completed more than once")
 				if err != nil {
 					duplicateErr = errors.Join(duplicateErr, err)
 				}
-				LogError(owner+" callback", duplicateErr)
+				LogError("document frame identity callback", duplicateErr)
 				return
 			}
 			callbackCompleted = true
@@ -1333,7 +1316,7 @@ func awaitDocumentObservation(s *Surfaces, owner string, schedule func(func(json
 		}
 		waitAbandoned = true
 		callbackMu.Unlock()
-		return nil, errors.New(owner + " native operation did not complete within the diagnostic timeout")
+		return nil, errors.New("document frame identity native operation did not complete within the diagnostic timeout")
 	}
 }
 
