@@ -452,7 +452,7 @@
       },
       {
         "name": "core.surfaces",
-        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, host or unread); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring. kind is tab for the surface of a tab and section for a section surface, and sidebar is the sidebar id of a section surface or null.",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, refused, host, unread or params); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring. kind is tab for the surface of a tab and section for a section surface, and sidebar is the sidebar id of a section surface or null.",
         "schema": {
           "type": "array",
           "items": {
@@ -532,8 +532,10 @@
                   "missing",
                   "disabled",
                   "reload",
+                  "refused",
                   "host",
                   "unread",
+                  "params",
                   null
                 ]
               },
