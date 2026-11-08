@@ -528,13 +528,18 @@ static BOOL holdsSurface(NSView *view) {
     return NO;
 }
 
-// A press on the workbench: a press in the content view of a window that holds a surface, outside the views of its surfaces
-// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+// A press on the workbench: a press in the content view of a window that holds a surface, outside the views of its surfaces and
+// outside its modal web views (docs/spec/native-surfaces.md#keyboard-of-a-surface). A modal web view is a web view of the content
+// view other than the main web view; it takes the keyboard itself, and its document owes no decision of the workbench
+// (docs/spec/native-modals.md#keyboard).
 static bool pressOnWorkbench(void *owner, double x, double y) {
     NSView *content = ((NSWindow *)owner).contentView;
     if (!content || !holdsSurface(content)) return false;
     NSView *hit = [content hitTest:[content.superview convertPoint:NSMakePoint(x, y) fromView:nil]];
-    return hit && !surfaceHost(hit);
+    if (!hit || surfaceHost(hit)) return false;
+    NSView *page = hit;
+    while (page && ![page isKindOfClass:WKWebView.class]) page = page.superview;
+    return !page || page == (NSView *)sp_window_main_webview(owner);
 }
 
 void *sp_surface_create(void *handle) {
