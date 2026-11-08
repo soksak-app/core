@@ -1,6 +1,7 @@
 // The view of the raster probe: one image region that the fake persistent sidecar @sok-check/sidecar-rasterprobe draws
 // (docs/spec/native-surfaces.md#image-regions, docs/spec/persistent-services.md). The view opens the session of its surface with its
-// image, forwards the text size factor of the surface and the input of the region to the sidecar, opens the session again on each
+// image before it sends any other request: a view of a reloaded page starts with a surface whose session the close of the old page
+// may have ended, and a request before the open would reach a surface without a session. It forwards the text size factor of the surface and the input of the region to the sidecar, opens the session again on each
 // connection notice of the sidecar, and reports the view, the session, the last frame and the input of the region as statuses. A
 // primary press on the region gives it the keyboard focus, as a view whose region takes text does (a press passes through the
 // region to the page, docs/spec/native-surfaces.md#image-regions). A hide, a show and a reload of the view are the host's: the host
@@ -134,6 +135,8 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   };
   await sidecar.on(surface, answer);
   await sidecar.onFailure(surface, (reason) => sessionStatus.set({ ...sessionStatus.read(), connected: false, failure: reason }));
+  // The open comes first: the region, the commands and the text size listener created below are the sources of every other request.
+  await open();
 
   const composition = await bridge.composition.create({ regions: { [REGION]: element }, overlays: {} });
   const image = composition.region(REGION);
@@ -192,5 +195,4 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   });
   new view.ResizeObserver(measure).observe(element);
   measure();
-  await open();
 }

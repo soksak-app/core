@@ -35,7 +35,7 @@
       },
       {
         "name": "rasterprobe.session",
-        "description": "The session of the surface as the sidecar reported it (session, created, child process, service pid, version and folder, mode image or headless, color, rows, text size factor), whether the sidecar is connected, and the last failure or refused request.",
+        "description": "The session of the surface as the sidecar reported it (session, created, child process, service pid, version and folder, mode image or headless, the name of its image region as region, color, rows, text size factor), whether the sidecar is connected, and the last failure or refused request.",
         "schema": {
           "type": "object",
           "properties": {

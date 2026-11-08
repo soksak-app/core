@@ -97,8 +97,10 @@ test("the sidecar catalog composes with the core catalog and declares the lines 
 });
 
 /** A fake view bridge and exposure that record what the probe registers and sends. */
-function fakeView({ textSize = 1.25 } = {}) {
+function fakeView({ textSize = 1.25, held = null, textSizeAtOnce = false } = {}) {
   const sent = [];
+  // The order of the calls of the view: each request by its operation, the composition, the text size listener and each command.
+  const order = [];
   const errors = [];
   const commands = new Map();
   const statuses = new Map();
@@ -122,19 +124,36 @@ function fakeView({ textSize = 1.25 } = {}) {
           send: async (surface, body, cids = []) => {
             assert.ok(answer && failure, "the view subscribes before its first request");
             sent.push({ surface, body, cids });
+            order.push(`send ${body.operation}`);
           },
         };
       },
-      textSize: { read: async () => textSize, on: async (listener) => { onTextSize = listener; } },
+      textSize: {
+        read: async () => textSize,
+        on: async (listener) => {
+          onTextSize = listener;
+          order.push("textSize.on");
+          // A listener can be told the current factor as soon as it registers.
+          if (textSizeAtOnce) listener(textSize);
+        },
+      },
       error: (where, text) => errors.push(`${where}: ${text}`),
     },
     composition: {
       create: async ({ regions }) => {
         assert.deepEqual(Object.keys(regions), [REGION]);
-        return { region: () => ({ on: (type, fn) => imageHandlers.set(type, fn), focus: async () => sent.push({ focus: true }) }) };
+        order.push("composition");
+        return { region: () => ({
+          on: (type, fn) => {
+            imageHandlers.set(type, fn);
+            // attachImage holds the input events of a region until its first input handler registers, then delivers them.
+            if (type === "input" && held !== null) fn(held);
+          },
+          focus: async () => sent.push({ focus: true }),
+        }) };
       },
     },
-    commands: { register: async (name, run) => { commands.set(name, run); } },
+    commands: { register: async (name, run) => { commands.set(name, run); order.push(`command ${name}`); } },
   };
   const elements = new Map();
   const expose = { status: async (name, read, subscribe) => { statuses.set(name, { read, subscribe }); },
@@ -145,7 +164,7 @@ function fakeView({ textSize = 1.25 } = {}) {
     ResizeObserver: class { constructor(callback) { observed = callback; } observe() {} },
   };
   const document = { getElementById: (id) => { assert.equal(id, REGION); return element; } };
-  return { bridge, expose, view, document, sent, errors, commands, statuses, elements, element, imageHandlers, press: (type, event) => listeners.get(type)({ type, ...event }),
+  return { bridge, expose, view, document, sent, order, errors, commands, statuses, elements, element, imageHandlers, press: (type, event) => listeners.get(type)({ type, ...event }),
     answer: (body) => answer(body), fail: (reason) => failure(reason), textSize: (value) => onTextSize(value), resized: () => observed() };
 }
 
@@ -174,6 +193,19 @@ test("the probe opens its session with its image and reports the view, the sessi
   assert.deepEqual(fake.sent.slice(1).map(({ body }) => body), [{ operation: "rows", count: 4 }, { operation: "kill" }]);
   fake.answer({ event: "rows", count: 4 });
   assert.equal(status("rasterprobe.session").rows, 4);
+});
+
+test("the view opens its session before any other request, as a view of a reloaded page must", { timeout: 1000 }, async () => {
+  // The region delivers a held focus transaction as soon as its input handler registers, and the text size listener is told the
+  // factor at once: neither request reaches the sidecar before the open, which a surface whose session ended would refuse.
+  const focus = { type: "input", actions: [{ type: "focus", focused: true }], preedit: null, errors: [], cids: ["n.1"] };
+  const fake = fakeView({ held: focus, textSizeAtOnce: true });
+  await startRasterProbe(fake);
+  const sends = fake.order.filter((entry) => entry.startsWith("send "));
+  assert.deepEqual(sends, ["send open", "send input", "send textSize"]);
+  assert.equal(fake.order[0], "send open", "the open precedes the composition, the commands and the text size listener");
+  assert.deepEqual(fake.sent[0].body, { operation: "open", image: REGION, textSize: 1.25 });
+  assert.deepEqual(fake.sent[1], { surface: "tab-9", body: { operation: "input", sequence: 1, actions: focus.actions, preedit: null }, cids: ["n.1"] });
 });
 
 test("the probe forwards region input with its cids, follows the text size and opens again on a connection notice", { timeout: 1000 }, async () => {
