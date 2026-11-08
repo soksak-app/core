@@ -1208,6 +1208,7 @@ fn invalid_json_closes_connection() {
 | `log.native.platform-pulls-the-ring` | 플랫폼은 빈 native ring을 0바이트와 손실 없음으로 pull하고, 빈 buffer로의 pull은 거부한다. | all |
 | `log.native.platform-reads-the-clock-and-takes-the-boot` | 플랫폼은 양수이고 줄어들지 않으며 시간과 함께 늘어나는 monotonic clock(나노초)을 읽고, 실행의 boot 식별자를 native 계층의 상관 식별자용으로 받는다. 빈 식별자와 영문자, 숫자, `-`, `_` 외의 문자가 있는 식별자는 거부한다. | all |
 | `log.native.host-writer-starts-with-the-platform-pull` | host의 writer는 플랫폼의 pull과 함께 시작하고 `log.open`을 먼저 쓴다. | all |
+| `log.native.activity-observers-register-under-the-policy` | host는 writer가 첫 policy를 적용한 뒤 활동 observer를 설치하므로, class `lifecycle`을 level `info`로 저장하는 policy는 host 시작부터 `activity.window`와 `activity.occlusion`의 `native.observe.registered`를 저장한다. | all |
 | `log.native.platform-flushes-the-observers` | 플랫폼은 마지막 요약 뒤에 전달이 있는 native observer의 모든 counted source의 요약을 저장하고 오류 없이 응답한다. | all |
 | `log.native.shutdown-flushes-the-observers-before-the-writer` | host의 종료는 native observer를 먼저 flush하고 event writer를 나중에 flush하므로, observer flush가 저장한 event는 종료 flush가 반환될 때 파일에 있다. | all |
 | `log.native.shutdown-reports-a-failed-observer-flush` | native observer의 flush가 실패해도 writer의 flush는 건너뛰지 않고, 결과는 observer flush와 그 원인을 이름으로 밝힌다. | all |
