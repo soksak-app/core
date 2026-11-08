@@ -449,6 +449,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F702",
+    implementation: [{ file: "packages/soksak/scripts/workspace-copy.mjs", symbol: "export const ROOT_PARTS = [" }],
+    tests: [{ file: "packages/soksak/test/workspace-copy.test.mjs", id: "every file that a copied module imports from outside the package is a copied workspace part" }],
+    expected: "The copy that make check-breaks runs holds every workspace file that a copied module imports, scripts/test-command.mjs included, so the copy passes before a break is applied.",
+    levels: ["unit"],
+  },
+  {
     id: "F669",
     implementation: [
       { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
