@@ -250,10 +250,31 @@ func readProject(raw json.RawMessage) (projectRecord, error) {
 	if err := json.Unmarshal(raw, &record.Project); err != nil {
 		return record, err
 	}
-	return record, errors.Join(member(record.Rest, "title", &record.Title), member(record.Rest, "root", &record.Root),
+	return record, record.readMembers()
+}
+
+// readMembers reads the members of the stored record that the shell names into their fields.
+func (record *projectRecord) readMembers() error {
+	return errors.Join(member(record.Rest, "title", &record.Title), member(record.Rest, "root", &record.Root),
 		member(record.Rest, "color", &record.Color), member(record.Rest, "identity", &record.Identity),
 		member(record.Rest, "pinned", &record.Pinned), member(record.Rest, "lastOpened", &record.LastOpened),
 		member(record.Rest, "settings", &record.Settings))
+}
+
+// take writes the members of a patch that the store took into the stored record, which core.projects reports, and reads the fields
+// again, so the record stays the one source of its members.
+func (record *projectRecord) take(members map[string]any) error {
+	if record.Rest == nil {
+		record.Rest = map[string]json.RawMessage{}
+	}
+	for key, value := range members {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("project member %s: %w", key, err)
+		}
+		record.Rest[key] = raw
+	}
+	return record.readMembers()
 }
 
 // Shell is the workbench of one window.

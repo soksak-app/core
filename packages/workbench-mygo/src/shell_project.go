@@ -336,11 +336,14 @@ func (s *Shell) openStored(id string, project *projectRecord, done func(err erro
 				done(err)
 				return
 			}
-			now := time.Now().UnixMilli()
+			opening := map[string]any{"lastOpened": time.Now().UnixMilli()}
 			if project := s.project(id); project != nil {
-				project.LastOpened = float64(now)
+				if err := project.take(opening); err != nil {
+					done(err)
+					return
+				}
 			}
-			s.patch(id, map[string]any{"lastOpened": now})
+			s.patch(id, opening)
 			if opened.Local {
 				s.showThen(id, done)
 				return

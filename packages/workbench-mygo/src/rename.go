@@ -137,14 +137,17 @@ func (s *Shell) commitRename(done func(error)) {
 
 // patchProject writes members into the stored project and tells when the store holds them, or the refusal of the store. The shell takes
 // the change from the answer, so it never shows what the store refused.
-func (s *Shell) patchProject(id string, members map[string]any, apply func(project *projectRecord), done func(error)) {
+func (s *Shell) patchProject(id string, members map[string]any, done func(error)) {
 	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": id, "patch": members}, func(_ any, err error) {
 		if err != nil {
 			done(err)
 			return
 		}
 		if project := s.project(id); project != nil {
-			apply(project)
+			if err := project.take(members); err != nil {
+				done(err)
+				return
+			}
 		}
 		s.options.Invalidate()
 		done(nil)
@@ -152,7 +155,7 @@ func (s *Shell) patchProject(id string, members map[string]any, apply func(proje
 }
 
 func (s *Shell) renameProject(id, title string, done func(error)) {
-	s.patchProject(id, map[string]any{"title": title}, func(project *projectRecord) { project.Title = title }, done)
+	s.patchProject(id, map[string]any{"title": title}, done)
 }
 
 func (s *Shell) renameSpace(id, title string) error {
@@ -174,7 +177,7 @@ func (s *Shell) renameSpace(id, title string) error {
 }
 
 func (s *Shell) pinProject(id string, pinned bool, done func(error)) {
-	s.patchProject(id, map[string]any{"pinned": pinned}, func(project *projectRecord) { project.Pinned = pinned }, done)
+	s.patchProject(id, map[string]any{"pinned": pinned}, done)
 }
 
 // moveProject moves a project in the stored order. Like the store, it moves nothing for a project that is not there or past either end.
