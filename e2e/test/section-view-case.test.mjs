@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { validateDiagnostics } from "@soksak/plugin-api";
-import { installedSectionViews, requireSectionDeclarations, SECTION_PLACEMENT, sectionTopEdgeDragPlan, sectionViewDescriptor }
+import { ANCHOR_PLUGIN, installedSectionViews, requireSectionDeclarations, SECTION_PLACEMENT, sectionTopEdgeDragPlan, sectionViewDescriptor }
   from "../benchmark/cases/section-view.mjs";
 
 /** A configuration folder whose plugins/installed.json lists `plugins` ({id, enabled, manifest, diagnostics?}). */
@@ -48,26 +48,31 @@ function withReadySchema(view, schema) {
 }
 
 test("the declaration of a plugin that has sections and no surface is a valid diagnostics declaration", () => {
-  const manifest = { id: "files", sections: [section("files.tree", "ui/tree.html")] };
-  assert.deepEqual(validateDiagnostics(manifest, declared("files", ["files.tree"])), declared("files", ["files.tree"]));
+  const manifest = { id: "probeplain", sections: [section("probeplain.section", "ui/section.html")] };
+  assert.deepEqual(validateDiagnostics(manifest, declared("probeplain", ["probeplain.section"])), declared("probeplain", ["probeplain.section"]));
 });
 
-test("the section views are the sections of the enabled installed plugins in the order of plugin id and declaration", (t) => {
+test("the section views are the sections of the enabled installed plugins, or of one plugin, in the order of plugin id and declaration", (t) => {
   const configDir = configFolder(t, [
-    { id: "files", enabled: true, manifest: { id: "files", sections: [section("files.tree", "ui/tree.html"), section("files.bookmarks", "ui/bookmarks.html")] }, diagnostics: declared("files", ["files.tree", "files.bookmarks"]) },
-    { id: "browser", enabled: true, manifest: { id: "browser", surface: {}, sections: [section("browser.dom", "ui/section.html")] } },
-    { id: "kanban", enabled: false, manifest: { id: "kanban", surface: {}, sections: [section("kanban.board", "ui/board.html")] } },
-    { id: "term", enabled: true, manifest: { id: "term", surface: {} } },
+    { id: "probeplain", enabled: true, manifest: { id: "probeplain", sections: [section("probeplain.section", "ui/section.html"), section("probeplain.second", "ui/second.html")] }, diagnostics: declared("probeplain", ["probeplain.section", "probeplain.second"]) },
+    { id: "layoutprobe", enabled: true, manifest: { id: "layoutprobe", surface: {}, sections: [section("layoutprobe.alpha", "ui/section.html")] } },
+    { id: "probeclose", enabled: false, manifest: { id: "probeclose", surface: {}, sections: [section("probeclose.list", "ui/list.html")] } },
+    { id: "layoutprobe2", enabled: true, manifest: { id: "layoutprobe2", surface: {} } },
   ]);
   const views = installedSectionViews(configDir);
   assert.deepEqual(views.map(({ plugin, section: id, page }) => [plugin, id, page]), [
-    ["browser", "browser.dom", "ui/section.html"],
-    ["files", "files.tree", "ui/tree.html"],
-    ["files", "files.bookmarks", "ui/bookmarks.html"],
+    ["layoutprobe", "layoutprobe.alpha", "ui/section.html"],
+    ["probeplain", "probeplain.section", "ui/section.html"],
+    ["probeplain", "probeplain.second", "ui/second.html"],
   ]);
   assert.equal(views[0].diagnostics, null);
-  assert.deepEqual(views[1].diagnostics, declared("files", ["files.tree", "files.bookmarks"]));
-  assert.deepEqual(views[1].manifest, { id: "files", sections: [section("files.tree", "ui/tree.html"), section("files.bookmarks", "ui/bookmarks.html")] });
+  assert.deepEqual(views[1].diagnostics, declared("probeplain", ["probeplain.section", "probeplain.second"]));
+  assert.deepEqual(views[1].manifest, { id: "probeplain", sections: [section("probeplain.section", "ui/section.html"), section("probeplain.second", "ui/second.html")] });
+  assert.deepEqual(installedSectionViews(configDir, { plugin: "probeplain" }).map(({ section: id }) => id), ["probeplain.section", "probeplain.second"]);
+  assert.throws(() => installedSectionViews(configDir, { plugin: "layoutprobe2" }),
+    { message: "no enabled installed plugin layoutprobe2 declares a section view" });
+  assert.throws(() => installedSectionViews(configDir, { plugin: "probeclose" }),
+    { message: "no enabled installed plugin probeclose declares a section view" });
 });
 
 test("reading the section views fails on a folder without installed plugins, another format or no section", (t) => {
@@ -77,67 +82,67 @@ test("reading the section views fails on a folder without installed plugins, ano
     { message: `${join(empty, "plugins", "installed.json")} does not exist, so no plugin with a section view is installed` });
   const old = configFolder(t, [], 2);
   assert.throws(() => installedSectionViews(old), { message: `${join(old, "plugins", "installed.json")}: format must be 3, not 2` });
-  const none = configFolder(t, [{ id: "term", enabled: true, manifest: { id: "term", surface: {} } }]);
+  const none = configFolder(t, [{ id: "layoutprobe2", enabled: true, manifest: { id: "layoutprobe2", surface: {} } }]);
   assert.throws(() => installedSectionViews(none), { message: "no enabled installed plugin declares a section view" });
 });
 
 test("a section view whose plugin does not declare the three entries of the section-view contract fails with its plugin and section", (t) => {
   const configDir = configFolder(t, [
-    { id: "browser", enabled: true, manifest: { id: "browser", surface: {}, sections: [section("browser.dom", "ui/section.html")] } },
-    { id: "files", enabled: true, manifest: { id: "files", sections: [section("files.tree", "ui/tree.html"), section("files.bookmarks", "ui/bookmarks.html")] },
-      diagnostics: declared("files", ["files.tree"]) },
+    { id: "layoutprobe", enabled: true, manifest: { id: "layoutprobe", surface: {}, sections: [section("layoutprobe.alpha", "ui/section.html")] } },
+    { id: "probeplain", enabled: true, manifest: { id: "probeplain", sections: [section("probeplain.section", "ui/section.html"), section("probeplain.second", "ui/second.html")] },
+      diagnostics: declared("probeplain", ["probeplain.section"]) },
   ]);
-  const [browser, files, bookmarks] = installedSectionViews(configDir);
+  const [layoutprobe, probeplain, second] = installedSectionViews(configDir);
   const failure = (view) => `${view.plugin} section view ${view.section} does not declare ${view.plugin}.view.frames, ` +
     `${view.plugin}.view.history and ${view.section}.view.ready in its diagnostics declaration`;
-  assert.throws(() => requireSectionDeclarations(browser), { message: failure(browser) });
-  assert.deepEqual(requireSectionDeclarations(files), { ...files, content: "files.tree section" });
+  assert.throws(() => requireSectionDeclarations(layoutprobe), { message: failure(layoutprobe) });
+  assert.deepEqual(requireSectionDeclarations(probeplain), { ...probeplain, content: "probeplain.section section" });
   // The ready status of another section of the plugin does not serve this section.
-  assert.throws(() => requireSectionDeclarations(bookmarks), { message: failure(bookmarks) });
-  const withoutReady = { ...files, diagnostics: { ...files.diagnostics, exposes: { commands: files.diagnostics.exposes.commands } } };
-  assert.throws(() => requireSectionDeclarations(withoutReady), { message: failure(files) });
-  const readyAsCommand = { ...files, diagnostics: { ...files.diagnostics, exposes: { commands: [...files.diagnostics.exposes.commands,
-    { name: "files.tree.view.ready", description: "d.", params: { type: "object" }, result: {} }] } } };
-  assert.throws(() => requireSectionDeclarations(readyAsCommand), { message: failure(files) });
-  const pluginStatus = { ...files, diagnostics: { ...files.diagnostics, exposes: { ...files.diagnostics.exposes,
-    status: [{ name: "files.view.ready", description: "d.", schema: readySchema({ content: single("files"), language: single("plaintext") }) }] } } };
-  assert.throws(() => requireSectionDeclarations(pluginStatus), { message: failure(files) });
+  assert.throws(() => requireSectionDeclarations(second), { message: failure(second) });
+  const withoutReady = { ...probeplain, diagnostics: { ...probeplain.diagnostics, exposes: { commands: probeplain.diagnostics.exposes.commands } } };
+  assert.throws(() => requireSectionDeclarations(withoutReady), { message: failure(probeplain) });
+  const readyAsCommand = { ...probeplain, diagnostics: { ...probeplain.diagnostics, exposes: { commands: [...probeplain.diagnostics.exposes.commands,
+    { name: "probeplain.section.view.ready", description: "d.", params: { type: "object" }, result: {} }] } } };
+  assert.throws(() => requireSectionDeclarations(readyAsCommand), { message: failure(probeplain) });
+  const pluginStatus = { ...probeplain, diagnostics: { ...probeplain.diagnostics, exposes: { ...probeplain.diagnostics.exposes,
+    status: [{ name: "probeplain.view.ready", description: "d.", schema: readySchema({ content: single("probeplain"), language: single("plaintext") }) }] } } };
+  assert.throws(() => requireSectionDeclarations(pluginStatus), { message: failure(probeplain) });
 });
 
 test("a section view whose ready status does not declare a single-entry enum content fails with its plugin, section and field", (t) => {
   const configDir = configFolder(t, [
-    { id: "files", enabled: true, manifest: { id: "files", sections: [section("files.tree", "ui/tree.html")] }, diagnostics: declared("files", ["files.tree"]) },
+    { id: "probeplain", enabled: true, manifest: { id: "probeplain", sections: [section("probeplain.section", "ui/section.html")] }, diagnostics: declared("probeplain", ["probeplain.section"]) },
   ]);
-  const [files] = installedSectionViews(configDir);
-  const failure = `files section view files.tree declares files.tree.view.ready without a single-entry enum content`;
+  const [probeplain] = installedSectionViews(configDir);
+  const failure = `probeplain section view probeplain.section declares probeplain.section.view.ready without a single-entry enum content`;
   const language = { language: single("plaintext") };
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema(language))), { message: failure });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({}))), { message: failure });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({ content: { type: "string" } }))), { message: failure });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, readySchema({ content: { type: "string", enum: ["one", "two"] } }))),
+  assert.throws(() => requireSectionDeclarations(withReadySchema(probeplain, readySchema(language))), { message: failure });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(probeplain, readySchema({}))), { message: failure });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(probeplain, readySchema({ content: { type: "string" } }))), { message: failure });
+  assert.throws(() => requireSectionDeclarations(withReadySchema(probeplain, readySchema({ content: { type: "string", enum: ["one", "two"] } }))),
     { message: failure });
-  assert.throws(() => requireSectionDeclarations(withReadySchema(files, { type: "object" })), { message: failure });
-  assert.deepEqual(requireSectionDeclarations(withReadySchema(files, readySchema({ content: single("files section") }))).content, "files section",
+  assert.throws(() => requireSectionDeclarations(withReadySchema(probeplain, { type: "object" })), { message: failure });
+  assert.deepEqual(requireSectionDeclarations(withReadySchema(probeplain, readySchema({ content: single("probeplain section") }))).content, "probeplain section",
     "a ready status without a language is refused");
 });
 
 test("a section view whose installed declaration the workbench refuses fails with the refusal of validateDiagnostics", (t) => {
-  const manifest = { id: "files", sections: [section("files.tree", "ui/tree.html")] };
+  const manifest = { id: "probeplain", sections: [section("probeplain.section", "ui/section.html")] };
   const view = (diagnostics, plugin = manifest) => {
-    const configDir = configFolder(t, [{ id: "files", enabled: true, manifest: plugin, diagnostics }]);
+    const configDir = configFolder(t, [{ id: "probeplain", enabled: true, manifest: plugin, diagnostics }]);
     return installedSectionViews(configDir)[0];
   };
-  const refused = (schema) => withReadySchema(view(declared("files", ["files.tree"])), schema);
-  assert.throws(() => requireSectionDeclarations(refused(readySchema({ content: { type: "string", const: "files section" }, language: single("plaintext") }))),
-    { message: "files exposes files.tree.view.ready schema.content: unknown field const" });
-  assert.throws(() => requireSectionDeclarations(refused({ ...readySchema({ content: single("files"), language: single("plaintext") }), required: ["ready"] })),
-    { message: "files exposes files.tree.view.ready schema: unknown field required" });
-  assert.throws(() => sectionViewDescriptor(refused({ ...readySchema({ content: single("files"), language: single("plaintext") }), required: ["ready"] })),
-    { message: "files exposes files.tree.view.ready schema: unknown field required" });
+  const refused = (schema) => withReadySchema(view(declared("probeplain", ["probeplain.section"])), schema);
+  assert.throws(() => requireSectionDeclarations(refused(readySchema({ content: { type: "string", const: "probeplain section" }, language: single("plaintext") }))),
+    { message: "probeplain exposes probeplain.section.view.ready schema.content: unknown field const" });
+  assert.throws(() => requireSectionDeclarations(refused({ ...readySchema({ content: single("probeplain"), language: single("plaintext") }), required: ["ready"] })),
+    { message: "probeplain exposes probeplain.section.view.ready schema: unknown field required" });
+  assert.throws(() => sectionViewDescriptor(refused({ ...readySchema({ content: single("probeplain"), language: single("plaintext") }), required: ["ready"] })),
+    { message: "probeplain exposes probeplain.section.view.ready schema: unknown field required" });
   // The manifest that the check reads is the installed plugin.json: a name that it also declares is refused.
-  const twice = view(declared("files", ["files.tree"]), { ...manifest, exposes: { commands: [declared("files", [])
+  const twice = view(declared("probeplain", ["probeplain.section"]), { ...manifest, exposes: { commands: [declared("probeplain", [])
     .exposes.commands[0]] } });
-  assert.throws(() => requireSectionDeclarations(twice), { message: "command files.view.frames is declared twice" });
+  assert.throws(() => requireSectionDeclarations(twice), { message: "command probeplain.view.frames is declared twice" });
 });
 
 /**
@@ -170,26 +175,26 @@ function fakeSession(statuses, answers = {}) {
   };
 }
 
-const terminalTab = (id) => ({ id, plugin: "terminal" });
+const anchorTab = (id) => ({ id, plugin: ANCHOR_PLUGIN });
 const card = (id, h, tabs, rows = [0, 1]) => ({ id, x: 0, y: 0, w: 400, h, r0: rows[0], r1: rows[1], c0: 0, c1: 1, tabs });
 
-test("the section placement anchors on the preferred card with a terminal tab, else on the first such card", () => {
-  const grid = { cards: [card("card-1", 300, [{ id: "browser-1", plugin: "browser" }]), card("card-2", 300, [terminalTab("t-2")]),
-    card("card-3", 300, [terminalTab("t-3")])] };
-  assert.equal(SECTION_PLACEMENT.card(grid, "files", "card-3"), "card-3");
-  assert.equal(SECTION_PLACEMENT.card(grid, "files", "card-1"), "card-2");
-  assert.equal(SECTION_PLACEMENT.card(grid, "files", undefined), "card-2");
-  assert.throws(() => SECTION_PLACEMENT.card({ cards: [grid.cards[0]] }, "files", "card-1"),
-    { message: "core.grid has no card with a terminal tab, whose card-left sidebar shows the section view of files" });
+test("the section placement anchors on the preferred card with a layoutprobe tab, else on the first such card", () => {
+  const grid = { cards: [card("card-1", 300, [{ id: "plain-1", plugin: "probeplain" }]), card("card-2", 300, [anchorTab("t-2")]),
+    card("card-3", 300, [anchorTab("t-3")])] };
+  assert.equal(SECTION_PLACEMENT.card(grid, "probeplain", "card-3"), "card-3");
+  assert.equal(SECTION_PLACEMENT.card(grid, "probeplain", "card-1"), "card-2");
+  assert.equal(SECTION_PLACEMENT.card(grid, "probeplain", undefined), "card-2");
+  assert.throws(() => SECTION_PLACEMENT.card({ cards: [grid.cards[0]] }, "probeplain", "card-1"),
+    { message: "core.grid has no card with a layoutprobe tab, whose card-left sidebar shows the section view of probeplain" });
 });
 
 const sidebar = (id, sections) => ({ sidebar: id, placement: "card", card: id.split(":")[0], sections });
 const fixtureProject = { id: "project-1", root: "/config/test-project" };
 
-test("a section view starts in a new terminal card split below the tallest terminal card, as the section of its card-left sidebar", async () => {
-  const grid = { cards: [card("card-1", 200, [terminalTab("t-1")]), card("card-2", 420, [terminalTab("t-2")]),
-    card("card-3", 500, [{ id: "browser-1", plugin: "browser" }])] };
-  const split = { cards: [...grid.cards, { ...card("card-4", 200, [terminalTab("t-4")]), active: "t-4" }] };
+test("a section view starts in a new layoutprobe card split below the tallest layoutprobe card, as the section of its card-left sidebar", async () => {
+  const grid = { cards: [card("card-1", 200, [anchorTab("t-1")]), card("card-2", 420, [anchorTab("t-2")]),
+    card("card-3", 500, [{ id: "plain-1", plugin: "probeplain" }])] };
+  const split = { cards: [...grid.cards, { ...card("card-4", 200, [anchorTab("t-4")]), active: "t-4" }] };
   const after = () => {
     let done = false;
     return { grid: () => [done ? split : grid], split: () => { done = true; return { card: "card-4", tab: "t-4" }; } };
@@ -198,54 +203,54 @@ test("a section view starts in a new terminal card split below the tallest termi
   const s = fakeSession({
     "core.project": [fixtureProject],
     "core.grid": shown.grid,
-    "core.sidebars": [[sidebar("card-1:left", [{ id: "files.tree", surfaceId: "spc-1/card-1:left/files.tree" }])],
-      [sidebar("card-1:left", [{ id: "files.tree", surfaceId: "spc-1/card-1:left/files.tree" }]),
-        sidebar("card-4:left", [{ id: "files.tree", surfaceId: "spc-1/card-4:left/files.tree" }])]],
+    "core.sidebars": [[sidebar("card-1:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-1:left/probeplain.section" }])],
+      [sidebar("card-1:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-1:left/probeplain.section" }]),
+        sidebar("card-4:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-4:left/probeplain.section" }])]],
   }, { "core.card.split": shown.split });
-  const surface = await SECTION_PLACEMENT.open(s, { card: "card-1", plugin: "files", params: { section: "files.tree" } });
-  assert.equal(surface, "spc-1/card-4:left/files.tree");
-  assert.deepEqual(s.calls[0], ["run", "core.card.split", { card: "card-2", side: "bottom", plugin: "terminal" }, undefined]);
+  const surface = await SECTION_PLACEMENT.open(s, { card: "card-1", plugin: "probeplain", params: { section: "probeplain.section" } });
+  assert.equal(surface, "spc-1/card-4:left/probeplain.section");
+  assert.deepEqual(s.calls[0], ["run", "core.card.split", { card: "card-2", side: "bottom", plugin: "layoutprobe" }, undefined]);
   assert.equal(s.cleanups.length, 1);
-  await assert.rejects(SECTION_PLACEMENT.open(s, { card: "card-1", plugin: "files", params: {} }),
-    { message: "the section placement of files requires params.section, the id of the section, not undefined" });
+  await assert.rejects(SECTION_PLACEMENT.open(s, { card: "card-1", plugin: "probeplain", params: {} }),
+    { message: "the section placement of probeplain requires params.section, the id of the section, not undefined" });
   const absent = fakeSession({ "core.project": [fixtureProject], "core.grid": [grid], "core.sidebars": [[]] }, { "core.card.split": () => ({ card: "card-4", tab: "t-4" }) });
-  await assert.rejects(SECTION_PLACEMENT.open(absent, { card: "card-1", plugin: "files", params: { section: "files.tree" } }),
-    { message: "card card-4 did not show the section files.tree in its card-left sidebar card-4:left" });
+  await assert.rejects(SECTION_PLACEMENT.open(absent, { card: "card-1", plugin: "probeplain", params: { section: "probeplain.section" } }),
+    { message: "card card-4 did not show the section probeplain.section in its card-left sidebar card-4:left" });
   const noTerminal = fakeSession({ "core.grid": [{ cards: [grid.cards[2]] }], "core.sidebars": [[]] });
-  await assert.rejects(SECTION_PLACEMENT.open(noTerminal, { card: "card-3", plugin: "files", params: { section: "files.tree" } }),
-    { message: "core.grid has no card with a terminal tab to split for the section view of files" });
+  await assert.rejects(SECTION_PLACEMENT.open(noTerminal, { card: "card-3", plugin: "probeplain", params: { section: "probeplain.section" } }),
+    { message: "core.grid has no card with a layoutprobe tab to split for the section view of probeplain" });
 });
 
 test("a section view that does not start in the fixture state fails with the expected and the actual state before it waits for readiness", async () => {
-  const sidebars = [[sidebar("card-4:left", [{ id: "files.tree", surfaceId: "spc-1/card-4:left/files.tree" }])]];
-  const anchor = card("card-2", 420, [terminalTab("t-2")]);
+  const sidebars = [[sidebar("card-4:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-4:left/probeplain.section" }])]];
+  const anchor = card("card-2", 420, [anchorTab("t-2")]);
   const opened = (project, measured) => fakeSession(
     { "core.project": [project], "core.grid": [{ cards: [anchor, measured] }], "core.sidebars": sidebars },
     { "core.card.split": () => ({ card: "card-4", tab: "t-4" }) });
-  const open = (s) => SECTION_PLACEMENT.open(s, { card: "card-2", plugin: "files", params: { section: "files.tree" } });
-  const terminal = { ...card("card-4", 200, [terminalTab("t-4")]), active: "t-4" };
-  assert.equal(await open(opened(fixtureProject, terminal)), "spc-1/card-4:left/files.tree");
-  await assert.rejects(open(opened(null, terminal)),
-    { message: "files section view files.tree starts with the project test-project, not with no project" });
-  await assert.rejects(open(opened({ id: "project-2", root: "/config/other" }, terminal)),
-    { message: "files section view files.tree starts with the project test-project, not with /config/other" });
-  await assert.rejects(open(opened(fixtureProject, { ...card("card-4", 200, [{ id: "browser-1", plugin: "browser" }, terminalTab("t-4")]), active: "browser-1" })),
-    { message: "files section view files.tree starts with a terminal tab active in card card-4, not with browser" });
+  const open = (s) => SECTION_PLACEMENT.open(s, { card: "card-2", plugin: "probeplain", params: { section: "probeplain.section" } });
+  const anchored = { ...card("card-4", 200, [anchorTab("t-4")]), active: "t-4" };
+  assert.equal(await open(opened(fixtureProject, anchored)), "spc-1/card-4:left/probeplain.section");
+  await assert.rejects(open(opened(null, anchored)),
+    { message: "probeplain section view probeplain.section starts with the project test-project, not with no project" });
+  await assert.rejects(open(opened({ id: "project-2", root: "/config/other" }, anchored)),
+    { message: "probeplain section view probeplain.section starts with the project test-project, not with /config/other" });
+  await assert.rejects(open(opened(fixtureProject, { ...card("card-4", 200, [{ id: "plain-1", plugin: "probeplain" }, anchorTab("t-4")]), active: "plain-1" })),
+    { message: "probeplain section view probeplain.section starts with a layoutprobe tab active in card card-4, not with probeplain" });
   await assert.rejects(open(opened(fixtureProject, { ...card("card-4", 200, []), active: null })),
-    { message: "files section view files.tree starts with a terminal tab active in card card-4, not with no active tab" });
+    { message: "probeplain section view probeplain.section starts with a layoutprobe tab active in card card-4, not with no active tab" });
 });
 
 test("a section view closes with the card that holds its card sidebar", async () => {
   const sidebars = [{ sidebar: "card-4:left", placement: "card", card: "card-4",
-    sections: [{ id: "files.tree", surfaceId: "spc-1/card-4:left/files.tree" }] }];
-  const surface = "spc-1/card-4:left/files.tree";
+    sections: [{ id: "probeplain.section", surfaceId: "spc-1/card-4:left/probeplain.section" }] }];
+  const surface = "spc-1/card-4:left/probeplain.section";
   const closed = fakeSession({ "core.sidebars": [sidebars], "core.surfaces": [[{ surface }], []] },
     { "core.card.close": () => ({ closed: true }) });
   await SECTION_PLACEMENT.close(closed, surface, { cleanup: false });
   assert.deepEqual(closed.calls.filter(([kind]) => kind === "run"), [["run", "core.card.close", { card: "card-4" }, undefined]]);
   const refused = fakeSession({ "core.sidebars": [sidebars], "core.surfaces": [[{ surface }]] }, { "core.card.close": () => ({ closed: false }) });
   await assert.rejects(SECTION_PLACEMENT.close(refused, surface, { cleanup: true }),
-    { message: /^card card-4 of section view spc-1\/card-4:left\/files.tree did not close during cleanup\n/ });
+    { message: /^card card-4 of section view spc-1\/card-4:left\/probeplain.section did not close during cleanup\n/ });
   const kept = fakeSession({ "core.sidebars": [sidebars], "core.surfaces": [[{ surface }]] }, { "core.card.close": () => ({ closed: true }) });
   await assert.rejects(SECTION_PLACEMENT.close(kept, surface, { cleanup: false }),
     { message: `section view ${surface} remained registered after close` });
@@ -266,70 +271,70 @@ test("the section drag moves the top boundary of the measured card 80 pt down an
 
 test("the section view descriptor waits for its declared ready status and reads its history and frames on its surface", async (t) => {
   const configDir = configFolder(t, [
-    { id: "files", enabled: true, manifest: { id: "files", sections: [section("files.tree", "ui/tree.html")] }, diagnostics: declared("files", ["files.tree"]) },
+    { id: "probeplain", enabled: true, manifest: { id: "probeplain", sections: [section("probeplain.section", "ui/section.html")] }, diagnostics: declared("probeplain", ["probeplain.section"]) },
   ]);
   const [view] = installedSectionViews(configDir);
   const descriptor = sectionViewDescriptor(view);
-  assert.equal(descriptor.plugin, "files");
+  assert.equal(descriptor.plugin, "probeplain");
   assert.equal(descriptor.placement, SECTION_PLACEMENT);
-  assert.deepEqual(descriptor.params, { section: "files.tree" });
-  assert.equal(descriptor.expectedContent, "files.tree section");
-  assert.equal(descriptor.readinessStatus, "files.tree.view.ready");
-  const surface = "spc-1/card-4:left/files.tree";
+  assert.deepEqual(descriptor.params, { section: "probeplain.section" });
+  assert.equal(descriptor.expectedContent, "probeplain.section section");
+  assert.equal(descriptor.readinessStatus, "probeplain.section.view.ready");
+  const surface = "spc-1/card-4:left/probeplain.section";
   const statusReads = [];
   assert.equal(await descriptor.readContent({ async get(name, at) {
     statusReads.push([name, at]);
-    return { ready: true, content: "files.tree section", language: "plaintext" };
-  } }, surface), "files.tree section", "the section view descriptor does not read the content of its ready status");
-  assert.deepEqual(statusReads, [["files.tree.view.ready", surface]]);
-  const ready = { ready: true, content: "files.tree section", language: "plaintext" };
-  const s = fakeSession({ "files.tree.view.ready": [{ ready: false, content: "files.tree section", language: "plaintext" }, ready] },
-    { "files.view.history": () => ({ length: 1 }) });
+    return { ready: true, content: "probeplain.section section", language: "plaintext" };
+  } }, surface), "probeplain.section section", "the section view descriptor does not read the content of its ready status");
+  assert.deepEqual(statusReads, [["probeplain.section.view.ready", surface]]);
+  const ready = { ready: true, content: "probeplain.section section", language: "plaintext" };
+  const s = fakeSession({ "probeplain.section.view.ready": [{ ready: false, content: "probeplain.section section", language: "plaintext" }, ready] },
+    { "probeplain.view.history": () => ({ length: 1 }) });
   assert.deepEqual(await descriptor.readiness(s, surface), { historyEntries: 1, regionHistoryEntries: 0, status: ready });
-  assert.deepEqual(s.calls, [["until", "files.tree.view.ready", { surface }], ["run", "files.view.history", {}, surface]]);
-  const other = fakeSession({ "files.tree.view.ready": [{ ...ready, content: "other" }] }, { "files.view.history": () => ({ length: 1 }) });
+  assert.deepEqual(s.calls, [["until", "probeplain.section.view.ready", { surface }], ["run", "probeplain.view.history", {}, surface]]);
+  const other = fakeSession({ "probeplain.section.view.ready": [{ ...ready, content: "other" }] }, { "probeplain.view.history": () => ({ length: 1 }) });
   await assert.rejects(descriptor.readiness(other, surface),
-    { message: /^files section view files.tree reported files.tree.view.ready on spc-1\/card-4:left\/files.tree with content that differs from its declaration\n/ });
-  const navigated = fakeSession({ "files.tree.view.ready": [ready] }, { "files.view.history": () => ({ length: 2 }) });
+    { message: /^probeplain section view probeplain.section reported probeplain.section.view.ready on spc-1\/card-4:left\/probeplain.section with content that differs from its declaration\n/ });
+  const navigated = fakeSession({ "probeplain.section.view.ready": [ready] }, { "probeplain.view.history": () => ({ length: 2 }) });
   await assert.rejects(descriptor.readiness(navigated, surface),
-    { message: /^files section view files.tree history on spc-1\/card-4:left\/files.tree does not contain only its initial document\n/ });
-  assert.deepEqual(await descriptor.readDocument(fakeSession({}, { "files.view.history": () => ({ length: 1 }) }), surface),
+    { message: /^probeplain section view probeplain.section history on spc-1\/card-4:left\/probeplain.section does not contain only its initial document\n/ });
+  assert.deepEqual(await descriptor.readDocument(fakeSession({}, { "probeplain.view.history": () => ({ length: 1 }) }), surface),
     { historyEntries: 1, regionHistoryEntries: 0 });
-  await assert.rejects(descriptor.readDocument(fakeSession({}, { "files.view.history": () => ({}) }), surface),
-    { message: "files section view files.tree answered files.view.history on spc-1/card-4:left/files.tree without a length" });
+  await assert.rejects(descriptor.readDocument(fakeSession({}, { "probeplain.view.history": () => ({}) }), surface),
+    { message: "probeplain section view probeplain.section answered probeplain.view.history on spc-1/card-4:left/probeplain.section without a length" });
 });
 
 test("a section view trace start without a marker color is refused with its plugin and section after the observer stops", async (t) => {
   const configDir = configFolder(t, [
-    { id: "files", enabled: true, manifest: { id: "files", sections: [section("files.tree", "ui/tree.html")] }, diagnostics: declared("files", ["files.tree"]) },
+    { id: "probeplain", enabled: true, manifest: { id: "probeplain", sections: [section("probeplain.section", "ui/section.html")] }, diagnostics: declared("probeplain", ["probeplain.section"]) },
   ]);
   const descriptor = sectionViewDescriptor(installedSectionViews(configDir)[0]);
-  const surface = "spc-1/card-4:left/files.tree";
+  const surface = "spc-1/card-4:left/probeplain.section";
   const started = { enabled: true, sourceClock: { monoNs: "1" }, markerColor: [17, 193, 231] };
-  const frames = (answer) => fakeSession({}, { "files.view.frames": ({ action }) => (action === "start" ? answer : { enabled: false }) });
+  const frames = (answer) => fakeSession({}, { "probeplain.view.frames": ({ action }) => (action === "start" ? answer : { enabled: false }) });
   const s = frames(started);
   assert.deepEqual(await descriptor.startContentTrace(s, surface), started);
   assert.deepEqual(await descriptor.stopContentTrace(s, surface), { enabled: false });
-  assert.deepEqual(s.calls, [["run", "files.view.frames", { action: "start" }, surface], ["run", "files.view.frames", { action: "stop" }, surface]]);
+  assert.deepEqual(s.calls, [["run", "probeplain.view.frames", { action: "start" }, surface], ["run", "probeplain.view.frames", { action: "stop" }, surface]]);
   for (const markerColor of [undefined, [17, 193], [17, 193, 256], [17, 193, 1.5]]) {
     const refused = frames({ ...started, markerColor });
     await assert.rejects(descriptor.startContentTrace(refused, surface),
-      { message: "files section view files.tree trace start must declare a three-channel RGB paint marker color" });
-    assert.deepEqual(refused.calls.at(-1), ["run", "files.view.frames", { action: "stop" }, surface]);
+      { message: "probeplain section view probeplain.section trace start must declare a three-channel RGB paint marker color" });
+    assert.deepEqual(refused.calls.at(-1), ["run", "probeplain.view.frames", { action: "stop" }, surface]);
   }
-  const stuck = fakeSession({}, { "files.view.frames": ({ action }) => {
-    if (action === "stop") throw new Error("files.view.frames stop failed");
+  const stuck = fakeSession({}, { "probeplain.view.frames": ({ action }) => {
+    if (action === "stop") throw new Error("probeplain.view.frames stop failed");
     return { ...started, markerColor: undefined };
   } });
   await assert.rejects(descriptor.startContentTrace(stuck, surface), (error) => error instanceof AggregateError
-    && error.message === `files section view files.tree answered a start without a marker color and did not stop on ${surface}`
+    && error.message === `probeplain section view probeplain.section answered a start without a marker color and did not stop on ${surface}`
     && error.errors.map((item) => item.message).join(" | ")
-      === "files section view files.tree trace start must declare a three-channel RGB paint marker color | files.view.frames stop failed");
+      === "probeplain section view probeplain.section trace start must declare a three-channel RGB paint marker color | probeplain.view.frames stop failed");
   const unstarted = frames({ enabled: false });
   await assert.rejects(descriptor.startContentTrace(unstarted, surface),
-    { message: /^files section view files.tree content-frame observer did not start on spc-1\/card-4:left\/files.tree\n/ });
+    { message: /^probeplain section view probeplain.section content-frame observer did not start on spc-1\/card-4:left\/probeplain.section\n/ });
   assert.equal(unstarted.calls.length, 1);
-  const running = fakeSession({}, { "files.view.frames": () => ({ enabled: true }) });
+  const running = fakeSession({}, { "probeplain.view.frames": () => ({ enabled: true }) });
   await assert.rejects(descriptor.stopContentTrace(running, surface),
-    { message: /^files section view files.tree content-frame observer did not stop on spc-1\/card-4:left\/files.tree\n/ });
+    { message: /^probeplain section view probeplain.section content-frame observer did not stop on spc-1\/card-4:left\/probeplain.section\n/ });
 });

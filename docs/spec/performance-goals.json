@@ -422,58 +422,10 @@
       }
     },
     {
-      "id": "G4-S7-browser-view",
-      "goal": "G4",
-      "scenario": "S7",
-      "target": "e2e/benchmark/browser-view.test.mjs",
-      "measurement": "verdict",
-      "unit": "verdict",
-      "over": "each",
-      "bound": {
-        "equals": "passed"
-      }
-    },
-    {
-      "id": "G4-S7-editor-view",
-      "goal": "G4",
-      "scenario": "S7",
-      "target": "e2e/benchmark/editor-view.test.mjs",
-      "measurement": "verdict",
-      "unit": "verdict",
-      "over": "each",
-      "bound": {
-        "equals": "passed"
-      }
-    },
-    {
-      "id": "G4-S7-hwp-view",
-      "goal": "G4",
-      "scenario": "S7",
-      "target": "e2e/benchmark/hwp-view.test.mjs",
-      "measurement": "verdict",
-      "unit": "verdict",
-      "over": "each",
-      "bound": {
-        "equals": "passed"
-      }
-    },
-    {
       "id": "G4-S7-section-view",
       "goal": "G4",
       "scenario": "S7",
       "target": "e2e/benchmark/section-view.test.mjs",
-      "measurement": "verdict",
-      "unit": "verdict",
-      "over": "each",
-      "bound": {
-        "equals": "passed"
-      }
-    },
-    {
-      "id": "G4-S7-editor-footprint",
-      "goal": "G4",
-      "scenario": "S7",
-      "target": "e2e/benchmark/editor-footprint.test.mjs",
       "measurement": "verdict",
       "unit": "verdict",
       "over": "each",

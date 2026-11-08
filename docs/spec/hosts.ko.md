@@ -780,11 +780,7 @@ judge는 다음 규칙을 적용한다:
 | `G3-S10-host-growth` | G3 | S10 | `make benchmark-split-load` | `hostGrowthKb` | KB | median | 131072 KB 미만 (`SPLIT_LOAD_GROWTH_BOUND_KB`) | — |
 | `G4-S5-view-drag` | G4 | S5 | `make benchmark-view-drag TRACE=0` | `verdict` | verdict | 각 run | passed | — |
 | `G4-S5-resize-catch-up` | G4 | S5 | `make benchmark-resize-catch-up TRACE=captured` | `verdict` | verdict | 각 run | passed | — |
-| `G4-S7-browser-view` | G4 | S7 | `e2e/benchmark/browser-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
-| `G4-S7-editor-view` | G4 | S7 | `e2e/benchmark/editor-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
-| `G4-S7-hwp-view` | G4 | S7 | `e2e/benchmark/hwp-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
 | `G4-S7-section-view` | G4 | S7 | `e2e/benchmark/section-view.test.mjs` | `verdict` | verdict | 각 run | passed | — |
-| `G4-S7-editor-footprint` | G4 | S7 | `e2e/benchmark/editor-footprint.test.mjs` | `verdict` | verdict | 각 run | passed | — |
 | `G5-S2-rows-1-cpu-per-frame` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1` | `applicationCpuPerFrameMs` | ms | median | 1.6 ms 이하 | 각 other host와 baseline host |
 | `G5-S2-rows-20-cpu-per-frame` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=20` | `applicationCpuPerFrameMs` | ms | median | 3.1 ms 이하 | 각 other host와 baseline host |
 | `G5-S2-rows-1-frame-rate` | G5 | S2 | `make measure-terminal-redraw PLUGIN=term RATE=30 ROWS=1` | `framesPerSecond` | frames/s | median | 27 frames/s 이상 | — |

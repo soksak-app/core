@@ -246,10 +246,10 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host document bridge", "objective-c", ["native/darwin/src/host_api_document.m"], ["packages/host/go/src/platform/darwin/document_test.go", "e2e/document-typing.test.mjs", "e2e/save-close.test.mjs"], { testLanguage: "go", testExtensions: new Set([".go", ".mjs"]), sharedTests: true }),
   lane("Darwin host document diagnostic bridges", "objective-c", ["native/darwin/src/host_api_document_draw_covered.m", "native/darwin/src/host_api_document_viewport_marker.m"], ["native/darwin/tests/document_draw_covered_test.m", "native/darwin/tests/document_viewport_marker_test.m", "e2e/design-hosts.test.mjs", "e2e/view-display.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs", "e2e/terminal-keyboard.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs", "e2e/capture-frame-identity.test.mjs", "e2e/capture-document-frame-identity.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m", "e2e/real/terminal.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
+  lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host link bridge", "objective-c", ["native/darwin/src/host_api_link.m"], ["native/darwin/tests/link_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin host notification bridge", "objective-c", ["native/darwin/src/host_api_notifications.m"], ["native/darwin/tests/notifications_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin host object and exit bridges", "objective-c", ["native/darwin/src/host_api_page_objects.m", "native/darwin/src/host_api_window_objects.m", "native/darwin/src/host_api_process_exit.m"], ["e2e/modal-release.test.mjs", "e2e/reload-memory.test.mjs", "e2e/benchmark/main-page-footprint.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -1600,7 +1600,6 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/app.mjs", symbol: "export function requiresAll(env) {" },
       { file: "packages/window-check/app.mjs", symbol: "export function windowPosition(name, area, frame) {" },
       { file: "packages/window-check/view-metrics.mjs", symbol: "export function domMountBaselineMs(host, recordedMs) {" },
-      { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function hwpFirstDisplayLimitMs(host) {" },
     ],
     tests: [
       { file: "packages/window-check/test/required-apps.test.mjs", id: "requiredApps accepts mygo as SOKSAK_APP" },
@@ -1612,7 +1611,6 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs gives every host 0 for a plugin without a recorded value" },
       { file: "packages/window-check/test/view-metrics.test.mjs", id: "domMountBaselineMs rejects an unknown host and a record that is not one value per recorded host" },
       { file: "packages/window-check/test/view-metrics.test.mjs", id: "view metric runner evaluates the mygo host with the lower of the recorded baselines" },
-      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP first-display limit is the DOM mount baseline of the host plus the first-display margin" },
     ],
     expected: "SOKSAK_APP=mygo selects the mygo application while the set without SOKSAK_APP stays wailsv3 and tauriv2, requiresAll holds when the required set holds every application of that set, the three applications have three window positions in the visible area, and one function gives the DOM mount baseline of each host, the lower recorded value for mygo.",
     levels: ["unit"],
@@ -1639,7 +1637,8 @@ const FEATURE_LINKS = [
       { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {" },
       { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {" },
       { file: "packages/plugin-api/index.js", symbol: "export function validateDiagnostics(manifest, diagnostics) {" },
-      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function installedSectionViews(configDir) {" },
+      { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function installedSectionViews(configDir, { plugin: only = null } = {}) {" },
+      { file: "e2e/fixtures/plain-view/probe/ui/section-diagnostics.js", symbol: "export async function attach({ declaration, status, registerStatus, commands, view, content, log }) {" },
       { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function requireSectionDeclarations(view) {" },
       { file: "e2e/benchmark/cases/section-view.mjs", symbol: "async function requireSectionState(s, owner, card) {" },
       { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export const SECTION_PLACEMENT = Object.freeze({" },
@@ -1668,10 +1667,13 @@ const FEATURE_LINKS = [
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose ready status does not declare a single-entry enum content fails with its plugin, section and field" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose installed declaration the workbench refuses fails with the refusal of validateDiagnostics" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view that does not start in the fixture state fails with the expected and the actual state before it waits for readiness" },
-      { file: "e2e/test/section-view-case.test.mjs", id: "a section view starts in a new terminal card split below the tallest terminal card, as the section of its card-left sidebar" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "a section view starts in a new layoutprobe card split below the tallest layoutprobe card, as the section of its card-left sidebar" },
+      { file: "e2e/test/section-view-case.test.mjs", id: "the section views are the sections of the enabled installed plugins, or of one plugin, in the order of plugin id and declaration" },
+      { file: "e2e/test/plain-view-section.test.mjs", id: "the plain view probe declares one section whose diagnostic declaration meets the section-view contract" },
+      { file: "e2e/test/plain-view-section.test.mjs", id: "the frames start paints the root with a marker color apart from the theme, records content frames, and the stop restores the root" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view trace start without a marker color is refused with its plugin and section after the observer stops" },
     ],
-    expected: "Each e2e benchmark applies the settings of its B3 state through fresh and asserts them, reads its bounds from docs/spec/performance-goals.json, and on a window without a page process reads the U7 records and the frame counters of each gesture; the view drag runs the drags of B3 in order; the term view and every section view of the installed plugins are measured for (i), (ii), (iii), (iii-b), (v) and (viii), a section view whose plugin does not declare the section-view contract fails with its plugin and section, a declaration that validateDiagnostics refuses fails with that refusal, and a section view outside the fixture state fails with the expected and the actual state.",
+    expected: "Each e2e benchmark applies the settings of its B3 state through fresh and asserts them, reads its bounds from docs/spec/performance-goals.json, and on a window without a page process reads the U7 records and the frame counters of each gesture; the view drag runs the drags of B3 in order; every section view of the section view fixture, the plain view probe, is measured for (i), (ii), (iii), (iii-b), (v) and (viii), a section view whose plugin does not declare the section-view contract fails with its plugin and section, a declaration that validateDiagnostics refuses fails with that refusal, and a section view outside the fixture state fails with the expected and the actual state.",
     levels: ["unit"],
   },
   {
@@ -3143,13 +3145,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F556",
-    implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence" }],
-    tests: [{ file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection fails when the document requests an address outside soksak" }],
-    expected: "The HWP startup window check fails with each address outside soksak that the resource entries of the document name.",
-    levels: ["unit"],
-  },
-  {
     id: "F547",
     implementation: [
       { file: "packages/workbench-mygo/src/events.go", symbol: "if e.gatedTimer || e.sending || len(e.gated) == 0 {" },
@@ -4243,18 +4238,6 @@ const FEATURE_LINKS = [
     {
       "file": "packages/window-check/view-metrics.mjs",
       "symbol": "function evaluateDrag("
-    },
-    {
-      "file": "e2e/benchmark/cases/browser.mjs",
-      "symbol": "async function dragObservation("
-    },
-    {
-      "file": "e2e/benchmark/cases/editor.mjs",
-      "symbol": "async function editorDragObservation("
-    },
-    {
-      "file": "e2e/benchmark/cases/hwp.mjs",
-      "symbol": "export function measureHwpPaintFrame("
     }
   ],
   "tests": [
@@ -4273,14 +4256,6 @@ const FEATURE_LINKS = [
     {
       "file": "packages/window-check/test/view-metrics.test.mjs",
       "id": "drag convergence accepts a final-size source interval that overlaps gesture end when later pixels prove it"
-    },
-    {
-      "file": "e2e/test/editor-view-metrics-case.test.mjs",
-      "id": "editor drag geometry uses the declared diagnostic CSS paint color rather than a sampled dominant color"
-    },
-    {
-      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
-      "id": "HWP paint geometry measures the magenta HTML marker separately from cyan native bounds"
     }
   ],
   "expected": "The earliest source-backed captured final paint meets two-frame, 33 ms and 2 pt convergence limits independently of eventual presentation, with exact target identity and stable later paint.",
@@ -4372,18 +4347,6 @@ const FEATURE_LINKS = [
     {
       "file": "e2e/view-metrics-collection.mjs",
       "symbol": "export function rootNativePlacementBeforeCapture("
-    },
-    {
-      "file": "e2e/benchmark/cases/browser.mjs",
-      "symbol": "async function dragObservation("
-    },
-    {
-      "file": "e2e/benchmark/cases/editor.mjs",
-      "symbol": "async function editorDragObservation("
-    },
-    {
-      "file": "e2e/benchmark/cases/hwp.mjs",
-      "symbol": "async function dragObservation("
     }
   ],
   "tests": [
@@ -4398,18 +4361,6 @@ const FEATURE_LINKS = [
     {
       "file": "packages/window-check/test/view-metrics.test.mjs",
       "id": "drag cadence is in-gesture and convergence meets both frame and time bounds"
-    },
-    {
-      "file": "e2e/test/editor-view-metrics-case.test.mjs",
-      "id": "editor motion evidence keeps source timing and mapped capture without per-source placement"
-    },
-    {
-      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
-      "id": "HWP layout recording covers the full display deadline after presentation"
-    },
-    {
-      "file": "e2e/test/browser-view-metrics-case.test.mjs",
-      "id": "browser pixel geometry matches the independently declared document slot"
     }
   ],
   "expected": "Native placement readback timestamps are retained as evidence but are not treated as setter times for individual source rows. Drag cadence and capture coverage use source intervals; each captured gesture frame keeps its independent pixel geometry proof. One-shot and final convergence retain the final viewport, successful presentation, post-request/input source and capture after both displayed and source bounds without changing thresholds.",
@@ -4496,18 +4447,6 @@ const FEATURE_LINKS = [
     {
       "file": "packages/window-check/test/view-metrics.test.mjs",
       "id": "drag cadence excludes observer idle time outside the recorded gesture"
-    },
-    {
-      "file": "e2e/test/browser-view-metrics-case.test.mjs",
-      "id": "browser diagnostic callbacks use the declared measurement actions"
-    },
-    {
-      "file": "e2e/test/editor-view-metrics-case.test.mjs",
-      "id": "editor view descriptor calls the declared hyphenated content-trace command"
-    },
-    {
-      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
-      "id": "HWP descriptor waits for its declared document status exposure"
     }
   ],
   "expected": "View source frames map to conservative native monotonic intervals from the successful start command bracket; ambiguous rows are preserved while one-shot and drag evidence require guaranteed ordering and coverage.",
@@ -4758,25 +4697,6 @@ const FEATURE_LINKS = [
     ]
   },
   {
-    id: "F239-173",
-    implementation: [
-      {
-        file: "e2e/activation/terminal-ime-document.mjs",
-        symbol: "export function terminalInputBaselineAfterReference("
-      }
-    ],
-    tests: [
-      {
-        file: "e2e/test/activation/terminal-ime-document.test.mjs",
-        id: "post-reference baseline accepts an unchanged prompt with fresh focus evidence"
-      }
-    ],
-    expected: "A restored unchanged prompt requires matching fresh status evidence while per-key acceptance still requires change.",
-    levels: [
-      "unit"
-    ]
-  },
-  {
     id: "F239-174",
     implementation: [
       {
@@ -4834,25 +4754,6 @@ const FEATURE_LINKS = [
     ]
   },
   {
-    id: "F239-177",
-    implementation: [
-      {
-        file: "e2e/activation/terminal-ime-document.mjs",
-        symbol: "export async function readTerminalObservationSnapshot("
-      }
-    ],
-    tests: [
-      {
-        file: "e2e/test/activation/terminal-ime-document.test.mjs",
-        id: "terminal observation reads status pairs concurrently around the screen sample"
-      }
-    ],
-    expected: "Current terminal status reads precede the dependent host presentation checkpoint and read.",
-    levels: [
-      "unit"
-    ]
-  },
-  {
     id: "F239-178",
     implementation: [
       {
@@ -4867,29 +4768,6 @@ const FEATURE_LINKS = [
       }
     ],
     expected: "Sixteen bounded identity jobs drain in order and a seventeenth admission fails explicitly.",
-    levels: [
-      "unit"
-    ]
-  },
-  {
-    id: "F239-179",
-    implementation: [
-      {
-        file: "e2e/activation/terminal-ime-document.mjs",
-        symbol: "let stopping = null;"
-      }
-    ],
-    tests: [
-      {
-        file: "e2e/test/activation/terminal-ime-document.test.mjs",
-        id: "terminal observer stop releases each subscription once across repeated and concurrent calls"
-      },
-      {
-        file: "e2e/test/activation/terminal-ime-document.test.mjs",
-        id: "terminal observer stop retries only subscriptions whose release did not succeed"
-      }
-    ],
-    expected: "Observation ends before offline analysis and repeated cleanup retries only unfinished subscription releases.",
     levels: [
       "unit"
     ]
@@ -5361,17 +5239,6 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
-    id: "F212.12-2-1-1",
-    implementation: [
-      { file: "e2e/editor.test.mjs", symbol: "const focusEditorForKeys =" },
-    ],
-    tests: [
-      { file: "e2e/editor.test.mjs", id: "a file opens from the tree in the editor, saves, shows a save error and asks before it closes" },
-    ],
-    expected: "A native click focuses the view and subsequent native input reaches its document and persists through Command-S on both hosts.",
-    levels: ["application"],
-  },
-  {
     id: "F212.12-1",
     implementation: [
       { file: "e2e/view-display.mjs", symbol: "export async function checkViewDisplay(" },
@@ -5380,10 +5247,11 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/test/view-display.test.mjs", id: "view display rejects a readiness-only case without a content verifier" },
       { file: "e2e/test/view-display.test.mjs", id: "view display runs the content verifier of the case after the recording stops" },
-      { file: "e2e/test/view-content.test.mjs", id: "view content reads the value that holds the shown text of each plugin" },
+      { file: "e2e/test/view-content.test.mjs", id: "view content reads the text of the content read that the check names in the visible document region" },
+      { file: "e2e/test/view-content.test.mjs", id: "the content case of the plain view probe waits for its content read and proves the text of its region document" },
       { file: "e2e/view-display.test.mjs", id: "each installed view plugin requires an explicit content case in a card" },
     ],
-    expected: "Every installed view reaches declared readiness and holds its expected content in the public value of its plugin, with exact finalized frame counts and empty binder audits.",
+    expected: "Every view of a content case reaches declared readiness and holds its expected content in the content read that it exposes in its own namespace, with exact finalized frame counts and empty binder audits.",
     levels: ["unit", "application"],
   },
   {
@@ -6086,7 +5954,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
-      { file: "e2e/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
     expected: "AppKit window creation and activation run on the event-loop thread, the bounded Tauri basic-operation matrix remains observable, and normal shutdown removes the owned endpoint and lock.",
@@ -6216,7 +6083,6 @@ const FEATURE_LINKS = [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
       { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
-      { file: "e2e/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
@@ -6231,7 +6097,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
-      { file: "e2e/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
@@ -8141,18 +8006,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-239",
-    implementation: [{ file: "e2e/hwp-startup.mjs", symbol: "export async function collectHwpStartupResourceEvidence(" }],
-    tests: [
-      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection stops before offline content verification and preserves evidence" },
-      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup read failure still stops tracing and retains offline verification" },
-      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection preserves start, stop, and offline verification errors" },
-      { file: "e2e/test/hwp-startup.test.mjs", id: "HWP startup collection reports a recording copy failure" },
-    ],
-    expected: "HWP startup collection preserves the recording and resource evidence, stops tracing before offline content verification, and reports collection, stop, verification, and recording-copy failures.",
-    levels: ["unit"],
-  },
-  {
     id: "F239",
     implementation: [{ file: "scripts/rust-tests.mjs", symbol: "testNames" }],
     tests: [{ file: "scripts/test/repeat-rust.test.mjs", id: "make repeat-rust names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],
@@ -8638,8 +8491,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayComparesEachSegmentOfASessionWhoseSequenceRestarts" },
       { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_compares_each_segment_of_a_session_whose_sequence_restarts" },
-      { file: "e2e/terminal-replay.test.mjs", id: "a session with output, a resize, a scroll, a selection, a theme and input replays with every hash equal" },
-      { file: "e2e/terminal-replay.test.mjs", id: "a stored input that was changed is a divergence of the layer sidecar" },
     ],
     expected: "A terminal session replays from its stored inputs with every sidecar and page hash equal, and a changed stored input or drawn screen is a divergence of the layer that stored it.",
     levels: ["unit", "application"],
@@ -8677,8 +8528,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/screen-hash.test.mjs", id: "a screen message without a segment is refused with the member named" },
       { file: "packages/sok/go/tests/replay_test.go", id: "TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession" },
       { file: "packages/sok/rust/tests/replay_test.rs", id: "replay_refuses_a_page_frame_that_names_no_segment_of_the_session" },
-      { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
-      { file: "e2e/terminal-replay.test.mjs", id: "a screen message changed on the way is a divergence of the layer plugin" },
     ],
     expected: "The screen message carries the members of the screen hash and its segment, the page hashes the grid it received into a frame record of the layer plugin, and the replay of a terminal session finds every sidecar and page hash equal and reports a message changed on the way as a divergence of the layer plugin.",
     levels: ["unit", "application"],
@@ -8694,7 +8543,6 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/tests/plugin_catalog_test.rs", id: "a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares" },
       { file: "packages/host/go/tests/plugin_catalog_test.go", id: "TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogItCannotUse" },
       { file: "packages/host/rust/tests/plugin_catalog_test.rs", id: "the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_catalog_it_cannot_use" },
-      { file: "e2e/terminal-replay.test.mjs", id: "a terminal session replays with the sidecar and page hashes equal" },
     ],
     expected: "The writer of each host stores a plugin event with the class that the catalog of its enabled installed plugin declares, and records a catalog it cannot use as an error that names the file.",
     levels: ["unit", "application"],
@@ -9705,17 +9553,6 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
-    id: "F94",
-    implementation: [
-      { file: "e2e/real/terminal.test.mjs", symbol: "async function prepare(t, app, line, { fullscreen = false, log = {}, reads = [], clipboard = false } = {})" },
-    ],
-    tests: [
-      { file: "e2e/real/terminal.test.mjs", id: "a real wheel over a long history is shown without lag, stalls, or reversal" },
-    ],
-    expected: "The real wheel check measures a fullscreen terminal wide enough for its history lines.",
-    levels: ["application"],
-  },
-  {
     id: "F96.1",
     implementation: [
       { file: "packages/sok/go/src/install.go", symbol: "func ParseRange" },
@@ -9801,17 +9638,6 @@ const FEATURE_LINKS = [
     ],
     expected: "make check-release fails unless every bundle declares MACOS_MINIMUM and every application executable is built for it.",
     levels: ["unit"],
-  },
-  {
-    id: "F95",
-    implementation: [
-      { file: "native/darwin/src/webview_geometry.m", symbol: "[main.window disableCursorRects];" },
-    ],
-    tests: [
-      { file: "e2e/real/terminal.test.mjs", id: "slow pointer movement over terminal text" },
-    ],
-    expected: "The text pointer stays over terminal text during slow pointer movement on both hosts.",
-    levels: ["application"],
   },
   {
     id: "F95.1",
@@ -10259,7 +10085,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "a surface drop names a command declared in the manifest's exposes" },
-      { file: "e2e/real/terminal.test.mjs", id: "a real Finder drag of a file and of an image pastes their quoted paths without executing" },
     ],
     expected: "A file dropped on a window reaches the native file drop view, which sends path URLs and the drop point; the page runs the drop command that the plugin of the surface under the point declares, and the terminal validates local URLs, shell-quotes all paths, and sends one non-executing paste; unsupported and malformed drops remain explicit errors on both rebuilt hosts.",
     levels: ["unit", "application"],
@@ -10436,43 +10261,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-47-15",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalObserverStatusesMatch(" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a fresh compose and cursor update can use unchanged known PTY rows" }],
-    expected: "The terminal observer accepts a fresh semantic composition update against unchanged known PTY rows while checking the current cursor state.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-16",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function startTerminalStatusObserver(" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a managed cursor until releases the observer's raw cursor watch" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "focus waits on the existing raw status stream after reference handoff" },
-    ],
-    expected: "The terminal status observer retains ownership of its raw status subscriptions while the consumer waits for cursor focus after the reference handoff.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-18",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function selectCoherentTerminalObservation(" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "returns the latest coherent reread and its accepted event slice" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
-    ],
-    expected: "The selected terminal observation is the latest coherent reread, screen, region and accepted event slice; an incoherent earlier read is not returned.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-20",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function waitForTerminalStage(" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "keeps notifications that arrive after the first status wakes the input stage" },
-    ],
-    expected: "The stage waits for the same-window AppKit document after each input instead of accepting an earlier coherent intermediate state.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-47-23",
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)drawRect:(NSRect)dirtyRect" }],
     tests: [
@@ -10495,39 +10283,11 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
-    id: "F239-47-26",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputReceiptMatches(" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "one terminal input request acknowledges a committed character key" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "input transaction validation checks every action and correlation identifier" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "native report and terminal request preserve actions, preedit and CID" },
-    ],
-    expected: "The acceptance consumer matches current native input transactions and the single corresponding terminal request using ordered actions, final preedit and correlation identity.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-27",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictAction(value, label)" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "native and terminal transactions preserve the ordered focus action" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "focus-only transactions do not acknowledge a key from retained preedit" },
-    ],
-    expected: "The strict input transaction reader preserves ordered focus actions and does not count focus-only events as character-key receipts.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-47-28",
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" }],
     tests: [{ file: "native/darwin/tests/image_region_input_transaction_test.m", id: "invalid marked replacement and later callback are explicitly rejected without mutation" }],
     expected: "A setMarkedText replacement outside the owned marked buffer is rejected before mutation, and later callbacks in that input scope are rejected without changing the buffer.",
     levels: ["native"],
-  },
-  {
-    id: "F239-47-29",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictTraceSequence(value, label)" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "zero-based input trace sequence keeps the native report before its terminal request" }],
-    expected: "The input trace accepts a zero-based native sequence followed by its later terminal request and rejects invalid or non-increasing sequence numbers.",
-    levels: ["unit"],
   },
   {
     id: "F239-47-30-1",
@@ -10603,33 +10363,6 @@ const FEATURE_LINKS = [
     ],
     expected: "A capture records bounded, validated AppKit display-link observations separately from ScreenCaptureKit callbacks and publishes the artifact path in both host stop payloads; hidden or missing observations are unavailable, overflow is explicitly incomplete, and the trace does not identify or prove presentation of a source frame.",
     levels: ["native", "unit"],
-  },
-  {
-    id: "F239-47-31",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalStageEvents(events, stageOffset)" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a status notification delivered during a sample satisfies the sample's original event offset" }],
-    expected: "A status notification that arrives after the first event wakes a wait remains in the current physical-key stage using its original event offset.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-35",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function initialCursorFrameMatchesScreen(cursor, screen)" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline requires the accepted screen frame" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline accepts null render only for the accepted screen frame" },
-    ],
-    expected: "The initial cursor matches the accepted screen frame exactly; null renderer metadata is allowed, and present renderer metadata must identify that same frame.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-60",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function observeTerminalBaseline" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "the initial terminal baseline observes a frame advanced during its read" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "a failed initial baseline stops its observer and preserves the read error" },
-    ],
-    expected: "The terminal observer is active before baseline reads can advance the frame, and a failed baseline read stops the observer while preserving its error.",
-    levels: ["unit"],
   },
   {
     id: "F239-53",
@@ -12203,13 +11936,6 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
-    id: "F428",
-    implementation: [{ file: "e2e/terminal-selection-follow.test.mjs", symbol: "the selection highlight of a drag follows the pointer while a status line redraws" }],
-    tests: [{ file: "e2e/terminal-selection-follow.test.mjs", id: "the selection highlight of a drag follows the pointer while a status line redraws" }],
-    expected: "The highlight of each recorded frame stays on the dragged cells and ends under the pointer.",
-    levels: ["application"],
-  },
-  {
     id: "F429",
     implementation: [{ file: "packages/workbench/package.json", symbol: "docs/spec/events.json" }],
     tests: [{ file: "packages/workbench/test/page-layout-trace.test.mjs", id: "a cancelled layout records only the phases that the event catalog declares" }],
@@ -12712,16 +12438,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-141",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "async function readObservationBatch(" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "terminal observation reads status pairs concurrently around the screen sample" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "terminal observation reports every failed read in each concurrent phase" },
-    ],
-    expected: "Terminal observation reads each status pair concurrently in phase order and reports every failed read.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-143",
     implementation: [
       { file: "native/darwin/src/image_capture_match.m", symbol: "sp_image_capture_match_identity_enqueue_frame(" },
@@ -12909,22 +12625,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F212.14-5-32",
-    implementation: [{ file: "e2e/benchmark/cases/hwp.mjs", symbol: "export async function collectHwpReclaimAfterMotion(" }],
-    tests: [{ file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP reclaim captures the opened group before reclaim closes the warm motion view" }],
-    expected: "HWP reclaim restores the initial declared card width before closing and reopening its measured group.",
-    levels: ["unit"],
-  },
-  {
     id: "F212.14-5-31",
     implementation: [
       { file: "e2e/view-metrics-collection.mjs", symbol: "export async function openRecordedView(" },
-      { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export async function collectHwpViewMeasurements(" },
     ],
     tests: [
       { file: "e2e/test/view-metrics-collection.test.mjs", id: "one recording reads the content value after readiness and defers the content frame past the footprint sample" },
       { file: "e2e/test/view-metrics-collection.test.mjs", id: "recorded view observation window rejects nonpositive and nonfinite durations" },
-      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP descriptor waits for its declared document status exposure" },
     ],
     expected: "HWP capture retains its declared observation window while the first content frame uses actual captured timestamps.",
     levels: ["unit"],
@@ -12935,7 +12642,6 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/document_view.m", symbol: "bool sp_document_viewport_marker(" },
       { file: "packages/host/go/src/diagnostics.go", symbol: "func diagnosticDocumentViewportMarker(" },
       { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn document_viewport_marker(" },
-      { file: "e2e/benchmark/cases/hwp.mjs", symbol: "export function measureHwpNativeMarkerFrame(" },
     ],
     tests: [
       { file: "native/darwin/tests/document_viewport_marker_test.m", id: "the enabled marker reports cyan RGB and a 2-point border" },
@@ -12950,9 +12656,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_resolves_only_attached_documents_in_the_window" },
       { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_runs_through_ui_dispatch_and_preserves_native_result" },
       { file: "packages/host/rust/src/diagnostics.rs", id: "document_viewport_marker_returns_native_errors" },
-      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native viewport marker measures native studio bounds at fixed and fractional capture scales" },
-      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native marker starts before capture and is removed after capture failures" },
-      { file: "e2e/test/hwp-view-metrics-case.test.mjs", id: "HWP native marker cleanup runs after an invalid successful start reply" },
     ],
     expected: "The native marker reports and restores its actual document-view border; both hosts route the declared diagnostic endpoint to attached documents, and HWP measures the captured native bounds.",
     levels: ["unit"],
@@ -13221,13 +12924,6 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
-    id: "F239-152",
-    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputBaselineAfterReference(" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "the first terminal key compares against the prompt redrawn after reference focus" }],
-    expected: "The terminal observer validates and uses the post-reference prompt baseline while retaining strict per-key checks.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-47",
     implementation: [
       { file: "e2e/activation/view-focus.test.mjs", symbol: "function assertImageRegionStages(" },
@@ -13241,7 +12937,6 @@ const FEATURE_LINKS = [
     id: "F239-47-2",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function visibleInputBeforeCursor(" }],
     tests: [
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "reconstructs committed screen text plus only the current marked buffer" },
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
     ],
     expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
@@ -14404,12 +14099,19 @@ const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-24
 // renders, which F715-2 removes with that proof.
 // F239-294 declared in the library check the files tree errors that its folder removal causes, which F715-2 removes: the core
 // window checks show no files section.
+// The plugin repository now verifies the completions whose only tests were plugin-owned checks that F715-2 removes from core:
+// the HWP startup and view checks (F556, F239-239, F212.14-5-32), the terminal input document and observer tests (F239-60,
+// F239-141, F239-152, F239-173, F239-177, F239-179 and F239-47-15 to F239-47-35), the editor save check (F212.12-2-1-1), the
+// real terminal wheel and text pointer checks (F94, F95) and the terminal selection follow check (F428).
 const REMOVED_COMPLETIONS = new Set(["F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
-  "F239-201", "F239-229", "F608", "F684", "F239-294"]);
+  "F239-201", "F239-229", "F608", "F684", "F239-294",
+  "F556", "F239-173", "F239-177", "F239-179", "F212.12-2-1-1", "F239-239", "F94", "F95",
+  "F239-47-15", "F239-47-16", "F239-47-18", "F239-47-20", "F239-47-26", "F239-47-27", "F239-47-29", "F239-47-31", "F239-47-35",
+  "F239-60", "F428", "F239-141", "F212.14-5-32", "F239-152"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

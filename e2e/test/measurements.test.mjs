@@ -16,11 +16,7 @@ test("B3_MEASUREMENTS names the B3 keys of each benchmark, and of each trace sta
     },
     "split-load": ["hostGrowthKb"],
     "idle-tab": ["idleTabCostKb", "documentPartKb"],
-    "browser-view": ["verdict"],
-    "editor-view": ["verdict"],
-    "hwp-view": ["verdict"],
     "section-view": ["verdict"],
-    "editor-footprint": ["verdict"],
     "input-latency": ["fieldMedianMs", "fieldP90Ms", "documentMedianMs", "documentP90Ms"],
   });
 });
@@ -43,11 +39,7 @@ test("B3_SETTINGS names the settings of each state of each benchmark, a trace st
     },
     "split-load": { "diagnostics.performance": false, "diagnostics.log": { call: "debug" } },
     "idle-tab": { "diagnostics.performance": true, "diagnostics.log": { call: "debug" } },
-    "browser-view": view,
-    "editor-view": view,
-    "hwp-view": view,
     "section-view": view,
-    "editor-footprint": view,
     "input-latency": traceSettings(0),
   });
 });

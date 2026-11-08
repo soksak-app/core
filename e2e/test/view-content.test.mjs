@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { cropViewPixels, viewContentProof } from "../view-content.mjs";
+import { PLAIN_CONTENT, cropViewPixels, readViewContent, viewContentCases, viewContentProof } from "../view-content.mjs";
 
 function frame() {
   const data = Buffer.alloc(8 * 8 * 4);
@@ -22,14 +23,10 @@ test("view pixel crops reject clipping and incomplete pixel storage", { timeout:
   assert.throws(() => cropViewPixels(value, { x: 0, y: 0, w: 1, h: 1 }), /storage/);
 });
 
-/**
- * A session whose host.window shows the root document of every surface and the studio of hwp, and whose image region named
- * view presents `presented`; `runs` answers each command by name.
- */
-function session(runs, { visible = true, presented = { generation: 1, raster: 2, sequence: 3 } } = {}) {
+/** A session whose host.window shows the root document and the document region "page" of the surface probe; `runs` answers each command by name. */
+function session(runs, { visible = true } = {}) {
   const frame = { x: 0, y: 0, width: 100, height: 50 };
-  const host = { documents: [{ surface: "probe", document: "", visible, frame }, { surface: "probe", document: "studio", visible, frame }],
-    regions: [{ surface: "probe", name: "view", presented }] };
+  const host = { documents: [{ surface: "probe", document: "", visible, frame }, { surface: "probe", document: "page", visible, frame }] };
   return {
     get: async (name) => { assert.equal(name, "host.window"); return host; },
     run: async (name, params, surface) => {
@@ -37,66 +34,53 @@ function session(runs, { visible = true, presented = { generation: 1, raster: 2,
       assert.ok(name in runs, `unexpected command ${name}`);
       return runs[name](params);
     },
-    async until(name, predicate, message) {
-      assert.equal(name, "host.window");
-      if (!predicate(host)) throw new Error(message);
-      return host;
-    },
   };
 }
 
-const cells = (text) => [...text].map((ch) => ch === " " ? { width: 1 } : { ch, width: 1 });
+const READ = Object.freeze({ command: "probeplain.content.read" });
 
-test("view content reads the value that holds the shown text of each plugin", { timeout: 5000 }, async () => {
-  assert.deepEqual(await viewContentProof(session({ "editor.read": () => "SOKSAK EDITOR CONTENT\n" }), "editor", "probe",
-    "SOKSAK EDITOR CONTENT"), { method: "value", expected: "SOKSAK EDITOR CONTENT", actual: "SOKSAK EDITOR CONTENT\n" });
-  assert.equal((await viewContentProof(session({ "browser.content.read": () => ({ kind: "empty", instruction: "주소를 입력하세요" }) }),
-    "browser", "probe", "주소를 입력하세요")).actual, "주소를 입력하세요");
-  const svg = '<text x="1" y="10">속삭</text><text x="2" y="10">한글</text><text x="1" y="20">문서확인</text>';
-  assert.equal((await viewContentProof(session({ "hwp.request": ({ method }) => { assert.equal(method, "getPageSvg"); return svg; } }),
-    "hwp", "probe", "속삭한글문서확인")).actual, "속삭한글\n문서확인");
-  for (const plugin of ["term", "terminal"]) {
-    const read = () => ({ rows: [cells("SOKSAK TERM CONTENT")], frame: { generation: 1, raster: 2, sequence: 3 } });
-    assert.equal((await viewContentProof(session({ [`${plugin}.screen.read`]: read }), plugin, "probe", "SOKSAK TERM CONTENT")).actual,
-      "SOKSAK TERM CONTENT");
-  }
+test("view content reads the text of the content read that the check names in the visible document region", { timeout: 5000 }, async () => {
+  assert.deepEqual(await viewContentProof(session({ "probeplain.content.read": () => "PROBE CONTENT\n" }), "probe", "PROBE CONTENT", READ),
+    { method: "value", expected: "PROBE CONTENT", actual: "PROBE CONTENT\n" });
+  assert.equal(await readViewContent(session({ "probeplain.content.read": () => "region text" }), "probe", { ...READ, document: "page" }),
+    "region text");
 });
 
 test("view content refuses a missing, wrong or not presented value", { timeout: 5000 }, async () => {
-  await assert.rejects(viewContentProof(session({ "editor.read": () => "OTHER\n" }), "editor", "probe", "SOKSAK EDITOR CONTENT"),
-    /does not show "SOKSAK EDITOR CONTENT": "OTHER\\n"/);
-  await assert.rejects(viewContentProof(session({ "editor.read": () => "SOKSAK EDITOR CONTENT\n" }, { visible: false }), "editor",
-    "probe", "SOKSAK EDITOR CONTENT"), /shows no document region ""/);
-  await assert.rejects(viewContentProof(session({ "browser.content.read": () => ({ kind: "document", instruction: null }) }), "browser",
-    "probe", "주소를 입력하세요"), /does not show its empty instruction/);
-  const read = () => ({ rows: [cells("SOKSAK TERM CONTENT")], frame: { generation: 1, raster: 2, sequence: 4 } });
-  await assert.rejects(viewContentProof(session({ "term.screen.read": read }), "term", "probe", "SOKSAK TERM CONTENT"),
-    /did not present frame/);
-  await assert.rejects(viewContentProof(session({ "editor.read": () => null }), "editor", "probe", "SOKSAK EDITOR CONTENT"),
-    /content is not text/);
-  await assert.rejects(viewContentProof(session({}), "files", "probe", "x"), /plugin files has no content value/);
+  await assert.rejects(viewContentProof(session({ "probeplain.content.read": () => "OTHER\n" }), "probe", "PROBE CONTENT", READ),
+    /probeplain.content.read probe does not show "PROBE CONTENT": "OTHER\\n"/);
+  await assert.rejects(viewContentProof(session({ "probeplain.content.read": () => "PROBE CONTENT" }, { visible: false }), "probe",
+    "PROBE CONTENT", READ), /shows no document region ""/);
+  await assert.rejects(readViewContent(session({ "probeplain.content.read": () => "x" }), "probe", { ...READ, document: "studio" }),
+    /shows no document region "studio"/);
+  await assert.rejects(viewContentProof(session({ "probeplain.content.read": () => null }), "probe", "PROBE CONTENT", READ),
+    /probeplain.content.read of probe answered no text: null/);
+  await assert.rejects(readViewContent(session({}), "probe", {}), /the content read of probe names no command/);
 });
 
-test("terminal content readiness preserves omitted blank cell characters", { timeout: 5000 }, async (t) => {
-  const { viewContentCases } = await import("../view-content.mjs");
-  const { mkdtempSync, rmSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
-  const root = mkdtempSync(join(tmpdir(), "view-content-owner-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+test("the content case of the plain view probe waits for its content read and proves the text of its region document", async () => {
+  const diagnostics = [];
+  const frame = { x: 0, y: 0, width: 100, height: 50 };
+  const calls = [];
   const s = {
-    get: async () => ({ root }),
-    cleanup() {},
-    run: async () => null,
-    rect: async () => ({ width: 100, height: 50 }),
-    async until(name, predicate) {
-      const value = name === "core.surfaces" ? [{ surface: "probe", exposes: ["status terminal.session", "status terminal.screen"] }]
-        : name === "terminal.session" ? { sessionId: "session", cols: 80, rows: 24 }
-        : [[..."SOKSAK TERMINAL CONTENT"].map(ch => ch === " " ? { width: 1 } : { ch, width: 1 })];
-      assert.ok(predicate(value), `${name} readiness discarded an omitted blank character`);
+    async until(name, predicate, message) {
+      calls.push(["until", name]);
+      const value = [{ surface: "tab-1", exposes: ["command probeplain.content.read"] }];
+      if (!predicate(value)) throw new Error(message);
       return value;
     },
+    get: async () => ({ documents: [{ surface: "tab-1", document: "page", visible: true, frame }] }),
+    run: async (name, params, surface) => {
+      calls.push(["run", name, surface]);
+      return PLAIN_CONTENT;
+    },
   };
-  const cases = await viewContentCases(s, () => {});
-  assert.equal(typeof await cases.get("terminal").ready(s, { tab: "probe" }), "function");
+  const cases = await viewContentCases(s, (message) => diagnostics.push(message));
+  assert.deepEqual([...cases.keys()], ["probeplain"]);
+  const verify = await cases.get("probeplain").ready(s, { tab: "tab-1" });
+  await verify();
+  assert.deepEqual(calls, [["until", "core.surfaces"], ["run", "probeplain.content.read", "tab-1"]]);
+  assert.deepEqual(diagnostics, [`probeplain tab-1 shows ${JSON.stringify(PLAIN_CONTENT)}`]);
+  const shown = readFileSync(new URL("../fixtures/plain-view/probe/ui/document.html", import.meta.url), "utf8");
+  assert.ok(shown.includes(`<p id="content">${PLAIN_CONTENT}</p>`), "the region document of the plain view probe does not show PLAIN_CONTENT");
 });

@@ -1,5 +1,0 @@
-#!/bin/sh
-# The terminal shell of the window checks. A session starts the shell of the settings as a login shell, so this file
-# runs /bin/sh, which is not a login shell, to avoid a prompt that changes with the system profile and the host name.
-# The prompt is sh-3.2$.
-exec /bin/sh
