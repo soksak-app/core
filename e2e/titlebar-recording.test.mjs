@@ -7,7 +7,7 @@ import { rmSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { TOLERANCE, measureTitlebar, misaligned, rowHeight } from "./titlebar-measurement.mjs";
@@ -78,6 +78,8 @@ for (const app of Object.values(APPS)) {
     { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s);
+      // The check windows overlap and can cover this one whole, and WebKit draws an occluded window less often.
+      await uncoverFromCheckWindows(t, s);
       s.cleanup(() => setFrame(s, 1));
       await setFrame(s, 1);
       // Pressing the frame makes the frame the scope of the text size command.
@@ -103,6 +105,8 @@ for (const app of Object.values(APPS)) {
     { timeout: 120000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s);
+      // The check windows overlap and can cover this one whole, and WebKit draws an occluded window less often.
+      await uncoverFromCheckWindows(t, s);
       s.cleanup(() => setFrame(s, 1));
       await setFrame(s, 1);
       await s.run("core.window.new");
