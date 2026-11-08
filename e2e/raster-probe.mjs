@@ -57,6 +57,16 @@ export async function rasterReady(s, surface) {
 }
 
 /**
+ * The condition on rasterprobe.session that a session of a respawned service holds: a connected session that a service other than
+ * the one of `before` holds. A service names its sessions from s1, so the session of a respawned service can carry the name of
+ * the session that died with the old service; the service PID tells them apart (docs/spec/persistent-services.md).
+ */
+export function reopenedSession(before) {
+  return (value) => value?.connected === true && typeof value.session === "string" && value.session !== ""
+    && Number.isInteger(value.service?.pid) && value.service.pid !== before.service.pid;
+}
+
+/**
  * Adds a raster probe tab to the card (by default the focused card), which makes it the active tab, and waits until it is ready
  * (rasterReady). Returns `{card, surface}`.
  */
