@@ -71,32 +71,32 @@ test("a sidecar revision of the registry record that differs from the last revis
 test("the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run", { timeout: 1000 }, () => {
   const index = {
     plugins: [
-      { id: "browser", versions: [{ version: "0.0.15", release: { url: "file:///b.tgz", sha256: hex("d", 64) } }] },
-      { id: "term", versions: [{ version: "0.0.3", release: { url: "file:///t3.tgz", sha256: hex("e", 64) } }, { version: "0.0.4", release: { url: "file:///t4.tgz", sha256: hex("9", 64) } }] },
+      { id: "layoutprobe", versions: [{ version: "0.0.15", release: { url: "file:///b.tgz", sha256: hex("d", 64) } }] },
+      { id: "probeplain", versions: [{ version: "0.0.3", release: { url: "file:///t3.tgz", sha256: hex("e", 64) } }, { version: "0.0.4", release: { url: "file:///t4.tgz", sha256: hex("9", 64) } }] },
     ],
     sidecars: [{ name: "fixture-sidecar", versions: [{ version: "0.0.20", protocol: 1, releases: { "darwin-arm64": { url: "file:///sidecar.tgz", sha256: hex("8", 64) } } }] }],
   };
   const installed = {
     format: 3,
-    plugins: { browser: { version: "0.0.15", path: "plugins/browser/0.0.15", enabled: true, sidecars: {} }, term: { version: "0.0.3", path: "plugins/term/0.0.3", enabled: true, sidecars: {} } },
+    plugins: { layoutprobe: { version: "0.0.15", path: "plugins/layoutprobe/0.0.15", enabled: true, sidecars: {} }, probeplain: { version: "0.0.3", path: "plugins/probeplain/0.0.3", enabled: true, sidecars: {} } },
     sidecars: { "fixture-sidecar": { version: "0.0.20", path: "sidecars/fixture-sidecar/0.0.20/darwin-arm64" } },
   };
   const releases = installedReleases(installed, index, "darwin-arm64");
   assert.deepEqual(releases, [
-    { kind: "plugin", id: "browser", version: "0.0.15", sha256: hex("d", 64) },
-    { kind: "plugin", id: "term", version: "0.0.3", sha256: hex("e", 64) },
+    { kind: "plugin", id: "layoutprobe", version: "0.0.15", sha256: hex("d", 64) },
+    { kind: "plugin", id: "probeplain", version: "0.0.3", sha256: hex("e", 64) },
     { kind: "sidecar", id: "fixture-sidecar", version: "0.0.20", sha256: hex("8", 64) },
   ]);
   assert.deepEqual(baselinePluginFailures(baselineRecord(), releases), []);
-  installed.plugins.term.version = "0.0.4";
+  installed.plugins.probeplain.version = "0.0.4";
   assert.deepEqual(baselinePluginFailures(baselineRecord(), installedReleases(installed, index, "darwin-arm64")),
-    [`the baseline host installed term 0.0.4 ${hex("9", 64)}, the baseline record holds term 0.0.3 ${hex("e", 64)}`]);
-  delete installed.plugins.browser;
-  installed.plugins.term.version = "0.0.3";
-  assert.deepEqual(baselinePluginFailures(baselineRecord(), installedReleases(installed, index, "darwin-arm64")), ["the baseline host installed no release of browser, which the baseline record holds"]);
+    [`the baseline host installed probeplain 0.0.4 ${hex("9", 64)}, the baseline record holds probeplain 0.0.3 ${hex("e", 64)}`]);
+  delete installed.plugins.layoutprobe;
+  installed.plugins.probeplain.version = "0.0.3";
+  assert.deepEqual(baselinePluginFailures(baselineRecord(), installedReleases(installed, index, "darwin-arm64")), ["the baseline host installed no release of layoutprobe, which the baseline record holds"]);
   assert.deepEqual(installedReleases(null, index, "darwin-arm64"), [], "a configuration folder without plugins/installed.json has nothing installed");
-  installed.plugins.term.version = "0.0.9";
-  assert.throws(() => installedReleases(installed, index, "darwin-arm64"), /^Error: the index lists no release of term 0\.0\.9$/);
+  installed.plugins.probeplain.version = "0.0.9";
+  assert.throws(() => installedReleases(installed, index, "darwin-arm64"), /^Error: the index lists no release of probeplain 0\.0\.9$/);
 });
 
 test("the surface plugins are the installed plugins whose manifest declares a surface", { timeout: 1000 }, () => {
