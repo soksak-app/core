@@ -252,7 +252,7 @@ test('every system owner under platform/darwin/system runs in a macOS job of CI 
   assert.deepEqual(system.filter((name) => linux.includes(name)), [], 'a system owner runs in the Linux job');
 });
 
-test('make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics and the Tauri job runs it', { timeout: 10_000 }, () => {
+test('make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics without installing the target', { timeout: 10_000 }, () => {
   const output = execFileSync('make', ['-n', 'check-windows-rust'], { cwd: ROOT, encoding: 'utf8' });
   // A local make does not change the toolchain: the target requires the installed Windows target, and CI adds it.
   assert.doesNotMatch(output, /^\S*rustup target add/m, output);
@@ -263,12 +263,9 @@ test('make check-windows-rust checks the Rust host library for x86_64-pc-windows
     'check --locked -p soksak-host --target x86_64-pc-windows-msvc',
     'check --locked -p soksak-host --target x86_64-pc-windows-msvc --features diagnostics',
   ], output);
-  const list = steps(ciJob('macos-tauriv2'));
-  const add = list.findIndex((item) => item.name === 'Add the Rust Windows target');
-  const check = list.findIndex((item) => item.name === 'Rust Windows build check');
-  assert.ok(add >= 0 && check > add, 'macos-tauriv2 does not add the Rust Windows target before the Rust Windows build check');
-  assert.match(list[add].text, /run: rustup target add x86_64-pc-windows-msvc$/m);
-  assert.match(list[check].text, /run: make -C core check-windows-rust$/m);
+  // The build script of ring compiles C for the MSVC target even for cargo check, which needs the MSVC tools of a Windows host,
+  // so no macOS or Linux job of CI runs this target.
+  assert.doesNotMatch(read('.github/workflows/ci.yml'), /check-windows-rust|x86_64-pc-windows-msvc/);
 });
 
 test('make test-mygo runs the unit tests of the Go packages of the mygo host', { timeout: 1000 }, () => {

@@ -298,8 +298,6 @@ const FEATURE_LINKS = [
       { file: "Makefile", symbol: "@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/ --exclude-folder platform/darwin/system" },
       { file: "Makefile", symbol: "@$(CARGO_ENV) $(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics" },
       { file: ".github/workflows/ci.yml", symbol: "run: make -C core test-headless-owners" },
-      { file: ".github/workflows/ci.yml", symbol: "run: rustup target add x86_64-pc-windows-msvc" },
-      { file: ".github/workflows/ci.yml", symbol: "run: make -C core check-windows-rust" },
     ],
     tests: [
       { file: "scripts/test/node-tests.test.mjs", id: "a repeated only selects the files that contain any of its values" },
@@ -307,10 +305,10 @@ const FEATURE_LINKS = [
       { file: "scripts/test/workflows.test.mjs", id: "make test-headless-owners runs the Node tests of scripts/test, e2e/test and packages/window-check/test outside platform/darwin/system" },
       { file: "scripts/test/workflows.test.mjs", id: "every system owner under platform/darwin/system runs in a macOS job of CI and in no Linux job" },
       { file: "scripts/test/node-tests.test.mjs", id: "an excluded folder removes its files under every folder of the workspace and nothing else" },
-      { file: "scripts/test/workflows.test.mjs", id: "make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics and the Tauri job runs it" },
+      { file: "scripts/test/workflows.test.mjs", id: "make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics without installing the target" },
       { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
     ],
-    expected: "A Linux job of CI installs the locked Node dependencies and runs the Node tests of scripts/test, e2e/test and packages/window-check/test outside platform/darwin/system through make test-headless-owners; every system owner placed in platform/darwin/system runs in a macOS job, and the required gate fails unless it succeeds. The Tauri job compiles the Rust host library for x86_64-pc-windows-msvc in the default and the diagnostic build through make check-windows-rust.",
+    expected: "A Linux job of CI installs the locked Node dependencies and runs the Node tests of scripts/test, e2e/test and packages/window-check/test outside platform/darwin/system through make test-headless-owners; every system owner placed in platform/darwin/system runs in a macOS job, and the required gate fails unless it succeeds. make check-windows-rust compiles the Rust host library for x86_64-pc-windows-msvc in the default and the diagnostic build on a host that has the target and the MSVC tools, and fails by name when the target is not installed.",
     levels: ["unit"],
   },
   {

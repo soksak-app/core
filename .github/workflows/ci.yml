@@ -133,11 +133,6 @@ jobs:
           CARGO_NET_OFFLINE: 'true'
           OFFLINE: '1'
         run: make -C core check-rust-format check-rust-clippy
-      - name: Add the Rust Windows target
-        working-directory: core
-        run: rustup target add x86_64-pc-windows-msvc
-      - name: Rust Windows build check
-        run: make -C core check-windows-rust
       - name: Reject lockfile changes
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
