@@ -182,6 +182,7 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   await status("rasterprobe.session", sessionStatus);
   await status("rasterprobe.frame", frameStatus);
   await status("rasterprobe.input", inputStatus);
+  await expose.element("rasterprobe.raster", element);
 
   await bridge.runtime.textSize.on((next) => {
     // default: as at the start, an unknown text size is factor 1.

@@ -136,14 +136,16 @@ function fakeView({ textSize = 1.25 } = {}) {
     },
     commands: { register: async (name, run) => { commands.set(name, run); } },
   };
-  const expose = { status: async (name, read, subscribe) => { statuses.set(name, { read, subscribe }); } };
+  const elements = new Map();
+  const expose = { status: async (name, read, subscribe) => { statuses.set(name, { read, subscribe }); },
+    element: async (name, target) => { elements.set(name, target); } };
   const view = {
     sokSurface: { surface: "tab-9" },
     devicePixelRatio: 2,
     ResizeObserver: class { constructor(callback) { observed = callback; } observe() {} },
   };
   const document = { getElementById: (id) => { assert.equal(id, REGION); return element; } };
-  return { bridge, expose, view, document, sent, errors, commands, statuses, imageHandlers, press: (type, event) => listeners.get(type)({ type, ...event }),
+  return { bridge, expose, view, document, sent, errors, commands, statuses, elements, element, imageHandlers, press: (type, event) => listeners.get(type)({ type, ...event }),
     answer: (body) => answer(body), fail: (reason) => failure(reason), textSize: (value) => onTextSize(value), resized: () => observed() };
 }
 
@@ -153,6 +155,8 @@ test("the probe opens its session with its image and reports the view, the sessi
   const manifest = read(join(PROBE, "plugin.json"));
   assert.deepEqual([...fake.statuses.keys()], manifest.exposes.status.map(({ name }) => name));
   assert.deepEqual([...fake.commands.keys()], manifest.exposes.commands.map(({ name }) => name));
+  assert.deepEqual([...fake.elements.keys()], manifest.exposes.element.map(({ name }) => name));
+  assert.equal(fake.elements.get("rasterprobe.raster"), fake.element, "the element entry is the image region element");
   assert.deepEqual(fake.sent, [{ surface: "tab-9", body: { operation: "open", image: REGION, textSize: 1.25 }, cids: [] }]);
   const status = (name) => fake.statuses.get(name).read();
   assert.deepEqual(status("rasterprobe.view"), { width: 400, height: 300, left: 0, top: 24, deviceWidth: 800, deviceHeight: 600, devicePixelRatio: 2, textSize: 1.25 });
