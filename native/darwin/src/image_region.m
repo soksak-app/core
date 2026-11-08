@@ -1990,7 +1990,6 @@ void sp_region_caret(void *handle, double x, double y, double w, double h) {
     view.caretHeight = h;
 }
 
-#ifdef SOKSAK_DIAGNOSTIC
 void sp_region_set_input_context(void *handle, void *context) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     ((SPImageRegion *)handle).givenInputContext = (NSTextInputContext *)context;
@@ -2000,7 +1999,6 @@ void sp_region_identity_token(void *handle, unsigned char token[16]) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     memcpy(token, ((SPImageRegion *)handle)->identityToken, sizeof ((SPImageRegion *)handle)->identityToken);
 }
-#endif
 
 void sp_region_text(void *handle, const char *utf8) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");

@@ -141,7 +141,6 @@ bool sp_document_go(void *document, int action, int offset);
 // Sets the region by the CSS pixel margins (left, top, right, bottom) of the surface viewport. The margins are kept
 // when the surface size changes.
 void sp_document_place(void *document, double left, double top, double right, double bottom, bool visible);
-#ifdef SOKSAK_DIAGNOSTIC
 // With draw, makes the document regions of window show their documents and render while the window is occluded
 // (sp_webview_render_occluded), so a still capture of the covered window holds them; without, ends that, and a covered region
 // hides its document again. The window keeps the state for a region created later in it until draw is false or the window
@@ -173,7 +172,6 @@ bool sp_document_frame_identity_freeze(uint64_t generation, sp_document_frame_id
 // Removes only the matching capture-session marker after capture intake has stopped. Completion runs exactly once on
 // the main thread; stale generations are reported as errors and cannot remove a replacement marker.
 bool sp_document_frame_identity_remove(uint64_t generation, sp_document_frame_identity_reply reply, void *context);
-#endif
 
 // Writes the region in window coordinates and the visibility {x, y, width, height, visible} to out[0..4].
 void sp_document_frame(void *document, double *out);

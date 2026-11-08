@@ -258,6 +258,10 @@ func readProject(raw json.RawMessage) (projectRecord, error) {
 
 // Shell is the workbench of one window.
 type Shell struct {
+	// transcript records the host calls of the workbench while diagnostics.transcript is on, and replyHold holds the exposure
+	// replies of the surfaces that diagnostics.surface.hold names.
+	transcript *Transcript
+	replyHold  *SurfaceReplyHold
 	// cardReads holds the decoded data of the cards, and railRead the last rail outline.
 	cardReads map[string]cardRead
 	railRead  railRead
@@ -418,6 +422,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
 	s.calls.Observe(s.events.Call)
+	s.exposedFocus.OnTransition(s.events.Info)
 	s.registry.Record(s.events.Command)
 	s.registry.Follow(s.followCommand)
 	s.errors = NewShownErrors(s.events.Error)

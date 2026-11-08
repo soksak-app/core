@@ -744,6 +744,10 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if err != nil {
 			return err
 		}
+		// busy is the only reason that a view reports; a modified tab keeps itself through tab.modified (docs/spec/plugins.md#memory-saver).
+		if fields.Reason != "busy" {
+			return fmt.Errorf("unknown keep reason: %s", fields.Reason)
+		}
 		if fields.On {
 			s.report(call.Surface).Keeps[fields.Reason] = true
 		} else {
@@ -1156,7 +1160,19 @@ func (s *Shell) runNativeCall(call viewCallEvent, view *viewState, unit *install
 		s.registry.Deliver(change)
 		answer(nil, nil)
 	case "exposureReply":
-		s.surfaceCall(call, "exposureReply", payload, func(_ any, err error) { answer(nil, err) })
+		// A held reply goes out after the surface closed, when the context of its view has ended, so it is sent with the context of
+		// the calls of the window, as the main page sends the reply that it held (diagnostics.surface.hold).
+		s.replyHold.Gate(call.Surface, func(sent func()) {
+			calls := s.calls.withContext(nil)
+			if view := s.surfaces.views[call.Surface]; view != nil && view.ctx != nil && view.ctx.Err() == nil {
+				calls = s.calls.withContext(view.ctx)
+			}
+			payload["surface"] = call.Surface
+			calls.CallInOrder("view:"+call.Surface, "exposureReply", payload, func(_ any, err error) {
+				answer(nil, err)
+				sent()
+			})
+		})
 	default:
 		return fmt.Errorf("host call %s is not served to plugins", fields.Name)
 	}

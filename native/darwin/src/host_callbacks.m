@@ -40,7 +40,6 @@ static void requireCallback(bool installed, const char *name) {
     }
 SP_HOST_CALLBACKS(SP_HOST_CALLBACK_DEFINE)
 
-#ifdef SOKSAK_DIAGNOSTIC
 static sp_host_diagnostic_callbacks diagnosticCallbacks;
 static bool diagnosticReady;
 
@@ -62,4 +61,3 @@ const char *sp_host_diagnostic_callbacks_install(const sp_host_diagnostic_callba
         SP_HOST_CALLBACK_##mode(diagnosticCallbacks.name arguments); \
     }
 SP_HOST_DIAGNOSTIC_CALLBACKS(SP_HOST_DIAGNOSTIC_CALLBACK_DEFINE)
-#endif

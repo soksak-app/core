@@ -318,7 +318,6 @@ static NSString *binaryRefusal(SPBinaryStore *store, NSUInteger length, NSString
 @property(assign) SPDocumentView *view;
 @end
 
-#ifdef SOKSAK_DIAGNOSTIC
 @interface SPDocumentFrameIdentity : NSObject {
 @public
     SPDocumentView *view;
@@ -374,7 +373,6 @@ static void frameIdentityStartFailed(SPDocumentFrameIdentity *identity, NSString
 static void frameIdentityStartReply(SPDocumentFrameIdentity *identity, NSString *json, NSString *error);
 static void frameIdentityFailSession(SPDocumentFrameIdentity *identity, NSString *reason);
 static void frameIdentityClose(SPDocumentView *view);
-#endif
 
 @interface SPDocumentView : WKWebView <WKNavigationDelegate, WKUIDelegate>
 @property sp_document_changed changed;
@@ -410,6 +408,10 @@ static void frameIdentityClose(SPDocumentView *view);
 // because when the replaced earlier navigation is cancelled, WKWebView.loading becomes NO before the new navigation
 // starts.
 @property(retain) WKNavigation *navigation;
+// The address of the current document: the address of the last committed main frame navigation, or nil while no document has
+// committed or after the WebContent process ended. WKWebView.URL reports the address of a navigation that has not committed yet,
+// whose document is not the current one.
+@property(copy) NSURL *committedURL;
 // The navigation that was last counted in navigations, so a navigation is counted once, when it starts.
 @property(retain) WKNavigation *countedNavigation;
 // The number of navigations that the document has started. A progress change of a navigation does not change it, so the host
@@ -448,7 +450,6 @@ static void frameIdentityClose(SPDocumentView *view);
 @property(retain) SPHiddenDelay *hiddenDelay;
 // The frame documents with a form flag, by the identifier that the form script of each frame document generates.
 @property(retain) NSMutableSet<NSString *> *formFrames;
-#ifdef SOKSAK_DIAGNOSTIC
 @property BOOL viewportMarkerEnabled;
 @property BOOL viewportMarkerOriginalWantsLayer;
 @property CGFloat viewportMarkerOriginalBorderWidth;
@@ -459,7 +460,6 @@ static void frameIdentityClose(SPDocumentView *view);
 @property BOOL viewDocumentCommitted;
 @property(retain) SPDocumentFrameIdentity *frameIdentity;
 @property(retain) id frameIdentityMessage;
-#endif
 - (void)clearBackForwardCache:(NSString *)reason;
 - (void)stopHiddenTimer;
 - (void)report;
@@ -475,7 +475,6 @@ static void frameIdentityClose(SPDocumentView *view);
 - (void)takeSnapshot;
 @end
 
-#ifdef SOKSAK_DIAGNOSTIC
 @interface SPDocumentFrameIdentityMessage : NSObject <WKScriptMessageHandler>
 @property(assign) SPDocumentView *view;
 @end
@@ -571,7 +570,6 @@ static void frameIdentityClose(SPDocumentView *view);
     });
 }
 @end
-#endif
 
 // The scheme of application documents inside webviews (docs/spec/native-host.md#application-addresses).
 static NSString *const kApplicationScheme = @"soksak";
@@ -914,7 +912,6 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     return [super performKeyEquivalent:event];
 }
 
-#ifdef SOKSAK_DIAGNOSTIC
 - (void)restoreViewportMarker {
     if (!self.viewportMarkerEnabled) return;
     CALayer *layer = self.layer;
@@ -932,23 +929,19 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     }
     self.viewportMarkerEnabled = NO;
 }
-#endif
 
 - (void)dealloc {
-#ifdef SOKSAK_DIAGNOSTIC
     [self restoreViewportMarker];
-#endif
     [_formFrames release];
-#ifdef SOKSAK_DIAGNOSTIC
     [_frameIdentityMessage release];
     [_frameIdentity release];
-#endif
     [_scroll release];
     [_failure release];
     [_link release];
     [_plugin release];
     [_binaries release];
     [_navigation release];
+    [_committedURL release];
     [_countedNavigation release];
     [_eventMonitor release];
     [_webSurface release];
@@ -1145,6 +1138,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 // A main frame commit, a reload included, replaces every frame document, so every form flag is cleared.
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
     if (self.pluginRootView) self.viewDocumentCommitted = YES;
+    self.committedURL = view.URL;
     [self.formFrames removeAllObjects];
     self.ready = NO;
     self.dirty = NO;
@@ -1216,6 +1210,7 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)view {
     sp_log_error("document view", [NSString stringWithFormat:@"web content process terminated: %@", self.URL.absoluteString].UTF8String);
     self.navigation = nil;
+    self.committedURL = nil;
     self.failure = @"the web content process ended";
     [self report];
     if (self.viewEnded && !self.closed) self.viewEnded(self.viewEndedContext);
@@ -1543,7 +1538,6 @@ static void *documentCreationFails(NSString *cause) {
     return NULL;
 }
 
-#ifdef SOKSAK_DIAGNOSTIC
 static char kDrawCoveredKey;
 
 // The record that a window draws its document regions while covered (sp_document_draw_covered). The window holds it as an
@@ -1592,7 +1586,6 @@ bool sp_document_draw_covered(void *handle, bool draw) {
     }
     return applied;
 }
-#endif
 
 void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *label, const char *channel,
     sp_document_changed changed, void *context) {
@@ -1617,9 +1610,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     if (!nativePlane) return documentCreationFails(@"the surface has no native plane");
     SPDocumentView *view = pluginView(directory, folder, plugin, labelText, channelSource, isView, changed, context);
     if (!view) return NULL;
-#ifdef SOKSAK_DIAGNOSTIC
     view.pluginRootView = isView;
-#endif
     if (!surfaceLayoutRenderAtDisplayRate(view)) {
         setDocumentFailure(@"the document webview cannot render at the display rate");
         [view release];
@@ -1648,7 +1639,6 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
         }
     } else {
         [nativePlane addSubview:view];
-#ifdef SOKSAK_DIAGNOSTIC
         // A region created in a window that draws covered draws covered too.
         if (windowDrawsCovered(surface.window) && !sp_webview_render_occluded(view, true)) {
             [view removeFromSuperview];
@@ -1656,7 +1646,6 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
             [view release];
             return documentCreationFails(@"the document webview cannot render while its window is occluded");
         }
-#endif
     }
     [view installEventMonitor];
     sp_observe_key_path("document_view.appearance", SP_OBSERVE_RECORD, surface, view, @"effectiveAppearance", 0, &kAppearanceContext);
@@ -1754,7 +1743,9 @@ bool sp_document_post(void *handle, const char *json) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
     if (!view || view.closed || !json || !view.plugin) return false;
-    NSURL *url = view.URL;
+    // The post runs in the current document, so the address of the committed document decides whether it is a plugin document of
+    // the region's plugin; a load that has not committed has not replaced the current document.
+    NSURL *url = view.committedURL;
     if (![url.scheme.lowercaseString isEqualToString:kApplicationScheme] || ![url.host isEqualToString:view.plugin]) return false;
     // The document parses the text: converting a message into an object here and that object into a script value costs the host
     // CPU in proportion to the message size at each post.
@@ -1883,7 +1874,6 @@ bool sp_document_zoom(void *document, double zoom) {
     return true;
 }
 
-#ifdef SOKSAK_DIAGNOSTIC
 static WKContentWorld *frameIdentityWorld(void) {
     return [WKContentWorld worldWithName:@"soksak-diagnostic-frame-identity"];
 }
@@ -2308,17 +2298,14 @@ bool sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, do
     CGColorRelease(cyan);
     return true;
 }
-#endif
 
 void sp_document_background(void *handle, bool enabled) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     NSView *view = (NSView *)handle;
-#ifdef SOKSAK_DIAGNOSTIC
     if ([view isKindOfClass:SPDocumentView.class]) {
         SPDocumentView *document = (SPDocumentView *)view;
         if (document.viewportMarkerEnabled) document.viewportMarkerOriginalWantsLayer = YES;
     }
-#endif
     view.wantsLayer = YES;
     view.layerUsesCoreImageFilters = YES;
     if (!enabled) {
@@ -2342,10 +2329,8 @@ void sp_document_appearance(void *handle, bool dark) {
 void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
-#ifdef SOKSAK_DIAGNOSTIC
     frameIdentityClose(view);
     [view restoreViewportMarker];
-#endif
     // The web content process of the view lives as long as AppKit keeps the view, so the keyboard leaves it at the close.
     sp_view_give_up_keyboard(view);
     view.closed = YES;

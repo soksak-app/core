@@ -56,6 +56,10 @@ type Focus struct {
 	responder Responder
 	views     map[string]*FocusStatus
 	reported  *FocusStatus
+	// transition writes the line of a focus transition of the workbench, and entered is the element that held the focus at the
+	// last report.
+	transition func(line string)
+	entered    *elementPlace
 }
 
 // NewFocus makes the focus of a window. changed runs on each change of the status.
@@ -195,10 +199,8 @@ func (f *Focus) ForgetView(surface string) {
 func (f *Focus) Status() *FocusStatus {
 	switch f.responder.Owner {
 	case "workbench":
-		for _, place := range f.places {
-			if !f.absent[place] && f.handles[place].Focused(f.window) {
-				return &FocusStatus{Name: place.name, Index: place.index}
-			}
+		if place := f.focusedPlace(); place != nil {
+			return &FocusStatus{Name: place.name, Index: place.index}
 		}
 	case "surface":
 		if f.responder.Surface != nil {
@@ -208,8 +210,41 @@ func (f *Focus) Status() *FocusStatus {
 	return nil
 }
 
+// OnTransition gives the focus the writer of the lines of its transitions: `focus out <name>` for the element of the workbench
+// that loses the keyboard focus and `focus in <name>` for the element that takes it, as the main page writes each focusout and
+// focusin of its document (core-exposure.js of packages/workbench).
+func (f *Focus) OnTransition(write func(line string)) { f.transition = write }
+
+// focusedPlace is the element of the workbench that holds the keyboard focus in the last frame, or nil.
+func (f *Focus) focusedPlace() *elementPlace {
+	for _, place := range f.places {
+		if !f.absent[place] && f.handles[place].Focused(f.window) {
+			return &place
+		}
+	}
+	return nil
+}
+
+// writeTransition writes the transition from the element of the last report to the element that holds the focus now.
+func (f *Focus) writeTransition() {
+	now := f.focusedPlace()
+	if now == nil && f.entered == nil || now != nil && f.entered != nil && *now == *f.entered {
+		return
+	}
+	if f.transition != nil {
+		if f.entered != nil {
+			f.transition("focus out " + f.entered.name)
+		}
+		if now != nil {
+			f.transition("focus in " + now.name)
+		}
+	}
+	f.entered = now
+}
+
 // report runs changed when the status differs from the last one it reported.
 func (f *Focus) report() {
+	f.writeTransition()
 	status := f.Status()
 	if status == nil && f.reported == nil || status != nil && f.reported != nil && sameFocus(*status, *f.reported) {
 		return

@@ -127,10 +127,6 @@ endif
 endif
 
 CFLAGS     := -arch $(ARCH) -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
-DIAGNOSTIC ?= 1
-ifeq ($(DIAGNOSTIC),1)
-CFLAGS     += -DSOKSAK_DIAGNOSTIC
-endif
 
 .PHONY: build-host-callback-worker build-host-callback-abi build fetch test test-app benchmark-site-cost test-capture-frame-identity test-capture-stop-intake test-app-activation test-app-input-reference-readiness test-app-view-focus-restore test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
@@ -229,7 +225,7 @@ build-host-callback-worker: $(HOST_CALLBACK_WORKER_LIBRARY)
 
 # Isolated ABI fixture: no application bundle or production library is changed.
 $(HOST_CALLBACK_ABI_LIBRARY): tests/host_callback_abi.m src/host_callbacks.m src/host_callbacks.h src/input_inject.h Makefile | $(BUILD)
-	@clang $(CFLAGS) -DSOKSAK_DIAGNOSTIC -dynamiclib -I$(CURDIR)/src tests/host_callback_abi.m src/host_callbacks.m -o $@
+	@clang $(CFLAGS) -dynamiclib -I$(CURDIR)/src tests/host_callback_abi.m src/host_callbacks.m -o $@
 
 build-host-callback-abi: $(HOST_CALLBACK_ABI_LIBRARY)
 

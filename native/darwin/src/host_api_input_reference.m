@@ -1,7 +1,6 @@
 // Native implementation of the host binding helpers formerly owned by input_reference.go.
 #include "host_api_input_reference.h"
 
-#ifdef SOKSAK_DIAGNOSTIC
 #include <stdint.h>
 #include <stdlib.h>
 #include "input_reference.h"
@@ -15,4 +14,3 @@ static void referenceReply(void *context, const char *reply, const char *failure
 void inputReference(uintptr_t window, const char *action, const char *document, uintptr_t context) {
     hostRunOnMain(^{ sp_input_reference((void *)window, action, document, referenceReply, (void *)context); });
 }
-#endif

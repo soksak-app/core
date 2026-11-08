@@ -11,8 +11,7 @@ import { pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { buildFixtureRegistry, nextPatch, readIndex } from "../../scripts/fixture-registry.mjs";
-import { fixtureRegistry } from "../benchmark/cases/floor-page.mjs";
-import { fresh, restoreRegistry, useRegistry } from "../fixture.mjs";
+import { fixtureRegistry, fresh, restoreRegistry, useRegistry } from "../fixture.mjs";
 
 /** The fixture plugin that the registry later lists in a newer version. */
 const PLUGIN = "probeplain";

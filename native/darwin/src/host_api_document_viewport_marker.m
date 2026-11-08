@@ -1,7 +1,6 @@
 // Native implementation of the host binding helpers formerly owned by document_viewport_marker.go.
 #include "host_api_document_viewport_marker.h"
 
-#ifdef SOKSAK_DIAGNOSTIC
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -12,4 +11,3 @@
 bool main_sp_document_viewport_marker(void *document, bool enabled, uint8_t *rgb3, double *borderWidth, char **error) {
     return ON_MAIN(bool, sp_document_viewport_marker(document, enabled, rgb3, borderWidth, error));
 }
-#endif

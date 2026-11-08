@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 )
 
@@ -81,8 +82,37 @@ func (s *Shell) surfaceRegistered(data []any) {
 		s.fail(fmt.Errorf("exposure: %w", err))
 		return
 	}
+	// The close names the entries that the surface held before it.
+	var held []string
+	if event.Closed && s.events.Traced() {
+		held = s.registry.EntriesOf(event.Surface)
+	}
 	if err := s.registry.Registered(event); err != nil {
 		s.fail(fmt.Errorf("exposure: %w", err))
+	} else if event.Closed {
+		s.traceRegistration("closed", event.Surface, held, nil)
+	} else if s.events.Traced() {
+		// A registration of a surface that the window no longer holds is not applied and is no registration.
+		if entries := s.registry.EntriesOf(event.Surface); slices.Contains(entries, declarationKey(event.Kind, event.Name)) {
+			s.traceRegistration("registered", event.Surface, entries, map[string]any{"kind": event.Kind, "name": event.Name})
+		}
+	}
+	if event.Closed {
+		s.replyHold.Closed(event.Surface)
 	}
 	s.pushStatuses()
+}
+
+// traceRegistration stores the trace event surface.registration of a registration or a close of a surface that the registry applied,
+// as registrationTrace of packages/workbench/exposure.js does: names are the entries that the surface holds at the event, and
+// timeOrigin is the start of the workbench in milliseconds. The workbench reaches a surface through the host and holds no port of it,
+// so the event has no hasPort (docs/spec/performance-trace.md#producers).
+func (s *Shell) traceRegistration(phase, surface string, names []string, fields map[string]any) {
+	s.events.Trace("surface.registration", func() map[string]any {
+		event := map[string]any{"phase": phase, "surface": surface, "timeOrigin": float64(s.events.StartedAt().UnixMilli()), "names": names}
+		for key, value := range fields {
+			event[key] = value
+		}
+		return event
+	})
 }

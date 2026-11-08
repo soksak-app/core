@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { assertReceivedUnchanged, documentFocused, focusedCard, imageFocused, inputDocument, insertedText, presentsTransaction,
-  readyRasterProbe, tabElementIndex, transactionMatchesKey, typedText } from "../input-probe.mjs";
+  pressInKeyWindow, readyRasterProbe, tabElementIndex, transactionMatchesKey, typedText } from "../input-probe.mjs";
 
 test("the document of input transactions folds commits, deletions and the last preedit as a plain text client", { timeout: 5000 }, () => {
   const transactions = [
@@ -116,4 +116,22 @@ test("the element index of a tab counts the tabs of the cards before its card", 
   assert.equal(tabElementIndex(grid, "tab-raster-2"), 3);
   assert.equal(tabElementIndex(grid, "tab-layout-1"), 0);
   assert.throws(() => tabElementIndex(grid, "tab-absent"), /tab-absent/);
+});
+
+test("a press as a person moves the pointer to the point, waits for the virtual key window and then clicks there", { timeout: 5000 }, async () => {
+  const calls = [];
+  let virtualKey = false;
+  const s = {
+    pointer: async (x, y, phase) => {
+      calls.push(`pointer ${x},${y} ${phase}`);
+      if (phase === "move") virtualKey = true;
+    },
+    until: async (name, predicate, message) => {
+      calls.push(`until ${name}`);
+      assert.equal(predicate({ virtualKey }), true, message);
+    },
+    click: async (x, y) => calls.push(`click ${x},${y}`),
+  };
+  await pressInKeyWindow(s, { x: 12, y: 34.5 });
+  assert.deepEqual(calls, ["pointer 12,34.5 move", "until host.window", "click 12,34.5"]);
 });

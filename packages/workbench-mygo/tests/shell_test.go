@@ -79,6 +79,8 @@ type storedHost struct {
 	traces        []string
 	// installed is the document of the installed plugins, and it is empty without plugins.
 	installed string
+	// transcribed holds the lines of the diagnostic transcript that the host call log received.
+	transcribed []transcriptLine
 	// classes is the policy in force that the host call log answers; none stores the errors.
 	classes map[string]any
 	// batchCalls makes each batch of events a call of calls.
@@ -101,11 +103,18 @@ func (h *storedHost) log(_ context.Context, argument json.RawMessage) (any, erro
 		Action  string            `json:"action"`
 		Events  []map[string]any  `json:"events"`
 		Classes map[string]string `json:"classes"`
+		Start   string            `json:"start"`
+		Line    string            `json:"line"`
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
 	}
 	switch request.Action {
+	case "transcript":
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.transcribed = append(h.transcribed, transcriptLine{Start: request.Start, Line: request.Line})
+		return nil, nil
 	case "clock":
 		return &host.ClockReading{TsMicros: time.Now().UnixMicro(), MonoNs: 1 << 40}, nil
 	case "policy":
@@ -127,6 +136,25 @@ func (h *storedHost) log(_ context.Context, argument json.RawMessage) (any, erro
 		h.calls = append(h.calls, "log")
 	}
 	return nil, nil
+}
+
+// transcriptLine is a line of the diagnostic transcript that the host call log received.
+type transcriptLine struct{ Start, Line string }
+
+// transcripts returns the lines of the diagnostic transcript that the host received, in their order.
+func (h *storedHost) transcripts() []transcriptLine {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.transcribed)
+}
+
+// transcriptLines returns the texts of the lines of the diagnostic transcript that the host received.
+func (h *storedHost) transcriptLines() []string {
+	var lines []string
+	for _, line := range h.transcripts() {
+		lines = append(lines, line.Line)
+	}
+	return lines
 }
 
 // called reports whether the host received the call name.

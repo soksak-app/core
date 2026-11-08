@@ -17,7 +17,7 @@ import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "./benchmark/
 import { B3_MEASUREMENTS, B3_SETTINGS } from "./benchmark/measurements.mjs";
 import { fresh } from "./fixture.mjs";
 import { CONFIGURATIONS, INPUT_LATENCY_TARGETS, clockOffset, inputLatencyB3Values, keyFigures, keyLatency } from "./input-latency.mjs";
-import { documentFocused, documentPoint, fieldPoint, inputProbeTab } from "./input-probe.mjs";
+import { documentFocused, documentPoint, fieldPoint, inputProbeTab, pressInKeyWindow } from "./input-probe.mjs";
 
 const KEYS = 12;
 /** The samples of `probeinput.clock` that bound the offset of the clock of the document. */
@@ -29,10 +29,10 @@ const now = () => performance.timeOrigin + performance.now();
 /** The status of the field of `target`. */
 const statusOf = (target) => (target === "field" ? "probeinput.field" : "probeinput.document");
 
-/** Gives the keyboard to the field of `target` of the probe `surface` with a press, and waits until it holds it. */
+/** Gives the keyboard to the field of `target` of the probe `surface` with a press of a person (pressInKeyWindow), and waits until it holds it. */
 async function focusTarget(s, surface, target) {
   const point = target === "field" ? await fieldPoint(s, surface) : await documentPoint(s, surface);
-  await s.click(point.x, point.y);
+  await pressInKeyWindow(s, point);
   await s.until("host.window", (state) => (target === "field" ? state.responder?.surface === surface : documentFocused(state, surface)),
     `the ${target} of ${surface} did not take the keyboard after the press`);
   await s.until(statusOf(target), (state) => state.focused, `the ${target} of ${surface} did not report its focus`, { surface });

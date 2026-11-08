@@ -184,7 +184,9 @@ type Calls struct {
 	post  func(task func())
 	// observer receives every call that ended, in the step of its answer.
 	observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)
-	mu       sync.Mutex
+	// transcribe receives every call that ended with its answer, in the step of its answer (diagnostics.transcript).
+	transcribe func(name string, argument, value any, failure error)
+	mu         sync.Mutex
 	// orders holds the calls that wait for the previous call of their order, and an order exists while a call of it runs.
 	orders map[string][]func()
 	// ended tells that the workbench of the calls ended (End).
@@ -206,6 +208,11 @@ func NewHostCalls(h *host.Host, window host.Frontend, post func(task func())) *C
 // Observe installs the observer of the calls (docs/spec/logging.md#entrances), before the first call.
 func (c *Calls) Observe(observer func(name string, argument any, cids []string, elapsed time.Duration, failure error)) {
 	c.observer = observer
+}
+
+// Transcribe installs the recorder of the diagnostic transcript, which receives each call that ended with its answer.
+func (c *Calls) Transcribe(transcribe func(name string, argument, value any, failure error)) {
+	c.transcribe = transcribe
 }
 
 // End ends the calls with their workbench: a call after it reaches no handler, and a call that still runs gives no answer. A reload
@@ -291,6 +298,9 @@ func (c *Calls) start(ctx context.Context, name string, argument any, cids []str
 			}
 			if c.observer != nil {
 				c.observer(name, argument, cids, elapsed, err)
+			}
+			if c.transcribe != nil {
+				c.transcribe(name, argument, value, err)
 			}
 			answer(value, err)
 		})
