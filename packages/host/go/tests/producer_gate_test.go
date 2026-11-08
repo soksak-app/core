@@ -40,7 +40,7 @@ func gatedCounts(t *testing.T, log *host.EventLog) map[string]float64 {
 
 // contract: log.policy.binding-call-is-gated
 func TestABindingCallThatThePolicyDoesNotStoreIsCountedAndAFailedOneIsStored(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	narrowCalls(t, log, "warn")
 	bindings := newBindings(t)
 	for index := 0; index < 3; index++ {
@@ -62,7 +62,7 @@ func TestABindingCallThatThePolicyDoesNotStoreIsCountedAndAFailedOneIsStored(t *
 
 // contract: log.policy.endpoint-call-is-gated
 func TestAnEndpointRequestThatThePolicyDoesNotStoreIsCounted(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	narrowCalls(t, log, "warn")
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
@@ -78,7 +78,7 @@ func TestAnEndpointRequestThatThePolicyDoesNotStoreIsCounted(t *testing.T) {
 
 // contract: log.policy.closed-gate-costs-a-branch
 func TestAClosedGateCostsFarLessThanAnOpenOneAndStaysUnderALimit(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 1 << 16
 	options.QueueBytes = 1 << 26
 	log, err := host.StartEventLog(options)
@@ -116,7 +116,7 @@ func TestAClosedGateCostsFarLessThanAnOpenOneAndStaysUnderALimit(t *testing.T) {
 
 // contract: log.policy.producer-builds-nothing-for-a-closed-gate
 func TestAClosedGateBuildsNoFieldsAtTheProducersOfTheHost(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	bindings := newBindings(t)
 	args := []json.RawMessage{json.RawMessage(`{"a":1,"b":"` + strings.Repeat("x", 4000) + `"}`)}
 	call := func() {
@@ -144,7 +144,7 @@ func TestAClosedGateBuildsNoFieldsAtTheProducersOfTheHost(t *testing.T) {
 
 // contract: log.policy.counts-each-second
 func TestTheCountsOfAClosedGateAreReportedEachSecondAndAtAFlush(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 1 << 12
 	options.QueueBytes = 1 << 22
 	log, err := host.StartEventLog(options)

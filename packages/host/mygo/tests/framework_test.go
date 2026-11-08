@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"testing/fstest"
@@ -28,15 +27,13 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 var (
 	_ host.Framework = (*adapter.Framework)(nil)
 	_ host.Frontend  = (*adapter.Frontend)(nil)
 )
-
-// cleanup runs after the tests of the process, for what the tests share.
-var cleanup = func() {}
 
 // quitHelper names the child process of the quit test.
 const quitHelper = "SOKSAK_MYGO_QUIT_HELPER"
@@ -49,44 +46,14 @@ var helpers = map[string]func(){quitHelper: runQuitHelper, applicationHelper: ru
 
 // TestMain runs the application of the framework on the main thread. The tests start when the application finished launching, and
 // the process ends with their status.
-func TestMain(m *testing.M) {
-	system, err := platform.Current()
-	if err == nil {
-		err = system.RequireMainThread()
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	for name, helper := range helpers {
-		if os.Getenv(name) != "" {
-			helper()
-			return
-		}
-	}
-	adapter.ConfigureApplication()
-	mygo.App.SetActivationPolicy(mygo.ActivationPolicyProhibited)
-	mygo.App.WhenReady(func() {
-		go func() {
-			status := m.Run()
-			cleanup()
-			os.Exit(status)
-		}()
-	})
-	if err := mygo.App.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "the application did not run:", err)
-		os.Exit(1)
-	}
-	fmt.Fprintln(os.Stderr, "the application ended before the tests ended")
-	os.Exit(1)
-}
+func TestMain(m *testing.M) { support.Main(m, helpers, func() {}) }
 
 // runQuitHelper quits through the framework adapter and reports that the application ended after its quit listeners ran.
 func runQuitHelper() {
 	adapter.ConfigureApplication()
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyProhibited)
 	mygo.App.OnQuit(func() { fmt.Println("quit listener") })
-	mygo.App.WhenReady(func() { go adapter.NewFramework(&sceneWorkbench{}).Quit() })
+	mygo.App.WhenReady(func() { go adapter.NewFramework(&support.SceneWorkbench{}).Quit() })
 	if err := mygo.App.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "the application did not run:", err)
 		os.Exit(1)
@@ -102,75 +69,15 @@ func runApplicationHelper() {
 		"frontend/modules/@soksak/plugin-api/view-start.js": {Data: []byte("")},
 	}
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyProhibited)
-	if err := adapter.Run(assets, host.Options{ConfigDir: os.Getenv(applicationHelper)}, &sceneWorkbench{}); err != nil {
+	if err := adapter.Run(assets, host.Options{ConfigDir: os.Getenv(applicationHelper)}, &support.SceneWorkbench{}); err != nil {
 		fmt.Fprintln(os.Stderr, "the application failed:", err)
 		os.Exit(1)
 	}
 }
 
-// sceneWorkbench is the fixture workbench: it draws one fixed scene and records what it receives.
-type sceneWorkbench struct {
-	mu      sync.Mutex
-	records []string
-}
-
-func (w *sceneWorkbench) record(format string, values ...any) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.records = append(w.records, fmt.Sprintf(format, values...))
-}
-
-func (w *sceneWorkbench) received() []string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return slices.Clone(w.records)
-}
-
-func (w *sceneWorkbench) Prepared(*host.Host) {}
-
-func (w *sceneWorkbench) Shown(window host.Frontend) { w.record("shown %s", window.Name()) }
-
-func (w *sceneWorkbench) Build(window host.Frontend) func(c *ui.Context) {
-	w.record("build %s", window.Name())
-	return func(c *ui.Context) {
-		w.record("draw %s", window.Name())
-		ui.Text(c, "scene")
-	}
-}
-
-func (w *sceneWorkbench) Close(window host.Frontend) { w.record("close %s", window.Name()) }
-
-func (w *sceneWorkbench) Emit(window host.Frontend, name string, data ...any) {
-	w.record("event %s %s %v", window.Name(), name, data)
-}
-
-func (w *sceneWorkbench) Call(window host.Frontend, script string) {
-	w.record("call %s %s", window.Name(), script)
-}
-
-// wait waits for condition, which an event of the framework makes true, within the limit of a test.
-func wait(t *testing.T, what string, condition func() bool) {
-	t.Helper()
-	for limit := time.Now().Add(10 * time.Second); !condition(); time.Sleep(5 * time.Millisecond) {
-		if time.Now().After(limit) {
-			t.Fatalf("%s did not happen within 10 s", what)
-		}
-	}
-}
-
-// open creates a window of a fixture workbench, which the test destroys at its end.
-func open(t *testing.T, name string) (*adapter.Framework, *sceneWorkbench, *adapter.Frontend) {
-	t.Helper()
-	workbench := &sceneWorkbench{}
-	framework := adapter.NewFramework(workbench)
-	window := framework.NewWindow(host.WindowOptions{Name: name, Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
-	t.Cleanup(window.Window().Destroy)
-	return framework, workbench, window
-}
-
 // contract: application.framework.names-the-application
 func TestTheMygoFrameworkNamesTheApplicationOfTheEndpoint(t *testing.T) {
-	framework := adapter.NewFramework(&sceneWorkbench{})
+	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	if name := framework.ApplicationName(); name != "mygo" {
 		t.Fatalf("application name %q, want mygo", name)
 	}
@@ -254,7 +161,7 @@ func TestTheStartWithoutAWorkbenchFails(t *testing.T) {
 
 // contract: mygo.framework.steps-and-quit
 func TestStepAndPostRunOnTheMainThreadInOrder(t *testing.T) {
-	framework := adapter.NewFramework(&sceneWorkbench{})
+	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	var order []string
 	done := make(chan struct{})
 	framework.Step(func() {
@@ -284,53 +191,10 @@ func TestQuitEndsTheApplicationThroughItsQuitListeners(t *testing.T) {
 	}
 }
 
-// bundled returns the executable of a bundle that holds this test binary, because the notification center of a run requires a bundle.
-func bundled(t *testing.T) string {
-	t.Helper()
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	contents := filepath.Join(t.TempDir(), "soksak-test.app", "Contents")
-	if err := os.MkdirAll(filepath.Join(contents, "MacOS"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	const plist = `<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>app.soksak.mygo.test</string>
-<key>CFBundleExecutable</key><string>soksak-test</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-</dict></plist>
-`
-	if err := os.WriteFile(filepath.Join(contents, "Info.plist"), []byte(plist), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	inside := filepath.Join(contents, "MacOS", "soksak-test")
-	if err := os.Link(executable, inside); err != nil {
-		t.Fatal(err)
-	}
-	return inside
-}
-
-// logged returns the standard error and the crash output that the application wrote to its log folder. A fatal error of the Go
-// runtime writes only to the crash output, and the folder ends with the test (docs/spec/logging.md#files).
-func logged(config string) string {
-	var text strings.Builder
-	for _, pattern := range []string{"host-*.stderr", "host-*.crash"} {
-		files, _ := filepath.Glob(filepath.Join(config, "logs", pattern))
-		for _, file := range files {
-			if data, err := os.ReadFile(file); err == nil {
-				text.Write(data)
-			}
-		}
-	}
-	return text.String()
-}
-
 // contract: application.framework.names-the-application
 func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 	config := t.TempDir()
-	child := exec.Command(bundled(t))
+	child := exec.Command(support.Bundled(t))
 	child.Env = append(os.Environ(), applicationHelper+"="+config)
 	var output bytes.Buffer
 	child.Stdout, child.Stderr = &output, &output
@@ -347,12 +211,12 @@ func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 		}
 		select {
 		case failure := <-ended:
-			t.Fatalf("the application ended before it published its endpoint: %v\n%s%s", failure, output.String(), logged(config))
+			t.Fatalf("the application ended before it published its endpoint: %v\n%s%s", failure, output.String(), support.Logged(config))
 		default:
 		}
 		if time.Now().After(limit) {
 			child.Process.Kill()
-			t.Fatalf("endpoint.json did not appear within 10 s\n%s%s", output.String(), logged(config))
+			t.Fatalf("endpoint.json did not appear within 10 s\n%s%s", output.String(), support.Logged(config))
 		}
 	}
 	if endpoint.Application != "mygo" || endpoint.PID != child.Process.Pid {
@@ -365,11 +229,11 @@ func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 	select {
 	case failure := <-ended:
 		if failure != nil {
-			t.Fatalf("the application ended with %v after the signal\n%s%s", failure, output.String(), logged(config))
+			t.Fatalf("the application ended with %v after the signal\n%s%s", failure, output.String(), support.Logged(config))
 		}
 	case <-time.After(10 * time.Second):
 		child.Process.Kill()
-		t.Fatalf("the application did not end within 10 s of the signal\n%s%s", output.String(), logged(config))
+		t.Fatalf("the application did not end within 10 s of the signal\n%s%s", output.String(), support.Logged(config))
 	}
 	records, err := filepath.Glob(filepath.Join(config, "logs", "host-*.jsonl"))
 	if err != nil || len(records) == 0 {
@@ -403,7 +267,7 @@ func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 
 // contract: mygo.framework.window-operations
 func TestDialogsAttachToTheWindow(t *testing.T) {
-	_, _, window := open(t, "dialogs")
+	_, _, window := support.Open(t, "dialogs")
 	folder := adapter.FolderDialog(window.Window(), "프로젝트 폴더 선택")
 	if folder.Parent != window.Window() || folder.Title != "프로젝트 폴더 선택" || !folder.Directory || folder.Multiple || !folder.CreateDirectories {
 		t.Fatalf("folder panel %+v", folder)
@@ -419,7 +283,7 @@ func TestDialogsAttachToTheWindow(t *testing.T) {
 
 // contract: mygo.framework.dock-menu-has-the-new-window-item
 func TestTheDockMenuHasTheNewWindowItem(t *testing.T) {
-	framework := adapter.NewFramework(&sceneWorkbench{})
+	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	opened := make(chan struct{}, 1)
 	if err := framework.InstallDock(func() { opened <- struct{}{} }); err != nil {
 		t.Fatal(err)
@@ -434,7 +298,7 @@ func TestTheDockMenuHasTheNewWindowItem(t *testing.T) {
 
 // contract: mygo.framework.start-builds-the-workbench
 func TestAWindowStartsHiddenWithItsWorkbench(t *testing.T) {
-	framework, workbench, window := open(t, "main")
+	framework, workbench, window := support.Open(t, "main")
 	if window.Name() != "main" || window.ID() == 0 {
 		t.Fatalf("window %q with the identifier %d", window.Name(), window.ID())
 	}
@@ -453,14 +317,14 @@ func TestAWindowStartsHiddenWithItsWorkbench(t *testing.T) {
 	if width, height := window.Size(); width != 400 || height != 300 {
 		t.Fatalf("size %v×%v", width, height)
 	}
-	if !slices.Contains(workbench.received(), "build main") {
-		t.Fatalf("the workbench received %v", workbench.received())
+	if !slices.Contains(workbench.Received(), "build main") {
+		t.Fatalf("the workbench received %v", workbench.Received())
 	}
 }
 
 // contract: mygo.framework.window-operations
 func TestTheTitleOfTheWindowChanges(t *testing.T) {
-	_, _, window := open(t, "title")
+	_, _, window := support.Open(t, "title")
 	window.SetTitle("next")
 	if got := window.Window().Title(); got != "next" {
 		t.Fatalf("title %q", got)
@@ -469,10 +333,10 @@ func TestTheTitleOfTheWindowChanges(t *testing.T) {
 
 // contract: mygo.framework.events-and-calls-reach-the-workbench
 func TestEventsAndCallsReachTheWorkbenchOfTheWindow(t *testing.T) {
-	_, workbench, window := open(t, "events")
+	_, workbench, window := support.Open(t, "events")
 	window.Emit("theme", "dark", 1)
 	window.CallWorkbench("window.__soksakBackground = true")
-	received := workbench.received()
+	received := workbench.Received()
 	for _, want := range []string{"event events theme [dark 1]", "call events window.__soksakBackground = true"} {
 		if !slices.Contains(received, want) {
 			t.Fatalf("the workbench received %v, want %q", received, want)
@@ -482,7 +346,7 @@ func TestEventsAndCallsReachTheWorkbenchOfTheWindow(t *testing.T) {
 
 // contract: mygo.framework.window-operations
 func TestSizeAndPositionOfTheWindow(t *testing.T) {
-	_, _, window := open(t, "bounds")
+	_, _, window := support.Open(t, "bounds")
 	resized := make(chan struct{}, 8)
 	moved := make(chan struct{}, 8)
 	window.OnWindowEvent(host.WindowResize, func() { resized <- struct{}{} })
@@ -501,19 +365,19 @@ func TestSizeAndPositionOfTheWindow(t *testing.T) {
 
 // contract: mygo.framework.window-operations
 func TestMaximizeAndItsState(t *testing.T) {
-	_, _, window := open(t, "maximise")
+	_, _, window := support.Open(t, "maximise")
 	if window.IsMaximized() || window.IsFullscreen() || window.IsMinimized() {
 		t.Fatal("a new window is maximised, in full screen or minimised")
 	}
 	window.Maximize()
-	wait(t, "the maximize", window.IsMaximized)
+	support.Wait(t, "the maximize", window.IsMaximized)
 	window.Unmaximize()
-	wait(t, "the restore", func() bool { return !window.IsMaximized() })
+	support.Wait(t, "the restore", func() bool { return !window.IsMaximized() })
 }
 
 // contract: application.framework.window-events-are-port-events
 func TestEachWindowEventOfTheFrontendIsAnEventOfMygo(t *testing.T) {
-	_, _, window := open(t, "sources")
+	_, _, window := support.Open(t, "sources")
 	for _, event := range []host.WindowEvent{host.WindowResize, host.WindowMove, host.WindowFocus, host.WindowFocusLost, host.WindowShow, host.WindowHide, host.WindowScaleChanged} {
 		if !adapter.WindowEventSource(window.Window(), event, func() {}) {
 			t.Errorf("the window event %d has no event of mygo", event)
@@ -528,7 +392,7 @@ func TestEachWindowEventOfTheFrontendIsAnEventOfMygo(t *testing.T) {
 
 // contract: mygo.framework.window-operations
 func TestAClosingHookKeepsOrClosesTheWindow(t *testing.T) {
-	framework, workbench, window := open(t, "closing")
+	framework, workbench, window := support.Open(t, "closing")
 	keep := true
 	window.OnClosing(func() bool { return keep })
 	window.Close()
@@ -543,16 +407,16 @@ func TestAClosingHookKeepsOrClosesTheWindow(t *testing.T) {
 	if got := framework.Windows(); len(got) != 0 {
 		t.Fatalf("the open windows are %v", got)
 	}
-	if !slices.Contains(workbench.received(), "close closing") {
-		t.Fatalf("the workbench received %v", workbench.received())
+	if !slices.Contains(workbench.Received(), "close closing") {
+		t.Fatalf("the workbench received %v", workbench.Received())
 	}
 }
 
 // contract: mygo.framework.start-builds-the-workbench
 func TestStartWorkbenchClosesAndBuildsTheWorkbench(t *testing.T) {
-	_, workbench, window := open(t, "restart")
+	_, workbench, window := support.Open(t, "restart")
 	window.StartWorkbench()
-	received := workbench.received()
+	received := workbench.Received()
 	close, build := slices.Index(received, "close restart"), slices.Index(received[1:], "build restart")
 	if close < 0 || build < 0 || build+1 < close {
 		t.Fatalf("the workbench received %v, want a close before a second build", received)
@@ -561,7 +425,7 @@ func TestStartWorkbenchClosesAndBuildsTheWorkbench(t *testing.T) {
 
 // contract: mygo.framework.frame-reports-reach-the-counters
 func TestTheLayoutObserverReportsTheTransactionOfAWindow(t *testing.T) {
-	_, _, window := open(t, "layout")
+	_, _, window := support.Open(t, "layout")
 	system, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)
@@ -622,10 +486,10 @@ func TestTheFrameReportsOfAWindowReachItsCounters(t *testing.T) {
 // first frame.
 // contract: mygo.framework.start-builds-the-workbench
 func TestAWorkbenchStartsAfterTheFirstFrameOfItsWindow(t *testing.T) {
-	_, workbench, window := open(t, "started")
+	_, workbench, window := support.Open(t, "started")
 	window.Show()
-	wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.received(), "shown started") })
-	records := workbench.received()
+	support.Wait(t, "the start of the workbench", func() bool { return slices.Contains(workbench.Received(), "shown started") })
+	records := workbench.Received()
 	drawn := slices.Index(records, "draw started")
 	if drawn < 0 || drawn > slices.Index(records, "shown started") {
 		t.Fatalf("the workbench started before the first frame: %v", records)
@@ -634,13 +498,13 @@ func TestAWorkbenchStartsAfterTheFirstFrameOfItsWindow(t *testing.T) {
 
 // contract: mygo.framework.frame-reports-reach-the-counters
 func TestAShownWindowCountsItsFramesAndThenDrawsNone(t *testing.T) {
-	_, _, window := open(t, "frames")
+	_, _, window := support.Open(t, "frames")
 	frames := window.Frames()
 	if frames == nil {
 		t.Fatal("a mygo window counts no frame")
 	}
 	window.Show()
-	wait(t, "a window that settled after its frames", func() bool {
+	support.Wait(t, "a window that settled after its frames", func() bool {
 		got := frames.Counters()
 		return *got.Frames > 0 && *got.CommandBuffers > 0 && *got.Settled
 	})

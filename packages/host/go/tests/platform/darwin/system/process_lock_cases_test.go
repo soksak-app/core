@@ -1,4 +1,6 @@
-package host_test
+//go:build darwin
+
+package system_test
 
 import (
 	"encoding/json"
@@ -28,7 +30,7 @@ type lockCase struct {
 func heldLockCases(t *testing.T) []lockCase {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "process-lock.json"))
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "..", "..", "..", "docs", "spec", "cases", "process-lock.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +79,7 @@ func TestTheHostRefusesAHeldLockOfEachCaseWithItsText(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer listener.Close()
-			endpoint := host.NewEndpoint(newFakeBackend())
+			endpoint := host.NewEndpoint(lockedBackend{})
 			info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
 				Application: "fixture", Version: "0.0.8", Started: time.Now()}
 			err = endpoint.Serve(listener, info, config)

@@ -17,11 +17,12 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 // surfaceWorkbench draws one native view element in a box of 200 by 100 at (30, 40), once a surface host is given.
 type surfaceWorkbench struct {
-	sceneWorkbench
+	support.SceneWorkbench
 	view atomic.Uintptr
 }
 
@@ -62,7 +63,7 @@ func TestE2EANativeViewElementPlacesItsSurfaceHost(t *testing.T) {
 	workbench, window, system, surface := openSurface(t)
 	workbench.view.Store(uintptr(surface))
 	window.Window().Invalidate()
-	wait(t, "the placement of the surface host", func() bool {
+	support.Wait(t, "the placement of the surface host", func() bool {
 		var frame platform.Rect
 		mygo.RunOnMain(func() { frame = system.SurfaceFrame(surface) })
 		return frame == platform.Rect{X: 30, Y: 40, W: 200, H: 100}

@@ -20,13 +20,6 @@ import (
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
-func eventLogOptions(directory string) host.EventLogOptions {
-	return host.EventLogOptions{
-		Directory: directory, Role: "host", Boot: "b1", QueueEvents: 64, QueueBytes: 64 * 1024,
-		BatchInterval: 20 * time.Millisecond, RotateBytes: 1 << 30, RetentionBytes: 1 << 40,
-	}
-}
-
 // readEventLog returns the events of a process: the lines of the main file at path and, when it exists, of the debug file beside
 // it, in the order of seq (the writer assigns seq across both files).
 func readEventLog(t *testing.T, path string) []map[string]any {
@@ -64,7 +57,7 @@ func readEventFile(t *testing.T, path string) []map[string]any {
 
 // contract: log.writer.assigns-seq-and-opens-with-log-open
 func TestTheFirstLineOfAnEventLogIsLogOpenAndSeqIsConsecutive(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +94,7 @@ func TestEveryLineCarriesTheWallClockAndTheMonotonicClockOfTheCall(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	// A small file rotates, so log.open and log.rotated are written by the writer after its start.
 	options.RotateBytes = 4000
 	options.QueueEvents = 1000
@@ -161,7 +154,7 @@ func TestEveryLineCarriesTheWallClockAndTheMonotonicClockOfTheCall(t *testing.T)
 
 // contract: log.writer.stores-cids
 func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefused(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +271,7 @@ func countOf(event map[string]any) int {
 
 // contract: log.writer.never-blocks-and-counts-loss
 func TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 4
 	options.BatchInterval = 30 * time.Second
 	log, err := host.StartEventLog(options)
@@ -311,7 +304,7 @@ func TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped(t *test
 func TestARecordOfTheLossBetweenTwoRefusalsSplitsThemIntoTwoDroppedRanges(t *testing.T) {
 	// The writer records the loss counted so far each time it writes the queue (the end of an interval, an error, a flush or
 	// the wakeup of a writer that slept); refusals on both sides of such a write are two ranges.
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 4
 	options.BatchInterval = 30 * time.Second
 	log, err := host.StartEventLog(options)
@@ -360,7 +353,7 @@ func TestARecordOfTheLossBetweenTwoRefusalsSplitsThemIntoTwoDroppedRanges(t *tes
 
 // contract: log.writer.error-wakes-the-writer
 func TestAnEventLogErrorIsWrittenWithoutWaitingForTheBatchInterval(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.BatchInterval = 30 * time.Second
 	log, err := host.StartEventLog(options)
 	if err != nil {
@@ -388,7 +381,7 @@ func TestAnEventLogErrorIsWrittenWithoutWaitingForTheBatchInterval(t *testing.T)
 
 // contract: log.writer.files-are-private
 func TestTheEventLogFolderIs0700AndTheFileIs0600(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(filepath.Join(t.TempDir(), "logs")))
+	log, err := host.StartEventLog(support.EventLogOptions(filepath.Join(t.TempDir(), "logs")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +405,7 @@ func TestTheEventLogFolderIs0700AndTheFileIs0600(t *testing.T) {
 // contract: log.writer.output-follows-the-contract
 func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 	directory := t.TempDir()
-	log, err := host.StartEventLog(eventLogOptions(directory))
+	log, err := host.StartEventLog(support.EventLogOptions(directory))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +441,7 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 
 // contract: log.writer.flush-at-exit
 func TestEventLogFlushWritesEveryAcceptedEventBeforeItReturns(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.BatchInterval = 30 * time.Second
 	log, err := host.StartEventLog(options)
 	if err != nil {
@@ -476,7 +469,7 @@ func TestEventLogFlushWritesEveryAcceptedEventBeforeItReturns(t *testing.T) {
 
 // contract: log.writer.relays-events-with-their-layer-and-time
 func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +519,7 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 
 // contract: log.writer.names-the-writing-document
 func TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -578,7 +571,7 @@ func TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer(t *testin
 
 // contract: log.writer.rotates-at-the-bound-and-keeps-generations
 func TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.RotateBytes = 4000
 	// The queue holds every event, so no refusal makes a gap of seq that log.dropped would explain.
 	options.QueueEvents = 1000
@@ -650,7 +643,7 @@ func TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration(t *testing.T) {
 
 // contract: log.writer.refuses-an-unbounded-file
 func TestAnEventLogWithoutARotationBoundIsRefused(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.RotateBytes = 0
 	if _, err := host.StartEventLog(options); err == nil || !strings.Contains(err.Error(), "RotateBytes") {
 		t.Fatalf("error %v", err)
@@ -659,7 +652,7 @@ func TestAnEventLogWithoutARotationBoundIsRefused(t *testing.T) {
 
 // contract: log.writer.announces-each-write-to-the-observer
 func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -692,7 +685,7 @@ func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
 func TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval(t *testing.T) {
 	// Events arrive every 5 ms, faster than the batch interval of 50 ms, so a writer that waits for a quiet interval
 	// writes nothing while they arrive.
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 4096
 	options.QueueBytes = 1 << 22
 	options.BatchInterval = 50 * time.Millisecond

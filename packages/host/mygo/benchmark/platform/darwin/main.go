@@ -1,4 +1,6 @@
-// Command cmd runs the benchmark of an empty mygo window on a display (make benchmark-empty-window): it opens a window of the framework
+//go:build darwin
+
+// Command darwin runs the benchmark of an empty mygo window on a display (make benchmark-empty-window): it opens a window of the framework
 // without the mygo framework adapter and writes one line of JSON to the standard output.
 package main
 

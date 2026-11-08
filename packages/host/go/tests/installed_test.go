@@ -16,27 +16,14 @@ import (
 	"testing/fstest"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
-
-// writeInstalled writes the content for each path into the configuration folder.
-func writeInstalled(t *testing.T, config string, files map[string]string) {
-	t.Helper()
-	for name, content := range files {
-		file := filepath.Join(config, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
 
 // installedFixture is a configuration folder in which two enabled plugins, one disabled plugin, and one sidecar are installed.
 func installedFixture(t *testing.T) string {
 	config := t.TempDir()
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"plugins/installed.json": `{"format": 3, "plugins": {
 			"tty": {"version": "0.1.0", "path": "plugins/tty/0.1.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
 			"alpha": {"version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}},
@@ -74,7 +61,7 @@ func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 // contract: installed.document.sidecar-facts
 func TestInstalledPluginsDocumentDeclaresTheMessageFormOfEachSidecar(t *testing.T) {
 	config := installedFixture(t)
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe", "message": {"form": "json-object", "operationField": "operation"}, "hostReadOperations": ["list"]}`,
 	})
 	want := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}`
@@ -86,7 +73,7 @@ func TestInstalledPluginsDocumentDeclaresTheMessageFormOfEachSidecar(t *testing.
 // contract: installed.document.names-from-package-json
 func TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON(t *testing.T) {
 	config := installedFixture(t)
-	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": `{"name": "plugin-renamed"}`})
+	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": `{"name": "plugin-renamed"}`})
 	if got := string(host.InstalledPluginsDocument(config, false)); !strings.Contains(got, `{"id":"alpha","package":"plugin-renamed",`) {
 		t.Fatalf("renamed document %s", got)
 	}
@@ -103,7 +90,7 @@ func TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON(t *testing.T) {
 func TestInstalledPluginsDocumentRefusesAPackageField(t *testing.T) {
 	config := installedFixture(t)
 	// A file of the current format that holds the removed member is refused (docs/spec/installation.md#stored-data-formats).
-	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 3, "plugins": {"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}`})
+	support.WriteInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 3, "plugins": {"alpha": {"package": "plugin-alpha", "version": "1.0.0", "path": "plugins/alpha/1.0.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}`})
 	want := `{"error":"` + filepath.Join(config, "plugins/installed.json") + `: plugins/installed.json alpha: unknown field package"}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != want {
 		t.Fatalf("package field %s", got)
@@ -115,7 +102,7 @@ func TestInstalledPluginJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
 	config := installedFixture(t)
 	manifest := filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")
 	for _, content := range []string{"", "{"} {
-		writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": content})
+		support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": content})
 		if got, want := string(host.InstalledPluginsDocument(config, false)), `{"error":"`+manifest+` is not valid JSON"}`; got != want {
 			t.Fatalf("invalid plugin.json %q: got %s, want %s", content, got, want)
 		}
@@ -126,7 +113,7 @@ func TestInstalledPluginJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
 func TestInstalledJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
 	config := installedFixture(t)
 	file := filepath.Join(config, "plugins/installed.json")
-	writeInstalled(t, config, map[string]string{"plugins/installed.json": "{"})
+	support.WriteInstalled(t, config, map[string]string{"plugins/installed.json": "{"})
 	if got, want := string(host.InstalledPluginsDocument(config, false)), `{"error":"`+file+` is not valid JSON"}`; got != want {
 		t.Fatalf("invalid installed.json: got %s, want %s", got, want)
 	}
@@ -136,7 +123,7 @@ func TestInstalledJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
 func TestInstalledPackageJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
 	config := installedFixture(t)
 	file := filepath.Join(config, "plugins/alpha/1.0.0/package.json")
-	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": "{"})
+	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": "{"})
 	if got, want := string(host.InstalledPluginsDocument(config, false)), `{"error":"`+file+` is not valid JSON"}`; got != want {
 		t.Fatalf("invalid package.json: got %s, want %s", got, want)
 	}
@@ -145,11 +132,11 @@ func TestInstalledPackageJSONInvalidTextNamesOnlyTheFile(t *testing.T) {
 // contract: installed.document.reports-errors
 func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 	config := installedFixture(t)
-	writeInstalled(t, config, map[string]string{"plugins/tty/0.1.0/diagnostics.json": "{"})
+	support.WriteInstalled(t, config, map[string]string{"plugins/tty/0.1.0/diagnostics.json": "{"})
 	if got := string(host.InstalledPluginsDocument(config, true)); got != `{"error":"`+filepath.Join(config, "plugins/tty/0.1.0/diagnostics.json")+` is not valid JSON"}` {
 		t.Fatalf("diagnostics error %s", got)
 	}
-	writeInstalled(t, config, map[string]string{"plugins/tty/0.1.0/diagnostics.json": "{}", "plugins/alpha/1.0.0/plugin.json": "{"})
+	support.WriteInstalled(t, config, map[string]string{"plugins/tty/0.1.0/diagnostics.json": "{}", "plugins/alpha/1.0.0/plugin.json": "{"})
 	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")+` is not valid JSON"}` {
 		t.Fatalf("manifest error %s", got)
 	}
@@ -159,7 +146,7 @@ func TestInstalledPluginsDocumentReportsAnInvalidState(t *testing.T) {
 	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")+`: the plugin manifest is missing"}` {
 		t.Fatalf("missing manifest %s", got)
 	}
-	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 9, "plugins": {}, "sidecars": {}}`})
+	support.WriteInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 9, "plugins": {}, "sidecars": {}}`})
 	if got := string(host.InstalledPluginsDocument(config, false)); got != `{"error":"`+filepath.Join(config, "plugins/installed.json")+`: plugins/installed.json: format must be 3"}` {
 		t.Fatalf("state error %s", got)
 	}
@@ -196,7 +183,7 @@ func TestInstalledAssetsServeTheFilesOfEnabledPackages(t *testing.T) {
 // contract: installed.modules.unreadable-installation-serves-frontend
 func TestAnUnreadableInstallationServesTheFrontendModules(t *testing.T) {
 	config := t.TempDir()
-	writeInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 2, "plugins": {}}`})
+	support.WriteInstalled(t, config, map[string]string{"plugins/installed.json": `{"format": 2, "plugins": {}}`})
 	frontend := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "frontend "+r.URL.Path) })
 	handler := host.InstalledAssets(config, fstest.MapFS{})(frontend)
 	for _, path := range []string{"/modules/soksak/dist/index.js", "/modules/@soksak/plugin-api/index.js"} {
@@ -212,7 +199,7 @@ func TestAnUnreadableInstallationServesTheFrontendModules(t *testing.T) {
 // language and the disabled plugin off declares a point of the same name.
 func sharedFixture(t *testing.T) string {
 	config := installedFixture(t)
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"plugins/alpha/1.0.0/plugin.json": `{"id": "alpha", "extends": {"language": {"version": "1.0.0", "schema": {},
 			"modules": {"@codemirror/state": "ui/state.js", "gone": "ui/gone.js", "outside": "../../tty/0.1.0/ui/tty.js"}}}}`,
 		"plugins/alpha/1.0.0/ui/state.js": "export const state = 1;",
@@ -244,7 +231,7 @@ func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
 			t.Fatalf("%s answered %d %q", path, code, body)
 		}
 	}
-	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
+	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
 	if code, body, _ := get("/shared/alpha.language/@codemirror/state.js"); code != 500 || !strings.Contains(body, filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")) {
 		t.Fatalf("invalid manifest %d %q", code, body)
 	}
@@ -258,13 +245,13 @@ func TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations(t *testing
 	}
 	for name, files := range cases {
 		config := installedFixture(t)
-		writeInstalled(t, config, files)
+		support.WriteInstalled(t, config, files)
 		sidecars, err := host.NewInstalledSidecars(config)
 		if err != nil {
 			t.Errorf("%s: the start failed: %v", name, err)
 			continue
 		}
-		err = sidecars.Send(newFakeOwner("/projects/a"), "@scope/sidecar-worker", "s1", json.RawMessage(`{}`))
+		err = sidecars.Send(support.NewFakeOwner("/projects/a"), "@scope/sidecar-worker", "s1", json.RawMessage(`{}`))
 		if want := "sidecar @scope/sidecar-worker is not declared by any plugin"; err == nil || err.Error() != want {
 			t.Errorf("%s: send error = %v, want %q", name, err, want)
 		}
@@ -284,7 +271,7 @@ func installedSendError(t *testing.T, config, name string) string {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	err = sidecars.Send(newFakeOwner("/projects/a"), name, "s1", json.RawMessage(`{}`))
+	err = sidecars.Send(support.NewFakeOwner("/projects/a"), name, "s1", json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatalf("a send to %s succeeded", name)
 	}
@@ -314,7 +301,7 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	if err := installedSendError(t, config, "@scope/sidecar-worker"); !strings.HasPrefix(err, "sidecar @scope/sidecar-worker: "+missing+": ") {
 		t.Fatalf("missing sidecar.json: %s", err)
 	}
-	writeInstalled(t, config, map[string]string{"plugins/tty/0.1.0/plugin.json": `{"id": "tty", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}`})
+	support.WriteInstalled(t, config, map[string]string{"plugins/tty/0.1.0/plugin.json": `{"id": "tty", "dependencies": {"@scope/sidecar-other": "^0.1.0"}}`})
 	manifest := filepath.Join(config, "plugins/tty/0.1.0/plugin.json")
 	if err := installedSendError(t, config, "@scope/sidecar-other"); err != "sidecar @scope/sidecar-other: "+manifest+": sidecar @scope/sidecar-other has no installed version" {
 		t.Fatalf("unknown sidecar: %s", err)
@@ -328,7 +315,7 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 func TestInstalledSidecarsListEveryDependentPlugin(t *testing.T) {
 	config := installedFixture(t)
 	// A second enabled plugin that lists the same sidecar is one more dependent of the one declaration.
-	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": `{"id": "alpha", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`})
+	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": `{"id": "alpha", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`})
 	declarations, err := host.InstalledSidecars(config)
 	if err != nil || len(declarations) != 1 || !reflect.DeepEqual(declarations[0].Dependents, []string{"alpha", "tty"}) {
 		t.Fatalf("shared sidecar declarations %+v, %v", declarations, err)
@@ -339,7 +326,7 @@ func TestInstalledSidecarsListEveryDependentPlugin(t *testing.T) {
 func TestInstalledSidecarsLeaveOutThePackagesOfInstalledPlugins(t *testing.T) {
 	config := installedFixture(t)
 	// The packages of an enabled and a disabled plugin are plugin dependencies, not sidecars.
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"plugins/tty/0.1.0/plugin.json": `{"id": "tty", "dependencies": {"@scope/sidecar-worker": "^0.1.0", "plugin-alpha": "^1.0.0", "plugin-off": "^1.0.0"}}`,
 	})
 	declarations, err := host.InstalledSidecars(config)
@@ -397,7 +384,7 @@ func readsFixture(t *testing.T) string {
 func writeReadsPlugin(t *testing.T, config, id string) {
 	t.Helper()
 	folder := "plugins/" + id + "/1.0.0/"
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		folder + "package.json": `{"name": "plugin-` + id + `"}`,
 		folder + "plugin.json": `{"id": "` + id + `", "extends": {"language": {"version": "1.0.0", "schema": {},
 			"modules": {"state": "ui/state.js"}}}}`,
@@ -412,7 +399,7 @@ func writeReadsRecord(t *testing.T, config string, ids ...string) {
 	for i, id := range ids {
 		records[i] = `"` + id + `": {"version": "1.0.0", "path": "plugins/` + id + `/1.0.0", "enabled": true, "sidecars": {}}`
 	}
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"plugins/installed.json": `{"format": 3, "plugins": {` + strings.Join(records, ",") + `}, "sidecars": {}}`,
 	})
 }
@@ -513,7 +500,7 @@ func TestASharedModuleReadsTheManifestOfItsProviderAlone(t *testing.T) {
 // contract: installed.modules.read-the-manifest-of-the-request
 func TestAMalformedManifestRefusesTheModulesOfItsOwnPluginAlone(t *testing.T) {
 	config := readsFixture(t)
-	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
+	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
 	checkModule(t, config, "/modules/plugin-beta/ui/state.js", "plugins/beta/1.0.0/ui/state.js")
 	checkShared(t, config, "/shared/beta.language/state.js", "plugins/beta/1.0.0/ui/state.js")
 	checkModule(t, config, "/modules/plugin-alpha/ui/state.js", "")
@@ -548,7 +535,7 @@ func TestTheRequestAfterARemovalDoesNotServeThePlugin(t *testing.T) {
 func TestTheRequestAfterAnUpdateReadsTheNewManifest(t *testing.T) {
 	config := readsFixture(t)
 	checkShared(t, config, "/shared/beta.language/state.js", "plugins/beta/1.0.0/ui/state.js")
-	writeInstalled(t, config, map[string]string{"plugins/beta/1.0.0/plugin.json": `{"id": "beta", "extends": {"language": {"version": "1.0.0",
+	support.WriteInstalled(t, config, map[string]string{"plugins/beta/1.0.0/plugin.json": `{"id": "beta", "extends": {"language": {"version": "1.0.0",
 		"schema": {}, "modules": {"other": "ui/state.js"}}}}`})
 	checkShared(t, config, "/shared/beta.language/state.js", "")
 }
@@ -588,7 +575,7 @@ func TestAFileOfTheFrontendReadsNoFileOfAPlugin(t *testing.T) {
 // contract: installed.modules.frontend-first
 func TestAFileOfTheFrontendWinsOverAPluginOfTheSamePackage(t *testing.T) {
 	config := readsFixture(t)
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"plugins/alpha/1.0.0/package.json":  `{"name": "soksak"}`,
 		"plugins/alpha/1.0.0/dist/index.js": "plugin",
 		"plugins/alpha/1.0.0/dist/other.js": "plugin other",
@@ -621,7 +608,7 @@ func TestAModuleOfAPluginStopsReadingAtItsPackage(t *testing.T) {
 // contract: installed.modules.read-the-manifest-of-the-request
 func TestAModuleBesideAMalformedPackageJSONIsServed(t *testing.T) {
 	config := readsFixture(t)
-	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": "{"})
+	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": "{"})
 	checkModule(t, config, "/modules/plugin-beta/ui/state.js", "plugins/beta/1.0.0/ui/state.js")
 	checkModule(t, config, "/modules/plugin-alpha/ui/state.js", "")
 }
@@ -643,7 +630,7 @@ func TestThePluginFolderReadsTheManifestOfItsPluginAlone(t *testing.T) {
 // contract: document.plugin.folder
 func TestThePluginFolderIsFoundBesideAMalformedPlugin(t *testing.T) {
 	config := readsFixture(t)
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"plugins/alpha/1.0.0/plugin.json":  "{",
 		"plugins/gamma/1.0.0/package.json": "{",
 	})

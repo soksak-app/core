@@ -23,7 +23,7 @@ import (
 func writeMixedEvents(t *testing.T) (string, map[host.Level]int) {
 	t.Helper()
 	config := t.TempDir()
-	options := eventLogOptions(filepath.Join(config, "logs"))
+	options := support.EventLogOptions(filepath.Join(config, "logs"))
 	options.RotateBytes = 1500
 	options.QueueEvents = 500
 	log, err := host.StartEventLog(options)

@@ -58,7 +58,7 @@ func checkCut(t *testing.T, event map[string]any) {
 
 // contract: bounds.producer.fields-are-cut-while-serialized
 func TestTheFieldsOfAHostEventAreCutWhileTheyAreSerialized(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	reads.Store(0)
 	big := make([]element, 1_000_000)
 	host.EmitHost(host.LevelDebug, "host.test.big", map[string]any{"data": big})
@@ -70,7 +70,7 @@ func TestTheFieldsOfAHostEventAreCutWhileTheyAreSerialized(t *testing.T) {
 
 // contract: bounds.producer.fields-are-cut-while-serialized
 func TestTheFieldsOfAnEmittedEventAreCutWhileTheyAreSerialized(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	reads.Store(0)
 	big := make([]element, 1_000_000)
 	if !log.Emit(host.LevelDebug, "host.test.emitted", map[string]any{"data": big}) {
@@ -84,7 +84,7 @@ func TestTheFieldsOfAnEmittedEventAreCutWhileTheyAreSerialized(t *testing.T) {
 
 // contract: bounds.producer.fields-are-cut-while-serialized
 func TestTheFieldsOfAHostEventThatFitAreStoredAsTheirJSON(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	host.EmitHost(host.LevelDebug, "host.test.small", map[string]any{
 		"list": []any{1, "x\n\"é", nil, true, 1.5, []string{"a"}}, "inner": map[string]any{"c": "d"}, "none": nil, "count": 7,
 	})
@@ -99,7 +99,7 @@ func TestTheFieldsOfAHostEventThatFitAreStoredAsTheirJSON(t *testing.T) {
 
 // contract: bounds.producer.record-text-is-cut
 func TestTheTextAndThePlaceOfARecordAreCutAtTheirBounds(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	host.LogError(strings.Repeat("p", 3000), strings.Repeat("é", 10000))
 	fields := storedEvent(t, log, "host.record.error")["fields"].(map[string]any)
 	text, place := fields["text"].(string), fields["where"].(string)
@@ -116,7 +116,7 @@ func TestTheStartBufferHoldsAtMostFourMebibytesAndTheWriterCountsTheRest(t *test
 	for index := 0; index < records; index++ {
 		host.LogInfo("flood", text)
 	}
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 4 * host.StartBufferRecords
 	options.QueueBytes = 64 << 20
 	log, err := host.StartEventLog(options)
@@ -147,7 +147,7 @@ func TestTheStartBufferHoldsAtMostFourMebibytesAndTheWriterCountsTheRest(t *test
 
 // contract: bounds.endpoint.topic-changes-hold-at-most-256
 func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounted(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	backend := newFakeBackend()
 	backend.held = make(chan struct{})
 	backend.holdMethod = "status.watch"
@@ -207,7 +207,7 @@ func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounte
 
 // contract: bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes
 func TestTheOutputQueueOfAConnectionHoldsAtMostSixteenMebibytesAndTheRefusalIsCounted(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	endpoint, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
 	reply := call(t, conn, 1, "status.watch", map[string]any{"window": "main", "name": "core.layout"})

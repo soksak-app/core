@@ -1,6 +1,6 @@
-//go:build e2e && diagnostics
+//go:build darwin && e2e && diagnostics
 
-package adapter_test
+package system_test
 
 // Checks that the picture of a window holds what its view page drew: the window server composes the surface host of a
 // view page under the Metal surface of the window, so only the picture of the window server shows both
@@ -17,6 +17,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 // stillPixel takes a still of the window, as diagnostics.capture.still does, and returns the color of the middle of box
@@ -62,7 +63,7 @@ func TestE2EAStillOfTheWindowShowsTheViewPage(t *testing.T) {
 	const r, g, b = 0x20, 0x40, 0x80
 	var seen [3]uint32
 	near := func(have, want uint32) bool { return have+8 >= want && have <= want+8 }
-	wait(t, "the color of the view page in the picture of the window", func() bool {
+	support.Wait(t, "the color of the view page in the picture of the window", func() bool {
 		seen = session.stillPixel(t)
 		return near(seen[0], r) && near(seen[1], g) && near(seen[2], b)
 	})

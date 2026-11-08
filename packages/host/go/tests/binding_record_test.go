@@ -12,6 +12,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // bindingTarget is a host with one method of each shape that the entrance calls.
@@ -59,7 +60,7 @@ func newBindings(t *testing.T) *host.Bindings {
 
 // contract: binding.record.call-is-an-event
 func TestABindingCallIsAnEventWhileTheTraceIsOff(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	if host.PerformanceEnabled() {
 		t.Fatal("the performance trace is on")
 	}
@@ -100,7 +101,7 @@ func TestABindingCallIsAnEventWhileTheTraceIsOff(t *testing.T) {
 
 // contract: binding.record.failure-names-the-error
 func TestAFailedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	bindings := newBindings(t)
 	_, err := bindings.Call(context.Background(), "Fail", []json.RawMessage{json.RawMessage(`null`)}, nil)
 	if err == nil {
@@ -118,7 +119,7 @@ func TestAFailedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
 
 // contract: binding.record.refusal-names-the-error
 func TestARefusedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	bindings := newBindings(t)
 	_, unknown := bindings.Call(context.Background(), "Missing", nil, nil)
 	_, counted := bindings.Call(context.Background(), "Fail", nil, nil)
@@ -139,7 +140,7 @@ func TestARefusedBindingCallIsAWarningWithItsErrorText(t *testing.T) {
 
 // contract: binding.record.arguments-are-cut-before-copying
 func TestTheArgumentsOfABindingEventAreCutAtTheBound(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	bindings := newBindings(t)
 	// Multi-byte characters put the bound inside a character.
 	big, err := json.Marshal(strings.Repeat("é", 3000))
@@ -162,7 +163,7 @@ func TestTheArgumentsOfABindingEventAreCutAtTheBound(t *testing.T) {
 
 // contract: binding.record.unfinished-call-names-the-error
 func TestABindingCallThatDoesNotReturnIsAWarning(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	bindings := newBindings(t)
 	func() {
 		defer func() {
@@ -184,7 +185,7 @@ func TestABindingCallThatDoesNotReturnIsAWarning(t *testing.T) {
 
 // contract: binding.record.native-call-is-an-event
 func TestACallOfANativeDocumentIsAnEvent(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	_, err := host.InvokeNative(nil, 7, "Theme", []json.RawMessage{json.RawMessage(`1`)})
 	if err == nil {
 		t.Fatal("Theme with an argument succeeded")
@@ -201,7 +202,7 @@ func TestACallOfANativeDocumentIsAnEvent(t *testing.T) {
 
 // contract: binding.record.every-host-method-is-callable
 func TestEveryMethodOfTheHostIsCallableThroughTheEntrance(t *testing.T) {
-	useEventLog(t)
+	support.UseEventLog(t)
 	bindings, err := host.NewBindings(&host.Host{}, "Bindings")
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +228,7 @@ func TestAMethodTheEntranceCannotCallFailsAtStart(t *testing.T) {
 
 // contract: binding.record.operation-identifiers-are-stored
 func TestABindingCallThatCarriesAnOperationStoresItsIdentifiers(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	bindings := newBindings(t)
 	if _, err := bindings.Call(context.Background(), "Echo", []json.RawMessage{json.RawMessage(`1`)}, []string{"p1.4", "p1.5"}); err != nil {
 		t.Fatal(err)
@@ -252,7 +253,7 @@ func TestABindingCallThatCarriesAnOperationStoresItsIdentifiers(t *testing.T) {
 
 // contract: binding.record.invalid-identifiers-are-refused
 func TestABindingCallWithAnInvalidIdentifierIsRefusedAndNotRun(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	bindings := newBindings(t)
 	_, err := bindings.Call(context.Background(), "Echo", []json.RawMessage{json.RawMessage(`1`)}, []string{"p1.4", "a\"b"})
 	if err == nil || !strings.Contains(err.Error(), `"a\"b"`) {
@@ -273,7 +274,7 @@ func TestABindingCallWithAnInvalidIdentifierIsRefusedAndNotRun(t *testing.T) {
 // json.Marshal(result) for another one, so the entrance returns a value that encodes as `null` for a method that returns
 // no value or a nil value.
 func TestABindingCallWithoutAValueRepliesNull(t *testing.T) {
-	useEventLog(t)
+	support.UseEventLog(t)
 	bindings := newBindings(t)
 	for _, call := range []struct {
 		method string

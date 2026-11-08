@@ -1,6 +1,6 @@
-//go:build e2e
+//go:build darwin && e2e
 
-package adapter_test
+package system_test
 
 // Checks the view surfaces of a window of the mygo host through the host calls of the workbench: a view page in a surface host of the
 // native view of the window, the end of its process and its keyboard (docs/spec/hosts.md#native-views). The tests share one host
@@ -29,6 +29,7 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
 	"github.com/soksak-app/core/packages/host/mygo/tests/platform/darwin"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 // box is where a card shows the surface of a test.
@@ -36,7 +37,7 @@ var box = platform.Rect{X: 30, Y: 40, W: 300, H: 200}
 
 // elementWorkbench draws one card for each listed surface, as the workbench of the application does.
 type elementWorkbench struct {
-	sceneWorkbench
+	support.SceneWorkbench
 	host    atomic.Pointer[host.Host]
 	context atomic.Pointer[context.Context]
 	shown   atomic.Pointer[[]string]
@@ -44,9 +45,9 @@ type elementWorkbench struct {
 
 // Shown answers as the workbench of the application does: it reports that the workbench of the window is ready.
 func (w *elementWorkbench) Shown(window host.Frontend) {
-	w.record("shown %s", window.Name())
+	w.Record("shown %s", window.Name())
 	if err := w.host.Load().WindowReady(*w.context.Load()); err != nil {
-		w.record("ready failed: %v", err)
+		w.Record("ready failed: %v", err)
 	}
 }
 
@@ -68,7 +69,7 @@ func (w *elementWorkbench) Emit(window host.Frontend, name string, data ...any) 
 	go func() {
 		reply, _ := json.Marshal(map[string]any{"id": request.ID, "result": nil})
 		if err := w.host.Load().ExposureReply(*w.context.Load(), reply); err != nil {
-			w.record("reply failed: %v", err)
+			w.Record("reply failed: %v", err)
 		}
 	}()
 }
@@ -76,7 +77,7 @@ func (w *elementWorkbench) Emit(window host.Frontend, name string, data ...any) 
 func (w *elementWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 	ctx := host.WithFrontend(context.Background(), window)
 	w.context.Store(&ctx)
-	w.record("build %s", window.Name())
+	w.Record("build %s", window.Name())
 	return func(c *ui.Context) {
 		shown := w.shown.Load()
 		if shown == nil {
@@ -289,12 +290,12 @@ func TestE2EClosingTheLastViewEndsItsProcess(t *testing.T) {
 	session := viewHost(t)
 	session.layout(t, viewSurface("last", true))
 	var process int32
-	wait(t, "the process of the view", func() bool {
+	support.Wait(t, "the process of the view", func() bool {
 		process = session.row(t, "last").Process
 		return process != 0
 	})
 	session.layout(t)
-	wait(t, "the end of the process of the last view", func() bool {
+	support.Wait(t, "the end of the process of the last view", func() bool {
 		return errors.Is(syscall.Kill(int(process), 0), syscall.ESRCH)
 	})
 }
@@ -307,7 +308,7 @@ func TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed(t *testing
 	element, _ := host.ElementOf(session.host, session.window, "keyboard")
 	session.window.Window().Focus()
 	mygo.RunOnMain(func() { session.system.FocusModal(unsafe.Pointer(element.Key), true) })
-	wait(t, "the keyboard in the view page", func() bool { return session.row(t, "keyboard").Focused })
+	support.Wait(t, "the keyboard in the view page", func() bool { return session.row(t, "keyboard").Focused })
 	session.layout(t, viewSurface("keyboard", false))
 	if session.row(t, "keyboard").Focused {
 		t.Fatal("the hidden view page holds the keyboard")
@@ -320,7 +321,7 @@ func TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed(t *testing
 
 // count returns how often the workbench received the record.
 func (w *elementWorkbench) count(record string) int {
-	return len(slices.DeleteFunc(w.received(), func(received string) bool { return received != record }))
+	return len(slices.DeleteFunc(w.Received(), func(received string) bool { return received != record }))
 }
 
 // The reload request of a ready workbench starts it again with a new start of the host, and the new workbench reports that it is ready.
@@ -329,19 +330,19 @@ func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
 	session := viewHost(t)
 	t.Cleanup(func() { session.layout(t) })
 	name := session.window.Name()
-	wait(t, "the first start of the workbench", func() bool { return session.workbench.count("shown "+name) > 0 })
+	support.Wait(t, "the first start of the workbench", func() bool { return session.workbench.count("shown "+name) > 0 })
 	builds, starts := session.workbench.count("build "+name), session.workbench.count("shown "+name)
 	session.layout(t, viewSurface("reloaded", true))
 	process := session.row(t, "reloaded").Process
 	session.window.Emit("page-reload")
-	wait(t, "the second start of the workbench", func() bool { return session.workbench.count("shown "+name) == starts+1 })
+	support.Wait(t, "the second start of the workbench", func() bool { return session.workbench.count("shown "+name) == starts+1 })
 	if got := session.workbench.count("build " + name); got != builds+1 {
 		t.Fatalf("%d builds after the reload, want %d", got, builds+1)
 	}
 	if got := session.workbench.count("close " + name); got == 0 {
 		t.Fatal("the previous workbench did not close")
 	}
-	wait(t, "the end of the view of the previous workbench", func() bool {
+	support.Wait(t, "the end of the view of the previous workbench", func() bool {
 		return process == 0 || errors.Is(syscall.Kill(int(process), 0), syscall.ESRCH)
 	})
 }
@@ -371,13 +372,13 @@ func TestE2EADocumentRegionShowsInTheSurfaceHostOfItsView(t *testing.T) {
 		Regions: []host.CompositionPlacement{{Name: "page", Left: 10, Top: 20, Right: 30, Bottom: 40, Visible: true}}})
 	document.URL = "soksak://probe/ui/page.html"
 	session.call(t, session.host.DocumentLoad, document)
-	wait(t, "the document region in the native view", func() bool {
+	support.Wait(t, "the document region in the native view", func() bool {
 		return slices.ContainsFunc(session.rows(t), func(row viewRow) bool {
 			return row.Document && !row.Hidden && row.X == box.X+10 && row.Y == box.Y+20 && row.Width == box.W-40 && row.Height == box.H-60
 		})
 	})
 	session.layout(t)
-	wait(t, "the end of the document region", func() bool {
+	support.Wait(t, "the end of the document region", func() bool {
 		return !slices.ContainsFunc(session.rows(t), func(row viewRow) bool { return row.Document })
 	})
 }
@@ -419,7 +420,7 @@ func TestE2EALeasedImageRegionHoldsItsFrameWhilePresented(t *testing.T) {
 	t.Cleanup(close)
 	var width, height int
 	var scale float64
-	wait(t, "the raster of the image region", func() bool {
+	support.Wait(t, "the raster of the image region", func() bool {
 		var placed bool
 		mygo.RunOnMain(func() { width, height, scale, placed = session.system.RasterImage(image) })
 		return placed && width > 0 && height > 0
@@ -443,16 +444,16 @@ func TestE2EALeasedImageRegionHoldsItsFrameWhilePresented(t *testing.T) {
 		}
 	}
 	present(0)
-	wait(t, "the mark of the presented frame", frames[0].InUse)
+	support.Wait(t, "the mark of the presented frame", frames[0].InUse)
 	present(1)
-	wait(t, "the mark of the replacing frame", frames[1].InUse)
+	support.Wait(t, "the mark of the replacing frame", frames[1].InUse)
 	mu.Lock()
 	if !slices.Equal(released, []int{1}) {
 		t.Fatalf("the region released %v after the second frame", released)
 	}
 	mu.Unlock()
 	present(2)
-	wait(t, "the mark of the replaced frame to clear", func() bool { return !frames[0].InUse() })
+	support.Wait(t, "the mark of the replaced frame to clear", func() bool { return !frames[0].InUse() })
 	close()
 	mu.Lock()
 	defer mu.Unlock()

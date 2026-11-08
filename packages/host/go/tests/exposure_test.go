@@ -407,7 +407,7 @@ func callEvents(t *testing.T, log *host.EventLog, event string) []map[string]any
 
 // contract: exposure.relay.timeout-writes-call-event
 func TestRelayTimeoutOfACommandWritesCallTimeout(t *testing.T) {
-	log := useRoomyEventLog(t)
+	log := support.UseRoomyEventLog(t)
 	relay := host.NewRelay[string]()
 	got := relay.RequestCall("surface-main-a", host.RelayCall{Plugin: "probe", Command: "probe.run"}, 50*time.Millisecond, func(uint64) error { return nil })
 	if got.Error == nil || got.Error.Code != 1005 {
@@ -425,7 +425,7 @@ func TestRelayTimeoutOfACommandWritesCallTimeout(t *testing.T) {
 
 // contract: exposure.relay.late-reply-writes-call-event
 func TestRelayLateReplyOfACommandWritesCallLateReply(t *testing.T) {
-	log := useRoomyEventLog(t)
+	log := support.UseRoomyEventLog(t)
 	support.TraceOn(t)
 	relay := host.NewRelay[string]()
 	var requested uint64

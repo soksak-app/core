@@ -16,24 +16,25 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 func TestE2EShowWaitsForTheFirstFrame(t *testing.T) {
-	_, workbench, window := open(t, "show")
+	_, workbench, window := support.Open(t, "show")
 	shown := make(chan struct{}, 1)
 	window.OnWindowEvent(host.WindowShow, func() { shown <- struct{}{} })
 	window.Show()
-	wait(t, "the show", window.Window().IsVisible)
+	support.Wait(t, "the show", window.Window().IsVisible)
 	<-shown
-	if !slices.Contains(workbench.received(), "draw show") {
-		t.Fatalf("the window showed before it drew: %v", workbench.received())
+	if !slices.Contains(workbench.Received(), "draw show") {
+		t.Fatalf("the window showed before it drew: %v", workbench.Received())
 	}
 }
 
 // A status read of whether the window is occluded is worth nothing to a watcher that hears of no change, so a window hears when
 // another covers all of it and when some of it shows again.
 func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
-	framework, _, below := open(t, "below")
+	framework, _, below := support.Open(t, "below")
 	above := framework.NewWindow(host.WindowOptions{Name: "above", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
 	t.Cleanup(above.Window().Destroy)
 	covered := make(chan struct{}, 8)
@@ -41,9 +42,9 @@ func TestE2EAWindowHearsWhenAnotherCoversIt(t *testing.T) {
 	below.OnWindowEvent(host.WindowHide, func() { covered <- struct{}{} })
 	below.OnWindowEvent(host.WindowShow, func() { uncovered <- struct{}{} })
 	below.Show()
-	wait(t, "the window below", below.Window().IsVisible)
+	support.Wait(t, "the window below", below.Window().IsVisible)
 	above.Show()
-	wait(t, "the window above", above.Window().IsVisible)
+	support.Wait(t, "the window above", above.Window().IsVisible)
 	x, y := below.Position()
 	above.SetSize(600, 500)
 	above.SetPosition(x-100, y-100)
@@ -78,7 +79,7 @@ func presentation(t *testing.T, window *adapter.Frontend) error {
 }
 
 func TestE2EThePresentationNoticeCallsBackAfterTheFrame(t *testing.T) {
-	_, _, window := open(t, "presentation")
+	_, _, window := support.Open(t, "presentation")
 	if err := presentation(t, window); err != nil {
 		t.Fatalf("the presentation notice failed: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestE2EThePresentationNoticeCallsBackAfterTheFrame(t *testing.T) {
 }
 
 func TestE2EThePresentationNoticeReportsAWindowThatClosed(t *testing.T) {
-	_, _, window := open(t, "presentation-closed")
+	_, _, window := support.Open(t, "presentation-closed")
 	result := make(chan error, 1)
 	var failed error
 	mygo.RunOnMain(func() {
@@ -118,7 +119,7 @@ func settle(window *adapter.Frontend, done func(displayed float64, err error)) e
 }
 
 func TestE2ETheSettledPresentationCallsBackOnTheMainThread(t *testing.T) {
-	_, workbench, window := open(t, "settled")
+	_, workbench, window := support.Open(t, "settled")
 	type settled struct {
 		displayed float64
 		err       error
@@ -134,8 +135,8 @@ func TestE2ETheSettledPresentationCallsBackOnTheMainThread(t *testing.T) {
 	if got := <-result; got.err != nil || got.displayed <= 0 {
 		t.Fatalf("the settled presentation reported %+v", got)
 	}
-	if !slices.Contains(workbench.received(), "draw settled") {
-		t.Fatalf("the window settled without a frame of its workbench: %v", workbench.received())
+	if !slices.Contains(workbench.Received(), "draw settled") {
+		t.Fatalf("the window settled without a frame of its workbench: %v", workbench.Received())
 	}
 }
 
@@ -143,9 +144,9 @@ func TestE2ETheSettledPresentationCallsBackOnTheMainThread(t *testing.T) {
 const quiet = 250 * time.Millisecond
 
 // held opens a window of a framework whose surface layout transactions hold frames.
-func held(t *testing.T, name string) (*adapter.Framework, *sceneWorkbench, *adapter.Frontend) {
+func held(t *testing.T, name string) (*adapter.Framework, *support.SceneWorkbench, *adapter.Frontend) {
 	t.Helper()
-	framework, workbench, window := open(t, name)
+	framework, workbench, window := support.Open(t, name)
 	if err := framework.ObserveLayout(); err != nil {
 		t.Fatal(err)
 	}
@@ -221,9 +222,9 @@ func TestE2EARecordingHoldsTheRequestAndThePresentationOfTheFrameOfATransaction(
 }
 
 // draws returns how many frames the workbench drew in window.
-func draws(workbench *sceneWorkbench, name string) int {
+func draws(workbench *support.SceneWorkbench, name string) int {
 	count := 0
-	for _, record := range workbench.received() {
+	for _, record := range workbench.Received() {
 		if record == "draw "+name {
 			count++
 		}
@@ -232,7 +233,7 @@ func draws(workbench *sceneWorkbench, name string) int {
 }
 
 // drawsNothing fails when the window draws within quiet.
-func drawsNothing(t *testing.T, workbench *sceneWorkbench, name string) {
+func drawsNothing(t *testing.T, workbench *support.SceneWorkbench, name string) {
 	t.Helper()
 	before := draws(workbench, name)
 	time.Sleep(quiet)
@@ -264,7 +265,7 @@ func TestE2ETheNoticeHoldsTheFramesOfTheWindowUntilTheTransactionEnds(t *testing
 	window.Window().Invalidate()
 	drawsNothing(t, workbench, "hold")
 	commit()
-	wait(t, "the frame after the transaction", func() bool { return draws(workbench, "hold") > before })
+	support.Wait(t, "the frame after the transaction", func() bool { return draws(workbench, "hold") > before })
 	time.Sleep(quiet)
 	if count := draws(workbench, "hold") - before; count != 1 {
 		t.Fatalf("the window drew %d frames after the transaction, want one", count)
@@ -283,7 +284,7 @@ func TestE2EAResizeAndAZoomInATransactionDrawOneFrameAtTheEnd(t *testing.T) {
 	window.Window().Maximize()
 	drawsNothing(t, workbench, "resize")
 	commit()
-	wait(t, "the frame after the transaction", func() bool { return draws(workbench, "resize") > before })
+	support.Wait(t, "the frame after the transaction", func() bool { return draws(workbench, "resize") > before })
 	time.Sleep(quiet)
 	if count := draws(workbench, "resize") - before; count != 1 {
 		t.Fatalf("the window drew %d frames after the transaction, want one", count)
@@ -307,8 +308,8 @@ func TestE2EATransactionHoldsTheOtherWindowsAndTheWindowsOpenedMeanwhile(t *test
 		t.Fatalf("the window opened meanwhile drew %d frames", count)
 	}
 	commit()
-	wait(t, "the frame of the other window", func() bool { return draws(workbench, "second") > before })
-	wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 })
+	support.Wait(t, "the frame of the other window", func() bool { return draws(workbench, "second") > before })
+	support.Wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 })
 }
 
 func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {

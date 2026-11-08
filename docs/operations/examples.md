@@ -264,7 +264,7 @@ The release holds what the plugin and sidecar repositories build with, so their 
 
 ## Empty window benchmark
 
-`make benchmark-empty-window [SECONDS=N]` runs `packages/host/mygo/benchmark/cmd`: it opens a window of the framework of 1200×760 points without the mygo framework adapter, so it draws no workbench, and writes one line of JSON: the footprint of the idle window (`footprintBytes`), the CPU over `seconds`, 240 by default (`cpuSeconds`), the footprint in the middle of a resize (`resizeFootprintBytes`) and the footprint 3 s after it (`afterResizeFootprintBytes`). `packages/host/mygo/benchmark/empty_window_test.go` checks its arguments, its window size, its readings and its output with a fixture window.
+`make benchmark-empty-window [SECONDS=N]` runs `packages/host/mygo/benchmark/platform/darwin`: it opens a window of the framework of 1200×760 points without the mygo framework adapter, so it draws no workbench, and writes one line of JSON: the footprint of the idle window (`footprintBytes`), the CPU over `seconds`, 240 by default (`cpuSeconds`), the footprint in the middle of a resize (`resizeFootprintBytes`) and the footprint 3 s after it (`afterResizeFootprintBytes`). `packages/host/mygo/benchmark/empty_window_test.go` checks its arguments, its window size, its readings and its output with a fixture window.
 
 ## Three-host benchmark
 

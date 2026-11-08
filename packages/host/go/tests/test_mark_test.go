@@ -9,6 +9,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // contract: diagnostics.test-mark.params-validate
@@ -55,7 +56,7 @@ func TestATestMarkIsStoredWhenLifecycleIsOff(t *testing.T) {
 
 func assertTestMarksUnderLifecyclePolicy(t *testing.T, lifecycle string) {
 	t.Helper()
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	policyText := `{"schema":1,"classes":{"lifecycle":"` + lifecycle + `","input":"error","call":"error","io":"error","frame":"error"}}`
 	policy, err := host.ParseLogPolicy("log-policy.json", []byte(policyText))
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 
 // contract: log.writer.stores-class
 func TestEveryLineStoresTheClassOfItsCatalogEntry(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestEveryLineStoresTheClassOfItsCatalogEntry(t *testing.T) {
 
 // contract: log.writer.marks-undeclared
 func TestAnEventTheCatalogDoesNotDeclareIsMarkedUndeclaredAndHasNoClass(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestAnEventTheCatalogDoesNotDeclareIsMarkedUndeclaredAndHasNoClass(t *testi
 
 // contract: log.writer.stores-class
 func TestTheEventsOfTheWriterItselfStoreTheirClass(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.RotateBytes = 600
 	options.QueueEvents = 4
 	options.BatchInterval = 30 * time.Second

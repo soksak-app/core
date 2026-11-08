@@ -3,117 +3,17 @@ package host_test
 // Checks the plugin operations inside the application (docs/spec/installation.md#plugin-operations-in-the-application).
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
-	"syscall"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
-
-// sokJSON runs the sok command and returns its JSON output.
-func sokJSON(t *testing.T, args ...string) map[string]any {
-	t.Helper()
-	var stdout, stderr bytes.Buffer
-	if code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: t.TempDir(), CoreVersion: sok.CoreVersion}); code != 0 {
-		t.Fatalf("sok %v: code %d stderr %s", args, code, stderr.String())
-	}
-	var value map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &value); err != nil {
-		t.Fatalf("sok %v: %v", args, err)
-	}
-	return value
-}
-
-// packFixture writes the release of fixtures/plugin-probe in the layout that `pnpm pack` writes
-// (docs/spec/installation.md#plugin-release), with the two files of the fixture under `package/`, into dir, and returns
-// its path and sha256.
-func packFixture(t *testing.T, dir string) (string, string) {
-	t.Helper()
-	var data bytes.Buffer
-	zipped := gzip.NewWriter(&data)
-	release := tar.NewWriter(zipped)
-	for _, name := range []string{"package.json", "plugin.json"} {
-		content, err := os.ReadFile(filepath.Join("fixtures/plugin-probe", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := release.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: "package/" + name, Mode: 0o644, Size: int64(len(content))}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := release.Write(content); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := release.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := zipped.Close(); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, "plugin-probe-"+sok.CoreVersion+".tgz")
-	if err := os.WriteFile(path, data.Bytes(), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(data.Bytes())
-	return path, hex.EncodeToString(sum[:])
-}
-
-// pluginRegistry builds the current release of fixtures/plugin-probe and its registry, and
-// returns the paths of index.json and the release. go test runs in the folder of the Go package, so the fixture is below it.
-func pluginRegistry(t *testing.T) (index, release string) {
-	t.Helper()
-	version := sok.CoreVersion
-	releases, registry := t.TempDir(), t.TempDir()
-	release, sum := packFixture(t, releases)
-	writeInstalled(t, registry, map[string]string{
-		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
-			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "` + version + `",
-			"release": {"url": "file://` + release + `", "sha256": "` + sum + `"},
-			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
-		"revoked.json": `{"plugins": [], "sidecars": []}`,
-	})
-	sokJSON(t, "registry", "build", registry)
-	return filepath.Join(registry, "index.json"), release
-}
-
-// changes collects the plugins-changed notifications.
-type changes struct {
-	mu   sync.Mutex
-	seen []host.PluginsChanged
-}
-
-func (c *changes) add(change host.PluginsChanged) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.seen = append(c.seen, change)
-}
-
-func (c *changes) list() []host.PluginsChanged {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]host.PluginsChanged(nil), c.seen...)
-}
-
-func newPlugins(t *testing.T, config string) (*host.Plugins, *changes) {
-	t.Helper()
-	seen := &changes{}
-	plugins, err := host.NewPlugins(config, func() error { return nil }, seen.add)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return plugins, seen
-}
 
 func stateText(t *testing.T, plugins *host.Plugins) string {
 	t.Helper()
@@ -131,11 +31,11 @@ func stateText(t *testing.T, plugins *host.Plugins) string {
 // contract: plugins.state.reports-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	plugins, _ := newPlugins(t, config)
+	plugins, _ := support.NewPlugins(t, config)
 	if text := stateText(t, plugins); text != `{"core":"`+sok.CoreVersion+`","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}` {
 		t.Fatalf("state without a registry %s", text)
 	}
-	index, _ := pluginRegistry(t)
+	index, _ := support.PluginRegistry(t)
 	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
@@ -175,11 +75,11 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 // contract: cli.plugin.starter-job-transitions-are-bound-to-snapshot
 func TestPluginsStarterPersistsPendingAndCompletedJob(t *testing.T) {
 	config := t.TempDir()
-	index, _ := pluginRegistry(t)
+	index, _ := support.PluginRegistry(t)
 	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
-	plugins, _ := newPlugins(t, config)
+	plugins, _ := support.NewPlugins(t, config)
 	request := host.PluginsStarterRequest{State: "pending", Pack: "starter", Registry: "file://" + index, Plugins: []string{"probe"}}
 	job, err := plugins.SetStarter(request)
 	if err != nil || job.State != "pending" {
@@ -209,11 +109,11 @@ func TestPluginsStarterPersistsPendingAndCompletedJob(t *testing.T) {
 // contract: plugins.run.changes-like-the-command
 func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	config := t.TempDir()
-	index, _ := pluginRegistry(t)
+	index, _ := support.PluginRegistry(t)
 	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
-	plugins, seen := newPlugins(t, config)
+	plugins, seen := support.NewPlugins(t, config)
 	installed, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"})
 	if err != nil {
 		t.Fatal(err)
@@ -243,7 +143,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 		t.Fatalf("remove kept the plugin folder: %v", err)
 	}
 	var actions []string
-	for _, change := range seen.list() {
+	for _, change := range seen.List() {
 		if change.Plugin != "probe" {
 			t.Fatalf("change %+v", change)
 		}
@@ -257,7 +157,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 // contract: plugins.run.applies-before-it-notifies
 func TestPluginsRunAppliesTheChangeBeforeItNotifies(t *testing.T) {
 	config := t.TempDir()
-	index, _ := pluginRegistry(t)
+	index, _ := support.PluginRegistry(t)
 	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
@@ -277,72 +177,11 @@ func TestPluginsRunAppliesTheChangeBeforeItNotifies(t *testing.T) {
 	}
 }
 
-// contract: plugins.run.rejects-invalid-and-concurrent
-func TestPluginsRunRejectsInvalidAndConcurrentOperations(t *testing.T) {
-	config := t.TempDir()
-	index, release := pluginRegistry(t)
-	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
-		t.Fatal(err)
-	}
-	plugins, seen := newPlugins(t, config)
-	for _, request := range []struct {
-		request host.PluginsRunRequest
-		want    string
-	}{
-		{host.PluginsRunRequest{Action: "rename", Plugin: "probe"}, `unknown plugin action "rename"`},
-		{host.PluginsRunRequest{Action: "install", Plugin: 5.0}, "plugin must be a non-empty string"},
-		{host.PluginsRunRequest{Action: "install", Plugin: ""}, "plugin must be a non-empty string"},
-		{host.PluginsRunRequest{Action: "remove", Plugin: "probe"}, "plugin probe is not installed"},
-	} {
-		if _, err := plugins.Run(request.request); err == nil || err.Error() != request.want {
-			t.Fatalf("%+v: %v, want %s", request.request, err, request.want)
-		}
-	}
-	// When the release is replaced by a FIFO, the installation stops while it reads that FIFO. At the moment the FIFO is opened for writing, the installation is running.
-	data, err := os.ReadFile(release)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Remove(release); err != nil {
-		t.Fatal(err)
-	}
-	if err := syscall.Mkfifo(release, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	first := make(chan error, 1)
-	go func() {
-		_, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"})
-		first <- err
-	}()
-	writer, err := os.OpenFile(release, os.O_WRONLY, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"}); err == nil || err.Error() != "another plugin operation is running" {
-		t.Fatalf("concurrent install: %v", err)
-	}
-	if len(seen.list()) != 0 {
-		t.Fatalf("rejected operations sent %+v", seen.list())
-	}
-	if _, err := writer.Write(data); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := <-first; err != nil {
-		t.Fatalf("first install: %v", err)
-	}
-	if got := seen.list(); len(got) != 1 || got[0] != (host.PluginsChanged{Action: "install", Plugin: "probe"}) {
-		t.Fatalf("plugins-changed %+v", got)
-	}
-}
-
 // contract: plugins.registry.sets-like-the-command
 func TestPluginsUseRegistrySetsTheRegistryLikeTheCommand(t *testing.T) {
 	config := t.TempDir()
-	plugins, _ := newPlugins(t, config)
-	index, _ := pluginRegistry(t)
+	plugins, _ := support.NewPlugins(t, config)
+	index, _ := support.PluginRegistry(t)
 	result, err := plugins.UseRegistry(host.PluginsRegistryRequest{Index: index})
 	if err != nil {
 		t.Fatal(err)
@@ -363,11 +202,11 @@ func TestPluginsUseRegistrySetsTheRegistryLikeTheCommand(t *testing.T) {
 // contract: cli.plugin.starter-job-transitions-are-bound-to-snapshot
 func TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation(t *testing.T) {
 	config := t.TempDir()
-	index, _ := pluginRegistry(t)
+	index, _ := support.PluginRegistry(t)
 	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
 		t.Fatalf("use registry: %v", err)
 	}
-	plugins, _ := newPlugins(t, config)
+	plugins, _ := support.NewPlugins(t, config)
 	request := host.PluginsStarterRequest{
 		State: "pending", Pack: "starter", Registry: "file://" + index, Plugins: []string{"probe"},
 	}
@@ -375,7 +214,7 @@ func TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation(t *test
 		t.Fatalf("save pending starter job = %#v, %v", job, err)
 	}
 
-	plugins, _ = newPlugins(t, config)
+	plugins, _ = support.NewPlugins(t, config)
 	state, err := plugins.State()
 	if err != nil || state.Starter == nil || state.Starter.State != "pending" {
 		t.Fatalf("pending starter state after manager recreation = %#v, %v", state, err)
@@ -388,7 +227,7 @@ func TestPluginsStarterPendingAndCompletedStatesSurviveManagerRecreation(t *test
 		t.Fatalf("save completed starter job = %#v, %v", job, err)
 	}
 
-	plugins, _ = newPlugins(t, config)
+	plugins, _ = support.NewPlugins(t, config)
 	state, err = plugins.State()
 	if err != nil || state.Starter == nil || state.Starter.State != "complete" {
 		t.Fatalf("completed starter state after manager recreation = %#v, %v", state, err)

@@ -9,115 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
-
-const echoSidecar = "@fixture/sidecar-echo"
-
-// stall is the upper bound that ends a hung check. Success is decided by the received events and the ended processes and not by this time.
-// Even on a heavily loaded machine, the reply and the exit of the sidecar arrive within it.
-const stall = 120 * time.Second
-
-// declare is the declaration of one sidecar installed in directory.
-func declare(directory, sidecar string) []host.SidecarDeclaration {
-	return []host.SidecarDeclaration{{Name: echoSidecar, Folder: directory, Data: []byte(sidecar)}}
-}
-
-// fakeOwner is a window that records the sidecar events and the failure events it received.
-type fakeOwner struct {
-	root     string
-	mu       sync.Mutex
-	events   []host.SidecarMessage
-	seen     chan struct{}
-	failures chan any
-}
-
-func newFakeOwner(root string) *fakeOwner {
-	return &fakeOwner{root: root, seen: make(chan struct{}, 16), failures: make(chan any, 16)}
-}
-
-func (o *fakeOwner) ProjectRoot() string { return o.root }
-
-func (o *fakeOwner) Emit(name string, data ...any) {
-	if name == "sidecar-failure" && len(data) == 1 {
-		o.failures <- data[0]
-	}
-}
-
-func (o *fakeOwner) DeliverSidecarMessage(message host.SidecarMessage) {
-	o.mu.Lock()
-	o.events = append(o.events, message)
-	o.mu.Unlock()
-	o.seen <- struct{}{}
-}
-
-func (o *fakeOwner) next(t *testing.T) host.SidecarMessage {
-	t.Helper()
-	select {
-	case <-o.seen:
-	case <-time.After(stall):
-		t.Fatalf("no sidecar event within %v; the test stalled", stall)
-	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return o.events[len(o.events)-1]
-}
-
-// sidecarFailure is the JSON form of the sidecar-failure event value (docs/spec/sidecars.md#failure).
-type sidecarFailure struct {
-	Sidecar string `json:"sidecar"`
-	Surface string `json:"surface"`
-	Reason  string `json:"reason"`
-}
-
-// failure waits for the next failure event and returns it in the JSON form.
-func (o *fakeOwner) failure(t *testing.T) sidecarFailure {
-	t.Helper()
-	var value any
-	select {
-	case value = <-o.failures:
-	case <-time.After(stall):
-		t.Fatalf("no sidecar failure within %v; the test stalled", stall)
-	}
-	data, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var failure sidecarFailure
-	if err := json.Unmarshal(data, &failure); err != nil {
-		t.Fatal(err)
-	}
-	return failure
-}
-
-// messageLimit is the maximum size before the line break in one line of a sidecar message (docs/spec/sidecars.md#messages).
-const messageLimit = 64 << 20
-
-// scriptSidecars creates a channel that declares a fake sidecar that runs script, and its directory.
-// DIR in script is replaced by that directory.
-func scriptSidecars(t *testing.T, script string) (*host.Sidecars, string) {
-	t.Helper()
-	directory := t.TempDir()
-	script = strings.ReplaceAll(script, "DIR", directory)
-	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Even when the check fails, no fake sidecar process is left.
-	t.Cleanup(sidecars.Stop)
-	return sidecars, directory
-}
 
 func scriptSidecarsWithManifest(t *testing.T, script, manifest string) (*host.Sidecars, string) {
 	t.Helper()
@@ -126,7 +25,7 @@ func scriptSidecarsWithManifest(t *testing.T, script, manifest string) (*host.Si
 	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, manifest), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, manifest), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,11 +42,11 @@ read request
 printf '%s\n' '{"surface":"s1","body":"ok"}'
 exec cat
 `, `{"executable":"fake","protocol":1,"displayName":"soksak://sidecar/probe"}`)
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
 		t.Fatal(err)
 	}
-	if event := owner.next(t); event.Surface != "s1" || string(event.Body) != `"ok"` {
+	if event := owner.Next(t); event.Surface != "s1" || string(event.Body) != `"ok"` {
 		t.Fatalf("sidecar event = %#v", event)
 	}
 	name, err := os.ReadFile(filepath.Join(directory, "display-name"))
@@ -159,111 +58,49 @@ exec cat
 	}
 }
 
-// paddedMessageScript is a script that reads one request, sends an s1 message of size bytes before the line break, and then runs then.
-// The body is one string and a shell pipeline writes it, so the script process waits until the write ends.
-func paddedMessageScript(size int, then string) (string, int) {
-	prefix, suffix := `{"surface":"s1","body":"`, `"}`
-	padding := size - len(prefix) - len(suffix)
-	return fmt.Sprintf("#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%%s' '%s'\nhead -c %d /dev/zero | tr '\\0' x\nprintf '%%s\\n' '%s'\n%s\n",
-		prefix, padding, suffix, then), padding
-}
-
-// processID is the process id that the fake sidecar recorded.
-func processID(t *testing.T, directory string) int {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(directory, "pid"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return pid
-}
-
-// requireEnded checks that the process pid ended and was reaped.
-func requireEnded(t *testing.T, pid int) {
-	t.Helper()
-	if err := syscall.Kill(pid, 0); !errors.Is(err, syscall.ESRCH) {
-		t.Fatalf("sidecar process %d still exists after its failure: kill(0) = %v", pid, err)
-	}
-}
-
 // contract: sidecars.protocol.message-at-limit-is-delivered
 func TestSidecarMessageAtTheLimitIsDelivered(t *testing.T) {
-	script, padding := paddedMessageScript(messageLimit, "exec cat")
-	sidecars, _ := scriptSidecars(t, script)
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	script, padding := support.PaddedMessageScript(support.MessageLimit, "exec cat")
+	sidecars, _ := support.ScriptSidecars(t, script)
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	event := owner.next(t)
+	event := owner.Next(t)
 	body := string(event.Body)
 	if event.Surface != "s1" || len(body) != padding+2 || strings.Trim(body[1:len(body)-1], "x") != "" || body[0] != '"' || body[len(body)-1] != '"' {
 		t.Fatalf("message at the limit: surface %q, body length %d, want %d", event.Surface, len(body), padding+2)
 	}
 	select {
-	case value := <-owner.failures:
+	case value := <-owner.Failures:
 		t.Fatalf("message at the limit produced a failure: %+v", value)
 	default:
 	}
 }
 
-// contract: sidecars.failure.oversize-message-terminates-and-notifies
-func TestOversizeSidecarMessageTerminatesAndNotifies(t *testing.T) {
-	script, _ := paddedMessageScript(messageLimit+1, "exec sleep 600")
-	sidecars, directory := scriptSidecars(t, script)
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
-		t.Fatal(err)
-	}
-	failure := owner.failure(t)
-	if failure.Sidecar != echoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "exceeds 67108864 bytes") {
-		t.Fatalf("oversize failure = %+v", failure)
-	}
-	requireEnded(t, processID(t, directory))
-}
-
-// contract: sidecars.failure.invalid-message-terminates-and-notifies
-func TestInvalidSidecarMessageTerminatesAndNotifies(t *testing.T) {
-	for _, line := range []string{`not json`, `{"surface":"s1"}`} {
-		sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread request\nprintf '%s\\n' '"+line+"'\nexec sleep 600\n")
-		owner := newFakeOwner("/projects/a")
-		if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
-			t.Fatal(err)
-		}
-		failure := owner.failure(t)
-		if failure.Sidecar != echoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "invalid message") {
-			t.Fatalf("%s: failure = %+v", line, failure)
-		}
-		requireEnded(t, processID(t, directory))
-	}
-}
-
 // contract: sidecars.failure.output-close-notifies-each-surface
 func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
-	sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ >> DIR/pids\nread first\nread second\nexit 3\n")
-	first, second := newFakeOwner("/projects/a"), newFakeOwner("/projects/b")
-	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\necho $$ >> DIR/pids\nread first\nread second\nexit 3\n")
+	first, second := support.NewFakeOwner("/projects/a"), support.NewFakeOwner("/projects/b")
+	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(second, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := sidecars.Send(second, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	for surface, owner := range map[string]*fakeOwner{"s1": first, "s2": second} {
-		failure := owner.failure(t)
-		if failure.Sidecar != echoSidecar || failure.Surface != surface || failure.Reason != "output closed: exit status 3" {
+	for surface, owner := range map[string]*support.FakeOwner{"s1": first, "s2": second} {
+		failure := owner.Failure(t)
+		if failure.Sidecar != support.EchoSidecar || failure.Surface != surface || failure.Reason != "output closed: exit status 3" {
 			t.Fatalf("%s: failure = %+v", surface, failure)
 		}
 	}
 	// A send after the failure starts a new process.
-	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatalf("send after failure: %v", err)
 	}
 	sidecars.Stop()
 	select {
-	case value := <-first.failures:
+	case value := <-first.Failures:
 		t.Fatalf("output end while stopping produced a failure: %+v", value)
 	default:
 	}
@@ -286,33 +123,33 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Stop closes stdin and waits for echo to record the remaining lines and end. With a short deadline, under load it would force the end before the record,
 	// so the deadline is stall. echo ends soon at EOF, so the check does not become slow.
-	sidecars.StopTimeout = stall
+	sidecars.StopTimeout = support.Stall
 	return sidecars, record
 }
 
 // contract: sidecars.send.delivers-only-to-owning-window, sidecars.send.rejects-surface-owned-by-another-window, sidecars.protocol.request-lines-carry-surface-root-body, sidecars.close-owner.sends-closed-per-surface
 func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	first, second := newFakeOwner("/projects/a"), newFakeOwner("/projects/b")
-	if err := sidecars.Send(first, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	first, second := support.NewFakeOwner("/projects/a"), support.NewFakeOwner("/projects/b")
+	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(second, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := sidecars.Send(second, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if event := first.next(t); event.Sidecar != echoSidecar || event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
+	if event := first.Next(t); event.Sidecar != support.EchoSidecar || event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
 		t.Fatalf("first window event = %+v", event)
 	}
-	if event := second.next(t); event.Surface != "s2" {
+	if event := second.Next(t); event.Surface != "s2" {
 		t.Fatalf("second window event = %+v", event)
 	}
-	if err := sidecars.Send(second, echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "another window") {
+	if err := sidecars.Send(second, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "another window") {
 		t.Fatalf("send to another window's surface = %v", err)
 	}
 	sidecars.CloseOwner(first)
@@ -333,13 +170,13 @@ func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 // contract: sidecars.protocol.surface-keeps-its-first-root
 func TestSurfaceKeepsTheRootItWasOpenedWith(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	// Even after the same window changed to another project, a surface that is already open sends with the first root.
-	owner.root = "/projects/b"
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	owner.Root = "/projects/b"
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.CloseOwner(owner)
@@ -360,12 +197,12 @@ func TestSurfaceKeepsTheRootItWasOpenedWith(t *testing.T) {
 // contract: sidecars.send.rejects-undeclared-sidecar, sidecars.send.rejects-after-stop
 func TestUndeclaredAndStoppedSidecarsAreRejected(t *testing.T) {
 	sidecars, _ := echoSidecars(t)
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, "other", "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not declared") {
 		t.Fatalf("undeclared sidecar = %v", err)
 	}
 	sidecars.Stop()
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "stopped") {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "stopped") {
 		t.Fatalf("send after stop = %v", err)
 	}
 }
@@ -373,23 +210,23 @@ func TestUndeclaredAndStoppedSidecarsAreRejected(t *testing.T) {
 // contract: sidecars.start.fails-on-missing-executable
 func TestMissingSidecarExecutableFails(t *testing.T) {
 	directory := t.TempDir()
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"absent","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"absent","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(newFakeOwner("/"), echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "sidecar "+echoSidecar) {
+	if err := sidecars.Send(support.NewFakeOwner("/"), support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "sidecar "+support.EchoSidecar) {
 		t.Fatalf("missing executable = %v", err)
 	}
 }
 
 // contract: sidecars.start.passes-log-directory
 func TestSidecarReceivesTheLogDirectory(t *testing.T) {
-	sidecars, directory := scriptSidecars(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > DIR/argv\nread request\nprintf '%s\\n' '{\"surface\":\"s1\",\"body\":\"ok\"}'\nexec cat\n")
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+	sidecars, directory := support.ScriptSidecars(t, "#!/bin/sh\nprintf '%s\\n' \"$@\" > DIR/argv\nread request\nprintf '%s\\n' '{\"surface\":\"s1\",\"body\":\"ok\"}'\nexec cat\n")
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
 		t.Fatal(err)
 	}
-	owner.next(t)
+	owner.Next(t)
 	config, err := filepath.EvalSymlinks(directory)
 	if err != nil {
 		t.Fatal(err)
@@ -415,18 +252,18 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = stall
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not declared by any plugin") {
+	sidecars.StopTimeout = support.Stall
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not declared by any plugin") {
 		t.Fatalf("send before the declaration = %v", err)
 	}
-	if err := sidecars.Declare(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`)); err != nil {
+	if err := sidecars.Declare(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if event := owner.next(t); event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
+	if event := owner.Next(t); event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
 		t.Fatalf("event = %+v", event)
 	}
 	sidecars.Stop()
@@ -457,13 +294,13 @@ func TestInvalidSidecarDeclarationsAreNotDeclared(t *testing.T) {
 		// The invalid declaration leaves the sidecar undeclared without failing the construction, and a send to it names
 		// the sidecar, its sidecar.json and the reason.
 		directory := t.TempDir()
-		sidecars, err := host.NewSidecars(declare(directory, c.sidecar), directory)
+		sidecars, err := host.NewSidecars(support.Declare(directory, c.sidecar), directory)
 		if err != nil {
 			t.Errorf("%s: the construction failed: %v", name, err)
 			continue
 		}
-		err = sidecars.Send(newFakeOwner("/projects/a"), echoSidecar, "s1", json.RawMessage(`{}`))
-		want := "sidecar " + echoSidecar + ": " + filepath.Join(directory, "sidecar.json") + ": " + c.reason
+		err = sidecars.Send(support.NewFakeOwner("/projects/a"), support.EchoSidecar, "s1", json.RawMessage(`{}`))
+		want := "sidecar " + support.EchoSidecar + ": " + filepath.Join(directory, "sidecar.json") + ": " + c.reason
 		if err == nil || err.Error() != want {
 			t.Errorf("%s: send error = %v, want %q", name, err, want)
 		}
@@ -478,23 +315,23 @@ func TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	declarations := append(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`),
+	declarations := append(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`),
 		host.SidecarDeclaration{Name: earlier, Folder: directory, Data: []byte(`{"executable":"echo","protocol":1}`)})
 	refused := "sidecar " + earlier + ": " + filepath.Join(directory, "sidecar.json") + ": displayName is required"
 	sidecars, err := host.NewSidecars(declarations, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = stall
+	sidecars.StopTimeout = support.Stall
 	defer sidecars.Stop()
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
 		t.Fatalf("send to the refused sidecar = %v, want %q", err, refused)
 	}
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if event := owner.next(t); event.Surface != "s1" {
+	if event := owner.Next(t); event.Surface != "s1" {
 		t.Fatalf("event = %+v", event)
 	}
 	// A declaration after the start keeps the valid sidecar running and the invalid one undeclared.
@@ -504,17 +341,17 @@ func TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared(t *testing.T) {
 	if err := sidecars.Send(owner, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
 		t.Fatalf("send to the refused sidecar after the declaration = %v, want %q", err, refused)
 	}
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"next"}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"next"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if event := owner.next(t); string(event.Body) != `{"operation":"next"}` {
+	if event := owner.Next(t); string(event.Body) != `{"operation":"next"}` {
 		t.Fatalf("event = %+v", event)
 	}
 }
 
 // contract: sidecars.declaration.persistent-requires-config-directory
 func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
-	if _, err := host.NewSidecars(declare(t.TempDir(), `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`), ""); err == nil || !strings.Contains(err.Error(), "persistent transport requires a config directory") {
+	if _, err := host.NewSidecars(support.Declare(t.TempDir(), `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`), ""); err == nil || !strings.Contains(err.Error(), "persistent transport requires a config directory") {
 		t.Fatalf("persistent transport without config = %v", err)
 	}
 }
@@ -523,12 +360,12 @@ func TestPersistentTransportRequiresConfigDirectory(t *testing.T) {
 func TestPersistentTransportAcceptsNonCanonicalConfigDirectory(t *testing.T) {
 	// filepath.Join removes ".", so the path that is not normalized is built by string concatenation.
 	configDirectory := t.TempDir()
-	sidecars, err := host.NewSidecars(declare(t.TempDir(), `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`), configDirectory+string(os.PathSeparator)+".")
+	sidecars, err := host.NewSidecars(support.Declare(t.TempDir(), `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`), configDirectory+string(os.PathSeparator)+".")
 	if err != nil {
 		t.Fatalf("non-canonical config directory was rejected: %v", err)
 	}
 	// There is no executable, so the service start fails, and before that the service directory is created under the configuration directory.
-	err = sidecars.Send(newFakeOwner("/projects/test"), echoSidecar, "s1", json.RawMessage(`{}`))
+	err = sidecars.Send(support.NewFakeOwner("/projects/test"), support.EchoSidecar, "s1", json.RawMessage(`{}`))
 	if err == nil || !strings.Contains(err.Error(), "sidecar") {
 		t.Fatalf("send = %v, want a sidecar start error", err)
 	}
@@ -544,7 +381,7 @@ func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(newFakeOwner("/"), echoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not declared by any plugin") {
+	if err := sidecars.Send(support.NewFakeOwner("/"), support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not declared by any plugin") {
 		t.Fatalf("send = %v", err)
 	}
 }
@@ -583,7 +420,7 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	// Sets the deadline to 100ms for the test.
 	sidecars.StopTimeout = 100 * time.Millisecond
 
-	owner := newFakeOwner("/projects/test")
+	owner := support.NewFakeOwner("/projects/test")
 
 	// The first Send to the fast sidecar launches that process. The start time is unrelated to property 1, so it is launched first and only recorded.
 	started := time.Now()
@@ -659,24 +496,24 @@ func TestStopGracefulShutdown(t *testing.T) {
 	}
 
 	// Declares the sidecar.
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"graceful","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"graceful","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Stop() forces the end only after the deadline passes. If it returns before the deadline, the sidecar ended by itself at stdin EOF.
 	// The deadline is set to stall, which is sufficiently longer than the process exit time on a loaded machine.
-	sidecars.StopTimeout = stall
+	sidecars.StopTimeout = support.Stall
 
-	owner := newFakeOwner("/projects/test")
+	owner := support.NewFakeOwner("/projects/test")
 
 	// Starts the sidecar.
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 
 	// Checks that the sidecar is actually reading stdin: waits for the echo event.
 	// This keeps the start time of the shell process out of the measurement.
-	if event := owner.next(t); event.Sidecar != echoSidecar || event.Surface != "s1" {
+	if event := owner.Next(t); event.Sidecar != support.EchoSidecar || event.Surface != "s1" {
 		t.Fatalf("echo event = %+v", event)
 	}
 
@@ -690,112 +527,29 @@ func TestStopGracefulShutdown(t *testing.T) {
 	}
 }
 
-// TestCloseDuringStopSendsNothing verifies that a surface close and a window close after Stop ended the input and before the process ends send nothing.
-// When the application ends, windows close together with Stop and call CloseOwner.
-// contract: sidecars.stop.forgets-running-sidecars
-func TestCloseDuringStopSendsNothing(t *testing.T) {
-	directory := t.TempDir()
-	// The sidecar: at start it opens ended and release for reading and writing. It echoes the lines it received, and when the input ends it writes one line to ended and
-	// stays alive until one line arrives on release. The sidecar keeps both pipes open, so the line it wrote is not discarded and the opening side
-	// does not block.
-	ended := filepath.Join(directory, "ended")
-	release := filepath.Join(directory, "release")
-	for _, fifo := range []string{ended, release} {
-		if err := syscall.Mkfifo(fifo, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	script := "#!/bin/sh\nexec 3<>" + release + " 4<>" + ended + "\nwhile read line; do echo \"$line\"; done\n" +
-		"echo ended >&4\nread -r released <&3\nexit 0\n"
-	if err := os.WriteFile(filepath.Join(directory, "lingering"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// Writes one line to release so that no sidecar remains even if the check ends midway.
-	var released sync.Once
-	releaseSidecar := func() {
-		released.Do(func() {
-			fifo, err := os.OpenFile(release, os.O_RDWR, 0)
-			if err != nil {
-				t.Errorf("open release: %v", err)
-				return
-			}
-			if _, err := fifo.Write([]byte("x\n")); err != nil {
-				t.Errorf("write release: %v", err)
-			}
-			if err := fifo.Close(); err != nil {
-				t.Errorf("close release: %v", err)
-			}
-		})
-	}
-	t.Cleanup(releaseSidecar)
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"lingering","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sidecars.StopTimeout = stall
-	owner := newFakeOwner("/projects/test")
-	for _, surface := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"test":"data"}`)); err != nil {
-			t.Fatalf("send %s: %v", surface, err)
-		}
-		if event := owner.next(t); event.Surface != surface {
-			t.Fatalf("echo event = %+v", event)
-		}
-	}
-
-	stopped := make(chan struct{})
-	go func() {
-		sidecars.Stop()
-		close(stopped)
-	}()
-	// When the sidecar writes to ended, Stop has ended the input and the process is still running.
-	signal, err := os.Open(ended)
-	if err != nil {
-		t.Fatal(err)
-	}
-	line, err := bufio.NewReader(signal).ReadString('\n')
-	if closeErr := signal.Close(); closeErr != nil {
-		t.Errorf("close ended: %v", closeErr)
-	}
-	if err != nil || line != "ended\n" {
-		t.Fatalf("end of input signal = %q, %v", line, err)
-	}
-	sidecars.Close("s1")
-	sidecars.CloseOwner(owner)
-	if closing := sidecars.Closing(); len(closing) != 0 {
-		t.Fatalf("closing during stop = %+v, want none", closing)
-	}
-	releaseSidecar()
-	select {
-	case <-stopped:
-	case <-time.After(stall):
-		t.Fatal("stop did not return after the sidecar ended")
-	}
-}
-
 // TestStopClosesUnreadOutput verifies that a protocol failure while stopping is written to the log, the read end of the output that the host no longer reads is
 // closed, and a sidecar that writes more than the pipe can hold afterward also ends without a forced termination. The output is
 // the close reply of a surface that the host did not close. The exit of that process is not reported because it is caused by the closed pipe.
 // contract: sidecars.stop.closes-unread-output
 func TestStopClosesUnreadOutput(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	directory := t.TempDir()
 	script := "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n" +
 		"i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"closed\":true}'; i=$((i+1)); done\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(directory, "talkative"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"talkative","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"talkative","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Stop forces the end only after the deadline passes. If it returns before the deadline, the sidecar wrote all its output and ended by itself.
-	sidecars.StopTimeout = stall
-	owner := newFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	sidecars.StopTimeout = support.Stall
+	owner := support.NewFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	if event := owner.next(t); event.Surface != "s1" {
+	if event := owner.Next(t); event.Surface != "s1" {
 		t.Fatalf("echo event = %+v", event)
 	}
 	start := time.Now()
@@ -817,18 +571,18 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 // This is the same order as the files sidecar answering the closed that a window close sent when the application ends.
 // contract: sidecars.stop.reads-output-to-end
 func TestStopReadsOutputToItsEnd(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	script := "#!/bin/sh\nclosed=\nwhile read line; do case \"$line\" in *'\"closed\":true'*) closed=1;; *) echo \"$line\";; esac; done\n" +
 		"[ -n \"$closed\" ] || exit 4\necho '{\"surface\":\"s1\",\"closed\":true}' || exit 5\n" +
 		"i=0\nwhile [ $i -lt 3000 ]; do echo '{\"surface\":\"s1\",\"body\":\"late\"}' || exit 5; i=$((i+1)); done\n" +
 		"echo finished > DIR/finished\nexit 0\n"
-	sidecars, directory := scriptSidecars(t, script)
-	sidecars.StopTimeout = stall
-	owner := newFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	sidecars, directory := support.ScriptSidecars(t, script)
+	sidecars.StopTimeout = support.Stall
+	owner := support.NewFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	if event := owner.next(t); event.Surface != "s1" {
+	if event := owner.Next(t); event.Surface != "s1" {
 		t.Fatalf("echo event = %+v", event)
 	}
 	sidecars.Close("s1")
@@ -849,18 +603,18 @@ func TestStopReadsOutputToItsEnd(t *testing.T) {
 // hosts.
 // contract: sidecars.stop.reports-exit-status
 func TestStopReportsExitStatus(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	for ending, want := range map[string]string{
 		"exit 3":        "error host sidecar @fixture/sidecar-echo: exited while stopping: exit status 3\n",
 		"kill -TERM $$": "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 15\n",
 	} {
-		sidecars, _ := scriptSidecars(t, "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n"+ending+"\n")
-		sidecars.StopTimeout = stall
-		owner := newFakeOwner("/projects/test")
-		if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+		sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nwhile read line; do echo \"$line\"; done\n"+ending+"\n")
+		sidecars.StopTimeout = support.Stall
+		owner := support.NewFakeOwner("/projects/test")
+		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 			t.Fatalf("send: %v", err)
 		}
-		if event := owner.next(t); event.Surface != "s1" {
+		if event := owner.Next(t); event.Surface != "s1" {
 			t.Fatalf("echo event = %+v", event)
 		}
 		sidecars.Stop()
@@ -873,7 +627,7 @@ func TestStopReportsExitStatus(t *testing.T) {
 // TestStopForcedKill verifies that a sidecar that does not end after the deadline is killed.
 // contract: sidecars.stop.kills-after-timeout
 func TestStopForcedKill(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	directory := t.TempDir()
 
 	// The sidecar: it does not read stdin, so it keeps running after stdin EOF. The stdin of a background command can become /dev/null depending on the shell and
@@ -884,17 +638,17 @@ func TestStopForcedKill(t *testing.T) {
 	}
 
 	// Declares the sidecar.
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"stubborn","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"stubborn","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Sets the deadline to 100ms for the test.
 	sidecars.StopTimeout = 100 * time.Millisecond
 
-	owner := newFakeOwner("/projects/test")
+	owner := support.NewFakeOwner("/projects/test")
 
 	// Starts the sidecar.
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 
@@ -905,7 +659,7 @@ func TestStopForcedKill(t *testing.T) {
 
 	// Stop() kills after it waits for the deadline. If it returns before the deadline, it did not wait, and the upper bound catches only a hang.
 	// The time until the process ends after the kill grows with the load, so success is not decided by the upper bound.
-	if elapsed < sidecars.StopTimeout || elapsed > stall {
+	if elapsed < sidecars.StopTimeout || elapsed > support.Stall {
 		t.Errorf("forced kill stop took %v, want at least the %v deadline", elapsed, sidecars.StopTimeout)
 	}
 	logged := written()
@@ -920,16 +674,16 @@ func TestStopForcedKill(t *testing.T) {
 // contract: sidecars.close.keeps-other-sessions
 func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	for _, surface := range []string{"s1", "state:files:p1"} {
-		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	sidecars.Close("s1")
 	// Even after the project of the window left, a session that was not closed sends with the first root.
-	owner.root = ""
-	if err := sidecars.Send(owner, echoSidecar, "state:files:p1", json.RawMessage(`{"operation":"watch"}`)); err != nil {
+	owner.Root = ""
+	if err := sidecars.Send(owner, support.EchoSidecar, "state:files:p1", json.RawMessage(`{"operation":"watch"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Stop()
@@ -965,16 +719,16 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 	secondFolder, secondRecord := makeEcho("second")
 	const second = "@fixture/sidecar-second"
 	declarations := []host.SidecarDeclaration{
-		{Name: echoSidecar, Folder: firstFolder, Data: []byte(`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`)},
+		{Name: support.EchoSidecar, Folder: firstFolder, Data: []byte(`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`)},
 		{Name: second, Folder: secondFolder, Data: []byte(`{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`)},
 	}
 	sidecars, err := host.NewSidecars(declarations, directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = stall
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	sidecars.StopTimeout = support.Stall
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if err := sidecars.Send(owner, second, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
@@ -1002,52 +756,6 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 	}
 }
 
-// contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail, sidecars.protocol.dropped-message-is-recorded, sidecars.image.retired-owner-dispositions
-func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
-	written := captureLog(t)
-	sidecars, directory := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread open3\nread closed2\n"+
-		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s2\",\"body\":{\"image\":{\"name\":17}}}' '{\"surface\":\"s1\",\"body\":\"after\"}'\n"+
-		"read barrier\nprintf '{\"surface\":\"s1\",\"body\":{\"barrier\":%s}}\\n' \"$barrier\"\n"+
-		"printf '%s\\n' '{\"surface\":\"ghost\",\"body\":\"x\"}'\nexec sleep 600\n")
-	owner := newFakeOwner("/projects/a")
-	for _, surface := range []string{"s1", "s2", "s3"} {
-		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	sidecars.Close("s2")
-	// The late message of s2 is discarded, and the s1 message after it is the first event.
-	if event := owner.next(t); event.Surface != "s1" || string(event.Body) != `"after"` {
-		t.Fatalf("first event = %+v", event)
-	}
-	// The script reads the next host request only after both closed-surface messages and the live-surface marker were read.
-	// Closing s3 is the barrier: any erroneous response to either earlier message would reach the script first.
-	sidecars.Close("s3")
-	barrierEvent := owner.next(t)
-	var barrier struct {
-		Barrier struct {
-			Surface string `json:"surface"`
-			Closed  bool   `json:"closed"`
-		} `json:"barrier"`
-	}
-	if barrierEvent.Surface != "s1" || json.Unmarshal(barrierEvent.Body, &barrier) != nil ||
-		barrier.Barrier.Surface != "s3" || !barrier.Barrier.Closed {
-		t.Fatalf("barrier event = %+v, want the close request for s3 after both discarded messages", barrierEvent)
-	}
-	failure := owner.failure(t)
-	if failure.Sidecar != echoSidecar || failure.Surface != "s1" || failure.Reason != "unknown surface ghost" {
-		t.Fatalf("failure = %+v", failure)
-	}
-	requireEnded(t, processID(t, directory))
-	// The discarded message of s2 is recorded with its body.
-	if want := ` warn host sidecar @fixture/sidecar-echo: message for surface s2 dropped: no window owns the surface: "late"`; !strings.Contains(written(), want) {
-		t.Fatalf("the log has no %q:\n%s", want, written())
-	}
-	if want := ` warn host sidecar @fixture/sidecar-echo: message for surface s2 dropped: no window owns the surface: {"image":{"name":17}}`; !strings.Contains(written(), want) {
-		t.Fatalf("the log has no %q:\n%s", want, written())
-	}
-}
-
 // closingSnapshots is a channel that receives the value of closing every time closing changes.
 func closingSnapshots(sidecars *host.Sidecars) chan []host.ClosingSurface {
 	snapshots := make(chan []host.ClosingSurface, 64)
@@ -1061,7 +769,7 @@ func nextClosing(t *testing.T, snapshots chan []host.ClosingSurface) []host.Clos
 	select {
 	case value := <-snapshots:
 		return value
-	case <-time.After(stall):
+	case <-time.After(support.Stall):
 		t.Fatal("closing did not change")
 		return nil
 	}
@@ -1074,7 +782,7 @@ func closingSidecars(t *testing.T, script string) *host.Sidecars {
 	if err := os.WriteFile(filepath.Join(directory, "closing"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"closing","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"closing","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1087,12 +795,12 @@ func TestClosedSurfaceStaysClosingUntilTheSidecarAnswers(t *testing.T) {
 	// Returns the line it received as it is. Returning a closed line is the reply to closed.
 	sidecars := closingSidecars(t, "#!/bin/sh\ntee /dev/null\n")
 	snapshots := closingSnapshots(sidecars)
-	owner := newFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
-	want := []host.ClosingSurface{{Sidecar: echoSidecar, Surface: "s1"}}
+	want := []host.ClosingSurface{{Sidecar: support.EchoSidecar, Surface: "s1"}}
 	if got := nextClosing(t, snapshots); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("closing after close = %v, want %v", got, want)
 	}
@@ -1106,9 +814,9 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 	script := "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; *) echo \"$line\";; esac; done\n"
 	sidecars := closingSidecars(t, script)
 	snapshots := closingSnapshots(sidecars)
-	written := captureLog(t)
-	owner := newFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	written := support.CaptureLog(t)
+	owner := support.NewFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
@@ -1126,15 +834,15 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 func TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds(t *testing.T) {
 	script := "#!/bin/sh\nwhile read line; do case \"$line\" in *closed*) printf '{\"surface\":\"s1\",\"closed\":true,\"error\":\"busy\"}\\n';; esac; done\n"
 	sidecars := closingSidecars(t, script)
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	atEnd := make(chan string, 1)
 	sidecars.ClosingChanged = func(value host.SidecarStatus) {
 		if len(value.Closing) == 0 {
 			atEnd <- written()
 		}
 	}
-	owner := newFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
@@ -1143,7 +851,7 @@ func TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds(t *testing.T) {
 		if want := "error host sidecar @fixture/sidecar-echo: close s1: busy\n"; !strings.Contains(log, want) {
 			t.Fatalf("log at the end of the closing entry %q does not contain %q", log, want)
 		}
-	case <-time.After(stall):
+	case <-time.After(support.Stall):
 		t.Fatal("the closing entry did not end")
 	}
 }
@@ -1151,16 +859,16 @@ func TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds(t *testing.T) {
 // contract: sidecars.close.unexpected-answer-fails
 func TestCloseAnswerForAnOpenSurfaceFailsTheSidecar(t *testing.T) {
 	sidecars := closingSidecars(t, "#!/bin/sh\nread line\nprintf '{\"surface\":\"s1\",\"closed\":true}\\n'\nexec cat >/dev/null\n")
-	owner := newFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	select {
-	case failure := <-owner.failures:
+	case failure := <-owner.Failures:
 		if got := failure.(host.SidecarFailure).Reason; got != "unexpected close answer for s1" {
 			t.Fatalf("failure reason = %q", got)
 		}
-	case <-time.After(stall):
+	case <-time.After(support.Stall):
 		t.Fatal("the unexpected close answer did not fail the sidecar")
 	}
 }
@@ -1181,29 +889,29 @@ func TestDeclarationReplacesASidecarWhoseFolderChanged(t *testing.T) {
 	}
 	data := `{"executable":"answer","displayName":"soksak://sidecar/probe","protocol":1}`
 	first, second := folder("first"), folder("second")
-	sidecars, err := host.NewSidecars(declare(first, data), "")
+	sidecars, err := host.NewSidecars(support.Declare(first, data), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	owner := newFakeOwner("/projects/replace")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/replace")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
-	if got := string(owner.next(t).Body); got != `{"from":"first"}` {
+	if got := string(owner.Next(t).Body); got != `{"from":"first"}` {
 		t.Fatalf("the first answer = %s", got)
 	}
-	if err := sidecars.Declare(declare(second, data)); err != nil {
+	if err := sidecars.Declare(support.Declare(second, data)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":2}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":2}`)); err != nil {
 		t.Fatal(err)
 	}
-	if got := string(owner.next(t).Body); got != `{"from":"second"}` {
+	if got := string(owner.Next(t).Body); got != `{"from":"second"}` {
 		t.Fatalf("the answer after the folder changed = %s, want the sidecar of the new folder", got)
 	}
 	select {
-	case failure := <-owner.failures:
+	case failure := <-owner.Failures:
 		t.Fatalf("replacing the sidecar reported a failure: %v", failure)
 	default:
 	}
@@ -1224,22 +932,22 @@ func TestRepeatedCloseAwaitsEachAnswer(t *testing.T) {
 		return written.Write(p)
 	}))
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
-	owner := newFakeOwner("/projects/closing")
+	owner := support.NewFakeOwner("/projects/closing")
 	for round := 0; round < 2; round++ {
-		if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 			t.Fatal(err)
 		}
-		owner.next(t)
+		owner.Next(t)
 		sidecars.Close("s1")
 		nextClosing(t, snapshots)
 	}
 	for len(nextClosing(t, snapshots)) != 0 {
 	}
 	// The echo of a later request follows both answers in the output, so a failure of either answer arrives first.
-	if err := sidecars.Send(owner, echoSidecar, "s2", json.RawMessage(`{"data":2}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"data":2}`)); err != nil {
 		t.Fatal(err)
 	}
-	owner.next(t)
+	owner.Next(t)
 	mu.Lock()
 	defer mu.Unlock()
 	if strings.Contains(written.String(), "failed") {
@@ -1252,8 +960,8 @@ func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
 	// Replies to the first request, and when it receives closed, it ends without a reply.
 	sidecars := closingSidecars(t, "#!/bin/sh\nread line\necho \"$line\"\nread line\nexit 0\n")
 	snapshots := closingSnapshots(sidecars)
-	owner := newFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/closing")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
@@ -1262,18 +970,6 @@ func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
 	}
 	if got := nextClosing(t, snapshots); len(got) != 0 {
 		t.Fatalf("closing after the sidecar ended = %v, want none", got)
-	}
-}
-
-// captureLog attaches a writer of events to the records of the host until the test ends and returns a function that gives
-// the records written so far, one line each in the text form `<time> <level> <layer> <where>: <text>`.
-func captureLog(t *testing.T) func() string {
-	log := useEventLog(t)
-	return func() string {
-		if err := log.Flush(5 * time.Second); err != nil {
-			t.Fatal(err)
-		}
-		return support.TextOf(readEventLog(t, log.Path()))
 	}
 }
 
@@ -1286,15 +982,15 @@ func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 // record of level info, layer sidecar and the name of the sidecar, and the last text without a line feed too.
 // contract: sidecars.stderr.lines-are-written-as-records
 func TestTheStandardErrorOfASidecarIsWrittenAsRecords(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	script := "#!/bin/sh\necho 'first line' >&2\nprintf 'no line feed' >&2\nwhile read line; do echo \"$line\"; done\n"
-	sidecars, _ := scriptSidecars(t, script)
-	sidecars.StopTimeout = stall
-	owner := newFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	sidecars, _ := support.ScriptSidecars(t, script)
+	sidecars.StopTimeout = support.Stall
+	owner := support.NewFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	if event := owner.next(t); event.Surface != "s1" {
+	if event := owner.Next(t); event.Surface != "s1" {
 		t.Fatalf("echo event = %+v", event)
 	}
 	sidecars.Stop()
@@ -1311,19 +1007,19 @@ func TestTheStandardErrorOfASidecarIsWrittenAsRecords(t *testing.T) {
 // contract: sidecars.trace.relay-records-every-message-with-its-body
 func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 	script := "#!/bin/sh\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\",\"text\":\"\\ud55c\"}}'\nwhile read line; do :; done\n"
-	sidecars, directory := scriptSidecars(t, script)
-	sidecars.StopTimeout = stall
-	log := useEventLog(t)
+	sidecars, directory := support.ScriptSidecars(t, script)
+	sidecars.StopTimeout = support.Stall
+	log := support.UseEventLog(t)
 	_ = directory
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
-	owner := newFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input","bytes":"7ZWc"}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input","bytes":"7ZWc"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	if event := owner.next(t); event.Surface != "s1" {
+	if event := owner.Next(t); event.Surface != "s1" {
 		t.Fatalf("event = %+v", event)
 	}
 	sidecars.Stop()
@@ -1339,7 +1035,7 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 			received = record
 		}
 	}
-	if sent == nil || sent["layer"] != "host" || sent["fields"].(map[string]any)["sidecar"] != echoSidecar || sent["fields"].(map[string]any)["surface"] != "s1" {
+	if sent == nil || sent["layer"] != "host" || sent["fields"].(map[string]any)["sidecar"] != support.EchoSidecar || sent["fields"].(map[string]any)["surface"] != "s1" {
 		t.Fatalf("the request was not recorded: %v", sent)
 	}
 	if body, _ := sent["fields"].(map[string]any)["body"].(map[string]any); body["operation"] != "input" || body["bytes"] != "7ZWc" {
@@ -1358,16 +1054,16 @@ func TestSidecarRequestWithCorrelationIdentifiersIsRecordedAsAnEvent(t *testing.
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	sidecars, _ := echoSidecars(t)
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, echoSidecar, "s1", body); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", body); err != nil {
 		t.Fatal(err)
 	}
-	owner.next(t)
-	owner.next(t)
+	owner.Next(t)
+	owner.Next(t)
 	sidecars.Stop()
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
@@ -1385,7 +1081,7 @@ func TestSidecarRequestWithCorrelationIdentifiersIsRecordedAsAnEvent(t *testing.
 	cids, ok := request["cids"].([]any)
 	fields := request["fields"].(map[string]any)
 	if request["level"] != "info" || !ok || len(cids) != 2 || cids[0] != "b1.7" || cids[1] != "b1.8" ||
-		fields["name"] != echoSidecar || fields["surface"] != "s1" || fields["bytes"] != float64(len(body)) {
+		fields["name"] != support.EchoSidecar || fields["surface"] != "s1" || fields["bytes"] != float64(len(body)) {
 		t.Fatalf("the request record: %v", request)
 	}
 }
@@ -1420,25 +1116,25 @@ cat >/dev/null
 func TestAMessageOfASidecarReachesItsOwnerWithTheIdentifiersOfItsRequest(t *testing.T) {
 	// The replies are records: without a writer of this test the host holds them for the writer of the next test.
 	support.StartWriter(t, t.TempDir())
-	sidecars, _ := scriptSidecars(t, replyScript)
-	owner := newFakeOwner("/projects/a")
+	sidecars, _ := support.ScriptSidecars(t, replyScript)
+	owner := support.NewFakeOwner("/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := owner.next(t).Cids; fmt.Sprint(got) != "[b1.7 b1.8]" {
+	if got := owner.Next(t).Cids; fmt.Sprint(got) != "[b1.7 b1.8]" {
 		t.Fatalf("the message names %v, want both identifiers of its request", got)
 	}
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.9"}); err != nil {
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.9"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := owner.next(t).Cids; fmt.Sprint(got) != "[b1.9]" {
+	if got := owner.Next(t).Cids; fmt.Sprint(got) != "[b1.9]" {
 		t.Fatalf("the message names %v, want the identifier of its request", got)
 	}
-	if err := sidecars.Send(owner, echoSidecar, "s1", body); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", body); err != nil {
 		t.Fatal(err)
 	}
-	if got := owner.next(t).Cids; len(got) != 0 {
+	if got := owner.Next(t).Cids; len(got) != 0 {
 		t.Fatalf("a message without identifiers names %v", got)
 	}
 }
@@ -1447,22 +1143,22 @@ func TestAMessageOfASidecarReachesItsOwnerWithTheIdentifiersOfItsRequest(t *test
 func TestAReplyOfASidecarIsRecordedWithTheIdentifiersOfItsRequest(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
-	sidecars, _ := scriptSidecars(t, replyScript)
-	owner := newFakeOwner("/projects/a")
+	sidecars, _ := support.ScriptSidecars(t, replyScript)
+	owner := support.NewFakeOwner("/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
-	owner.next(t)
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.9"}); err != nil {
+	owner.Next(t)
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.9"}); err != nil {
 		t.Fatal(err)
 	}
-	owner.next(t)
-	if err := sidecars.Send(owner, echoSidecar, "s1", body); err != nil {
+	owner.Next(t)
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", body); err != nil {
 		t.Fatal(err)
 	}
-	owner.next(t)
-	owner.next(t)
+	owner.Next(t)
+	owner.Next(t)
 	replies := sidecarReplies(t, log, config)
 	if len(replies) != 3 {
 		t.Fatalf("%d events host.sidecar.reply, want 3 (an error with identifiers, an answer with identifiers, an error without): %v", len(replies), replies)
@@ -1482,7 +1178,7 @@ func TestAReplyOfASidecarIsRecordedWithTheIdentifiersOfItsRequest(t *testing.T) 
 		cids, _ := replies[i]["cids"].([]any)
 		_, hasMicros := fields["micros"]
 		errorText, _ := fields["error"].(string)
-		if replies[i]["level"] != w.level || fields["name"] != echoSidecar || fields["surface"] != "s1" || fields["ok"] != w.ok ||
+		if replies[i]["level"] != w.level || fields["name"] != support.EchoSidecar || fields["surface"] != "s1" || fields["ok"] != w.ok ||
 			errorText != w.error || fmt.Sprint(cids) != fmt.Sprint(w.cids) || hasMicros != w.micros {
 			t.Fatalf("reply %d is %v, want level %s ok %v error %q cids %v micros %v", i, replies[i], w.level, w.ok, w.error, w.cids, w.micros)
 		}
@@ -1496,16 +1192,16 @@ func TestAReplyOfASidecarIsRecordedWithTheIdentifiersOfItsRequest(t *testing.T) 
 func TestTheFailureOfASidecarIsTheFailedReplyOfItsPendingRequests(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
-	sidecars, _ := scriptSidecars(t, "#!/bin/sh\nread first\nread second\nexit 3\n")
-	owner := newFakeOwner("/projects/a")
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nread first\nread second\nexit 3\n")
+	owner := support.NewFakeOwner("/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.7"}); err != nil {
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", body, []string{"b1.8"}); err != nil {
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.8"}); err != nil {
 		t.Fatal(err)
 	}
-	failure := owner.failure(t)
+	failure := owner.Failure(t)
 	replies := sidecarReplies(t, log, config)
 	if len(replies) != 1 {
 		t.Fatalf("%d events host.sidecar.reply, want 1: %v", len(replies), replies)
@@ -1523,13 +1219,13 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	// The first process ends by itself with a status; the second ends when the host stops it.
-	sidecars, _ := scriptSidecars(t, "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ncat >/dev/null\n")
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ncat >/dev/null\n")
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	owner.failure(t)
-	if err := sidecars.Send(owner, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner.Failure(t)
+	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Stop()
@@ -1544,7 +1240,7 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 			continue
 		}
 		fields := event["fields"].(map[string]any)
-		if fields["name"] != echoSidecar {
+		if fields["name"] != support.EchoSidecar {
 			t.Fatalf("%s fields = %v", name, fields)
 		}
 		pid, ok := fields["pid"].(float64)
@@ -1591,9 +1287,9 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	sidecars, _ := scriptSidecars(t, "#!/bin/sh\ncat >/dev/null\n")
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\ncat >/dev/null\n")
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	host.PerformanceSample()
@@ -1611,10 +1307,10 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 	exit, named := -1, []int{}
 	for index, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
 		fields, _ := event["fields"].(map[string]any)
-		if event["event"] == "host.sidecar.exit" && fields["name"] == echoSidecar {
+		if event["event"] == "host.sidecar.exit" && fields["name"] == support.EchoSidecar {
 			exit = index
 		}
-		if event["event"] == "host.sampler.memory" && fields["name"] == echoSidecar {
+		if event["event"] == "host.sampler.memory" && fields["name"] == support.EchoSidecar {
 			named = append(named, index)
 		}
 	}
@@ -1631,15 +1327,15 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 // contract: sidecars.protocol.request-line-carries-cids
 func TestSidecarRequestCarriesTheCorrelationIdentifiers(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`), []string{"b1.7", "b1.8"}); err != nil {
+	owner := support.NewFakeOwner("/projects/a")
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`), []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
-	owner.next(t)
-	owner.next(t)
+	owner.Next(t)
+	owner.Next(t)
 	sidecars.Stop()
 	requests, err := os.ReadFile(record)
 	if err != nil {
@@ -1655,19 +1351,19 @@ func TestSidecarRequestCarriesTheCorrelationIdentifiers(t *testing.T) {
 
 // contract: sidecars.image.closed-surface-is-answered, sidecars.image.retired-owner-dispositions
 func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
-	captureLog(t)
+	support.CaptureLog(t)
 	// The script sends a transfer image of the closed surface s2, reads the answer of the host and returns it as a message of s1.
-	sidecars, _ := scriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\n"+
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\necho $$ > DIR/pid\nread open1\nread open2\nread closed2\n"+
 		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n"+
 		"read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec cat >/dev/null\n")
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	for _, surface := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	sidecars.Close("s2")
-	event := owner.next(t)
+	event := owner.Next(t)
 	var answer any
 	if err := json.Unmarshal(event.Body, &answer); err != nil {
 		t.Fatalf("the returned answer %s is not JSON: %v", event.Body, err)
@@ -1682,34 +1378,6 @@ func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
 	sidecars.Stop()
 	if elapsed := time.Since(begin); elapsed >= time.Second {
 		t.Fatalf("stop took %v after the answer; the sidecar ends with its input and must not wait the stop deadline of %v", elapsed, sidecars.StopTimeout)
-	}
-}
-
-// contract: sidecars.stop.stdin-eof-cancels-late-image
-func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
-	written := captureLog(t)
-	script := "#!/bin/sh\necho $$ > DIR/pid\nread open\nread closed\ncat >/dev/null\n" +
-		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n"
-	sidecars, directory := scriptSidecars(t, script)
-	owner := newFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
-		t.Fatal(err)
-	}
-	sidecars.Close("s2")
-	sidecars.Stop()
-	requireEnded(t, processID(t, directory))
-	owner.mu.Lock()
-	delivered := append([]host.SidecarMessage(nil), owner.events...)
-	owner.mu.Unlock()
-	if len(delivered) != 0 {
-		t.Fatalf("messages delivered while stopping after stdin EOF: %+v, want the late image canceled", delivered)
-	}
-	got := written()
-	if strings.Contains(got, "error host sidecar "+echoSidecar+": answer of the image of closed surface s2: sidecars are stopped") {
-		t.Fatalf("stop logged a failed reply for process-owned output: %s", got)
-	}
-	if !strings.Contains(got, "info host sidecar "+echoSidecar+": canceled transfer image of closed surface s2") {
-		t.Fatalf("stop did not record cancellation of process-owned output: %s", got)
 	}
 }
 
@@ -1737,9 +1405,9 @@ func TestAnUnfinishedLineAtTheEndOfTheOutputIsNotAMessage(t *testing.T) {
 // records the answer that it cannot send instead of an error.
 // contract: sidecars.protocol.answer-to-ended-sidecar-is-recorded
 func TestAResponseToASidecarThatEndedIsTheEndedError(t *testing.T) {
-	sidecars, _ := scriptSidecars(t, "#!/bin/sh\nexec sleep 600\n")
-	err := sidecars.SendResponse(echoSidecar, "s1", "view", json.RawMessage(`{"image":{"error":"closed"}}`))
-	if !errors.Is(err, host.ErrSidecarEnded) || err.Error() != "sidecar "+echoSidecar+" is not running" {
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nexec sleep 600\n")
+	err := sidecars.SendResponse(support.EchoSidecar, "s1", "view", json.RawMessage(`{"image":{"error":"closed"}}`))
+	if !errors.Is(err, host.ErrSidecarEnded) || err.Error() != "sidecar "+support.EchoSidecar+" is not running" {
 		t.Fatalf("err %v", err)
 	}
 }
@@ -1747,18 +1415,18 @@ func TestAResponseToASidecarThatEndedIsTheEndedError(t *testing.T) {
 // contract: sidecars.trace.first-answer-after-spawn-is-recorded
 func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	script := "#!/bin/sh\necho $$ > DIR/pid\nread request\necho '{\"surface\":\"s1\",\"body\":{\"event\":\"state\"}}'\nwhile read line; do :; done\n"
-	sidecars, directory := scriptSidecars(t, script)
-	sidecars.StopTimeout = stall
-	log := useEventLog(t)
+	sidecars, directory := support.ScriptSidecars(t, script)
+	sidecars.StopTimeout = support.Stall
+	log := support.UseEventLog(t)
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
-	owner := newFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	owner := support.NewFakeOwner("/projects/test")
+	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	owner.next(t)
+	owner.Next(t)
 	sidecars.Stop()
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
@@ -1773,7 +1441,7 @@ func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 		t.Fatal("the first answer after the spawn was not recorded")
 	}
 	fields, _ := ready["fields"].(map[string]any)
-	if ready["level"] != "debug" || fields["sidecar"] != echoSidecar || fields["pid"] != float64(processID(t, directory)) {
+	if ready["level"] != "debug" || fields["sidecar"] != support.EchoSidecar || fields["pid"] != float64(support.ProcessID(t, directory)) {
 		t.Fatalf("ready event = %v", ready)
 	}
 	if ms, ok := fields["ms"].(float64); !ok || ms < 0 {
@@ -1814,7 +1482,7 @@ func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
 	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(strings.ReplaceAll(restartScript, "DIR", directory)), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	declarations := []host.SidecarDeclaration{{Name: echoSidecar, Folder: directory, Data: []byte(`{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}`), Dependents: []string{"plugin-a"}}}
+	declarations := []host.SidecarDeclaration{{Name: support.EchoSidecar, Folder: directory, Data: []byte(`{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}`), Dependents: []string{"plugin-a"}}}
 	sidecars, err := host.NewSidecars(declarations, directory)
 	if err != nil {
 		t.Fatal(err)
@@ -1829,10 +1497,10 @@ func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
 }
 
 // sendAt moves the clock to offset and sends an open request of surface from owner.
-func sendAt(t *testing.T, clock *restartClock, sidecars *host.Sidecars, owner *fakeOwner, surface string, offset time.Duration) error {
+func sendAt(t *testing.T, clock *restartClock, sidecars *host.Sidecars, owner *support.FakeOwner, surface string, offset time.Duration) error {
 	t.Helper()
 	clock.set(offset)
-	return sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`))
+	return sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`))
 }
 
 // touchFile creates the empty file name in directory.
@@ -1844,9 +1512,9 @@ func touchFile(t *testing.T, directory, name string) {
 }
 
 // requireInvalidFailure waits for the next failure of the owner and checks that the sidecar failed with an invalid message.
-func requireInvalidFailure(t *testing.T, owner *fakeOwner, offset time.Duration) {
+func requireInvalidFailure(t *testing.T, owner *support.FakeOwner, offset time.Duration) {
 	t.Helper()
-	if failure := owner.failure(t); failure.Sidecar != echoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "invalid message") {
+	if failure := owner.Failure(t); failure.Sidecar != support.EchoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "invalid message") {
 		t.Fatalf("failure at %v = %+v", offset, failure)
 	}
 }
@@ -1854,7 +1522,7 @@ func requireInvalidFailure(t *testing.T, owner *fakeOwner, offset time.Duration)
 // requireRestartLimit checks that err is the refusal of a sidecar at its restart limit.
 func requireRestartLimit(t *testing.T, err error, offset time.Duration) {
 	t.Helper()
-	if err == nil || err.Error() != "sidecar "+echoSidecar+": restart limit" {
+	if err == nil || err.Error() != "sidecar "+support.EchoSidecar+": restart limit" {
 		t.Fatalf("send at %v = %v, want the restart limit refusal", offset, err)
 	}
 }
@@ -1862,7 +1530,7 @@ func requireRestartLimit(t *testing.T, err error, offset time.Duration) {
 // contract: sidecars.restart.three-failures-restart
 func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 	sidecars, directory, clock := restartSidecars(t)
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
@@ -1875,7 +1543,7 @@ func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 		t.Fatalf("send after three failures: %v", err)
 	}
 	select {
-	case value := <-owner.failures:
+	case value := <-owner.Failures:
 		t.Fatalf("the restarted sidecar failed: %+v", value)
 	case <-time.After(200 * time.Millisecond):
 	}
@@ -1890,8 +1558,8 @@ func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 // contract: sidecars.restart.fourth-failure-stops
 func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 	sidecars, _, clock := restartSidecars(t)
-	log := useEventLog(t)
-	owner := newFakeOwner("/projects/a")
+	log := support.UseEventLog(t)
+	owner := support.NewFakeOwner("/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
@@ -1900,7 +1568,7 @@ func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 	}
 	// The fourth failure stops the restarts: the next send starts no process and fails with the reason restart limit.
 	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s1", 40*time.Second), 40*time.Second)
-	if failure := owner.failure(t); failure.Sidecar != echoSidecar || failure.Surface != "s1" || failure.Reason != "restart limit" {
+	if failure := owner.Failure(t); failure.Sidecar != support.EchoSidecar || failure.Surface != "s1" || failure.Reason != "restart limit" {
 		t.Fatalf("refused send failure = %+v", failure)
 	}
 	sidecars.Stop()
@@ -1914,7 +1582,7 @@ func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 			starts++
 		case "host.sidecar.restart-limit":
 			stops++
-			if event["level"] != "error" || event["fields"].(map[string]any)["sidecar"] != echoSidecar {
+			if event["level"] != "error" || event["fields"].(map[string]any)["sidecar"] != support.EchoSidecar {
 				t.Fatalf("restart-limit event = %v", event)
 			}
 		}
@@ -1927,7 +1595,7 @@ func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 // contract: sidecars.restart.old-failure-not-counted
 func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
 	sidecars, _, clock := restartSidecars(t)
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	// The failure at 0 seconds is more than 300 seconds before the failure at 305 seconds, so it is not counted there.
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 305 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
@@ -1941,7 +1609,7 @@ func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
 	}
 	requireInvalidFailure(t, owner, 306*time.Second)
 	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s1", 307*time.Second), 307*time.Second)
-	if failure := owner.failure(t); failure.Reason != "restart limit" {
+	if failure := owner.Failure(t); failure.Reason != "restart limit" {
 		t.Fatalf("refused send failure = %+v", failure)
 	}
 }
@@ -1949,9 +1617,9 @@ func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
 // contract: sidecars.restart.surface-open-resets-the-record
 func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	sidecars, directory, clock := restartSidecars(t)
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	support.TraceOn(t)
-	owner := newFakeOwner("/projects/a")
+	owner := support.NewFakeOwner("/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
@@ -1959,11 +1627,11 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 		requireInvalidFailure(t, owner, offset)
 	}
 	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s1", 40*time.Second), 40*time.Second)
-	owner.failure(t)
+	owner.Failure(t)
 	// The creation of a surface of a plugin that does not list the sidecar leaves the stop in place.
 	sidecars.SurfaceOpened("plugin-b", "s2")
 	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s2", 41*time.Second), 41*time.Second)
-	owner.failure(t)
+	owner.Failure(t)
 	// The creation of a surface of plugin-a, which lists the sidecar, clears the record; the next send starts the process.
 	touchFile(t, directory, "ok")
 	sidecars.SurfaceOpened("plugin-a", "s2")
@@ -1988,7 +1656,7 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 			continue
 		}
 		fields := event["fields"].(map[string]any)
-		if fields["sidecar"] != echoSidecar || fields["surface"] != "s2" {
+		if fields["sidecar"] != support.EchoSidecar || fields["surface"] != "s2" {
 			t.Fatalf("restart-reset fields = %v", fields)
 		}
 		found = true
@@ -2002,7 +1670,7 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 func TestRestartRefusesAnAlreadyOpenSurface(t *testing.T) {
 	sidecars, _, clock := restartSidecars(t)
 	// s3 is open: its request failed the first process, which is not the process that stopped.
-	first, second := newFakeOwner("/projects/b"), newFakeOwner("/projects/a")
+	first, second := support.NewFakeOwner("/projects/b"), support.NewFakeOwner("/projects/a")
 	if err := sendAt(t, clock, sidecars, first, "s3", 0); err != nil {
 		t.Fatal(err)
 	}
@@ -2015,18 +1683,18 @@ func TestRestartRefusesAnAlreadyOpenSurface(t *testing.T) {
 	}
 	// The fourth failure stopped the sidecar. s3 is open, so its next request is refused too.
 	err := sendAt(t, clock, sidecars, first, "s3", 40*time.Second)
-	if err == nil || err.Error() != "sidecar "+echoSidecar+": restart limit" {
+	if err == nil || err.Error() != "sidecar "+support.EchoSidecar+": restart limit" {
 		t.Fatalf("send of the open surface s3 after the stop = %v, want the restart limit refusal", err)
 	}
-	if failure := first.failure(t); failure.Surface != "s3" || failure.Reason != "restart limit" {
+	if failure := first.Failure(t); failure.Surface != "s3" || failure.Reason != "restart limit" {
 		t.Fatalf("refused failure = %+v", failure)
 	}
 }
 
 // requireInvalidFailure3 waits for the next failure of owner and checks that the surface failed with an invalid message.
-func requireInvalidFailure3(t *testing.T, owner *fakeOwner, surface string, offset time.Duration) {
+func requireInvalidFailure3(t *testing.T, owner *support.FakeOwner, surface string, offset time.Duration) {
 	t.Helper()
-	if failure := owner.failure(t); failure.Sidecar != echoSidecar || failure.Surface != surface || !strings.Contains(failure.Reason, "invalid message") {
+	if failure := owner.Failure(t); failure.Sidecar != support.EchoSidecar || failure.Surface != surface || !strings.Contains(failure.Reason, "invalid message") {
 		t.Fatalf("failure of %s at %v = %+v", surface, offset, failure)
 	}
 }

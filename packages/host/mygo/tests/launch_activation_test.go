@@ -18,6 +18,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 // launchHelper names the child process of the launch test.
@@ -30,7 +31,7 @@ func runLaunchHelper() {
 	adapter.ConfigureApplication()
 	var activated atomic.Bool
 	mygo.App.OnDidBecomeActive(func() { activated.Store(true) })
-	framework := adapter.NewFramework(&sceneWorkbench{})
+	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	mygo.App.WhenReady(func() {
 		go func() {
 			window := framework.NewWindow(host.WindowOptions{Name: "launch", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)

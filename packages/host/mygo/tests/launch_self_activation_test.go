@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo"
 
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 // selfActivationHelper names the child process of the test.
@@ -28,7 +29,7 @@ func runSelfActivationHelper() {
 	var activated atomic.Bool
 	mygo.App.OnDidBecomeActive(func() { activated.Store(true) })
 	fmt.Println("window show", mygo.App.WindowShow() != nil)
-	framework := adapter.NewFramework(&sceneWorkbench{})
+	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	mygo.App.WhenReady(func() {
 		go func() {
 			time.Sleep(time.Second)

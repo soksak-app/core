@@ -12,12 +12,13 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 func TestE2EEachDeliveredDragIsOneStepOfItsCallback(t *testing.T) {
-	framework, _, window := open(t, "drag")
+	framework, _, window := support.Open(t, "drag")
 	window.Show()
-	wait(t, "the show", window.Window().IsVisible)
+	support.Wait(t, "the show", window.Window().IsVisible)
 	system, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)

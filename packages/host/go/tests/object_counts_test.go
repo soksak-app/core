@@ -14,6 +14,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // contract: diagnostics.objects.counts-host-objects
@@ -47,7 +48,7 @@ func TestDocumentRegionCountFallsBackWhenRemoved(t *testing.T) {
 // contract: diagnostics.objects.counts-host-objects
 func TestImageRegionCountFallsBackWhenRemoved(t *testing.T) {
 	images := host.NewImages()
-	owner := &host.ImageOwner{SidecarName: "image", SidecarOwner: newFakeOwner("/root")}
+	owner := &host.ImageOwner{SidecarName: "image", SidecarOwner: support.NewFakeOwner("/root")}
 	one := host.ImageKey{Surface: "tab-1", Name: "picture"}
 	two := host.ImageKey{Surface: "tab-1", Name: "thumb"}
 	if got := images.Count(); got != 0 {
@@ -80,22 +81,22 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = stall
+	sidecars.StopTimeout = support.Stall
 	t.Cleanup(sidecars.Stop)
-	owner := newFakeOwner(directory)
-	other := newFakeOwner(directory)
+	owner := support.NewFakeOwner(directory)
+	other := support.NewFakeOwner(directory)
 	if got := len(sidecars.Sessions(owner)); got != 0 {
 		t.Fatalf("no session counts %d for the owner, want 0", got)
 	}
-	if err := sidecars.SendWithCids(owner, echoSidecar, "s1", json.RawMessage(`{}`), []string{"c1"}); err != nil {
+	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`), []string{"c1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := sidecars.Sessions(owner); len(got) != 1 || got[0] != (host.SidecarSession{Sidecar: echoSidecar, Surface: "s1"}) {
-		t.Fatalf("one surface of the owner lists the sessions %v, want [{%s s1}]", got, echoSidecar)
+	if got := sidecars.Sessions(owner); len(got) != 1 || got[0] != (host.SidecarSession{Sidecar: support.EchoSidecar, Surface: "s1"}) {
+		t.Fatalf("one surface of the owner lists the sessions %v, want [{%s s1}]", got, support.EchoSidecar)
 	}
 	if got := len(sidecars.Sessions(other)); got != 0 {
 		t.Fatalf("another owner counts %d sessions, want 0", got)
@@ -121,19 +122,19 @@ func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = stall
+	sidecars.StopTimeout = support.Stall
 	t.Cleanup(sidecars.Stop)
-	owner := newFakeOwner(directory)
+	owner := support.NewFakeOwner(directory)
 	for _, surface := range []string{"terminal-b", "terminal-a"} {
-		if err := sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{}`)); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
-	want := []host.SidecarSession{{Sidecar: echoSidecar, Surface: "terminal-a"}, {Sidecar: echoSidecar, Surface: "terminal-b"}}
+	want := []host.SidecarSession{{Sidecar: support.EchoSidecar, Surface: "terminal-a"}, {Sidecar: support.EchoSidecar, Surface: "terminal-b"}}
 	if got := sidecars.Sessions(owner); !slices.Equal(got, want) {
 		t.Fatalf("the sessions are %v, want %v", got, want)
 	}

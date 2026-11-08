@@ -80,8 +80,8 @@ func (o *fakeImageOwner) next(t *testing.T) host.SidecarMessage {
 	t.Helper()
 	select {
 	case <-o.seen:
-	case <-time.After(stall):
-		t.Fatalf("no sidecar event within %v; the test stalled", stall)
+	case <-time.After(support.Stall):
+		t.Fatalf("no sidecar event within %v; the test stalled", support.Stall)
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -1263,7 +1263,7 @@ func TestImageCallFailuresNameTheCall(t *testing.T) {
 // refusal record.
 // contract: images.envelope.refusal-is-recorded
 func TestImageFrameNonceCauseIsRecorded(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 	attachImage(t, images, key)
@@ -1299,7 +1299,7 @@ func TestImageFrameNonceCauseIsRecorded(t *testing.T) {
 // of the region.
 // contract: images.envelope.refusal-is-recorded
 func TestImageFrameRefusalsAreRecorded(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 	attachImage(t, images, key)
@@ -1407,7 +1407,7 @@ func TestFrameAnswerEventRecordsConsumedAndRefusedAnswers(t *testing.T) {
 // reach the ended sidecar is recorded.
 // contract: images.present.frame-of-undeclared-sidecar-is-invalidated
 func TestAFrameOfASidecarThatNoPluginDeclaresIsInvalidated(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 	attachImage(t, images, key)

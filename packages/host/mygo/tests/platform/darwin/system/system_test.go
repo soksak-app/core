@@ -1,4 +1,8 @@
-package adapter_test
+//go:build darwin
+
+// Package system_test holds the tests of the mygo framework adapter that hold only on macOS: they send AppKit messages of the system
+// to the application and run it in a bundle.
+package system_test
 
 import (
 	"bufio"
@@ -22,6 +26,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
@@ -76,7 +81,14 @@ var steps = map[string]func(w *systemWorkbench, window host.Frontend){
 	},
 }
 
-func init() { helpers[systemHelper] = runSystemHelper }
+// cleanup runs after the tests of the process, for what the tests share.
+var cleanup = func() {}
+
+// TestMain runs the application of the framework on the main thread and the tests in it; the child process of systemHelper runs
+// runSystemHelper instead. A test may replace cleanup while the tests run, so the call reads it after them.
+func TestMain(m *testing.M) {
+	support.Main(m, map[string]func(){systemHelper: runSystemHelper}, func() { cleanup() })
+}
 
 // runSystemHelper runs the application of the framework adapter with the workbench of the step.
 func runSystemHelper() {
@@ -96,7 +108,7 @@ func runSystemHelper() {
 // systemWorkbench is the fixture workbench of the child process: it runs its step once and writes each event it receives to the
 // standard output.
 type systemWorkbench struct {
-	sceneWorkbench
+	support.SceneWorkbench
 	host    *host.Host
 	step    func(w *systemWorkbench, window host.Frontend)
 	stepped sync.Once
@@ -152,7 +164,7 @@ type running struct {
 // runStep starts the application in its bundle with the workbench of step.
 func runStep(t *testing.T, step string) *running {
 	t.Helper()
-	return startStep(t, step, t.TempDir(), bundled(t))
+	return startStep(t, step, t.TempDir(), support.Bundled(t))
 }
 
 // startStep starts executable with the workbench of step, the configuration directory config and the environment of env.
@@ -192,14 +204,14 @@ func (r *running) expect(t *testing.T, text string) string {
 		select {
 		case line, open := <-r.lines:
 			if !open {
-				t.Fatalf("the application ended before it wrote %q, after %q\n%s", text, r.seen, logged(r.config))
+				t.Fatalf("the application ended before it wrote %q, after %q\n%s", text, r.seen, support.Logged(r.config))
 			}
 			r.seen = append(r.seen, line)
 			if strings.Contains(line, text) {
 				return line
 			}
 		case <-limit:
-			t.Fatalf("the application did not write %q within 10 s, after %q\n%s", text, r.seen, logged(r.config))
+			t.Fatalf("the application did not write %q within 10 s, after %q\n%s", text, r.seen, support.Logged(r.config))
 		}
 	}
 }
@@ -215,11 +227,11 @@ func (r *running) finished(t *testing.T) string {
 				r.seen = append(r.seen, line)
 			}
 		case <-limit:
-			t.Fatalf("the application did not end within 10 s, after %q\n%s", r.seen, logged(r.config))
+			t.Fatalf("the application did not end within 10 s, after %q\n%s", r.seen, support.Logged(r.config))
 		}
 	}
 	if failure := <-r.ended; failure != nil {
-		t.Fatalf("the application ended with %v, after %q\n%s", failure, r.seen, logged(r.config))
+		t.Fatalf("the application ended with %v, after %q\n%s", failure, r.seen, support.Logged(r.config))
 	}
 	return r.events(t)
 }
@@ -228,7 +240,7 @@ func (r *running) finished(t *testing.T) string {
 func (r *running) quit(t *testing.T) string {
 	t.Helper()
 	// The application takes a quit once it published its endpoint.
-	wait(t, "endpoint.json", func() bool {
+	support.Wait(t, "endpoint.json", func() bool {
 		_, err := os.Stat(filepath.Join(r.config, "endpoint.json"))
 		return err == nil
 	})
@@ -351,7 +363,7 @@ func dropFiles(t *testing.T, window *adapter.Frontend, x, y float64, paths ...st
 
 // contract: mygo.system.file-drop-reaches-the-workbench
 func TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView(t *testing.T) {
-	_, workbench, window := open(t, "drop")
+	_, workbench, window := support.Open(t, "drop")
 	folder, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -369,10 +381,10 @@ func TestAFileDroppedOnAWindowReachesItsWorkbenchAsTheTextOfTheFileDropView(t *t
 	}
 	const event = "event drop files-dropped "
 	var received string
-	wait(t, "files-dropped", func() bool {
-		index := slices.IndexFunc(workbench.received(), func(record string) bool { return strings.HasPrefix(record, event) })
+	support.Wait(t, "files-dropped", func() bool {
+		index := slices.IndexFunc(workbench.Received(), func(record string) bool { return strings.HasPrefix(record, event) })
 		if index >= 0 {
-			received = workbench.received()[index]
+			received = workbench.Received()[index]
 		}
 		return index >= 0
 	})
@@ -449,7 +461,7 @@ func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	executable, err := filepath.EvalSymlinks(bundled(t))
+	executable, err := filepath.EvalSymlinks(support.Bundled(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +478,7 @@ func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *
 	if !strings.Contains(log, `"cause":"update"`) {
 		t.Fatalf("the application log holds no update:\n%s", log)
 	}
-	wait(t, "the command of the update", func() bool {
+	support.Wait(t, "the command of the update", func() bool {
 		_, err := os.Stat(arguments)
 		return err == nil
 	})

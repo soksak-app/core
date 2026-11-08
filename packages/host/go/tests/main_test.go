@@ -16,9 +16,5 @@ func init() { runtime.LockOSThread() }
 // without a framework adapter and a call of a function that is not installed ends the process (main_thread.h).
 func TestMain(m *testing.M) {
 	testplatform.InstallMainThread()
-	if directory := os.Getenv(terminationStart); directory != "" {
-		quitAfterTheStart(directory)
-		return
-	}
 	os.Exit(m.Run())
 }

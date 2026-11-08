@@ -699,7 +699,7 @@ benchmark-resize-catch-up:
 # The benchmark of an empty mygo window (docs/operations/examples.md#empty-window-benchmark): it opens a window of the framework without
 # the mygo framework adapter. SECONDS is the time over which it reads the CPU.
 benchmark-empty-window:
-	@CGO_ENABLED=0 $(call go-env) go -C packages/host/mygo run -ldflags "$(GO_INTERNAL_LINK)" ./benchmark/cmd $(if $(SECONDS),--seconds $(SECONDS))
+	@CGO_ENABLED=0 $(call go-env) go -C packages/host/mygo run -ldflags "$(GO_INTERNAL_LINK)" ./benchmark/platform/darwin $(if $(SECONDS),--seconds $(SECONDS))
 
 benchmark-idle-tab:
 	@$(B3_BENCHMARK_ENV) pnpm -F @soksak/e2e run benchmark:idle-tab

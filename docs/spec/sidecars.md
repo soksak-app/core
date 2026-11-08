@@ -158,4 +158,4 @@ Request identifiers must remain unique across application restarts because a per
 
 ## Tests
 
-Each sidecar runs its tests in its own directory. Each host tests its relay, the message limit, and failure delivery in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.
+Each sidecar runs its tests in its own directory. Each host tests its relay, the message limit, and failure delivery in `tests/sidecars_test.*`, whose Go cases that hold only on macOS are in `tests/platform/darwin/system/sidecars_test.go` ([allowed differences](hosts.md#allowed-differences), row H70), and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

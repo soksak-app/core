@@ -12,12 +12,13 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // contract: log.policy.event-reaches-every-document
 func TestACreatedPolicyFileIsWatchedBeforeItsRead(t *testing.T) {
 	config := t.TempDir()
-	options := eventLogOptions(filepath.Join(config, "logs"))
+	options := support.EventLogOptions(filepath.Join(config, "logs"))
 	options.PolicyPath = filepath.Join(config, "log-policy.json")
 	log, err := host.StartEventLog(options)
 	if err != nil {

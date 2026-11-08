@@ -1,6 +1,8 @@
+//go:build darwin
+
 // The start of the library on macOS requires the two main-thread functions that the framework adapter installs (docs/spec/hosts.md,
 // main thread of the Wails host).
-package host_test
+package system_test
 
 import (
 	"testing"

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 func writeCatalogPlugin(t *testing.T, config, id, catalog string) string {
@@ -28,7 +29,7 @@ func writeCatalogPlugin(t *testing.T, config, id, catalog string) string {
 
 // contract: log.plugin-catalog.host-applies-the-installed-catalogs
 func TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogItCannotUse(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	config := t.TempDir()
 	writeCatalogPlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sequence":{"type":"number"}},"required":["sequence"]}}}}`)
 	broken := writeCatalogPlugin(t, config, "broken", `{"events":`)
@@ -64,7 +65,7 @@ func TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogIt
 
 // contract: log.plugin-catalog.keeps-the-catalogs-of-earlier-plugins
 func TestTheHostKeepsTheClassesOfAPluginThatAChangeRemoved(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	config := t.TempDir()
 	writeCatalogPlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sequence":{"type":"number"}},"required":["sequence"]}}}}`)
 	installed := filepath.Join(config, "plugins", "installed.json")
@@ -94,7 +95,7 @@ func TestTheHostKeepsTheClassesOfAPluginThatAChangeRemoved(t *testing.T) {
 
 // contract: log.plugin-catalog.records-the-held-catalogs
 func TestTheWriterRecordsThePluginCatalogsItHoldsAtEachApply(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	config := t.TempDir()
 	writeCatalogPlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sequence":{"type":"number"}},"required":["sequence"]}}}}`)
 	writeCatalogPlugin(t, config, "broken", `{"events":`)

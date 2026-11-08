@@ -14,6 +14,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 const everything = `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`
@@ -65,7 +66,7 @@ func TestAPolicyFileNamesEveryClassWithALevelAndNothingElse(t *testing.T) {
 
 func startPolicyLog(t *testing.T, policy string) *host.EventLog {
 	t.Helper()
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +201,7 @@ func TestTheStartOfTheWorkbenchPassesAGateThatTurnsTheLifecycleOff(t *testing.T)
 // contract: log.policy.file-is-watched, log.policy.default-stores-errors
 func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	config := t.TempDir()
-	options := eventLogOptions(filepath.Join(config, "logs"))
+	options := support.EventLogOptions(filepath.Join(config, "logs"))
 	options.PolicyPath = filepath.Join(config, "log-policy.json")
 	log, err := host.StartEventLog(options)
 	if err != nil {
@@ -283,7 +284,7 @@ func assertDefaultGate(t *testing.T, log *host.EventLog, step string) {
 // contract: log.policy.page-sets-the-file
 func TestThePageSetsThePolicyThroughTheLogCallAndTheHostWritesTheFile(t *testing.T) {
 	config := t.TempDir()
-	options := eventLogOptions(filepath.Join(config, "logs"))
+	options := support.EventLogOptions(filepath.Join(config, "logs"))
 	options.PolicyPath = filepath.Join(config, "log-policy.json")
 	log, err := host.StartEventLog(options)
 	if err != nil {
@@ -325,7 +326,7 @@ func TestThePageSetsThePolicyThroughTheLogCallAndTheHostWritesTheFile(t *testing
 			t.Errorf("%s wrote the file", name)
 		}
 	}
-	bare, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	bare, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +337,7 @@ func TestThePageSetsThePolicyThroughTheLogCallAndTheHostWritesTheFile(t *testing
 
 // contract: log.policy.read-answers-the-policy-in-force
 func TestTheActionPolicyReadAnswersTheClassesOfThePolicyInForce(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +366,7 @@ func TestTheActionPolicyReadAnswersTheClassesOfThePolicyInForce(t *testing.T) {
 // contract: log.policy.event-reaches-every-document
 func TestEachAppliedPolicyIsTheEventLogPolicyAndARefusedFileIsNot(t *testing.T) {
 	config := t.TempDir()
-	options := eventLogOptions(filepath.Join(config, "logs"))
+	options := support.EventLogOptions(filepath.Join(config, "logs"))
 	options.PolicyPath = filepath.Join(config, "log-policy.json")
 	log, err := host.StartEventLog(options)
 	if err != nil {
@@ -410,7 +411,7 @@ func TestEachAppliedPolicyIsTheEventLogPolicyAndARefusedFileIsNot(t *testing.T) 
 // contract: log.policy.carries-the-cids-of-the-change
 func TestThePolicyThatAPageChangeWritesCarriesTheCidsOfTheChange(t *testing.T) {
 	config := t.TempDir()
-	options := eventLogOptions(filepath.Join(config, "logs"))
+	options := support.EventLogOptions(filepath.Join(config, "logs"))
 	options.PolicyPath = filepath.Join(config, "log-policy.json")
 	log, err := host.StartEventLog(options)
 	if err != nil {

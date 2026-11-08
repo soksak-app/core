@@ -30,7 +30,7 @@ func seqsOf(events []map[string]any) []int {
 
 // contract: log.writer.splits-files-by-level
 func TestDebugAndTraceEventsGoToTheDebugFileAndTheOthersToTheMainFile(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestDebugAndTraceEventsGoToTheDebugFileAndTheOthersToTheMainFile(t *testing
 
 // contract: log.writer.rotation-keeps-every-generation
 func TestEachFileRotatesOnItsOwnAndRotationNeverRemovesAGeneration(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.RotateBytes = 700
 	options.QueueEvents = 500
 	options.QueueBytes = 1 << 20
@@ -137,7 +137,7 @@ func TestEachFileRotatesOnItsOwnAndRotationNeverRemovesAGeneration(t *testing.T)
 
 // contract: log.writer.never-blocks-and-counts-loss
 func TestALossNamesTheChannelOfTheRefusedEvents(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.QueueEvents = 4
 	options.BatchInterval = 30 * time.Second
 	log, err := host.StartEventLog(options)

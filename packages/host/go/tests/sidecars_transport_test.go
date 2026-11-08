@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -31,22 +30,6 @@ type SidecarMessage = host.SidecarMessage
 type SidecarDeclaration = host.SidecarDeclaration
 
 var NewSidecars = host.NewSidecars
-
-type harnessOwner struct {
-	root string
-	seen chan SidecarMessage
-}
-
-func (o *harnessOwner) ProjectRoot() string { return o.root }
-func (o *harnessOwner) Emit(string, ...any) {}
-
-func (o *harnessOwner) DeliverSidecarMessage(message SidecarMessage) { o.seen <- message }
-
-// harnessDeclarations is the declaration of one persistent sidecar installed in folder.
-func harnessDeclarations(folder string) []SidecarDeclaration {
-	return []SidecarDeclaration{{Name: "fixture-service", Folder: folder,
-		Data: []byte(`{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`)}}
-}
 
 func writeHarnessEndpoint(t *testing.T, directory, socket string) {
 	t.Helper()
@@ -146,7 +129,7 @@ func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t 
 
 func runHarnessReconnect(t *testing.T, sequential bool) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -156,33 +139,33 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 	writeHarnessEndpoint(t, root, socket)
 	serverDone := serveHarnessConnections(t, listener, 4)
 
-	first, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	first, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	second, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstOwner := &harnessOwner{root: "/first", seen: make(chan SidecarMessage, 4)}
-	secondOwner := &harnessOwner{root: "/second", seen: make(chan SidecarMessage, 4)}
+	firstOwner := &support.HarnessOwner{Root: "/first", Seen: make(chan SidecarMessage, 4)}
+	secondOwner := &support.HarnessOwner{Root: "/second", Seen: make(chan SidecarMessage, 4)}
 
-	awaitInitial := func(owner *harnessOwner) {
+	awaitInitial := func(owner *support.HarnessOwner) {
 		select {
-		case <-owner.seen:
-		case <-time.After(stall):
+		case <-owner.Seen:
+		case <-time.After(support.Stall):
 			t.Fatal("no initial event; the test stalled")
 		}
 	}
 	// The host connects the cut socket again immediately and sends the connection event. A send after
 	// it receives that event goes to the connection made again, so endpoint reuse and reconnection are verified.
-	awaitConnection := func(owner *harnessOwner) {
+	awaitConnection := func(owner *support.HarnessOwner) {
 		select {
-		case event := <-owner.seen:
+		case event := <-owner.Seen:
 			if string(event.Body) != `{"connected":true,"event":"connection"}` {
 				t.Fatalf("event after the connection loss = %s, want the connection event", event.Body)
 			}
-		case <-time.After(stall):
+		case <-time.After(support.Stall):
 			t.Fatal("no connection event; the test stalled")
 		}
 	}
@@ -221,10 +204,10 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 		}
 		close(start)
 		group.Wait()
-		for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+		for _, owner := range []*support.HarnessOwner{firstOwner, secondOwner} {
 			awaitInitial(owner)
 		}
-		for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+		for _, owner := range []*support.HarnessOwner{firstOwner, secondOwner} {
 			awaitConnection(owner)
 		}
 	}
@@ -234,13 +217,13 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 	if err := second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
 		t.Fatal(err)
 	}
-	for _, owner := range []*harnessOwner{firstOwner, secondOwner} {
+	for _, owner := range []*support.HarnessOwner{firstOwner, secondOwner} {
 		select {
-		case event := <-owner.seen:
+		case event := <-owner.Seen:
 			if string(event.Body) != `{"operation":"reconnect"}` {
 				t.Fatalf("reconnect event = %s", event.Body)
 			}
-		case <-time.After(stall):
+		case <-time.After(support.Stall):
 			t.Fatal("no reconnect event; the test stalled")
 		}
 	}
@@ -260,7 +243,7 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 // contract: sidecars-transport.stop.close-owner-then-shutdown
 func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -279,7 +262,7 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 			return
 		}
 		defer connection.Close()
-		if err := connection.SetReadDeadline(time.Now().Add(stall)); err != nil {
+		if err := connection.SetReadDeadline(time.Now().Add(support.Stall)); err != nil {
 			serverDone <- err
 			return
 		}
@@ -325,11 +308,11 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/shutdown", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/shutdown", Seen: make(chan SidecarMessage, 1)}
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -345,7 +328,7 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 // contract: sidecars-transport.stop.own-close-is-not-a-read-error
 func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -405,11 +388,11 @@ func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/stop", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/stop", Seen: make(chan SidecarMessage, 1)}
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +411,7 @@ func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 // contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
 func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -447,7 +430,7 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 			return
 		}
 		defer connection.Close()
-		if err := connection.SetReadDeadline(time.Now().Add(stall)); err != nil {
+		if err := connection.SetReadDeadline(time.Now().Add(support.Stall)); err != nil {
 			return
 		}
 		reader := bufio.NewReader(connection)
@@ -492,11 +475,11 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/late", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/late", Seen: make(chan SidecarMessage, 1)}
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -512,9 +495,9 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 
 // contract: sidecars.image.stop-answers-late-persistent-image-before-shutdown
 func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -590,19 +573,19 @@ func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T)
 		}
 	}()
 
-	declarations := harnessDeclarations(t.TempDir())
+	declarations := support.HarnessDeclarations(t.TempDir())
 	declarations[0].Version = "0.0.1"
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/late-image", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/late-image", Seen: make(chan SidecarMessage, 1)}
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	select {
-	case <-owner.seen:
-	case <-time.After(stall):
+	case <-owner.Seen:
+	case <-time.After(support.Stall):
 		t.Fatal("the service's open event did not reach its owner")
 	}
 	sidecars.Close("surface")
@@ -622,7 +605,7 @@ func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T)
 // contract: sidecars-transport.hello.rejects-auth-failure
 func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -639,11 +622,11 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 		_, _ = bufio.NewReader(connection).ReadBytes('\n')
 		_, _ = io.WriteString(connection, `{"operation":"hello","ok":false,"error":"authentication or protocol mismatch"}`+"\n")
 	}()
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/auth", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/auth", Seen: make(chan SidecarMessage, 1)}
 	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "authentication handshake failed") {
 		t.Fatalf("auth error = %v", err)
@@ -653,7 +636,7 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 // contract: sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint
 func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpoint(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -682,11 +665,11 @@ func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpo
 		serverDone <- writeErr
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/protocol", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/protocol", Seen: make(chan SidecarMessage, 1)}
 	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "protocol mismatch in hello response") {
 		t.Fatalf("protocol mismatch error = %v", err)
@@ -711,7 +694,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	if err := os.MkdirAll(serviceDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	socketDir := socketParent(t)
+	socketDir := support.SocketParent(t)
 	socket := filepath.Join(socketDir, "service.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -799,20 +782,20 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 		serverDone <- err
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(executableDir), configDir)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(executableDir), configDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/replacement", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/replacement", Seen: make(chan SidecarMessage, 1)}
 	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	select {
-	case event := <-owner.seen:
+	case event := <-owner.Seen:
 		if event.Surface != "surface" {
 			t.Fatalf("unexpected surface: %s", event.Surface)
 		}
-	case <-time.After(stall):
+	case <-time.After(support.Stall):
 		t.Fatal("no replacement event; the test stalled")
 	}
 	if _, err := os.Stat(filepath.Join(serviceDir, "endpoint.json")); !os.IsNotExist(err) {
@@ -827,7 +810,7 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 // contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement
 func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(t *testing.T) {
 	root := t.TempDir()
-	socketDir := socketParent(t)
+	socketDir := support.SocketParent(t)
 	missingSocket := filepath.Join(socketDir, "missing.sock")
 	serviceDir := filepath.Join(root, "services", "service")
 	if err := os.MkdirAll(serviceDir, 0o700); err != nil {
@@ -848,11 +831,11 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/unreachable", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/unreachable", Seen: make(chan SidecarMessage, 1)}
 	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "connect authenticated service") {
 		t.Fatalf("connection error = %v", err)
@@ -870,7 +853,7 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 // contract: sidecars.retain.sends-authoritative-layout, sidecars.retain.reports-service-failure
 func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -924,7 +907,7 @@ func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 		}
 	}()
 
-	declarations := harnessDeclarations(t.TempDir())
+	declarations := support.HarnessDeclarations(t.TempDir())
 	declarations[0].Version = "0.0.1"
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
@@ -939,7 +922,7 @@ func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 	if string(empty) != "[]" {
 		t.Fatalf("retained surfaces = %s, want [] when no surface is kept", empty)
 	}
-	owner := &harnessOwner{root: "/live", seen: make(chan SidecarMessage, 4)}
+	owner := &support.HarnessOwner{Root: "/live", Seen: make(chan SidecarMessage, 4)}
 	if err := sidecars.Send(owner, "fixture-service", "sent", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -966,7 +949,7 @@ func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 // contract: sidecars.retain.rejects-after-stop
 func TestPersistentRetainInterruptedByStopSendsNothing(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1013,7 +996,7 @@ func TestPersistentRetainInterruptedByStopSendsNothing(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1031,7 +1014,7 @@ func TestPersistentRetainInterruptedByStopSendsNothing(t *testing.T) {
 
 // contract: sidecars.retain.skips-service-without-endpoint
 func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), t.TempDir())
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1050,7 +1033,7 @@ func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
 // contract: sidecars.retain.timeout-names-the-request-stage
 func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1097,7 +1080,7 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1120,7 +1103,7 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 // contract: sidecars-transport.persistent.revives-a-lost-connection
 func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1171,21 +1154,21 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 		}
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	first := receiveSidecarMessage(t, owner.seen)
+	first := receiveSidecarMessage(t, owner.Seen)
 	if first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
 
 	// When the connection is cut, it must be connected again without a send; the connection event is the evidence (V5-106).
-	revived := receiveSidecarMessage(t, owner.seen)
+	revived := receiveSidecarMessage(t, owner.Seen)
 	if revived.Surface != "surface-1" {
 		t.Fatalf("the connection notice went to %q", revived.Surface)
 	}
@@ -1201,7 +1184,7 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
-	echoed := receiveSidecarMessage(t, owner.seen)
+	echoed := receiveSidecarMessage(t, owner.Seen)
 	if echoed.Surface != "surface-1" || string(echoed.Body) != `{"operation":"input"}` {
 		t.Fatalf("the input did not ride the revived connection: %v %s", echoed.Surface, echoed.Body)
 	}
@@ -1214,7 +1197,7 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 // contract: sidecars-transport.persistent.revive-failure-is-reported
 func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1251,15 +1234,15 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 		<-closed
 	}()
 
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	first := receiveSidecarMessage(t, owner.seen)
+	first := receiveSidecarMessage(t, owner.Seen)
 	if first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
@@ -1271,7 +1254,7 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 	<-serverDone
 
 	// When the restart fails, the connection loss and its reason are announced to the surface (V5-106).
-	failure := receiveSidecarMessage(t, owner.seen)
+	failure := receiveSidecarMessage(t, owner.Seen)
 	if failure.Surface != "surface-1" {
 		t.Fatalf("the failure notice went to %q", failure.Surface)
 	}
@@ -1298,7 +1281,7 @@ func isConnectionNotice(message SidecarMessage) bool {
 // contract: sidecars-transport.persistent.connection-notice-reaches-only-senders
 func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1338,32 +1321,32 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 	if err := os.WriteFile(filepath.Join(folder, "stdio"), []byte("#!/bin/sh\nexec cat\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	declarations := append(harnessDeclarations(folder), SidecarDeclaration{Name: "fixture-stdio", Folder: folder,
+	declarations := append(support.HarnessDeclarations(folder), SidecarDeclaration{Name: "fixture-stdio", Folder: folder,
 		Data: []byte(`{"executable":"stdio","displayName":"soksak://sidecar/probe","protocol":1}`)})
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	sender := &harnessOwner{root: "/sender", seen: make(chan SidecarMessage, 8)}
-	other := &harnessOwner{root: "/other", seen: make(chan SidecarMessage, 8)}
+	sender := &support.HarnessOwner{Root: "/sender", Seen: make(chan SidecarMessage, 8)}
+	other := &support.HarnessOwner{Root: "/other", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(sender, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if first := receiveSidecarMessage(t, sender.seen); first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
+	if first := receiveSidecarMessage(t, sender.Seen); first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
 	if err := sidecars.Send(other, "fixture-stdio", "surface-2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if first := receiveSidecarMessage(t, other.seen); first.Sidecar != "fixture-stdio" || first.Surface != "surface-2" {
+	if first := receiveSidecarMessage(t, other.Seen); first.Sidecar != "fixture-stdio" || first.Surface != "surface-2" {
 		t.Fatalf("the first message was not the standard input echo: %v %v %s", first.Sidecar, first.Surface, first.Body)
 	}
 
 	listener.Close()
 	close(closed)
 	<-serverDone
-	if failure := receiveSidecarMessage(t, sender.seen); failure.Surface != "surface-1" || !isConnectionNotice(failure) {
+	if failure := receiveSidecarMessage(t, sender.Seen); failure.Surface != "surface-1" || !isConnectionNotice(failure) {
 		t.Fatalf("the failed revival was not announced to the surface that sent: %v %s", failure.Surface, failure.Body)
 	}
 
@@ -1408,7 +1391,7 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 	}
 	announced := false
 	for range 2 {
-		if message := receiveSidecarMessage(t, sender.seen); message.Surface == "surface-1" && isConnectionNotice(message) {
+		if message := receiveSidecarMessage(t, sender.Seen); message.Surface == "surface-1" && isConnectionNotice(message) {
 			announced = true
 		}
 	}
@@ -1417,7 +1400,7 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 	}
 	for {
 		select {
-		case message := <-other.seen:
+		case message := <-other.Seen:
 			if isConnectionNotice(message) {
 				t.Fatalf("a surface that never sent to %s received its connection notice: %v %v %s", "fixture-service", message.Sidecar, message.Surface, message.Body)
 			}
@@ -1433,8 +1416,8 @@ func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMess
 	select {
 	case message := <-seen:
 		return message
-	case <-time.After(stall):
-		t.Fatalf("no sidecar message arrived within %v; the test stalled", stall)
+	case <-time.After(support.Stall):
+		t.Fatalf("no sidecar message arrived within %v; the test stalled", support.Stall)
 		return SidecarMessage{}
 	}
 }
@@ -1460,7 +1443,7 @@ func (o *failureOwner) DeliverSidecarMessage(message SidecarMessage) { o.seen <-
 func serveOneBadLine(t *testing.T, payload []byte) (root string, closed <-chan struct{}) {
 	t.Helper()
 	root = t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1496,7 +1479,7 @@ func serveOneBadLine(t *testing.T, payload []byte) (root string, closed <-chan s
 func expectConnectionFailure(t *testing.T, payload []byte, reason string) {
 	t.Helper()
 	root, closed := serveOneBadLine(t, payload)
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1512,12 +1495,12 @@ func expectConnectionFailure(t *testing.T, payload []byte, reason string) {
 		}
 	case message := <-owner.seen:
 		t.Fatalf("the bad line was delivered as a message: %+v", message)
-	case <-time.After(stall):
+	case <-time.After(support.Stall):
 		t.Fatal("no sidecar failure; the test stalled")
 	}
 	select {
 	case <-closed:
-	case <-time.After(stall):
+	case <-time.After(support.Stall):
 		t.Fatal("the host kept the connection open; the test stalled")
 	}
 }
@@ -1530,7 +1513,7 @@ func TestPersistentTransportFailsTheConnectionOnAnInvalidEvent(t *testing.T) {
 
 // contract: sidecars-transport.persistent.oversize-line-fails-the-connection
 func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
-	expectConnectionFailure(t, bytes.Repeat([]byte("x"), messageLimit+2), fmt.Sprintf("message exceeds %d bytes", messageLimit))
+	expectConnectionFailure(t, bytes.Repeat([]byte("x"), support.MessageLimit+2), fmt.Sprintf("message exceeds %d bytes", support.MessageLimit))
 }
 
 // The start of a persistent sidecar (the service connection and hello) does not make the send to another sidecar wait. The service replies to hello
@@ -1538,7 +1521,7 @@ func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
 // contract: sidecars.send.start-does-not-block-other-sidecars
 func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1592,14 +1575,14 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(folder, "fast"), []byte("#!/bin/sh\ntee /dev/null\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	declarations := append(harnessDeclarations(folder), SidecarDeclaration{Name: "fixture-fast", Folder: folder,
+	declarations := append(support.HarnessDeclarations(folder), SidecarDeclaration{Name: "fixture-fast", Folder: folder,
 		Data: []byte(`{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}`)})
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := &harnessOwner{root: "/start", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/start", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"start"}`)); err != nil {
 		t.Fatalf("fast start: %v", err)
 	}
@@ -1632,7 +1615,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 // contract: sidecars-transport.hello.times-out
 func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -1651,14 +1634,14 @@ func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 		_, _ = bufio.NewReader(connection).ReadBytes('\n')
 		<-release
 	}()
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sidecars.HelloTimeout = 100 * time.Millisecond
-	owner := &harnessOwner{root: "/hello", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/hello", Seen: make(chan SidecarMessage, 1)}
 	begin := time.Now()
-	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
 	if elapsed := time.Since(begin); elapsed >= time.Second {
 		t.Fatalf("the start failed after %v; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply", elapsed)
 	}
@@ -1678,35 +1661,19 @@ func TestPersistentStartFailsWhenTheServicePrintsNoEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	sidecars, err := NewSidecars(harnessDeclarations(folder), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sidecars.ReadyTimeout = time.Second
-	owner := &harnessOwner{root: "/startup", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/startup", Seen: make(chan SidecarMessage, 1)}
 	begin := time.Now()
-	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
 	if want := "sidecar fixture-service: the service did not print its endpoint within 1s"; err == nil || err.Error() != want {
 		t.Fatalf("silent service = %v after %v, want %q", err, time.Since(begin), want)
 	}
 	if running, err := exec.Command("pgrep", "-f", filepath.Join(folder, "service")).Output(); err == nil {
 		t.Fatalf("the silent service still runs: %s", running)
-	}
-}
-
-// sendWithin sends to fixture-service and returns the result within limit. If it does not return, the check fails.
-func sendWithin(t *testing.T, sidecars *host.Sidecars, owner *harnessOwner, limit time.Duration) error {
-	t.Helper()
-	result := make(chan error, 1)
-	go func() {
-		result <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
-	}()
-	select {
-	case err := <-result:
-		return err
-	case <-time.After(limit):
-		t.Fatalf("the send did not return within %v", limit)
-		return nil
 	}
 }
 
@@ -1718,12 +1685,12 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := t.TempDir()
-	sidecars, err := NewSidecars(harnessDeclarations(folder), config)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/exit", seen: make(chan SidecarMessage, 1)}
-	if err := sendWithin(t, sidecars, owner, 30*time.Second); err == nil {
+	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
+	if err := support.SendWithin(t, sidecars, owner, 30*time.Second); err == nil {
 		t.Fatal("the service that exits started")
 	}
 	data, err := os.ReadFile(filepath.Join(config, "logs", "service.log"))
@@ -1732,108 +1699,6 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 	}
 	if string(data) != "service line\n" {
 		t.Fatalf("service log %q", data)
-	}
-}
-
-// A service that the host started is the leader of a new session. So it does not receive the signals of the process group and the terminal of the application.
-// The service writes its number to a file, prints the endpoint, and remains until the check ends it.
-// contract: sidecars-transport.persistent.starts-in-new-session
-func TestPersistentServiceStartsInANewSession(t *testing.T) {
-	t.Setenv("SOKSAK_SIDECAR_DISPLAY_NAME", "inherited-value")
-	executableDir := t.TempDir()
-	socketDir := socketParent(t)
-	socket := filepath.Join(socketDir, "service.sock")
-	listener, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	pidPath := filepath.Join(executableDir, "pid")
-	environmentPath := filepath.Join(executableDir, "display-name")
-	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nprintf '%%s' \"${SOKSAK_SIDECAR_DISPLAY_NAME-unset}\" > '%s'\nprintf '{\"protocol\":1,\"pid\":%%d,\"socket\":\"%s\",\"token\":\"harness-token\"}\\n' $$\nexec sleep 600\n", pidPath, environmentPath, socket)
-	if err := os.WriteFile(filepath.Join(executableDir, "service"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	serverDone := make(chan error, 1)
-	go func() {
-		connection, err := listener.Accept()
-		if err != nil {
-			serverDone <- err
-			return
-		}
-		defer connection.Close()
-		reader := bufio.NewReader(connection)
-		if _, err := reader.ReadBytes('\n'); err != nil {
-			serverDone <- err
-			return
-		}
-		if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
-			serverDone <- err
-			return
-		}
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			serverDone <- err
-			return
-		}
-		if _, err := connection.Write(line); err != nil {
-			serverDone <- err
-			return
-		}
-		line, err = reader.ReadBytes('\n')
-		if err != nil {
-			serverDone <- err
-			return
-		}
-		var closeRequest map[string]any
-		if err := json.Unmarshal(line, &closeRequest); err != nil {
-			serverDone <- err
-			return
-		}
-		response, _ := json.Marshal(map[string]any{
-			"operation": "closed-owner", "request": closeRequest["request"], "ok": false, "error": "test close",
-		})
-		_, err = connection.Write(append(response, '\n'))
-		serverDone <- err
-	}()
-	sidecars, err := NewSidecars(harnessDeclarations(executableDir), t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := &harnessOwner{root: "/session", seen: make(chan SidecarMessage, 4)}
-	if err := sendWithin(t, sidecars, owner, 30*time.Second); err != nil {
-		t.Fatal(err)
-	}
-	if data, err := os.ReadFile(environmentPath); err != nil {
-		t.Fatal(err)
-	} else if string(data) != "inherited-value" {
-		t.Fatalf("persistent child display-name environment = %q, want inherited value unchanged", data)
-	}
-	// The service wrote its number before it printed the endpoint.
-	data, err := os.ReadFile(pidPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
-			t.Errorf("end the service %d: %v", pid, err)
-		}
-	}()
-	session, err := syscall.Getsid(pid)
-	if err != nil {
-		t.Fatalf("session of the service %d: %v", pid, err)
-	}
-	if session != pid {
-		own, _ := syscall.Getsid(0)
-		t.Fatalf("the service %d is in session %d (the test is in session %d), want its own session", pid, session, own)
-	}
-	sidecars.Stop()
-	if err := <-serverDone; err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -1850,12 +1715,12 @@ func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(config, "logs"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := NewSidecars(harnessDeclarations(folder), config)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/exit", seen: make(chan SidecarMessage, 1)}
-	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
+	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
 	if want := "sidecar fixture-service: service log: create logs directory: "; err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("service log failure = %v, want prefix %q", err, want)
 	}
@@ -1871,12 +1736,12 @@ func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) 
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := NewSidecars(harnessDeclarations(folder), t.TempDir())
+	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/exit", seen: make(chan SidecarMessage, 1)}
-	err = sendWithin(t, sidecars, owner, 30*time.Second)
+	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
+	err = support.SendWithin(t, sidecars, owner, 30*time.Second)
 	if want := "sidecar fixture-service: service exited before endpoint"; err == nil || err.Error() != want {
 		t.Fatalf("exited service = %v, want %q", err, want)
 	}
@@ -1924,7 +1789,7 @@ func TestAMessageOfAPersistentServiceReachesItsOwnerWithTheIdentifiersOfItsReque
 	// The replies are records: without a writer of this test the host holds them for the writer of the next test.
 	support.StartWriter(t, t.TempDir())
 	root := t.TempDir()
-	socket := filepath.Join(socketParent(t), "s.sock")
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -1932,16 +1797,16 @@ func TestAMessageOfAPersistentServiceReachesItsOwnerWithTheIdentifiersOfItsReque
 	defer listener.Close()
 	writeHarnessEndpoint(t, root, socket)
 	serveHelloVersion(t, listener, nil)
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := &harnessOwner{root: "/cids", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/cids", Seen: make(chan SidecarMessage, 1)}
 	if err := sidecars.SendWithCids(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"input"}`), []string{"view-a.1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := receiveSidecarMessage(t, owner.seen).Cids; len(got) != 1 || got[0] != "view-a.1" {
+	if got := receiveSidecarMessage(t, owner.Seen).Cids; len(got) != 1 || got[0] != "view-a.1" {
 		t.Fatalf("the message names %v, want the identifier of its request", got)
 	}
 }
@@ -1961,7 +1826,7 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 	for _, item := range cases {
 		t.Run(item.name, func(t *testing.T) {
 			root := t.TempDir()
-			socketDirectory := socketParent(t)
+			socketDirectory := support.SocketParent(t)
 			socket := filepath.Join(socketDirectory, "s.sock")
 			listener, err := net.Listen("unix", socket)
 			if err != nil {
@@ -1970,18 +1835,18 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 			defer listener.Close()
 			writeHarnessEndpoint(t, root, socket)
 			serveHelloVersion(t, listener, item.version)
-			declarations := harnessDeclarations(t.TempDir())
+			declarations := support.HarnessDeclarations(t.TempDir())
 			declarations[0].Version = "0.0.7"
 			sidecars, err := NewSidecars(declarations, root)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer sidecars.Stop()
-			owner := &harnessOwner{root: "/outdated", seen: make(chan SidecarMessage, 1)}
+			owner := &support.HarnessOwner{Root: "/outdated", Seen: make(chan SidecarMessage, 1)}
 			if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 				t.Fatal(err)
 			}
-			receiveSidecarMessage(t, owner.seen)
+			receiveSidecarMessage(t, owner.Seen)
 			got, _ := json.Marshal(sidecars.Outdated())
 			want, _ := json.Marshal(item.want)
 			if string(got) != string(want) {
@@ -2019,9 +1884,9 @@ func (b *syncBuffer) String() string {
 
 // contract: sidecars-transport.persistent.lost-connection-writes-an-error-line
 func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
-	logged := recordText(captureLog(t))
+	logged := recordText(support.CaptureLog(t))
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -2058,16 +1923,16 @@ func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
 			}()
 		}
 	}()
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen) // the open echo
-	receiveSidecarMessage(t, owner.seen) // the connection notice of the reconnection
+	receiveSidecarMessage(t, owner.Seen) // the open echo
+	receiveSidecarMessage(t, owner.Seen) // the connection notice of the reconnection
 	sidecars.Stop()
 	listener.Close()
 	count := strings.Count(logged.String(), "error host sidecar fixture-service: connection lost; restarted (end: eof, waiting: 0)\n")
@@ -2112,7 +1977,7 @@ func installedProcessRunning(pid int) bool {
 
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
 	t.Helper()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -2158,8 +2023,10 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 			t.Errorf("installed service pid file: %v", err)
 			return
 		}
-		// default: a process that already ended gives ESRCH, and the check below reports only a process that remains.
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+		// default: a process that already ended gives os.ErrProcessDone, and the check below reports only a process that remains.
+		if remaining, err := os.FindProcess(pid); err == nil {
+			_ = remaining.Kill()
+		}
 		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
 		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z.
 		deadline := time.Now().Add(time.Second)
@@ -2255,7 +2122,7 @@ func (s *replaceService) received() []string {
 
 func replaceSidecars(t *testing.T, root string, service *replaceService) *host.Sidecars {
 	t.Helper()
-	declarations := harnessDeclarations(service.folder)
+	declarations := support.HarnessDeclarations(service.folder)
 	declarations[0].Version = "0.0.7"
 	declarations[0].Dependents = []string{"probe"}
 	sidecars, err := NewSidecars(declarations, root)
@@ -2268,15 +2135,15 @@ func replaceSidecars(t *testing.T, root string, service *replaceService) *host.S
 
 // contract: sidecars-transport.replace.replaces-an-outdated-service
 func TestAnOutdatedServiceIsReplaced(t *testing.T) {
-	logged := recordText(captureLog(t))
+	logged := recordText(support.CaptureLog(t))
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	if got := sidecars.Outdated(); len(got) != 1 || got[0].Installed == nil || *got[0].Installed != "0.0.7" || got[0].Running == nil || *got[0].Running != "0.0.6" {
 		t.Fatalf("outdated before the replacement: %+v", got)
 	}
@@ -2284,7 +2151,7 @@ func TestAnOutdatedServiceIsReplaced(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The surface that sent to the sidecar receives the connection notice of the new service.
-	notice := receiveSidecarMessage(t, owner.seen)
+	notice := receiveSidecarMessage(t, owner.Seen)
 	var event map[string]any
 	if err := json.Unmarshal(notice.Body, &event); err != nil || event["event"] != "connection" || event["connected"] != true {
 		t.Fatalf("the notice after the replacement is %s (%v)", notice.Body, err)
@@ -2309,11 +2176,11 @@ func TestAServiceThatIsNotOutdatedIsNotReplaced(t *testing.T) {
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err == nil || !strings.Contains(err.Error(), "fixture-service") {
 		t.Fatalf("replace without a running service: %v", err)
 	}
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err == nil || !strings.Contains(err.Error(), "fixture-service") {
 		t.Fatalf("replace of the installed version: %v", err)
 	}
@@ -2324,15 +2191,15 @@ func TestAServiceThatIsNotOutdatedIsNotReplaced(t *testing.T) {
 
 // contract: sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar
 func TestAServiceOfAnUndeclaredSidecarIsEnded(t *testing.T) {
-	logged := recordText(captureLog(t))
+	logged := recordText(support.CaptureLog(t))
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	if err := sidecars.Declare(nil); err != nil {
 		t.Fatal(err)
 	}
@@ -2343,7 +2210,7 @@ func TestAServiceOfAnUndeclaredSidecarIsEnded(t *testing.T) {
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
 		t.Fatal(err)
 	}
-	notice := receiveSidecarMessage(t, owner.seen)
+	notice := receiveSidecarMessage(t, owner.Seen)
 	var event map[string]any
 	if err := json.Unmarshal(notice.Body, &event); err != nil || event["event"] != "connection" || event["connected"] != false {
 		t.Fatalf("the notice after the end is %s (%v)", notice.Body, err)
@@ -2373,11 +2240,11 @@ func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	if _, err := sidecars.Retain([]host.RetainedSurface{}); err != nil {
 		t.Fatal(err)
 	}
@@ -2413,11 +2280,11 @@ func TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds(t *testing.T) {
 	if _, err := sidecars.Retain(layout); err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Close("surface-1")
 	// The hidden section has not sent in this process, so only the layout says that its session is recoverable.
 	layout = layout[1:]
@@ -2460,11 +2327,11 @@ func TestAnOutdatedServiceWaitsForTheFirstLayoutList(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Close("surface-1")
 	time.Sleep(200 * time.Millisecond)
 	if got := service.received(); slices.Contains(got, "close-owner") || slices.Contains(got, "shutdown") {
@@ -2478,11 +2345,11 @@ func TestAReplacedServiceStartsAfterTheEndOfItsProcess(t *testing.T) {
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	service.endsAfter = 300 * time.Millisecond
 	sidecars := replaceSidecars(t, root, service)
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
 		t.Fatal(err)
 	}
@@ -2496,7 +2363,7 @@ func TestAReplacedServiceStartsAfterTheEndOfItsProcess(t *testing.T) {
 // contract: sidecars-transport.hello.client-is-the-configuration-directory
 func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -2529,12 +2396,12 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 			connection.Write(line)
 		}
 	}()
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := &harnessOwner{root: "/client", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/client", Seen: make(chan SidecarMessage, 1)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -2552,7 +2419,7 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 // The deadline of the hello ends with its answer: a service may stay silent for longer, and what it sends then arrives.
 func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -2586,18 +2453,18 @@ func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 			connection.Write(line)
 		}
 	}()
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
 	sidecars.HelloTimeout = deadline
-	owner := &harnessOwner{root: "/silence", seen: make(chan SidecarMessage, 1)}
+	owner := &support.HarnessOwner{Root: "/silence", Seen: make(chan SidecarMessage, 1)}
 	began := time.Now()
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	if elapsed := time.Since(began); elapsed < silence {
 		t.Fatalf("the message arrived after %v, before the silence of %v ended", elapsed, silence)
 	}
@@ -2610,11 +2477,11 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	service.hold = make(chan struct{})
 	service.closeOwner = make(chan struct{}, 4)
 	sidecars := replaceSidecars(t, root, service)
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	// The service answers every send of a surface, and the reader of the host delivers each answer to the owner. The owner takes
 	// them all, as a window does, so the reader reaches the answer to shutdown that the replacement waits for.
 	taken := make(chan struct{})
@@ -2622,7 +2489,7 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	go func() {
 		for {
 			select {
-			case <-owner.seen:
+			case <-owner.Seen:
 			case <-taken:
 				return
 			}
@@ -2684,11 +2551,11 @@ func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *
 	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
 	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
-	owner := &harnessOwner{root: "/replace", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Detach()
 	// The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
 	select {
@@ -2717,7 +2584,7 @@ const eventsService = "fixture-events-service"
 // contract: sidecars-transport.persistent.connection-events
 func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	root := t.TempDir()
-	socketDirectory := socketParent(t)
+	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
@@ -2771,12 +2638,12 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, eventsService, "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen) // the echo
-	receiveSidecarMessage(t, owner.seen) // the notice of the reconnection
+	receiveSidecarMessage(t, owner.Seen) // the echo
+	receiveSidecarMessage(t, owner.Seen) // the notice of the reconnection
 	// The sampler names the service while it is connected and not after the connection ended.
 	sampledService := func() int {
 		host.PerformanceSample()
@@ -2823,7 +2690,7 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	config := t.TempDir()
 	folder := t.TempDir()
-	socket := filepath.Join(socketParent(t), "s.sock")
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -2843,7 +2710,9 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 			return
 		}
 		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
-			_ = syscall.Kill(pid, syscall.SIGKILL)
+			if remaining, err := os.FindProcess(pid); err == nil {
+				_ = remaining.Kill()
+			}
 		}
 	})
 	served := make(chan struct{})
@@ -2872,7 +2741,7 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 		}
 	}()
 	log := support.StartWriter(t, config)
-	sidecars, err := NewSidecars(harnessDeclarations(folder), config)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(folder), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2880,11 +2749,11 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
-	owner := &harnessOwner{root: "/only", seen: make(chan SidecarMessage, 8)}
+	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
 	if err := sidecars.Send(owner, "fixture-service", "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.seen)
+	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Stop()
 	listener.Close()
 	<-served
@@ -2948,7 +2817,7 @@ func deadProcessID(t *testing.T) int {
 // refused send gets the connection notice, and the open of a surface of a dependent plugin clears the stop.
 // contract: sidecars.restart.persistent-service-end-stops-before-the-spawn, sidecars.restart.persistent-refused-send-gets-the-connection-notice
 func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	support.TraceOn(t)
 	root := t.TempDir()
 	folder := t.TempDir()
@@ -2956,7 +2825,7 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\necho run >> '"+runs+"'\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	declarations := harnessDeclarations(folder)
+	declarations := support.HarnessDeclarations(folder)
 	declarations[0].Dependents = []string{"plugin-a"}
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
@@ -2985,7 +2854,7 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 	}
 
 	// A live service: its first connection echoes one request and ends, and the second ends when cut is closed.
-	socket := filepath.Join(socketParent(t), "s.sock")
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -3104,7 +2973,7 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 // contract: sidecars.restart.persistent-violation-counts
 func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
 	root := t.TempDir()
-	socket := filepath.Join(socketParent(t), "s.sock")
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -3142,7 +3011,7 @@ func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
 			}()
 		}
 	}()
-	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3160,7 +3029,7 @@ func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
 			if !strings.HasPrefix(failure.Reason, "invalid message: ") {
 				t.Fatalf("failure at %v = %+v", offset, failure)
 			}
-		case <-time.After(stall):
+		case <-time.After(support.Stall):
 			t.Fatalf("no sidecar failure at %v; the test stalled", offset)
 		}
 	}

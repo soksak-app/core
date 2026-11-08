@@ -158,4 +158,4 @@ Persistent supplier는 client 종료 후에도 request ledger를 유지할 수 �
 
 ## 테스트
 
-각 사이드카는 자기 디렉터리에서 테스트를 실행한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달, 메시지 한도, 실패 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.
+각 사이드카는 자기 디렉터리에서 테스트를 실행한다. 각 호스트는 `tests/sidecars_test.*`(macOS에서만 성립하는 Go case는 `tests/platform/darwin/system/sidecars_test.go`, [허용 차이](hosts.ko.md#허용-차이) 행 H70)에서 fake 사이드카 실행 파일로 전달, 메시지 한도, 실패 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.

@@ -1,4 +1,6 @@
-package host_test
+//go:build darwin
+
+package system_test
 
 import (
 	"encoding/json"
@@ -9,6 +11,7 @@ import (
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // closedSurfaces are the surfaces that the flush scenario closes while the queue is full. The writer can take lines out of the
@@ -20,7 +23,7 @@ var closedSurfaces = []string{"s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"}
 // buffered replies and closes are written in the correct order after the queue is emptied.
 // contract: flush.queue.rejects-send-when-full, flush.queue.full-error-says-not-keeping-up, flush.buffer.replies-delivered-after-drain, flush.buffer.closes-delivered-after-drain, flush.buffer.consumed-acks-not-coalesced, flush.buffer.delivered-after-queued-bodies, sidecars.close.buffered-close-is-recorded
 func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")
 	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
@@ -32,14 +35,14 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := newFakeOwner("/p")
+	owner := support.NewFakeOwner("/p")
 	// Registers the surfaces to close first (Close notifies only registered surfaces).
 	for _, s := range append([]string{"s1"}, closedSurfaces...) {
-		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -47,7 +50,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
-		if err := sidecars.Send(owner, echoSidecar, "s1", big); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
 			if !strings.Contains(err.Error(), "is not keeping up") {
 				t.Fatal(err)
 			}
@@ -61,14 +64,14 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	for i, name := range []string{"a", "b", "c"} {
 		bodyMap := host.AfterPresent(true, "", name, 1, 1, i+1)
 		bodyBytes, _ := json.Marshal(bodyMap)
-		if err := sidecars.SendResponse(echoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
+		if err := sidecars.SendResponse(support.EchoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// Sends again to the same picture a with a different sequence. All immutable frame acks must arrive.
 	bodyMap := host.AfterPresent(true, "", "a", 1, 1, 4)
 	bodyBytes, _ := json.Marshal(bodyMap)
-	if err := sidecars.SendResponse(echoSidecar, "s1", "a", json.RawMessage(bodyBytes)); err != nil {
+	if err := sidecars.SendResponse(support.EchoSidecar, "s1", "a", json.RawMessage(bodyBytes)); err != nil {
 		t.Fatal(err)
 	}
 	for _, surface := range closedSurfaces {
@@ -138,7 +141,7 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 // takes a line just after the queue was full.
 // contract: sidecars.close.room-has-no-buffered-record
 func TestACloseThatFindsRoomWritesNoBufferedRecord(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")
 	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
@@ -148,20 +151,20 @@ func TestACloseThatFindsRoomWritesNoBufferedRecord(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := newFakeOwner("/p")
+	owner := support.NewFakeOwner("/p")
 	for _, s := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
-		if err := sidecars.Send(owner, echoSidecar, "s1", big); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
 			if !strings.Contains(err.Error(), "is not keeping up") {
 				t.Fatal(err)
 			}
@@ -186,7 +189,7 @@ func TestACloseThatFindsRoomWritesNoBufferedRecord(t *testing.T) {
 				close(receipts)
 			}
 			select {
-			case <-owner.seen:
+			case <-owner.Seen:
 			case <-finished:
 				return
 			}
@@ -215,16 +218,16 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sidecars.StopTimeout = stall // Makes Stop() wait until cat receives 5MB and ends. The deadline catches only a hang
-	owner := newFakeOwner("/p")
+	sidecars.StopTimeout = support.Stall // Makes Stop() wait until cat receives 5MB and ends. The deadline catches only a hang
+	owner := support.NewFakeOwner("/p")
 
 	// Surface registration
 	for _, s := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, echoSidecar, s, json.RawMessage(`{}`)); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -233,7 +236,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
-		if err := sidecars.Send(owner, echoSidecar, "s1", big); err != nil {
+		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
 			if !strings.Contains(err.Error(), "is not keeping up") {
 				t.Fatal(err)
 			}
@@ -248,7 +251,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	for i, name := range []string{"x", "y", "z"} {
 		bodyMap := host.AfterPresent(true, "", name, 1, 1, i+1)
 		bodyBytes, _ := json.Marshal(bodyMap)
-		if err := sidecars.SendResponse(echoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
+		if err := sidecars.SendResponse(support.EchoSidecar, "s1", name, json.RawMessage(bodyBytes)); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -17,25 +17,9 @@ import (
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
-// useEventLog starts a writer, makes it the writer of the records of the host, and detaches it when the test ends.
-func useEventLog(t *testing.T) *host.EventLog {
-	t.Helper()
-	// Records that earlier tests wrote while no writer was attached wait in the start buffer; they are not this test's.
-	host.UseHostEventLog(nil)
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	support.StoreEveryLevel(t, log)
-	host.UseHostEventLog(log)
-	// The writer ends before the folder of the test is removed; a writer that outlives the test writes into a removed folder.
-	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
-	return log
-}
-
 // contract: log.record.error-and-info-are-events
 func TestAnErrorAndAnObservationAreEventsWithWhereAndText(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	host.LogError("surface input", errors.New("the window has no content view"))
 	host.LogInfo("webkit children", "pid 7: gone")
 	if err := log.Flush(5 * time.Second); err != nil {
@@ -60,7 +44,7 @@ func TestAnErrorAndAnObservationAreEventsWithWhereAndText(t *testing.T) {
 
 // contract: log.record.site-names-the-call
 func TestARecordOfAHelperNamesTheFileAndLineOfItsCall(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	_, _, line, _ := runtime.Caller(0)
 	host.LogError("view channel", "project window is closed")
 	host.LogWarn("view channel", "project window is closed")
@@ -97,7 +81,7 @@ func TestRecordsWrittenBeforeTheWriterExistsAreStoredInOrderWithTheirOwnTime(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +112,7 @@ func TestTheStartBufferRefusesRecordsBeyondItsBoundAndTheWriterCountsThem(t *tes
 	for index := 0; index < host.StartBufferRecords+extra; index++ {
 		host.LogInfo("flood", "record")
 	}
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	// The writer holds every record of the start buffer, as in the Rust test, so the test counts only the refusals of the start buffer.
 	options.QueueEvents = 4 * host.StartBufferRecords
 	options.QueueBytes = 64 << 20
@@ -162,7 +146,7 @@ func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterv
 	if err := host.FlushRecords(time.Second); err != nil {
 		t.Fatalf("without a writer there is nothing to wait for: %v", err)
 	}
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.BatchInterval = 30 * time.Second
 	log, err := host.StartEventLog(options)
 	if err != nil {
@@ -183,7 +167,7 @@ func TestFlushRecordsStoresTheRecordsWrittenSoFarWithoutWaitingForTheBatchInterv
 
 // contract: performance.trace.host-observation-is-an-event
 func TestAHostObservationOfTheTraceIsAnEvent(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +222,7 @@ func TestAHostObservationOfTheTraceIsAnEvent(t *testing.T) {
 
 // contract: log.input.region-event-with-cids-is-recorded
 func TestARegionEventWithCorrelationIdentifiersIsRecordedAsAnInputRelay(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	if err := host.RecordInputRelay("tab-1", "view", `{"type":"key","key":"Enter","cids":["b1.3","b1.4"]}`); err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +258,7 @@ func TestARegionEventWithCorrelationIdentifiersIsRecordedAsAnInputRelay(t *testi
 
 // contract: endpoint.lock.unrecorded-end
 func TestAnUnrecordedEndIsStoredAsAnErrorEventWithItsFields(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	boot, pid, previous := "1700000000-4242", 4242, "123"
 	host.ReportUnrecordedEnd(host.UnrecordedEnd{Previous: &previous})
 	host.ReportUnrecordedEnd(host.UnrecordedEnd{Boot: &boot, PID: &pid})

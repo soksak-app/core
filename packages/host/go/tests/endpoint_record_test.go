@@ -9,6 +9,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // endpointCalls flushes the writer and returns the events `host.endpoint.call` that it stored, in order.
@@ -28,7 +29,7 @@ func endpointCalls(t *testing.T, log *host.EventLog) []map[string]any {
 
 // contract: endpoint.record.call-is-an-event
 func TestAnEndpointRequestIsAnEventWhileTheTraceIsOff(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	if host.PerformanceEnabled() {
 		t.Fatal("the performance trace is on")
 	}
@@ -63,7 +64,7 @@ func TestAnEndpointRequestIsAnEventWhileTheTraceIsOff(t *testing.T) {
 
 // contract: endpoint.record.failure-names-the-error
 func TestAFailedEndpointRequestIsAWarningWithItsErrorText(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
 	reply := call(t, conn, 1, "status.get", map[string]any{"window": "absent", "name": "core.layout"})
@@ -82,7 +83,7 @@ func TestAFailedEndpointRequestIsAWarningWithItsErrorText(t *testing.T) {
 
 // contract: endpoint.record.arguments-are-cut-before-copying
 func TestTheArgumentsOfAnEndpointEventAreCutAtTheBound(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	_, address, _ := serve(t, newFakeBackend())
 	conn := dial(t, address)
 	// Multi-byte characters put the bound inside a character.

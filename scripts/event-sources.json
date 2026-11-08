@@ -4,7 +4,7 @@
     "go.go-statement": [
       "^packages/host/go/src/routine/routine\\.go$",
       "^packages/sok/go/src/routine\\.go$",
-      "^packages/host/mygo/benchmark/cmd/main\\.go$"
+      "^packages/host/mygo/benchmark/platform/darwin/main\\.go$"
     ],
     "m.registration": [
       "^native/darwin/src/observe\\.m$"

@@ -46,7 +46,7 @@ func run(t *testing.T, logs, name string, ts, last int64, size int, at time.Time
 
 func startRetention(t *testing.T, logs string, bound int64) *host.EventLog {
 	t.Helper()
-	options := eventLogOptions(logs)
+	options := support.EventLogOptions(logs)
 	options.Boot = "1791500009-9"
 	options.RetentionBytes = bound
 	log, err := host.StartEventLog(options)
@@ -185,7 +185,7 @@ func TestARotationRunsTheRetentionAgain(t *testing.T) {
 	if err := os.MkdirAll(logs, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	options := eventLogOptions(logs)
+	options := support.EventLogOptions(logs)
 	options.Boot = "1791500009-9"
 	options.RotateBytes = 1500
 	options.QueueEvents = 200
@@ -211,7 +211,7 @@ func TestARotationRunsTheRetentionAgain(t *testing.T) {
 
 // contract: log.retention.requires-a-bound
 func TestAnEventLogWithoutARetentionBoundIsRefused(t *testing.T) {
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.RetentionBytes = 0
 	if _, err := host.StartEventLog(options); err == nil || !strings.Contains(err.Error(), "RetentionBytes") {
 		t.Fatalf("error %v", err)

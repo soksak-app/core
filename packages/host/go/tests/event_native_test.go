@@ -75,7 +75,7 @@ func (r *fakeRing) loss(channel host.Channel) (uint64, uint64) {
 // the records follow log.policy in the file.
 func startWithRing(t *testing.T, ring *fakeRing) *host.EventLog {
 	t.Helper()
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.Pull = ring.pull
 	options.PullLoss = ring.loss
 	options.Wake = make(chan struct{})
@@ -123,7 +123,7 @@ func waitFor(t *testing.T, log *host.EventLog, name string) {
 // startWaking starts a writer with the ring and returns the channel that wakes it, once it took what its start left.
 func startWaking(t *testing.T, ring *fakeRing, interval time.Duration) (*host.EventLog, chan struct{}) {
 	t.Helper()
-	options := eventLogOptions(t.TempDir())
+	options := support.EventLogOptions(t.TempDir())
 	options.BatchInterval = interval
 	options.Pull = ring.pull
 	options.PullLoss = ring.loss

@@ -10,6 +10,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	adapter "github.com/soksak-app/core/packages/host/mygo/src"
+	"github.com/soksak-app/core/packages/host/mygo/tests/support"
 )
 
 // labels collects the names of the items of a menu.
@@ -82,7 +83,7 @@ func TestApplicationMenuLanguages(t *testing.T) {
 // contract: mygo.menu.set-menu-builds-the-application-menu
 func TestSetMenuInstallsTheMenuInTheApplication(t *testing.T) {
 	ran := make(chan struct{}, 1)
-	framework := adapter.NewFramework(&sceneWorkbench{})
+	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	err := framework.SetMenu([]host.Menu{{Title: "Tools", Items: []host.MenuItem{{Title: "Run", Key: "cmd+shift+r", Run: func() { ran <- struct{}{} }}}}})
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +100,7 @@ func TestSetMenuInstallsTheMenuInTheApplication(t *testing.T) {
 	if !strings.Contains(items, "Tools") || !strings.Contains(items, "Run") {
 		t.Fatalf("the application menu holds %s", items)
 	}
-	_, _, window := open(t, "menu-target")
+	_, _, window := support.Open(t, "menu-target")
 	mygo.RunOnMain(func() { err = system.MenuSelect(window.NativeWindow(), "Tools", "Run") })
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +110,7 @@ func TestSetMenuInstallsTheMenuInTheApplication(t *testing.T) {
 
 // contract: mygo.menu.set-menu-builds-the-application-menu
 func TestAnItemWithAnUnknownRoleOrModifierBuildsNoMenu(t *testing.T) {
-	framework := adapter.NewFramework(&sceneWorkbench{})
+	framework := adapter.NewFramework(&support.SceneWorkbench{})
 	if err := framework.SetMenu([]host.Menu{{Title: "Tools", Items: []host.MenuItem{{Role: "unknown"}}}}); err == nil {
 		t.Fatal("an unknown role built a menu")
 	}

@@ -21,6 +21,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // fakeBackend imitates one window ("main") and its page. It records page requests and replies with null.
@@ -922,7 +923,7 @@ func TestPendingSubscriptionDoesNotBlockOtherRequests(t *testing.T) {
 
 // contract: endpoint.discovery.removes-socket-on-close
 func TestEndpointSocketIsRemovedOnClose(t *testing.T) {
-	listener, address, err := listen(t, filepath.Join(socketParent(t), "sockets"), "test-close")
+	listener, address, err := listen(t, filepath.Join(support.SocketParent(t), "sockets"), "test-close")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -944,21 +945,6 @@ func TestEndpointSocketIsRemovedOnClose(t *testing.T) {
 	}
 }
 
-// socketParent is a short temporary directory that fits within the socket path length limit.
-func socketParent(t *testing.T) string {
-	t.Helper()
-	parent, err := os.MkdirTemp("", "sp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.RemoveAll(parent); err != nil {
-			t.Errorf("cannot remove %s: %v", parent, err)
-		}
-	})
-	return parent
-}
-
 func listen(t *testing.T, directory, name string) (net.Listener, platform.Endpoint, error) {
 	t.Helper()
 	system, err := platform.Current()
@@ -970,7 +956,7 @@ func listen(t *testing.T, directory, name string) (net.Listener, platform.Endpoi
 
 // contract: endpoint.socket.private-modes
 func TestEndpointFilesArePrivateToTheUser(t *testing.T) {
-	sockets := filepath.Join(socketParent(t), "sockets")
+	sockets := filepath.Join(support.SocketParent(t), "sockets")
 	listener, address, err := listen(t, sockets, "test-modes")
 	if err != nil {
 		t.Fatal(err)
@@ -996,7 +982,7 @@ func endedProcess(t *testing.T) int {
 
 // contract: endpoint.socket.sweeps-ended-process-sockets
 func TestSocketsOfEndedProcessesAreRemoved(t *testing.T) {
-	sockets := filepath.Join(socketParent(t), "sockets")
+	sockets := filepath.Join(support.SocketParent(t), "sockets")
 	if err := os.Mkdir(sockets, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -1024,7 +1010,7 @@ func TestSocketsOfEndedProcessesAreRemoved(t *testing.T) {
 
 // contract: endpoint.socket.refuses-open-directory
 func TestSocketDirectoryOpenToOthersIsRefused(t *testing.T) {
-	sockets := filepath.Join(socketParent(t), "sockets")
+	sockets := filepath.Join(support.SocketParent(t), "sockets")
 	if err := os.Mkdir(sockets, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1048,7 +1034,7 @@ func TestSocketDirectoryOfAnotherUserIsRefused(t *testing.T) {
 
 // contract: endpoint.socket.refuses-non-directory
 func TestSocketPathThatIsNotADirectoryIsRefused(t *testing.T) {
-	parent := socketParent(t)
+	parent := support.SocketParent(t)
 	target := filepath.Join(parent, "target")
 	if err := os.Mkdir(target, 0700); err != nil {
 		t.Fatal(err)
@@ -1065,7 +1051,7 @@ func TestSocketPathThatIsNotADirectoryIsRefused(t *testing.T) {
 
 // contract: endpoint.socket.path-over-limit
 func TestSocketPathOverTheLimitIsRefused(t *testing.T) {
-	sockets := filepath.Join(socketParent(t), strings.Repeat("s", 120))
+	sockets := filepath.Join(support.SocketParent(t), strings.Repeat("s", 120))
 	address := filepath.Join(sockets, fmt.Sprintf("test-long-%d.sock", os.Getpid()))
 	_, _, err := listen(t, sockets, "test-long")
 	want := fmt.Sprintf("endpoint socket path %s is %d bytes, over the limit of 103 bytes of a unix socket address", address, len(address))
@@ -1112,42 +1098,6 @@ func TestEndpointFileIsWrittenOnlyAfterTheFirstWindowExists(t *testing.T) {
 	reply := call(t, conn, 1, "status.get", map[string]any{"window": "main", "name": "host.windows"})
 	if reply.Error != nil {
 		t.Fatalf("a request after publication failed: %+v", reply.Error)
-	}
-}
-
-// contract: endpoint.process.rejects-a-malformed-lock
-func TestEndpointRefusesAHeldLockWithAnotherForm(t *testing.T) {
-	for _, contents := range []string{"123", "abc", "0", "-3", "", `{"pid":0,"boot":"b1"}`, `{"pid":5}`} {
-		config := t.TempDir()
-		lock := filepath.Join(config, "process.lock")
-		if err := os.WriteFile(lock, []byte(contents), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		// This test is the live owner: it holds the lock while the content has another form.
-		owner, err := os.Open(lock)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := syscall.Flock(int(owner.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-			t.Fatal(err)
-		}
-		listener, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		endpoint := host.NewEndpoint(newFakeBackend())
-		info := host.EndpointInfo{Transport: "tcp", Address: listener.Addr().String(), PID: os.Getpid(),
-			Application: "fixture", Version: "0.0.8", Started: time.Now()}
-		err = endpoint.Serve(listener, info, config)
-		_ = listener.Close()
-		want := fmt.Sprintf("configuration directory %s is already owned by a live process", config)
-		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Fatalf("held lock %q: %v, want prefix %q", contents, err, want)
-		}
-		if data, err := os.ReadFile(lock); err != nil || string(data) != contents {
-			t.Fatalf("lock %q changed: %q %v", contents, data, err)
-		}
-		_ = owner.Close()
 	}
 }
 
@@ -1342,7 +1292,7 @@ func closeRecord(t *testing.T, written func() string, text string) {
 
 // contract: endpoint.transport.close-reason-is-recorded
 func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
 
@@ -1389,7 +1339,7 @@ func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
 // A connection that ends inside a frame closes with the reason of the read, not with peer closed.
 // contract: endpoint.close.reason-of-read-error
 func TestEndpointRecordsAReadErrorInsideAFrame(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
 
@@ -1428,7 +1378,7 @@ func waitForLog(t *testing.T, written func() string, text string) string {
 // A reply to a connection that the peer closed before the reply is not an error: the host records the reply as not sent.
 // contract: endpoint.close.reply-after-peer-close
 func TestEndpointRecordsAReplyToAClosedConnectionAsNotSent(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	backend := newFakeBackend()
 	backend.holdMethod = "status.get"
 	backend.held = make(chan struct{})
@@ -1468,7 +1418,7 @@ func (brokenPipeConn) Write([]byte) (int, error) {
 // A write that fails because the peer closed the connection closes it as a peer close and records the frame as not sent.
 // contract: endpoint.close.reply-after-peer-close
 func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -1500,7 +1450,7 @@ func (l acceptFault) Accept() (net.Conn, error) { return nil, l.err }
 // An accept that fails while the endpoint serves ends the accept loop and writes the reason to the application log.
 // contract: endpoint.accept.error-is-recorded
 func TestEndpointRecordsAnAcceptError(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -1527,7 +1477,7 @@ func TestEndpointRecordsAnAcceptError(t *testing.T) {
 // receives the error.
 // contract: endpoint.timeout.is-recorded
 func TestEndpointRecordsATimeoutOfARequest(t *testing.T) {
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	backend := newFakeBackend()
 	backend.failures = map[string]error{"status.get": &host.RPCError{Code: 1005, Message: "the document did not reply within 10000 ms"}}
 	_, address, _ := serve(t, backend)

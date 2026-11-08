@@ -240,3 +240,15 @@ test("e2e fixture payload manifests do not create independent core test owners",
     `${coreTest}:1: test of packages/workbench reads a path of e2e: ../../../e2e/fixtures/memory-saver/unload-probe/ui/app.js`,
   ]);
 });
+
+test("fixture payload manifests of a package's tests do not create independent core test owners", { timeout: 1000 }, () => {
+  const owners = corePackageFolders();
+  assert.ok(!owners.some((owner) => /(^|\/)fixtures\//.test(owner.dir)));
+  const support = "packages/host/go/tests/support/plugins.go";
+  const own = 'return filepath.Join(filepath.Dir(here), "..", "fixtures", "plugin-probe")\n';
+  assert.deepEqual(checkTestPathReads(owners, [support], () => own), []);
+  const other = 'return filepath.Join(filepath.Dir(here), "..", "..", "..", "rust", "tests", "fixtures", "plugin-probe")\n';
+  assert.deepEqual(checkTestPathReads(owners, [support], () => other), [
+    `${support}:1: test of packages/host/go reads a path of packages/host/rust: ${other.trim()}`,
+  ]);
+});

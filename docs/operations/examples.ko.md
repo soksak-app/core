@@ -263,7 +263,7 @@ Release는 plugin과 sidecar 저장소가 build에 쓰는 것을 담으므로, �
 
 ## 빈 창 benchmark
 
-`make benchmark-empty-window [SECONDS=N]`은 `packages/host/mygo/benchmark/cmd`를 실행한다. mygo framework adapter 없이 1200×760 point의 framework 창을 열어 workbench를 그리지 않고, JSON 한 줄을 쓴다: 유휴 창의 footprint(`footprintBytes`), `seconds`(기본 240) 동안의 CPU(`cpuSeconds`), resize 중간의 footprint(`resizeFootprintBytes`), 그 3 s 뒤의 footprint(`afterResizeFootprintBytes`). `packages/host/mygo/benchmark/empty_window_test.go`는 fixture 창으로 인자, 창 크기, 측정값, 출력을 검사한다.
+`make benchmark-empty-window [SECONDS=N]`은 `packages/host/mygo/benchmark/platform/darwin`를 실행한다. mygo framework adapter 없이 1200×760 point의 framework 창을 열어 workbench를 그리지 않고, JSON 한 줄을 쓴다: 유휴 창의 footprint(`footprintBytes`), `seconds`(기본 240) 동안의 CPU(`cpuSeconds`), resize 중간의 footprint(`resizeFootprintBytes`), 그 3 s 뒤의 footprint(`afterResizeFootprintBytes`). `packages/host/mygo/benchmark/empty_window_test.go`는 fixture 창으로 인자, 창 크기, 측정값, 출력을 검사한다.
 
 ## Three-host benchmark
 

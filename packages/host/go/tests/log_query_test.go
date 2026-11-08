@@ -195,7 +195,7 @@ type indexResult struct {
 func TestTheIndexCoversEachBatchTheWriterWrote(t *testing.T) {
 	config := t.TempDir()
 	logs := filepath.Join(config, "logs")
-	options := eventLogOptions(logs)
+	options := support.EventLogOptions(logs)
 	options.RotateBytes = 6 << 10
 	log, err := host.StartEventLog(options)
 	if err != nil {
@@ -254,7 +254,7 @@ func TestTheIndexCoversEachBatchTheWriterWrote(t *testing.T) {
 
 // contract: log.writer.stores-an-event-for-each-index-built-from-the-file
 func TestAnIndexBuiltFromTheFileIsAnEventAndAnAppendIsNot(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	config := t.TempDir()
 	path := writeEventFile(t, config, "host-x1.jsonl", eventLines(6))
 	rebuilt := func() []map[string]any {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // contract: diagnostics.stall-dump.params-validate
@@ -41,7 +42,7 @@ func TestAStallDumpNamesAnExistingFileByItsAbsolutePath(t *testing.T) {
 
 // contract: diagnostics.stall-dump.event-carries-path
 func TestAStallDumpIsAnEventAndTheReplyNamesItsPosition(t *testing.T) {
-	log := useEventLog(t)
+	log := support.UseEventLog(t)
 	dump := filepath.Join(t.TempDir(), "stall-10-7.txt")
 	boot, seq, err := host.EmitStallDump(dump, 5*time.Second)
 	if err != nil {

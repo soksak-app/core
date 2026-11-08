@@ -12,6 +12,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // coreFrontend is the bundled frontend. It holds the core files and also the paths that a view must not receive.
@@ -32,7 +33,7 @@ func coreFrontend() fstest.MapFS {
 // depends on the provider, which grants no file. The other plugin owns a file that no plugin is granted.
 func coreRootFixture(t *testing.T) string {
 	config := t.TempDir()
-	writeInstalled(t, config, map[string]string{
+	support.WriteInstalled(t, config, map[string]string{
 		"plugins/installed.json": `{"format": 3, "plugins": {
 			"provider": {"version": "1.0.0", "path": "plugins/provider/1.0.0", "enabled": true, "sidecars": {}},
 			"view": {"version": "1.0.0", "path": "plugins/view/1.0.0", "enabled": true, "sidecars": {}},
@@ -113,7 +114,7 @@ func TestCoreRootServesACoreFile(t *testing.T) {
 // contract: document.core-root.grant
 func TestCoreRootRefusesAnUnrelatedPluginFile(t *testing.T) {
 	config := coreRootFixture(t)
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	coreRootRefused(t, written, config, "provider", "/modules/plugin-other/secret.js")
 	coreRootRefused(t, written, config, "provider", "/modules/plugin-view/ui/secret.js")
 	coreRootRefused(t, written, config, "provider", "/modules/plugin-provider/ui/own.js")
@@ -124,7 +125,7 @@ func TestCoreRootRefusesAnUnrelatedPluginFile(t *testing.T) {
 // contract: document.core-root.grant
 func TestCoreRootRefusesRuntimeAndWorkbenchPaths(t *testing.T) {
 	config := coreRootFixture(t)
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	for _, urlPath := range []string{"/runtime/index.js", "/environment.json", "/start.json", "/index.html"} {
 		coreRootRefused(t, written, config, "provider", urlPath)
 	}
@@ -133,7 +134,7 @@ func TestCoreRootRefusesRuntimeAndWorkbenchPaths(t *testing.T) {
 // contract: document.core-root.grant
 func TestCoreRootRefusesARequesterThatIsNotEnabled(t *testing.T) {
 	config := coreRootFixture(t)
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	coreRootRefused(t, written, config, "off", "/modules/@soksak/plugin-api/index.js")
 	coreRootRefused(t, written, config, "nobody", "/modules/@soksak/plugin-api/index.js")
 }
@@ -154,7 +155,7 @@ func TestCoreRootReadsTheTargetsFromTheCoreRootFile(t *testing.T) {
 	config := coreRootFixture(t)
 	frontend := coreFrontend()
 	frontend["core-root.json"] = &fstest.MapFile{Data: []byte(`["/modules/@soksak/plugin-api/index.js"]`)}
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 	file, found, err := host.CoreRoot(config, "other", "/modules/@soksak/plugin-api/index.js", frontend)
 	if err != nil || !found || string(file.Data) != "export const index = 1;" {
 		t.Fatalf("a target that the list names: found %v, err %v, data %q", found, err, file.Data)
@@ -242,7 +243,7 @@ func TestCoreRootResolverAnswersAViewThroughThePlatform(t *testing.T) {
 func TestCoreRootResolverRefusesAPathThroughThePlatform(t *testing.T) {
 	config := coreRootFixture(t)
 	resolve := registeredCoreRoot(t, config)
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 
 	if _, _, found := resolve("provider", "/runtime/index.js"); found {
 		t.Fatal("a runtime path is found, want not found")
@@ -262,7 +263,7 @@ func TestCoreRootResolverReportsAGrantedFileThatIsMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolve := registeredCoreRoot(t, config)
-	written := captureLog(t)
+	written := support.CaptureLog(t)
 
 	if _, _, found := resolve("provider", "/modules/plugin-view/ui/item.js"); found {
 		t.Fatal("a granted file that is missing is found, want not found")

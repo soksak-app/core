@@ -19,7 +19,7 @@ func relayEvent(event string, index int) map[string]any {
 
 // contract: log.batch.stores-workbench-events-in-order
 func TestARelayedBatchIsStoredInOrderInTheLayerWorkbench(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestARelayedBatchIsStoredInOrderInTheLayerWorkbench(t *testing.T) {
 
 // contract: log.batch.rejects-an-invalid-batch-without-writing, log.batch.requires-the-start
 func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 
 // contract: log.batch.returns-the-transcript-lines-of-workbench-records
 func TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestARelayedBatchReturnsTheTranscriptLinesOfItsWorkbenchRecords(t *testing.
 
 // contract: log.transcript.answers-the-whole-line
 func TestATranscriptRequestStoresTheCutRecordAndAnswersTheWholeLine(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestATranscriptRequestStoresTheCutRecordAndAnswersTheWholeLine(t *testing.T
 
 // contract: log.batch.stores-clock-and-cids-of-workbench-events
 func TestARelayedBatchStoresTheMonotonicClockAndTheIdentifiersThatTheWorkbenchGave(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestTheClockRequestAnswersTheClocksOfTheHostAndStoresNoEvent(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestTheClockRequestAnswersTheClocksOfTheHostAndStoresNoEvent(t *testing.T) 
 
 // contract: log.batch.stores-plugin-events-in-the-layer-plugin
 func TestARelayedBatchStoresAPluginEventInTheLayerPlugin(t *testing.T) {
-	log, err := host.StartEventLog(eventLogOptions(t.TempDir()))
+	log, err := host.StartEventLog(support.EventLogOptions(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
