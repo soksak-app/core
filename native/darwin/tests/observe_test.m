@@ -158,6 +158,7 @@ int main(void) { @autoreleasepool {
     hostInstallMainThread(runDirectly, runDirectly);
     NSWindow *inputWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 32, 32)
         styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    inputWindow.releasedWhenClosed = NO;
     __block uintptr_t inputMonitor = 0;
     NSArray<NSDictionary *> *inputRegistered = capturedEvents(^{
         inputMonitor = surfaceWatchMouse((uintptr_t)inputWindow, 0);
@@ -176,6 +177,7 @@ int main(void) { @autoreleasepool {
     [NSApp sendEvent:inputEvent];
     check(sp_observe_count("host_input.surface") == 1, @"removing the host input monitor ends its counted deliveries");
     [inputWindow close];
+    [inputWindow release];
 
     // A run loop observer and a dispatch source are registered through the entrance too.
     __block int loops = 0;

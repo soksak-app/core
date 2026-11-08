@@ -149,9 +149,9 @@ int main(void) { @autoreleasepool {
     // Request B while A owns the virtual input context. Neither action may borrow A's responder.
     NSWindow *menuA = [[NSWindow alloc] initWithContentRect:NSMakeRect(20, 20, 160, 100)
         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
+    menuA.releasedWhenClosed = NO;
     NSWindow *menuB = [[NSWindow alloc] initWithContentRect:NSMakeRect(40, 40, 160, 100)
         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable backing:NSBackingStoreBuffered defer:NO];
-    menuA.releasedWhenClosed = NO;
     menuB.releasedWhenClosed = NO;
     MenuWindowResponder *responderA = [[[MenuWindowResponder alloc] initWithFrame:menuA.contentView.bounds] autorelease];
     MenuWindowResponder *responderB = [[[MenuWindowResponder alloc] initWithFrame:menuB.contentView.bounds] autorelease];
