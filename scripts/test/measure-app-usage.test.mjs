@@ -204,7 +204,7 @@ test("totals count the attributed rows only and sum the sidecars apart from the 
 const MYGO = "/var/tester/soksak-check-mygo";
 const MB = 1024 * 1024;
 
-/** The host.window of a window of the mygo host: no main page, the frame counters of U7 and one image region of a term surface. */
+/** The host.window of a window of the mygo host: no main page, the frame counters of U7 and one image region of a tab surface. */
 function mygoWindow(overrides = {}) {
   return {
     frame: { x: 100, y: 50, width: 1200, height: 788 },
@@ -220,17 +220,25 @@ function mygoWindow(overrides = {}) {
   };
 }
 
-test("the options take a state, the idle wait, the pointer step and the trace state", () => {
+test("the options take a state, the plugins of S1, the idle wait, the pointer step and the trace state", () => {
   assert.deepEqual(parseOptions(["--sok", "/b/sok", "--config-dir", MYGO, "--trace", "0"]),
-    { sok: "/b/sok", configDirs: [MYGO], interval: 10, state: null, idle: false, step: null, trace: 0, b3Out: null, json: false });
+    { sok: "/b/sok", configDirs: [MYGO], interval: 10, state: null, idle: false, step: null, trace: 0, b3Out: null, json: false, plugins: { tab: null, page: null } });
   assert.deepEqual(
-    parseOptions(["--sok", "/b/sok", "--config-dir", MYGO, "--state", "S9", "--idle", "--step", "pointer", "--trace", "1", "--interval", "240",
-      "--b3-out", "/var/tester/b3/S9.json"]),
-    { sok: "/b/sok", configDirs: [MYGO], interval: 240, state: "S9", idle: true, step: "pointer", trace: 1, b3Out: "/var/tester/b3/S9.json", json: false });
+    parseOptions(["--sok", "/b/sok", "--config-dir", MYGO, "--state", "S9", "--tab-plugin", "probeinput", "--page-plugin", "probeplain", "--idle", "--step", "pointer",
+      "--trace", "1", "--interval", "240", "--b3-out", "/var/tester/b3/S9.json"]),
+    { sok: "/b/sok", configDirs: [MYGO], interval: 240, state: "S9", idle: true, step: "pointer", trace: 1, b3Out: "/var/tester/b3/S9.json", json: false,
+      plugins: { tab: "probeinput", page: "probeplain" } });
   assert.deepEqual(STATES, ["S0", "S0b", "S1", "S9", "S11", "S12", "S14", "S15"]);
   const base = ["--sok", "/b/sok", "--config-dir", MYGO, "--trace", "0"];
   assert.throws(() => parseOptions([...base, "--state", "S2"]), /--state must be one of S0, S0b, S1, S9, S11, S12, S14, S15 \(S2\)/);
   assert.throws(() => parseOptions([...base, "--step", "key"]), /--step must be pointer \(key\)/);
+  for (const state of ["S1", "S9", "S11", "S12", "S15"]) {
+    assert.throws(() => parseOptions([...base, "--state", state]), new RegExp(`^Error: --state ${state} prepares S1 and requires --tab-plugin ID --page-plugin ID$`));
+    assert.throws(() => parseOptions([...base, "--state", state, "--page-plugin", "probeplain"]), /requires --tab-plugin ID --page-plugin ID/);
+  }
+  assert.equal(parseOptions([...base, "--state", "S0"]).state, "S0", "S0 opens no tab and takes no plugin");
+  assert.throws(() => parseOptions([...base, "--state", "S14", "--tab-plugin", "probeinput", "--page-plugin", "probeplain"]),
+    /^Error: --tab-plugin and --page-plugin name the tabs of S1, which --state S14 does not prepare$/);
   assert.throws(() => parseOptions(["--sok", "/b/sok", "--config-dir", MYGO]), /TRACE must be 0, 1 or frame-records, not set/);
   assert.throws(() => parseOptions([...base.slice(0, 4), "--trace", "2", "--step", "pointer"]), /TRACE must be 0, 1 or frame-records, not "2"/);
   assert.throws(() => parseOptions([...base, "--config-dir", "/var/tester/other", "--idle"]),
@@ -350,12 +358,13 @@ function fakeSession(answer, window = "w1", calls = []) {
   };
 }
 
-test("the idle wait waits for the cursor idle timeout of every term tab and then for 3 seconds without a frame", async () => {
+test("the idle wait waits for the cursor idle timeout of every tab whose plugin exposes its cursor status and then for 3 seconds without a frame", async () => {
   const surfaces = [
-    { kind: "tab", surface: "tab-1", plugin: "term", exposes: ["status term.screen", "status term.cursor"] },
-    { kind: "tab", surface: "tab-3", plugin: "term", exposes: ["status term.cursor"] },
-    { kind: "tab", surface: "tab-2", plugin: "browser", exposes: ["status browser.location"] },
-    { kind: "section", surface: "sec-1", plugin: "probe", exposes: ["status probe.cursor"] },
+    { kind: "tab", surface: "tab-1", plugin: "probeinput", exposes: ["status probeinput.screen", "status probeinput.cursor"] },
+    { kind: "tab", surface: "tab-3", plugin: "rasterprobe", exposes: ["status rasterprobe.cursor"] },
+    { kind: "tab", surface: "tab-2", plugin: "probeplain", exposes: ["status probeplain.location"] },
+    { kind: "tab", surface: "tab-4", plugin: "probeunload", exposes: ["status probeinput.cursor"] },
+    { kind: "section", surface: "sec-1", plugin: "probecontributor", exposes: ["status probecontributor.cursor"] },
   ];
   const idle = { "tab-1": 5000, "tab-3": 7000 };
   const s = fakeSession((kind, window, name, params, surface) => (name === "core.surfaces" ? surfaces : { idleTimeout: idle[surface] }));
@@ -363,10 +372,10 @@ test("the idle wait waits for the cursor idle timeout of every term tab and then
   await waitIdle({ sessions: [s], frames: async () => [null], sleep: async (ms) => { waits.push(ms); } });
   assert.deepEqual(waits, [7000, 3000]);
   assert.deepEqual(s.calls.filter(([kind]) => kind === "get").map((call) => call.slice(2)),
-    [["core.surfaces", undefined], ["term.cursor", undefined, "tab-1"], ["term.cursor", undefined, "tab-3"]]);
+    [["core.surfaces", undefined], ["probeinput.cursor", undefined, "tab-1"], ["rasterprobe.cursor", undefined, "tab-3"]]);
   const broken = fakeSession((kind, window, name) => (name === "core.surfaces" ? surfaces.slice(0, 1) : { idleTimeout: "5s" }));
   await assert.rejects(waitIdle({ sessions: [broken], frames: async () => [null], sleep: async () => {} }),
-    /surface tab-1 of window w1 reports term.cursor idleTimeout "5s", not a number of milliseconds/);
+    /surface tab-1 of window w1 reports probeinput.cursor idleTimeout "5s", not a number of milliseconds/);
 });
 
 test("counts the error lines of the layout fault in the application log", () => {
@@ -564,7 +573,7 @@ test("a move that input.pointer refuses fails the pointer step and sets the trac
 const URL_BLANK = "http://127.0.0.1:4100/blank";
 
 /**
- * The answers of a mygo application whose window w1 opens the fixture project with one terminal tab t-old in card c1; the
+ * The answers of a mygo application whose window w1 opens the fixture project with one tab t-old in card c1; the
  * entries of `answers` replace an answer by `<kind> <window> <name>`.
  */
 function appAnswers(answers = {}) {
@@ -578,17 +587,17 @@ function appAnswers(answers = {}) {
     }
     if (name === "host.windows") return windows.map((entry) => ({ ...entry }));
     if (name === "host.window") return mygoWindow(window === "w2" ? { frame: { x: 0, y: 0, width: 1320, height: 908 }, content: { x: 0, y: 28, width: params?.width ?? 1320, height: 880 } } : {});
-    if (name === "core.grid") return { cards: [{ id: "left", fixed: true, tabs: [] }, { id: "c1", fixed: false, tabs: [{ id: "t-old", plugin: "terminal" }] }] };
+    if (name === "core.grid") return { cards: [{ id: "left", fixed: true, tabs: [] }, { id: "c1", fixed: false, tabs: [{ id: "t-old", plugin: "probeunload" }] }] };
     if (name === "core.card.add-tab") return { tab: "t-term" };
     if (name === "core.tab.close") return { closed: true };
     if (name === "core.card.split") return { card: "c2", tab: "t-web" };
     if (name === "core.surfaces") {
       return [
-        { kind: "tab", surface: "t-term", plugin: "term", exposes: ["status term.cursor"], status: { phase: "ready", error: null } },
-        { kind: "tab", surface: "t-web", plugin: "browser", exposes: ["status browser.location"], status: { phase: "ready", error: null } },
+        { kind: "tab", surface: "t-term", plugin: "probeinput", exposes: ["status probeinput.cursor"], status: { phase: "ready", error: null } },
+        { kind: "tab", surface: "t-web", plugin: "probeplain", exposes: ["command probeplain.navigate", "status probeplain.location"], status: { phase: "ready", error: null } },
       ];
     }
-    if (name === "browser.location") return { url: URL_BLANK, loading: false, error: null, title: "blank" };
+    if (name === "probeplain.location") return { url: URL_BLANK, loading: false, error: null, title: "blank" };
     if (name === "core.settings-modal") return { open: true };
     if (name === "core.screen") return { screen: "library", modal: null };
     return null;
@@ -617,22 +626,41 @@ const S1_STEPS = [
   ["until", "w1", "host.window", undefined],
   ["request", "w1", "diagnostics.fixture", {}],
   "applyTrace",
-  ["run", "w1", "core.card.add-tab", { card: "c1", plugin: "term" }],
+  ["run", "w1", "core.card.add-tab", { card: "c1", plugin: "probeinput" }],
   ["run", "w1", "core.tab.close", { tab: "t-old" }],
   ["until", "w1", "core.surfaces", undefined],
   "serve",
-  ["run", "w1", "core.card.split", { card: "c1", side: "right", plugin: "browser" }],
+  ["run", "w1", "core.card.split", { card: "c1", side: "right", plugin: "probeplain" }],
   ["until", "w1", "core.surfaces", undefined],
-  ["run", "w1", "browser.navigate", { url: URL_BLANK }, "t-web"],
-  ["until", "w1", "browser.location", undefined, "t-web"],
+  ["run", "w1", "probeplain.navigate", { url: URL_BLANK }, "t-web"],
+  ["until", "w1", "probeplain.location", undefined, "t-web"],
 ];
 
-test("S1 opens one term tab and one browser tab on the blank loopback page in a window of 1200 by 760 points", async () => {
+/** The plugins of the two tabs of S1: fixture plugins of e2e/fixtures. */
+const S1_PLUGINS = { tab: "probeinput", page: "probeplain" };
+
+test("S1 opens one tab of the tab plugin and one tab of the page plugin on the blank loopback page in a window of 1200 by 760 points", async () => {
   const calls = [];
   const s = fakeSession(appAnswers(), "w1", calls);
-  const context = await prepareState(s, "S1", prepareDeps(calls));
+  const context = await prepareState(s, "S1", prepareDeps(calls), S1_PLUGINS);
   assert.deepEqual(actions(calls), S1_STEPS);
   assert.deepEqual(context, { state: "S1", windows: ["w1"], url: URL_BLANK, footprints: "settled" });
+});
+
+test("a state that starts from S1 requires the plugins of its tab and its page, and the page plugin must expose its navigate command and its location status", async () => {
+  for (const state of ["S1", "S9", "S11", "S12", "S15"]) {
+    await assert.rejects(prepareState(fakeSession(appAnswers(), "w1", []), state, prepareDeps([])), new RegExp(`^Error: ${state} prepares S1, which requires the plugins of its tab and its page$`));
+    await assert.rejects(prepareState(fakeSession(appAnswers(), "w1", []), state, prepareDeps([]), { tab: "probeinput" }), /which requires the plugins of its tab and its page/);
+  }
+  const located = { kind: "tab", surface: "t-web", plugin: "probeclose", exposes: ["status probeclose.location"], status: { phase: "ready", error: null } };
+  const tabbed = { kind: "tab", surface: "t-term", plugin: "probeinput", exposes: [], status: { phase: "ready", error: null } };
+  const answers = appAnswers({ "get w1 core.surfaces": [tabbed, located], "until w1 core.surfaces": [tabbed, located] });
+  await assert.rejects(prepareState(fakeSession(answers, "w1", []), "S1", prepareDeps([]), { tab: "probeinput", page: "probeclose" }),
+    /^Error: the page plugin probeclose of S1 does not expose command probeclose\.navigate; surface t-web exposes \["status probeclose\.location"\]$/);
+  const bare = { ...located, exposes: [] };
+  const none = appAnswers({ "get w1 core.surfaces": [tabbed, bare], "until w1 core.surfaces": [tabbed, bare] });
+  await assert.rejects(prepareState(fakeSession(none, "w1", []), "S1", prepareDeps([]), { tab: "probeinput", page: "probeclose" }),
+    /^Error: the page plugin probeclose of S1 does not expose command probeclose\.navigate and status probeclose\.location; surface t-web exposes \[\]$/);
 });
 
 test("S0 and S14 keep the library screen, and S14 types one character into the library search 10 seconds before the reading", async () => {
@@ -685,7 +713,7 @@ test("S9 places a second library window over the window of S1 and requires occlu
     "get w1 host.window": () => mygoWindow({ occluded: covered }),
   });
   const s = fakeSession(answers, "w1", calls);
-  const context = await prepareState(s, "S9", prepareDeps(calls));
+  const context = await prepareState(s, "S9", prepareDeps(calls), S1_PLUGINS);
   assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
     ["run", "w1", "core.window.new", {}],
     ["until", "w1", "host.windows", undefined],
@@ -696,13 +724,13 @@ test("S9 places a second library window over the window of S1 and requires occlu
   ]);
   assert.deepEqual(context.windows, ["w1", "w2"]);
   const open = fakeSession(appAnswers(), "w1", []);
-  await assert.rejects(prepareState(open, "S9", prepareDeps([])), /until host.window of w1: the second window did not cover window w1/);
+  await assert.rejects(prepareState(open, "S9", prepareDeps([]), S1_PLUGINS), /until host.window of w1: the second window did not cover window w1/);
 });
 
 test("S11 opens a second project window beside the window of S1", async () => {
   const calls = [];
   const s = fakeSession(appAnswers({ "until w2 host.window": () => mygoWindow({ frame: { x: 0, y: 0, width: 1200, height: 788 } }) }), "w1", calls);
-  const context = await prepareState(s, "S11", prepareDeps(calls));
+  const context = await prepareState(s, "S11", prepareDeps(calls), S1_PLUGINS);
   assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
     ["run", "w1", "core.window.new", {}],
     ["until", "w1", "host.windows", undefined],
@@ -718,7 +746,7 @@ test("S11 opens a second project window beside the window of S1", async () => {
 test("S12 makes one layout draw fail and waits for its error line, and S15 opens the settings window", async () => {
   const calls = [];
   const s = fakeSession(appAnswers(), "w1", calls);
-  const context = await prepareState(s, "S12", prepareDeps(calls));
+  const context = await prepareState(s, "S12", prepareDeps(calls), S1_PLUGINS);
   assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
     "logPosition",
     ["request", "w1", "diagnostics.layout.fail", {}],
@@ -729,7 +757,7 @@ test("S12 makes one layout draw fail and waits for its error line, and S15 opens
   ]);
   assert.deepEqual(context.faultLog, { "host-1-10.jsonl": { offset: 400, inode: "7" } });
   calls.length = 0;
-  await prepareState(s, "S15", prepareDeps(calls));
+  await prepareState(s, "S15", prepareDeps(calls), S1_PLUGINS);
   assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
     ["run", "w1", "core.settings.open", {}],
     ["until", "w1", "core.settings-modal", undefined],

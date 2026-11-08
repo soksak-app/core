@@ -1362,7 +1362,7 @@ const FEATURE_LINKS = [
   {
     id: "F502-2-3",
     implementation: [
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function prepareState(s, state, deps)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function prepareState(s, state, deps, plugins = {})" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function waitIdle({ sessions, frames, sleep })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIET_INTERVALS })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function measurePointer({ s, measure, frameRecords, restore, tail, records })" },
@@ -1390,7 +1390,7 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export const B3_MEASUREMENTS" },
     ],
     tests: [
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the options take a state, the idle wait, the pointer step and the trace state" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the options take a state, the plugins of S1, the idle wait, the pointer step and the trace state" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements of app-usage are the host and application figures, the WebKit processes and the change of the frame counters" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the B3 measurements add the footprint after the pointer move, the error lines of the fault and the pointer move p90" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a host whose host.window reports no frame counters has no frames and commandBuffers measurements, and a partial counter fails" },
@@ -1414,7 +1414,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-app-usage.test.mjs", id: "every window must be visible except the covered first window of S9" },
       { file: "scripts/test/footprints.test.mjs", id: "footprints settle when two readings 5 seconds apart differ by less than 1,024 KB and the reading is 3 seconds after the last frame" },
       { file: "scripts/test/footprints.test.mjs", id: "reading a footprint runs footprint -p PID -f bytes and names the process of a failure" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait waits for the cursor idle timeout of every term tab and then for 3 seconds without a frame" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait waits for the cursor idle timeout of every tab whose plugin exposes its cursor status and then for 3 seconds without a frame" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the gesture figures are the 90th percentile of the mouseMoved: steps with the hitTest: step right before each" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither" },

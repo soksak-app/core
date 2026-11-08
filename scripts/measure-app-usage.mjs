@@ -13,11 +13,13 @@
 // --trace 0|1 sets the trace state with core.settings.change before the measurement (scripts/measure-trace.mjs); --trace frame-records,
 // which needs --step pointer, sets the trace state of the frame records (FRAME_RECORDS) for both moves of the pointer step. --state
 // prepares a state of B3 through declared commands in a window of 1200 by 760 points: S0 (the library screen without a plugin view), S0b (the window after its
-// project closed, each WebContent process of a view page or a document region read before the close exited), S1 (one term tab and one
-// browser tab on a blank page of a loopback server that ends with the measurement), S9 (S1 under a second library window that covers it),
+// project closed, each WebContent process of a view page or a document region read before the close exited), S1 (one tab of the plugin
+// --tab-plugin and beside it one tab of the plugin --page-plugin, which exposes the command <id>.navigate and the status <id>.location, on a
+// blank page of a loopback server that ends with the measurement; the script names no plugin, and S1, S9, S11, S12 and S15 require both
+// options), S9 (S1 under a second library window that covers it),
 // S11 (S1 with a second project window beside it), S12 (S1 after one layout draw that fails), S14 (S0 10 seconds after one character in the
 // library search) and S15 (S1 with the settings window open). --idle waits for the cursor idle timeout of every tab whose plugin exposes a
-// cursor status (the term and terminal tabs) and then for 3 seconds without a change of frames of host.window, or 3 seconds on a window
+// cursor status <id>.cursor and then for 3 seconds without a change of frames of host.window, or 3 seconds on a window
 // whose frames is null. --step pointer moves the pointer across the window, already the key window and not occluded, with the moves of
 // input.pointer, which take no permission and leave the cursor, reads the CPU time over the move and the footprints before and after it, and
 // repeats the move in the trace state of the frame records (FRAME_RECORDS) to read the U7 records of a window without a main page. The
@@ -51,7 +53,7 @@
 //                                                pointer --trace frame-records on a window without a main page)
 //
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records [--interval SECONDS]
-//     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--idle] [--step pointer] [--b3-out FILE] [--json]
+//     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--tab-plugin ID --page-plugin ID] [--idle] [--step pointer] [--b3-out FILE] [--json]
 import { execFile } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
@@ -94,8 +96,8 @@ const FAULT_LINE_LIMIT = 30000;
 /** The HID moves of the pointer step across the window. */
 const POINTER_MOVES = 60;
 /** The plugins of the tabs of S1. */
-const S1_TERMINAL = "term";
-const S1_BROWSER = "browser";
+/** The states that start from S1, which require the plugins of its two tabs. */
+export const S1_STATES = ["S1", "S9", "S11", "S12", "S15"];
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -350,7 +352,7 @@ export function recordsOver(before, after) {
   return gained;
 }
 
-/** The tabs whose plugin exposes a cursor status `<plugin>.cursor` with its idle timeout: the term and terminal tabs. */
+/** The tabs whose plugin exposes a cursor status `<plugin>.cursor` with its idle timeout. */
 export function cursorTabs(surfaces) {
   return surfaces.filter((surface) => surface.kind === "tab" && surface.exposes?.includes(`status ${surface.plugin}.cursor`));
 }
@@ -551,19 +553,31 @@ async function closeProject(s, deps) {
 }
 
 /**
- * S1: the fixture project with one term tab and, beside it, one browser tab on the blank page of the loopback server of deps.serve().
- * The trace state is set after the fixture, which resets the common settings. Returns the address of the page.
+ * S1: the fixture project with one tab of the plugin `plugins.tab` and, beside it, one tab of the plugin `plugins.page` on the blank page of
+ * the loopback server of deps.serve(). The page plugin must expose the command `<page>.navigate` and the status `<page>.location`; a
+ * missing entry fails and is named. The trace state is set after the fixture, which resets the common settings. Returns the address of
+ * the page.
  */
-async function prepareS1(s, deps) {
+async function prepareS1(s, deps, plugins) {
   await s.request("diagnostics.fixture");
   await deps.applyTrace();
-  const { card } = await openOnlyTab(s, S1_TERMINAL);
+  const { card } = await openOnlyTab(s, plugins.tab);
   const url = await deps.serve();
-  const { tab } = await s.run("core.card.split", { card, side: "right", plugin: S1_BROWSER });
-  await s.until("core.surfaces", (list) => list.some((surface) => surface.surface === tab && surface.exposes?.includes(`status ${S1_BROWSER}.location`)),
-    `the browser surface ${tab} did not register ${S1_BROWSER}.location`);
-  await s.run(`${S1_BROWSER}.navigate`, { url }, tab);
-  await s.until(`${S1_BROWSER}.location`, (at) => at.url === url && !at.loading && at.error === null && at.title === "blank",
+  const { tab } = await s.run("core.card.split", { card, side: "right", plugin: plugins.page });
+  const required = [`command ${plugins.page}.navigate`, `status ${plugins.page}.location`];
+  let seen = null;
+  try {
+    await s.until("core.surfaces", (list) => {
+      seen = list.find((entry) => entry.surface === tab) ?? null;
+      return seen !== null && required.every((entry) => seen.exposes?.includes(entry));
+    }, `the ${plugins.page} surface ${tab} did not register ${required.join(" and ")}`);
+  } catch (error) {
+    const missing = seen === null ? [] : required.filter((entry) => !seen.exposes?.includes(entry));
+    if (missing.length === 0) throw error;
+    throw new Error(`the page plugin ${plugins.page} of S1 does not expose ${missing.join(" and ")}; surface ${tab} exposes ${JSON.stringify(seen.exposes ?? [])}`);
+  }
+  await s.run(`${plugins.page}.navigate`, { url }, tab);
+  await s.until(`${plugins.page}.location`, (at) => at.url === url && !at.loading && at.error === null && at.title === "blank",
     `surface ${tab} did not load ${url}`, { surface: tab });
   return url;
 }
@@ -572,11 +586,12 @@ async function prepareS1(s, deps) {
  * Prepares state in the window of the session s through declared commands, in a window of 1200 by 760 points (B3). deps holds
  * applyTrace() (the trace state of the measurement), serve() (the address of the blank page), projectRoot(name) (a project folder),
  * logPosition() and untilFaultLine(position) (the application log), remainingWebKit() (the WebKit processes of the application with their
- * footprints) and sleep(ms). Returns { state, windows, footprints } with the windows of the state, the footprint rule (`settled`, or
+ * footprints) and sleep(ms). plugins holds the plugin ids { tab, page } of S1, which the states of S1_STATES require. Returns { state, windows, footprints } with the windows of the state, the footprint rule (`settled`, or
  * `at-once` for S14) and the readings of the state: url (S1 and the states after it), exited and remaining (S0b) and faultLog (S12).
  */
-export async function prepareState(s, state, deps) {
+export async function prepareState(s, state, deps, plugins = {}) {
   if (!STATES.includes(state)) throw new Error(`the state ${state} is not one of ${STATES.join(", ")}`);
+  if (S1_STATES.includes(state) && (!plugins.tab || !plugins.page)) throw new Error(`${state} prepares S1, which requires the plugins of its tab and its page`);
   await resize(s, WINDOW_SIZE);
   const context = { state, windows: [s.window], footprints: state === "S14" ? "at-once" : "settled" };
   if (state === "S0b") {
@@ -595,7 +610,7 @@ export async function prepareState(s, state, deps) {
     }
     return context;
   }
-  context.url = await prepareS1(s, deps);
+  context.url = await prepareS1(s, deps, plugins);
   if (state === "S9") {
     const cover = await newWindow(s);
     await resize(cover, { width: WINDOW_SIZE.width + 2 * COVER_MARGIN, height: WINDOW_SIZE.height + 2 * COVER_MARGIN });
@@ -777,6 +792,8 @@ export function parseOptions(args) {
       idle: { type: "boolean", default: false },
       step: { type: "string" },
       trace: { type: "string" },
+      "tab-plugin": { type: "string" },
+      "page-plugin": { type: "string" },
       "b3-out": { type: "string" },
       json: { type: "boolean", default: false },
     },
@@ -790,6 +807,12 @@ export function parseOptions(args) {
   const trace = parseTrace(values.trace, [0, 1, FRAME_RECORDS]);
   if (values.state !== undefined && !STATES.includes(values.state)) throw new Error(`--state must be one of ${STATES.join(", ")} (${values.state})`);
   if (values.step !== undefined && values.step !== "pointer") throw new Error(`--step must be pointer (${values.step})`);
+  if (S1_STATES.includes(values.state) && (!values["tab-plugin"] || !values["page-plugin"])) {
+    throw new Error(`--state ${values.state} prepares S1 and requires --tab-plugin ID --page-plugin ID`);
+  }
+  if ((values["tab-plugin"] !== undefined || values["page-plugin"] !== undefined) && !S1_STATES.includes(values.state)) {
+    throw new Error(`--tab-plugin and --page-plugin name the tabs of S1, which --state ${values.state ?? "(none)"} does not prepare`);
+  }
   if (trace === FRAME_RECORDS && values.step === undefined) {
     throw new Error(`TRACE ${FRAME_RECORDS} is the trace state of the U7 records of --step pointer, which was not given`);
   }
@@ -801,6 +824,7 @@ export function parseOptions(args) {
   return {
     sok: values.sok, configDirs: values["config-dir"], interval, state: values.state ?? null, idle: values.idle,
     step: values.step ?? null, trace, b3Out, json: values.json,
+    plugins: { tab: values["tab-plugin"] ?? null, page: values["page-plugin"] ?? null },
   };
 }
 
@@ -1078,7 +1102,7 @@ async function windowMark(s) {
 
 /** Measures the applications of the options and returns the parts of the report. */
 async function measureOptions(options) {
-  const { sok, configDirs, interval, state, idle, step, trace } = options;
+  const { sok, configDirs, interval, state, idle, step, trace, plugins } = options;
   const cleanups = [];
   const errors = [];
   const sessions = [];
@@ -1126,7 +1150,7 @@ async function measureOptions(options) {
           return remaining;
         },
         sleep: delay,
-      });
+      }, plugins);
       sessions[0].windows = context.windows;
     } else {
       for (const session of sessions) await traceOf(session)();

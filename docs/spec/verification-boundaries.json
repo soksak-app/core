@@ -702,11 +702,6 @@
       "reason": "Tests that the project-tab add control keeps contrast in second-drag frames, using `prepareTerminalDrag` from the terminal benchmark case. Replace with the view-drag fixture plan."
     },
     {
-      "file": "scripts/measure-app-usage.mjs",
-      "owner": "tool",
-      "reason": "Measurement script whose process attribution names the \"browser\" and \"term\" plugins/sidecars of an installed app. It should be reduced to taking plugin ids from the configuration or from fixtures."
-    },
-    {
       "file": "scripts/test/benchmark-b3.test.mjs",
       "owner": "mixed",
       "reason": "\"the surface plugins are the installed plugins whose manifest declares a surface\" -> core (fake manifests, but it reads plugins/term and plugins/files and should use e2e/fixtures manifests); \"the targets of a scenario come from the goals…\", \"the runs interleave the five applications…\", \"the sessions of B3 live beside the baseline record…\", \"the session folder holds the session and the baseline record…\", \"the run reads the declarations of the e2e benchmarks…\", \"the run conditions are read from injected readings…\" -> core (measurement harness; fixture data names term/browser and should use view-drag/plain-view ids)"
@@ -725,11 +720,6 @@
       "file": "scripts/test/fixtures/b3/baseline.json",
       "owner": "core",
       "reason": "B3 baseline data keyed by \"term\"/\"browser\". Re-key it to the view-drag/plain-view fixture ids."
-    },
-    {
-      "file": "scripts/test/measure-app-usage.test.mjs",
-      "owner": "core",
-      "reason": "Tests the measurement harness (process attribution, sidecar sums, pointer step), using \"term\"/\"browser\" as sample ids. Replace with fixture ids (view-drag, plain-view, sidecar-probe)."
     },
     {
       "file": "scripts/test/measure-terminal-redraw.test.mjs",
