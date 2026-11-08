@@ -14,8 +14,11 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
   const own = (await s.get("core.grid")).cards.find((card) => card.tabs?.some((item) => item.id === surface)).id;
   await keepCommonSettings(s);
   await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-  // The right override of the layout probe ties the right fixed sidebar to the card of the start tab.
-  await s.run("core.settings.link", { place: "window-right", plugin, set: `${plugin}.list`, scope: "common" });
+  // The right override of the layout probe, a stored set of its sections, ties the right fixed sidebar to the card of the start tab.
+  const sets = (await s.get("core.settings")).values.sets;
+  const set = { id: "check-rail", title: "Rail", sections: ["layoutprobe.alpha", "layoutprobe.fill"], layout: "list" };
+  await s.run("core.settings.set", { patch: { sets: [...sets, set] }, scope: "common" });
+  await s.run("core.settings.link", { place: "window-right", plugin, set: set.id, scope: "common" });
 
   // Records while the state changes, and measures whether the recording is complete and the rail color of the last frame.
   const record = async (label, change, loops) => {

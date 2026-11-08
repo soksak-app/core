@@ -14,9 +14,15 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a sidebar's selected tab and folded sections survive a reload from the saved space`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    // The inner left sidebar of the start card uses the tabs set of the layout probe and the fixed left sidebar its list set.
-    const [inner] = await cardSidebar(s, { set: "layoutprobe.tabs" });
-    await s.run("core.settings.link", { place: "left", plugin: null, set: "layoutprobe.list", scope: "common" });
+    // The inner left sidebar of the start card uses a list set of the layout probe sections turned into tabs, and the fixed left
+    // sidebar a list set of the same sections.
+    const sections = ["layoutprobe.alpha", "layoutprobe.beta", "layoutprobe.follow"];
+    const [inner] = await cardSidebar(s, { set: "check-tabs", sections });
+    const sets = (await s.get("core.settings")).values.sets;
+    await s.run("core.settings.set", { patch: { sets: [
+      ...sets.map((set) => (set.id === "check-tabs" ? { ...set, layout: "tabs" } : set)),
+      { id: "check-window", title: "창", sections, layout: "list" }] }, scope: "common" });
+    await s.run("core.settings.link", { place: "left", plugin: null, set: "check-window", scope: "common" });
     const of = (bars, id) => bars.find((bar) => bar.sidebar === id);
     await s.until("core.sidebars", (bars) => of(bars, inner)?.layout === "tabs" && of(bars, "left")?.layout === "list",
       "the card sidebar and the left sidebar did not draw");
