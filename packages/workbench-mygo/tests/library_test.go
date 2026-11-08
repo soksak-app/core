@@ -482,3 +482,23 @@ func TestAFailedOpenOfTheLibraryShowsInTheLibrary(t *testing.T) {
 		t.Fatalf("the workbench banner shows %s", banner)
 	}
 }
+
+func TestTheProjectListSelectsTheProjectPage(t *testing.T) {
+	f, _, _ := twoProjects(t)
+	f.run("core.plugins.browse", nil)
+	f.settle()
+	f.run("core.library.return", nil)
+	f.settle()
+	f.run("core.projects.browse", nil)
+	f.settle()
+	if got := status[libraryRead](t, f, "core.library"); got.Page != "projects" || len(got.Shown) == 0 {
+		t.Fatalf("core.projects.browse after the plugin page shows the page %q with the projects %v", got.Page, got.Shown)
+	}
+	f.run("core.library.page", map[string]string{"page": "plugins"})
+	f.settle()
+	f.run("core.projects.browse", nil)
+	f.settle()
+	if got := status[libraryRead](t, f, "core.library"); got.Page != "projects" {
+		t.Fatalf("core.projects.browse in the library keeps the page %q", got.Page)
+	}
+}

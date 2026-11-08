@@ -97,7 +97,8 @@ func (s *Shell) register() {
 	s.registerCardSidebars()
 	s.registerPlugins()
 	s.registerDebug()
-	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return nil })
+	// The project list shows the library and selects its page of the projects (docs/spec/installation.md#plugin-screen).
+	act(s, "core.projects.browse", func(struct{}) error { s.browse(); return s.showLibraryPage("projects") })
 	later(s, "core.projects.flush", func(_ struct{}, answer func(any, error)) { s.flushProjects(answerNull(answer)) })
 	command(s, "core.plugins.apply", func(struct{}) (any, error) {
 		s.pluginsChanged()
