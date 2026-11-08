@@ -337,11 +337,6 @@
       "reason": "Checks that hidden terminal and term screens keep notifying their screen status, which is those plugins' own screen subscription."
     },
     {
-      "file": "e2e/sidebar.test.mjs",
-      "owner": "mixed",
-      "reason": "\"an inset sidebar stands inside its card and folds or resizes without changing the card\": core; \"a combined set mounts every section in list layout and switches sections in tabs layout\": core (fixture sections); \"the browser sections mount as section views beside the card's browser navigation\": plugin:browser; \"a sidebar starts with its sections and lines up its header and status rules with the neighbouring cards\": core; \"the browser DOM and network sections list the document's elements and requests\": plugin:browser; \"a browser tab shows the document title or the address and the tabs section mounts\": plugin:browser; \"tabs-layout tabs keep their full names on one line at the strip height\": core; \"a section header's name stays in place when sections fold and sits alike in every header\": core; \"a fill section takes the sidebar height the other sections leave and gives it up when folded\": core; \"sections that follow a core status mount without an error after a reload\": core (fixture section following a status); \"the fold control at the bottom of a window sidebar turns it off and the header turns it on\": core."
-    },
-    {
       "file": "e2e/sidecar-recovery.test.mjs",
       "owner": "core",
       "reason": "Checks that a surface reattaches without an app restart when its persistent sidecar service dies (core sidecar supervision). A new killable fake persistent-sidecar fixture would replace sidecar-vt-alacritty."
