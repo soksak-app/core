@@ -302,11 +302,6 @@
       "reason": "Helper that prepares the default terminal surface and waits for its session. Remove it or reduce it to preparing a fake-session fixture."
     },
     {
-      "file": "e2e/projects.test.mjs",
-      "owner": "core",
-      "reason": "All seven tests check project windows, persistence, settings inheritance, the placeholder for an unloaded plugin, and presentation of a covered window. The terminal is only the usable surface; `plain-view` with a status exposure would replace it."
-    },
-    {
       "file": "e2e/real/focus.test.mjs",
       "owner": "core",
       "reason": "Checks that a real press on a native region never moves focus to another tab's text field (focus routing). Two fixtures would replace terminal and browser: `plain-view` and `extension-probe` with a webview text field."
