@@ -82,15 +82,10 @@ func (s *Shell) surfaceRegistered(data []any) {
 		s.fail(fmt.Errorf("exposure: %w", err))
 		return
 	}
-	// The close names the entries that the surface held before it.
-	var held []string
-	if event.Closed && s.events.Traced() {
-		held = s.registry.EntriesOf(event.Surface)
-	}
-	if err := s.registry.Registered(event); err != nil {
+	if event.Closed {
+		s.closeRegistrations(event.Surface)
+	} else if err := s.registry.Registered(event); err != nil {
 		s.fail(fmt.Errorf("exposure: %w", err))
-	} else if event.Closed {
-		s.traceRegistration("closed", event.Surface, held, nil)
 	} else if s.events.Traced() {
 		// A registration of a surface that the window no longer holds is not applied and is no registration.
 		if entries := s.registry.EntriesOf(event.Surface); slices.Contains(entries, declarationKey(event.Kind, event.Name)) {
@@ -101,6 +96,20 @@ func (s *Shell) surfaceRegistered(data []any) {
 		s.replyHold.Closed(event.Surface)
 	}
 	s.pushStatuses()
+}
+
+// closeRegistrations removes what surface registered, at its close or at the end of the document of its view, whose next document
+// registers its own (unregisterSurface of packages/workbench/exposure.js). The close names the entries that the surface held.
+func (s *Shell) closeRegistrations(surface string) {
+	var held []string
+	if s.events.Traced() {
+		held = s.registry.EntriesOf(surface)
+	}
+	if err := s.registry.Registered(SurfaceRegistered{Surface: surface, Closed: true}); err != nil {
+		s.fail(fmt.Errorf("exposure: %w", err))
+		return
+	}
+	s.traceRegistration("closed", surface, held, nil)
 }
 
 // traceRegistration stores the trace event surface.registration of a registration or a close of a surface that the registry applied,

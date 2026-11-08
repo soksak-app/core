@@ -734,6 +734,8 @@ export class Session {
    * if none was sent. finishSession removes the folder only after every cleanup and the error audit succeed.
    */
   async record(params = {}) {
+    // Frame identity is decoded from the captured pixels of the window, which a window that is covered whole does not present.
+    if (params.frameIdentity) requireUncovered(this, await this.get("host.window"));
     const { frames } = await this.request("diagnostics.capture.start", params);
     let sent = false;
     const identity = this.trackRecording(frames);
@@ -1234,6 +1236,17 @@ export function coveredBy(s, window) {
   const covering = coveringWindows(s.client.endpoint.pid, window.frame);
   return covering.length ? covering.map(({ owner, frame }) => `${owner} at ${JSON.stringify(frame)}`).join(", ")
     : "windows that together cover it";
+}
+
+/**
+ * Refuses a measurement of the pixels of a window that host.window `window` of session `s` reports `occluded`: WebKit renders a
+ * window that is covered whole less often, so its frames do not show what the check does. The error names the covering windows
+ * (coveredBy) and states that nothing was measured.
+ */
+export function requireUncovered(s, window) {
+  if (!window.occluded) return;
+  throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window)}, so WebKit renders it less often. ` +
+    "Nothing was measured: uncover the window, without activating the application, and run the check again.");
 }
 
 async function dragOnce(s, plan, capture, frameIdentity) {
