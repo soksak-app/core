@@ -632,16 +632,6 @@
       "reason": "Tests that window occlusion hides a view's document, using a browser page title reporting visibility. Replace with plain-view/memory-saver publishing a document visibility status."
     },
     {
-      "file": "e2e/window-sidebar-persistence.test.mjs",
-      "owner": "core",
-      "reason": "Tests that sidebar settings links and placement persist (`core.settings.link`, window-right), using terminal tabs. Replace with plain-view declaring settings/sidebar placement."
-    },
-    {
-      "file": "e2e/window-sidebars.test.mjs",
-      "owner": "core",
-      "reason": "Tests that fixed sidebars apply plugin rail overrides and card focus, using terminal and browser tabs (rail groups 0 vs 1). Replace with two fake fixtures, one declaring a rail group and one declaring none (plain-view plus extension-probe)."
-    },
-    {
       "file": "e2e/workbench-capture.test.mjs",
       "owner": "core",
       "reason": "Tests that the project-tab add control keeps contrast in second-drag frames, using `prepareTerminalDrag` from the terminal benchmark case. Replace with the view-drag fixture plan."
