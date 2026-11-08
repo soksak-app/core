@@ -33,6 +33,4 @@ bool sp_capture_frame_identity_decode(const uint8_t *bgra, size_t byte_length, s
 // the immutable PNG bytes and error output. Atlas cells use the same CoreImage QR generator as tagged source rasters.
 bool sp_capture_frame_identity_atlas(NSArray<NSString *> *payloads, size_t cell_pixels, size_t columns,
     NSData **png, NSString **error);
-#ifdef SOKSAK_DIAGNOSTIC
 void sp_capture_frame_identity_test_set_decode_hook(bool (*hook)(void));
-#endif

@@ -12,12 +12,10 @@
 
 static const size_t kFrameIdentityAtlasByteLimit = 48 * 1024 * 1024;
 
-#ifdef SOKSAK_DIAGNOSTIC
 static bool (*captureFrameIdentityDecodeTestHook)(void);
 void sp_capture_frame_identity_test_set_decode_hook(bool (*hook)(void)) {
     captureFrameIdentityDecodeTestHook = hook;
 }
-#endif
 
 static NSString *payloadPrefix(NSString *nonce, SPCaptureFrameIdentity identity) {
     return [NSString stringWithFormat:@"soksak-frame-id:v1:%@:%llu:%llu:%llu", nonce,
@@ -358,12 +356,10 @@ bool sp_capture_frame_identity_decode(const uint8_t *bgra, size_t byte_length, s
         ZXing_ReaderOptions_setTryInvert(options, true);
         ZXing_ReaderOptions_setTryDownscale(options, true);
         ZXing_ReaderOptions_setReturnErrors(options, true);
-#ifdef SOKSAK_DIAGNOSTIC
     if (captureFrameIdentityDecodeTestHook && !captureFrameIdentityDecodeTestHook()) {
         *error = [@"QR decoder test failure" copy];
         break;
     }
-#endif
         barcodes = ZXing_ReadBarcodes(imageView, options);
         if (!barcodes) {
             decoderError = ZXing_LastErrorMsg();
