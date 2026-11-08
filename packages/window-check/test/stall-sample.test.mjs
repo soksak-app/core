@@ -1,12 +1,37 @@
 // When a request does not answer within the limit, the check keeps the stacks of the host process at that time (F69).
 // What the main thread did while it did not answer can be seen only at that moment.
 import assert from "node:assert/strict";
+import * as childProcess from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
-import { within } from "../app.mjs";
-import { sampleProcess } from "../stall-sample.mjs";
+import test, { mock } from "node:test";
+
+// The host pid that no process holds. launchctl and sample answer for it as they do on macOS 27 for a process that does not run,
+// so the check of the record of an absent host does not depend on the tools of the system; every other command runs.
+const ABSENT_HOST = 999999;
+const ABSENT_DOMAIN = `pid/${ABSENT_HOST} = {\n\ttype = pid\n\thandle = ${ABSENT_HOST}\n\tactive count = 1\n\n\tservices = {\n\t}\n\n` +
+  "\tunmanaged processes = {\n\t}\n\n\tendpoints = {\n\t}\n\n\tproperties = slain\n}\n";
+const ABSENT_SAMPLE = `sample[19329]: sample cannot examine process ${ABSENT_HOST} (with name like '${ABSENT_HOST}') because it no longer appears to be running.\n`;
+function execFile(command, args, options, callback) {
+  if (command === "/bin/launchctl" && args[1] === `pid/${ABSENT_HOST}`) {
+    queueMicrotask(() => callback(null, ABSENT_DOMAIN, ""));
+    return { pid: undefined, kill: () => false };
+  }
+  if (command === "/usr/bin/sample" && args[0] === String(ABSENT_HOST)) {
+    queueMicrotask(() => callback(Object.assign(new Error(`Command failed: ${command} ${args.join(" ")}`), { code: 255 }), "", ABSENT_SAMPLE));
+    return { pid: undefined, kill: () => false };
+  }
+  return childProcess.execFile(command, args, options, callback);
+}
+mock.module("node:child_process", {
+  namedExports: { ...childProcess, execFile },
+  defaultExport: { ...childProcess.default, execFile },
+});
+const { within } = await import("../app.mjs");
+const { sampleProcess } = await import("../stall-sample.mjs");
+// The tests that sample live processes ask the platform for that facility, so they fail by name on a system without it.
+const { liveProcessSampling } = await import("./platform/platform.js");
 
 test("a request that does not answer within its limit records what the host was doing and names the record", async () => {
   const never = new Promise(() => {});
@@ -71,6 +96,7 @@ test("a state at the limit that does not finish does not hold the end of the pro
 });
 
 test("a sample that stalls records the stacks of the sampling process before it ends", { timeout: 20000 }, async (t) => {
+  await liveProcessSampling();
   const { runProcess } = await import("../stall-sample.mjs");
   const folder = mkdtempSync(join(tmpdir(), "stall-sampler-"));
   t.after(() => rmSync(folder, { recursive: true, force: true }));
@@ -129,9 +155,9 @@ test("a request that the page did not answer names the stall records or why they
   const { Session } = await import("../app.mjs");
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
   t.after(() => rmSync(configDir, { recursive: true }));
-  const client = { endpoint: { pid: 999999 }, request: async () => { throw new EndpointError({ code: -32603, message: "the document did not reply within 10000 ms" }); } };
+  const client = { endpoint: { pid: ABSENT_HOST }, request: async () => { throw new EndpointError({ code: -32603, message: "the document did not reply within 10000 ms" }); } };
   const s = new Session({ name: "tauriv2", configDir }, client);
-  // No process 999999 runs, so sample cannot record the host and the reason stays in the error.
+  // No process ABSENT_HOST runs, so sample cannot record the host and the reason stays in the error.
   await assert.rejects(s.request("status.get", { name: "core.verify" }),
     /^EndpointError: tauriv2 status\.get core\.verify: the document did not reply within 10000 ms; sampling the host failed: sample 999999 /);
 });
@@ -199,6 +225,7 @@ test("a request that answers before 3 s does not start a sample", async (t) => {
 
 
 test("native stall sampling keeps the check event loop responsive", { timeout: 10000 }, async (t) => {
+  await liveProcessSampling();
   const { mkdtemp, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
@@ -327,6 +354,7 @@ test("a flock wait that cannot be read is named in the record with the reason", 
 });
 
 test("lsof and the lock probe of macOS name the file and the holder of a real flock wait", { timeout: 20000 }, async (t) => {
+  await liveProcessSampling();
   const { spawn } = await import("node:child_process");
   const { realpathSync, writeFileSync } = await import("node:fs");
   const { flockWait } = await import("../stall-sample.mjs");

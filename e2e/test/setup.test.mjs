@@ -59,6 +59,7 @@ test("common setup declares binaries without building anything", { timeout: 1000
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
     import childProcess from "node:child_process";
     import { syncBuiltinESMExports } from "node:module";
+    Object.defineProperty(process, "platform", { value: "darwin" });
     childProcess.spawnSync = (command, args) => {
       if (args[0] !== "metadata") throw new Error("unexpected setup dependency: " + command + " " + args.join(" "));
       return { status: 0, stdout: JSON.stringify({ target_directory: "/declared/target", workspace_root: "/declared/source" }) };

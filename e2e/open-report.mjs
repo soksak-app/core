@@ -16,8 +16,11 @@ export function openStages(rows) {
 
 /** The system state at the measurement: the load average and the five processes with the highest CPU use. It separates whether a late reply is caused by the load of other processes. */
 export function systemState() {
-  const ps = spawnSync("ps", ["-Ao", "pcpu,comm", "-r"], { encoding: "utf8" });
+  // `ps -A -o pcpu=,comm=` is the POSIX form; the CPU order is made here, because the sort option of ps differs between systems.
+  const ps = spawnSync("ps", ["-A", "-o", "pcpu=,comm="], { encoding: "utf8", maxBuffer: Infinity });
   if (ps.status !== 0) throw new Error(`ps failed with ${ps.status}: ${ps.stderr}`);
-  const top = ps.stdout.trim().split("\n").slice(1, 6).map((line) => line.trim()).join("; ");
+  const top = ps.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "")
+    .map((line) => ({ line, cpu: Number.parseFloat(line) })).sort((a, b) => b.cpu - a.cpu)
+    .slice(0, 5).map(({ line }) => line).join("; ");
   return `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")} on ${availableParallelism()} processors; top CPU: ${top}`;
 }
