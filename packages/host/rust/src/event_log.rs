@@ -14,7 +14,7 @@ use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::{Options as WriterOptions, PullSink};
 
 pub use soksak_sok::event_log::{
-    Channel, EventLog, Level, RelayedEvent, Rouser, SCHEMA, Wake, valid_cid,
+    Channel, EventLog, Level, LossReason, RelayedEvent, Rouser, SCHEMA, Wake, valid_cid,
 };
 
 use crate::bounds::Fields;

@@ -450,6 +450,22 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F713",
+    implementation: [
+      { file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) CountLoss(channel Channel, reason LossReason, events, bytes uint64) {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "pub fn count_loss(&self, channel: Channel, reason: LossReason, events: u64, bytes: u64) {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/event_log_options_test.go", id: "TestAnInvalidCorrelationIdentifierIsRecordedAsItsOwnLossAndNotAsAFullQueue" },
+      { file: "packages/sok/go/tests/event_log_options_test.go", id: "TestALevelOutsideTheContractIsRecordedAsItsOwnLossAndNotAsAFullQueue" },
+      { file: "packages/sok/go/tests/event_log_options_test.go", id: "TestFieldsThatCannotBeSerializedAreRecordedAsTheirOwnLossAndNotAsAFullQueue" },
+      { file: "packages/sok/rust/tests/event_log_options_test.rs", id: "an_invalid_correlation_identifier_is_recorded_as_its_own_loss_and_not_as_a_full_queue" },
+      { file: "packages/sok/rust/tests/event_log_options_test.rs", id: "fields_that_cannot_be_serialized_are_recorded_as_their_own_loss_and_not_as_a_full_queue" },
+    ],
+    expected: "A refused event is recorded in a log.dropped whose reason names why it was refused: an invalid correlation identifier, a level outside the contract and fields that cannot be serialized each have their own reason and no queued depth, and only a refusal at the bound of the queue states the queue was full.",
+    levels: ["unit"],
+  },
+  {
     id: "F712",
     implementation: [{ file: "packages/sok/go/src/event_log.go", symbol: "func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any) bool" }],
     tests: [{ file: "packages/host/go/tests/event_log_test.go", id: "TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefused" }],

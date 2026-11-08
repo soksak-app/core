@@ -8,7 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 
 use crate::bounds::{Fields, RECORD_PLACE_BYTES, RECORD_TEXT_BYTES, cut_text};
-use crate::event_log::{Channel, EventLog, Level, RelayedEvent, monotonic_ns, valid_cid};
+use crate::event_log::{
+    Channel, EventLog, Level, LossReason, RelayedEvent, monotonic_ns, valid_cid,
+};
 
 /// The number of records that the start buffer holds; a record beyond it is refused and counted.
 pub const START_BUFFER_RECORDS: usize = 1024;
@@ -90,7 +92,7 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
         }
         for channel in Channel::ALL {
             let (events, bytes) = lost[channel_index(channel)];
-            log.count_loss(channel, events, bytes);
+            log.count_loss(channel, LossReason::StartBufferFull, events, bytes);
         }
     }
     let attached = log.is_some();

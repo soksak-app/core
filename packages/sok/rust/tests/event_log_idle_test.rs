@@ -10,7 +10,7 @@ use serde_json::json;
 use serde_json::value::RawValue;
 use soksak_sok::event_bounds::Fields;
 use soksak_sok::event_classes::Class;
-use soksak_sok::event_log::{Channel, EventLog, Level, Options, RelayedEvent, Rouser};
+use soksak_sok::event_log::{Channel, EventLog, Level, LossReason, Options, RelayedEvent, Rouser};
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -244,7 +244,8 @@ fn a_count_of_the_gate_wakes_the_writer() {
 #[test]
 fn a_loss_wakes_the_writer() {
     let idle = idle(HOUR);
-    idle.log.count_loss(Channel::Other, 1, 7);
+    idle.log
+        .count_loss(Channel::Other, LossReason::QueueFull, 1, 7);
     idle.wait_for("log.dropped");
 }
 

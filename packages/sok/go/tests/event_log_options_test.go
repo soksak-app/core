@@ -83,6 +83,70 @@ func TestAWriterWithoutRotationStoresTheLayerTheClockAndTheCidsOfItsOptions(t *t
 	}
 }
 
+// refusedLoss starts a writer, has refuse refuse one event that the queue had room for, and returns the fields of the only
+// log.dropped that the writer stored.
+func refusedLoss(t *testing.T, boot string, refuse func(log *sok.EventLog) bool) map[string]any {
+	t.Helper()
+	log, err := sok.StartEventLog(optionsIn(t.TempDir(), boot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refuse(log) {
+		t.Fatal("the event was accepted")
+	}
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	log.Close()
+	var dropped []map[string]any
+	for _, line := range storedLines(t, log.Path()) {
+		if line["event"] == "log.dropped" {
+			dropped = append(dropped, line)
+		}
+	}
+	if len(dropped) != 1 {
+		t.Fatalf("the refused event is recorded in %d log.dropped events: %v", len(dropped), dropped)
+	}
+	fields, _ := dropped[0]["fields"].(map[string]any)
+	return fields
+}
+
+// checkLossReason fails unless fields record one event of the channel other with reason, and no depth of the queue, which only
+// a refusal of the queue states.
+func checkLossReason(t *testing.T, fields map[string]any, reason string) {
+	t.Helper()
+	if fields["reason"] == "the queue was full" {
+		t.Fatalf("the refusal is recorded as a full queue: %v", fields)
+	}
+	if fields["reason"] != reason || fields["count"] != float64(1) || fields["channel"] != "other" {
+		t.Fatalf("log.dropped = %v, want the reason %q", fields, reason)
+	}
+	if _, present := fields["queued"]; present {
+		t.Fatalf("log.dropped of a refusal that is not of the queue states queued: %v", fields)
+	}
+}
+
+func TestAnInvalidCorrelationIdentifierIsRecordedAsItsOwnLossAndNotAsAFullQueue(t *testing.T) {
+	fields := refusedLoss(t, "cids-loss", func(log *sok.EventLog) bool {
+		return log.EmitCids(sok.LevelInfo, "host.probe.bad", []string{`a"b`}, nil)
+	})
+	checkLossReason(t, fields, "a correlation identifier was not valid")
+}
+
+func TestALevelOutsideTheContractIsRecordedAsItsOwnLossAndNotAsAFullQueue(t *testing.T) {
+	fields := refusedLoss(t, "level-loss", func(log *sok.EventLog) bool {
+		return log.Emit(sok.Level("notice"), "host.probe.level", nil)
+	})
+	checkLossReason(t, fields, "the level was not in the contract")
+}
+
+func TestFieldsThatCannotBeSerializedAreRecordedAsTheirOwnLossAndNotAsAFullQueue(t *testing.T) {
+	fields := refusedLoss(t, "fields-loss", func(log *sok.EventLog) bool {
+		return log.Emit(sok.LevelInfo, "host.probe.fields", map[string]any{"value": func() {}})
+	})
+	checkLossReason(t, fields, "the fields could not be serialized")
+}
+
 // contract: cli.log.writer-options.rotates-at-its-bound
 func TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated(t *testing.T) {
 	options := optionsIn(t.TempDir(), "rotating")

@@ -115,6 +115,42 @@ func (c Channel) String() string {
 	return "other"
 }
 
+// LossReason is why the writer or a producer of this process refused an event before it was stored; the writer records one
+// log.dropped for each channel and reason that lost events, in the order of the channels and then of the reasons
+// (docs/spec/logging.md#writers).
+type LossReason int
+
+// The reasons of a loss that the writer counts.
+const (
+	// LossQueueFull is a refusal at the bound of the queue in events or in bytes.
+	LossQueueFull LossReason = iota
+	// LossUndefinedLevel is an event whose level the contract does not define.
+	LossUndefinedLevel
+	// LossInvalidCids is an event with a correlation identifier that a line cannot carry.
+	LossInvalidCids
+	// LossUnserializableFields is an event whose fields cannot be serialized.
+	LossUnserializableFields
+	// LossStartBufferFull is a record that the full start buffer of the host refused before the writer existed.
+	LossStartBufferFull
+	// LossStepRingFull is a step record that the full step ring of the framework lost.
+	LossStepRingFull
+	// LossReasonCount is the number of reasons.
+	LossReasonCount
+)
+
+// lossReasons are the reasons as log.dropped states them.
+var lossReasons = [LossReasonCount]string{
+	LossQueueFull:            "the queue was full",
+	LossUndefinedLevel:       "the level was not in the contract",
+	LossInvalidCids:          "a correlation identifier was not valid",
+	LossUnserializableFields: "the fields could not be serialized",
+	LossStartBufferFull:      "the start buffer was full",
+	LossStepRingFull:         "the step ring was full",
+}
+
+// String is the reason as log.dropped states it.
+func (r LossReason) String() string { return lossReasons[r] }
+
 // ChannelOf returns the channel that stores the level.
 func ChannelOf(level Level) Channel {
 	if level == LevelDebug || level == LevelTrace {
@@ -184,8 +220,10 @@ type EventLog struct {
 	queuedBytes  atomic.Int64
 	queueEvents  int64
 	queueBytes   int64
-	// lost counts what the queue and the producers refused, for each channel.
-	lost [ChannelCount]struct{ events, bytes, depth atomic.Uint64 }
+	// lost counts what the queue and the producers refused, for each channel and reason; depth is the largest number of queued
+	// events at a refusal of the queue, for each channel.
+	lost  [ChannelCount][LossReasonCount]struct{ events, bytes atomic.Uint64 }
+	depth [ChannelCount]atomic.Uint64
 	// gate is the policy in force and the count of the events that it refused.
 	gate        *eventGate
 	policyPath  string
@@ -313,12 +351,14 @@ func StartEventLog(options EventLogOptions) (*EventLog, error) {
 	return log, nil
 }
 
-// CountLoss adds events and bytes of a channel that a producer of this process refused before they reached the writer; the
-// writer records them as a log.dropped that names the channel.
-func (l *EventLog) CountLoss(channel Channel, events, bytes uint64) {
-	l.lost[channel].events.Add(events)
-	l.lost[channel].bytes.Add(bytes)
-	raiseDepth(&l.lost[channel].depth, l.queuedEvents.Load())
+// CountLoss adds events and bytes of a channel that a producer of this process refused for reason before they reached the
+// writer; the writer records them as a log.dropped that names the channel and the reason.
+func (l *EventLog) CountLoss(channel Channel, reason LossReason, events, bytes uint64) {
+	l.lost[channel][reason].events.Add(events)
+	l.lost[channel][reason].bytes.Add(bytes)
+	if reason == LossQueueFull {
+		raiseDepth(&l.depth[channel], l.queuedEvents.Load())
+	}
 }
 
 // Boot is the identifier of the run that this writer belongs to; with a seq it names a line of the log.
@@ -339,7 +379,7 @@ func (l *EventLog) EmitPlaced(level Level, event string, fields json.RawMessage,
 func (l *EventLog) EmitPlacedBounded(level Level, event string, fields []byte, produced int, deadline time.Duration) (uint64, error) {
 	placed := make(chan uint64, 1)
 	if l.queuedEvents.Load() >= l.queueEvents {
-		l.countLoss(ChannelOf(level), len(event))
+		l.countLoss(ChannelOf(level), LossQueueFull, len(event))
 		return 0, fmt.Errorf("the event writer refused %s because %w", event, errQueueFull)
 	}
 	if err := l.enqueuePlaced(time.Now().UnixMicro(), l.clock(), l.layer, "", "", level, event, nil, fields, produced, placed); err != nil {
@@ -376,12 +416,12 @@ func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any
 	case LevelError, LevelWarn, LevelInfo, LevelDebug, LevelTrace:
 	default:
 		// A level outside the contract is a defect of the caller; the event is counted as lost and the defect is reported.
-		l.countLoss(ChannelOf(level), len(event))
+		l.countLoss(ChannelOf(level), LossUndefinedLevel, len(event))
 		fmt.Fprintf(os.Stderr, "event writer: %s has the level %q, which the contract does not define\n", event, string(level))
 		return false
 	}
 	if err := CheckCids(cids); err != nil {
-		l.countLoss(ChannelOf(level), len(event))
+		l.countLoss(ChannelOf(level), LossInvalidCids, len(event))
 		fmt.Fprintf(os.Stderr, "event writer: the cids of %s are refused: %v\n", event, err)
 		return false
 	}
@@ -390,13 +430,13 @@ func (l *EventLog) EmitCids(level Level, event string, cids []string, fields any
 		return false
 	}
 	if l.queuedEvents.Load() >= l.queueEvents {
-		l.countLoss(ChannelOf(level), len(event))
+		l.countLoss(ChannelOf(level), LossQueueFull, len(event))
 		return false
 	}
 	text, produced, err := BoundedMarshal(fields, EventFieldsLimitBytes)
 	if err != nil {
 		// A value that cannot be serialized is a defect of the caller; it is counted in place of the event.
-		l.countLoss(ChannelOf(level), len(event))
+		l.countLoss(ChannelOf(level), LossUnserializableFields, len(event))
 		fmt.Fprintf(os.Stderr, "event writer: the fields of %s cannot be serialized: %v\n", event, err)
 		return false
 	}
@@ -486,7 +526,7 @@ func (l *EventLog) EmitRelayed(e RelayedEvent) (bool, error) {
 		return false, nil
 	}
 	if l.queuedEvents.Load() >= l.queueEvents {
-		l.countLoss(ChannelOf(e.Level), len(e.Event))
+		l.countLoss(ChannelOf(e.Level), LossQueueFull, len(e.Event))
 		return false, nil
 	}
 	return l.enqueuePlaced(e.TsMicros, e.MonoNs, e.Layer, e.Page, e.Start, e.Level, e.Event, e.Cids, e.Fields, e.Produced, nil) == nil, nil
@@ -511,7 +551,7 @@ func (l *EventLog) enqueuePlaced(tsMicros int64, monoNs uint64, layer, page, sta
 		bytes += len(cid)
 	}
 	if l.queuedBytes.Load()+int64(bytes) > l.queueBytes {
-		l.countLoss(ChannelOf(level), bytes)
+		l.countLoss(ChannelOf(level), LossQueueFull, bytes)
 		return errQueueFull
 	}
 	pending := &pendingEvent{tsMicros: tsMicros, monoNs: monoNs, cids: cids, layer: layer, page: page, start: start, level: level, event: event, fields: text, bytes: bytes, truncated: truncated, placed: placed}
@@ -534,7 +574,7 @@ func (l *EventLog) queue(pending *pendingEvent) error {
 	default:
 		l.queuedBytes.Add(-int64(pending.bytes))
 		l.queuedEvents.Add(-1)
-		l.countLoss(ChannelOf(pending.level), pending.bytes)
+		l.countLoss(ChannelOf(pending.level), LossQueueFull, pending.bytes)
 		return errQueueFull
 	}
 }
@@ -548,7 +588,7 @@ func (l *EventLog) enqueueWriterEvent(level Level, name string, fields json.RawM
 	pending.cids = cids
 	pending.bytes = len(fields) + len(name)
 	if l.queuedBytes.Load()+int64(pending.bytes) > l.queueBytes {
-		l.countLoss(ChannelOf(level), pending.bytes)
+		l.countLoss(ChannelOf(level), LossQueueFull, pending.bytes)
 		return false
 	}
 	return l.queue(pending) == nil
@@ -594,10 +634,9 @@ func headFields(text []byte, size int) (json.RawMessage, int) {
 	return cut, size
 }
 
-func (l *EventLog) countLoss(channel Channel, bytes int) {
-	l.lost[channel].events.Add(1)
-	l.lost[channel].bytes.Add(uint64(bytes))
-	raiseDepth(&l.lost[channel].depth, l.queuedEvents.Load())
+// countLoss counts one event of bytes bytes of a channel that the writer refused for reason, and wakes a writer that sleeps.
+func (l *EventLog) countLoss(channel Channel, reason LossReason, bytes int) {
+	l.CountLoss(channel, reason, 1, uint64(bytes))
 	l.rouse()
 }
 
@@ -623,11 +662,13 @@ func (l *EventLog) rouseForCount() {
 // SetGatedWait sets how long a count of the gate waits for an event when the writer sleeps. A log starts with gatedWait.
 func (l *EventLog) SetGatedWait(wait time.Duration) { l.countWait.Store(int64(wait)) }
 
-// lossCounted reports whether a count of the queue waits for the writer.
+// lossCounted reports whether a count of a loss, of any channel and reason, waits for the writer.
 func (l *EventLog) lossCounted() bool {
 	for channel := range l.lost {
-		if l.lost[channel].events.Load() > 0 {
-			return true
+		for reason := range l.lost[channel] {
+			if l.lost[channel][reason].events.Load() > 0 {
+				return true
+			}
 		}
 	}
 	return false
@@ -958,12 +999,21 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			dropped(events, bytes, reason, channel, nil)
 		})
 	}
+	// recordLoss stores one log.dropped for each channel and reason that lost events, in the order of the channels and then of
+	// the reasons, so the ranges of seq that they name follow each other. Only a refusal of the queue states the depth of the
+	// queue in queued.
 	recordLoss := func() {
 		for channel := Channel(0); channel < ChannelCount; channel++ {
-			events := l.lost[channel].events.Swap(0)
-			bytes := l.lost[channel].bytes.Swap(0)
-			queued := l.lost[channel].depth.Swap(0)
-			dropped(events, bytes, "the queue was full", channel, &queued)
+			for reason := LossReason(0); reason < LossReasonCount; reason++ {
+				events := l.lost[channel][reason].events.Swap(0)
+				bytes := l.lost[channel][reason].bytes.Swap(0)
+				if reason == LossQueueFull {
+					queued := l.depth[channel].Swap(0)
+					dropped(events, bytes, reason.String(), channel, &queued)
+				} else {
+					dropped(events, bytes, reason.String(), channel, nil)
+				}
+			}
 		}
 	}
 	// reportGated reports the events that the gate refused with the exact count for each class and level, at most each second

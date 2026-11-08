@@ -138,7 +138,7 @@ func UseHostEventLog(log *EventLog) {
 		}
 	}
 	for channel := sok.Channel(0); channel < sok.ChannelCount; channel++ {
-		log.CountLoss(channel, lost[channel].count, lost[channel].bytes)
+		log.CountLoss(channel, sok.LossStartBufferFull, lost[channel].count, lost[channel].bytes)
 	}
 }
 

@@ -95,6 +95,53 @@ impl Channel {
     }
 }
 
+/// Why the writer or a producer of this process refused an event before it was stored; the writer records one `log.dropped` for
+/// each channel and reason that lost events, in the order of the channels and then of the reasons (docs/spec/logging.md#writers).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LossReason {
+    /// A refusal at the bound of the queue in events or in bytes.
+    QueueFull,
+    /// An event whose level the contract does not define, which only a Go producer can name.
+    UndefinedLevel,
+    /// An event with a correlation identifier that a line cannot carry.
+    InvalidCids,
+    /// An event whose fields cannot be serialized.
+    UnserializableFields,
+    /// A record that the full start buffer of the host refused before the writer existed.
+    StartBufferFull,
+    /// A step record that the full step ring of the framework lost.
+    StepRingFull,
+}
+
+impl LossReason {
+    /// The reasons in the order in which the writer records them.
+    pub const ALL: [LossReason; 6] = [
+        LossReason::QueueFull,
+        LossReason::UndefinedLevel,
+        LossReason::InvalidCids,
+        LossReason::UnserializableFields,
+        LossReason::StartBufferFull,
+        LossReason::StepRingFull,
+    ];
+
+    /// The reason as `log.dropped` states it.
+    pub fn text(self) -> &'static str {
+        match self {
+            LossReason::QueueFull => "the queue was full",
+            LossReason::UndefinedLevel => "the level was not in the contract",
+            LossReason::InvalidCids => "a correlation identifier was not valid",
+            LossReason::UnserializableFields => "the fields could not be serialized",
+            LossReason::StartBufferFull => "the start buffer was full",
+            LossReason::StepRingFull => "the step ring was full",
+        }
+    }
+
+    /// The position of the reason in `ALL`.
+    pub fn index(self) -> usize {
+        self as usize
+    }
+}
+
 /// What the writer passes to a `Pull`: it takes the events of the source and the losses of the source.
 pub trait PullSink {
     /// Stores an event of the source as it is.
@@ -272,11 +319,13 @@ const GATED_REPORT_INTERVAL: Duration = Duration::from_secs(1);
 /// and it may wait for the next event, up to this bound on what a crash can take with it (docs/spec/logging.md#policy).
 const GATED_WAIT: Duration = Duration::from_secs(60);
 
-/// The loss that the queue counted since the writer last recorded it, for each channel.
+/// The loss that the queue and the producers counted since the writer last recorded it, for each channel and reason.
+#[derive(Default)]
 struct Loss {
-    events: [AtomicU64; 2],
-    bytes: [AtomicU64; 2],
-    /// The largest number of events waiting in the queue at a refusal since the writer last recorded the loss, for each channel.
+    events: [[AtomicU64; LossReason::ALL.len()]; 2],
+    bytes: [[AtomicU64; LossReason::ALL.len()]; 2],
+    /// The largest number of events waiting in the queue at a refusal of the queue since the writer last recorded the loss, for
+    /// each channel.
     depth: [AtomicU64; 2],
 }
 
@@ -485,11 +534,7 @@ impl EventLog {
         let (sender, receiver) = sync_channel(options.queue_events + RESERVED_FOR_REQUESTS);
         let queued_events = Arc::new(AtomicUsize::new(0));
         let queued_bytes = Arc::new(AtomicUsize::new(0));
-        let loss = Arc::new(Loss {
-            events: [AtomicU64::new(0), AtomicU64::new(0)],
-            bytes: [AtomicU64::new(0), AtomicU64::new(0)],
-            depth: [AtomicU64::new(0), AtomicU64::new(0)],
-        });
+        let loss = Arc::new(Loss::default());
         // events: forwarded
         let open = Pending::writer_event(
             options.layer,
@@ -683,7 +728,12 @@ impl EventLog {
     ) -> Result<u64, String> {
         let (placed, receiver) = sync_channel(1);
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(Channel::of(level), 1, event.len() as u64);
+            self.count_loss(
+                Channel::of(level),
+                LossReason::QueueFull,
+                1,
+                event.len() as u64,
+            );
             return Err(format!(
                 "the event writer refused {event} because its queue was full"
             ));
@@ -727,7 +777,12 @@ impl EventLog {
         fields: &T,
     ) -> bool {
         if let Some(bad) = cids.iter().find(|cid| !valid_cid(cid)) {
-            self.count_loss(Channel::of(level), 1, event.len() as u64);
+            self.count_loss(
+                Channel::of(level),
+                LossReason::InvalidCids,
+                1,
+                event.len() as u64,
+            );
             eprintln!(
                 "event writer: {event} has the correlation identifier {bad:?}, which is empty or holds a quote, a backslash or a control character"
             );
@@ -742,14 +797,24 @@ impl EventLog {
             return false;
         }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(Channel::of(level), 1, event.len() as u64);
+            self.count_loss(
+                Channel::of(level),
+                LossReason::QueueFull,
+                1,
+                event.len() as u64,
+            );
             return false;
         }
         let fields = match Fields::of(fields) {
             Ok(fields) => fields,
             Err(error) => {
                 // A value that cannot be serialized is a defect of the caller: it is recorded in place of the event.
-                self.count_loss(Channel::of(level), 1, event.len() as u64);
+                self.count_loss(
+                    Channel::of(level),
+                    LossReason::UnserializableFields,
+                    1,
+                    event.len() as u64,
+                );
                 eprintln!("event writer: the fields of {event} cannot be serialized: {error}");
                 return false;
             }
@@ -812,7 +877,12 @@ impl EventLog {
             return Ok(false);
         }
         if self.queued_events.load(Ordering::Relaxed) >= self.queue_events {
-            self.count_loss(Channel::of(level), 1, event.len() as u64);
+            self.count_loss(
+                Channel::of(level),
+                LossReason::QueueFull,
+                1,
+                event.len() as u64,
+            );
             return Ok(false);
         }
         Ok(self
@@ -850,7 +920,7 @@ impl EventLog {
         };
         let bytes = fields.get().len() + event.len();
         if self.queued_bytes.load(Ordering::Relaxed) + bytes > self.queue_bytes {
-            self.count_loss(Channel::of(level), 1, bytes as u64);
+            self.count_loss(Channel::of(level), LossReason::QueueFull, 1, bytes as u64);
             return Err(Refusal::Queue);
         }
         // A closed gate stores nothing and counts the event; an event that passes every gate is named by passes_every_gate.
@@ -889,7 +959,7 @@ impl EventLog {
             Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
                 self.queued_bytes.fetch_sub(bytes, Ordering::Relaxed);
                 self.queued_events.fetch_sub(1, Ordering::Relaxed);
-                self.count_loss(channel, 1, bytes as u64);
+                self.count_loss(channel, LossReason::QueueFull, 1, bytes as u64);
                 Err(Refusal::Queue)
             }
         }
@@ -910,7 +980,12 @@ impl EventLog {
         pending.cids = cids;
         pending.bytes = pending.fields.get().len() + name.len();
         if self.queued_bytes.load(Ordering::Relaxed) + pending.bytes > self.queue_bytes {
-            self.count_loss(Channel::of(level), 1, pending.bytes as u64);
+            self.count_loss(
+                Channel::of(level),
+                LossReason::QueueFull,
+                1,
+                pending.bytes as u64,
+            );
             return false;
         }
         self.queue(pending).is_ok()
@@ -938,13 +1013,17 @@ impl EventLog {
         self.policy_path.as_deref()
     }
 
-    /// Adds events and bytes of a channel that a producer of this process refused before they reached the writer; the writer
-    /// records them as a `log.dropped` that names the channel and the depth of the queue at the refusal.
-    pub fn count_loss(&self, channel: Channel, events: u64, bytes: u64) {
-        self.loss.events[channel.index()].fetch_add(events, Ordering::Relaxed);
-        self.loss.bytes[channel.index()].fetch_add(bytes, Ordering::Relaxed);
-        let depth = self.queued_events.load(Ordering::Relaxed) as u64;
-        self.loss.depth[channel.index()].fetch_max(depth, Ordering::Relaxed);
+    /// Adds events and bytes of a channel that a producer of this process refused for `reason` before they reached the writer;
+    /// the writer records them as a `log.dropped` that names the channel and the reason, and for `LossReason::QueueFull` the
+    /// depth of the queue at the refusal.
+    pub fn count_loss(&self, channel: Channel, reason: LossReason, events: u64, bytes: u64) {
+        let (c, r) = (channel.index(), reason.index());
+        self.loss.events[c][r].fetch_add(events, Ordering::Relaxed);
+        self.loss.bytes[c][r].fetch_add(bytes, Ordering::Relaxed);
+        if reason == LossReason::QueueFull {
+            let depth = self.queued_events.load(Ordering::Relaxed) as u64;
+            self.loss.depth[c].fetch_max(depth, Ordering::Relaxed);
+        }
         self.rouser.nudge();
     }
 
@@ -1438,12 +1517,18 @@ fn write_loop(
             pull(out);
         }
     };
+    // One `log.dropped` for each channel and reason that lost events, in the order of the channels and then of the reasons, so
+    // the ranges of `seq` that they name follow each other. Only a refusal of the queue states the depth of the queue in `queued`.
     let record_loss = |out: &mut Output| {
         for channel in Channel::ALL {
-            let events = loss.events[channel.index()].swap(0, Ordering::Relaxed);
-            let bytes = loss.bytes[channel.index()].swap(0, Ordering::Relaxed);
-            let queued = loss.depth[channel.index()].swap(0, Ordering::Relaxed);
-            out.dropped(events, bytes, "the queue was full", channel, Some(queued));
+            for reason in LossReason::ALL {
+                let (c, r) = (channel.index(), reason.index());
+                let events = loss.events[c][r].swap(0, Ordering::Relaxed);
+                let bytes = loss.bytes[c][r].swap(0, Ordering::Relaxed);
+                let queued = (reason == LossReason::QueueFull)
+                    .then(|| loss.depth[c].swap(0, Ordering::Relaxed));
+                out.dropped(events, bytes, reason.text(), channel, queued);
+            }
         }
     };
     // The time since which a writer that sleeps holds a count of the gate.
@@ -1516,6 +1601,7 @@ fn write_loop(
         let counted = loss
             .events
             .iter()
+            .flatten()
             .any(|count| count.load(Ordering::Relaxed) > 0);
         if counted {
             rouser.asleep.store(false, Ordering::SeqCst);

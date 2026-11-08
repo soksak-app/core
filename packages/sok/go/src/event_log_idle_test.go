@@ -199,7 +199,7 @@ func TestGateCountWakesTheWriter(t *testing.T) {
 func TestLossWakesTheWriter(t *testing.T) {
 	log, source, _ := idleLog(t, time.Hour)
 	settledPulls(t, source)
-	log.countLoss(ChannelOther, 7)
+	log.countLoss(ChannelOther, LossQueueFull, 7)
 	waitForFile(t, log.Path(), "log.dropped", "a loss of a writer that slept")
 }
 

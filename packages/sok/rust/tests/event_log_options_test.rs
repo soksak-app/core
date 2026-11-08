@@ -72,6 +72,63 @@ fn a_writer_without_rotation_stores_the_layer_the_clock_and_the_cids_of_its_opti
     assert_eq!(lines[1]["cids"], json!(["c1", "c2"]));
 }
 
+/// Starts a writer, has `refuse` refuse one event that the queue had room for, and returns the fields of the only `log.dropped`
+/// that the writer stored.
+fn refused_loss(name: &str, refuse: impl FnOnce(&EventLog) -> bool) -> Value {
+    let directory = Folder::new(name);
+    let log = EventLog::start(options(directory.path(), name)).unwrap();
+    assert!(!refuse(&log), "the event was accepted");
+    log.flush(Duration::from_secs(5)).unwrap();
+    log.close();
+    let dropped: Vec<Value> = stored_lines(log.path())
+        .into_iter()
+        .filter(|line| line["event"] == "log.dropped")
+        .collect();
+    assert_eq!(
+        dropped.len(),
+        1,
+        "the refused event is recorded in {dropped:?}"
+    );
+    dropped[0]["fields"].clone()
+}
+
+/// Checks that `fields` record one event of the channel `other` with `reason`, and no depth of the queue, which only a refusal
+/// of the queue states.
+fn check_loss_reason(fields: &Value, reason: &str) {
+    assert_ne!(fields["reason"], "the queue was full", "{fields}");
+    assert_eq!(fields["reason"], reason, "{fields}");
+    assert_eq!(fields["count"], 1, "{fields}");
+    assert_eq!(fields["channel"], "other", "{fields}");
+    assert!(fields.get("queued").is_none(), "{fields}");
+}
+
+/// A value whose serialization fails.
+struct Unserializable;
+
+impl serde::Serialize for Unserializable {
+    fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+        Err(serde::ser::Error::custom(
+            "the value refuses to be serialized",
+        ))
+    }
+}
+
+#[test]
+fn an_invalid_correlation_identifier_is_recorded_as_its_own_loss_and_not_as_a_full_queue() {
+    let fields = refused_loss("options-cids-loss", |log| {
+        log.emit_cids(Level::Info, "host.probe.bad", &["a\"b".into()], &json!({}))
+    });
+    check_loss_reason(&fields, "a correlation identifier was not valid");
+}
+
+#[test]
+fn fields_that_cannot_be_serialized_are_recorded_as_their_own_loss_and_not_as_a_full_queue() {
+    let fields = refused_loss("options-fields-loss", |log| {
+        log.emit(Level::Info, "host.probe.fields", &Unserializable)
+    });
+    check_loss_reason(&fields, "the fields could not be serialized");
+}
+
 // contract: cli.log.writer-options.rotates-at-its-bound
 #[test]
 fn a_writer_rotates_at_its_bound_and_the_new_file_starts_with_log_open_and_log_rotated() {
