@@ -1744,7 +1744,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestAWorkbenchStartingEndsItsPredecessorsDialogBackground" },
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground" },
-      { file: "e2e/modal.test.mjs", id: "mygo: reloading under settings leaves successor terminal images and documents unblurred" },
+      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor terminal images and documents unblurred" },
     ],
     expected: "Reload retires the previous workbench dialog background claim while preserving an independent current native dialog; successor images and documents are unblurred when no effective dialog remains.",
     levels: ["unit", "application"],

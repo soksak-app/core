@@ -32,6 +32,7 @@ func TestAWorkbenchDialogBlursTheDocuments(t *testing.T) {
 
 // A workbench's dialog claim belongs to that workbench, not to the persistent
 // native window. Its successor must not inherit a claim that no longer exists.
+// contract: modal.workbench-dialog.new-workbench-ends-the-claim
 func TestAWorkbenchStartingEndsItsPredecessorsDialogBackground(t *testing.T) {
 	saved := system
 	t.Cleanup(func() { system = saved })
@@ -89,6 +90,7 @@ func TestAWorkbenchStartingEndsItsPredecessorsDialogBackground(t *testing.T) {
 	}
 }
 
+// contract: modal.workbench-dialog.end-keeps-a-modal-dialog-background
 func TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground(t *testing.T) {
 	saved := system
 	t.Cleanup(func() { system = saved })
