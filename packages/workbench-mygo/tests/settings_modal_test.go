@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -115,6 +116,23 @@ func opened(t *testing.T) *shellFixture {
 	f := newShell(t, acme())
 	f.click("core.chrome.settings", "")
 	return f
+}
+
+// A refused change of the settings is an invalid argument of the command, as the page answers it (docs/spec/settings.md).
+func TestARefusedSettingsChangeIsInvalidParams(t *testing.T) {
+	f := openedShell(t)
+	for name, params := range map[string]map[string]any{
+		"core.settings.set":         {"patch": map[string]any{"projectOpening": "tabs"}, "scope": "project"},
+		"core.settings.change":      {"key": "unknown", "value": 1, "scope": "common"},
+		"core.settings.link":        {"place": "left", "set": "no-such-set"},
+		"core.settings.sets.update": {"id": "no-such-set", "title": "x"},
+		"core.settings.sets.row":    {"id": "no-such-set", "action": "add"},
+	} {
+		var refused *workbench.Refusal
+		if err := f.finish(name, params); !errors.As(err, &refused) || refused.Code != workbench.InvalidParams {
+			t.Errorf("%s answered %#v, want %d", name, err, workbench.InvalidParams)
+		}
+	}
 }
 
 func TestTheSettingsButtonOpensTheCardWithItsThreeSections(t *testing.T) {
