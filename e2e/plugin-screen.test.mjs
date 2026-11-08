@@ -5,9 +5,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { fixturePluginIds } from "../scripts/fixture-registry.mjs";
-import { fresh, pluginChangeApplied } from "./fixture.mjs";
+import { fresh, pluginChangeStarted } from "./fixture.mjs";
 
 /** The fixture plugin that uses a fake sidecar. */
 const SIDECAR_PLUGIN = "rasterprobe";
@@ -28,23 +27,6 @@ async function showPlugins(s) {
   await s.until("core.screen", (screen) => screen.screen === "library", "core.plugins.browse did not show the library");
   return s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0,
     "the plugin page did not list plugins");
-}
-
-/**
- * Runs `change`, a plugin change that starts the workbench of the window again, and returns core.window.workbench of the new start.
- * The command answers before the new start (docs/spec/installation.md#applying-a-change), and the old document ends without
- * replying to a request that reaches it, so the wait reads the start from the event log (pluginChangeApplied) and not from the
- * status of the window.
- */
-async function startedAgain(s, change, action) {
-  const before = (await s.get("core.window.workbench")).start;
-  const offsets = currentEventOffsets(s.app.configDir);
-  const result = await change();
-  await pluginChangeApplied(s, offsets, action);
-  const workbench = await s.get("core.window.workbench");
-  assert.notEqual(workbench.start, before, `${action} did not start the workbench again`);
-  assert.equal(workbench.readyState, "complete");
-  return { workbench, result };
 }
 
 /** Returns the action names of the visible plugin cards in document order. */
@@ -106,7 +88,7 @@ for (const app of Object.values(APPS)) {
     // A plugin operation starts the workbench of the window again, which then reports the change without an application restart
     // (docs/spec/installation.md#applying-a-change). Each reload is a new start of the workbench.
     assert.ok(actionsOf(await s.get("core.library"), PLUGIN).includes("disable"), `the ${PLUGIN} card has no 사용 안 함`);
-    await startedAgain(s, () => s.run("core.plugins.disable", { plugin: PLUGIN }), `disabling ${PLUGIN}`);
+    await pluginChangeStarted(s, () => s.run("core.plugins.disable", { plugin: PLUGIN }), `disabling ${PLUGIN}`);
     const disabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN)?.state === "disabled",
       `the reloaded window did not report ${PLUGIN} disabled`);
     assert.equal(disabled.reload, false);
@@ -114,7 +96,7 @@ for (const app of Object.values(APPS)) {
 
     await showPlugins(s);
     await s.until("core.library", (value) => actionsOf(value, PLUGIN).includes("enable"), `the ${PLUGIN} card did not offer 사용`);
-    await startedAgain(s, () => s.run("core.plugins.enable", { plugin: PLUGIN }), `enabling ${PLUGIN}`);
+    await pluginChangeStarted(s, () => s.run("core.plugins.enable", { plugin: PLUGIN }), `enabling ${PLUGIN}`);
     const enabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN)?.state === "loaded",
       `the reloaded window did not load ${PLUGIN}`);
     assert.equal(enabled.reload, false);
@@ -146,7 +128,7 @@ for (const app of Object.values(APPS)) {
     // The plain-view probe is enabled again after the check, which reloads the window once more.
     s.cleanup(async () => {
       if ((await s.get("core.plugins")).plugins.find((row) => row.id === PLUGIN).installed.enabled) return;
-      await startedAgain(s, () => s.run("core.plugins.enable", { plugin: PLUGIN }), `enabling ${PLUGIN}`);
+      await pluginChangeStarted(s, () => s.run("core.plugins.enable", { plugin: PLUGIN }), `enabling ${PLUGIN}`);
     });
     const before = await start();
     await s.run("core.plugins.disable", { plugin: PLUGIN });
@@ -162,7 +144,7 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(await s.get(`${MODIFIED_PLUGIN}.state`, surface), { saves: 0, modified: true }, "적용하지 않기 ran the save command");
 
     // core.plugins.apply asks again, and the action that applies without saving reloads the window without running the save command.
-    const { result: applied } = await startedAgain(s, async () => {
+    const { result: applied } = await pluginChangeStarted(s, async () => {
       const applying = s.run("core.plugins.apply", {});
       assert.deepEqual(await ask(), ["저장하고 적용", "저장하지 않고 적용", "적용하지 않기"]);
       await s.run("core.picker.pick", { index: 1 });
