@@ -347,11 +347,6 @@
       "reason": "Checks that plugin operations read an https registry and refuse a wrong hash, a revoked version and an unreachable registry (core registry code). A packed fixture plugin in the test registry would replace browser."
     },
     {
-      "file": "e2e/semantic-screen.test.mjs",
-      "owner": "mixed",
-      "reason": "Checks that hidden terminal and term screens keep notifying their screen status, which is those plugins' own screen subscription."
-    },
-    {
       "file": "e2e/settings.test.mjs",
       "owner": "mixed",
       "reason": "\"terminal card sidebar choices persist through declared controls and reload\": core (fixture declaring sidebar controls); \"settings keep sidebar appearance in general and list plugins with search and pages\": core (fixture plugins); \"the settings plugin page has no plugin operation and 플러그인 관리 shows the plugin screen\": core; \"each sidebar set line fits beside its buttons on one line\": core; \"settings create, edit with section rows, and delete a sidebar set\": core (fixture sidebar sections); \"layout value settings change the inset sidebar widths\": core; \"an invalid stored set or link is rejected when it is changed and when it is loaded\": core; \"a plugin's right sidebar choice takes precedence over the general choice\": core; \"a card-left link draws an internal card sidebar and no rail column\": core; \"performance tracing records enabled card focus and stops while disabled\": core; \"a new inset sidebar opens at 190 points\": core; \"a settings change keeps the scroll position of the window\": core."
@@ -400,11 +395,6 @@
       "file": "e2e/terminal-keyboard.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks that native keys edit and execute commands independently in three terminal shells."
-    },
-    {
-      "file": "e2e/terminal-protocols.test.mjs",
-      "owner": "mixed",
-      "reason": "\"implemented CSI sequences change the screen, the cursor, and the replies\": plugin:terminal; \"implemented OSC sequences change the title, colors, cursor, and clipboard and reply\": plugin:terminal; \"mouse, focus, paste, and alternate-scroll modes report input\": plugin:terminal; \"repeated card focus keeps terminal drag PTY ownership idempotent\": plugin:terminal."
     },
     {
       "file": "e2e/terminal-reopen.test.mjs",
