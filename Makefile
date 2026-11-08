@@ -62,10 +62,11 @@ check-release: build-wailsv3-release build-tauriv2-release build-mygo-release
 # Measures the memory of the main page process of a running application at start, idle, and after reload (docs/operations/examples.md).
 # APP is wailsv3, tauriv2 or mygo, CONFIG is the configuration folder of that application, BUILD is release (default) or debug. A window of the
 # mygo host has no main page, and the measurement fails with "the mygo host has no main page".
-# HOST is wailsv3 or tauriv2. Checks with a copy of the built debug bundle that an application update replaces the bundle.
-check-app-update:
+# HOST is wailsv3, tauriv2 or mygo. Checks with a copy of the built debug bundle that an application update replaces the bundle. The
+# registry index that it extends with the core release is the index of the fixture registry.
+check-app-update: build-fixture-registry
 	@case "$(HOST)" in wailsv3|tauriv2|mygo) ;; *) echo "check-app-update requires HOST=wailsv3|tauriv2|mygo" >&2; exit 2;; esac
-	@node scripts/check-app-update.mjs --host $(HOST) --bundle target/debug/sok-$(HOST).app --registry target/registry/index.json
+	@node scripts/check-app-update.mjs --host $(HOST) --bundle target/debug/sok-$(HOST).app --registry target/fixture-registry/index.json
 
 measure-page-memory:
 	@case "$(APP)" in wailsv3|tauriv2|mygo) ;; *) echo "measure-page-memory requires APP=wailsv3|tauriv2|mygo CONFIG=DIR [BUILD=release|debug] [MINUTES=60] [RELOADS=20]" >&2; exit 2;; esac
@@ -175,13 +176,17 @@ check-browser-example: copy-frontend-browser
 	@pnpm -F @soksak/browser check
 
 # The browser example has no host, so the plugins of the pack that apps/browser/environment.json names in `install` are installed into
-# BROWSER_CONFIG and the staging provides that installation as a host does (the staging layout of docs/spec/plugins.md).
+# BROWSER_CONFIG from the registry that its `registry` names, as a user installation does, and the staging provides that installation
+# as a host does (the staging layout of docs/spec/plugins.md). That registry is the public one over https, so the staging needs the
+# network; the browser example is an example application, not a check of core, and it builds no plugin.
 BROWSER_CONFIG = target/browser-config
 
-copy-frontend-browser: build-registry
+copy-frontend-browser: build-sok
 	@rm -rf $(BROWSER_CONFIG)
-	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir $(BROWSER_CONFIG)
-	@ids=$$(node -e "const env = require('$(CURDIR)/apps/browser/environment.json'); const pack = require('$(CURDIR)/$(REGISTRY)/index.json').packs.find((p) => p.name === env.install); if (!pack) throw new Error('apps/browser/environment.json install names no pack: ' + env.install); console.log(pack.plugins.join(' '))") || exit 1; for id in $$ids; do target/debug/sok plugin install $$id --config-dir $(BROWSER_CONFIG) || exit 1; done
+	@registry=$$(node -e "const env = require('$(CURDIR)/apps/browser/environment.json'); if (!env.registry || !env.install) throw new Error('apps/browser/environment.json names no registry or no install pack'); console.log(env.registry)") || exit 1; \
+	  target/debug/sok registry use "$$registry" --config-dir $(BROWSER_CONFIG) || exit 1
+	@ids=$$(node -e "const env = require('$(CURDIR)/apps/browser/environment.json'); fetch(env.registry).then((r) => { if (!r.ok) throw new Error(env.registry + ': ' + r.status); return r.json(); }).then((index) => { const pack = index.packs.find((p) => p.name === env.install); if (!pack) throw new Error(env.registry + ' lists no pack ' + env.install + ', which apps/browser/environment.json names in install'); console.log(pack.plugins.join(' ')); })") || exit 1; \
+	  for id in $$ids; do target/debug/sok plugin install $$id --config-dir $(BROWSER_CONFIG) || exit 1; done
 	@pnpm -F @soksak/browser exec sok-copy-frontend build --installed $(CURDIR)/$(BROWSER_CONFIG)
 
 run-browser: copy-frontend-browser
@@ -311,7 +316,7 @@ check-windows-rust: check-cargo
 # Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.
 # A source behind a diagnostic feature or tag fails here and not in the build of an app. The Go tests link the native test library,
 # so it is built. The core frontend is staged because the apps include it at compile time.
-check-host-debug: check-cargo build-native build-native-tests copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
+check-host-debug: check-cargo build-native build-native-tests copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo
 	@echo "START: Rust hosts cargo check --tests --features $(TAURI_DEBUG_FEATURES)"
 	@$(CARGO_ENV) $(CARGO) check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
 	@echo "PASS: Rust hosts in the debug configuration"
@@ -365,7 +370,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native fetch-native build-registry build-fixture-registry fixture-registry install-registry install-plugins copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native fetch-native build-sok build-fixture-registry fixture-registry copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-activation test-app-real test-app-person test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -460,28 +465,9 @@ build-native-tests:
 fetch-native:
 	@$(MAKE) -C native/darwin MACOS_MINIMUM=$(MACOS_MINIMUM) fetch
 
-# The workspace registry. Packs the sibling plugin repositories that scripts/workspace-registry.json declares with their make pack,
-# builds every declared sidecar from its repository and releases them for the current platform, and then
-# creates index.json in target/registry (docs/spec/plugins.md#repositories).
-# Diagnostic builds and window checks install from here.
-# SIDECARS=diagnostic runs `make release PROFILE=release FEATURES=diagnostics` of each sidecar repository, so a Rust sidecar builds the
-# release profile with its feature diagnostics and a sidecar whose make release takes neither variable builds as it always does, and
-# writes beside index.json sidecar-revisions.json, the revision of each sidecar repository that it built and whether its working tree
-# held changes outside that revision.
-# SIDECARS=diagnostic PLUGINS=public packs no plugin and builds no sidecar: it writes into target/registry-public an index of the plugins
-# of the index of the public registry beside the sidecar releases that make build-registry SIDECARS=diagnostic wrote into target/registry,
-# and fails when they are missing.
-# PLUGINS also names the surface plugin ids of make measure-object-counts and make measure-trace-share (PLUGINS='ID...'), which do not depend on
-# registry; a recipe that sets PLUGINS for those targets and also runs registry passes PLUGINS explicitly to each sub-make.
-WORKSPACE_REGISTRY = target/registry
-# The index of the public registry (docs/spec/registry.md).
-PUBLIC_REGISTRY_INDEX = https://soksak-app.github.io/registry/index.json
-REGISTRY = $(if $(filter public,$(PLUGINS)),target/registry-public,$(WORKSPACE_REGISTRY))
-
-build-registry: check-cargo
+# The sok command line of the debug build, which builds and installs registries outside an application bundle.
+build-sok: check-cargo
 	@$(CARGO_ENV) $(CARGO) build --locked -p soksak-sok
-	@node scripts/workspace-registry.mjs --sok target/debug/sok --out $(REGISTRY) $(if $(SIDECARS),--sidecars $(SIDECARS)) \
-		$(if $(PLUGINS),--plugins $(PLUGINS) --sidecar-registry $(WORKSPACE_REGISTRY) --public-index $(PUBLIC_REGISTRY_INDEX))
 
 # The fixture registry (docs/spec/plugin-processes.md#verification-boundaries). Packs every fake plugin of e2e/fixtures and releases
 # every fake sidecar of e2e/fixtures/sidecars for the current platform, and then creates index.json in target/fixture-registry with
@@ -493,35 +479,17 @@ FIXTURE_REGISTRY = target/fixture-registry
 FIXTURE_SOK = target/debug/sok
 FIXTURE_SIDECARS = $(patsubst %/sidecar.json,%,$(wildcard e2e/fixtures/sidecars/*/sidecar.json))
 
-build-fixture-registry: check-cargo
-	@$(CARGO_ENV) $(CARGO) build --locked -p soksak-sok
+build-fixture-registry: build-sok
 	@$(MAKE) --no-print-directory fixture-registry FIXTURE_SOK=target/debug/sok FIXTURE_REGISTRY=$(FIXTURE_REGISTRY)
 
 fixture-registry:
 	@for dir in $(FIXTURE_SIDECARS); do $(CARGO_ENV) pnpm --dir "$$dir" run build || exit 1; done
 	@node scripts/fixture-registry.mjs --sok "$(FIXTURE_SOK)" --out "$(FIXTURE_REGISTRY)"
 
-# The installation stage of the workspace: `make install` of every plugin and sidecar repository that scripts/workspace-registry.json
-# declares. A fresh checkout runs it once before make build-registry builds and packs those repositories.
-install-registry:
-	@node scripts/workspace-registry.mjs --install
-
-# Installs every plugin of the workspace registry into the CONFIG configuration folder. Applications do not hold plugins in the bundle, so
-# window checks and development runs install with this target before they start the application. Workspace plugins are changed without changing
-# the version, so when the same version is already installed the installation changes nothing. Therefore the installed plugins are
-# removed first and installed again. Build the registry explicitly before installation; each host consumes the same built inputs.
-install-plugins:
-	@test -n "$(CONFIG)" || { echo "make install-plugins CONFIG=<configuration directory>" >&2; exit 2; }
-	@test -x target/debug/sok || { echo "target/debug/sok is missing or not executable; run make build-registry before installation" >&2; exit 2; }
-	@test -f "$(REGISTRY)/index.json" || { echo "$(REGISTRY)/index.json is missing; run make build-registry before installation" >&2; exit 2; }
-	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir "$(CONFIG)"
-	@for id in $$(node -e 'const f = "$(CONFIG)/plugins/installed.json"; const fs = require("fs"); console.log(fs.existsSync(f) ? Object.keys(JSON.parse(fs.readFileSync(f, "utf8")).plugins).join(" ") : "")'); do \
-		target/debug/sok plugin remove $$id --config-dir "$(CONFIG)" || exit 1; done
-	@for id in $$(node -e 'console.log(JSON.parse(require("fs").readFileSync("$(REGISTRY)/index.json", "utf8")).plugins.map((p) => p.id).join(" "))'); do \
-		target/debug/sok plugin install $$id --config-dir "$(CONFIG)" || exit 1; done
-
 # Stages the frontend. The argument is an extra flag. debug includes the page diagnostic module (--diagnostics) and release does not
-# include it. Plugins and sidecars are not put in the bundle; they are installed into the configuration folder (make install-plugins).
+# include it. Plugins and sidecars are not put in the bundle; they are installed into the configuration folder. The staged environment.json
+# keeps the registry that the application declares, in debug and release builds alike; a window check sets the fixture registry in each
+# configuration with `sok registry use` (scripts/test-app.mjs).
 copy-wailsv3 = pnpm -F @soksak/wailsv3 exec sok-copy-frontend src/frontend $(1)
 copy-tauriv2 = pnpm -F @soksak/tauriv2 exec sok-copy-frontend src/frontend $(1)
 # No page runs the workbench on the mygo host, so its staging is the view root.
@@ -529,23 +497,13 @@ copy-mygo = pnpm -F @soksak/mygo exec sok-copy-frontend src/frontend --no-main-p
 
 # Staging does not touch the bundle. The bundle is rebuilt only by the build targets. This keeps the executable of the debug app that checks use
 # from being removed by the staging of a check target such as test-native.
-copy-frontend-wailsv3: build build-registry
-	@$(call copy-wailsv3,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
-
-copy-frontend-tauriv2: build build-registry
-	@$(call copy-tauriv2,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
-
-copy-frontend-mygo: build build-registry
-	@$(call copy-mygo,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
-
-# Stages only the core frontend for independent host language checks. Registry builds belong to full host and release checks.
-copy-core-frontend-wailsv3: build
+copy-frontend-wailsv3: build
 	@$(call copy-wailsv3,--diagnostics)
 
-copy-core-frontend-tauriv2: build
+copy-frontend-tauriv2: build
 	@$(call copy-tauriv2,--diagnostics)
 
-copy-core-frontend-mygo: build
+copy-frontend-mygo: build
 	@$(call copy-mygo,--diagnostics)
 
 # generate_context! includes the frontend, so this rebuilds the crate.
@@ -619,7 +577,7 @@ run-mygo-release: build-mygo-release
 
 # Unit checks of native code. Runs the shared input check and the host contract check, which runs the tests of the two hosts.
 # The checks of a sidecar run in each sidecar repository.
-test-native: build-native copy-core-frontend-wailsv3 copy-core-frontend-tauriv2
+test-native: build-native copy-frontend-wailsv3 copy-frontend-tauriv2
 	@$(MAKE) check-rust-format
 	@$(MAKE) check-rust-clippy
 	@$(MAKE) check-go-format
@@ -635,7 +593,7 @@ check-go-format:
 
 # Checks every package and test of the Rust workspace in the diagnostic build and the default build without clippy warnings.
 # generate_context! of sok-tauriv2 reads the staged frontend (frontendDist), so the check stages it first, as test-native does.
-check-rust-clippy: check-cargo build-native copy-core-frontend-tauriv2
+check-rust-clippy: check-cargo build-native copy-frontend-tauriv2
 	@$(CARGO_ENV) $(CARGO) clippy --locked --workspace --tests --features soksak-host-tauriv2/diagnostics -- -D warnings
 	@$(CARGO_ENV) $(CARGO) clippy --locked --workspace --tests -- -D warnings
 	@echo "Rust clippy check passed: 1 workspace, diagnostics and default builds"
@@ -648,18 +606,18 @@ check-rust-format: check-cargo
 # Runs the tests of the hosts in the default configuration and the diagnostic configuration and checks from the results that the host contract cases
 # (docs/spec/host-contract.md) run at the same level.
 # Host contract tests build their fixture plugins and sidecars under test-owned temporary directories.
-test-hosts: check-cargo build-native-mygo build-native-tests copy-core-frontend-wailsv3 copy-core-frontend-tauriv2 copy-core-frontend-mygo
+test-hosts: check-cargo build-native-mygo build-native-tests copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo
 	@$(call go-env) $(CARGO_ENV) node scripts/test-hosts.mjs --go-ldflags="$(GO_INTERNAL_LINK)" --cgo-ldflags="$(GO_LINK)"
 
 # Per-language CI checks use the same selected host contract without discovering or building the other host.
-test-wailsv3: check-host-callbacks check-host-api build-native build-native-tests copy-core-frontend-wailsv3
+test-wailsv3: check-host-callbacks check-host-api build-native build-native-tests copy-frontend-wailsv3
 	@$(call go-env) node scripts/test-hosts.mjs --host wailsv3 --cgo-ldflags="$(GO_LINK)"
 
-test-tauriv2: check-cargo build-native copy-core-frontend-tauriv2
+test-tauriv2: check-cargo build-native copy-frontend-tauriv2
 	@$(CARGO_ENV) node scripts/test-hosts.mjs --host tauriv2
 
 # The contract run of the mygo host, and the unit tests of its workbench and of its application.
-test-mygo: build-native-mygo build-native-tests copy-core-frontend-mygo
+test-mygo: build-native-mygo build-native-tests copy-frontend-mygo
 	@CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/workbench-mygo/...' --count 1 --timeout $(TEST_TIMEOUT) --ldflags='$(GO_INTERNAL_LINK)'
 	@$(call go-env) node scripts/test-hosts.mjs --host mygo --go-ldflags="$(GO_INTERNAL_LINK)"
 	@pnpm -F @soksak/mygo test
@@ -762,14 +720,18 @@ repeat-app-test:
 	@pnpm -F @soksak/e2e run repeat --file '$(FILE)' --name '$(NAME)' --count $(COUNT)
 
 # The three-host benchmark B3 (scripts/benchmark-b3.mjs, docs/operations/examples.md#three-host-benchmark): it checks the BASELINE checkout
-# against the baseline record b3/baseline.json of the git common directory, builds the release bundles of this checkout and of BASELINE and the two registry indexes, starts and
-# quits each application for each run of each scenario and writes one session folder under b3 of the git common directory for make check-b3. It runs
+# against the baseline record b3/baseline.json of the git common directory, builds the release bundles of this checkout and of BASELINE, installs
+# the registry index INDEX into the configuration of each current host and BASELINE_INDEX into each baseline host, starts and quits each
+# application for each run of each scenario and writes one session folder under b3 of the git common directory for make check-b3. It builds
+# no plugin or sidecar; it measures the installed environment and gates no release. It runs
 # the accessibility client of S13, which needs the Accessibility permission, so a person runs S13 (F622).
 benchmark-b3:
-	@case "$(PHASE)" in 1|final) ;; *) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
-	@case "$(RUNS)" in ''|*[!0-9]*|0*) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
-	@case "$(BASELINE)" in '') echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout>" >&2; exit 2;; esac
-	@node scripts/benchmark-b3.mjs --phase $(PHASE) --runs $(RUNS) --baseline "$(BASELINE)"
+	@case "$(PHASE)" in 1|final) ;; *) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout> INDEX=<index> BASELINE_INDEX=<index>" >&2; exit 2;; esac
+	@case "$(RUNS)" in ''|*[!0-9]*|0*) echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout> INDEX=<index> BASELINE_INDEX=<index>" >&2; exit 2;; esac
+	@case "$(BASELINE)" in '') echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout> INDEX=<index> BASELINE_INDEX=<index>" >&2; exit 2;; esac
+	@case "$(INDEX)" in '') echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout> INDEX=<index> BASELINE_INDEX=<index>" >&2; exit 2;; esac
+	@case "$(BASELINE_INDEX)" in '') echo "benchmark-b3 requires PHASE=1|final RUNS=<n> BASELINE=<checkout> INDEX=<index> BASELINE_INDEX=<index>" >&2; exit 2;; esac
+	@node scripts/benchmark-b3.mjs --phase $(PHASE) --runs $(RUNS) --baseline "$(BASELINE)" --index "$(INDEX)" --baseline-index "$(BASELINE_INDEX)"
 
 # Judges a session folder of make benchmark-b3 against docs/spec/performance-goals.json without starting an application and prints each
 # value with its runs, its spread and its result (scripts/b3-judge.mjs, docs/operations/examples.md#three-host-benchmark).

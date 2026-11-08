@@ -51,7 +51,7 @@ test("generated pkg-config file follows a relocated workspace", { timeout: 10000
 
 test("Tauri app and bundled CLI Cargo commands use the declared deployment target", { timeout: 10000 }, () => {
   for (const target of ["build-tauriv2", "build-tauriv2-release"]) {
-    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "-o", "copy-frontend-tauriv2", target], {
+    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "copy-frontend-tauriv2", target], {
       cwd: workspace,
       encoding: "utf8",
       env: { ...process.env, MACOSX_DEPLOYMENT_TARGET: "13.0" },
@@ -64,18 +64,21 @@ test("Tauri app and bundled CLI Cargo commands use the declared deployment targe
   }
 });
 
-test("registry and workspace lint targets use the tracked Cargo lockfile", { timeout: 10000 }, () => {
-  const registry = execFileSync("make", ["-n", "-o", "build-native", "build-registry"], {
+test("the sok build and workspace lint targets use the tracked Cargo lockfile", { timeout: 10000 }, () => {
+  const sok = execFileSync("make", ["-n", "-o", "build-native", "build-sok"], {
     cwd: workspace, encoding: "utf8",
   });
-  assert.match(registry, /cargo build --locked -p soksak-sok/, registry);
-  const clippy = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "-o", "copy-frontend-tauriv2", "check-rust-clippy"], {
+  assert.match(sok, /cargo build --locked -p soksak-sok/, sok);
+  const clippy = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "copy-frontend-tauriv2", "check-rust-clippy"], {
     cwd: workspace, encoding: "utf8",
   });
   const calls = clippy.split(/\r?\n/).filter((line) => /\bcargo clippy\b/.test(line));
   assert.equal(calls.length, 2, clippy);
   for (const call of calls) assert.match(call, /cargo clippy --locked/, call);
 });
+
+// The staging and the checks of core build, pack and read no plugin or sidecar repository and pass no registry of their own.
+const NO_PLUGIN_REPOSITORY = /--registry-index|\.\.\/(?:plugins|sidecars)\b|\bregistry use\b/;
 
 test("per-host checks build only the selected host and core frontend", { timeout: 10000 }, () => {
   for (const [host, target] of [["wailsv3", "test-wailsv3"], ["tauriv2", "test-tauriv2"]]) {
@@ -84,14 +87,14 @@ test("per-host checks build only the selected host and core frontend", { timeout
     });
     assert.match(output, new RegExp(`sok-copy-frontend src/frontend --diagnostics`), output);
     assert.match(output, new RegExp(`test-hosts\\.mjs --host ${host}`), output);
-    assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
+    assert.doesNotMatch(output, NO_PLUGIN_REPOSITORY, output);
     assert.doesNotMatch(output, new RegExp(`--host ${host === "wailsv3" ? "tauriv2" : "wailsv3"}`), output);
   }
 });
 
 test("the mygo application stages its view root, not a main page", { timeout: 10000 }, () => {
-  for (const [target, flags] of [["copy-core-frontend-mygo", /sok-copy-frontend src\/frontend --no-main-page --diagnostics/], ["build-mygo", /sok-copy-frontend src\/frontend --no-main-page --diagnostics --registry-index/], ["build-mygo-release", /sok-copy-frontend src\/frontend --no-main-page/]]) {
-    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", target], { cwd: workspace, encoding: "utf8" });
+  for (const [target, flags] of [["copy-frontend-mygo", /sok-copy-frontend src\/frontend --no-main-page --diagnostics$/m], ["build-mygo", /sok-copy-frontend src\/frontend --no-main-page --diagnostics$/m], ["build-mygo-release", /sok-copy-frontend src\/frontend --no-main-page/]]) {
+    const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", target], { cwd: workspace, encoding: "utf8" });
     assert.match(output, flags, output);
   }
   const builds = (output, release = false) => {
@@ -110,12 +113,12 @@ test("the mygo application stages its view root, not a main page", { timeout: 10
     // Linker flags have their own exact assertions; keep the existing tag, source and bundle-path assertions independent of argument position.
     return commands.map((command) => command.replace(/(?:^|\s)-ldflags "[^"]*"/, ''));
   };
-  const build = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", "build-mygo"], { cwd: workspace, encoding: "utf8" });
+  const build = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "build-mygo"], { cwd: workspace, encoding: "utf8" });
   const debug = builds(build);
   assert.match(debug[0], /go build -C apps\/mygo -tags "diagnostics dev" -o \S+\/Contents\/MacOS\/sok-mygo \.\/src$/, debug[0]);
   assert.match(debug[1], /go build -C packages\/sok\/go\s+-tags "diagnostics dev mygo" -o \S+\/Contents\/MacOS\/sok \.\/src\/cmd\/sok$/, debug[1]);
   for (const diagnostics of ["", "1"]) {
-    const release = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "-o", "build-registry", `DIAGNOSTIC_RELEASE=${diagnostics}`, "build-mygo-release"], { cwd: workspace, encoding: "utf8" });
+    const release = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", `DIAGNOSTIC_RELEASE=${diagnostics}`, "build-mygo-release"], { cwd: workspace, encoding: "utf8" });
     const commands = builds(release, true);
     const appTags = diagnostics ? String.raw`-tags diagnostics\s+` : '';
     const cliTags = diagnostics ? 'diagnostics mygo' : 'mygo';
@@ -125,13 +128,13 @@ test("the mygo application stages its view root, not a main page", { timeout: 10
   }
 });
 
-test("Rust clippy stages only the core frontend and avoids the workspace registry", { timeout: 10000 }, () => {
+test("Rust clippy stages only the core frontend and builds no plugin repository", { timeout: 10000 }, () => {
   const output = execFileSync("make", ["-n", "-o", "build-native", "-o", "build", "check-rust-clippy"], {
     cwd: workspace, encoding: "utf8",
   });
   assert.match(output, /sok-copy-frontend src\/frontend --diagnostics/, output);
   assert.match(output, /cargo clippy --locked/, output);
-  assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
+  assert.doesNotMatch(output, NO_PLUGIN_REPOSITORY, output);
 });
 
 test("native and paired host contract checks use core-only frontend stages", { timeout: 10000 }, () => {
@@ -141,7 +144,7 @@ test("native and paired host contract checks use core-only frontend stages", { t
     });
     assert.match(output, /sok-copy-frontend src\/frontend --diagnostics/, output);
     assert.match(output, /test-hosts\.mjs/, output);
-    assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
+    assert.doesNotMatch(output, NO_PLUGIN_REPOSITORY, output);
   }
 });
 
@@ -158,7 +161,7 @@ test("release host checks audit only their own optimized bundle", { timeout: 100
     for (const other of ["wailsv3", "tauriv2", "mygo"].filter((name) => name !== host)) {
       assert.doesNotMatch(output, new RegExp(`--${other}-bundle`), output);
     }
-    assert.doesNotMatch(output, /workspace-registry\.mjs/, output);
+    assert.doesNotMatch(output, NO_PLUGIN_REPOSITORY, output);
   }
 });
 
