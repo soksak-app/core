@@ -136,8 +136,8 @@ test("the runs interleave the five applications, run S0b in the application that
 
 test("the targets of a scenario come from the goals in their order, and STEP=pointer runs after every other reading of the scenario", { timeout: 1000 }, () => {
   const goals = readGoals(readFileSync(join(ROOT, "docs", "spec", "performance-goals.json"), "utf8"), "docs/spec/performance-goals.json");
-  assert.deepEqual(scenarioTargets(goals, "S1"), ["make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240", "make measure-app-usage STATE=S1",
-    "make measure-app-usage STATE=S1 STEP=pointer", "make measure-app-usage STATE=S1 STEP=pointer TRACE=frame-records"], "the pointer step runs once in each trace state of its output");
+  assert.deepEqual(scenarioTargets(goals, "S1"), ["make measure-app-usage STATE=S1 TAB=term PAGE=browser IDLE=1 INTERVAL=240", "make measure-app-usage STATE=S1 TAB=term PAGE=browser",
+    "make measure-app-usage STATE=S1 TAB=term PAGE=browser STEP=pointer", "make measure-app-usage STATE=S1 TAB=term PAGE=browser STEP=pointer TRACE=frame-records"], "the pointer step runs once in each trace state of its output");
   assert.deepEqual(scenarioTargets(goals, "S0"), ["make measure-app-usage STATE=S0", "make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240", "make measure-app-usage STATE=S0 STEP=pointer"]);
   assert.deepEqual(scenarioTargets(goals, "S5"), ["make benchmark-view-drag TRACE=0", "make benchmark-resize-catch-up TRACE=captured",
     "make benchmark-view-drag TRACE=frame-records", "make benchmark-resize-catch-up TRACE=frame-records"], "a benchmark that measures in two trace states runs once in each");
@@ -149,7 +149,7 @@ test("phase 1 reruns with TRACE=1 each target that takes the trace state of the 
   const [debug] = applicationsOf({ root: "/core", baseline: "/baseline" }, "debug");
   const targets = Object.fromEntries(attributionUnits(goals, [mygo], [debug])
     .flatMap((unit) => unit.scenarios.map((scenario) => [scenario, unit.targets(scenario)])));
-  assert.deepEqual(targets.S1, ["make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240", "make measure-app-usage STATE=S1", "make measure-app-usage STATE=S1 STEP=pointer"],
+  assert.deepEqual(targets.S1, ["make measure-app-usage STATE=S1 TAB=term PAGE=browser IDLE=1 INTERVAL=240", "make measure-app-usage STATE=S1 TAB=term PAGE=browser", "make measure-app-usage STATE=S1 TAB=term PAGE=browser STEP=pointer"],
     "the pointer CPU and footprints rerun with TRACE=1, and the hit-test target of the frame records measures in its own state");
   assert.deepEqual(targets.S0, ["make measure-app-usage STATE=S0", "make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240", "make measure-app-usage STATE=S0 STEP=pointer"]);
   assert.ok(!Object.hasOwn(targets, "S5"), "the benchmarks of S5 take no TRACE of the run");
