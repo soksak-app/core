@@ -169,12 +169,6 @@ test("native and host contract tests stage the frontend without resetting an app
   }
 });
 
-test("host structure audit reports a clean paired-host graph", { timeout: TREE_AUDIT_LIMIT_MS }, async () => {
-  const result = await run(node, [join(root, "scripts/check-host-files.mjs")]);
-  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /Host structure checks passed:/);
-});
-
 // The allowed differences of a tree with language host libraries and framework adapters: a language table and a framework table.
 const TWO_TABLES = `## Allowed differences
 

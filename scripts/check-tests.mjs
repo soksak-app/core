@@ -109,7 +109,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "packages/soksak/scripts/mutate.mjs",
     "packages/soksak/scripts/workspace-copy.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
-  lane("host structure audit", "js-ts", ["scripts/check-host-files.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/main-thread-calls.test.mjs", "scripts/test/platform/darwin/system/main-thread-calls.test.mjs"], { sharedTests: true }),
+  lane("host structure audit", "js-ts", ["scripts/check-host-files.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/main-thread-calls.test.mjs", "scripts/test/platform/darwin/system/main-thread-calls.test.mjs", "scripts/test/platform/darwin/system/host-structure.test.mjs"], { sharedTests: true }),
   lane("main-thread audit Go reader", "go", ["scripts/cgo-sources.go"], ["scripts/test/main-thread-calls.test.mjs", "scripts/test/platform/darwin/system/main-thread-calls.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("release diagnostic audit", "js-ts", ["scripts/check-release.mjs"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-release-paths.test.mjs"], { sharedTests: true }),
   lane("installed format mentions", "js-ts", ["scripts/test/format-mentions.test.mjs"], ["scripts/test/format-mentions.test.mjs"]),
@@ -6038,7 +6038,7 @@ const FEATURE_LINKS = [
   {
     id: "G2-1",
     implementation: [{ file: "scripts/check-host-files.mjs", symbol: "PAIRS" }],
-    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit reports a clean paired-host graph" }],
+    tests: [{ file: "scripts/test/platform/darwin/system/host-structure.test.mjs", id: "host structure audit reports a clean paired-host graph" }],
     expected: "The paired Tauri/Wails host and application structure contains only declared differences and no missing counterpart or obsolete process path.",
     levels: ["unit"],
   },
@@ -10082,7 +10082,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/host.js", symbol: "waitPresented" },
     ],
     tests: [
-      { file: "scripts/test/soksak-scripts.test.mjs", id: "host structure audit reports a clean paired-host graph" },
+      { file: "scripts/test/platform/darwin/system/host-structure.test.mjs", id: "host structure audit reports a clean paired-host graph" },
       { file: "e2e/terminal.test.mjs", id: "a newly split terminal presents its first native raster" },
     ],
     expected: "Audit infrastructure and bounded basic surface presentation are complete for both adapters, while uncovered restoration and IME scopes remain open rather than nominally active.",

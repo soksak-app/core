@@ -173,11 +173,13 @@ test("cgo-free generated artifacts are checked and obsolete diagnostics are remo
     assert.ok(existsSync(diagnosticFile));
     const diagnostics = readFileSync(diagnosticFile, "utf8");
     // A file-list build includes the diagnostic binding explicitly; its shared
-    // ABI dependency still requires the diagnostic profile's build tag.
-    for (const profile of [["test", binding], ["test", "-tags", "diagnostics", binding, diagnosticFile]]) {
+    // ABI dependency still requires the diagnostic profile's build tag. The
+    // bindings and their ABI are of the darwin layer, so the build names darwin
+    // on every system.
+    for (const profile of [["build", binding], ["build", "-tags", "diagnostics", binding, diagnosticFile]]) {
       const compiled = spawnSync("go", profile, {
         cwd: new URL("../../packages/host/mygo/", import.meta.url),
-        env: { ...process.env, CGO_ENABLED: "0" }, encoding: "utf8",
+        env: { ...process.env, CGO_ENABLED: "0", GOOS: "darwin" }, encoding: "utf8",
       });
       assert.equal(compiled.status, 0, compiled.stdout + compiled.stderr);
     }

@@ -199,16 +199,17 @@ test("the cleanup of a recorded group ends a group that macOS refuses with EPERM
 });
 
 test("a group at its limit is ended and its leftovers named while other processes make the process table larger than a read buffer", { timeout: 20000 }, async (t) => {
-  // Three processes outside the group of the test carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB
-  // output buffer of execFileSync; the names of the leftovers come only from the members of the group. The cleanup ends them and the
-  // group of the test process, which a runner that stops the group and fails to read the table leaves stopped.
+  // Three processes outside the group of the test carry arguments of 450 KB each, as five arguments of 90 KB because Linux limits one
+  // argument to 128 KB, so the commands of all processes exceed the 1 MiB output buffer of execFileSync; the names of the leftovers
+  // come only from the members of the group. The cleanup ends them and the group of the test process, which a runner that stops the
+  // group and fails to read the table leaves stopped.
   // macOS 27 takes about 3.4 ms for each KB of arguments to start a process (1.5 s for 450 KB), and the starts of the processes of one
   // parent wait for each other. The test process of the runner, whose parent is this process too, starts only after the three, past its
   // limit, and the runner stops it before it ran. Each of the three writes a line when it runs, and the run starts after the three lines,
   // so the commands are in the table and the test process starts at once.
   const folder = mkdtempSync(join(tmpdir(), "runner-large-"));
   const pidFile = join(folder, "pid");
-  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "process.stdout.write('running\\n'); setInterval(() => {}, 1000)", "x".repeat(450 * 1024)], { stdio: ["ignore", "pipe", "ignore"] }));
+  const large = Array.from({ length: 3 }, () => spawn(process.execPath, ["-e", "process.stdout.write('running\\n'); setInterval(() => {}, 1000)", ...Array.from({ length: 5 }, () => "x".repeat(90 * 1024))], { stdio: ["ignore", "pipe", "ignore"] }));
   t.after(() => {
     for (const child of large) child.kill("SIGKILL");
     endRecordedGroup(pidFile);
