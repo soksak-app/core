@@ -48,7 +48,7 @@
       },
       {
         "name": "rasterprobe.frame",
-        "description": "The last frame that the sidecar sent: its identity (generation, raster, sequence), its raster in device pixels and scale, its grid (rows, columns and cell size), the row bands it paints, its color and the color of its identity marker; null before the first frame.",
+        "description": "The last frame that the sidecar sent: its identity (generation, raster, sequence), its raster in device pixels and scale, its grid (rows, columns and cell size), the row bands it paints, its color, the color of its identity marker and the time in microseconds that painting it took (draw_us); null before the first frame.",
         "schema": { "type": ["object", "null"] }
       },
       {

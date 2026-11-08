@@ -85,7 +85,7 @@ test("the sidecar catalog composes with the core catalog and declares the lines 
       line(5, "info", "lifecycle", "log.open", { schema: 3, pid: 20, role: "rasterprobe", boot: "1791500000-20" }),
       line(6, "debug", "io", "sidecar.rasterprobe.request", { operation: "open", bytes: 80 }, { surface: "tab-1", cids: ["b.1"] }),
       line(9, "debug", "frame", "sidecar.rasterprobe.frame", { event: "frame", name: REGION, generation: 2, raster: 5, sequence: 1, width: 160, height: 96,
-        scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3, color: "#0050b4", marker: "#020001", surface: 7 }, { surface: "tab-1", session: "s1" }),
+        scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3, color: "#0050b4", marker: "#020001", surface: 7, draw_us: 41 }, { surface: "tab-1", session: "s1" }),
     ].join("\n") + "\n");
     assert.deepEqual(auditLogDirectories(BASE, [folder]), []);
     writeFileSync(join(folder, "logs", "rasterprobe-1791500000-20.debug.jsonl"),

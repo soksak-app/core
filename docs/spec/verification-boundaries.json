@@ -302,16 +302,6 @@
       "reason": "Checks that the right sidebar follows saved per-plugin settings and survives the return from full screen. A fixture plugin that declares a sidebar override would replace the terminal."
     },
     {
-      "file": "e2e/outside.mjs",
-      "owner": "tool",
-      "reason": "Measurement helper that checks a surface is drawn only inside its card, using terminal screen marks and background. Reduce it to a fixture that paints a known color or marks (`view-drag`/`plain-view`)."
-    },
-    {
-      "file": "e2e/outside.test.mjs",
-      "owner": "core",
-      "reason": "Checks card, native-content and rail alignment, and that a divider drag leaves no white frame (drag and placement measurement). `view-drag` with a known paint color would replace the terminal."
-    },
-    {
       "file": "e2e/plugin-screen.test.mjs",
       "owner": "core",
       "reason": "Checks the library plugin page (descriptions, versions, sidecars, search, disable/enable, the modified-tab prompt). It uses the real cohort only as list content; fixture plugins with a fake sidecar and `save-close` (for the modified tab) would replace it."

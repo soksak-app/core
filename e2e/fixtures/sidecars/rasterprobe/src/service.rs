@@ -867,7 +867,11 @@ impl Service {
             },
         };
         let transfer = state.slots.get_mut(&slot).expect("the slot was chosen from the slots");
-        if let Err(error) = transfer.paint(&scene) {
+        let painting = std::time::Instant::now();
+        let painted = transfer.paint(&scene);
+        // The paint time of the frame in microseconds, which the frame event reports as the draw time of the supplier.
+        let draw_us = u64::try_from(painting.elapsed().as_micros()).unwrap_or(u64::MAX);
+        if let Err(error) = painted {
             image.error = Some(error.clone());
             image.dirty = false;
             out.push(Out { conn: state.attachment, line: envelope(&key.1, &[], json!({"event": "error", "error": error})) });
@@ -903,6 +907,7 @@ impl Service {
             "color": scene.color.text(),
             "marker": scene.marker().text(),
             "surface": transfer.id(),
+            "draw_us": draw_us,
         });
         let conn = state.attachment;
         out.push(Out { conn, line: envelope(&key.1, &[], json!({"image": frame})) });
@@ -1042,6 +1047,7 @@ mod tests {
         assert_eq!(bodies[1]["event"], "frame");
         assert_eq!(bodies[1]["grid"], json!({"rows": 3, "cols": 10, "cellWidth": 16, "cellHeight": 32}));
         assert_eq!((bodies[1]["rows"].as_u64(), bodies[1]["color"].as_str(), bodies[1]["marker"].as_str()), (Some(3), Some("#102030"), Some("#020001")));
+        assert!(bodies[1]["draw_us"].is_u64(), "the frame reports its paint time: {}", bodies[1]);
         let painted = shared.lock().unwrap().painted.clone();
         assert_eq!(painted.len(), 1);
         assert_eq!((painted[0].1.rows, painted[0].1.sequence), (3, 1));

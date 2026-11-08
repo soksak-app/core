@@ -10214,7 +10214,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
     ],
     expected: "A complete divider recording keeps native content inside its card, keeps card and rail geometry aligned, contains no white surface frame, and returns to its initial position.",
     levels: ["native", "application"],
@@ -13068,8 +13068,8 @@ const FEATURE_LINKS = [
   {
     id: "F239-162",
     implementation: [{ file: "e2e/supplier-draw.mjs", symbol: "export function supplierDrawDurations(" }],
-    tests: [{ file: "e2e/test/supplier-draw.test.mjs", id: "supplier draw durations classify screen records without a raster" }],
-    expected: "Supplier draw measurements classify screen-only records, reject invalid raster metrics and await stored records through log notifications.",
+    tests: [{ file: "e2e/test/supplier-draw.test.mjs", id: "supplier draw durations read the paint time of every frame record of the fake sidecar" }],
+    expected: "Supplier draw measurements read the paint time of each frame record of the fake sidecar, reject invalid raster metrics and await stored records through log notifications.",
     levels: ["unit"],
   },
   {
@@ -13349,8 +13349,8 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
-      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "an image region view document fills its native frame before and after a divider drag" },
     ],
     expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
     levels: ["application"],
@@ -13410,8 +13410,8 @@ const FEATURE_LINKS = [
     implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
     tests: [
       { file: "e2e/outside.test.mjs", id: "native content, cards, and the sidebar rail stay aligned" },
-      { file: "e2e/outside.test.mjs", id: "terminal divider drag does not leave a white surface frame" },
-      { file: "e2e/outside.test.mjs", id: "the terminal document fills its native frame before and after a divider drag" },
+      { file: "e2e/outside.test.mjs", id: "an image region divider drag does not leave a white surface frame" },
+      { file: "e2e/outside.test.mjs", id: "an image region view document fills its native frame before and after a divider drag" },
     ],
     expected: "Complete recordings verify card movement, symmetric content alignment, final size and document fill while retaining separate performance measurements.",
     levels: ["application"],
