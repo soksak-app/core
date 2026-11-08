@@ -123,7 +123,11 @@ func (s *Shell) registerLibrary() {
 	// The opening reads the geometry store before it shows the project, so the command answers when the project is shown, and the
 	// answer of a command that asked for a frame waits for its placement (followCommand).
 	later(s, "core.library.open", func(value idParam, answer func(any, error)) {
-		s.activateThen(value.ID, func() { answer(nil, nil) })
+		// The library shows a failure of the opening, as the page reports it in the library (perform of packages/workbench/library.js).
+		s.activateThen(value.ID, func(err error) {
+			s.failed(err)
+			answer(nil, nil)
+		})
 	})
 	later(s, "core.library.pin", func(value pinParam, answer func(any, error)) {
 		s.pinProject(value.ID, value.Pinned, answerNull(answer))

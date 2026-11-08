@@ -560,7 +560,8 @@ func (s *Shell) showRequested(done func()) {
 		done()
 		return
 	}
-	s.activateThen(s.options.Project, func() {
+	s.activateThen(s.options.Project, func(err error) {
+		s.failed(err)
 		if s.active == "" {
 			s.options.Located("")
 		}
@@ -609,6 +610,13 @@ func decode[T any](value any) (T, error) {
 func (s *Shell) fail(err error) {
 	s.errors.Show(workbenchErrorPlace, err.Error(), "")
 	s.options.Invalidate()
+}
+
+// failed shows err as fail does, and nothing without an error: the end of an operation whose caller has no answer to carry it.
+func (s *Shell) failed(err error) {
+	if err != nil {
+		s.fail(err)
+	}
 }
 
 // project returns the stored project id.
