@@ -1090,6 +1090,20 @@ static CGEventFlags cgFlags(unsigned modifiers) {
     return result;
 }
 
+// Sets the time of a key event that is made now. NSEvent.timestamp, which a web view gives its key event as event.timeStamp,
+// counts the uptime of the system, and both paths of keyInput take their time from here. AppKit converts that uptime into the
+// timestamp of the CGEvent of a key event, so no unit of CGEventTimestamp is assumed here. Returns false when AppKit makes no
+// such event.
+static bool stampNow(CGEventRef event) {
+    NSEvent *now = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
+        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:0 context:nil characters:@"" charactersIgnoringModifiers:@""
+        isARepeat:NO keyCode:0];
+    CGEventRef stamped = now.CGEvent;
+    if (!stamped) return false;
+    CGEventSetTimestamp(event, CGEventGetTimestamp(stamped));
+    return true;
+}
+
 // equivalent is set when a key down of the virtual key window is taken as a key equivalent, and typed when a key down of the
 // virtual key window types its stated text through the text input of a web view.
 static sp_input_result keyInput(void *handle, const char *key, const char *text, unsigned modifiers, bool down,
@@ -1118,22 +1132,24 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     if (!text) {
         // AppKit derives the character from the physical key and the current input source. The same applies to a named key.
         // An event with a character inserted directly from the caller does not pass through the input method (for example Backspace during composition).
+        // CGEventCreateKeyboardEvent sets a time of its own; the key takes the time that the stated-text path takes.
         CGEventRef raw = CGEventCreateKeyboardEvent(NULL, code, down);
         if (raw) {
             CGEventSetFlags(raw, cgFlags(modifiers));
             CGEventSetIntegerValueField(raw, kSPEventWindowNumberField, window.windowNumber);
-            event = [NSEvent eventWithCGEvent:raw];
+            if (stampNow(raw)) event = [NSEvent eventWithCGEvent:raw];
             CFRelease(raw);
         }
     } else {
         event = [NSEvent keyEventWithType:down ? NSEventTypeKeyDown : NSEventTypeKeyUp
             location:NSZeroPoint modifierFlags:flags(modifiers)
-            timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            timestamp:0 windowNumber:window.windowNumber
             context:nil characters:characters charactersIgnoringModifiers:characters
             isARepeat:NO keyCode:code];
         // The event carries the mark of a stated text, so a region that types it without the input method types that text,
-        // also when it receives the key later than its delivery.
+        // also when it receives the key later than its delivery. The copy is the delivered event, so it takes the time.
         CGEventRef marked = event ? CGEventCreateCopy(event.CGEvent) : NULL;
+        event = nil;
         if (marked) {
             CGEventSetIntegerValueField(marked, kCGEventSourceUserData, SP_INPUT_STATED_TEXT);
             // The copy of an event whose text has more than one character carries the character of the key code instead, so the
@@ -1142,7 +1158,7 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
             [characters getCharacters:units range:NSMakeRange(0, characters.length)];
             CGEventKeyboardSetUnicodeString(marked, characters.length, units);
             free(units);
-            event = [NSEvent eventWithCGEvent:marked];
+            if (stampNow(marked)) event = [NSEvent eventWithCGEvent:marked];
             CFRelease(marked);
         }
     }

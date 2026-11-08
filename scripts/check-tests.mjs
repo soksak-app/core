@@ -11705,6 +11705,7 @@ const FEATURE_LINKS = [
       { file: "e2e/fixture.mjs", symbol: "export async function pluginChangeStarted(" },
       { file: "packages/workbench-mygo/src/shell.go", symbol: "for _, refused := range []*string{snapshot.ProjectsError, snapshot.SettingsError} {" },
       { file: "packages/workbench-mygo/src/events.go", symbol: "func (e *Events) emit(at time.Time, level sok.Level, event string, fields func() map[string]any, cids []string) {" },
+      { file: "native/darwin/src/input_inject.m", symbol: "static bool stampNow(CGEventRef event) {" },
       { file: "packages/workbench-mygo/src/settings_store.go", symbol: "func (s *SettingsStore) Check(" },
       { file: "packages/workbench-mygo/src/events.go", symbol: "func (e *Events) Trace(" },
       { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) switchTrace(" },
