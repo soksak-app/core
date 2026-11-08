@@ -98,15 +98,17 @@ measure-host-calls:
 # (scripts/measure-app-usage.mjs, docs/operations/examples.md). TRACE=0 sets the trace off under the default log policy and TRACE=1 the trace
 # on with the class frame at debug before the measurement; TRACE=frame-records, which needs STEP=pointer, sets the trace state of the frame
 # records (scripts/measure-trace.mjs) for both moves of the pointer step. STATE prepares a state of the three-host benchmark B3 in a window of 1200 by 760
-# points through declared commands (docs/operations/examples.md); IDLE=1 then waits for the cursor idle timeout of every term and terminal tab
+# points through declared commands (docs/operations/examples.md); S1 and the states after it (S9, S11, S12, S15) open one tab of the plugin TAB
+# and one tab of the plugin PAGE, which exposes PAGE.navigate and PAGE.location, and require both; the target names no plugin, it measures
+# the installed environment and gates nothing. IDLE=1 then waits for the cursor idle timeout of every tab whose plugin exposes <id>.cursor
 # and for 3 seconds without a change of frames of host.window, and for the counts of the gate to be written before the first CPU reading; STEP=pointer measures a pointer move across the window with the moves of
 # input.pointer, which take no permission and leave the cursor, in a window that is already the key window and not occluded. B3_OUT writes the B3 record of the
 # measurement, its measurements and its conditions, to that file as JSON; one record holds the keys of one trace state, so with STEP=pointer
 # TRACE=0|1 writes the keys of the first move without pointerMoveP90Ms and TRACE=frame-records writes pointerMoveP90Ms alone. SOK defaults to the sok binary of target/debug.
 measure-app-usage:
-	@case "$(CONFIG_DIR)" in '') echo "measure-app-usage requires CONFIG_DIR=DIR TRACE=0|1|frame-records [STATE=S0|S0b|S1|S9|S11|S12|S14|S15] [IDLE=1] [STEP=pointer] [B3_OUT=FILE] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(CONFIG_DIR)" in '') echo "measure-app-usage requires CONFIG_DIR=DIR TRACE=0|1|frame-records [STATE=S0|S0b|S1|S9|S11|S12|S14|S15] [TAB=ID PAGE=ID] [IDLE=1] [STEP=pointer] [B3_OUT=FILE] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@case "$(IDLE)" in ''|1) ;; *) echo "measure-app-usage takes IDLE=1, not IDLE=$(IDLE)" >&2; exit 2;; esac
-	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --interval $(or $(INTERVAL),10) $(if $(STATE),--state "$(STATE)") $(if $(IDLE),--idle) $(if $(STEP),--step "$(STEP)") $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
+	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --interval $(or $(INTERVAL),10) $(if $(STATE),--state "$(STATE)") $(if $(TAB),--tab-plugin "$(TAB)") $(if $(PAGE),--page-plugin "$(PAGE)") $(if $(IDLE),--idle) $(if $(STEP),--step "$(STEP)") $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
 # Reports the CPU time of each process of the running application of CONFIG_DIR for each frame that the image region of a terminal tab
 # presents while its program rewrites ROWS rows at RATE frames per second (scripts/measure-terminal-redraw.mjs, docs/operations/examples.md):

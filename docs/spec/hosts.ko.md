@@ -749,30 +749,30 @@ judge는 다음 규칙을 적용한다:
 | `G2-S0-frames` | G2 | S0 | `make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
 | `G2-S0-command-buffers` | G2 | S0 | `make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
 | `G2-S0-host-cpu` | G2 | S0 | `make measure-app-usage STATE=S0 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S1-frames` | G2 | S1 | `make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
-| `G2-S1-command-buffers` | G2 | S1 | `make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
-| `G2-S1-host-cpu` | G2 | S1 | `make measure-app-usage STATE=S1 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S9-frames` | G2 | S9 | `make measure-app-usage STATE=S9 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
-| `G2-S9-command-buffers` | G2 | S9 | `make measure-app-usage STATE=S9 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
-| `G2-S9-host-cpu` | G2 | S9 | `make measure-app-usage STATE=S9 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
-| `G2-S12-frames` | G2 | S12 | `make measure-app-usage STATE=S12 IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
-| `G2-S12-command-buffers` | G2 | S12 | `make measure-app-usage STATE=S12 IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
-| `G2-S12-host-cpu` | G2 | S12 | `make measure-app-usage STATE=S12 IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S1-frames` | G2 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S1-command-buffers` | G2 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S1-host-cpu` | G2 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S9-frames` | G2 | S9 | `make measure-app-usage STATE=S9 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S9-command-buffers` | G2 | S9 | `make measure-app-usage STATE=S9 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S9-host-cpu` | G2 | S9 | `make measure-app-usage STATE=S9 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
+| `G2-S12-frames` | G2 | S12 | `make measure-app-usage STATE=S12 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `frames` | count | 각 run | 정확히 0 | — |
+| `G2-S12-command-buffers` | G2 | S12 | `make measure-app-usage STATE=S12 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `commandBuffers` | count | 각 run | 정확히 0 | — |
+| `G2-S12-host-cpu` | G2 | S12 | `make measure-app-usage STATE=S12 TAB=term PAGE=browser IDLE=1 INTERVAL=240` | `hostCpuSeconds` | s | median | 0.12 s 이하 | 각 other host와 baseline host |
 | `G2-S0-footprint-before-pointer` | G2 | S0 | `make measure-app-usage STATE=S0 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
 | `G2-S0-footprint-after-pointer` | G2 | S0 | `make measure-app-usage STATE=S0 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S0-footprint-before-pointer` |
-| `G2-S1-footprint-before-pointer` | G2 | S1 | `make measure-app-usage STATE=S1 STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
-| `G2-S1-footprint-after-pointer` | G2 | S1 | `make measure-app-usage STATE=S1 STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S1-footprint-before-pointer` |
-| `G2-S12-error-lines` | G2 | S12 | `make measure-app-usage STATE=S12` | `errorLines` | count | 각 run | 정확히 1 | — |
+| `G2-S1-footprint-before-pointer` | G2 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser STEP=pointer` | `applicationFootprintKb` | KB | median | — | — |
+| `G2-S1-footprint-after-pointer` | G2 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser STEP=pointer` | `applicationFootprintAfterKb` | KB | median | — | `G2-S1-footprint-before-pointer` |
+| `G2-S12-error-lines` | G2 | S12 | `make measure-app-usage STATE=S12 TAB=term PAGE=browser` | `errorLines` | count | 각 run | 정확히 1 | — |
 | `G3-S0-footprint` | G3 | S0 | `make measure-app-usage STATE=S0` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S0b-footprint` | G3 | S0b | `make measure-app-usage STATE=S0b` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S1-footprint` | G3 | S1 | `make measure-app-usage STATE=S1` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S1-host-footprint` | G3 | S1 | `make measure-app-usage STATE=S1` | `hostFootprintKb` | KB | median | — | — |
+| `G3-S1-footprint` | G3 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S1-host-footprint` | G3 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser` | `hostFootprintKb` | KB | median | — | — |
 | `G3-S5-peak-before-drag` | G3 | S5 | `make benchmark-view-drag TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S5-peak-after-drag` | G3 | S5 | `make benchmark-view-drag TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S13-peak-before-drag` | G3 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S13-peak-after-drag` | G3 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S11-second-window-footprint` | G3 | S11 | `make measure-app-usage STATE=S11` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S15-settings-window-footprint` | G3 | S15 | `make measure-app-usage STATE=S15` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S11-second-window-footprint` | G3 | S11 | `make measure-app-usage STATE=S11 TAB=term PAGE=browser` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S15-settings-window-footprint` | G3 | S15 | `make measure-app-usage STATE=S15 TAB=term PAGE=browser` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S14-footprint` | G3 | S14 | `make measure-app-usage STATE=S14` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S3-changed-counts` | G3 | S3 | `make measure-object-counts BUILD=release REPETITIONS=30` | `changedCounts` | count | 각 run | 정확히 0 | — |
 | `G3-S3-growing-figures` | G3 | S3 | `make measure-object-counts BUILD=release REPETITIONS=30` | `growingFigures` | count | 각 run | 정확히 0 | — |
@@ -799,7 +799,7 @@ judge는 다음 규칙을 적용한다:
 | `G7-S8-term-p90` | G7 | S8 | `e2e/input-latency.test.mjs` | `termP90Ms` | ms | median | — | 각 other host와 baseline host |
 | `G8-S5-drag-cpu` | G8 | S5 | `make benchmark-view-drag TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
 | `G8-S13-drag-cpu` | G8 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `dragCpuSeconds` | s | median | — | 각 other host와 baseline host |
-| `G8-S1-pointer-cpu` | G8 | S1 | `make measure-app-usage STATE=S1 STEP=pointer` | `applicationCpuSeconds` | s | median | — | 각 other host와 baseline host |
+| `G8-S1-pointer-cpu` | G8 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser STEP=pointer` | `applicationCpuSeconds` | s | median | — | 각 other host와 baseline host |
 | `G8-S5-drag-frame-p90` | G8 | S5 | `make benchmark-view-drag TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
 | `G8-S5-drag-step-p90` | G8 | S5 | `make benchmark-view-drag TRACE=frame-records` | `dragStepP90Ms` | ms | median | 8.33 ms 이하 | — |
 | `G8-S13-drag-frame-p90` | G8 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
@@ -810,7 +810,7 @@ judge는 다음 규칙을 적용한다:
 | `G8-S13-drag-first-frame` | G8 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=frame-records` | `dragFirstFrameMs` | ms | median | 8.33 ms 이하 | — |
 | `G8-S5-maximise-frame-p90` | G8 | S5 | `make benchmark-resize-catch-up TRACE=frame-records` | `maximiseFrameP90Ms` | ms | median | 8.33 ms 이하 | — |
 | `G8-S5-maximise-step-p90` | G8 | S5 | `make benchmark-resize-catch-up TRACE=frame-records` | `maximiseStepP90Ms` | ms | median | 8.33 ms 이하 | — |
-| `G8-S1-pointer-move-p90` | G8 | S1 | `make measure-app-usage STATE=S1 STEP=pointer TRACE=frame-records` | `pointerMoveP90Ms` | ms | median | 8.33 ms 이하 | — |
+| `G8-S1-pointer-move-p90` | G8 | S1 | `make measure-app-usage STATE=S1 TAB=term PAGE=browser STEP=pointer TRACE=frame-records` | `pointerMoveP90Ms` | ms | median | 8.33 ms 이하 | — |
 
 각 목표의 값:
 
