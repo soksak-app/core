@@ -538,3 +538,57 @@ func TestANewDocumentOfASurfaceRegistersItsCommandsAgain(t *testing.T) {
 		t.Fatal("the second document registered its command twice")
 	}
 }
+
+// The registrations of a view belong to its document: when its process ends, core.surfaces lists none of them and a request for them
+// is not forwarded to the view, until the next document registers its own, as unregisterSurface of packages/workbench/exposure.js
+// does on view-process-ended. A check that waits for the registrations of a restarted view then reaches the view after it subscribed.
+func TestTheRegistrationsOfAViewEndWithItsProcess(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	exposes := func() []string {
+		t.Helper()
+		value, err := r.f.shell.Registry().Read("core.surfaces")
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var surfaces []struct {
+			Surface string   `json:"surface"`
+			Exposes []string `json:"exposes"`
+		}
+		if err := json.Unmarshal(encoded, &surfaces); err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range surfaces {
+			if entry.Surface == surface {
+				return entry.Exposes
+			}
+		}
+		t.Fatalf("no surface %s in core.surfaces", surface)
+		return nil
+	}
+	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	if listed := exposes(); !reflect.DeepEqual(listed, []string{"command textprobe.input", "status textprobe.screen"}) {
+		t.Fatalf("the view lists %v", listed)
+	}
+	r.f.shell.Event("view-process-ended", []any{map[string]any{"surface": surface, "generation": 1}})
+	r.f.settle()
+	if listed := exposes(); len(listed) != 0 {
+		t.Fatalf("the ended view still lists %v", listed)
+	}
+	r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 2, "id": 31,
+		"command": "runtime.native.call", "params": map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}}}})
+	r.f.settle()
+	reply := r.stored.replies[len(r.stored.replies)-1]
+	if reply["id"] != float64(31) || reply["generation"] != float64(2) || reply["error"] != nil {
+		t.Fatalf("the next document could not register: %v", reply)
+	}
+	if listed := exposes(); !reflect.DeepEqual(listed, []string{"status textprobe.screen"}) {
+		t.Fatalf("the next document lists %v", listed)
+	}
+}

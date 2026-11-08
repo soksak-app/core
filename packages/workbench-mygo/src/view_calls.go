@@ -1281,10 +1281,12 @@ func (s *Shell) viewEnded(data []any) {
 	s.forgetView(event.Surface, view)
 }
 
-// forgetView ends what the page of a view held.
+// forgetView ends what the page of a view held, its registrations among them.
 func (s *Shell) forgetView(surface string, view *viewState) {
 	view.end()
 	delete(s.surfaces.views, surface)
+	s.closeRegistrations(surface)
+	s.pushStatuses()
 	s.exposedFocus.ForgetView(surface)
 	delete(s.surfaces.documents, surface)
 }
