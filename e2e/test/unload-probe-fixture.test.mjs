@@ -36,3 +36,18 @@ test("the unload probe serves its declared status through its exposure and follo
   assert.deepEqual(values.at(-1), { url: "https://example.test/next", loading: false, history, restored: { url: "https://example.test/" } });
   assert.equal(location.read().url, "https://example.test/later");
 });
+
+// The document region of the probe is the element #document at the height of its view. Its percentage height resolves only against
+// html and body of a definite height; at an auto height the region is placed with no height, and the view restart check that waits
+// for a visibly placed region never ends.
+test("the document region of the unload probe page fills the height of its view", () => {
+  const page = readFileSync(new URL("../fixtures/memory-saver/unload-probe/ui/page.html", import.meta.url), "utf8");
+  const rules = [...page.matchAll(/([^{}<>]+)\{([^}]*)\}/g)].map(([, selector, body]) => ({
+    selectors: selector.split(",").map((item) => item.trim()), body: body.replace(/\s+/g, ""),
+  }));
+  for (const element of ["html", "body"]) {
+    assert.ok(rules.some((rule) => rule.selectors.includes(element) && rule.body.includes("height:100%")),
+      `${element} of the unload probe page has no definite height`);
+  }
+  assert.match(page, /<div id="document" style="height:100%">/);
+});
