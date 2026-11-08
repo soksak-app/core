@@ -282,11 +282,6 @@
       "reason": "Leaves stills of the files and browser sidebar sections in light and dark modes, so it observes those plugins' own design. It should move to those plugins."
     },
     {
-      "file": "e2e/observation/terminal-focus-current.test.mjs",
-      "owner": "core",
-      "reason": "Observes that a click on a current view reaches it and gives it native focus. `plain-view` with a native region would replace the terminal."
-    },
-    {
       "file": "e2e/observation/terminal-sidebar-current.test.mjs",
       "owner": "core",
       "reason": "Checks that the right sidebar follows saved per-plugin settings and survives the return from full screen. A fixture plugin that declares a sidebar override would replace the terminal."

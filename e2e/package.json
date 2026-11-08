@@ -15,7 +15,7 @@
     "test-app:section-design": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/section-design.test.mjs",
     "test-app:terminal-sidebar-current": "node ./run.mjs --test --test-global-setup=./setup.mjs observation/terminal-sidebar-current.test.mjs",
     "test-app:shutdown": "node normal-shutdown.mjs",
-    "test-app:terminal-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs",
+    "test-app:view-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/view-focus-current.test.mjs",
     "benchmark:view-drag": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/view-drag.test.mjs",
     "benchmark:resize-catch-up": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/resize-catch-up.test.mjs",
     "benchmark:idle-tab": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/idle-tab.test.mjs",
