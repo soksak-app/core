@@ -298,6 +298,7 @@ const FEATURE_LINKS = [
       { file: "Makefile", symbol: "@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/" },
       { file: "Makefile", symbol: "@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics" },
       { file: ".github/workflows/ci.yml", symbol: "run: make -C core test-headless-owners" },
+      { file: ".github/workflows/ci.yml", symbol: "run: rustup target add x86_64-pc-windows-msvc" },
       { file: ".github/workflows/ci.yml", symbol: "run: make -C core check-windows-rust" },
     ],
     tests: [

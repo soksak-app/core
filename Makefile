@@ -297,9 +297,10 @@ check-windows-build:
 
 # Compiles the sources of the Rust host library for the Windows target in the default build and the diagnostic build, as
 # check-windows-build does for the Go hosts. Host tests run only on macOS (docs/spec/host-contract.md), so they are not compiled.
+# The target does not change the toolchain: it fails when the Windows target of rustup is not installed.
 WINDOWS_RUST_TARGET = x86_64-pc-windows-msvc
 check-windows-rust: check-cargo
-	@$(dir $(CARGO))rustup target add $(WINDOWS_RUST_TARGET)
+	@$(dir $(CARGO))rustup target list --installed | grep -qx '$(WINDOWS_RUST_TARGET)' || { echo "the Rust target $(WINDOWS_RUST_TARGET) is not installed; run rustup target add $(WINDOWS_RUST_TARGET)" >&2; exit 1; }
 	@echo "START: Rust host library cargo check --target $(WINDOWS_RUST_TARGET)"
 	@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET)
 	@echo "PASS: Rust host library for $(WINDOWS_RUST_TARGET)"

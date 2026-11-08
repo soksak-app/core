@@ -231,16 +231,21 @@ test('make test-headless-owners runs every Node test of scripts/test, e2e/test a
 
 test('make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics and the Tauri job runs it', { timeout: 10_000 }, () => {
   const output = execFileSync('make', ['-n', 'check-windows-rust'], { cwd: ROOT, encoding: 'utf8' });
-  assert.match(output, /rustup target add x86_64-pc-windows-msvc$/m, output);
+  // A local make does not change the toolchain: the target requires the installed Windows target, and CI adds it.
+  assert.doesNotMatch(output, /^\S*rustup target add/m, output);
+  assert.match(output, /rustup target list --installed \| grep -qx 'x86_64-pc-windows-msvc' \|\| \{ echo "the Rust target x86_64-pc-windows-msvc is not installed; run rustup target add x86_64-pc-windows-msvc" >&2; exit 1; \}/, output);
   const checks = output.split('\n').filter((line) => / check --locked -p soksak-host --target x86_64-pc-windows-msvc/.test(line))
     .map((line) => line.replace(/^.* check --locked/, 'check --locked'));
   assert.deepEqual(checks, [
     'check --locked -p soksak-host --target x86_64-pc-windows-msvc',
     'check --locked -p soksak-host --target x86_64-pc-windows-msvc --features diagnostics',
   ], output);
-  const step = steps(ciJob('macos-tauriv2')).find((item) => item.name === 'Rust Windows build check');
-  assert.ok(step, 'macos-tauriv2 has no step named Rust Windows build check');
-  assert.match(step.text, /run: make -C core check-windows-rust$/m);
+  const list = steps(ciJob('macos-tauriv2'));
+  const add = list.findIndex((item) => item.name === 'Add the Rust Windows target');
+  const check = list.findIndex((item) => item.name === 'Rust Windows build check');
+  assert.ok(add >= 0 && check > add, 'macos-tauriv2 does not add the Rust Windows target before the Rust Windows build check');
+  assert.match(list[add].text, /run: rustup target add x86_64-pc-windows-msvc$/m);
+  assert.match(list[check].text, /run: make -C core check-windows-rust$/m);
 });
 
 test('make test-mygo runs the unit tests of the Go packages of the mygo host', { timeout: 1000 }, () => {
