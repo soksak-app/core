@@ -65,7 +65,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
   try {
     // The receiver keeps the drawing function and does not draw immediately. This is the same as a page that waits for the native preparation.
     let held = null;
-    plane.onLayout((made, draw) => { held = { made, draw }; });
+    plane.onLayout((made, draw, seated, titlebar, holds) => { held = { made, draw, holds }; });
     plane.adopt(plane.fresh(), "spc-aaaaaa");
     held.draw();
     // The drawing of a live card mounts the surface of its tab.
@@ -143,6 +143,14 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
       "the prior focus remained on the split card");
     const stale = held;
     assert.ok(stale.made.has(card), "the held layout does not contain the split card");
+    assert.equal(stale.holds(), true, "the seats of the newest layout must hold");
+    // A tab that becomes active in a card moves the seat of that card: the held layout no longer names what the card shows.
+    const behind = plane.addTabTo("main", pluginId, null);
+    assert.equal(stale.holds(), false, `the held layout still holds after ${behind} became the active tab of main`);
+    assert.equal(held.holds(), true, "the layout of the added tab must hold");
+    const shown = held;
+    await plane.closeTabById(behind);
+    assert.equal(shown.holds(), false, "the layout held before the active tab closed must not hold");
     await plane.closeTabById(tab);
     assert.equal(plane.currentGrid().card(card), undefined, "closing the last tab left the card on the plane");
     mounts.length = 0;
