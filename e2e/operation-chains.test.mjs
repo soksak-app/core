@@ -24,7 +24,8 @@ import { chainOf, declaredChains, PERFORMED, tailOf } from "./chains.mjs";
 import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
 import { releaseKey } from "../scripts/platform/platform.js";
 
-const REGISTRY = fileURLToPath(new URL("../target/registry/", import.meta.url));
+// The index of the fixture registry that the run installed into each application (scripts/test-app.mjs).
+const REGISTRY_INDEX = process.env.SOKSAK_CANDIDATE_REGISTRY;
 const NEWER = "99.0.0";
 
 for (const app of Object.values(APPS)) {
@@ -109,7 +110,8 @@ for (const app of Object.values(APPS)) {
 
     // The application update runs against a registry that offers a newer release whose download is refused.
     const key = releaseKey(app.name);
-    const index = JSON.parse(readFileSync(join(REGISTRY, "index.json"), "utf8"));
+    assert.ok(REGISTRY_INDEX, "SOKSAK_CANDIDATE_REGISTRY must name the index of the fixture registry of the run");
+    const index = JSON.parse(readFileSync(fileURLToPath(REGISTRY_INDEX), "utf8"));
     const release = { url: `https://127.0.0.1:9/soksak-app/core/releases/download/v${NEWER}/soksak-${NEWER}.zip`, sha256: "0".repeat(64) };
     index.core = { versions: [{ version: NEWER, releases: { [key]: release } }] };
     const folder = mkdtempSync(join(tmpdir(), "soksak-chains-registry-"));
