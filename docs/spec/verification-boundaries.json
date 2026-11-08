@@ -62,11 +62,6 @@
       "reason": "Checks the application update list and its operation steps (installation code of core) and edits the published browser entry only as an incompatible plugin; replace with a fixture plugin (for example plain-view probe) published in the served fixture registry with two versions."
     },
     {
-      "file": "e2e/balance.test.mjs",
-      "owner": "core",
-      "reason": "Checks the auto-arrange button and command (layout) with terminal or browser tabs as card content; replace with plain-view probe tabs."
-    },
-    {
       "file": "e2e/benchmark/browser-view.test.mjs",
       "owner": "plugin:browser",
       "reason": "Measures the browser view's own process and frame contract (B3 browser-view keys)."
@@ -187,16 +182,6 @@
       "reason": "Checks a still PNG's native bounds and the settings modal in stills, with the terminal only as default content; plain-view probe."
     },
     {
-      "file": "e2e/card-fullscreen.test.mjs",
-      "owner": "core",
-      "reason": "Checks card fullscreen geometry, tab switch and refused layout tools, with terminal or browser tabs as vehicles; plain-view probe tabs."
-    },
-    {
-      "file": "e2e/card-panels.test.mjs",
-      "owner": "core",
-      "reason": "Checks card four-side panel assignment and native surface width, using a terminal card; plain-view probe that reports its surface rect."
-    },
-    {
       "file": "e2e/card-sidebar-gesture.test.mjs",
       "owner": "core",
       "reason": "Checks native pointer input on card sidebar handles, with the terminal only as default tab; plain-view probe."
@@ -205,11 +190,6 @@
       "file": "e2e/card-sidebar-space.test.mjs",
       "owner": "core",
       "reason": "Checks card sidebar space conditions, collapse and storage, with the terminal as default tab; plain-view probe."
-    },
-    {
-      "file": "e2e/card-tools-menu.test.mjs",
-      "owner": "core",
-      "reason": "Checks the narrow card head tools menu and tab list button, using terminal tabs; plain-view probe tabs."
     },
     {
       "file": "e2e/commands.test.mjs",
@@ -420,11 +400,6 @@
       "file": "e2e/sidecar-recovery.test.mjs",
       "owner": "core",
       "reason": "Checks that a surface reattaches without an app restart when its persistent sidecar service dies (core sidecar supervision). A new killable fake persistent-sidecar fixture would replace sidecar-vt-alacritty."
-    },
-    {
-      "file": "e2e/space-apps.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a full-screen card lists the space's apps by card and switches to a picked one. `plain-view` tabs would replace terminal and browser."
     },
     {
       "file": "e2e/surface-sync-turn.test.mjs",
