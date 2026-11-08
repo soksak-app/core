@@ -1195,12 +1195,10 @@
                   "type": "number"
                 },
                 "start": {
-                  "type": "object",
-                  "additionalProperties": { "type": "number" }
+                  "type": "object"
                 },
                 "tail": {
-                  "type": "object",
-                  "additionalProperties": { "type": "number" }
+                  "type": "object"
                 },
                 "total": {
                   "type": "number"
