@@ -1,12 +1,15 @@
 // Tests of the module exports of scripts/check-boundaries.mjs. Importing the module runs no check and prints nothing.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { checkNames, checkSpecReads, checkTestPathReads, components, corePackageFolders, corePackageNames } from "../check-boundaries.mjs";
+import {
+  CORE_OWNERS, GATE_SOURCES, checkGateSources, checkNames, checkPluginNames, checkSpecReads, checkTestPathReads, classifiedFiles,
+  corePackageFolders, corePackageNames, fixtureSidecarNames, namedPlugins, namedSidecars, pluginNameScope,
+} from "../check-boundaries.mjs";
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
@@ -24,10 +27,80 @@ test("importing the boundary module runs no check", (t) => {
   assert.equal(result.stdout, "");
 });
 
-test("components lists the core packages and the declared folders", () => {
-  const found = components();
-  assert.ok(found.some((item) => item.kind === "core" && item.name === scoped("plugin-api")));
-  assert.ok(found.every((item) => typeof item.name === "string"));
+test("a check names a plugin by its id, its settings keys and the namespace of the names it passes to the endpoint", { timeout: 1000 }, () => {
+  assert.deepEqual(namedPlugins(`await s.run("core.card.add-tab", { plugin: "probe" });`), ["core", "probe"]);
+  assert.deepEqual(namedPlugins(`const tab = tabs.find((item) => item.plugin === 'probe');`), ["probe"]);
+  assert.deepEqual(namedPlugins("if (typeof fields?.plugin !== \"string\") throw new Error();"), []);
+  assert.deepEqual(namedPlugins(`await press(s, "core.settings-modal.plugin", "plugin:probe");`), ["probe"]);
+  assert.deepEqual(namedPlugins("await press(s, \"core.settings-modal.set\", `link:card-left:probe`);"), ["probe"]);
+  assert.deepEqual(namedPlugins(`run(sok, ["plugin", "install", "probe", "--config-dir", dir]);`), ["probe"]);
+  assert.deepEqual(namedPlugins("sok plugin remove probe --config-dir dir"), ["probe"]);
+  assert.deepEqual(namedPlugins("run(sok, [\"plugin\", \"install\", id]); run(`sok plugin install ${id}`);"), []);
+  assert.deepEqual(namedPlugins(`await s.until("probe.session", ready); const v = await child.get('other.view');`), ["probe", "other"]);
+  assert.deepEqual(namedPlugins(`await s.registered("probe.focus"); const sidebar = { set: "probe.list", section: "probe.alpha" };`),
+    ["probe", "probe", "probe"]);
+  assert.deepEqual(namedPlugins(`await s.get("host.window"); readFileSync("probe.json");`), ["host"]);
+});
+
+test("checkPluginNames allows core, the host and the fixture plugins, and names the file, the line and any other plugin", { timeout: 1000 }, () => {
+  const sources = {
+    "e2e/fixture-tab.test.mjs": `await s.run("core.card.add-tab", { plugin: "layoutprobe" });\nawait s.get("host.window");\n`,
+    "e2e/unknown.test.mjs": `const a = 1;\nawait s.until("unknown.session", ready);\nawait s.run("core.card.add-tab", { plugin: "unknown" });\n`,
+    "e2e/listed.test.mjs": `await s.run("unknown.focus");\n`,
+  };
+  const errors = checkPluginNames(Object.keys(sources), {
+    fixtures: ["layoutprobe"], exempt: new Set(["e2e/listed.test.mjs"]), readSource: (file) => sources[file],
+  });
+  assert.deepEqual(errors, [
+    "e2e/unknown.test.mjs:2: names the plugin unknown, which is neither core nor a fixture plugin of e2e/fixtures",
+    "e2e/unknown.test.mjs:3: names the plugin unknown, which is neither core nor a fixture plugin of e2e/fixtures",
+  ]);
+  assert.deepEqual(CORE_OWNERS, ["core", "host"]);
+  const records = { "e2e/draw.mjs": `event.event === "sidecar.fake.frame";\nevent.event === "sidecar.real.frame";\n` };
+  assert.deepEqual(checkPluginNames(["e2e/draw.mjs"], { fixtures: [], sidecars: ["fake"], readSource: (file) => records[file] }),
+    ["e2e/draw.mjs:2: names the sidecar real, which is not a fake sidecar of e2e/fixtures/sidecars"]);
+  assert.deepEqual(namedSidecars(`s.until("sidecar.fake.session"); log("sidecar.json");`), ["fake"]);
+  assert.deepEqual(checkPluginNames(["e2e/listed.test.mjs"], { fixtures: [], readSource: (file) => sources[file] }),
+    ["e2e/listed.test.mjs:1: names the plugin unknown, which is neither core nor a fixture plugin of e2e/fixtures"],
+    "a file that the classification no longer lists is checked");
+});
+
+test("the fake sidecars are named by the package names of the sidecar folders of the fixtures", { timeout: 1000 }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "soksak-boundaries-sidecars-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const folder = join(root, "sidecars", "fake");
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, "sidecar.json"), "{}");
+  writeFileSync(join(folder, "package.json"), JSON.stringify({ name: "@sok-check/sidecar-fake" }));
+  assert.deepEqual(fixtureSidecarNames(root), ["fake"]);
+  writeFileSync(join(folder, "package.json"), JSON.stringify({ name: "@sok-check/fake" }));
+  assert.throws(() => fixtureSidecarNames(root), /the name "@sok-check\/fake" of a fake sidecar does not end with sidecar-<name>$/);
+});
+
+test("the plugin names are read in the checks and harness modules of e2e and scripts, not in their headless tests or the ledger", { timeout: 1000 }, () => {
+  assert.deepEqual(pluginNameScope([
+    "e2e/a.test.mjs", "e2e/benchmark/b.test.mjs", "e2e/helper.mjs", "e2e/fixtures/probe/ui/app.js", "scripts/run.mjs",
+    "e2e/test/a.test.mjs", "scripts/test/run.test.mjs", "scripts/check-tests.mjs", "packages/workbench/a.js", "e2e/plugin.json", "docs/x.md",
+  ]), ["e2e/a.test.mjs", "e2e/benchmark/b.test.mjs", "e2e/helper.mjs", "e2e/fixtures/probe/ui/app.js", "scripts/run.mjs"]);
+  assert.deepEqual([...classifiedFiles({ schema: 1, files: [{ file: "e2e/a.test.mjs", owner: "core", reason: "r" }] })], ["e2e/a.test.mjs"]);
+  assert.deepEqual([...classifiedFiles({ schema: 1, files: [] })], [], "an empty classification exempts no file");
+  assert.throws(() => classifiedFiles({ schema: 1 }), /^Error: docs\/spec\/verification-boundaries\.json holds no list files$/);
+});
+
+test("the gate of a core release names no registry index URL, no plugin repository and no registry but the fixture registry", { timeout: 1000 }, () => {
+  assert.deepEqual(GATE_SOURCES, ["Makefile", "scripts/acceptance-run.mjs", "scripts/candidate-acceptance.mjs", "scripts/test-app.mjs"]);
+  const sources = {
+    "Makefile": "FIXTURE_REGISTRY = target/fixture-registry\nINDEX = https://example.test/registry/index.json\n",
+    "scripts/test-app.mjs": "const registry = join(root, 'target', 'fixture-registry');\nconst plugins = '../plugins/probe';\nconst old = 'target/registry/index.json';\n",
+    "scripts/acceptance-run.mjs": "const sidecar = \"../sidecars/probe\";\nconst publicIndex = `target/registry-public/index.json`;\n",
+  };
+  assert.deepEqual(checkGateSources(Object.keys(sources), (file) => sources[file]), [
+    "Makefile:2: the gate of a core release names a registry index URL",
+    "scripts/test-app.mjs:2: the gate of a core release names a plugin repository path",
+    "scripts/test-app.mjs:3: the gate of a core release names a registry other than the fixture registry",
+    "scripts/acceptance-run.mjs:1: the gate of a core release names a plugin repository path",
+    "scripts/acceptance-run.mjs:2: the gate of a core release names a registry other than the fixture registry",
+  ]);
 });
 
 test("corePackageNames reads every tracked package.json and the core-served prefix", () => {

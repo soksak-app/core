@@ -131,7 +131,7 @@ test("boundary audit reports a clean component graph", { timeout: TREE_AUDIT_LIM
   assert.match(result.stdout, /Boundary checks passed:/);
 });
 
-test("boundary audit reports core sources that name a declared plugin without reading a sibling folder", { timeout: 5000 }, async (t) => {
+test("boundary audit reports a check that names a plugin other than a fixture plugin, and knows no plugin of another repository", { timeout: 5000 }, async (t) => {
   // The fixture names are joined from parts: the boundary audit scans this file for @soksak/ names.
   const scoped = (name) => ["@soksak", name].join("/");
   const fixture = await mkdtemp(join(tmpdir(), "soksak-boundaries-"));
@@ -142,20 +142,28 @@ test("boundary audit reports core sources that name a declared plugin without re
     await writeFile(path, text);
   };
   await write(join(core, "packages/a/package.json"), JSON.stringify({ name: scoped("a") }));
-  await write(join(core, "packages/a/index.js"), `export const id = "probe";\nimport "${scoped("sidecar-probe")}";\n`);
-  // The declared repositories do not exist: the audit reads the plugin ids from the declaration of the checkout.
-  await write(join(core, "scripts/workspace-registry.json"), JSON.stringify({
-    plugins: [{ repository: "../plugins/probe", id: "probe" }], sidecars: [{ repository: "../sidecars/probe", folder: "." }], packs: [],
-  }));
+  await write(join(core, "packages/a/index.js"), `import "${scoped("sidecar-probe")}";\n`);
+  await write(join(core, "e2e/fixtures/probe/plugin.json"), JSON.stringify({ id: "probe" }));
+  await write(join(core, "e2e/fixture-tab.test.mjs"), `await s.run("core.card.add-tab", { plugin: "probe" });\n`);
+  await write(join(core, "e2e/other.test.mjs"), `const ready = () => true;\nawait s.until("other.session", ready);\n`);
+  await write(join(core, "e2e/listed.test.mjs"), `await s.run("listed.focus");\n`);
+  await write(join(core, "docs/spec/verification-boundaries.json"),
+    JSON.stringify({ schema: 1, files: [{ file: "e2e/listed.test.mjs", owner: "core", reason: "converts to a fixture" }] }));
+  // The gate sources: the window check runner names a registry that is not the fixture registry.
+  await write(join(core, "Makefile"), "FIXTURE_REGISTRY = target/fixture-registry\n");
+  await write(join(core, "scripts/acceptance-run.mjs"), "\n");
+  await write(join(core, "scripts/candidate-acceptance.mjs"), "\n");
+  await write(join(core, "scripts/test-app.mjs"), "const index = 'target/registry/index.json';\n");
   assert.equal((await run("git", ["init", "--quiet", core])).code, 0);
   // The audit reads the tracked files of the checkout.
-  assert.equal((await run("git", ["-C", core, "add", "--", "packages", "scripts"])).code, 0);
+  assert.equal((await run("git", ["-C", core, "add", "--", "Makefile", "packages", "e2e", "scripts", "docs"])).code, 0);
   const script = join(root, "scripts/check-boundaries.mjs");
   const named = await run(node, [script, core]);
   assert.equal(named.code, 1, `${named.stdout}\n${named.stderr}`);
   assert.deepEqual(named.stderr.trim().split("\n"), [
-    `packages/a/index.js:2: core source names ${scoped("sidecar-probe")}, which is not a core package`,
-    `packages/a/index.js:1: core ${scoped("a")} names plugin id probe`,
+    `packages/a/index.js:1: core source names ${scoped("sidecar-probe")}, which is not a core package`,
+    "e2e/other.test.mjs:2: names the plugin other, which is neither core nor a fixture plugin of e2e/fixtures",
+    "scripts/test-app.mjs:1: the gate of a core release names a registry other than the fixture registry",
   ]);
 });
 
