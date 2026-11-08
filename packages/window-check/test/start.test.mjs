@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, placeholderTabs, reading, replacePlaceholders, restoreRegistry, startTab, useRegistry } from "../start.mjs";
+import { addTabOfPlugin, cardSidebar, placeholderTabs, reading, replacePlaceholders, restoreRegistry, START_PROBE, START_PROBE_ENTRIES, startTab,
+  useRegistry } from "../start.mjs";
 
 const PLUGIN = "startplugin";
 const ENTRIES = Object.freeze([`status ${PLUGIN}.view`]);
@@ -100,22 +101,47 @@ test("the start state replaces each placeholder by a tab of the given plugin and
   assert.deepEqual(s.calls.filter(([kind]) => kind === "run").map(([, name, params]) => [name, params]), [
     ["core.card.add-tab", { card: "upper", plugin: PLUGIN }], ["core.tab.close", { tab: "t1" }],
     ["core.card.add-tab", { card: "lower", plugin: PLUGIN }], ["core.tab.close", { tab: "b1" }]]);
-  assert.deepEqual(await startTab(s, { plugin: PLUGIN, entries: ENTRIES }), { surface: "added-1", plugin: PLUGIN });
+  assert.deepEqual(await startTab(s, { startPlugin: PLUGIN, startEntries: ENTRIES }), { surface: "added-1", plugin: PLUGIN });
   assert.deepEqual(s.calls.at(-1), ["registered", "added-1", ENTRIES]);
-  await assert.rejects(replacePlaceholders(workbench(starterLayout())), /the start state names no plugin/);
+});
+
+test("the start probe that the package ships is the start plugin when a check names none", async () => {
+  const s = workbench(starterLayout());
+  await replacePlaceholders(s);
+  assert.deepEqual(s.state.grid.cards.map((card) => card.tabs?.map((tab) => tab.plugin)), [undefined, [START_PROBE], [START_PROBE]]);
+  // The fake registers the entries of the test plugin; the start probe registers its own view status.
+  for (const row of s.state.surfaces) row.exposes = [...START_PROBE_ENTRIES];
+  assert.deepEqual(await startTab(s), { surface: "added-1", plugin: START_PROBE });
+  assert.deepEqual(s.calls.at(-1), ["registered", "added-1", ["status startprobe.view"]]);
+  const probe = JSON.parse(readFileSync(new URL("../fixtures/start-probe/plugin.json", import.meta.url), "utf8"));
+  assert.equal(probe.id, START_PROBE);
+  assert.deepEqual(probe.exposes.status.map((entry) => `status ${entry.name}`), START_PROBE_ENTRIES);
+});
+
+test("a tab of the plugin under check is added to the focused card and the start state waits for its ready function", async () => {
+  const s = workbench(starterLayout());
+  await replacePlaceholders(s, PLUGIN);
+  const seen = [];
+  assert.deepEqual(await addTabOfPlugin(s, { plugin: "checked", ready: async (session, tab) => { seen.push(tab); } }),
+    { surface: "added-3", plugin: "checked" });
+  assert.deepEqual(seen, ["added-3"]);
+  assert.deepEqual(s.calls.filter(([kind]) => kind === "run").at(-1), ["run", "core.card.add-tab", { card: "upper", plugin: "checked" }]);
+  assert.deepEqual(await addTabOfPlugin(s, { plugin: "checked", ready: async () => ({ surface: "x", ready: true }) }), { surface: "x", ready: true });
+  await assert.rejects(addTabOfPlugin(s, { plugin: "checked" }), /addPluginTab of checked names no ready function/);
+  await assert.rejects(addTabOfPlugin(s, { ready: async () => {} }), /addPluginTab names no plugin/);
 });
 
 test("a start layout whose focused card holds no ready tab of the plugin fails", async () => {
-  await assert.rejects(startTab(workbench(starterLayout()), { plugin: PLUGIN, entries: ENTRIES }),
+  await assert.rejects(startTab(workbench(starterLayout()), { startPlugin: PLUGIN, startEntries: ENTRIES }),
     /focused card of the start layout holds no active startplugin tab/);
   const layout = starterLayout();
   const s = workbench(layout);
   await replacePlaceholders(s, PLUGIN);
   layout.surfaces.find((row) => row.surface === "added-1").status.phase = "loading";
-  await assert.rejects(startTab(s, { plugin: PLUGIN, entries: ENTRIES }), /start tab added-1 did not become ready/);
+  await assert.rejects(startTab(s, { startPlugin: PLUGIN, startEntries: ENTRIES }), /start tab added-1 did not become ready/);
   layout.surfaces.find((row) => row.surface === "added-1").status.phase = "ready";
   layout.surfaces.find((row) => row.surface === "added-1").exposes = [];
-  await assert.rejects(startTab(s, { plugin: PLUGIN, entries: ENTRIES }), /did not register status startplugin.view/);
+  await assert.rejects(startTab(s, { startPlugin: PLUGIN, startEntries: ENTRIES }), /did not register status startplugin.view/);
 });
 
 test("a card sidebar links a named set or stores its own common set of the given sections on the cards of the plugin", async () => {
@@ -132,6 +158,11 @@ test("a card sidebar links a named set or stores its own common set of the given
   await cardSidebar(own, { plugin: PLUGIN, sections: ["other.alpha", "other.beta"] });
   assert.deepEqual(own.state.settings.values.sets, [{ id: "check-sections", title: "검사", sections: ["other.alpha", "other.beta"], layout: "list" }]);
   assert.ok(own.state.sidebars.every((item) => item.set === "check-sections"));
+
+  const tabs = workbench(starterLayout());
+  await replacePlaceholders(tabs, PLUGIN);
+  await cardSidebar(tabs, { plugin: PLUGIN, set: "own-tabs", sections: ["other.alpha"], layout: "tabs" });
+  assert.deepEqual(tabs.state.settings.values.sets, [{ id: "own-tabs", title: "검사", sections: ["other.alpha"], layout: "tabs" }]);
 
   await assert.rejects(cardSidebar(workbench(starterLayout()), { plugin: PLUGIN, set: "x" }), /no card shows an active startplugin tab/);
   await assert.rejects(cardSidebar(own, { set: "x" }), /a card sidebar names the plugin of its cards/);
@@ -172,7 +203,17 @@ test("a wait declaration reads the record catalog of the configuration folder of
   assert.ok(catalog.events["workbench.start"]);
 });
 
-test("the start module names no plugin", () => {
+test("the start module names no real plugin", () => {
   const source = readFileSync(new URL("../start.mjs", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /["'](layoutprobe|startprobe|terminal|term|browser|files|editor|hwp)["'.]/);
+  assert.doesNotMatch(source, /["'](layoutprobe|terminal|term|browser|files|editor|hwp)["'.]/);
+});
+
+test("the start probe that the package ships is a valid plugin release", async () => {
+  const { validateManifest } = await import("@soksak/plugin-api");
+  const folder = new URL("../fixtures/start-probe/", import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL("plugin.json", folder), "utf8"));
+  assert.doesNotThrow(() => validateManifest(manifest));
+  const pkg = JSON.parse(readFileSync(new URL("package.json", folder), "utf8"));
+  assert.deepEqual(pkg.files, ["plugin.json", "ui"]);
+  assert.match(readFileSync(new URL(manifest.surface.composition.page, folder), "utf8"), /<script type="module" src="\.\/app\.js">/);
 });

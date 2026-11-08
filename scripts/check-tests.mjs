@@ -147,7 +147,11 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
-  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]) }),
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]), sharedTests: true }),
+  // The start probe that @soksak/window-check ships for the checks of plugin repositories.
+  lane("window check start probe declaration", "declaration", ["packages/window-check/fixtures/start-probe/plugin.json"], ["packages/window-check/test/start.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("window check start probe view", "js-ts", ["packages/window-check/fixtures/start-probe/ui/app.js"], ["packages/window-check/test/start.test.mjs"], { sharedTests: true }),
+  lane("window check start probe page", "document", ["packages/window-check/fixtures/start-probe/ui/page.html"], ["packages/window-check/test/start.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("audit of the running documents", "js-ts", ["e2e/audit-surfaces.mjs"], ["scripts/test/audit-surfaces.test.mjs"]),
   lane("browser runtime", "js-ts", ["apps/browser/runtime/**/*.js"], ["apps/browser/test/**/*.mjs", "apps/browser/check/**/*.mjs"], { sharedTests: true }),
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),

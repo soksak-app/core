@@ -28,6 +28,7 @@
     "./text-difference.mjs": "./text-difference.mjs",
     "./catalog.mjs": "./catalog.mjs",
     "./start.mjs": "./start.mjs",
+    "./test-app.mjs": "./test-app.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -54,14 +55,21 @@
     "text-difference.mjs",
     "catalog.mjs",
     "core-events.json",
-    "start.mjs"
+    "start.mjs",
+    "test-app.mjs",
+    "soksak-test-app.mjs",
+    "fixtures/"
   ],
   "bin": {
-    "sok-repeat": "./repeat.mjs"
+    "sok-repeat": "./repeat.mjs",
+    "soksak-test-app": "./soksak-test-app.mjs"
   },
   "scripts": {
     "test": "node --test --experimental-test-module-mocks test/*.test.mjs test/platform/darwin/system/*.test.mjs"
   },
+  "specFiles": [
+    "docs/spec/events.json"
+  ],
   "dependencies": {
     "@parcel/watcher": "2.6.0",
     "@soksak/client": "workspace:*",

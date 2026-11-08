@@ -30,7 +30,7 @@ function installedRecord(directory) {
 }
 
 /**
- * The event catalogs of the sidecars that `plugins/installed.json` of a configuration folder records: each recorded folder
+ * The event catalogs of the sidecars that installed.json of the plugins folder of a configuration folder records: each recorded folder
  * holds a `sidecar.json`, whose member `events` names the catalog file (docs/spec/sidecars.md). A sidecar without the member
  * declares no catalog. A file that is missing, not JSON or of another format is an error that names the file.
  */

@@ -10,12 +10,12 @@ const SPEC_CATALOG = new URL("../../../docs/spec/events.json", import.meta.url);
 
 test("the core catalog that the package ships is docs/spec/events.json", () => {
   assert.equal(readFileSync(CORE_CATALOG, "utf8"), readFileSync(SPEC_CATALOG, "utf8"),
-    "packages/window-check/core-events.json differs from docs/spec/events.json; copy docs/spec/events.json over it");
+    "core-events.json of @soksak/window-check differs from docs/spec/events.json; copy docs/spec/events.json over it");
   assert.deepEqual(coreCatalog(), JSON.parse(readFileSync(SPEC_CATALOG, "utf8")));
 });
 
-const PLUGIN_PATH = "plugins/probe/1.0.0";
-const SIDECAR_PATH = "sidecars/alpha/1.0.0/platform";
+const PLUGIN_PATH = "store/probe/1.0.0";
+const SIDECAR_PATH = "store/alpha/1.0.0/platform";
 const fields = { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", properties: { kind: { type: "string" } }, required: ["kind"] };
 
 /** A configuration folder that installed the plugin `probe` and the sidecar `alpha`, each with an event catalog. */
@@ -24,6 +24,7 @@ function configuration(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, PLUGIN_PATH), { recursive: true });
   mkdirSync(join(root, SIDECAR_PATH), { recursive: true });
+  mkdirSync(join(root, "plugins"));
   writeFileSync(join(root, "plugins", "installed.json"), JSON.stringify({
     format: 3,
     plugins: { probe: { version: "1.0.0", path: PLUGIN_PATH, enabled: true } },

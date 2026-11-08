@@ -1,0 +1,14 @@
+{
+  "id": "startprobe",
+  "name": "Start probe",
+  "description": "Window check fixture: the tab that replaces each placeholder tab of the start layout, so the plugin under check starts in no tab of the layout.",
+  "surface": { "composition": { "kind": "view", "page": "ui/page.html" } },
+  "mark": "S",
+  "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
+  "exposes": {
+    "status": [{ "name": "startprobe.view", "description": "The view has started.",
+      "schema": { "type": "object", "properties": { "started": { "type": "boolean" } } } }],
+    "commands": [],
+    "element": []
+  }
+}
