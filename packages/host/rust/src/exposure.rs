@@ -2883,47 +2883,5 @@ mod reply_tests {
 }
 
 #[cfg(test)]
-mod activation_observation_tests {
-    use super::*;
-
-    #[test]
-    fn host_window_preserves_exact_activation_observation() {
-        for observation in [
-            json!({"registered":true,"count":"0"}),
-            json!({"registered":false,"count":"18446744073709551615"}),
-        ] {
-            let facts = json!({"activationObservation":observation});
-            assert_eq!(window_activation_observation(&facts).unwrap(), observation);
-        }
-    }
-
-    #[test]
-    fn host_window_refuses_missing_or_invalid_activation_observation() {
-        let invalid = [
-            Value::Null,
-            json!({}),
-            json!({"registered":true}),
-            json!({"count":"1"}),
-            json!({"registered":"true","count":"1"}),
-            json!({"registered":false,"count":1}),
-            json!({"registered":false,"count":""}),
-            json!({"registered":false,"count":"01"}),
-            json!({"registered":false,"count":"-1"}),
-            json!({"registered":false,"count":"+1"}),
-            json!({"registered":false,"count":"1.0"}),
-            json!({"registered":false,"count":"18446744073709551616"}),
-        ];
-        assert!(
-            window_activation_observation(&json!({}))
-                .unwrap_err()
-                .contains("activationObservation")
-        );
-        for observation in invalid {
-            assert!(
-                window_activation_observation(&json!({"activationObservation":observation}))
-                    .unwrap_err()
-                    .contains("activationObservation")
-            );
-        }
-    }
-}
+#[path = "window_activation_observation_test.rs"]
+mod activation_observation_tests;
