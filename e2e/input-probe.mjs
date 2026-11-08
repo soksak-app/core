@@ -264,3 +264,14 @@ export async function receivedAfter(s, surface, after, message) {
   }, message, { surface });
   return state.log.filter((entry) => entry.sequence > after);
 }
+
+/**
+ * The index of the element core.card.tab of `tab` among the tab elements of the window, which `element.rect` takes. The window
+ * numbers its tab elements across every card in the order of core.grid, so the index counts the tabs of the cards before the card
+ * of `tab`; the index of the tab in its own card names another tab when an earlier card holds tabs.
+ */
+export function tabElementIndex(grid, tab) {
+  const index = grid.cards.flatMap((card) => card.tabs ?? []).findIndex((entry) => entry.id === tab);
+  if (index < 0) throw new Error(`core.grid has no tab ${tab}`);
+  return index;
+}
