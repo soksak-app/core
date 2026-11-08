@@ -32,11 +32,6 @@
       "reason": "Checks that Japanese marked text is committed once when composition ends (IME) and uses the PTY as the receiver; replace with a plain-view probe commit log."
     },
     {
-      "file": "e2e/activation/registry-active.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a window re-reads the registry when it becomes key (installation and registry code) and uses browser only as an entry in the registry; replace with an extension-probe or plain-view package in a fixture registry."
-    },
-    {
       "file": "e2e/activation/terminal-ime-document.mjs",
       "owner": "tool",
       "reason": "Helper that pulls terminal compose and cursor state for IME checks; it is terminal-specific and must be reduced to a fixture probe status shape."
@@ -55,11 +50,6 @@
       "file": "e2e/activation/view-ime-escape.test.mjs",
       "owner": "core",
       "reason": "Checks that Escape ends a view's composition without forwarding a workbench command (IME and keyboard routing); replace the terminal with a plain-view probe that has a text input and a command log."
-    },
-    {
-      "file": "e2e/app-update.test.mjs",
-      "owner": "core",
-      "reason": "Checks the application update list and its operation steps (installation code of core) and edits the published browser entry only as an incompatible plugin; replace with a fixture plugin (for example plain-view probe) published in the served fixture registry with two versions."
     },
     {
       "file": "e2e/balance.test.mjs",
@@ -342,11 +332,6 @@
       "reason": "Checks the library plugin page (descriptions, versions, sidecars, search, disable/enable, the modified-tab prompt). It uses the real cohort only as list content; fixture plugins with a fake sidecar and `save-close` (for the modified tab) would replace it."
     },
     {
-      "file": "e2e/plugin-updates.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the plugin screen lists updates and that \"update all\" stops at a refused update (core registry and installation). It edits the browser entry; a packed fixture plugin in a fixture registry would replace it."
-    },
-    {
       "file": "e2e/prepare-terminal.mjs",
       "owner": "tool",
       "reason": "Helper that prepares the default terminal surface and waits for its session. Remove it or reduce it to preparing a fake-session fixture."
@@ -385,11 +370,6 @@
       "file": "e2e/real/tui-drag.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks that a mouse-reporting TUI drag inside the terminal survives repeated clicks."
-    },
-    {
-      "file": "e2e/registry.test.mjs",
-      "owner": "core",
-      "reason": "Checks that plugin operations read an https registry and refuse a wrong hash, a revoked version and an unreachable registry (core registry code). A packed fixture plugin in the test registry would replace browser."
     },
     {
       "file": "e2e/retained-view-placement.test.mjs",
