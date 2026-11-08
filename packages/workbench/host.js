@@ -144,6 +144,7 @@ function orderedSidecarPort(name) {
       // records a real failure or expected retirement cancellation. Do not also
       // mislabel a retired view as a window/background application error.
       if (failureOwner === "view") return;
+      // default: the thrown value may not be an Error, so without message the value itself is written.
       report(`sidecar ${name}: send failed: ${error?.message ?? error}`);
     }));
   }
@@ -321,7 +322,7 @@ export function surfaceContextRuntime(surface, declarations = {}) {
     unregister: () => {
       if (unregistered) return;
       unregistered = true;
-      removeExposurePort?.();
+      if (removeExposurePort !== null) removeExposurePort();
       removeExposurePort = null;
       registry.unregisterSurface(surfaceId);
     },

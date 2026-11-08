@@ -10,6 +10,7 @@
 - F692: observe test는 input window를 할당하는 자리에서 close 시 release를 끄고, close 뒤에 window를 release한다.
 - F651: fallback 검사는 문자열 글자 안의 `||`를 글자로 읽고, template part의 `||`는 계속 보고한다.
 - F502-13-2: sidebar inset은 look의 선 두께만 쓰는 이유를 적는다.
+- F661: workbench는 exposure port를 가질 때만 제거하고, 다른 값이면 실패한다.
 - F696-4-4: 화면 글자 인식기를 제거한다. 그 native test program, Makefile 규칙, native test 항목과 native test runner의 build 단계, window-check 준비의 인식 명령과 warm-up, Vision 글자 인식의 private-API 행, 그리고 이들을 다루던 소유 검사가 대상이다. 검증 pipeline에 글자 인식은 남지 않는다. capture의 frame identity code를 Vision으로 decode하는 일은 그 IME·drag 쓰임과 함께 남는다.
 
 - F696-4-3: 창 검사는 view의 콘텐츠를 그 콘텐츠를 가진 plugin의 공개 값에서 읽는다. `browser.content.read`, `editor.read`, `getPageSvg`의 page glyph, image region이 조회가 가리키는 frame을 presented한 뒤의 `term.screen.read`와 `terminal.screen.read`, section ready status의 `content`이다. browser·editor·hwp 값은 그 view의 document region이 보이는 동안 읽는다. 녹화한 view는 값을 읽은 뒤의 presentation 시각 이후 첫 frame을 첫 콘텐츠 frame으로 삼고, browser·hwp·terminal·marker-view layout case는 그 presentation 이후 선언된 slot과 맞는 첫 frame을 삼는다. anchor 인식과 `e2e/view-first-content.mjs`는 제거되고, 측정의 콘텐츠 증명은 `{method: "value", expected, actual}`이다.
