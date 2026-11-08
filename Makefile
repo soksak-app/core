@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-host-files check-app-tests create-test-certificates test-app-terminal-sidebar-current test-app-terminal-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-terminal-sidebar-current test-app-terminal-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -294,6 +294,18 @@ check-windows-build:
 	@echo "START: mygo framework adapter go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
 	@cd packages/host/mygo && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
 	@echo "PASS: mygo diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
+
+# Compiles the sources of the Rust host library for the Windows target in the default build and the diagnostic build, as
+# check-windows-build does for the Go hosts. Host tests run only on macOS (docs/spec/host-contract.md), so they are not compiled.
+WINDOWS_RUST_TARGET = x86_64-pc-windows-msvc
+check-windows-rust: check-cargo
+	@$(dir $(CARGO))rustup target add $(WINDOWS_RUST_TARGET)
+	@echo "START: Rust host library cargo check --target $(WINDOWS_RUST_TARGET)"
+	@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET)
+	@echo "PASS: Rust host library for $(WINDOWS_RUST_TARGET)"
+	@echo "START: Rust host library cargo check --target $(WINDOWS_RUST_TARGET) --features diagnostics"
+	@$(CARGO) check --locked -p soksak-host --target $(WINDOWS_RUST_TARGET) --features diagnostics
+	@echo "PASS: Rust diagnostics host library for $(WINDOWS_RUST_TARGET)"
 
 # Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.
 # A source behind a diagnostic feature or tag fails here and not in the build of an app. The Go tests link the native test library,

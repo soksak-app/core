@@ -122,10 +122,10 @@ test('ci keeps language host checks independent and gates release on every requi
   const ci = read('.github/workflows/ci.yml');
   const jobsText = /^jobs:\n([\s\S]*)$/m.exec(ci)?.[1] ?? '';
   const jobNames = [...jobsText.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gm)].map((match) => match[1]);
-  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'macos-mygo', 'build-native', 'equivalence', 'required'];
+  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'macos-mygo', 'build-native', 'equivalence', 'linux-node', 'required'];
   for (const name of required) assert.ok(jobNames.includes(name), `ci.yml has no required job ${name}`);
-  // Linux and Windows are not verified platforms, so CI runs no product check on them; the Sok CLI tests run in the macOS host jobs.
-  assert.deepEqual(jobNames.filter((name) => !required.includes(name)), [], 'ci.yml has a job outside the verified macOS scope');
+  // The applications are verified on macOS only; Linux runs the headless owner tests, and the Sok CLI tests run in the macOS host jobs.
+  assert.deepEqual(jobNames.filter((name) => !required.includes(name)), [], 'ci.yml has a job outside the declared scope');
   const job = (name) => {
     const start = jobsText.indexOf(`  ${name}:`);
     assert.notEqual(start, -1, `ci.yml has no job ${name}`);
@@ -160,7 +160,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const gate = job('required');
   for (const [name, variable] of [
     ['core-node', 'CORE_NODE'], ['macos-wailsv3', 'WAILS'], ['macos-tauriv2', 'TAURI'], ['macos-mygo', 'MYGO'],
-    ['build-native', 'NATIVE'], ['equivalence', 'EQUIVALENCE'],
+    ['build-native', 'NATIVE'], ['equivalence', 'EQUIVALENCE'], ['linux-node', 'LINUX_NODE'],
   ]) {
     assert.match(gate, new RegExp(`${variable}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`), `required gate does not read ${name}`);
   }
@@ -168,7 +168,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const gateLoop = /for result in ([^;]+); do/.exec(gate);
   assert.ok(gateLoop, 'required gate does not loop over its job results');
   assert.deepEqual(gateLoop[1].match(/"\$([A-Z_]+)"/g),
-    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$MYGO"', '"$NATIVE"', '"$EQUIVALENCE"']);
+    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$MYGO"', '"$NATIVE"', '"$EQUIVALENCE"', '"$LINUX_NODE"']);
   for (const [host, jobName, testName] of [
     ['wailsv3', 'macos-wailsv3', 'Wails host tests'], ['tauriv2', 'macos-tauriv2', 'Tauri host tests'], ['mygo', 'macos-mygo', 'mygo host tests'],
   ]) {
@@ -195,6 +195,52 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.match(equivalence[eqChecks].text, /OFFLINE: '1'/);
   // A hosted runner serves one job, so its Rust builds use every processor; a one-job limit builds each crate on one processor.
   assert.doesNotMatch(job('equivalence'), /CARGO_BUILD_JOBS/, 'equivalence limits its Rust builds to fewer jobs than the runner has processors');
+});
+
+/** The text of a job of ci.yml, from its name line to the next job. */
+function ciJob(name) {
+  const text = read('.github/workflows/ci.yml');
+  const start = text.indexOf(`\n  ${name}:\n`);
+  assert.notEqual(start, -1, `ci.yml has no job ${name}`);
+  const next = text.slice(start + 1).search(/\n(?=  [a-z][a-z0-9-]+:\s*$)/m);
+  return next < 0 ? text.slice(start + 1) : text.slice(start + 1, start + 1 + next);
+}
+
+test('the linux-node job runs the headless owner tests on Linux after the locked install and the required gate waits for it', { timeout: 1000 }, () => {
+  const job = ciJob('linux-node');
+  assert.match(job, /^ {4}runs-on: ubuntu-26\.04-arm$/m, 'linux-node does not run on the hosted Linux runner');
+  const list = steps(job);
+  const install = list.findIndex((step) => /run: pnpm -C core install --frozen-lockfile$/m.test(step.text));
+  const owners = list.findIndex((step) => step.name === 'Headless owner tests');
+  assert.ok(install >= 0 && owners > install, 'linux-node does not install the locked dependencies before the headless owner tests');
+  assert.match(list[owners].text, /run: make -C core test-headless-owners$/m);
+  assert.match(list[owners].text, /npm_config_offline: 'true'/);
+  assert.ok(list.some((step) => step.name === 'Reject lockfile changes'), 'linux-node does not reject lockfile changes');
+  const gate = ciJob('required');
+  assert.match(gate, /^ {6}- linux-node$/m, 'the required gate does not need linux-node');
+  assert.match(gate, /LINUX_NODE: \$\{\{ needs\.linux-node\.result \}\}/);
+});
+
+test('make test-headless-owners runs every Node test of scripts/test, e2e/test and packages/window-check/test', { timeout: 1000 }, () => {
+  const recipe = /^test-headless-owners:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
+  assert.ok(recipe, 'the Makefile has no test-headless-owners target');
+  assert.deepEqual(recipe[1].trim().split('\n').map((line) => line.trim()),
+    ['@node scripts/node-tests.mjs --only scripts/test/ --only e2e/test/ --only packages/window-check/test/'],
+    'test-headless-owners runs another selection or excludes a folder of the owners');
+});
+
+test('make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics and the Tauri job runs it', { timeout: 10_000 }, () => {
+  const output = execFileSync('make', ['-n', 'check-windows-rust'], { cwd: ROOT, encoding: 'utf8' });
+  assert.match(output, /rustup target add x86_64-pc-windows-msvc$/m, output);
+  const checks = output.split('\n').filter((line) => / check --locked -p soksak-host --target x86_64-pc-windows-msvc/.test(line))
+    .map((line) => line.replace(/^.* check --locked/, 'check --locked'));
+  assert.deepEqual(checks, [
+    'check --locked -p soksak-host --target x86_64-pc-windows-msvc',
+    'check --locked -p soksak-host --target x86_64-pc-windows-msvc --features diagnostics',
+  ], output);
+  const step = steps(ciJob('macos-tauriv2')).find((item) => item.name === 'Rust Windows build check');
+  assert.ok(step, 'macos-tauriv2 has no step named Rust Windows build check');
+  assert.match(step.text, /run: make -C core check-windows-rust$/m);
 });
 
 test('make test-mygo runs the unit tests of the Go packages of the mygo host', { timeout: 1000 }, () => {
