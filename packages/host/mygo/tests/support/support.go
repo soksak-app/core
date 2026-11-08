@@ -60,6 +60,15 @@ func Main(m *testing.M, helpers map[string]func(), cleanup func()) {
 type SceneWorkbench struct {
 	mu      sync.Mutex
 	records []string
+	// holding keeps the workbench from showing its first screen when it starts, as a start that still reads its state.
+	holding bool
+}
+
+// HoldFirstScreen makes the starts after it show no first screen until the test calls FirstScreen of the window.
+func (w *SceneWorkbench) HoldFirstScreen() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.holding = true
 }
 
 // Record adds one record.
@@ -78,7 +87,16 @@ func (w *SceneWorkbench) Received() []string {
 
 func (w *SceneWorkbench) Prepared(*host.Host) {}
 
-func (w *SceneWorkbench) Shown(window host.Frontend) { w.Record("shown %s", window.Name()) }
+// Shown records the start and, unless the workbench holds it, shows the first screen at once, as the scene needs no state.
+func (w *SceneWorkbench) Shown(window host.Frontend) {
+	w.Record("shown %s", window.Name())
+	w.mu.Lock()
+	holding := w.holding
+	w.mu.Unlock()
+	if !holding {
+		mygo.RunOnMain(window.(*adapter.Frontend).FirstScreen)
+	}
+}
 
 func (w *SceneWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 	w.Record("build %s", window.Name())

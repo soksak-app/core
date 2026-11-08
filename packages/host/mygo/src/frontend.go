@@ -33,8 +33,12 @@ type Frontend struct {
 	frames *host.WindowFrames
 
 	mu sync.Mutex
-	// ready is true once the window drew its first frame, and shown once the host asked to show it.
-	ready, shown bool
+	// ready is true once the window drew its first frame, shown once the host asked to show it, and revealed once the window went on
+	// the screen with the first screen of its workbench.
+	ready, shown, revealed bool
+	// revealing belongs to the main thread: the next frame of the window draws the first screen of its workbench, and the window goes
+	// on the screen once that frame returns.
+	revealing bool
 	// held and released belong to the main thread: whether the adapter holds the frames of the window, and what waits for its release.
 	held     bool
 	released []func()
@@ -128,19 +132,17 @@ func (f *Frontend) elementSurface(view uintptr) (unsafe.Pointer, bool) {
 func (f *Frontend) started() {
 	view := f.framework.workbench.Build(f)
 	f.view.Store(&view)
-	// The window was created hidden and shows when its first frame is drawn, as the main page of the other hosts reveals its window
-	// after the first load (docs/spec/hosts.md#operation-groups).
+	// The window was created hidden, and its workbench starts after its first frame, because a command reads the elements of the last
+	// frame. The window goes on the screen with the first screen of its workbench (FirstScreen), as the other hosts reveal a window
+	// once the first load of its main page ended (docs/spec/native-host.md#page-start).
 	f.window.OnReadyToShow(func() {
 		f.mu.Lock()
 		first := !f.ready
 		f.ready = true
 		shown := f.shown
 		f.mu.Unlock()
-		if shown {
-			f.window.Show()
-			if first {
-				routine.Go("workbench-start", f.startHeld)
-			}
+		if shown && first {
+			routine.Go("workbench-start", f.startHeld)
 		}
 	})
 	// A listener makes the window take the files that no element of the workbench takes (docs/spec/native-surfaces.md).
@@ -277,22 +279,37 @@ func (f *Frontend) Invalidate() { f.window.Invalidate() }
 // a background of its own shows this color.
 func (f *Frontend) SetBackdrop(color string) error { return f.window.SetBackgroundColor(color) }
 
-// Show puts the window on the screen, once the window drew its first frame. The host shows a window after it holds the window, so
-// the workbench starts its host calls here.
+// Show puts the window on the screen once its workbench showed its first screen (FirstScreen). The host shows a window after it holds
+// the window, so the workbench starts its host calls here.
 func (f *Frontend) Show() {
 	f.mu.Lock()
 	first := !f.shown
 	f.shown = true
-	ready := f.ready
+	ready, revealed := f.ready, f.revealed
 	f.mu.Unlock()
+	if revealed {
+		f.window.Show()
+	}
 	// A window answers commands once its workbench started, and they read the elements of its last frame, so a window that drew
 	// no frame starts its workbench with its first frame.
-	if ready {
-		f.window.Show()
-		if first {
-			routine.Go("workbench-start", f.startHeld)
-		}
+	if ready && first {
+		routine.Go("workbench-start", f.startHeld)
 	}
+}
+
+// drawn follows a frame that the view of the window built: the frame of the first screen puts the window on the screen once it
+// returned, as a window that is ready to show does. Call it on the main thread.
+func (f *Frontend) drawn() {
+	if !f.revealing {
+		return
+	}
+	f.revealing = false
+	mygo.App.WhenReady(func() {
+		f.mu.Lock()
+		f.revealed = true
+		f.mu.Unlock()
+		f.window.Show()
+	})
 }
 
 // WindowEventSource adds listener to the mygo event of a window event of the port and reports whether the framework has that
@@ -478,15 +495,22 @@ func (f *Frontend) StartWorkbench() {
 	}
 }
 
-// FirstScreen tells the window that its workbench shows its first screen, so the window draws again, unless a layout transaction
-// holds it, whose end releases it. Call it on the main thread.
+// FirstScreen tells the window that its workbench shows its first screen. A window that did not go on the screen yet goes on it with
+// the frame of that screen, and a restarted workbench lets its window draw again, unless a layout transaction holds the window,
+// whose end releases it. Call it on the main thread.
 func (f *Frontend) FirstScreen() {
-	if !f.starting {
-		return
+	if f.starting {
+		f.starting = false
+		if !f.framework.transaction {
+			f.release()
+		}
 	}
-	f.starting = false
-	if !f.framework.transaction {
-		f.release()
+	f.mu.Lock()
+	revealed := f.revealed
+	f.mu.Unlock()
+	if !revealed && !f.revealing {
+		f.revealing = true
+		f.window.Invalidate()
 	}
 }
 

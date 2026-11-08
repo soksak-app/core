@@ -113,6 +113,7 @@ func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
 			if view := frontend.view.Load(); view != nil {
 				(*view)(c)
 			}
+			frontend.drawn()
 		})
 		frontend.content.RecordFrames(FrameRecorder(frontend.frames))
 		frontend.window = mygo.NewWindow(mygo.WindowOptions{
