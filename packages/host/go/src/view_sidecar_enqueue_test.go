@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"testing/synctest"
 )
@@ -53,4 +54,31 @@ func TestMountedSidecarEnqueueCannotCreateSessionAfterItsGenerationRetires(t *te
 			t.Fatal("retired send recorded a new session root")
 		}
 	})
+}
+
+// A mounted view send that the full outbox refuses commits no session: no surface, owner or root is recorded.
+func TestAFullOutboxDoesNotCreateAMountedSession(t *testing.T) {
+	s, service, _ := mountedSidecarProject(t)
+	service.outbox = make(chan queuedLine, 1)
+	service.outbox <- queuedLine{}
+	source, ok := s.documents.view("probe-surface")
+	if !ok {
+		t.Fatal("missing actual source generation")
+	}
+	err := s.sendViewSidecar(context.Background(), ViewSidecarSendRequest{Source: "probe-surface", Generation: source.generation, Sidecar: service.name, Surface: "probe-surface", Body: json.RawMessage(`{"operation":"full"}`)})
+	if err == nil || !strings.Contains(err.Error(), "not keeping up") {
+		t.Fatalf("actual enqueue must be refused: %v", err)
+	}
+	if len(service.outbox) != 1 {
+		t.Fatalf("refused send changed the outbox: %d queued lines, want only the line that fills it", len(service.outbox))
+	}
+	c := s.sidecars
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if service.surfaces["probe-surface"] || c.owners["probe-surface"] != nil {
+		t.Fatal("failed enqueue committed a mounted session")
+	}
+	if _, known := c.roots["probe-surface"]; known {
+		t.Fatal("failed enqueue recorded a session root")
+	}
 }

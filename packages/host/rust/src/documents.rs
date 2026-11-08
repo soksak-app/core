@@ -3783,6 +3783,26 @@ mod view_generation_tests;
 #[path = "view_sidecar_project_test.rs"]
 mod view_sidecar_project_test;
 
+#[cfg(test)]
+#[path = "view_sidecar_send_test.rs"]
+mod view_sidecar_send_test;
+
+#[cfg(test)]
+#[path = "view_sidecar_cids_test.rs"]
+mod view_sidecar_cids_test;
+
+#[cfg(test)]
+#[path = "view_sidecar_enqueue_test.rs"]
+mod view_sidecar_enqueue_test;
+
+#[cfg(test)]
+#[path = "sidecar_root_admission_test.rs"]
+mod sidecar_root_admission_test;
+
+#[cfg(test)]
+#[path = "window_sidecar_admission_test.rs"]
+mod window_sidecar_admission_test;
+
 /// Private main-workbench bridge. Plugin runtime.sidecar.send carries no source authority.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
