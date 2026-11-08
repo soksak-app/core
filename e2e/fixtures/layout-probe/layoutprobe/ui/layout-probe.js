@@ -112,9 +112,6 @@ export async function startLayoutProbe({ bridge, expose, view }) {
   // The bridge applies each theme to the root before it calls the listeners, so the read sees the new theme.
   bridge.runtime.theme(resized);
 
-  await expose.status("layoutprobe.view", tab.read, tab.subscribe);
-  await expose.status("layoutprobe.surface", size.read, size.subscribe);
-  await expose.status("layoutprobe.document", region.read, region.subscribe);
   await bridge.calls.request("tab.footer", FOOTER);
   tab.set({ settings: await bridge.runtime.settings.read() });
   await bridge.runtime.settings.on((settings) => tab.set({ settings }));
@@ -159,6 +156,10 @@ export async function startLayoutProbe({ bridge, expose, view }) {
     await page.post({ to: TO_DOCUMENT, store: value });
     return null;
   });
+  // The statuses come after the commands: a check that waits for them as the ready entries of the tab runs the commands at once.
+  await expose.status("layoutprobe.view", tab.read, tab.subscribe);
+  await expose.status("layoutprobe.surface", size.read, size.subscribe);
+  await expose.status("layoutprobe.document", region.read, region.subscribe);
 
   await page.load(address);
 }
@@ -172,8 +173,9 @@ export async function startProbeSection({ bridge, expose, view }) {
     width: view.innerWidth, height: view.innerHeight, follows, surface: null, view: null,
   });
   view.addEventListener("resize", () => state.set({ width: view.innerWidth, height: view.innerHeight }));
-  await expose.status("layoutprobe.section", state.read, state.subscribe);
+  // The status comes after the command, as in the tab view.
   await bridge.commands.register("layoutprobe.open", (params) => openFile(bridge, params));
+  await expose.status("layoutprobe.section", state.read, state.subscribe);
   if (!follows) return;
   // A view watches a status on a surface of its own plugin only, so the section watches layoutprobe.view only on a followed surface
   // that core.surfaces names as a layoutprobe surface; for another plugin's tab it reports the surface with no view.

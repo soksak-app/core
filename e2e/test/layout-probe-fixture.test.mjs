@@ -151,6 +151,23 @@ test("the tab view and a section view together serve every declared status and r
   }
 });
 
+test("the tab and section views register every command before they serve a status, so a check that waits for its statuses can run its commands", { timeout: 1000 }, async () => {
+  const view = fakeView(TAB_START);
+  const fake = fakeBridge();
+  const registered = [];
+  const expose = { status: async (name) => { registered.push([name, [...fake.commands.keys()].sort()]); } };
+  await startLayoutProbe({ bridge: fake.bridge, expose, view });
+  const commands = probe.exposes.commands.map((command) => command.name).sort();
+  assert.deepEqual(registered.map(([, names]) => names), registered.map(() => commands));
+
+  const section = fakeBridge();
+  const served = [];
+  await startProbeSection({ bridge: section.bridge, view: fakeView({ surface: "spc-1/right/layoutprobe.alpha", params: null,
+    origin: { directory: null }, project: null, section: { id: "layoutprobe.alpha", sidebar: "right", card: null } }),
+  expose: { status: async (name) => { served.push([name, [...section.commands.keys()]]); } } });
+  assert.deepEqual(served, [["layoutprobe.section", ["layoutprobe.open"]]]);
+});
+
 test("the tab view reports its start values, declares its footer and loads its region document", { timeout: 1000 }, async () => {
   const { fake, served } = await startTab();
   assert.deepEqual(fake.calls, [["tab.footer", FOOTER]]);
