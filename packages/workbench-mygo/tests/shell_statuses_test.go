@@ -77,6 +77,30 @@ func TestGridStatusShowsTheCardsOfTheSplit(t *testing.T) {
 	}
 }
 
+// The plane of core.grid is the rectangle of the drawn plane in the window, as the main page measures its plane element, and the
+// grid fills it (the schema of core.grid in the declarations of the workbench).
+func TestGridStatusGivesThePlaneRectangle(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.settle()
+	grid := status[struct {
+		Width  float64            `json:"width"`
+		Height float64            `json:"height"`
+		Plane  map[string]float64 `json:"plane"`
+	}](t, f, "core.grid")
+	plane := grid.Plane
+	for _, key := range []string{"x", "y", "w", "h"} {
+		if _, ok := plane[key]; !ok {
+			t.Fatalf("the plane of core.grid has no %s: %v", key, plane)
+		}
+	}
+	if plane["w"] != grid.Width || plane["h"] != grid.Height || plane["w"] <= 0 || plane["h"] <= 0 {
+		t.Fatalf("the plane %v does not hold the grid of %v by %v", plane, grid.Width, grid.Height)
+	}
+	if plane["x"]+plane["w"] > 1200 || plane["y"]+plane["h"] > 800 {
+		t.Fatalf("the plane %v leaves the window of 1200 by 800", plane)
+	}
+}
+
 func TestFullscreenCoversThePlaneAndKeepsTheLayout(t *testing.T) {
 	f, _ := surfaceShell(t)
 	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "textprobe"})
