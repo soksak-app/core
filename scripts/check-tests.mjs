@@ -2550,7 +2550,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that closes without a region records the keys it drops" },
       { file: "packages/host/go/src/view_join_test.go", id: "TestAnImageRegionDeclarationKeepsTheKeysOfItsSurface" },
       { file: "packages/host/rust/src/surfaces_test.rs", id: "an_image_region_declaration_keeps_the_keys_of_its_surface" },
-      { file: "e2e/new-tab-keys.test.mjs", id: "keys typed as a new tab opens reach its terminal whole" },
+      { file: "e2e/new-tab-keys.test.mjs", id: "keys typed as a new tab opens reach its image region whole" },
     ],
     expected: "Keys typed before the image region of a surface shows reach the region in order, up to 256, and the keys over the limit or left at the close are recorded as dropped.",
     levels: ["native", "unit", "application"],
