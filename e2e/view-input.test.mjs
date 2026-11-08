@@ -1,9 +1,11 @@
-// Checks native view/main focus, text retention, picker Escape without activation.
+// Checks native view/main focus, text retention, picker Escape without activation. The text field of the view of the input probe
+// reports its focus and its value.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
+import { fieldPoint, inputProbeTab } from "./input-probe.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an inactive view retains input across main focus and handles picker Escape`, { timeout: 60000 }, async (t) => {
@@ -13,42 +15,37 @@ for (const app of Object.values(APPS)) {
     ] });
     await keepCommonSettings(s);
     await s.selectInputSource("latin");
-    const browser = (await s.get("core.surfaces")).find(item => item.plugin === "browser" && item.visible);
-    assert.ok(browser, "the fixture has no visible browser view");
-    await s.until("core.surfaces", all => all.some(item => item.surface === browser.surface
-      && item.exposes.includes("status browser.address.text") && item.exposes.includes("element browser.address")),
-    "the browser did not register its address field");
+    const probe = await inputProbeTab(s);
     const project = await s.get("core.project");
     const space = project.spaces.find(item => item.id === project.activeSpaceId);
-    const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.id === browser.surface));
+    const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.id === probe.surface));
     assert.ok(space && card, "the fixture view has no active space or owning card");
     const initialWindow = await s.get("host.window");
     assert.equal(initialWindow.active, false, "the inactive input check requires a background application");
-    const clickAddress = async () => {
-      const field = await s.rect("browser.address", undefined, browser.surface);
-      assert.ok(field.width > 0 && field.height > 0, "the browser address has no input area");
-      await s.click(field.x + field.width / 2, field.y + field.height / 2);
-      await s.until("host.window", window => window.responder?.surface === browser.surface,
-        "the native address press did not focus its view");
-      await s.until("browser.address.text", value => value.focused,
-        "the address control did not report focus", { surface: browser.surface });
+    const clickField = async () => {
+      const field = await fieldPoint(s, probe.surface);
+      await s.click(field.x, field.y);
+      await s.until("host.window", window => window.responder?.surface === probe.surface,
+        "the native field press did not focus its view");
+      await s.until("probeinput.field", value => value.focused,
+        "the view field did not report focus", { surface: probe.surface });
       await s.presented();
     };
     const activity = await s.collect("host.window");
     const recording = await s.record();
-    await clickAddress();
-    const beforeInput = await s.get("core.surface.input", browser.surface);
+    await clickField();
+    const beforeInput = await s.get("core.surface.input", probe.surface);
     await s.press("x", { text: "x" });
     await s.until("core.surface.input", events => events.some(event => event.type === "keydown"
       && event.sequence > (beforeInput.at(-1)?.sequence ?? 0)),
-    "the view received no DOM keydown after native delivery", { surface: browser.surface });
+    "the view received no DOM keydown after native delivery", { surface: probe.surface });
     t.diagnostic(`view key delivery: ${JSON.stringify({
-      events: await s.get("core.surface.input", browser.surface),
+      events: await s.get("core.surface.input", probe.surface),
       window: await s.get("host.window"),
-      text: await s.get("browser.address.text", browser.surface),
+      field: await s.get("probeinput.field", probe.surface),
     })}`);
-    await s.until("browser.address.text", value => value.value === "x",
-      "the focused view did not receive native text", { surface: browser.surface });
+    await s.until("probeinput.field", value => value.value === "x",
+      "the focused view did not receive native text", { surface: probe.surface });
 
     await s.run("core.rename.begin", { kind: "space", id: space.id });
     await s.until("core.rename", value => value?.id === space.id, "the main rename field did not open");
@@ -61,20 +58,21 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     await s.press("y", { text: "y" });
     await s.until("core.rename", value => value?.value.includes("y"), "the main document did not receive native text");
-    assert.equal((await s.get("browser.address.text", browser.surface)).value, "x",
+    assert.equal((await s.get("probeinput.field", probe.surface)).value, "x",
       "main-document input changed the view text");
     await s.press("Escape");
     await s.until("core.rename", value => value === null, "native Escape did not cancel main-document rename");
     assert.equal((await s.get("core.project")).spaces.find(item => item.id === space.id).title, space.title,
       "cancelled rename changed the space title");
 
-    await clickAddress();
-    assert.equal((await s.get("browser.address.text", browser.surface)).value, "x",
+    await clickField();
+    assert.equal((await s.get("probeinput.field", probe.surface)).value, "x",
       "returning native focus did not preserve the view text");
-    // Address focus selects its retained text; typing replaces that selection.
+    // The caret is put at the end of the retained text, so typing adds to it.
+    await s.run("probeinput.select", { target: "field", start: 1 }, probe.surface);
     await s.press("z", { text: "z" });
-    await s.until("browser.address.text", value => value.value === "z",
-      "native input did not return to the retained view", { surface: browser.surface });
+    await s.until("probeinput.field", value => value.value === "xz",
+      "native input did not return to the retained view", { surface: probe.surface });
     await s.run("core.card.menu", { card: card.id, menu: "add" });
     await s.until("host.window", window => window.modal?.id === "picker" && window.modal.shown,
       "the picker did not appear over the view");

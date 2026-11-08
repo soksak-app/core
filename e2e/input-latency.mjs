@@ -1,13 +1,16 @@
-// The input latency check (e2e/input-latency.test.mjs): the plugins of its tabs, its configurations and the figures that it prints
-// and writes for B3. The `term` and the `terminal` plugin declare the same statuses and commands under their
-// own id (`<plugin>.session`, `<plugin>.screen`, `<plugin>.screen.read`), so one check measures both.
-/** The plugins of the measured tabs. */
-export const INPUT_LATENCY_PLUGINS = ["terminal", "term"];
+// The input latency check (e2e/input-latency.test.mjs): the targets of its keys, its configurations, the clock that maps the
+// arrival of a key in the document of the input probe to the clock of the check, and the figures that it prints and writes for B3.
+// The input probe (e2e/fixtures/input-probe/probe) records each key that reaches the text field of its view and of its native
+// document region with the time of its event (`atMs` of `probeinput.field` and `probeinput.document`), and `probeinput.clock` maps
+// that time to the clock of the source.
+
+/** The targets of the measured keys: the text field of the view of the input probe and the field of its native document region. */
+export const INPUT_LATENCY_TARGETS = ["field", "document"];
 
 /** The producer gate of every class at `info` (docs/spec/logging.md#limits, docs/spec/logging.md#policy). */
 const INFO = { lifecycle: "info", input: "info", call: "info", io: "info", frame: "info" };
 
-/** The configurations of a tab, in order: the trace off, on and off again under the default gate, and the gate of every class at info. */
+/** The configurations of a target, in order: the trace off, on and off again under the default gate, and the gate of every class at info. */
 export const CONFIGURATIONS = Object.freeze([{ trace: false }, { trace: true }, { trace: false }, { trace: false, gate: INFO }]);
 
 /** The value at the rank `share` of the sorted values. */
@@ -22,12 +25,35 @@ export function keyFigures(samples) {
 }
 
 /**
- * The B3 values of the tab of `plugin` (G7): the median and the 90th percentile of the keys of the configurations with the trace off and
- * the default gate, `<plugin>MedianMs` and `<plugin>P90Ms`. results are the figures of the configurations with `trace` and `gate`.
+ * The offset from the clock of the check to the clock of a probe document, in ms, from `samples` of `probeinput.clock`: each sample
+ * is `{sentMs, receivedMs, clock}`, where sentMs and receivedMs are the epoch times of the check around the request and clock its
+ * result. The document read its clock between the two, so the sample with the shortest round trip bounds the offset best; the
+ * offset is that of its midpoint, and `errorMs` is half its round trip plus the resolution of the source clock.
  */
-export function inputLatencyB3Values(plugin, results) {
+export function clockOffset(samples) {
+  if (samples.length === 0) throw new Error("the clock of the probe document has no sample");
+  const best = samples.reduce((a, b) => (b.receivedMs - b.sentMs < a.receivedMs - a.sentMs ? b : a));
+  const midpoint = (best.sentMs + best.receivedMs) / 2;
+  const source = best.clock.documentTimeOriginMs + best.clock.sourceNowMs;
+  return { offsetMs: source - midpoint, errorMs: (best.receivedMs - best.sentMs) / 2 + best.clock.sourceResolutionMs };
+}
+
+/**
+ * The latency of a key in ms: from `startedMs`, the epoch time of the check just before it injected the key, to the arrival of the key
+ * in the probe document, `atMs` after `documentTimeOriginMs` on the clock of the document, which `offsetMs` (clockOffset) maps to the
+ * clock of the check.
+ */
+export function keyLatency({ startedMs, atMs, documentTimeOriginMs, offsetMs }) {
+  return documentTimeOriginMs + atMs - offsetMs - startedMs;
+}
+
+/**
+ * The B3 values of `target` (G7): the median and the 90th percentile of the keys of the configurations with the trace off and the
+ * default gate, `<target>MedianMs` and `<target>P90Ms`. results are the figures of the configurations with `trace` and `gate`.
+ */
+export function inputLatencyB3Values(target, results) {
   const keys = results.filter(({ trace, gate }) => trace === false && gate === "default").flatMap(({ keys_ms: times }) => times);
-  if (keys.length === 0) throw new Error(`the input latency of ${plugin} has no key of a configuration with the trace off and the default gate`);
+  if (keys.length === 0) throw new Error(`the input latency of ${target} has no key of a configuration with the trace off and the default gate`);
   const sorted = keys.toSorted((a, b) => a - b);
-  return { [`${plugin}MedianMs`]: percentile(sorted, 0.5), [`${plugin}P90Ms`]: percentile(sorted, 0.9) };
+  return { [`${target}MedianMs`]: percentile(sorted, 0.5), [`${target}P90Ms`]: percentile(sorted, 0.9) };
 }

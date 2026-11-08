@@ -12,7 +12,7 @@ import {
   documentAddress, followedSurface, FOOTER, regionVisibility, startLayoutProbe, startProbeSection,
 } from "../fixtures/layout-probe/layoutprobe/ui/layout-probe.js";
 import { startDocumentProbe, storageKey } from "../fixtures/layout-probe/layoutprobe/ui/document-probe.js";
-import { startSecondProbe } from "../fixtures/layout-probe/layoutprobe2/ui/second-probe.js";
+import { startSecondProbe, TEXT_SIZE } from "../fixtures/layout-probe/layoutprobe2/ui/second-probe.js";
 
 const folder = (plugin) => fileURLToPath(new URL(`../fixtures/layout-probe/${plugin}/`, import.meta.url));
 const read = (plugin, file) => JSON.parse(readFileSync(`${folder(plugin)}${file}`, "utf8"));
@@ -52,6 +52,7 @@ function fakeBridge({ settings = { shade: "plain", rows: 4, caption: "probe" } }
   const calls = [];
   const commands = new Map();
   const watches = new Map();
+  const ran = [];
   const region = { posts: [], loads: [], onMessage: null };
   let theme = null;
   let settingsListener = null;
@@ -73,6 +74,13 @@ function fakeBridge({ settings = { shade: "plain", rows: 4, caption: "probe" } }
     },
     runtime: {
       theme: (listener) => { theme = listener; },
+      // core.file.open answers the tab of a .lprobe path and fails as core does for a path that no loaded plugin opens.
+      command: async (name, params) => {
+        ran.push([name, params]);
+        if (name !== "core.file.open") throw new Error(`unknown command ${name}`);
+        if (!params.path.endsWith(".lprobe")) throw new Error(`no plugin opens ${params.path}`);
+        return { tab: "tab-8" };
+      },
       settings: { read: async () => settings, on: async (listener) => { settingsListener = listener; return () => {}; } },
       status: {
         watch: (name, listener, { surface } = {}) => {
@@ -83,7 +91,7 @@ function fakeBridge({ settings = { shade: "plain", rows: 4, caption: "probe" } }
       },
     },
   };
-  return { bridge, calls, commands, watches, region, theme: (value) => theme(value), settings: (value) => settingsListener(value) };
+  return { bridge, calls, commands, watches, region, ran, theme: (value) => theme(value), settings: (value) => settingsListener(value) };
 }
 
 /** A fake exposure that keeps each served status. */
@@ -131,11 +139,13 @@ test("the layout probe manifests satisfy the installation contract and only the 
 test("the tab view and a section view together serve every declared status and register every declared command", { timeout: 1000 }, async () => {
   const { fake, served } = await startTab();
   const section = fakeExpose();
-  await startProbeSection({ bridge: fakeBridge().bridge, expose: section.expose,
+  const sectionBridge = fakeBridge();
+  await startProbeSection({ bridge: sectionBridge.bridge, expose: section.expose,
     view: fakeView({ surface: "spc-1/right/layoutprobe.alpha", params: null, origin: { directory: null }, project: null,
       section: { id: "layoutprobe.alpha", sidebar: "right", card: null } }) });
   assert.deepEqual([...served.keys(), ...section.served.keys()].sort(), probe.exposes.status.map((status) => status.name).sort());
   assert.deepEqual([...fake.commands.keys()].sort(), probe.exposes.commands.map((command) => command.name).sort());
+  assert.deepEqual([...sectionBridge.commands.keys()], ["layoutprobe.open"]);
   for (const [name, entry] of [...served, ...section.served]) {
     assert.ok(matchesSchema(schemaOf(probe, name), entry.read()), `${name}: ${JSON.stringify(entry.read())}`);
   }
@@ -200,15 +210,16 @@ test("the document status follows the messages of the region document and the vi
   const { view, fake, served } = await startTab();
   const status = served.get("layoutprobe.document");
   assert.deepEqual(status.read(), { url: documentAddress("tab-7"), reported: false, scheme: null, document: null,
-    visibility: null, stored: null, color: null });
+    visibility: null, changes: null, stored: null, color: null });
   // The view receives its own posts as document messages too, and they carry no from mark.
   fake.region.onMessage({ to: "layoutprobe.document", color: "red" });
   assert.equal(status.read().reported, false);
-  fake.region.onMessage({ from: "layoutprobe.document", scheme: "light", visibility: "visible", stored: "kept", color: "rgb(0, 128, 96)" });
+  fake.region.onMessage({ from: "layoutprobe.document", scheme: "light", visibility: "visible", changes: 0, stored: "kept", color: "rgb(0, 128, 96)" });
   assert.deepEqual(status.read(), { url: documentAddress("tab-7"), reported: true, scheme: "light", document: "visible",
-    visibility: "shown", stored: "kept", color: "rgb(0, 128, 96)" });
-  fake.region.onMessage({ from: "layoutprobe.document", scheme: "dark", visibility: "hidden", stored: "kept", color: "rgb(0, 128, 96)" });
+    visibility: "shown", changes: 0, stored: "kept", color: "rgb(0, 128, 96)" });
+  fake.region.onMessage({ from: "layoutprobe.document", scheme: "dark", visibility: "hidden", changes: 1, stored: "kept", color: "rgb(0, 128, 96)" });
   assert.equal(status.read().visibility, "occluded");
+  assert.equal(status.read().changes, 1);
   view.document.visibilityState = "hidden";
   view.document.dispatch("visibilitychange");
   assert.equal(status.read().visibility, "hidden");
@@ -286,7 +297,8 @@ test("the region document reports its scheme, visibility, stored value and color
     postMessage: (message, origin) => { assert.equal(origin, "soksak://layoutprobe"); posted.push(message); },
   });
   startDocumentProbe(window);
-  const report = (change) => ({ from: "layoutprobe.document", scheme: "dark", visibility: "visible", stored: "before", color: "rgb(0, 128, 96)", ...change });
+  const report = (change) => ({ from: "layoutprobe.document", scheme: "dark", visibility: "visible", changes: 0, stored: "before",
+    color: "rgb(0, 128, 96)", ...change });
   assert.deepEqual(posted, [report()]);
   dark.matches = false;
   dark.dispatch("change");
@@ -297,25 +309,77 @@ test("the region document reports its scheme, visibility, stored value and color
   window.dispatch("message", { data: { to: "layoutprobe.document", store: "after" } });
   assert.deepEqual(posted.slice(1), [
     report({ scheme: "light" }),
-    report({ scheme: "light", visibility: "hidden" }),
-    report({ scheme: "light", visibility: "hidden", color: "rgb(1, 2, 3)" }),
-    report({ scheme: "light", visibility: "hidden", color: "rgb(1, 2, 3)", stored: "after" }),
+    report({ scheme: "light", visibility: "hidden", changes: 1 }),
+    report({ scheme: "light", visibility: "hidden", changes: 1, color: "rgb(1, 2, 3)" }),
+    report({ scheme: "light", visibility: "hidden", changes: 1, color: "rgb(1, 2, 3)", stored: "after" }),
   ]);
+  // A scheme change is no visibility change, and each visibilitychange counts once.
+  document.visibilityState = "visible";
+  document.dispatch("visibilitychange");
+  assert.deepEqual(posted.at(-1), report({ scheme: "light", changes: 2, color: "rgb(1, 2, 3)", stored: "after" }));
   assert.equal(storage.get("layoutprobe.site.tab-7"), "after");
   assert.equal(storageKey({ href: "soksak://layoutprobe/ui/document.html" }), "layoutprobe.site.");
 });
 
-test("the second probe serves its declared status and follows its size", { timeout: 1000 }, async () => {
+/**
+ * Starts the second probe in a fake view whose line of text is 1.25 times its font size high, with a fake bridge whose text size
+ * starts at `factor` and an exposure that keeps the served statuses and the exposed elements.
+ */
+async function startSecond(factor = 1) {
   const view = fakeView({ surface: "tab-9", params: null, origin: { directory: null }, project: null, section: null });
+  const text = { style: {}, getBoundingClientRect: () => ({ height: Number.parseFloat(text.style.fontSize) * 1.25 }) };
+  const empty = { style: {} };
+  view.document.getElementById = (id) => ({ text, empty })[id] ?? null;
+  let textSize = null;
+  const bridge = { runtime: { textSize: { read: async () => factor, on: async (listener) => { textSize = listener; return () => {}; } } } };
   const { served, expose } = fakeExpose();
-  await startSecondProbe({ expose, view });
+  const elements = new Map();
+  expose.element = async (name, element) => { elements.set(name, element); };
+  await startSecondProbe({ bridge, expose, view });
+  return { view, served, elements, text, empty, textSize: (value) => textSize(value) };
+}
+
+test("the second probe serves its declared status and elements and follows its size", { timeout: 1000 }, async () => {
+  const { view, served, elements, text, empty } = await startSecond();
   assert.deepEqual([...served.keys()], second.exposes.status.map((status) => status.name));
+  assert.deepEqual([...elements.keys()], second.exposes.element.map((element) => element.name));
+  assert.deepEqual([elements.get("layoutprobe2.text"), elements.get("layoutprobe2.empty")], [text, empty]);
   assert.equal(second.sidebars, undefined);
   const status = served.get("layoutprobe2.surface");
   const values = [];
   status.subscribe((value) => values.push(value));
   view.innerHeight = 200;
   view.dispatch("resize");
-  assert.deepEqual(values, [{ surface: "tab-9", width: 640, height: 200, scale: 2 }]);
+  assert.deepEqual(values, [{ surface: "tab-9", width: 640, height: 200, scale: 2, text: { factor: 1, height: TEXT_SIZE * 1.25 } }]);
   assert.ok(matchesSchema(schemaOf(second, "layoutprobe2.surface"), status.read()));
+});
+
+test("the second probe draws its text at the text size of its surface and reports each change", { timeout: 1000 }, async () => {
+  const { served, text, textSize } = await startSecond(1.25);
+  const status = served.get("layoutprobe2.surface");
+  assert.equal(text.style.fontSize, `${TEXT_SIZE * 1.25}px`);
+  assert.deepEqual(status.read().text, { factor: 1.25, height: TEXT_SIZE * 1.25 * 1.25 });
+  const values = [];
+  status.subscribe((value) => values.push(value.text));
+  textSize(1.5);
+  assert.equal(text.style.fontSize, `${TEXT_SIZE * 1.5}px`);
+  assert.deepEqual(values, [{ factor: 1.5, height: TEXT_SIZE * 1.5 * 1.25 }]);
+});
+
+test("the open command of a tab or section view runs core.file.open and answers the tab or the failure", { timeout: 1000 }, async () => {
+  const { fake } = await startTab();
+  const section = fakeBridge();
+  await startProbeSection({ bridge: section.bridge, expose: fakeExpose().expose,
+    view: fakeView({ surface: "spc-1/left/layoutprobe.beta", params: null, origin: { directory: null }, project: null,
+      section: { id: "layoutprobe.beta", sidebar: "left", card: null } }) });
+  const declared = probe.exposes.commands.find((command) => command.name === "layoutprobe.open");
+  for (const { commands, ran } of [fake, section]) {
+    const opened = await commands.get("layoutprobe.open")({ path: "notes/b.lprobe" });
+    const refused = await commands.get("layoutprobe.open")({ path: "notes/b.unknown" });
+    assert.deepEqual(opened, { tab: "tab-8", error: null });
+    assert.deepEqual(refused, { tab: null, error: "no plugin opens notes/b.unknown" });
+    assert.deepEqual(ran, [["core.file.open", { path: "notes/b.lprobe" }], ["core.file.open", { path: "notes/b.unknown" }]]);
+    for (const value of [opened, refused]) assert.ok(matchesSchema(declared.result, value), JSON.stringify(value));
+    await assert.rejects(commands.get("layoutprobe.open")({ path: "" }), /requires a path/);
+  }
 });

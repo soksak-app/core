@@ -8,16 +8,19 @@ import { fresh } from "./fixture.mjs";
 const panes = (grid) => grid.cards.filter((card) => card.pane !== null);
 const card = (grid, id) => grid.cards.find((item) => item.id === id);
 const spread = (values) => Math.max(...values) - Math.min(...values);
+/** The card of the grid that holds the tab surface. */
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the auto-arrange button gives three over four cards a fair share`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface, plugin } = await fresh(s);
+    const first = cardOf(await s.get("core.grid"), surface);
     // The upper row is divided into 1/2, 1/4 and 1/4, the lower row into four times 1/4, and then one boundary of the lower row is moved to make the division uneven.
-    const split = async (from, side) => (await s.run("core.card.split", { card: from, side, plugin: "browser" })).card;
+    const split = async (from, side) => (await s.run("core.card.split", { card: from, side, plugin })).card;
     const start = panes(await s.get("core.grid")).length;
-    const lower = await split("terminal", "bottom");
-    const upper = ["terminal"];
+    const lower = await split(first, "bottom");
+    const upper = [first];
     upper.push(await split(upper[0], "right"));
     upper.push(await split(upper[1], "right"));
     const far = await split(lower, "right");

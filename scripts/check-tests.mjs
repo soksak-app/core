@@ -1875,7 +1875,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestAWorkbenchStartingEndsItsPredecessorsDialogBackground" },
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground" },
-      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor terminal images and documents unblurred" },
+      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor raster images and documents unblurred" },
     ],
     expected: "Reload retires the previous workbench dialog background claim while preserving an independent current native dialog; successor images and documents are unblurred when no effective dialog remains.",
     levels: ["unit", "application"],
@@ -1890,9 +1890,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing" },
       { file: "packages/workbench-mygo/tests/host_calls_test.go", id: "TestEndedCallsAnswerNothingAndCallNothing" },
       { file: "packages/host/go/src/view_join_test.go", id: "TestAPresentationWhoseTicketAReloadCancelledIsNoLongerCurrent" },
-      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+      { file: "e2e/edit-menu-keys.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
     ],
-    expected: "Reload ends the previous mygo workbench calls: ended calls invoke and answer nothing, cancelled presentation tickets report no longer current, and actual terminal-edit reload completes before selection and menu copy/paste.",
+    expected: "Reload ends the previous mygo workbench calls: ended calls invoke and answer nothing, cancelled presentation tickets report no longer current, and the actual edit-menu-keys reload completes before selection and menu copy/paste.",
     levels: ["unit", "application"],
   },
   {
@@ -2471,9 +2471,9 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench-mygo/tests/tab_state_test.go", id: "TestEachReadOfTheSessionsOfATabRecordsItsCause" },
       { file: "packages/workbench/test/tab-session.test.mjs", id: "each read of the sessions of a tab records its cause" },
-      { file: "e2e/browser.test.mjs", id: "a quit with a browser tab reads its sessions once and calls no page after the window" },
+      { file: "e2e/document-region.test.mjs", id: "a quit with a document region tab reads its sessions once and calls no page after the window" },
     ],
-    expected: "A quit while a browser tab holds a document region reads the sessions of the tab once with the cause flush and calls no page after its window is gone.",
+    expected: "A quit while a tab holds a document region reads the sessions of the tab once with the cause flush and calls no page after its window is gone.",
     levels: ["unit", "application"],
   },
   {
@@ -2514,7 +2514,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+C runs copy: once through the Copy item" },
       { file: "native/darwin/tests/input_virtual_key_equivalent_test.m", id: "Command+V runs paste: once through the Paste item" },
-      { file: "e2e/terminal-edit.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
+      { file: "e2e/edit-menu-keys.test.mjs", id: "${app.name}: injected Command+C and Command+V run the Edit menu like a person's keys" },
     ],
     expected: "Virtual-key Command+C and Command+V take the menu/responder equivalent path once while another application remains active, with actual copy/paste verified on mygo, Wails and Tauri.",
     levels: ["unit", "application"],
@@ -2548,7 +2548,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that closes without a region records the keys it drops" },
       { file: "packages/host/go/src/view_join_test.go", id: "TestAnImageRegionDeclarationKeepsTheKeysOfItsSurface" },
       { file: "packages/host/rust/src/surfaces_test.rs", id: "an_image_region_declaration_keeps_the_keys_of_its_surface" },
-      { file: "e2e/new-tab-keys.test.mjs", id: "keys typed as a new tab opens reach its terminal whole" },
+      { file: "e2e/new-tab-keys.test.mjs", id: "keys typed as a new tab opens reach its image region whole" },
     ],
     expected: "Keys typed before the image region of a surface shows reach the region in order, up to 256, and the keys over the limit or left at the close are recorded as dropped.",
     levels: ["native", "unit", "application"],
@@ -4007,19 +4007,11 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-292",
-    implementation: [{ file: "e2e/browser.test.mjs", symbol: "traceRows(readEvents(" }],
+    implementation: [{ file: "e2e/document-region.test.mjs", symbol: "traceRows(readEvents(" }],
     tests: [
-      { file: "e2e/browser.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
-      { file: "e2e/browser.test.mjs", id: "a browser without an address hides its document region and shows the empty state" },
+      { file: "e2e/document-region.test.mjs", id: "a placement that keeps a shown document in place does not hide it" },
     ],
-    expected: "The placement check reads the applied placements from host.trace.surface and the empty state check expects the root document of the browser view at the empty state.",
-    levels: ["application"],
-  },
-  {
-    id: "F239-294",
-    implementation: [{ file: "e2e/library.test.mjs", symbol: "const removed = folder.replace(" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" }],
-    expected: "The library check declares the three texts of the files tree failure that its folder removal causes and passes on both hosts.",
+    expected: "The placement check reads the applied placements from host.trace.surface.",
     levels: ["application"],
   },
   {
@@ -4811,25 +4803,6 @@ const FEATURE_LINKS = [
     ]
   },
   {
-    id: "F239-175",
-    implementation: [
-      {
-        file: "e2e/activation/ime-visual-capture.mjs",
-        symbol: "export function persistThenRequireVisualProof("
-      }
-    ],
-    tests: [
-      {
-        file: "e2e/test/activation/ime-visual-capture.test.mjs",
-        id: "visual proof preserves cadence measurements without a functional gap threshold"
-      }
-    ],
-    expected: "Complete IME visual proof preserves cadence measurements while missing proof remains a failure.",
-    levels: [
-      "unit"
-    ]
-  },
-  {
     id: "F239-176",
     implementation: [
       {
@@ -4873,10 +4846,6 @@ const FEATURE_LINKS = [
       {
         file: "e2e/activation/terminal-ime-document.mjs",
         symbol: "export async function readTerminalObservationSnapshot("
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        symbol: "readHost: async () =>"
       }
     ],
     tests: [
@@ -4915,10 +4884,6 @@ const FEATURE_LINKS = [
       {
         file: "e2e/activation/terminal-ime-document.mjs",
         symbol: "let stopping = null;"
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        symbol: "await stateObserver.stop();"
       }
     ],
     tests: [
@@ -4929,16 +4894,11 @@ const FEATURE_LINKS = [
       {
         file: "e2e/test/activation/terminal-ime-document.test.mjs",
         id: "terminal observer stop retries only subscriptions whose release did not succeed"
-      },
-      {
-        file: "e2e/activation/ime.test.mjs",
-        id: "eight Korean vowels and one Backspace retain an exact input trace"
       }
     ],
     expected: "Observation ends before offline analysis and repeated cleanup retries only unfinished subscription releases.",
     levels: [
-      "unit",
-      "application"
+      "unit"
     ]
   },
   {
@@ -4946,7 +4906,7 @@ const FEATURE_LINKS = [
     implementation: [
       {
         file: "e2e/activation/ime.test.mjs",
-        symbol: "const runRepeatedVowelScenario = async"
+        symbol: "for (const [index, key] of keys.entries())"
       }
     ],
     tests: [
@@ -4955,23 +4915,10 @@ const FEATURE_LINKS = [
         id: "eight Korean vowels and one Backspace retain an exact input trace"
       }
     ],
-    expected: "The complete approved two-host IME gesture retains matching documents, exact visual proof and error-free cleanup.",
+    expected: "The complete approved two-host IME gesture retains matching documents, each transaction received unchanged by the sidecar and error-free cleanup.",
     levels: [
       "application"
     ]
-  },
-  {
-    id: "F239-98",
-    implementation: [
-      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export async function startImeCapture(" },
-      { file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function attachImeFrameIdentities(" },
-    ],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "IME capture does not start when renderer metadata is absent" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "display time differs" },
-    ],
-    expected: "IME capture requires renderer metadata and opt-in identity capture, and joins each exact callback display time to its issued source identity.",
-    levels: ["unit"],
   },
   {
     id: "F239-146",
@@ -5151,25 +5098,14 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
-    id: "F239-47-36",
-    implementation: [
-      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario(t, \"zsh\")" },
-    ],
-    tests: [
-      { file: "e2e/activation/ime.test.mjs", id: "zsh ZLE redraw retains the eight-vowel Backspace and Space input trace" },
-    ],
-    expected: "The fixed zsh ZLE gesture preserves all reference documents and measured glyph/underline stages with complete captures and independent cadence metrics.",
-    levels: ["application"],
-  },
-  {
     id: "F239-180",
     implementation: [
-      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "const completed = await waitForTerminalStage(" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", symbol: "await untilDocument(lifecycle, surface, start, expectedDocument," },
     ],
     tests: [
       { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
     ],
-    expected: "Lifecycle completion waits for a coherent complete reference document and preserves isolated observations and complete decoded capture artifacts.",
+    expected: "Lifecycle completion waits for the complete reference document in the image region and preserves isolated observations and complete decoded capture artifacts.",
     levels: ["application"],
   },
   {
@@ -5360,7 +5296,7 @@ const FEATURE_LINKS = [
   {
     id: "F212.12-2-3",
     implementation: [
-      { file: "e2e/view-input.test.mjs", symbol: "const clickAddress =" },
+      { file: "e2e/view-input.test.mjs", symbol: "const clickField =" },
     ],
     tests: [
       { file: "e2e/view-input.test.mjs", id: "an inactive view retains input across main focus and handles picker Escape" },
@@ -5511,12 +5447,12 @@ const FEATURE_LINKS = [
     id: "F212.13",
     implementation: [
       { file: "native/darwin/src/input_reference.m", symbol: "void sp_input_reference(" },
-      { file: "e2e/activation/ime.test.mjs", symbol: "runRepeatedVowelScenario" },
+      { file: "e2e/activation/ime.test.mjs", symbol: "await compareAppKitReference(s, keys, documents.at(-1), documents);" },
     ],
     tests: [
       { file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" },
     ],
-    expected: "Approved same-window AppKit and terminal activation inputs match all documents and measured glyph/underline stages with complete captures, restored baseline and clean shutdown.",
+    expected: "Approved same-window AppKit and image region activation inputs match all documents, each received unchanged by the sidecar, with restored baseline and clean shutdown.",
     levels: ["application"],
   },
   {
@@ -6245,7 +6181,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "native/darwin/tests/window_facts_test.m", id: "document webview focus is reported" },
-      { file: "e2e/browser.test.mjs", id: "browser document focus and isolation" },
     ],
     expected: "A single click inside a browser document makes that document the native first responder, and a later click in another document transfers focus without leaving the first document focused.",
     levels: ["native", "application"],
@@ -6287,7 +6222,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
-      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
       { file: "e2e/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
@@ -6304,7 +6239,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/terminal-keyboard.test.mjs", id: "native keyboard edits and executes independently in three terminals" },
-      { file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" },
+      { file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" },
       { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
@@ -6334,17 +6269,6 @@ const FEATURE_LINKS = [
     ],
     expected: "The first native click focuses a terminal and the next character is accepted without a second click.",
     levels: ["unit", "native", "application"],
-  },
-  {
-    id: "F0.1.3",
-    implementation: [
-      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_key" },
-    ],
-    tests: [
-      { file: "e2e/browser.test.mjs", id: "browser document region navigates" },
-    ],
-    expected: "The first address entry replaces the selected URL instead of appending to it, while later clicks retain caret editing.",
-    levels: ["unit", "application"],
   },
   {
     id: "F0.2",
@@ -6704,7 +6628,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
       { file: "e2e/terminal.test.mjs", id: "the terminal font follows the pressed card's text size" },
-      { file: "e2e/browser.test.mjs", id: "the browser document zoom follows the pressed card's text size" },
     ],
     expected: "Command =, -, and 0 change the text size of the last pressed card or of the frame and every card: DOM content by CSS zoom, terminal cells by font size, and browser documents by page zoom, while the plane stays inside the window.",
     levels: ["unit", "application"],
@@ -7116,9 +7039,9 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/input_inject.m", symbol: "sp_input_result sp_input_key" },
     ],
     tests: [
-      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to the prompt, trace off and on" },
+      { file: "e2e/input-latency.test.mjs", id: "input latency from the injected key to its arrival, trace off and on" },
     ],
-    expected: "Every injected Enter is answered by a prompt with the performance trace off, on and off again, and the measured times are reported.",
+    expected: "Every injected Enter arrives in the input probe field with the performance trace off, on and off again, and the measured times are reported.",
     levels: ["application"],
   },
   {
@@ -7720,9 +7643,9 @@ const FEATURE_LINKS = [
     ],
     tests: [
       // The message-row part of the expected result is held (F332-4-4-1); this test covers the error display part.
-      { file: "e2e/files.test.mjs", id: "a file that no plugin opens from the files tree section stays out of the error display" },
+      { file: "e2e/sidebar-sections.test.mjs", id: "a file that no plugin opens from a view stays out of the error display" },
     ],
-    expected: "The failure of core.file.open for a file that no plugin opens is shown in the message row of the file tree of the files plugin and not in the error display of the main document.",
+    expected: "The failure of core.file.open for a file that no plugin opens returns to the view that ran it and is not shown in the error display of the main document.",
     levels: ["application"],
   },
   {
@@ -7869,7 +7792,7 @@ const FEATURE_LINKS = [
   {
     id: "F149",
     implementation: [{ file: "packages/log-contract/index.js", symbol: "export function auditLog" }],
-    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" }],
+    tests: [{ file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" }],
     expected: "Typed English text and a composed Korean syllable pass through every layer of a running application and reach the PTY once.",
     levels: ["application"],
   },
@@ -10203,8 +10126,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/documents.rs", symbol: "set_document_appearance" },
       { file: "packages/host/go/src/documents.go", symbol: "SetDocumentAppearance" },
     ],
-    tests: [{ file: "e2e/browser.test.mjs", id: "browser documents follow host theme pixels for existing, new, and reloaded documents" }],
-    expected: "Existing, newly split, and reloaded browser documents apply the current host theme before presentation and retain their explicit HTTP(S) location.",
+    tests: [{ file: "e2e/document-region.test.mjs", id: "documents follow host theme pixels for existing, new, and reloaded documents" }],
+    expected: "Existing, newly split, and reloaded documents apply the current host theme before presentation.",
     levels: ["unit", "native", "application"],
   },
   {
@@ -10213,7 +10136,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/theme.rs", symbol: "set" },
       { file: "packages/host/go/src/theme.go", symbol: "SetTheme" },
     ],
-    tests: [{ file: "e2e/browser.test.mjs", id: "a site's appearance remains independent of the host theme" }],
+    tests: [{ file: "e2e/document-region.test.mjs", id: "a document's own appearance remains independent of the host theme" }],
     expected: "A local document that fixes its own colour keeps that colour when the host switches light to dark, the region receives the host color scheme, and its URL remains unchanged.",
     levels: ["application"],
   },
@@ -10357,7 +10280,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Backspace during a composition edits it to 하 without PTY input" },
       { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Enter commits the edited syllable once and is reported after it" },
-      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" },
+      { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the sidecar once" },
     ],
     expected: "The image-region client commits its local marked buffer once before following input, while Backspace can edit the current composition without sending a PTY key. The real-input-source result remains separately verified by its activation case.",
     levels: ["native", "application"],
@@ -10513,33 +10436,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-47-12",
-    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
-    tests: [
-      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" },
-      { file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" },
-    ],
-    expected: "The visual calculator validates the producer screen.render metadata and its distinct capture pixel format, effective glyph colors, fractional geometry, and blink-off cursor representation.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-13",
-    implementation: [
-      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function mapCaptureRaster(" },
-      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function measureRenderedCell(" },
-    ],
-    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "raw glyph ink bounds preserve signed overhang and clip only to the raster" }],
-    expected: "Signed glyph and underline bounds retain their source coordinates, map through capture raster origin, and clip only to the raster while rejecting mismatched frame provenance.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-14",
-    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" }],
-    expected: "Cursor rectangle and color metadata are required only when the producer draws the cursor, including normal and difference blend rules.",
-    levels: ["unit"],
-  },
-  {
     id: "F268",
     implementation: [
       { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.message.frame-preedit" },
@@ -10592,16 +10488,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F239-47-17",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an advanced cursor frame against prior rows when identical rows suppress screen status" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "rejects future rows but reuses identical rows across a frame generation change" },
-    ],
-    expected: "Visual status indexing associates a cursor frame with the valid preceding screen rows even when identical rows suppress a new screen event, and rejects future row state.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-47-18",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function selectCoherentTerminalObservation(" }],
     tests: [
@@ -10609,16 +10495,6 @@ const FEATURE_LINKS = [
       { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
     ],
     expected: "The selected terminal observation is the latest coherent reread, screen, region and accepted event slice; an incoherent earlier read is not returned.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-19",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function planVisualStage(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "stage planning accepts prior base rows with the exact current overlay frame" },
-      { file: "e2e/test/activation/terminal-ime-document.test.mjs", id: "requires coherent base screen presentation without equating a later overlay frame" },
-    ],
-    expected: "Visual stages retain the exact cursor overlay frame and use prior base-screen rows without requiring those distinct frames to have equal sequence identities.",
     levels: ["unit"],
   },
   {
@@ -10893,13 +10769,6 @@ const FEATURE_LINKS = [
       { file: "packages/sok/go/tests/platform/windows/private_files_test.go", id: "TestPrivateFileOperationsFailExplicitlyWithoutCreatingFiles" },
     ],
     expected: "The Wails CLI routes event-log directory/file and process-lock creation through its platform interface; Darwin and Linux enforce the Unix private modes, and Windows rejects these operations before creating their paths.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-47-10",
-    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata" }],
-    tests: [{ file: "e2e/test/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" }],
-    expected: "Renderer metadata is accepted only when its geometry and pixel layout belong to the measured frame.",
     levels: ["unit"],
   },
   {
@@ -12294,7 +12163,7 @@ const FEATURE_LINKS = [
   {
     id: "F424",
     implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "a skipped test; assert its precondition" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "terminal source card not found" }],
+    tests: [{ file: "e2e/library.test.mjs", id: "raster source card not found" }],
     expected: "A window check whose precondition fails reports a failure.",
     levels: ["application"],
   },
@@ -12363,8 +12232,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F332-7",
-    implementation: [{ file: "e2e/observation/section-design.test.mjs", symbol: "stills of the files and browser sections in each mode" }],
-    tests: [{ file: "e2e/observation/section-design.test.mjs", id: "stills of the files and browser sections in each mode" }],
+    implementation: [{ file: "e2e/observation/section-design.test.mjs", symbol: "stills of the probe sections and document in each mode" }],
+    tests: [{ file: "e2e/observation/section-design.test.mjs", id: "stills of the probe sections and document in each mode" }],
     expected: "Stills of the applications in each mode show the sections for inspection.",
     levels: ["application"],
   },
@@ -12727,34 +12596,6 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
-    id: "F239-98-1-1",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
-    expected: "Visual proof persistence requires complete cadence evidence and records measured outcomes before rejection.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-1",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function persistThenRequireVisualProof" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual proof preserves cadence measurements without a functional gap threshold" }],
-    expected: "Complete visual results and cadence measurements are persisted before incomplete functional proof is rejected.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-2",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "visual indexing projects rows-only screen status without inventing a screen frame" }],
-    expected: "Visual input uses prior rows-only terminal screen status without inventing a screen frame identity.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-98-3",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function semanticRasterColorSpace(name)" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "source manifest loads only digest-verified frame-bound rasters" }],
-    expected: "The retained-source consumer maps the emitted CoreGraphics sRGB name to the semantic sRGB label and rejects unsupported names without changing raster bytes.",
-    levels: ["unit"],
-  },
-  {
     id: "F239-93",
     implementation: [{ file: "scripts/test-hosts.mjs", symbol: "export function auditHostContract" }],
     tests: [{ file: "scripts/test/test-hosts.test.mjs", id: "the static audit reports each case of a host scope that no test declares" }],
@@ -12876,16 +12717,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/diagnostics_test.go", id: "TestRecordingFinishStopFailurePreservesFolder" },
     ],
     expected: "Capture stop and layout failures preserve and report the folder returned by capture start.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-134",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexAcceptedFrameTrace(" }],
-    tests: [
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" },
-      { file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "joins repeated screen messages to every exact accepted native frame tuple" },
-    ],
-    expected: "Visual screen records join only to accepted native frame tuples with exact trace and hash identity.",
     levels: ["unit"],
   },
   {
@@ -13020,13 +12851,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function placeSurfaces(" }],
     tests: [{ file: "packages/workbench/test/surface-view-path.test.mjs", id: "a later retained mount waits for the preceding placement release" }],
     expected: "A retained mount starts only after the preceding placement finishes its release and survives that release.",
-    levels: ["unit"],
-  },
-  {
-    id: "F239-158",
-    implementation: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", symbol: "@capture-fixture/sidecar" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "indexes an accepted screen frame from its exact TRACE body and DEBUG hash marker" }],
-    expected: "Consumer capture fixtures retain wire behavior without naming a workspace sidecar implementation.",
     levels: ["unit"],
   },
   {
@@ -13426,9 +13250,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-76",
-    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: 'await s.run("terminal.focus", {}, surface)' }],
+    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: "await focusImageActive(s, surface);" }],
     tests: [{ file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" }],
-    expected: "The declared terminal focus command establishes focus before the input trace.",
+    expected: "The declared raster probe focus command establishes image region focus before the input trace.",
     levels: ["application"],
   },
   {
@@ -13457,13 +13281,6 @@ const FEATURE_LINKS = [
     ],
     expected: "Each Hangul and Backspace input matches its reference document and exact-frame visual state independently of the recording quality result.",
     levels: ["unit", "application"],
-  },
-  {
-    id: "F239-98-4",
-    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
-    tests: [{ file: "e2e/test/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],
-    expected: "Tag-scoped visual proof evaluates the exact issued target despite unrelated incomplete source state.",
-    levels: ["unit"],
   },
   {
     id: "F239-111",
@@ -14613,11 +14430,19 @@ const MOVED_COMPLETIONS = new Set(["F596", "F239-170", "F239-197", "F239-247", "
 // F239-201, F239-229, F608 and F684 wrote the build target of the captured-text recognizer, the crop of a frame that it read and the
 // statement of its failure, which F696-4-4 removes with the recognizer: a window check reads the content of a view from the public
 // value that holds it.
-const REMOVED_COMPLETIONS = new Set(["F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
+// F239-98, F239-98-1, F239-98-1-1, F239-98-2, F239-98-3, F239-98-4, F239-47-17, F239-47-19, F239-134, F239-158 and F239-175 wrote
+// the capture of a terminal IME composition, its stages and its visual proof, which F715-2 removes: the IME checks of core type
+// into the image region of the raster probe, and the glyph proof of a terminal belongs to the terminal plugin.
+// F239-47-10, F239-47-12, F239-47-13 and F239-47-14 wrote the measure of the glyphs, the underline and the cursor that a terminal
+// renders, which F715-2 removes with that proof.
+// F239-294 declared in the library check the files tree errors that its folder removal causes, which F715-2 removes: the core
+// window checks show no files section.
+const REMOVED_COMPLETIONS = new Set(["F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
+  "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
   "F249", "F292-7", "F68", "F60", "F91", "F114", "F116", "F125", "F239-269", "F55", "F239-47-24", "F239-182", "F239-68", "F278",
   "F278-1", "F280", "F283-1", "F283-2", "F286", "F290", "F292-26-3", "F226", "F239-39", "F239-41", "F239-41-1", "F239-42",
   "F239-42-1", "F239-42-2", "F239-241", "F248-7", "F248-8", "F212.9a", "F212.9a-2", "F239-226", "F239-230", "F239-51", "F239-52",
-  "F239-201", "F239-229", "F608", "F684"]);
+  "F239-201", "F239-229", "F608", "F684", "F239-294"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

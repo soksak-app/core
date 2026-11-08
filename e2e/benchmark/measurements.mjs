@@ -15,7 +15,7 @@
 //   split-load                  hostGrowthKb, the growth of the host process under load
 //   idle-tab                    idleTabCostKb, the cost of the idle tab, and documentPartKb, its part in documents
 //   *-view, editor-footprint    verdict
-//   input-latency               terminalMedianMs, terminalP90Ms, termMedianMs and termP90Ms, the keys of the configurations with the
+//   input-latency               fieldMedianMs, fieldP90Ms, documentMedianMs and documentP90Ms, the keys of the configurations with the
 //                               trace off and the default gate
 
 import { FRAME_RECORDS, traceSettings } from "../../scripts/measure-trace.mjs";
@@ -39,7 +39,7 @@ export const B3_MEASUREMENTS = Object.freeze({
   "hwp-view": keys("verdict"),
   "section-view": keys("verdict"),
   "editor-footprint": keys("verdict"),
-  "input-latency": keys("terminalMedianMs", "terminalP90Ms", "termMedianMs", "termP90Ms"),
+  "input-latency": keys("fieldMedianMs", "fieldP90Ms", "documentMedianMs", "documentP90Ms"),
 });
 
 /** The frozen settings of `performance`, the value of diagnostics.performance, and `log`, the value of diagnostics.log. */

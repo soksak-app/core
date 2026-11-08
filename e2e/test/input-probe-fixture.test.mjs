@@ -26,11 +26,14 @@ test("the input probe declares the statuses, commands and elements of the input 
   assert.deepEqual(names(manifest.exposes.commands), ["probeinput.clear", "probeinput.clock", "probeinput.select"]);
   assert.deepEqual(names(manifest.exposes.element), ["probeinput.field", "probeinput.text"]);
   const status = Object.fromEntries(manifest.exposes.status.map((entry) => [entry.name, entry.schema.properties]));
-  const input = ["documentTimeOriginMs", "focused", "value", "caret", "preedit", "keys", "commits", "copies", "pastes"];
+  const input = ["documentTimeOriginMs", "focused", "value", "caret", "preedit", "keys", "commits", "copies", "pastes", "wheels",
+    "pointer"];
   assert.deepEqual(Object.keys(status["probeinput.field"]), input);
   assert.deepEqual(Object.keys(status["probeinput.document"]), ["ready", ...input]);
   assert.deepEqual(Object.keys(status["probeinput.field"].keys.items.properties),
     ["sequence", "type", "key", "code", "modifiers", "text", "composing", "repeat", "trusted", "atMs"]);
+  assert.deepEqual(Object.keys(status["probeinput.field"].wheels.items.properties), ["sequence", "deltaX", "deltaY", "modifiers", "atMs"]);
+  assert.deepEqual(Object.keys(status["probeinput.field"].pointer.properties), ["downs", "drags", "ups", "foreign"]);
   assert.deepEqual(Object.keys(status["probeinput.routing"]), ["pickerOpen", "forwarded"]);
 });
 
@@ -64,11 +67,13 @@ function fakeField() {
     } });
   const document = eventTarget({ activeElement: element, hasFocus: () => true });
   const view = eventTarget({ document, performance: { timeOrigin: 1000, now: () => 5 } });
-  const fire = (type, event = {}) => {
-    // default: an event without a time arrives at time 0.
-    for (const fn of element.on.get(type) ?? []) fn({ type, timeStamp: 0, ...event });
+  // default: an event without a time arrives at time 0.
+  const dispatch = (target, type, event) => {
+    for (const fn of target.on.get(type) ?? []) fn({ type, timeStamp: 0, ...event });
   };
-  return { element, view, fire };
+  const fire = (type, event = {}) => dispatch(element, type, event);
+  const fireDocument = (type, event = {}) => dispatch(document, type, event);
+  return { element, view, fire, fireDocument };
 }
 
 const key = (key, extra = {}) => ({ key, code: `Key${key.toUpperCase()}`, shiftKey: false, altKey: false, ctrlKey: false,
@@ -129,4 +134,21 @@ test("the input log reports the copied selection, the pasted text, the caret, an
   assert.equal(state.value, "");
   assert.deepEqual([state.keys, state.commits, state.copies, state.pastes, state.preedit], [[], [], [], [], null]);
   assert.deepEqual(log.clock(), { documentTimeOriginMs: 1000, sourceNowMs: 5, sourceResolutionMs: 1 });
+});
+
+test("the input log reports the wheels and the pointer gesture of its document, and a foreign button", { timeout: 5000 }, () => {
+  const { element, view, fireDocument } = fakeField();
+  const log = createInputLog(element, view);
+  fireDocument("wheel", { deltaX: 0, deltaY: -120, shiftKey: true, altKey: false, ctrlKey: false, metaKey: false, timeStamp: 7 });
+  fireDocument("pointerdown", { buttons: 1 });
+  fireDocument("pointermove", { buttons: 1 });
+  fireDocument("pointermove", { buttons: 1 });
+  fireDocument("pointerup", { buttons: 0 });
+  fireDocument("pointermove", { buttons: 2 });
+  let state = log.read();
+  assert.deepEqual(state.wheels, [{ sequence: 1, deltaX: 0, deltaY: -120, modifiers: ["shift"], atMs: 7 }]);
+  assert.deepEqual(state.pointer, { downs: 1, drags: 2, ups: 1, foreign: 1 });
+  log.clear();
+  state = log.read();
+  assert.deepEqual([state.wheels, state.pointer], [[], { downs: 0, drags: 0, ups: 0, foreign: 0 }]);
 });

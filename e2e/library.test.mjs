@@ -6,9 +6,15 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, open } from "@soksak/window-check/app.mjs";
-import { fresh, terminalReady } from "./fixture.mjs";
+import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { terminalProcessSnapshot } from "./terminal-processes.mjs";
+import { processTable } from "./process-table.mjs";
+
+/**
+ * The plugin of the views with a native image region: the raster probe, whose fake persistent sidecar keeps one session with one
+ * child process for each surface (e2e/fixtures/raster-probe).
+ */
+const RASTER = "rasterprobe";
 
 /** One window of the window list that is not in known. */
 const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
@@ -37,10 +43,37 @@ async function returnProject(s, id, phase) {
   }
 }
 
+/**
+ * The processes of the raster probe tabs of the grid: the service pid and the sorted child pids that the sessions of the tabs report,
+ * hidden tabs included. The process table must show the service with exactly those children and no zombie among them.
+ */
+async function rasterProcessSnapshot(s, message) {
+  const tabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === RASTER);
+  const sessions = [];
+  for (const tab of tabs) {
+    sessions.push(await s.until("rasterprobe.session", (value) => value?.connected && typeof value.session === "string" ? value : null,
+      `${message}: ${tab.id} has no session`, { surface: tab.id }));
+  }
+  const services = new Set(sessions.map((session) => session.service?.pid));
+  assert.equal(services.size, 1, `${message}: the raster probe sessions do not share one service: ${JSON.stringify(sessions)}`);
+  const [service] = services;
+  assert.ok(Number.isInteger(service) && service > 0, `${message}: the raster probe service pid is missing`);
+  const rows = processTable("pid=,ppid=,stat=").trim().split("\n").map((line) => line.trim().split(/\s+/))
+    .map(([pid, parent, state]) => ({ pid: Number(pid), parent: Number(parent), state }));
+  const running = rows.find((row) => row.pid === service);
+  assert.ok(running && !running.state.includes("Z"), `${message}: the raster probe service ${service} is not running`);
+  const children = rows.filter((row) => row.parent === service);
+  for (const child of children) assert.equal(child.state.includes("Z"), false, `${message}: raster probe child ${child.pid} is a zombie`);
+  const reported = sessions.map((session) => session.child).sort((a, b) => a - b);
+  assert.deepEqual(children.map((row) => row.pid).sort((a, b) => a - b), reported,
+    `${message}: the children of the raster probe service are not the children of its sessions`);
+  return { service, children: reported };
+}
+
 /** Checks that the return to the project restored not only the DOM slots but also the visible native image raster. */
-async function assertVisibleTerminalRasters(s, minimum, message) {
-  const surfaces = await s.surfaces("terminal");
-  assert.ok(surfaces.length >= minimum, `${message}: expected at least ${minimum} visible terminals, got ${surfaces.length}`);
+async function assertVisibleRasters(s, minimum, message) {
+  const surfaces = await s.surfaces(RASTER);
+  assert.ok(surfaces.length >= minimum, `${message}: expected at least ${minimum} visible raster views, got ${surfaces.length}`);
   const window = await s.until("host.window", (state) => surfaces.every((surface) => {
     const region = state.regions.find((item) => item.surface === surface.surface);
     return region?.visible && region.presented && region.frame.width > 0 && region.frame.height > 0;
@@ -49,7 +82,7 @@ async function assertVisibleTerminalRasters(s, minimum, message) {
     const region = window.regions.find((item) => item.surface === surface.surface);
     assert.ok(region, `${message}: ${surface.surface} has no native image region`);
     assert.equal(region.visible, true,
-      `${message}: ${surface.surface} is a visible terminal surface but its native image region is hidden`);
+      `${message}: ${surface.surface} is a visible raster surface but its native image region is hidden`);
     assert.ok(region.presented, `${message}: ${surface.surface} has no presented raster`);
     assert.ok(region.frame.width > 0 && region.frame.height > 0,
       `${message}: ${surface.surface} has an empty native frame`);
@@ -58,11 +91,10 @@ async function assertVisibleTerminalRasters(s, minimum, message) {
     assert.equal(region.presented.height, Math.round(region.frame.height * region.presented.scale),
       `${message}: ${surface.surface} raster height does not match its native frame`);
   }
-  const visibleTerminalIds = new Set(surfaces.map((surface) => surface.surface));
-  const visibleTerminalRegions = window.regions.filter((region) =>
-    region.visible && visibleTerminalIds.has(region.surface));
-  assert.equal(visibleTerminalRegions.length, surfaces.length,
-    `${message}: visible terminal surfaces and visible native image regions are not one-to-one`);
+  const visibleIds = new Set(surfaces.map((surface) => surface.surface));
+  const visibleRegions = window.regions.filter((region) => region.visible && visibleIds.has(region.surface));
+  assert.equal(visibleRegions.length, surfaces.length,
+    `${message}: visible raster surfaces and visible native image regions are not one-to-one`);
 }
 
 /** Checks that no web view that the grid does not own remains in the native surface list of the host. */
@@ -75,8 +107,8 @@ async function assertNoOrphanNativeSurfaces(s, message) {
   assert.deepEqual(orphan, [], `${message}: orphan native surfaces ${orphan.map((surface) => surface.id).join(", ")}`);
 }
 
-/** Checks the white of the DOM in the terminal area in the real pixels of a recording of the whole return transition. */
-function assertNoWhiteTerminalBleed(frameFiles, regions, message) {
+/** Checks the white of the DOM in the image regions in the real pixels of a recording of the whole return transition. */
+function assertNoWhiteBleed(frameFiles, regions, message) {
   assert.ok(frameFiles.length > 0, `${message}: capture produced no frames`);
   let worst = { ratio: 0, frame: -1, surface: "" };
   for (const [frameIndex, path] of frameFiles.entries()) {
@@ -106,7 +138,7 @@ function assertNoWhiteTerminalBleed(frameFiles, regions, message) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: library windows create and open projects in place`, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface: startTab } = await fresh(s);
     const verification = await s.collect("core.verify");
     s.cleanup(async () => {
       const failed = (await verification.stop()).filter((value) => value?.rows?.some((row) =>
@@ -135,7 +167,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
     await s.run("core.projects.browse");
     assert.equal((await s.get("core.screen")).screen, "library");
-    assert.equal((await s.surfaces("terminal")).length, 0);
+    assert.equal((await s.surfaces(RASTER)).length, 0);
     assert.equal((await s.get("host.window")).surfaces.some((x) => x.visible), false, "the library shows no native surface");
     const library = await shown(s, 1, "the library did not list the project");
     const preview = library.previews[first.id].map(({ card, x, y, w, h }) => ({ id: card, x, y, w, h }));
@@ -147,11 +179,15 @@ for (const app of Object.values(APPS)) {
         if (a.y + a.h <= b.y) assert.ok(pa.y + pa.h < pb.y, `${a.id} must remain above ${b.id}`);
       }
     }
-    const [left, terminal, browser, right] = ["left", "terminal", "browser", "right"]
+    // The start layout holds the fixed sidebars left and right and between them two content cards, the card of the start tab above
+    // the other.
+    const upperId = grid.cards.find((card) => card.tabs?.some((tab) => tab.id === startTab)).id;
+    const lowerId = grid.cards.find((card) => card.id !== upperId && card.tabs?.length > 0).id;
+    const [left, upper, lower, right] = ["left", upperId, lowerId, "right"]
       .map((id) => preview.find((c) => c.id === id));
     assert.ok(Math.abs(left.w - right.w) <= 1 / 64, "sidebar widths must be uniform");
-    assert.ok(Math.abs(terminal.h - browser.h) <= 1 / 64, "split rows must have equal heights");
-    const gaps = [terminal.x - left.x - left.w, right.x - terminal.x - terminal.w, browser.y - terminal.y - terminal.h];
+    assert.ok(Math.abs(upper.h - lower.h) <= 1 / 64, "split rows must have equal heights");
+    const gaps = [upper.x - left.x - left.w, right.x - upper.x - upper.w, lower.y - upper.y - upper.h];
     assert.ok(gaps.every((gap) => gap > 0 && Math.abs(gap - gaps[0]) <= 1 / 64), "pane gaps must be uniform on both axes");
     const saved = await project(s, first.id);
     const space = saved.spaces.find((x) => x.id === saved.activeSpaceId);
@@ -160,39 +196,38 @@ for (const app of Object.values(APPS)) {
     await returnProject(s, first.id, "preview project return");
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not reopen after the preview check");
     await assertNoLibraryError(s, "the preview project return");
-    // After it creates three visible terminals, the check leaves for the library and returns to the same project.
+    // After it creates three visible raster views, the check leaves for the library and returns to the same project.
     // If the return command restores only the DOM and displays the native image raster late, this check fails.
-    let terminalCount = (await s.surfaces("terminal")).filter((surface) => surface.visible).length;
-    if (terminalCount === 0) {
-      const source = grid.cards.find((card) => card.id === "terminal" && card.tabs.length > 0);
-      assert.ok(source, "terminal source card not found");
-      await s.run("core.card.split", { card: source.id, side: "right", plugin: "terminal" });
+    let rasterCount = (await s.surfaces(RASTER)).filter((surface) => surface.visible).length;
+    if (rasterCount === 0) {
+      const source = grid.cards.find((card) => card.id === upperId && card.tabs.length > 0);
+      assert.ok(source, "raster source card not found");
+      await s.run("core.card.split", { card: source.id, side: "right", plugin: RASTER });
       await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
-        surface.visible && surface.plugin === "terminal").length > terminalCount,
-      "the first terminal card did not render");
-      terminalCount = 1;
+        surface.visible && surface.plugin === RASTER).length > rasterCount,
+      "the first raster card did not render");
+      rasterCount = 1;
     }
-    while (terminalCount < 3) {
+    while (rasterCount < 3) {
       // Splits the largest content card along its longer side. The fixed sidebar and the inner sidebar take space, so a small card
       // cannot be split further because of the minimum size rule.
       const [largest] = (await s.get("core.grid")).cards.filter((card) => !card.fixed)
         .sort((a, b) => b.w * b.h - a.w * a.h);
       assert.ok(largest, "no content card can be split");
-      await s.run("core.card.split", { card: largest.id, side: largest.w >= largest.h ? "right" : "bottom", plugin: "terminal" });
+      await s.run("core.card.split", { card: largest.id, side: largest.w >= largest.h ? "right" : "bottom", plugin: RASTER });
       const next = await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
-        surface.visible && surface.plugin === "terminal").length > terminalCount,
-      "a terminal card split did not produce another visible terminal");
-      terminalCount = next.filter((surface) => surface.visible && surface.plugin === "terminal").length;
+        surface.visible && surface.plugin === RASTER).length > rasterCount,
+      "a raster card split did not produce another visible raster view");
+      rasterCount = next.filter((surface) => surface.visible && surface.plugin === RASTER).length;
     }
-    await s.until("core.surfaces", (surfaces) => surfaces.filter((item) => item.visible && item.plugin === "terminal").length >= 3,
-      "three visible terminal surfaces did not render");
+    await s.until("core.surfaces", (surfaces) => surfaces.filter((item) => item.visible && item.plugin === RASTER).length >= 3,
+      "three visible raster surfaces did not render");
     await s.presented();
-    await assertVisibleTerminalRasters(s, 3, "before leaving the project");
-    const processesAtThree = terminalProcessSnapshot(app.configDir);
-    const terminalTabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs)
-      .filter((tab) => tab.plugin === "terminal");
-    assert.equal(processesAtThree.shells.length, terminalTabs.length,
-      "every open terminal owns one shell in the shared service, including hidden tabs");
+    await assertVisibleRasters(s, 3, "before leaving the project");
+    const processesAtThree = await rasterProcessSnapshot(s, "before leaving the project");
+    const rasterTabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === RASTER);
+    assert.equal(new Set(processesAtThree.children).size, rasterTabs.length,
+      "every open raster view owns one child in the shared service, including hidden tabs");
     const capture = await s.request("diagnostics.capture.start", {});
     let captureActive = true;
     s.cleanup(async () => {
@@ -202,7 +237,7 @@ for (const app of Object.values(APPS)) {
     });
     await s.run("core.projects.browse");
     await s.until("core.screen", (screen) => screen.screen === "library", "the project did not enter the library");
-    await returnProject(s, first.id, "three-terminal project return");
+    await returnProject(s, first.id, "three-raster project return");
     await s.until("core.screen", (screen) => screen.screen === "workspace", "the project did not return from the library");
     await assertNoLibraryError(s, "the measured project return");
     const phaseStarted = performance.now();
@@ -216,26 +251,26 @@ for (const app of Object.values(APPS)) {
       return duration;
     };
     t.diagnostic(`${app.name}: START restoration connection`);
-    const restored = (surfaces) => surfaces.filter((surface) => surface.visible && surface.plugin === "terminal" &&
-      surface.exposes.includes("status terminal.session") && surface.exposes.includes("status core.surface.document"));
+    const restored = (surfaces) => surfaces.filter((surface) => surface.visible && surface.plugin === RASTER &&
+      surface.exposes.includes("status rasterprobe.session") && surface.exposes.includes("status core.surface.document"));
     await s.until("core.surfaces", (surfaces) => restored(surfaces).length > 0,
-      "restoration connection did not register terminal surfaces");
+      "restoration connection did not register raster surfaces");
     // A notification that satisfied the condition can describe a surface from before the return changed the surfaces, so the check reads the current registry again.
-    const restoredTerminals = restored(await s.get("core.surfaces"));
-    assert.ok(restoredTerminals.length > 0, "the current registry has no restored terminal surface");
-    for (const terminal of restoredTerminals) {
-      await s.until("terminal.session", (session) => Boolean(session?.sessionId),
-        "restored terminal session did not connect", { surface: terminal.surface });
+    const restoredRasters = restored(await s.get("core.surfaces"));
+    assert.ok(restoredRasters.length > 0, "the current registry has no restored raster surface");
+    for (const raster of restoredRasters) {
+      await s.until("rasterprobe.session", (session) => session?.connected === true && typeof session.session === "string",
+        "restored raster session did not connect", { surface: raster.surface });
     }
     phase("connection");
     t.diagnostic(`${app.name}: START restoration document`);
-    for (const terminal of restoredTerminals) {
+    for (const raster of restoredRasters) {
       await s.until("core.surface.document", (document) => document?.readyState === "complete" && document.themed,
-        "restored terminal document did not become ready", { surface: terminal.surface });
+        "restored raster document did not become ready", { surface: raster.surface });
     }
     phase("document");
     t.diagnostic(`${app.name}: START restoration raster`);
-    await assertVisibleTerminalRasters(s, 3, "restored terminal raster phase");
+    await assertVisibleRasters(s, 3, "restored raster phase");
     phase("raster");
     t.diagnostic(`${app.name}: START restoration first presentation`);
     await s.presented();
@@ -243,20 +278,20 @@ for (const app of Object.values(APPS)) {
     const stopped = await s.request("diagnostics.capture.stop", { after: 0 });
     captureActive = false;
     const returned = await s.get("host.window");
-    const expectedTerminals = (await s.surfaces("terminal")).filter((surface) => surface.visible);
-    const returnedTerminals = expectedTerminals.map((surface) => {
+    const expectedRasters = (await s.surfaces(RASTER)).filter((surface) => surface.visible);
+    const returnedRegions = expectedRasters.map((surface) => {
       const region = returned.regions.find((item) => item.surface === surface.surface);
       assert.ok(region, `project return pixel composition: ${surface.surface} has no native region to measure`);
       assert.equal(region.visible, true,
         `project return pixel composition: ${surface.surface} is visible in DOM but native region is hidden`);
       return region;
     });
-    assertNoWhiteTerminalBleed(frames(stopped.frames), returnedTerminals, "project return pixel composition");
+    assertNoWhiteBleed(frames(stopped.frames), returnedRegions, "project return pixel composition");
     rmSync(stopped.frames, { recursive: true, force: true });
-    await assertVisibleTerminalRasters(s, 3, "immediately after returning to the project");
+    await assertVisibleRasters(s, 3, "immediately after returning to the project");
     await assertNoOrphanNativeSurfaces(s, "immediately after returning to the project");
-    assert.deepEqual(terminalProcessSnapshot(app.configDir), processesAtThree,
-      "project return must retain the same service and shell PIDs without creating sessions");
+    assert.deepEqual(await rasterProcessSnapshot(s, "after returning to the project"), processesAtThree,
+      "project return must retain the same service and child PIDs without creating sessions");
 
     await s.run("core.window.new");
     const two = await s.windows(2, "new OS window was not created");
@@ -338,31 +373,22 @@ for (const app of Object.values(APPS)) {
     mkdirSync(folder);
     const missing = await s.run("core.project.open", { root: folder });
     await s.run("core.projects.flush");
-    // The project opens in its own window (the default of projectOpening is windows). The folder is deleted after the terminal of that window opened its session.
-    // If the folder of a starting terminal is deleted, that opening fails in the deleted folder (F44), which is not
-    // a behavior of the library that this check observes.
+    // The project opens in its own window (the default of projectOpening is windows). The check adds a tab of the layout probe to
+    // that window and deletes the folder after the tab is ready, so the window holds the native surface of a tab of the project.
     const listed = await s.until("host.windows", (list) => list.some((item) => item.project === folder && item.ready),
       "the project did not open in its own window");
     const projectWindow = listed.find((item) => item.project === folder);
     const other = s.on(projectWindow.window);
-    const terminals = await terminalReady(other);
-    // A terminal in a covered window opens its session when the window is shown (docs/spec/native-surfaces.md#image-regions), so it starts no opening here.
-    if (!(await other.get("host.window")).occluded) {
-      for (const terminal of terminals) {
-        await other.until("terminal.session", (session) => typeof session?.sessionId === "string" && session.sessionId !== "",
-          `terminal ${terminal.surface} of the project did not open its session`, { surface: terminal.surface });
-      }
-    }
+    const focused = (await other.until("core.grid", (grid) => grid?.cards.some((card) => card.focused),
+      "the project window has no focused card")).cards.find((card) => card.focused);
+    const { tab: probe } = await other.run("core.card.add-tab", { card: focused.id, plugin: "layoutprobe" });
+    await other.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === probe && item.status?.phase === "ready"),
+      `the probe tab ${probe} of the project did not become ready`);
+    const tabs = (await other.get("core.grid")).cards.flatMap((card) => card.tabs ?? []).map((tab) => tab.id);
     rmSync(folder, { recursive: true });
     // This check shows the missing folder in the library and makes the project unopenable. Both errors are shown on the screen and recorded.
     s.expectError(new RegExp(`^error workbench library project ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `));
     s.expectError(/^error workbench library: project directory does not exist: /);
-    // The files tree of the project window reads the removed folder and shows that failure. The text depends on the step
-    // that meets the removal first: the read of the folder, git in its removed working directory, or git changing into it.
-    const removed = folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // The files tree section view reports the removal with runtime.error, which writes `error workbench surface <surface> <where>: <text>`
-    // (docs/spec/native-surfaces.md#view-surfaces).
-    s.expectError(new RegExp(`^error workbench surface [^ ]+/left/files\\.tree files tree: (lstat ${removed}: no such file or directory|git rev-parse --show-toplevel: exit status 128: fatal: (Unable to read current working directory|cannot change to '${removed}'): No such file or directory)$`));
 
     await s.run("core.projects.browse");
     const library = await s.until("core.library", (state) => state.folderErrors?.[missing.id] !== undefined,
@@ -385,7 +411,7 @@ for (const app of Object.values(APPS)) {
     await s.until("host.windows", (list) => list.some((item) => item.window === projectWindow.window && item.project === null) &&
       !list.some((item) => item.project === folder), "the window of the removed project still shows it");
     await other.until("core.screen", (state) => state.screen === "library", "the window of the removed project did not show the library");
-    const ended = new Set(terminals.map((terminal) => terminal.surface));
+    const ended = new Set(tabs);
     await other.until("host.window", (state) => !state.surfaces.some((surface) => ended.has(surface.id)),
       "the window of the removed project kept the native surfaces of its tabs");
     // Closes the window that this check opened so that no window remains for the next check.
