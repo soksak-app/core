@@ -4,6 +4,7 @@ import { dirname, extname, resolve } from "node:path";
 import { absolute, markdownLinks } from "./markdown-links.mjs";
 import { tableCells } from "./markdown-table.mjs";
 import { checkCompletedItems, retiredChecklistItems } from "@soksak/kit/checklist";
+import { headingAnchors } from "@soksak/kit/docs";
 import { auditCommittedEvidenceWording, auditHistoricalScopeWording, auditModalParitySnapshotWording, checkChangelogTranslations, checkChecklistTranslations, checkSpecificationIds, conflictMarkerErrors } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
@@ -11,15 +12,9 @@ const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others
 const errors = [];
 // Replaces a code block with the same number of blank lines, so the line numbers of errors stay the same as in the source.
 const withoutCode = (text) => text.replace(/^(`{3,}|~{3,}).*\n[\s\S]*?^\1\s*$/gm, (block) => block.replace(/[^\n]/g, ""));
-// The anchors of a document: the id of each heading and of each explicit anchor element `<a id="...">`.
+// The anchors of a document: the anchor of each heading, by the rule of the kit, and the id of each explicit anchor element `<a id="...">`.
 const anchors = (text) => {
-  const found = new Set();
-  for (const match of withoutCode(text).matchAll(/^#{1,6}\s+(.+)$/gm)) {
-    const base = match[1].toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").trim().replace(/\s/g, "-");
-    let id = base, count = 0;
-    while (found.has(id)) id = `${base}-${++count}`;
-    found.add(id);
-  }
+  const found = headingAnchors(text);
   for (const match of withoutCode(text).matchAll(/<a\s+(?:id|name)="([^"]+)"/g)) found.add(match[1]);
   return found;
 };

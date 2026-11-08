@@ -1901,6 +1901,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F512",
+    implementation: [{ file: "scripts/check-docs.mjs", symbol: "import { headingAnchors } from \"@soksak/kit/docs\";" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "check-docs fails on a section reference of a source, a message or a text whose document or anchor is missing" }],
+    expected: "The documentation check derives the anchors of headings with the rule of the pinned kit and reports a section reference whose anchor is missing.",
+    levels: ["unit"],
+  },
+  {
     id: "F529",
     implementation: [
       { file: "Makefile", symbol: "check-checklist-history:" },
