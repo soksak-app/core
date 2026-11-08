@@ -2,31 +2,46 @@
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { createServer } from "node:http";
 import test from "node:test";
 
 import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { ensureTerminals } from "./terminal-screen.mjs";
 import { readStillCapture } from "./still-capture.mjs";
 
 // Functional paint checks explicitly render covered windows without activation.
 // This preparation does not change production benchmark visibility requirements.
 async function fresh(s, options) {
-  await prepare(s, options);
+  const tab = await prepare(s, options);
   s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
   await s.request("diagnostics.window.draw-covered", { draw: true });
   await s.presented();
+  return tab;
+}
+
+/** The raster probe: a view whose image region a sidecar session paints. */
+const RASTER = "rasterprobe";
+/** The second layout probe: a plugin whose tab view exposes elements. */
+const SECOND = "layoutprobe2";
+/** The card of the grid that holds the tab surface. */
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+
+/** Waits until a visible raster probe tab of the window is ready with a connected session and returns its surface id. */
+async function readyRaster(s, message) {
+  const ready = (item) => item.plugin === RASTER && item.visible && item.status?.phase === "ready";
+  const { surface } = (await s.until("core.surfaces", (list) => list.some(ready), message)).find(ready);
+  await s.until("rasterprobe.session", (value) => value?.connected === true && typeof value.session === "string",
+    `${message}: the raster probe ${surface} has no connected session`, { surface });
+  return surface;
 }
 
 // A workbench owns its dialog claim only until that workbench ends.
 // Reload directly under settings: preparing another fixture here would erase
 // the lifecycle boundary that this regression must exercise.
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: reloading under settings leaves successor terminal images and documents unblurred`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: reloading under settings leaves successor raster images and documents unblurred`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface: start } = await fresh(s);
     await s.request("diagnostics.window.draw-covered", { draw: true });
     s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
     s.cleanup(async () => {
@@ -34,12 +49,20 @@ for (const app of Object.values(APPS)) {
       if (!t.passed) await readStillCapture(s, t);
       await s.run("core.settings.close");
     });
-    const [terminal] = await ensureTerminals(s, 1);
+    // A raster probe tab on the start card gives the window a native image region. The saved layout keeps it through the reload.
+    await s.run("core.card.add-tab", { card: cardOf(await s.get("core.grid"), start), plugin: RASTER });
+    s.cleanup(async () => {
+      for (const card of (await s.get("core.grid")).cards) {
+        for (const tab of card.tabs ?? []) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.id });
+      }
+    });
+    const raster = await readyRaster(s, "the raster probe tab did not become ready");
+    await s.run("core.projects.flush");
     const before = await s.until("host.window", (host) => host.regions.some((region) =>
-      region.surface === terminal.surface && region.name === "view" && region.visible && region.presented && region.blurred === false),
-    "the initial terminal image did not present without blur");
-    const original = before.regions.find((region) => region.surface === terminal.surface && region.name === "view");
-    t.diagnostic(`before reload terminal: ${JSON.stringify(original)}`);
+      region.surface === raster && region.name === "raster" && region.visible && region.presented && region.blurred === false),
+    "the initial raster image did not present without blur");
+    const original = before.regions.find((region) => region.surface === raster && region.name === "raster");
+    t.diagnostic(`before reload raster: ${JSON.stringify(original)}`);
     await s.presented();
     const baseline = await readStillCapture(s, t);
     assert.ok(baseline.image.width > 0 && baseline.image.height > 0, "initial still is empty");
@@ -48,8 +71,8 @@ for (const app of Object.values(APPS)) {
     await s.until("core.window.workbench", (workbench) => workbench.background === true,
       "settings did not acquire the workbench dialog background");
     await s.until("host.window", (host) => host.regions.some((region) =>
-      region.surface === terminal.surface && region.name === "view" && region.visible && region.blurred === true),
-    "settings did not blur the actual terminal image");
+      region.surface === raster && region.name === "raster" && region.visible && region.blurred === true),
+    "settings did not blur the actual raster image");
     await s.presented();
     await readStillCapture(s, t);
     await s.run("host.window.reload");
@@ -58,29 +81,18 @@ for (const app of Object.values(APPS)) {
     "the successor workbench did not start without a dialog");
     await s.until("core.modal", (modal) => modal === null, "the successor retained a modal");
     await s.until("core.picker", (picker) => picker.open === false, "the successor retained a picker");
-    const [successor] = await ensureTerminals(s, 1);
+    const successor = await readyRaster(s, "the successor did not restore a ready raster probe tab");
     const after = await s.until("host.window", (host) => {
-      const image = host.regions.find((region) => region.surface === successor.surface && region.name === "view");
+      const image = host.regions.find((region) => region.surface === successor && region.name === "raster");
       return image?.visible && image.presented && image.presented.generation !== original.presented.generation &&
         host.regions.filter((region) => region.visible).every((region) => region.blurred === false) &&
         host.documents.every((document) => document.blurred === false);
-    }, "the successor's newly attached terminal image or documents inherited the ended dialog blur");
+    }, "the successor's newly attached raster image or documents inherited the ended dialog blur");
     t.diagnostic(`after reload native backgrounds: ${JSON.stringify({ regions: after.regions, documents: after.documents, modal: after.modal })}`);
     await s.presented();
     const restored = await readStillCapture(s, t);
     assert.ok(restored.image.width > 0 && restored.image.height > 0, "successor still is empty");
   });
-}
-
-/** The address of a loopback server that serves one empty document. The check closes it when it ends. */
-async function serveDocument(s) {
-  const server = createServer((request, response) => {
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    response.end("<!doctype html><title>modal</title>");
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  s.cleanup(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
-  return `http://127.0.0.1:${server.address().port}/modal`;
 }
 
 /** Checks that the modal web view does not paint its own background. */
@@ -245,13 +257,14 @@ for (const app of MAIN_PAGE_APPS) {
 
   test(`${app.name}: a card split while settings are open keeps settings above new surfaces`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    const { surface } = await fresh(s);
+    const card = cardOf(await s.get("core.grid"), surface);
     await openSidebars(s);
     await s.presented();
     const before = await s.get("host.window");
     settingsAboveSurfaces(before);
     const old = new Set(before.surfaces.map((x) => x.id));
-    await s.run("core.card.split", { card: "terminal", side: "right", plugin: "browser" });
+    await s.run("core.card.split", { card, side: "right", plugin: SECOND });
     const after = await s.until("host.window",
       (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown,
       "the split did not display a new native surface");
@@ -277,22 +290,28 @@ for (const app of MAIN_PAGE_APPS) {
 
   test(`${app.name}: settings blocks background input and closes only through its close button`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
-    const [browser] = await s.surfaces("browser");
-    assert.ok(browser, "a browser surface must be visible");
-    // A browser without an address hides the document region, so the check opens an address to show the document region.
-    const url = await serveDocument(s);
-    await s.run("browser.navigate", { url }, browser.surface);
-    await s.until("browser.location", (at) => at.url === url && !at.loading, `the browser did not load ${url}`, { surface: browser.surface });
-    await s.until("host.window", (w) => w.documents.some((d) => d.surface === browser.surface && d.document === "page" && d.visible),
-      "the browser document region is not visible after the load");
+    const { surface, plugin } = await fresh(s);
+    // The start tab is a layout probe, whose document region page covers its view but an 8 pt margin.
+    const probe = (await s.surfaces(plugin)).find((item) => item.surface === surface);
+    assert.ok(probe, "the start probe surface must be visible");
+    await s.until("layoutprobe.document", (value) => value?.reported === true, "the probe document region did not report", { surface });
+    await s.until("host.window", (w) => w.documents.some((d) => d.surface === surface && d.document === "page" && d.visible),
+      "the probe document region is not visible");
+    // The other card shows a tab of the second probe, whose element stands behind the dialog.
+    const grid = await s.get("core.grid");
+    const other = grid.cards.find((card) => card.id !== cardOf(grid, surface) && card.tabs?.length > 0)?.id;
+    assert.ok(other, "the start layout has no second card with tabs");
+    const { tab: second } = await s.run("core.card.add-tab", { card: other, plugin: SECOND });
+    s.cleanup(() => s.run("core.tab.close", { tab: second }));
+    await s.until("core.surfaces", (all) => all.some((item) => item.surface === second && item.visible && item.status?.phase === "ready"),
+      `the ${SECOND} tab did not become ready`);
     await openSettings(s);
     await s.presented();
     settingsAboveSurfaces(await s.get("host.window"));
     await background(s, true);
-    // The right center of the browser surface is the document region of that surface.
-    const frame = browser.applied;
-    const point = { x: frame.x + frame.w - 4, y: frame.y + frame.h / 2 };
+    // A point 16 pt inside the right edge at the vertical center of the probe surface is in the document region of that surface.
+    const frame = probe.applied;
+    const point = { x: frame.x + frame.w - 16, y: frame.y + frame.h / 2 };
     const modalHit = await s.run("host.hit", point);
     assert.equal(modalHit.kind, "native", "native input must reach the settings webview");
     assert.equal(modalHit.identifier, "modal:settings", "native input must identify the settings webview");
@@ -318,7 +337,7 @@ for (const app of MAIN_PAGE_APPS) {
     // The element behind the dialog keeps its layout and takes no action (docs/spec/exposure.md).
     const behind = await s.rect("core.chrome.settings");
     assert.ok(behind.width > 0 && behind.height > 0, `the element behind the dialog has no place: ${JSON.stringify(behind)}`);
-    for (const refused of [() => s.act("core.chrome.settings", "click"), () => s.act("browser.document", "click", { surface: browser.surface })]) {
+    for (const refused of [() => s.act("core.chrome.settings", "click"), () => s.act(`${SECOND}.text`, "click", { surface: second })]) {
       await assert.rejects(refused, (error) => error.code === 1010 && /is behind the open dialog and takes no action/.test(error.message));
     }
 
@@ -326,8 +345,8 @@ for (const app of MAIN_PAGE_APPS) {
     await s.until("host.window", (state) => state.modal === null, "settings did not close");
     await background(s, false);
     await s.presented();
-    assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface: browser.surface, document: "page" },
-      "closing settings must restore native input to the browser document");
+    assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface, document: "page" },
+      "closing settings must restore native input to the probe document");
   });
 
   test(`${app.name}: add and split menus are transparent and have no backdrop`, { timeout: 30000 }, async (t) => {

@@ -247,11 +247,6 @@
       "reason": "Checks that the keyboard returns after Escape closes the add picker and that keys pressed while it opens are dropped (modal and focus routing). A new keyboard-echo capability for `plain-view` would replace the terminal."
     },
     {
-      "file": "e2e/modal.test.mjs",
-      "owner": "mixed",
-      "reason": "\"reloading under settings leaves successor terminal images and documents unblurred\": core (`plain-view` raster); \"the settings modal is on screen at the time presented reports after it is shown\": core; \"an open modal's document receives the content the page updates\": core; \"a first modal answer that arrives after later changes keeps the moved position\": core; \"a card split while settings are open keeps settings above new surfaces\": core (`plain-view`); \"reloading the main document removes its settings webview\": core; \"settings blocks background input and closes only through its close button\": core (keyboard-echo `plain-view`); \"add and split menus are transparent and have no backdrop\": core; \"moving settings and resizing the parent preserves its native coverage\": core; \"Help > Debug records the state, lists the logs folder and refuses a path outside it\": core; the four \"debug timeline/debug view\" tests: core."
-    },
-    {
       "file": "e2e/new-tab-keys.test.mjs",
       "owner": "core",
       "reason": "Checks that keys typed while a new tab opens all reach it (input held until the tab can take it). A keyboard-echo `plain-view` would replace the terminal."
