@@ -74,7 +74,7 @@ core의 release는 registry를 읽지 않는다. registry가 자기 `core.json`�
 
 ## View drag benchmark
 
-`make benchmark-plain-view`는 view drag의 floor를 측정한다. plugin 코드 없이 빈 document region만 가진 view인 `e2e/fixtures/plain-view/probe`의 fixture를 설치하고, 같은 너비 drag와 녹화를 실행해 gesture 중 source 간격을 보고한다. floor는 목표의 입력이므로 목표를 판정하지 않는다. trace를 끈 드래그도 실행해 지연, convergence, load와 transaction 단계를 보고한다.
+`make benchmark-plain-view`는 view drag의 floor를 측정한다. 모든 검사 설정이 설치해 둔 `e2e/fixtures/plain-view/probe`의 fixture, 곧 document region이 자기 plugin document의 text 한 줄을 보이고 page가 크기 관찰 외의 코드를 실행하지 않는 view를 열고, 같은 너비 drag와 녹화를 실행해 gesture 중 source 간격을 보고한다. floor는 목표의 입력이므로 목표를 판정하지 않는다. trace를 끈 드래그도 실행해 지연, convergence, load와 transaction 단계를 보고한다.
 
 `make DIAGNOSTIC_RELEASE=1 build-wailsv3-release build-tauriv2-release`로 로컬 최적화 diagnostic candidate를 build하고 설치된 각 sidecar를 release profile과 diagnostic feature로 build한다. Benchmark 실행 전에 정확한 executable hash와 source revision을 기록한다. 로컬 compile은 release를 공개하지 않는다. Rust development profile은 host crate를 최적화하지 않으므로 이전 debug-profile 측정은 별도 관측으로 보존한다.
 

@@ -15,7 +15,7 @@ import { B3_SETTINGS } from "../measurements.mjs";
 import { performanceGoalBound } from "./performance-goals.mjs";
 
 /**
- * The tabs of the card that each round splits off and closes, by plugin: the plain view probe (a view and an empty document region),
+ * The tabs of the card that each round splits off and closes, by plugin: the plain view probe (a view and a document region with one line of text),
  * the layout probe (a view and its plugin document region) and the raster probe (a view, a native image region and its sidecar).
  */
 export const STRESS_TABS = Object.freeze(["probeplain", "layoutprobe", "rasterprobe"]);

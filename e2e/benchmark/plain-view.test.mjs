@@ -20,7 +20,7 @@ const descriptor = Object.freeze({
   stopContentTrace: (s, surface) => s.run("probeplain.measure", { action: "stop" }, surface),
 });
 
-// The colour that the recording shows for the empty document region of the probe.
+// The colour that the recording shows for the document region of the probe, the background of its region document.
 const PROBE_COLOUR = [30, 30, 30];
 
 /** Prepares the window, opens the probe, which every check configuration has installed, to the right of a card and returns the session state of its drag. */

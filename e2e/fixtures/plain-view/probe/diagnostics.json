@@ -1,0 +1,87 @@
+{
+  "module": "ui/section-diagnostics.js",
+  "exposes": {
+    "status": [
+      {
+        "name": "probeplain.section.view.ready",
+        "description": "Whether the section view shows its text Plain section, and that text.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "ready": {
+              "type": "boolean"
+            },
+            "content": {
+              "type": "string",
+              "enum": [
+                "Plain section"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "probeplain.view.frames",
+        "description": "Starts or stops the observation of the content frames of the section view document. Start paints the document root with the marker color until stop and answers the source clock and the marker color.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "start",
+                "stop"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "sourceClock": {
+              "type": "object",
+              "properties": {
+                "documentTimeOriginMs": {
+                  "type": "number"
+                },
+                "sourceNowMs": {
+                  "type": "number"
+                },
+                "sourceResolutionMs": {
+                  "type": "number"
+                }
+              }
+            },
+            "markerColor": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "probeplain.view.history",
+        "description": "The number of entries of the session history of the section view document.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "length": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
