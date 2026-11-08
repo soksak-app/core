@@ -24,7 +24,8 @@ const FOLLOW = "layoutprobe.follow";
 
 /**
  * Puts an active tab of the second probe on the card of the start layout that does not hold the start tab surface, so that the start
- * card is the only card that shows the start plugin. Returns the ids of the two cards as `{own, other}`.
+ * card is the only card that shows the start plugin, and focuses the start card again, because adding a tab focuses the card of the
+ * tab. Returns the ids of the two cards as `{own, other}`.
  */
 async function soleStartCard(s, surface) {
   const grid = await s.get("core.grid");
@@ -35,6 +36,7 @@ async function soleStartCard(s, surface) {
   s.cleanup(() => s.run("core.tab.close", { tab }));
   await s.until("core.grid", (value) => value.cards.find((card) => card.id === other)?.active === tab,
     `the ${SECOND} tab did not become active`);
+  await s.run("core.card.focus", { card: own });
   return { own, other };
 }
 
@@ -214,6 +216,13 @@ async function headerRuleContrast(s, rect) {
 /** Whether two lengths are equal within half a point. */
 const near = (a, b) => Math.abs(a - b) <= 0.5;
 
+/**
+ * Whether two places of a name inside its header are the same place. The page lays out in units of 1/64 point, so two places differ
+ * by 1/64 point or more. The mygo workbench lays out its element tree in float32, whose rounding gives the same place values that
+ * differ by less than 1/128 point in headers at different heights of the window.
+ */
+const samePlace = (a, b) => a.length === b.length && a.every((value, index) => Math.abs(value - b[index]) < 1 / 128);
+
 /** Rectangles of all elements of the name. Stops at an index that does not exist. */
 const rects = async (s, name) => {
   const out = [];
@@ -336,17 +345,21 @@ for (const app of Object.values(APPS)) {
     };
     const first = await place(0);
     const second = await place(1);
-    assert.deepEqual(second.offset, first.offset, "the second header places its name differently from the first");
+    assert.ok(samePlace(second.offset, first.offset),
+      `the second header places its name differently from the first: ${JSON.stringify(second.offset)}, ${JSON.stringify(first.offset)}`);
     for (const [index, section] of [[0, one], [1, two]]) {
       const open = await place(index);
       await s.run("core.sidebar.section.fold", { sidebar: "left", section: section.id });
       await s.until("core.sidebars", (value) => value[0].sections[index].folded === true, `${section.id} did not fold`);
       const folded = await place(index);
       // When a fill section receives the space, the header can move, so the name positions inside the headers are compared.
-      assert.deepEqual(folded.offset, open.offset, `${section.id}: the name moved inside its header when the section folded`);
+      assert.ok(samePlace(folded.offset, open.offset),
+        `${section.id}: the name moved inside its header when the section folded: ${JSON.stringify(folded.offset)}, ${JSON.stringify(open.offset)}`);
       await s.run("core.sidebar.section.fold", { sidebar: "left", section: section.id });
       await s.until("core.sidebars", (value) => value[0].sections[index].folded === false, `${section.id} did not unfold`);
-      assert.deepEqual((await place(index)).offset, open.offset, `${section.id}: the name moved inside its header when the section unfolded`);
+      const unfolded = await place(index);
+      assert.ok(samePlace(unfolded.offset, open.offset),
+        `${section.id}: the name moved inside its header when the section unfolded: ${JSON.stringify(unfolded.offset)}, ${JSON.stringify(open.offset)}`);
     }
   });
 }
