@@ -12,7 +12,7 @@ import { validateManifest, validateSidecar } from "@soksak/plugin-api";
 
 import { catalogOf, auditLogDirectories } from "../../scripts/check-events.mjs";
 import { INPUT_LOG_LIMIT, REGION, SIDECAR, startRasterProbe } from "../fixtures/raster-probe/probe/ui/raster-probe.js";
-import { RASTER_ENTRIES, rasterReady, reopenedSession } from "../raster-probe.mjs";
+import { presentRasterTab, RASTER_ENTRIES, rasterReady, reopenedSession } from "../raster-probe.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PROBE = join(ROOT, "e2e/fixtures/raster-probe/probe");
@@ -344,4 +344,35 @@ test("a session that a respawned service opens is a new session, also when the n
   assert.equal(reopened({ ...before, connected: false, failure: "restart" }), false, "the lost connection");
   assert.equal(reopened({ ...before, session: null, child: null, service: service(30) }), false, "a connection without a session");
   assert.equal(reopened({ ...before, connected: false, service: service(30) }), false, "a session that is not connected");
+});
+
+test("a raster probe tab that a check opens while it watches the window draws covered before the wait for its image", { timeout: 1000 }, async () => {
+  // A check window opens behind the windows of other applications, and the image region of a covered window draws nothing, so a
+  // tab opened during a capture waits for an image that never comes unless the window draws covered (docs/spec/hosts.md#launch-activation).
+  const calls = [];
+  const values = {
+    "core.grid": { cards: [{ id: "card-1", active: "tab-7" }] },
+    "core.surfaces": [{ surface: "tab-7", plugin: "rasterprobe", visible: true, exposes: [...RASTER_ENTRIES] }],
+    "rasterprobe.session": { session: "s1", connected: true },
+    "rasterprobe.frame": { generation: 1, raster: 1, sequence: 1 },
+    "host.window": { regions: [{ surface: "tab-7", name: "raster", visible: true, presented: { generation: 1, raster: 1, sequence: 1 } }] },
+  };
+  const s = {
+    run: async (name, params) => { calls.push(["run", name, params]); return { tab: "tab-7" }; },
+    registered: async (surface, entries) => { calls.push(["registered", surface, entries]); },
+    request: async (method, params) => { calls.push(["request", method, params]); return null; },
+    until: async (name, accept) => {
+      calls.push(["until", name]);
+      assert.ok(accept(values[name]), name);
+      return values[name];
+    },
+    get: async (name) => values[name],
+    cleanup: () => {},
+  };
+  assert.equal(await presentRasterTab(s, "card-1"), "tab-7");
+  assert.deepEqual(calls[0], ["run", "core.card.add-tab", { card: "card-1", plugin: "rasterprobe" }]);
+  const covered = calls.findIndex(([kind, method, params]) => kind === "request" && method === "diagnostics.window.draw-covered"
+    && params?.draw === true);
+  const image = calls.findIndex(([kind, name]) => kind === "until" && name === "host.window");
+  assert.ok(covered >= 0 && covered < image, `the window draws covered before the wait for the image: ${JSON.stringify(calls)}`);
 });
