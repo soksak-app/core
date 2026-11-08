@@ -24,6 +24,10 @@ type placingHost struct {
 	unanswered chan struct{}
 	// refusal, when it is set, is the error that answers a placement.
 	refusal error
+	// answered is the last answer of a placement. presented, when it is set, answers a placement in its place: the mygo host answers
+	// with the boxes where the frame that it presented put the views, and the elements of that frame place them
+	// (docs/spec/hosts.md#native-views).
+	answered, presented json.RawMessage
 }
 
 func placingShell(t *testing.T) (*shellFixture, *placingHost) {
@@ -63,6 +67,10 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 			if err := json.Unmarshal(argument, &request); err != nil {
 				return nil, err
 			}
+			if stored.presented != nil {
+				request.Placements = stored.presented
+			}
+			stored.answered = request.Placements
 			return request.Placements, nil
 		},
 	}
@@ -144,6 +152,49 @@ func TestTheVerificationFailsAPlacementTheHostLeavesUnanswered(t *testing.T) {
 	verify = status[workbench.VerifyStatus](t, f, "core.verify")
 	if got := verifyRow(t, verify, "V7a "); got.OK || verify.Failed == 0 || !strings.Contains(got.Note, "3000 ms") {
 		t.Fatalf("a placement past the bound: V7a %+v, failed %+v", got, failedRows(verify))
+	}
+}
+
+// The frame that a placement presents on the mygo host is a frame after the one that asked for it, and the elements of that frame
+// place the views (docs/spec/hosts.md#native-views). When a frame drew other lines while the placement ran, its answer states where
+// those lines stand: the placement owes the place of what the window draws now, so the rows that compare the plane with a placement
+// wait for the next one, which the frame after the answer starts and then measure it.
+func TestAPlacementWhoseFrameDrewOtherLinesIsOwedAgain(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	drawnAt1000 := stored.answered
+	held := make(chan struct{})
+	t.Cleanup(func() {
+		if stored.unanswered != nil {
+			close(held)
+		}
+	})
+	stored.unanswered = held
+	resized(f, 900)
+	// The shake goes back to 1000 while the placement of 900 runs, and the host presents the frame that drew 1000.
+	stored.presented = drawnAt1000
+	f.tester.SetSize(1000, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	stored.unanswered = nil
+	close(held)
+	f.pending.drain(t)
+	if verify := status[workbench.VerifyStatus](t, f, "core.verify"); verify.Failed != 0 {
+		t.Fatalf("a placement answered by a frame of other lines fails %+v", failedRows(verify))
+	}
+	stored.presented = nil
+	for range 2 {
+		f.tester.Frame()
+		f.pending.drain(t)
+	}
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	for _, name := range []string{"V7a ", "V7b "} {
+		if !verifyRow(t, verify, name).OK {
+			t.Fatalf("the placement after the answer: %+v", failedRows(verify))
+		}
+	}
+	if verify.Failed != 0 {
+		t.Fatalf("the placement after the answer fails %+v", failedRows(verify))
 	}
 }
 
