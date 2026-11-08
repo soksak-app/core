@@ -18,9 +18,9 @@ function fixture() {
   return { configDir, log };
 }
 
-test("no-terminal shutdown refuses a sidecar session before requesting quit", { timeout: 2000 }, async () => {
+test("no-service shutdown refuses a sidecar session before requesting quit", { timeout: 2000 }, async () => {
   const { configDir } = fixture();
-  const sessions = [{ sidecar: "vt-alacritty", surface: "tab-terminal" }];
+  const sessions = [{ sidecar: "rasterprobe", surface: "tab-raster" }];
   let quitRequested = false;
   const client = {
     endpoint: { pid: 200 },
@@ -46,16 +46,16 @@ test("no-terminal shutdown refuses a sidecar session before requesting quit", { 
       waitForShutdown: async () => ({ closedMs: 1 }),
       env: {},
       write: () => {},
-    }), /no-terminal shutdown precondition failed: sidecar sessions=/);
+    }), /no-service shutdown precondition failed: sidecar sessions=/);
     assert.equal(quitRequested, false, "the runner requests quit before rejecting the live sidecar session");
   } finally {
     rmSync(configDir, { recursive: true, force: true });
   }
 });
 
-test("no-terminal shutdown refuses a persistent service endpoint without a session", { timeout: 2000 }, async () => {
+test("no-service shutdown refuses a persistent service endpoint without a session", { timeout: 2000 }, async () => {
   const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "vt-alacritty");
+  const serviceDirectory = join(configDir, "services", "rasterprobe");
   mkdirSync(serviceDirectory, { recursive: true });
   const endpointFile = join(serviceDirectory, "endpoint.json");
   writeFileSync(endpointFile, `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
@@ -82,7 +82,7 @@ test("no-terminal shutdown refuses a persistent service endpoint without a sessi
       env: {},
       write: () => {},
     }), (error) => {
-      assert.match(error.message, /no-terminal shutdown precondition failed/);
+      assert.match(error.message, /no-service shutdown precondition failed/);
       assert.ok(error.message.includes(endpointFile), `the error does not name ${endpointFile}: ${error.message}`);
       return true;
     });
@@ -92,7 +92,7 @@ test("no-terminal shutdown refuses a persistent service endpoint without a sessi
   }
 });
 
-test("no-terminal shutdown records the empty session and endpoint precondition", { timeout: 2000 }, async () => {
+test("no-service shutdown records the empty session and endpoint precondition", { timeout: 2000 }, async () => {
   const { configDir } = fixture();
   const client = {
     endpoint: { pid: 200 },
@@ -117,14 +117,14 @@ test("no-terminal shutdown records the empty session and endpoint precondition",
       env: {},
       write: (line) => lines.push(line),
     });
-    assert.ok(lines.includes("PRECONDITION normal-shutdown app=wailsv3 mode=no-terminal sidecar_sessions=0 service_endpoints=0"),
-      `the empty no-terminal precondition was not recorded: ${JSON.stringify(lines)}`);
+    assert.ok(lines.includes("PRECONDITION normal-shutdown app=wailsv3 mode=no-service sidecar_sessions=0 service_endpoints=0"),
+      `the empty no-service precondition was not recorded: ${JSON.stringify(lines)}`);
   } finally {
     rmSync(configDir, { recursive: true, force: true });
   }
 });
 
-test("no-terminal shutdown reports invalid diagnostic session metadata", { timeout: 2000 }, async () => {
+test("no-service shutdown reports invalid diagnostic session metadata", { timeout: 2000 }, async () => {
   const { configDir } = fixture();
   let quitRequested = false;
   const client = {
@@ -155,7 +155,7 @@ test("no-terminal shutdown reports invalid diagnostic session metadata", { timeo
   }
 });
 
-test("no-terminal shutdown reports a non-directory service entry", { timeout: 2000 }, async () => {
+test("no-service shutdown reports a non-directory service entry", { timeout: 2000 }, async () => {
   const { configDir } = fixture();
   const serviceEntry = join(configDir, "services", "invalid-entry");
   mkdirSync(join(configDir, "services"));
@@ -285,8 +285,8 @@ test("normal shutdown retains an application error when the shutdown wait fails"
 
 test("normal shutdown closes the application client when the shutdown wait fails", async () => {
   const { configDir } = fixture();
-  const serviceEndpoint = join(configDir, "services", "terminal", "endpoint.json");
-  mkdirSync(join(configDir, "services", "terminal"), { recursive: true });
+  const serviceEndpoint = join(configDir, "services", "rasterprobe", "endpoint.json");
+  mkdirSync(join(configDir, "services", "rasterprobe"), { recursive: true });
   writeFileSync(serviceEndpoint, `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
   const clients = [];
   const connectClient = async () => {
@@ -305,21 +305,21 @@ test("normal shutdown closes the application client when the shutdown wait fails
       connectClient,
       waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
       waitForReady: async () => {},
-      prepareTerminal: async () => ({ surface: "tab-terminal", sessionId: "session-terminal" }),
+      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
       waitForShutdown: async () => { throw new Error("controlled shutdown timeout"); },
-      env: { SOKSAK_SHUTDOWN_TERMINAL: "1" },
+      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
       write: () => {},
     }), /controlled shutdown timeout/);
-    assert.equal(clients.length, 1, "shutdown does not open a terminal-service observer connection");
+    assert.equal(clients.length, 1, "shutdown does not open a service observer connection");
     assert.deepEqual(clients.map((client) => client.closed), [true], "the endpoint client closes after a shutdown failure");
   } finally {
     rmSync(configDir, { recursive: true, force: true });
   }
 });
 
-test("terminal shutdown fails when endpoint EOF precedes a service process timeout", async () => {
+test("service shutdown fails when endpoint EOF precedes a service process timeout", async () => {
   const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "terminal");
+  const serviceDirectory = join(configDir, "services", "rasterprobe");
   mkdirSync(serviceDirectory, { recursive: true });
   writeFileSync(join(serviceDirectory, "endpoint.json"), `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
   const clients = [];
@@ -339,10 +339,10 @@ test("terminal shutdown fails when endpoint EOF precedes a service process timeo
       connectClient,
       waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
       waitForReady: async () => {},
-      prepareTerminal: async () => ({ surface: "tab-terminal", sessionId: "session-terminal" }),
+      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
       waitForShutdown: async () => ({ closedMs: 1 }),
       waitForServiceProcess: async () => { throw new Error("controlled service process wait timeout"); },
-      env: { SOKSAK_SHUTDOWN_TERMINAL: "1" },
+      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
       write: () => {},
     }), /controlled service process wait timeout/);
   } finally {
@@ -350,9 +350,9 @@ test("terminal shutdown fails when endpoint EOF precedes a service process timeo
   }
 });
 
-test("terminal shutdown rejects a service endpoint that remains after PID observation", async () => {
+test("service shutdown rejects a service endpoint that remains after PID observation", async () => {
   const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "terminal");
+  const serviceDirectory = join(configDir, "services", "rasterprobe");
   mkdirSync(serviceDirectory, { recursive: true });
   const serviceEndpoint = join(serviceDirectory, "endpoint.json");
   writeFileSync(serviceEndpoint, `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
@@ -363,20 +363,20 @@ test("terminal shutdown rejects a service endpoint that remains after PID observ
       connectClient: async () => client,
       waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
       waitForReady: async () => {},
-      prepareTerminal: async () => ({ surface: "tab-terminal", sessionId: "session-terminal" }),
+      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
       waitForShutdown: async () => ({ closedMs: 1 }),
       waitForServiceProcess: async ({ pid }) => assert.equal(pid, 321),
-      env: { SOKSAK_SHUTDOWN_TERMINAL: "1" },
+      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
       write: () => {},
-    }), /services\/terminal\/endpoint.json remains after service PID 321 ended/);
+    }), /services\/rasterprobe\/endpoint.json remains after service PID 321 ended/);
   } finally {
     rmSync(configDir, { recursive: true, force: true });
   }
 });
 
-test("terminal shutdown names an invalid service endpoint and rejects its PID", async () => {
+test("service shutdown names an invalid service endpoint and rejects its PID", async () => {
   const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "terminal");
+  const serviceDirectory = join(configDir, "services", "rasterprobe");
   mkdirSync(serviceDirectory, { recursive: true });
   const serviceEndpoint = join(serviceDirectory, "endpoint.json");
   writeFileSync(serviceEndpoint, `${JSON.stringify({ protocol: 2, pid: -1 })}\n`);
@@ -387,9 +387,9 @@ test("terminal shutdown names an invalid service endpoint and rejects its PID", 
       connectClient: async () => client,
       waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
       waitForReady: async () => {},
-      prepareTerminal: async () => ({ surface: "tab-terminal", sessionId: "session-terminal" }),
+      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
       waitForShutdown: async () => { throw new Error("shutdown should not start"); },
-      env: { SOKSAK_SHUTDOWN_TERMINAL: "1" },
+      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
       write: () => {},
     }), (error) => error.message === `${serviceEndpoint} must contain protocol 1 and a positive int32 pid`);
   } finally {

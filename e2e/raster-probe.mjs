@@ -102,3 +102,26 @@ export async function setMeasuredColor(s, surface) {
   await s.run("rasterprobe.color", { color: MEASURED_HEX }, surface);
   return presentedFrame(s, surface, (frame) => frame.color === MEASURED_HEX, `a frame in ${MEASURED_HEX}`);
 }
+
+/**
+ * Prepares a raster probe session through a raw application client (`client`, `request(client, method, params)`): restores the
+ * fixture layout, adds a raster probe tab to its focused card, waits for the notification that the tab is a visible surface and
+ * then for the notification that its fake persistent sidecar opened the session. The sidecar runs as the one persistent service
+ * with an endpoint. Returns `{surface, session}`.
+ */
+export async function prepareRasterSession(client, request, { startupLimit = 15_000 } = {}) {
+  await request(client, "diagnostics.fixture", { window: "main", settings: {} });
+  const grid = await request(client, "status.get", { window: "main", name: "core.grid" });
+  const card = grid?.cards?.find((item) => item.focused)?.id;
+  if (!card) throw new Error("the shutdown fixture has no focused card for a raster probe tab");
+  const added = await request(client, "command.run", { window: "main", name: "core.card.add-tab", params: { card, plugin: RASTER } });
+  const surface = added?.tab;
+  if (typeof surface !== "string" || surface.length === 0) {
+    throw new Error(`core.card.add-tab returned ${JSON.stringify(added)}, expected a raster probe tab`);
+  }
+  await client.watch("main", "core.surfaces",
+    (value) => value.some((item) => item.surface === surface && item.plugin === RASTER && item.visible), { timeout: startupLimit });
+  const session = await client.watch("main", "rasterprobe.session",
+    (value) => typeof value?.session === "string" && value.connected === true && !value.error, { surface, timeout: startupLimit });
+  return { surface, session: session.session };
+}

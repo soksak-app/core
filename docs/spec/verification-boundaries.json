@@ -272,11 +272,6 @@
       "reason": "Checks that keys typed while a new tab opens all reach it (input held until the tab can take it). A keyboard-echo `plain-view` would replace the terminal."
     },
     {
-      "file": "e2e/normal-shutdown-runner.mjs",
-      "owner": "tool",
-      "reason": "Shutdown helper that prepares a real terminal and audits its sidecar service at quit. Reduce it to fixtures: a fake persistent-service fixture should stand in for the terminal."
-    },
-    {
       "file": "e2e/observation/section-design.test.mjs",
       "owner": "mixed",
       "reason": "Leaves stills of the files and browser sidebar sections in light and dark modes, so it observes those plugins' own design. It should move to those plugins."
@@ -467,24 +462,9 @@
       "reason": "Unit test of the input-latency measurement harness. It names terminal and term tabs as the measured plugins; it should measure a keyboard-echo fixture, and per-plugin latency belongs to the plugins."
     },
     {
-      "file": "e2e/test/normal-shutdown-audit.test.mjs",
-      "owner": "core",
-      "reason": "Unit tests of the normal-shutdown audit (sidecar sessions and service endpoints at quit). The \"terminal shutdown\" cases should use a fake persistent-service fixture."
-    },
-    {
-      "file": "e2e/test/normal-shutdown.test.mjs",
-      "owner": "core",
-      "reason": "Unit test that shutdown preparation waits for surface and session notifications. It uses prepare-terminal; replace it with fake-session fixture preparation."
-    },
-    {
       "file": "e2e/test/reload-phases.test.mjs",
       "owner": "core",
       "reason": "Unit test of reload phase parsing. \"terminal\" and \"browser\" are only card ids in synthetic command args; fixture ids would replace them."
-    },
-    {
-      "file": "e2e/test/reload-view-reply.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of matching native view replies across a page reload. \"terminal\" is only the plugin and surface name in synthetic records; a fixture id (`plain-view`) would replace it."
     },
     {
       "file": "e2e/test/section-view-case.test.mjs",
