@@ -1,15 +1,15 @@
-// The cost of an idle browser tab on a blank page, shared by the idle tab window check (e2e/idle-tab-memory.test.mjs) and its benchmark
-// (e2e/benchmark/idle-tab.test.mjs). The cost is the footprints of the web content processes of its documents, the page of its view
-// and its document region, plus the growth of the process that draws the window: the main web view of a window with a page process,
-// and the host process of a window whose host.window reports pageProcess null, which the mygo host draws in its own process. Both
-// are read from the sampler of the trace (`host.sampler.memory`, docs/spec/performance-trace.md) through `log.query`. The page is a
-// blank local page, so the cost covers the tab and not the content of a site.
+// The cost of an idle tab with a document region, shared by the idle tab window check (e2e/idle-tab-memory.test.mjs) and its benchmark
+// (e2e/benchmark/idle-tab.test.mjs). The tab is a tab of the layout probe fixture, whose view loads its own plugin document, a page
+// without content, into its document region. The cost is the footprints of the web content processes of its documents, the page of its
+// view and its document region, plus the growth of the process that draws the window: the main web view of a window with a page
+// process, and the host process of a window whose host.window reports pageProcess null, which the mygo host draws in its own process.
+// Both are read from the sampler of the trace (`host.sampler.memory`, docs/spec/performance-trace.md) through `log.query`. The document
+// is a fixture page without content, so the cost covers the tab and not the content of a site.
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
 
 import { within } from "@soksak/window-check/app.mjs";
 import { allRows, tailOf } from "../../chains.mjs";
-import { fresh } from "../../fixture.mjs";
+import { fresh, START_PLUGIN } from "../../fixture.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";
 import { performanceGoalBound } from "./performance-goals.mjs";
@@ -21,16 +21,8 @@ const SETTLED_KB = 1024;
 /** The upper bound of the wait for settled readings; the sampler reads every five seconds. */
 const SETTLE_LIMIT = 120_000;
 
-/** A loopback server of one blank page. It is closed when the check ends. */
-async function serve(s) {
-  const server = createServer((request, response) => {
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-    response.end("<!doctype html><title>blank</title>");
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  s.cleanup(() => new Promise((resolve) => server.close(resolve)));
-  return `http://127.0.0.1:${server.address().port}/blank`;
-}
+/** The plugin of the idle tab: the layout probe, whose view holds one document region and reports its document (layoutprobe.document). */
+const IDLE_TAB_PLUGIN = START_PLUGIN;
 
 /**
  * Waits on the notices of `host.log` until `pick` returns a value from the sampler readings stored after `since`, and returns it.
@@ -99,31 +91,26 @@ export const settledDocumentsOf = (name, match) => (rows) => {
 };
 
 /**
- * Opens a browser tab on the blank page in the active card and returns the settled documents of the tab, the process whose growth
+ * Opens a layout probe tab to the right of the active card and returns the settled documents of the tab, the process whose growth
  * counts (`growthOf`, idleTabGrowth), its footprint before and after the tab, its growth and the cost (documents plus growth), the
- * footprints in KB, and the B3 conditions of the prepared window. The tab must load the page and every reading must settle, or the
- * recording fails.
+ * footprints in KB, and the B3 conditions of the prepared window. The tab must load the document of its region and every reading must
+ * settle, or the recording fails.
  */
 export async function recordIdleTab(s) {
   await fresh(s, { ...fixtureSettings(B3_SETTINGS["idle-tab"]), reads: ["host.sampler.memory"] });
   const conditions = await b3Conditions(s, B3_SETTINGS["idle-tab"]);
-  const url = await serve(s);
-  await s.until("core.surfaces",
-    (list) => list.some((x) => x.visible && x.plugin === "browser" && x.exposes.includes("status browser.location")),
-    "no visible browser surface registered browser.location");
   const grid = await s.get("core.grid");
   const card = grid.cards.find((c) => c.active);
   assert.ok(card, "the grid has no active card");
 
   const growthOf = idleTabGrowth({ window: s.window, pageProcess: (await s.get("host.window")).pageProcess });
   const growthBefore = await readings(s, await tailOf(s), growthOf.settled, `the settled ${growthOf.of} before the tab`);
-  const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: "browser" });
+  const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: IDLE_TAB_PLUGIN });
   s.cleanup(() => s.run("core.tab.close", { tab }));
-  await s.until("core.surfaces", (list) => list.some((x) => x.surface === tab && x.exposes.includes("status browser.location")),
-    "the new browser surface did not register");
-  await s.run("browser.navigate", { url }, tab);
-  await s.until("browser.location", (at) => at.url === url && !at.loading && at.error === null && at.title === "blank",
-    `surface ${tab} did not load ${url}`, { surface: tab });
+  await s.until("core.surfaces", (list) => list.some((x) => x.surface === tab && x.exposes.includes(`status ${IDLE_TAB_PLUGIN}.document`)),
+    `the new ${IDLE_TAB_PLUGIN} surface did not register ${IDLE_TAB_PLUGIN}.document`);
+  await s.until(`${IDLE_TAB_PLUGIN}.document`, (at) => at.reported === true && at.visibility === "shown",
+    `surface ${tab} did not load the document of its region`, { surface: tab });
   const loaded = await tailOf(s);
   const settled = await readings(s, loaded,
     settledDocumentsOf(`the documents of ${tab}`, (fields) => fields.role === "document" && fields.surface === tab),

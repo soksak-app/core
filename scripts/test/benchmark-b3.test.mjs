@@ -55,29 +55,29 @@ test("a BASELINE checkout whose head differs from the last head of the baseline 
 test("the installed sidecars of every application and the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run", { timeout: 1000 }, () => {
   const index = {
     plugins: [
-      { id: "browser", versions: [{ version: "0.0.15", release: { url: "file:///b.tgz", sha256: hex("d", 64) } }] },
-      { id: "term", versions: [{ version: "0.0.3", release: { url: "file:///t3.tgz", sha256: hex("e", 64) } }, { version: "0.0.4", release: { url: "file:///t4.tgz", sha256: hex("9", 64) } }] },
+      { id: "layoutprobe", versions: [{ version: "0.0.15", release: { url: "file:///b.tgz", sha256: hex("d", 64) } }] },
+      { id: "probeplain", versions: [{ version: "0.0.3", release: { url: "file:///t3.tgz", sha256: hex("e", 64) } }, { version: "0.0.4", release: { url: "file:///t4.tgz", sha256: hex("9", 64) } }] },
     ],
     sidecars: [{ name: "fixture-sidecar", versions: [{ version: "0.0.20", protocol: 1, releases: { "darwin-arm64": { url: "file:///sidecar.tgz", sha256: hex("8", 64) } } }] }],
   };
   const installed = {
     format: 3,
-    plugins: { browser: { version: "0.0.15", path: "plugins/browser/0.0.15", enabled: true, sidecars: {} }, term: { version: "0.0.3", path: "plugins/term/0.0.3", enabled: true, sidecars: {} } },
+    plugins: { layoutprobe: { version: "0.0.15", path: "plugins/layoutprobe/0.0.15", enabled: true, sidecars: {} }, probeplain: { version: "0.0.3", path: "plugins/probeplain/0.0.3", enabled: true, sidecars: {} } },
     sidecars: { "fixture-sidecar": { version: "0.0.20", path: "sidecars/fixture-sidecar/0.0.20/darwin-arm64" } },
   };
   const releases = installedReleases(installed, index, "darwin-arm64");
   assert.deepEqual(releases, [
-    { kind: "plugin", id: "browser", version: "0.0.15", sha256: hex("d", 64) },
-    { kind: "plugin", id: "term", version: "0.0.3", sha256: hex("e", 64) },
+    { kind: "plugin", id: "layoutprobe", version: "0.0.15", sha256: hex("d", 64) },
+    { kind: "plugin", id: "probeplain", version: "0.0.3", sha256: hex("e", 64) },
     { kind: "sidecar", id: "fixture-sidecar", version: "0.0.20", sha256: hex("8", 64) },
   ]);
   assert.deepEqual(baselinePluginFailures(baselineRecord(), releases), []);
-  installed.plugins.term.version = "0.0.4";
+  installed.plugins.probeplain.version = "0.0.4";
   assert.deepEqual(baselinePluginFailures(baselineRecord(), installedReleases(installed, index, "darwin-arm64")),
-    [`the baseline host installed term 0.0.4 ${hex("9", 64)}, the baseline record holds term 0.0.3 ${hex("e", 64)}`]);
-  delete installed.plugins.browser;
-  installed.plugins.term.version = "0.0.3";
-  assert.deepEqual(baselinePluginFailures(baselineRecord(), installedReleases(installed, index, "darwin-arm64")), ["the baseline host installed no release of browser, which the baseline record holds"]);
+    [`the baseline host installed probeplain 0.0.4 ${hex("9", 64)}, the baseline record holds probeplain 0.0.3 ${hex("e", 64)}`]);
+  delete installed.plugins.layoutprobe;
+  installed.plugins.probeplain.version = "0.0.3";
+  assert.deepEqual(baselinePluginFailures(baselineRecord(), installedReleases(installed, index, "darwin-arm64")), ["the baseline host installed no release of layoutprobe, which the baseline record holds"]);
   assert.deepEqual(installedReleases(null, index, "darwin-arm64"), [], "a configuration folder without plugins/installed.json has nothing installed");
   assert.deepEqual(sidecarReleaseFailures(baselineRecord(), releases, "mygo"), []);
   const other = releases.map((release) => (release.kind === "sidecar" ? { ...release, version: "0.0.21", sha256: hex("7", 64) } : release));
@@ -87,14 +87,16 @@ test("the installed sidecars of every application and the installed plugins of a
     [`wailsv3 installed the sidecar other-sidecar 1 ${hex("6", 64)}, which the baseline record does not hold`]);
   assert.deepEqual(sidecarReleaseFailures(baselineRecord(), releases.filter((release) => release.kind === "plugin"), "tauriv2"),
     ["tauriv2 installed no release of the sidecar fixture-sidecar, which the baseline record holds"]);
-  installed.plugins.term.version = "0.0.9";
-  assert.throws(() => installedReleases(installed, index, "darwin-arm64"), /^Error: the index lists no release of term 0\.0\.9$/);
+  installed.plugins.probeplain.version = "0.0.9";
+  assert.throws(() => installedReleases(installed, index, "darwin-arm64"), /^Error: the index lists no release of probeplain 0\.0\.9$/);
 });
 
 test("the surface plugins are the installed plugins whose manifest declares a surface", { timeout: 1000 }, () => {
-  const installed = { format: 3, plugins: { files: { version: "1", path: "plugins/files/1" }, term: { version: "2", path: "plugins/term/2" } }, sidecars: {} };
-  const manifests = { "plugins/files/1": { id: "files", sidebars: {} }, "plugins/term/2": { id: "term", surface: { composition: { kind: "view", page: "index.html" } } } };
-  assert.deepEqual(surfacePlugins(installed, (path) => manifests[path]), ["term"]);
+  const installed = { format: 3, plugins: { probecontributor: { version: "1", path: "plugins/probecontributor/1" }, probeplain: { version: "2", path: "plugins/probeplain/2" } }, sidecars: {} };
+  // The manifests are those of the fixture plugins: the contributor probe declares no surface and the plain view probe one.
+  const fixture = (path) => JSON.parse(readFileSync(new URL(`../../e2e/fixtures/${path}/plugin.json`, import.meta.url), "utf8"));
+  const manifests = { "plugins/probecontributor/1": fixture("extension-probe/contributor"), "plugins/probeplain/2": fixture("plain-view/probe") };
+  assert.deepEqual(surfacePlugins(installed, (path) => manifests[path]), ["probeplain"]);
 });
 
 test("the run conditions are read from injected readings of swap use, of fseventsd and of the display", { timeout: 1000 }, () => {
@@ -159,10 +161,10 @@ test("phase 1 reruns with TRACE=1 each target that takes the trace state of the 
 test("a target runs in the checkout of its application with its configuration folder, its sok, its trace state and its value file", { timeout: 1000 }, () => {
   const [, , , baseline] = applicationsOf({ root: "/core", baseline: "/baseline" });
   const paths = { configRoot: "/core/target/b3/s/configs/S1-1-baseline-wailsv3", configDir: "/core/target/b3/s/configs/S1-1-baseline-wailsv3/soksak-check-wailsv3",
-    trace: 0, out: "/core/target/b3/s/outputs/S1/1-baseline-wailsv3/1.json", plugins: ["browser", "term"], runId: "b3-S1-1-baseline-wailsv3", runFolder: "/core/target/b3/s/outputs/S1/1-baseline-wailsv3" };
+    trace: 0, out: "/core/target/b3/s/outputs/S1/1-baseline-wailsv3/1.json", plugins: ["layoutprobe", "probeplain"], runId: "b3-S1-1-baseline-wailsv3", runFolder: "/core/target/b3/s/outputs/S1/1-baseline-wailsv3" };
   const make = targetCommand("make measure-app-usage STATE=S1 STEP=pointer", { application: baseline, ...paths });
   assert.deepEqual(make.argv, ["make", "-s", "--no-print-directory", "measure-app-usage", "STATE=S1", "STEP=pointer", "APP=wailsv3", `CONFIG=${paths.configDir}`,
-    `CONFIG_DIR=${paths.configDir}`, "SOK=/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/sok", "TRACE=0", "PLUGINS=browser term", `B3_OUT=${paths.out}`]);
+    `CONFIG_DIR=${paths.configDir}`, "SOK=/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/sok", "TRACE=0", "PLUGINS=layoutprobe probeplain", `B3_OUT=${paths.out}`]);
   assert.equal(make.cwd, "/baseline");
   assert.equal(make.env.SOKSAK_APP, "wailsv3");
   assert.equal(make.env.SOKSAK_CONFIG_ROOT, paths.configRoot);
@@ -173,8 +175,8 @@ test("a target runs in the checkout of its application with its configuration fo
   assert.deepEqual(targetCommand("make benchmark-split-load", { application: baseline, ...paths }).argv.filter((word) => word.startsWith("TRACE=")), [],
     "a benchmark applies the settings that B3_SETTINGS declares for it and takes no TRACE of the run");
   assert.equal(make.env.SOKSAK_RUN_ID, paths.runId);
-  const check = targetCommand("e2e/benchmark/term-view.test.mjs", { application: baseline, ...paths });
-  assert.deepEqual(check.argv, ["pnpm", "-F", "@soksak/e2e", "exec", "node", "./run.mjs", "--test", "--test-concurrency=1", "--test-global-setup=./setup.mjs", "benchmark/term-view.test.mjs"]);
+  const check = targetCommand("e2e/benchmark/plain-view.test.mjs", { application: baseline, ...paths });
+  assert.deepEqual(check.argv, ["pnpm", "-F", "@soksak/e2e", "exec", "node", "./run.mjs", "--test", "--test-concurrency=1", "--test-global-setup=./setup.mjs", "benchmark/plain-view.test.mjs"]);
   assert.equal(check.cwd, "/baseline");
   assert.equal(check.env.SOKSAK_B3_OUT, paths.out, "a check of e2e/ reads the path of its output from SOKSAK_B3_OUT");
   assert.throws(() => targetCommand("node elsewhere.mjs", { application: baseline, ...paths }), /^Error: the target "node elsewhere\.mjs" is neither a make target nor a check of e2e\/$/);
@@ -187,11 +189,11 @@ test("a run installs the index of its application into a new configuration folde
   assert.equal(baseline.index, "/indexes/baseline.json");
   const configRoot = "/core/target/b3/s/configs/S0-1-baseline-wailsv3";
   const configDir = `${configRoot}/soksak-check-wailsv3`;
-  const plan = unitPlan({ application: baseline, configRoot, configDir, pluginIds: ["browser", "term"] });
+  const plan = unitPlan({ application: baseline, configRoot, configDir, pluginIds: ["layoutprobe", "probeplain"] });
   assert.deepEqual(plan.prepare.map((step) => [step.phase, step.kind, step.argv]), [
     ["prepare", "run", [baseline.sok, "registry", "use", "/indexes/baseline.json", "--config-dir", configDir]],
-    ["prepare", "run", [baseline.sok, "plugin", "install", "browser", "--config-dir", configDir]],
-    ["prepare", "run", [baseline.sok, "plugin", "install", "term", "--config-dir", configDir]],
+    ["prepare", "run", [baseline.sok, "plugin", "install", "layoutprobe", "--config-dir", configDir]],
+    ["prepare", "run", [baseline.sok, "plugin", "install", "probeplain", "--config-dir", configDir]],
     ["prepare", "start", ["/baseline/target/release/wailsv3/soksak.app/Contents/MacOS/soksak-wailsv3", "--config-dir", configDir]],
   ]);
   assert.equal(plan.prepare[3].app, "baseline-wailsv3");
@@ -220,8 +222,8 @@ const BENCHMARKS = {
     "view-drag": { 0: ["verdict", "dragCpuSeconds"], "frame-records": ["dragFrameP90Ms"] },
     "resize-catch-up": { captured: ["verdict"], "frame-records": ["maximiseFrameP90Ms"] },
     "split-load": ["hostGrowthKb"],
-    "term-view": ["verdict"],
-    "hwp-view": ["verdict"],
+    "plain-view": ["verdict"],
+    "main-page-footprint": ["verdict"],
   },
   settings: {
     "view-drag": { 0: traceSettings(0), "frame-records": traceSettings("frame-records") },
@@ -230,7 +232,7 @@ const BENCHMARKS = {
       "frame-records": traceSettings("frame-records"),
     },
     "split-load": { "diagnostics.performance": false, "diagnostics.log": { call: "debug" } },
-    "term-view": { "diagnostics.performance": false, "diagnostics.log": {} },
+    "plain-view": { "diagnostics.performance": false, "diagnostics.log": {} },
   },
 };
 
@@ -300,17 +302,17 @@ test("an e2e benchmark reports the settings that B3_SETTINGS declares for it in 
     { goals, scenario, target, application: { host: "wailsv3" }, trace: 0, code: 0, benchmarks: BENCHMARKS }).failures;
   const split = "make benchmark-split-load";
   const captured = "make benchmark-resize-catch-up TRACE=captured";
-  const term = "e2e/benchmark/term-view.test.mjs";
+  const probeplain = "e2e/benchmark/plain-view.test.mjs";
   const capturedSettings = BENCHMARKS.settings["resize-catch-up"].captured;
   assert.deepEqual(read(split, settingsConditions(BENCHMARKS.settings["split-load"]), "S10"), []);
   assert.deepEqual(read(captured, settingsConditions(capturedSettings)), []);
-  assert.deepEqual(read(term, settingsConditions(BENCHMARKS.settings["term-view"]), "S7"), []);
+  assert.deepEqual(read(probeplain, settingsConditions(BENCHMARKS.settings["plain-view"]), "S7"), []);
   assert.deepEqual(read(split, targetConditions(0), "S10"), [
     `${split}: reports logPolicy ${JSON.stringify(policyOf(0))}, expected ${JSON.stringify(policyOfSetting({ call: "debug" }).classes)} of split-load`,
   ], "a benchmark without TRACE is compared with the settings of its one state");
-  assert.deepEqual(read(term, targetConditions(1), "S7"), [
-    `${term}: reports traceState true, expected false of term-view`,
-    `${term}: reports logPolicy ${JSON.stringify(policyOf(1))}, expected ${JSON.stringify(policyOf(0))} of term-view`,
+  assert.deepEqual(read(probeplain, targetConditions(1), "S7"), [
+    `${probeplain}: reports traceState true, expected false of plain-view`,
+    `${probeplain}: reports logPolicy ${JSON.stringify(policyOf(1))}, expected ${JSON.stringify(policyOf(0))} of plain-view`,
   ], "a check of e2e/ is the benchmark of its file name");
   assert.deepEqual(read(captured, targetConditions("frame-records")), [
     `${captured}: reports traceState false, expected true of resize-catch-up in the state captured`,
@@ -322,8 +324,8 @@ test("an e2e benchmark reports the settings that B3_SETTINGS declares for it in 
     ["make benchmark-resize-catch-up TRACE=0: resize-catch-up measures in no state 0"]);
   assert.deepEqual(read("make benchmark-split-load TRACE=0", targetConditions(0), "S10"),
     ["make benchmark-split-load TRACE=0: names TRACE=0, and split-load measures in one state"]);
-  assert.deepEqual(read("e2e/benchmark/hwp-view.test.mjs", targetConditions(0), "S7"),
-    ["e2e/benchmark/hwp-view.test.mjs: e2e/benchmark/measurements.mjs declares no settings of hwp-view in B3_SETTINGS"]);
+  assert.deepEqual(read("e2e/benchmark/main-page-footprint.test.mjs", targetConditions(0), "S7"),
+    ["e2e/benchmark/main-page-footprint.test.mjs: e2e/benchmark/measurements.mjs declares no settings of main-page-footprint in B3_SETTINGS"]);
   assert.deepEqual(read("e2e/benchmark/section-view.test.mjs", targetConditions(0), "S7"),
     ["e2e/benchmark/section-view.test.mjs: e2e/benchmark/measurements.mjs declares no measurements of section-view in B3_MEASUREMENTS"]);
 });
@@ -670,8 +672,8 @@ test("a failed run keeps only the output of its application and the logs of its 
   const runTarget = context.runTarget;
   context.runTarget = async (command, options) => {
     const result = await runTarget(command, options);
-    mkdirSync(join(configDir, "plugins", "terminal"), { recursive: true });
-    writeFileSync(join(configDir, "plugins", "terminal", "view.js"), "x".repeat(4096));
+    mkdirSync(join(configDir, "plugins", "probeplain"), { recursive: true });
+    writeFileSync(join(configDir, "plugins", "probeplain", "view.js"), "x".repeat(4096));
     mkdirSync(join(configDir, "logs"), { recursive: true });
     writeFileSync(join(configDir, "logs", "events.jsonl"), "y".repeat(2048));
     const output = JSON.parse(readFileSync(command.out, "utf8"));

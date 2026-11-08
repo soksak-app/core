@@ -5,7 +5,7 @@
     { "id": "fixture-sidecar", "version": "0.0.20", "sha256": "8888888888888888888888888888888888888888888888888888888888888888" }
   ],
   "plugins": [
-    { "id": "browser", "version": "0.0.15", "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" },
-    { "id": "term", "version": "0.0.3", "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" }
+    { "id": "layoutprobe", "version": "0.0.15", "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" },
+    { "id": "probeplain", "version": "0.0.3", "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" }
   ]
 }

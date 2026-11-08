@@ -1,7 +1,7 @@
-// The view drag benchmark of B3 (docs/operations/examples.md, S5 and S16; cases/view-drag.mjs holds the order of its steps). It prepares
-// the layout of the terminal drag on the terminal view of the fixture, or with SOKSAK_FLOOR=1 on the view of the floor page
-// (cases/floor-page.mjs), and runs under that layout a drag without capture through `diagnostics.drag` with `native: true`, the captured
-// drag, which meets the performance targets with the performance and renderer traces off, and, after `frames` of host.window has not
+// The view drag benchmark of B3 (docs/operations/examples.md, S5 and S16; cases/view-drag.mjs holds the order of its steps). It opens
+// the floor page fixture view as the active tab of the focused card (cases/floor-page.mjs), prepares the layout of its drag, and runs
+// under that layout a drag without capture through `diagnostics.drag` with `native: true`, the captured
+// drag, which meets the performance targets with the performance trace off, and, after `frames` of host.window has not
 // changed for 3 seconds, a drag without capture under the policy that stores the class `frame` at `debug`, whose U7 records it reads on a
 // window whose host.window reports pageProcess null. It reads the CPU time and the peak footprint of each process of the application
 // before and after the first drag. SOKSAK_ACCESSIBILITY=1 reads the elements of the window through the accessibility API before the
@@ -19,9 +19,8 @@ import { applyTrace, FRAME_RECORDS } from "../../scripts/measure-trace.mjs";
 import { fresh } from "../fixture.mjs";
 import { readWindowElements } from "../real/hid.mjs";
 import { b3Conditions, b3Target, fixtureSettings, withB3Out } from "./cases/b3-run.mjs";
-import { openFloorPage } from "./cases/floor-page.mjs";
+import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN } from "./cases/floor-page.mjs";
 import { recordGesture } from "./cases/gesture-records.mjs";
-import { prepareFloorDrag, prepareTerminalDrag, TERMINAL_DRAG_PLAN } from "./cases/terminal.mjs";
 import { dragProcesses, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "./cases/view-drag.mjs";
 import { B3_MEASUREMENTS, B3_SETTINGS } from "./measurements.mjs";
 
@@ -32,10 +31,8 @@ for (const app of Object.values(APPS)) {
     { timeout: 180000 }, async (t) => {
       const s = await open(t, app);
       await withB3Out(b3Target(process.env, B3_MEASUREMENTS["view-drag"]), async (run) => {
-        const terminal = await fresh(s, fixtureSettings(B3_SETTINGS["view-drag"]["0"]));
-        const prepared = OPTIONS.floor
-          ? await prepareFloorDrag(t, s, await openFloorPage(s, { signal: t.signal }), app.configDir)
-          : await prepareTerminalDrag(t, s, terminal, app.configDir);
+        await fresh(s, fixtureSettings(B3_SETTINGS["view-drag"]["0"]));
+        const prepared = await prepareFloorDrag(t, s, await openFloorPage(s), app.configDir);
         const { pageProcess } = await s.get("host.window");
         await runViewDrag({ options: OPTIONS, pageProcess, steps: {
           readElements: async () => readWindowElements(app),
@@ -63,7 +60,7 @@ for (const app of Object.values(APPS)) {
           untilFramesQuiet: () => untilFramesQuiet({ frames: async () => [(await s.get("host.window")).frames] }),
           frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, app.configDir),
           gcLoop: (on) => s.request("diagnostics.gc.loop", { on }),
-          uncapturedDrag: () => drag(s, TERMINAL_DRAG_PLAN),
+          uncapturedDrag: () => drag(s, VIEW_DRAG_PLAN),
           record: async (gesture) => {
             if (pageProcess === null) return recordGesture(s, gesture);
             await gesture();

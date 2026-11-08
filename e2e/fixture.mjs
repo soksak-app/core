@@ -4,6 +4,8 @@
 // tabs name the plugins of the published starter, which a fixture configuration does not load, so they open as placeholders. The
 // preparation replaces each such placeholder by a tab of the layout probe fixture `layoutprobe` in the same card and returns the tab
 // of the focused card.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
@@ -26,13 +28,28 @@ export const replacePlaceholders = (s) => start.replacePlaceholders(s, START_PLU
 /** Waits until the active tab of the focused card is a ready START_PLUGIN tab that registered START_ENTRIES and returns it. */
 export const startTab = (s) => start.startTab(s, { startPlugin: START_PLUGIN, startEntries: START_ENTRIES });
 
+/** The manifest of the layout probe (e2e/fixtures/layout-probe/layoutprobe/plugin.json). */
+const LAYOUT_PROBE_MANIFEST = fileURLToPath(new URL("fixtures/layout-probe/layoutprobe/plugin.json", import.meta.url));
+
 /**
- * Puts a card-left sidebar on each card whose active tab is a tab of `plugin` (START_PLUGIN by default). Without `sections` it links
- * the set `set`, by default the list set `<plugin>.list` that the layout probe declares (it also declares `layoutprobe.tabs`, tabs
- * layout); with `sections` it stores a common list set of those sections (start.mjs cardSidebar). Returns the ids of the card sidebars.
+ * The sections of the set `list` that the layout probe declares: the default sections of the card sidebar of a check. A check
+ * configuration does not hold that set, because the sidebars of environment.json replace the default sets of the plugins
+ * (docs/spec/plugins.md#default-sidebar-sets), so the check stores its own set of these sections.
  */
-export const cardSidebar = (s, { plugin = START_PLUGIN, set, sections } = {}) =>
-  start.cardSidebar(s, { plugin, set: set ?? (sections === undefined ? `${plugin}.list` : undefined), sections });
+export function probeListSections(path = LAYOUT_PROBE_MANIFEST) {
+  const sets = JSON.parse(readFileSync(path, "utf8")).sidebars?.sets ?? [];
+  const list = sets.find((item) => item.id === "list");
+  if (!Array.isArray(list?.sections) || list.sections.length === 0) throw new Error(`${path} declares no sections of its set list`);
+  return list.sections;
+}
+
+/**
+ * Puts a card-left sidebar on each card whose active tab is a tab of `plugin` (START_PLUGIN by default): it stores a common set
+ * (start.mjs cardSidebar, the id `check-sections` by default) of `sections`, by default the sections of the list set of the layout
+ * probe (probeListSections), and links it. Returns the ids of the card sidebars.
+ */
+export const cardSidebar = (s, { plugin = START_PLUGIN, set, sections = probeListSections(), layout } = {}) =>
+  start.cardSidebar(s, { plugin, set, sections, layout });
 
 /**
  * The declarations of the records that a check reads: the catalog of core joined with the catalogs of the plugins and sidecars

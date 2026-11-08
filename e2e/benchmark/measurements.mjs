@@ -14,7 +14,7 @@
 //                               main page
 //   split-load                  hostGrowthKb, the growth of the host process under load
 //   idle-tab                    idleTabCostKb, the cost of the idle tab, and documentPartKb, its part in documents
-//   *-view, editor-footprint    verdict
+//   section-view                verdict
 //   input-latency               fieldMedianMs, fieldP90Ms, documentMedianMs and documentP90Ms, the keys of the configurations with the
 //                               trace off and the default gate
 
@@ -34,13 +34,7 @@ export const B3_MEASUREMENTS = Object.freeze({
   }),
   "split-load": keys("hostGrowthKb"),
   "idle-tab": keys("idleTabCostKb", "documentPartKb"),
-  "browser-view": keys("verdict"),
-  "editor-view": keys("verdict"),
-  "hwp-view": keys("verdict"),
-  "terminal-view": keys("verdict"),
-  "term-view": keys("verdict"),
   "section-view": keys("verdict"),
-  "editor-footprint": keys("verdict"),
   "input-latency": keys("fieldMedianMs", "fieldP90Ms", "documentMedianMs", "documentP90Ms"),
 });
 
@@ -73,12 +67,6 @@ export const B3_SETTINGS = Object.freeze({
   "split-load": settings(false, { call: "debug" }),
   // The memory readings of the sampler of the performance trace (host.sampler.memory) are stored in the class call at debug.
   "idle-tab": settings(true, { call: "debug" }),
-  "browser-view": VIEW,
-  "editor-view": VIEW,
-  "hwp-view": VIEW,
-  "terminal-view": VIEW,
-  "term-view": VIEW,
   "section-view": VIEW,
-  "editor-footprint": VIEW,
   "input-latency": trace(0),
 });

@@ -158,6 +158,9 @@ test("a card sidebar links a named set or stores its own common set of the given
   await cardSidebar(own, { plugin: PLUGIN, sections: ["other.alpha", "other.beta"] });
   assert.deepEqual(own.state.settings.values.sets, [{ id: "check-sections", title: "검사", sections: ["other.alpha", "other.beta"], layout: "list" }]);
   assert.ok(own.state.sidebars.every((item) => item.set === "check-sections"));
+  // A second sidebar of the same check stores its sections in place of the set with the same id.
+  await cardSidebar(own, { plugin: PLUGIN, sections: ["other.beta"] });
+  assert.deepEqual(own.state.settings.values.sets, [{ id: "check-sections", title: "검사", sections: ["other.beta"], layout: "list" }]);
 
   const tabs = workbench(starterLayout());
   await replacePlaceholders(tabs, PLUGIN);

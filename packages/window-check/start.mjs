@@ -76,7 +76,8 @@ export async function startTab(s, { startPlugin: plugin = START_PROBE, startEntr
 
 /**
  * Puts a card-left sidebar on each card whose active tab is a tab of `plugin`. With `sections` it first stores a common set of the
- * layout `layout` (`list` by default) with the id `set` (CHECK_SET by default) that holds those sections, so the sidebar shows them
+ * layout `layout` (`list` by default) with the id `set` (CHECK_SET by default) that holds those sections, in place of a set with that
+ * id, so the sidebar shows them
  * whatever sets the environment of the application declares in place of the sets of the plugins; without `sections` it links the
  * set `set`. keepCommonSettings restores the sets and the links when the
  * check ends. Returns the ids of the card sidebars.
@@ -88,7 +89,8 @@ export async function cardSidebar(s, { plugin, set, sections, layout = "list" } 
   await keepCommonSettings(s);
   if (sections !== undefined) {
     const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: [...sets, { id, title: "검사", sections, layout }] }, scope: "common" });
+    await s.run("core.settings.set", { patch: { sets: [...sets.filter((item) => item.id !== id), { id, title: "검사", sections, layout }] },
+      scope: "common" });
   }
   await s.run("core.settings.link", { place: "card-left", plugin, set: id, scope: "common" });
   const cards = (await s.get("core.grid")).cards

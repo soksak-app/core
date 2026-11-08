@@ -15,7 +15,7 @@ View-drag benchmark는 구조가 유효한 캡처 수집과 기준 판정을 분
 
 View display acceptance는 설치되고 활성화된 view plugin을 열거하고 실제로 연 tab을 식별한다. 각 plugin은 선언된 readiness를 검사하고 content verifier를 돌려주는 명시적 content case를 요구한다. Case가 없으면 plugin과 tab 식별자를 밝히며 실패한다. Colour variation만으로 plugin content를 입증할 수 없다. Missing case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
 
-설치된 각 view의 content verifier는 녹화가 끝난 뒤 그 plugin의 공개 값에서 고정된 예상 콘텐츠를 읽는다. Browser empty-state 안내문(`browser.content.read`), editor text fixture(`editor.read`), HWP fixture 문단(`getPageSvg`의 page glyph), terminal 출력 marker(image region이 조회가 가리키는 frame을 presented한 뒤의 `term.screen.read` 또는 `terminal.screen.read`)이다. browser·editor·HWP 값은 그 view의 document region이 보이는 동안 읽는다. 전체 녹화를 decode하고 확정 frame count를 확인한다. Content verifier 없이 readiness만 제공하는 case는 거부한다.
+view의 content verifier는 녹화가 끝난 뒤, view가 자기 namespace에 노출하고 view가 보이는 text를 답하는 content read에서 고정된 예상 콘텐츠를 읽는다. 검사가 command와 document region의 이름을 정하며, 그 값은 그 region이 보이는 동안 읽는다. core 검사는 plain view probe fixture의 `probeplain.content.read`를 읽으며, 그것은 document region `page`의 줄 `Plain view probe content`를 답한다. 전체 녹화를 decode하고 확정 frame count를 확인한다. Content verifier 없이 readiness만 제공하는 case는 거부한다.
 
 Terminal background sample은 같은 view crop 변환을 사용하며 buffer coordinate에 capture content origin, display scale과 content scale을 포함한다. 작은 크기에서도 sample은 crop 내부에 있다. Unit fixture는 각 변환에서 요청한 pixel과 주변 pixel을 독립적으로 구분한다. 멈춘 capture folder는 session finalization까지 성공한 뒤에만 제거하며 decoding, geometry 또는 finalization이 실패하면 보존한다.
 

@@ -114,9 +114,11 @@ measure-app-usage:
 # presents while its program rewrites ROWS rows at RATE frames per second (scripts/measure-terminal-redraw.mjs, docs/operations/examples.md):
 # after the trace state of TRACE=0|1, it opens one tab of PLUGIN, whose PLUGIN.input and PLUGIN.screen it uses, in a new project window of
 # 760 by 614 points and divides the CPU time by the change of presentedFrames of the region of that tab. B3_OUT writes the B3 record of the
-# measurement to that file as JSON. SOK defaults to the sok binary of target/debug.
+# measurement to that file as JSON. SOK defaults to the sok binary of target/debug. PLUGIN has no default: the caller names a plugin of the
+# installed environment, and the target gates nothing.
 measure-terminal-redraw:
 	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-redraw requires CONFIG_DIR=DIR PLUGIN=ID ROWS=N TRACE=0|1 [B3_OUT=FILE] [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(PLUGIN)" in '') echo "measure-terminal-redraw requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
 	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" --rows "$(ROWS)" --trace "$(TRACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10) $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
 
 # Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of
@@ -687,11 +689,11 @@ test-app-shutdown:
 # B3_OUT=FILE writes the B3 output of the benchmark to FILE (e2e/benchmark/cases/b3-run.mjs). The view drag and the resize catch-up
 # measure in two states and take with B3_OUT the state TRACE, one of the state names of the benchmark in B3_MEASUREMENTS of
 # e2e/benchmark/measurements.mjs: TRACE=0|frame-records for the view drag and TRACE=captured|frame-records for the resize catch-up; the
-# view drag takes ACCESSIBILITY=1, FLOOR=1 and GC_LOOP=1 (e2e/benchmark/cases/view-drag.mjs). The benchmark refuses a value that it does
+# view drag takes ACCESSIBILITY=1 and GC_LOOP=1 (e2e/benchmark/cases/view-drag.mjs). The benchmark refuses a value that it does
 # not take.
 B3_BENCHMARK_ENV = $(if $(B3_OUT),SOKSAK_B3_OUT="$(abspath $(B3_OUT))") $(if $(TRACE),SOKSAK_B3_TRACE="$(TRACE)")
 benchmark-view-drag:
-	@$(B3_BENCHMARK_ENV) $(if $(ACCESSIBILITY),SOKSAK_ACCESSIBILITY="$(ACCESSIBILITY)") $(if $(FLOOR),SOKSAK_FLOOR="$(FLOOR)") \
+	@$(B3_BENCHMARK_ENV) $(if $(ACCESSIBILITY),SOKSAK_ACCESSIBILITY="$(ACCESSIBILITY)") \
 	  $(if $(GC_LOOP),SOKSAK_GC_LOOP="$(GC_LOOP)") pnpm -F @soksak/e2e run benchmark:view-drag
 
 benchmark-resize-catch-up:

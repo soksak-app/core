@@ -1,31 +1,37 @@
-// The section views of the view benchmark (docs/operations/examples.md, S7): each section view of the enabled installed plugins is measured
-// for (i), (ii), (iii), (iii-b), (v) and (viii) of plugin processes, through the section-view contract of
-// docs/spec/plugin-processes.md#section-views. A section view whose plugin does not declare that contract fails with its plugin and section.
+// The section views of the view benchmark (docs/operations/examples.md, S7): each section view of the section view fixture, the plain view
+// probe (SECTION_VIEW_PLUGIN), is measured for (i), (ii), (iii), (iii-b), (v) and (viii) of plugin processes, through the section-view
+// contract of docs/spec/plugin-processes.md#section-views. A section view whose plugin does not declare that contract fails with its
+// plugin and section.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { validateDiagnostics } from "@soksak/plugin-api";
+import { START_PLUGIN } from "../../fixture.mjs";
 import { effectiveCardCornerRadiusPt } from "../../view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, waitForViewReadiness } from "../../view-metrics-collection.mjs";
 import { activeCoreTheme, markerDragObservation, markerLayoutObservation, requireMarkerColor } from "./marker-view.mjs";
 
 const INSTALLED_FORMAT = 3;
 
+/** The plugin of the section views that the view benchmark measures: the plain view probe (e2e/fixtures/plain-view/probe). */
+export const SECTION_VIEW_PLUGIN = "probeplain";
+
 /**
- * The section views of the enabled installed plugins of the configuration folder `configDir`, in the order of plugin id and then of the
- * plugin's `sections`: { plugin, section, page, manifest, diagnostics }, where `page` is the page of the section's view composition,
- * `manifest` the content of the plugin's plugin.json and `diagnostics` the content of its diagnostics.json in its recorded path, or null
- * when the package holds none. A folder without plugins/installed.json, a file of another format, or no section view at all is an error.
+ * The section views of the enabled installed plugins of the configuration folder `configDir`, or of the plugin `plugin` alone when it is
+ * given, in the order of plugin id and then of the plugin's `sections`: { plugin, section, page, manifest, diagnostics }, where `page`
+ * is the page of the section's view composition, `manifest` the content of the plugin's plugin.json and `diagnostics` the content of its
+ * diagnostics.json in its recorded path, or null when the package holds none. A folder without plugins/installed.json, a file of
+ * another format, or no section view at all is an error.
  */
-export function installedSectionViews(configDir) {
+export function installedSectionViews(configDir, { plugin: only = null } = {}) {
   const path = join(configDir, "plugins", "installed.json");
   if (!existsSync(path)) throw new Error(`${path} does not exist, so no plugin with a section view is installed`);
   const installed = JSON.parse(readFileSync(path, "utf8"));
   if (installed.format !== INSTALLED_FORMAT) throw new Error(`${path}: format must be ${INSTALLED_FORMAT}, not ${installed.format}`);
   const views = [];
   for (const [plugin, record] of Object.entries(installed.plugins).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (!record.enabled) continue;
+    if (!record.enabled || (only !== null && plugin !== only)) continue;
     const folder = join(configDir, record.path);
     const manifest = JSON.parse(readFileSync(join(folder, "plugin.json"), "utf8"));
     const diagnosticsPath = join(folder, "diagnostics.json");
@@ -35,7 +41,9 @@ export function installedSectionViews(configDir) {
       views.push({ plugin, section: section.id, page: section.composition.page, manifest, diagnostics });
     }
   }
-  if (views.length === 0) throw new Error("no enabled installed plugin declares a section view");
+  if (views.length === 0) {
+    throw new Error(only === null ? "no enabled installed plugin declares a section view" : `no enabled installed plugin ${only} declares a section view`);
+  }
   return views;
 }
 
@@ -77,15 +85,18 @@ export function requireSectionDeclarations(view) {
   return { ...view, content };
 }
 
-/** The plugin whose cards hold the card-left sidebar that shows the measured section (terminalCardSidebar of e2e/fixture.mjs). */
-const ANCHOR_PLUGIN = "terminal";
+/**
+ * The plugin whose cards hold the card-left sidebar that shows the measured section: the layout probe, the plugin of the start tab
+ * (cardSidebar of e2e/fixture.mjs).
+ */
+export const ANCHOR_PLUGIN = START_PLUGIN;
 
 const hasAnchorTab = (card) => card?.tabs?.some((tab) => typeof tab?.id === "string" && tab.id.length > 0 && tab.plugin === ANCHOR_PLUGIN);
 
-/** The id of the tallest card of `grid` with a terminal tab, the first in document order among equals; none is an error. */
+/** The id of the tallest card of `grid` with an ANCHOR_PLUGIN tab, the first in document order among equals; none is an error. */
 function tallestAnchorCard(grid, plugin) {
   const cards = (grid?.cards ?? []).filter(hasAnchorTab);
-  if (cards.length === 0) throw new Error(`core.grid has no card with a terminal tab to split for the section view of ${plugin}`);
+  if (cards.length === 0) throw new Error(`core.grid has no card with a ${ANCHOR_PLUGIN} tab to split for the section view of ${plugin}`);
   return cards.reduce((tallest, card) => (card.h > tallest.h ? card : tallest)).id;
 }
 
@@ -94,7 +105,8 @@ const FIXTURE_PROJECT = "test-project";
 
 /**
  * Fails, with the expected and the actual state, unless the window of `s` is in the state of the section-view contract: the project
- * of diagnostics.fixture is open, and the active tab of `card`, whose card-left sidebar shows the section view `owner`, is a terminal tab.
+ * of diagnostics.fixture is open, and the active tab of `card`, whose card-left sidebar shows the section view `owner`, is an
+ * ANCHOR_PLUGIN tab.
  */
 async function requireSectionState(s, owner, card) {
   const project = await s.get("core.project");
@@ -114,18 +126,18 @@ const sidebarOfSurface = (sidebars, surface) => sidebars.find((row) => row.place
 
 /**
  * The placement of a section view, the `placement` of its view descriptor ({ card, open, close } of TAB_PLACEMENT in
- * e2e/view-metrics-collection.mjs). The window shows the measured section alone in the card-left sidebar of every terminal card
- * (terminalCardSidebar of e2e/fixture.mjs):
- *   card   the preferred card when it has a terminal tab, else the first card with one; its terminal tab is the anchor
- *   open   splits the tallest card with a terminal tab at its bottom with core.card.split and a new terminal tab, requires the state of
- *          the section-view contract (requireSectionState), and resolves with the section surface `params.section` of the card-left
- *          sidebar of the new card, as core.sidebars reports it
+ * e2e/view-metrics-collection.mjs). The window shows the measured section alone in the card-left sidebar of every card of
+ * ANCHOR_PLUGIN (cardSidebar of e2e/fixture.mjs):
+ *   card   the preferred card when it has an ANCHOR_PLUGIN tab, else the first card with one; that tab is the anchor
+ *   open   splits the tallest card with an ANCHOR_PLUGIN tab at its bottom with core.card.split and a new ANCHOR_PLUGIN tab, requires the
+ *          state of the section-view contract (requireSectionState), and resolves with the section surface `params.section` of the
+ *          card-left sidebar of the new card, as core.sidebars reports it
  *   close  closes the card whose card sidebar holds the section surface and waits until core.surfaces no longer lists it
  */
 export const SECTION_PLACEMENT = Object.freeze({
   card(grid, plugin, preferred) {
     const card = grid?.cards?.find((item) => item.id === preferred && hasAnchorTab(item)) ?? grid?.cards?.find(hasAnchorTab);
-    if (!card) throw new Error(`core.grid has no card with a terminal tab, whose card-left sidebar shows the section view of ${plugin}`);
+    if (!card) throw new Error(`core.grid has no card with a ${ANCHOR_PLUGIN} tab, whose card-left sidebar shows the section view of ${plugin}`);
     return card.id;
   },
   async open(s, { plugin, params }) {
@@ -232,7 +244,7 @@ export function sectionViewDescriptor(view) {
 
 /**
  * Collects the measurements of the section view of `descriptor` (sectionViewDescriptor) in the window of `s`, which shows the section
- * alone in the card-left sidebar of every terminal card: the process starts, first displays, warm reuse, total and reclaim of
+ * alone in the card-left sidebar of every ANCHOR_PLUGIN card: the process starts, first displays, warm reuse, total and reclaim of
  * e2e/view-metrics-collection.mjs, then the layout (v) on the y axis and the drag (viii) of the top boundary of a new section card,
  * measured with the palette of the active core theme and the marker color of each trace start.
  */

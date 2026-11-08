@@ -7,169 +7,9 @@
       "reason": "Helper that pulls terminal compose and cursor state for IME checks; it is terminal-specific and must be reduced to a fixture probe status shape."
     },
     {
-      "file": "e2e/benchmark/browser-view.test.mjs",
-      "owner": "plugin:browser",
-      "reason": "Measures the browser view's own process and frame contract (B3 browser-view keys)."
-    },
-    {
-      "file": "e2e/benchmark/cases/browser.mjs",
-      "owner": "plugin:browser",
-      "reason": "Benchmark case of browser view lifecycle and geometry, measured on browser DOM and pages."
-    },
-    {
-      "file": "e2e/benchmark/cases/editor.mjs",
-      "owner": "plugin:editor",
-      "reason": "Measures the editor's process footprint and views."
-    },
-    {
-      "file": "e2e/benchmark/cases/floor-page.mjs",
-      "owner": "core",
-      "reason": "Already uses the floor-page fixture; it borrows the terminal geometry colour only as a constant, which should move into the fixture or harness."
-    },
-    {
-      "file": "e2e/benchmark/cases/hwp.mjs",
-      "owner": "plugin:hwp",
-      "reason": "Checks HWP document history, studio bounds and native marker replies."
-    },
-    {
-      "file": "e2e/benchmark/cases/idle-tab.mjs",
-      "owner": "core",
-      "reason": "Measures the memory cost of an idle tab and document region (measurement harness) with a browser on a blank page; replace with a plain-view probe tab that has a document region."
-    },
-    {
-      "file": "e2e/benchmark/cases/marker-view.mjs",
-      "owner": "core",
-      "reason": "Generic marker-colour layout and drag measurement harness that names editor and section views only as users; it needs a fixture view that paints `markerColor`."
-    },
-    {
-      "file": "e2e/benchmark/cases/resize.mjs",
-      "owner": "core",
-      "reason": "Maximise and restore gesture harness that reuses the terminal drag geometry rule; replace with a floor-page fixture view."
-    },
-    {
-      "file": "e2e/benchmark/cases/section-view.mjs",
-      "owner": "core",
-      "reason": "Measures the section-view contract over whatever plugins are installed (measurement harness); replace with a fixture plugin that declares a section view."
-    },
-    {
-      "file": "e2e/benchmark/cases/split-load.mjs",
-      "owner": "core",
-      "reason": "Split, resize, reload and WebView churn stress on host RSS, with terminal or browser as tabs; replace with plain-view probe tabs."
-    },
-    {
-      "file": "e2e/benchmark/cases/terminal.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Terminal and term view descriptors and screen reads; the shared geometry rule should move to the harness or floor-page. Also covers term."
-    },
-    {
-      "file": "e2e/benchmark/cases/view-drag.mjs",
-      "owner": "core",
-      "reason": "Drives the view drag sequence (drag and capture) and needs the terminal only for layout; replace with the view-drag floor-page fixture."
-    },
-    {
-      "file": "e2e/benchmark/editor-footprint.test.mjs",
-      "owner": "plugin:editor",
-      "reason": "Measures the editor process footprint."
-    },
-    {
-      "file": "e2e/benchmark/editor-view.test.mjs",
-      "owner": "plugin:editor",
-      "reason": "Measures the editor view's process, layout and drag contract."
-    },
-    {
-      "file": "e2e/benchmark/hwp-view.test.mjs",
-      "owner": "plugin:hwp",
-      "reason": "Measures HWP process, history, layout, drag and reclaim."
-    },
-    {
-      "file": "e2e/benchmark/term-view.test.mjs",
-      "owner": "plugin:term",
-      "reason": "Measures the term view's process and frame contract."
-    },
-    {
-      "file": "e2e/benchmark/terminal-view.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Measures the terminal view's process and frame contract."
-    },
-    {
-      "file": "e2e/benchmark/view-drag.test.mjs",
-      "owner": "core",
-      "reason": "View drag benchmark of the host and capture; it defaults to the terminal view and should always use the view-drag floor-page fixture."
-    },
-    {
       "file": "e2e/browser-cohort-upgrade.test.mjs",
       "owner": "environment",
       "reason": "Checks that the official CLI upgrade of browser keeps the starter cohort (including sidecar-files and sidecar-vt-alacritty) ready."
-    },
-    {
-      "file": "e2e/editor.test.mjs",
-      "owner": "plugin:editor",
-      "reason": "Editor opening, saving, save error and ask-before-close of its documents (its save-close core part is already covered by the save-close probe)."
-    },
-    {
-      "file": "e2e/hwp-startup.mjs",
-      "owner": "tool",
-      "reason": "Collects HWP startup resource state for hwp.test; it belongs with plugin:hwp and must leave core."
-    },
-    {
-      "file": "e2e/hwp-support.mjs",
-      "owner": "tool",
-      "reason": "HWP check helpers (fixture, open through the Files section, page lines); they belong with plugin:hwp and must leave core."
-    },
-    {
-      "file": "e2e/hwp.test.mjs",
-      "owner": "plugin:hwp",
-      "reason": "Checks HWP page drawing, keys, selection, saving and startup timing."
-    },
-    {
-      "file": "e2e/input-oracle.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks that the bytes the terminal sidecar writes to the PTY match what an independent receiver reads, which is the terminal sidecar's own contract."
-    },
-    {
-      "file": "e2e/prepare-terminal.mjs",
-      "owner": "tool",
-      "reason": "Helper that prepares the default terminal surface and waits for its session. Remove it or reduce it to preparing a fake-session fixture."
-    },
-    {
-      "file": "e2e/real/terminal.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Every test checks terminal behavior itself: selection, copy and paste, scrollback, scrollbar, OSC 8, mouse modes, keypad, fixture TUI, Finder drop. \"dividers and card icons show their cursors...\" is core (`view-drag`)."
-    },
-    {
-      "file": "e2e/real/tui-drag.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks that a mouse-reporting TUI drag inside the terminal survives repeated clicks."
-    },
-    {
-      "file": "e2e/terminal-font.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks the terminal's font.family fallback and wide-glyph centering."
-    },
-    {
-      "file": "e2e/terminal-hidden-tab.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks a terminal fix (F192: the workbench sent a background open without an image). The real behavior checked is the terminal drawing shell output. A core part (a hidden tab stays mounted) could move to `plain-view`."
-    },
-    {
-      "file": "e2e/terminal-keyboard-trace.mjs",
-      "owner": "tool",
-      "reason": "Helper that traces terminal input transactions for terminal-keyboard.test. Keep it with the terminal plugin, or reduce it to a fixture trace."
-    },
-    {
-      "file": "e2e/terminal-keyboard.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks that native keys edit and execute commands independently in three terminal shells."
-    },
-    {
-      "file": "e2e/terminal-reopen.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks that a terminal opened after the earlier terminals closed displays the prompt of its shell."
-    },
-    {
-      "file": "e2e/terminal-replay.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks replay of terminal sessions with sidecar and page frame hashes stored by the terminal plugin. The core replay command could be checked with a fake sidecar fixture."
     },
     {
       "file": "e2e/terminal-screen.mjs",
@@ -177,89 +17,9 @@
       "reason": "Helper that opens terminals and reads terminal screen glyphs and pixels, and is used by many core tests. It must be reduced to fixture helpers (open `plain-view`, read the fixture color or echo log)."
     },
     {
-      "file": "e2e/terminal-selection-follow.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Checks that the selection highlight follows the pointer while a status line redraws (terminal P105)."
-    },
-    {
-      "file": "e2e/test/activation/terminal-ime-document.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Unit tests of reconstructing the terminal's input document from terminal.screen.read and VT receipts."
-    },
-    {
-      "file": "e2e/test/browser-view-metrics-case.test.mjs",
-      "owner": "plugin:browser",
-      "reason": "Unit tests of the browser metrics benchmark case (browser readiness, history, diagnostic callbacks)."
-    },
-    {
-      "file": "e2e/test/card-panel-checks.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of card-panel measurement helpers. Terminal and browser are only plugin ids in synthetic data; fixture ids (`plain-view`, `extension-probe`) would replace them."
-    },
-    {
-      "file": "e2e/test/editor-view-metrics-case.test.mjs",
-      "owner": "plugin:editor",
-      "reason": "Unit tests of the editor benchmark case (editor process footprint, editor geometry)."
-    },
-    {
-      "file": "e2e/test/floor-page-fixture.test.mjs",
-      "owner": "core",
-      "reason": "Tests the floor-page measurement fixture and the fixture registry. It opens the floor page in the terminal card and builds on the workspace registry; it should open in a `plain-view` card from a registry of fixtures only."
-    },
-    {
-      "file": "e2e/test/host-public-parity.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of public host parity checking. Terminal and browser are only plugin ids in synthetic data; replace them with fixture ids."
-    },
-    {
-      "file": "e2e/test/hwp-startup.test.mjs",
-      "owner": "plugin:hwp",
-      "reason": "Unit tests of collecting HWP startup resource evidence."
-    },
-    {
-      "file": "e2e/test/hwp-view-metrics-case.test.mjs",
-      "owner": "plugin:hwp",
-      "reason": "Unit tests of the HWP benchmark case (layout, marker, reclaim, footprint)."
-    },
-    {
-      "file": "e2e/test/reload-phases.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of reload phase parsing. \"terminal\" and \"browser\" are only card ids in synthetic command args; fixture ids would replace them."
-    },
-    {
-      "file": "e2e/test/section-view-case.test.mjs",
-      "owner": "core",
-      "reason": "Tests section-view discovery, placement, ready status and section drag with made-up `files`/`browser`/`term` manifests in temporary folders. Replace with a sections capability on a fake fixture (for example, plain-view with a declared section, a ready status enum and history)."
-    },
-    {
-      "file": "e2e/test/terminal-keyboard-trace.test.mjs",
-      "owner": "plugin:terminal",
-      "reason": "Tests failure-evidence collection that reads `terminal.pty.pending` and `terminal.ime.trace` from the terminal plugin."
-    },
-    {
       "file": "e2e/test/terminal-screen.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Tests how the terminal's cell screen and backgrounds are read and sampled (wrapped command output, cell rows), which is terminal screen content."
-    },
-    {
-      "file": "e2e/test/terminal-view-metrics-case.test.mjs",
-      "owner": "mixed",
-      "reason": "\"the term view descriptor reads the statuses and commands of the term plugin\" -> plugin:term; \"the shell of a terminal view is the check shell of its plugin\" -> plugin:terminal; \"terminal view descriptor reads browser history and controls only the diagnostic frame obse…\" -> core (view-drag fixture with history/frame-observer capability); \"terminal source content mapping retains source interval…\" -> core (capture/measurement harness, view-drag fixture); \"terminal layout geometry excludes captured focus-corner colors…\" -> core (view-drag fixture); \"terminal geometry background uses one distinctive OSC 11 color…\" -> plugin:terminal; \"terminal drag layout evidence is written before frame analysis\" -> core (view-drag fixture); \"terminal drag geometry keeps four measured card and raster edges…\" -> core (view-drag fixture with a native raster region); \"terminal convergence target comes from the visible native raster region\" -> core (view-drag fixture with a native raster region)"
-    },
-    {
-      "file": "e2e/test/view-content.test.mjs",
-      "owner": "mixed",
-      "reason": "\"view content reads the value that holds the shown text of each plugin\" -> plugin cohort (browser/editor/hwp/term/terminal), so it should move to each plugin; \"terminal content readiness preserves omitted blank cell characters\" -> plugin:terminal; \"view content refuses a missing, wrong or not presented value\" -> core (plain-view with a content-read command); \"view pixel crops include the capture content origin and scale once\" -> core (capture, any fixture); \"view pixel crops reject clipping and incomplete pixel storage\" -> core (capture, any fixture)"
-    },
-    {
-      "file": "e2e/test/view-drag-case.test.mjs",
-      "owner": "core",
-      "reason": "Tests the B3 view-drag benchmark mechanics (native input drags, process CPU and footprint, GC_LOOP, judgment) and has no real-plugin references. It already fits the view-drag fixture."
-    },
-    {
-      "file": "e2e/view-content.mjs",
-      "owner": "mixed",
-      "reason": "This helper (not a test) reads the shown content of each real plugin (`browser.content.read`, `editor.read`, hwp page SVG, `term`/`terminal.screen.read`) and builds the cases for those plugins. The per-plugin readers belong to plugin:browser, plugin:editor, plugin:hwp, plugin:term and plugin:terminal; the generic harness is core and should use a plain-view content-read command."
     },
     {
       "file": "scripts/test/benchmark-b3.test.mjs",
@@ -272,19 +32,9 @@
       "reason": "Tests candidate acceptance and publication of release components (`kind: 'plugin', id: 'terminal'` release digests), which is cohort release evidence."
     },
     {
-      "file": "scripts/test/check-tests.test.mjs",
-      "owner": "core",
-      "reason": "Tests the test-ownership audit with made-up ids (\"sidecar-y\", \"sidecar-probe\", \"hwp\" as sample strings). Replace \"hwp\" with a fixture id."
-    },
-    {
       "file": "scripts/test/fixtures/b3/baseline.json",
       "owner": "core",
       "reason": "B3 baseline data keyed by \"term\"/\"browser\". Re-key it to the view-drag/plain-view fixture ids."
-    },
-    {
-      "file": "scripts/test/measure-terminal-redraw.test.mjs",
-      "owner": "core",
-      "reason": "Tests the redraw measurement harness (window server, presentedFrames, CPU per frame) for \"the plugin\" of a terminal tab. Replace with a fake fixture that presents an image region and accepts fixture rows (view-drag native raster)."
     }
   ]
 }

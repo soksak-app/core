@@ -29,7 +29,7 @@ const endpointCall = (fields) => ({ level: "debug", layer: "host", event: "host.
 test("a command request reads the command name from its args as the phase, and another request reads its method", (t) => {
   const configDir = configFolder(t, [
     { level: "info", layer: "host", event: "log.open", fields: { pid: 200, role: "host" } },
-    endpointCall({ name: "command.run", args: JSON.stringify({ name: "core.card.split", params: { card: "terminal" } }), micros: 42000, ok: true }),
+    endpointCall({ name: "command.run", args: JSON.stringify({ name: "core.card.split", params: { card: "c1" } }), micros: 42000, ok: true }),
     endpointCall({ name: "status.get", args: JSON.stringify({ name: "core.grid" }), micros: 900, ok: true }),
     endpointCall({ name: "command.run", args: JSON.stringify({ name: "host.window.reload", params: {} }), micros: 2100000, ok: false,
       error: "1005: the reloaded page did not report ready within 10s" }),
@@ -47,7 +47,7 @@ test("a command request reads the command name from its args as the phase, and a
 test("the flush that a read sends is not a phase of the check", (t) => {
   const configDir = configFolder(t, [
     endpointCall({ name: "diagnostics.log.flush", args: null, micros: 800, ok: true }),
-    endpointCall({ name: "command.run", args: JSON.stringify({ name: "core.card.close", params: { card: "browser" } }), micros: 9000, ok: true }),
+    endpointCall({ name: "command.run", args: JSON.stringify({ name: "core.card.close", params: { card: "c2" } }), micros: 9000, ok: true }),
   ]);
   assert.deepEqual(readPhases(configDir, {}).phases.map((phase) => phase.phase), ["core.card.close"]);
 });

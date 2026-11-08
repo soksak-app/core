@@ -1,5 +1,5 @@
-// The memory saver end to end (docs/spec/plugins.md#memory-saver, docs/spec/exposure.md#tab-memory). An unload probe that
-// declares surface.unload is installed from the fixture registry. On each host the
+// The memory saver end to end (docs/spec/plugins.md#memory-saver, docs/spec/exposure.md#tab-memory). The unload probe fixture, which
+// declares surface.unload, is preinstalled in every check configuration. On each host the
 // check requires that:
 // 1. core.tab.unload of a hidden probe tab reports it unloaded in core.tab.memory and removes its document region from the
 //    host objects (diagnostics.objects);
@@ -9,16 +9,11 @@
 // 4. a kept tab (core.tab.keep) and a modified tab are not unloaded.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { rmSync } from "node:fs";
-import { dirname, join } from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 import { allRows, tailOf } from "./chains.mjs";
-import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
-import { fixtureRegistry } from "./benchmark/cases/floor-page.mjs";
+import { fresh } from "./fixture.mjs";
 
 /** A loopback server of three small pages, /a, /b and /c. It is closed when the check ends. */
 async function serve(s) {
@@ -30,13 +25,6 @@ async function serve(s) {
   s.cleanup(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }));
   const base = `http://127.0.0.1:${server.address().port}`;
   return { a: `${base}/a`, b: `${base}/b`, c: `${base}/c` };
-}
-
-/** Runs a plugin operation that changes installed.json and waits until the page has reloaded (docs/spec/installation.md#applying-a-change). */
-async function pluginChange(s, action, run) {
-  const offsets = currentEventOffsets(s.app.configDir);
-  await run();
-  await pluginChangeApplied(s, offsets, action);
 }
 
 /**
@@ -74,20 +62,8 @@ for (const app of Object.values(APPS)) {
     await step(t, s, "prepare the fixture", () => fresh(s, { settings: { memorySaver: true, memorySaverDelay: 720 },
       log: { lifecycle: "info" }, reads: ["workbench.tab.restored", "workbench.tab.unloaded", "workbench.tab.unload.skipped"] }));
     const pages = await serve(s);
-    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
-    s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      await s.windows(1, "the page was not ready for the cleanup");
-      if ((await s.get("core.plugins")).plugins.find((row) => row.id === "probeunload")?.installed) {
-        await pluginChange(s, "the removal of probeunload in the cleanup", () => s.run("core.plugins.remove", { plugin: "probeunload" }));
-      }
-      await restoreRegistry(s);
-    });
-    await step(t, s, "install the unload probe", async () => {
-      await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
-      await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "probeunload"), "the probe registry did not list the unload probe");
-      await pluginChange(s, "the install of probeunload", () => s.run("core.plugins.install", { plugin: "probeunload" }));
-    });
+    assert.ok((await s.get("core.plugins")).plugins.find((row) => row.id === "probeunload")?.installed,
+      "the fixture plugin probeunload is not installed in the check configuration");
     // The pressure level belongs to the process, so the check returns it to normal for the checks after it.
     s.cleanup(() => s.request("diagnostics.memory.pressure", { level: "normal" }));
 

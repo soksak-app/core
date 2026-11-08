@@ -123,7 +123,7 @@ test("a value that the benchmark does not declare, or outside the form of the B3
 
 test("a run that fails before it read its conditions writes nothing and reports both causes", { timeout: 5000 }, async (t) => {
   const path = join(folder(t), "out.json");
-  await assert.rejects(withB3Out({ path, state: null, keys: B3_MEASUREMENTS["browser-view"] }, async () => { throw new Error("no window"); }),
+  await assert.rejects(withB3Out({ path, state: null, keys: B3_MEASUREMENTS["section-view"] }, async () => { throw new Error("no window"); }),
     (error) => error instanceof AggregateError && error.errors[0].message === "no window" &&
       error.errors[1].message === "the B3 conditions of a benchmark are the object that b3Conditions returned, which withB3Out reads again when it writes, not undefined");
   assert.throws(() => readFileSync(path), { code: "ENOENT" });
@@ -139,7 +139,7 @@ test("without a B3 target a benchmark runs as a window check and writes nothing"
 test("the tests of one benchmark file add to one B3 output under the same conditions, and its verdict fails when any of them failed",
   { timeout: 5000 }, async (t) => {
     const path = join(folder(t), "out.json");
-    const target = { path, state: null, keys: B3_MEASUREMENTS["hwp-view"] };
+    const target = { path, state: null, keys: B3_MEASUREMENTS["section-view"] };
     await withB3Out(target, async (run) => { run.conditions = await started(t); });
     await assert.rejects(withB3Out(target, async (run) => { run.conditions = await started(t); throw new Error("reclaim returned 80%"); }),
       new Error("reclaim returned 80%"));

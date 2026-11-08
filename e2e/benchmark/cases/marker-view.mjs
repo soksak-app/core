@@ -1,6 +1,6 @@
 // The layout (v) and drag (viii) observations of a view that paints its document root with the `markerColor` of its
-// content-trace start: the editor view (editor.mjs) and the section views (section-view.mjs). The pixels of each capture are
-// measured with the palette of the active core theme and that marker color. `owner` names the measured view in every error.
+// content-trace start: the section views (section-view.mjs). The pixels of each capture are measured with the palette of the active
+// core theme and that marker color. `owner` names the measured view in every error.
 import assert from "node:assert/strict";
 
 import { drag } from "@soksak/window-check/app.mjs";

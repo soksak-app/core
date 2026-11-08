@@ -1,7 +1,8 @@
 // The maximise and restore gesture of the resize window check (e2e/resize.test.mjs) and of its benchmark
 // (e2e/benchmark/resize-catch-up.test.mjs). Both record the same frames; the check judges the behaviour and the benchmark judges the limit.
-// On a window whose host.window reports pageProcess null the benchmark also judges each recorded frame with the geometry rule of the
-// terminal drag (terminalDragGeometryFrame of terminal.mjs, evaluateGeometryFrames of @soksak/window-check/view-metrics.mjs), and after
+// On a window whose host.window reports pageProcess null the benchmark also opens the floor page fixture view in the focused card and
+// judges each recorded frame with the geometry rule of the view drag (dragGeometryFrame of floor-page.mjs, evaluateGeometryFrames of
+// @soksak/window-check/view-metrics.mjs), and after
 // the captured maximise and restore it runs a maximise and restore without capture under the trace state of the frame records and reads
 // their U7 records (gesture-records.mjs).
 import { rmSync } from "node:fs";
@@ -16,7 +17,7 @@ import { gestureB3Values } from "./gesture-records.mjs";
 import { fresh } from "../../fixture.mjs";
 import { frameEvidence, lagStages, measureFrame, writeEvidence } from "../../resize-frames.mjs";
 import { effectiveCardCornerRadiusPt } from "../../view-frame-geometry.mjs";
-import { measureTerminalLayoutFrame, setTerminalGeometryBackground, terminalDragGeometryFrame, terminalSlotInsets } from "./terminal.mjs";
+import { dragGeometryFrame, floorSlotInsets, measureFloorLayoutFrame, openFloorPage } from "./floor-page.mjs";
 
 /**
  * Time (ms) from the first recorded frame to the last frame in which the layout is behind the window, that the layout may take
@@ -34,7 +35,7 @@ const margin = (w) => w.content.width - right(w);
 
 /**
  * Records the change that resizes the window and measures the frames until the layout is displayed at the new size; with `geometry`
- * ({cornerRadiusPt, slotInsetsPt}) it also judges each recorded frame with the geometry rule of the terminal drag (resizeGeometry).
+ * ({cornerRadiusPt, slotInsetsPt}) it also judges each recorded frame with the geometry rule of the view drag (resizeGeometry).
  * The recording and the evidence are kept whether the change passes or fails.
  */
 async function record(s, gesture, change, sized, geometry) {
@@ -81,20 +82,20 @@ async function record(s, gesture, change, sized, geometry) {
 }
 
 /**
- * The geometry rule of the terminal drag over the recorded frames `decoded` of `gesture`: the card and the native rectangle of the
- * terminal in each frame (`measure`, measureTerminalLayoutFrame of terminal.mjs, with the corner radius of the cards), against the slot
- * that the insets `slotInsetsPt` of the terminal declare in the card (terminalDragGeometryFrame of terminal.mjs, evaluateGeometryFrames of
- * @soksak/window-check/view-metrics.mjs). A frame without the terminal geometry is an error that names it.
+ * The geometry rule of the view drag over the recorded frames `decoded` of `gesture`: the card and the rectangle of the floor page view
+ * in each frame (`measure`, measureFloorLayoutFrame of floor-page.mjs, with the corner radius of the cards), against the slot that the
+ * insets `slotInsetsPt` of the view declare in the card (dragGeometryFrame of floor-page.mjs, evaluateGeometryFrames of
+ * @soksak/window-check/view-metrics.mjs). A frame without the floor page geometry is an error that names it.
  */
-export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureTerminalLayoutFrame }) {
+export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureFloorLayoutFrame }) {
   const rows = decoded.map((frame, frameIndex) => {
     let measured;
     try {
       measured = measure(frame, { cornerRadiusPt });
     } catch (error) {
-      throw new Error(`${gesture}: recorded frame ${frameIndex} has no terminal geometry: ${error.message}`, { cause: error });
+      throw new Error(`${gesture}: recorded frame ${frameIndex} has no floor page geometry: ${error.message}`, { cause: error });
     }
-    return terminalDragGeometryFrame(frameIndex, measured, slotInsetsPt);
+    return dragGeometryFrame(frameIndex, measured, slotInsetsPt);
   });
   return evaluateGeometryFrames(rows, `${gesture}.geometryFrames`);
 }
@@ -102,7 +103,7 @@ export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt,
 /** Fails when the geometry rule of `gesture` (resizeGeometry) did not hold in every recorded frame. */
 export function assertResizeGeometry(gesture, geometry) {
   if (!geometry.passed) {
-    throw new Error(`${gesture}: the native rectangle of the terminal is ${geometry.maxErrorPt} pt from its card slot in a recorded frame, more than ${geometry.limitPt} pt`);
+    throw new Error(`${gesture}: the rectangle of the floor page view is ${geometry.maxErrorPt} pt from its card slot in a recorded frame, more than ${geometry.limitPt} pt`);
   }
 }
 
@@ -155,36 +156,33 @@ async function maximiseAndRestore(s) {
 }
 
 /**
- * The geometry of the fixture terminal of the window of `s` for the geometry rule: the terminal shows the measurement background, and
- * the corner radius of the cards and the insets of the slot of the terminal in its card are read.
+ * The geometry of the window of `s` for the geometry rule: the floor page view, which draws the measurement colour over its frame, opens
+ * as the active tab of the focused card, and the corner radius of the cards and the insets of the slot of the view in its card are read.
  */
-async function terminalGeometry(s, terminal) {
-  await setTerminalGeometryBackground(s, terminal.surface, "terminal");
+async function floorGeometry(s) {
+  const { surface, card } = await openFloorPage(s);
   await s.presented();
   const { values } = await s.get("core.settings");
-  const grid = await s.get("core.grid");
-  const card = grid.cards.find((item) => item.tabs?.some((tab) => tab.id === terminal.surface));
-  if (card === undefined) throw new Error(`the fixture terminal ${terminal.surface} is in no card of window ${s.window}`);
-  return { cornerRadiusPt: effectiveCardCornerRadiusPt(values), slotInsetsPt: await terminalSlotInsets(s, "terminal", card.id, terminal.surface) };
+  return { cornerRadiusPt: effectiveCardCornerRadiusPt(values), slotInsetsPt: await floorSlotInsets(s, card, surface) };
 }
 
 /**
  * Maximises the window of `s` and restores it, recording each change. `judge(gesture, recorded)` runs after each recorded change
  * with `{displayed, measured, stages, geometry}` and may throw. With `geometry` and on a window whose host.window reports pageProcess
- * null, each recorded frame is also judged with the geometry rule of the terminal drag (resizeGeometry, assertResizeGeometry); the
+ * null, each recorded frame is also judged with the geometry rule of the view drag (resizeGeometry, assertResizeGeometry); the
  * geometry of a gesture is null otherwise. `started()` runs after the preparation, right before the first gesture. The window is
  * restored when the check ends and it was maximised. Returns the recorded gestures and pageProcess of host.window.
  */
 export async function recordMaximiseAndRestore(s, judge = () => {}, { geometry = false, started = async () => {} } = {}) {
   // The settings of the state captured, whose performance trace records the view joins of each layout transaction and whose frame gate
   // records the page layout phases, so the stages of a late layout are named from the records (F292-41).
-  const terminal = await fresh(s, {
+  await fresh(s, {
     ...fixtureSettings(B3_SETTINGS["resize-catch-up"].captured),
     reads: ["host.window.event", "host.trace.view.presentation-join", "host.trace.view.presentation-abandoned", "host.stall",
       "workbench.trace.layout"],
   });
   const { pageProcess } = await s.get("host.window");
-  const frameGeometry = geometry && pageProcess === null ? await terminalGeometry(s, terminal) : null;
+  const frameGeometry = geometry && pageProcess === null ? await floorGeometry(s) : null;
   const { maximise, restore, restored } = await maximiseAndRestore(s);
   await started();
   const grown = await record(s, "maximising", maximise.change, maximise.sized, frameGeometry);

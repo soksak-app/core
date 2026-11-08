@@ -1,11 +1,14 @@
 {
   "id": "probeplain",
   "name": "Plain view probe",
-  "description": "Benchmark fixture that shows a view with an empty document region and observes the size of its document, the floor of a view drag.",
+  "description": "Benchmark fixture: a view whose document region shows one text line, the floor of a view drag, and a section view with the section-view contract.",
   "events": "events.json",
   "surface": {
     "composition": { "kind": "view", "page": "ui/page.html", "regions": [{ "name": "page", "kind": "document", "input": "native" }], "overlays": [] }
   },
+  "sections": [
+    { "id": "probeplain.section", "name": "Plain section", "composition": { "kind": "view", "page": "ui/section.html" }, "height": "fill" }
+  ],
   "mark": "P",
   "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
   "exposes": {
@@ -16,6 +19,12 @@
         "description": "Starts or stops the observation of the document size and returns the source clock at its start.",
         "params": { "type": "object", "properties": { "action": { "type": "string" } } },
         "result": { "type": "object" }
+      },
+      {
+        "name": "probeplain.content.read",
+        "description": "Answers the text that the document region of the view shows, once its document has reported it.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "string" }
       }
     ],
     "element": []

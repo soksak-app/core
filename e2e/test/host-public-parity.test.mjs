@@ -13,8 +13,8 @@ function fixture() {
   return {layout:{window:{content:{width:400,height:300},scale:2,
     surfaces:[{id:"tab-a",visible:true,frame:{x:10,y:20,width:100,height:60}}]},
     document:{width:400,height:300,scale:2},settings:{left:true},project:null,overridden:{}},
-    grid:{cards:[{id:"card-a",pane:"pane-a",active:"tab-a",tabs:[{id:"tab-a",plugin:"terminal"}]}]},
-    surfaces:[{surface:"tab-a",plugin:"terminal",visible:true,dim:false,declared:{...rect},applied:{...rect},composition:"view",kind:"tab",state:"loaded"}],
+    grid:{cards:[{id:"card-a",pane:"pane-a",active:"tab-a",tabs:[{id:"tab-a",plugin:"layoutprobe"}]}]},
+    surfaces:[{surface:"tab-a",plugin:"layoutprobe",visible:true,dim:false,declared:{...rect},applied:{...rect},composition:"view",kind:"tab",state:"loaded"}],
     modal:{open:false},hits:{"tab-a":{kind:"document",surface:"tab-a",document:""}}};
 }
 
@@ -36,7 +36,7 @@ for(const [name,change] of [
 
 test("public host parity rejects a semantic host difference",{timeout:1000},async()=>{
   const {publicHostState,comparePublicHostStates}=await api();const input=fixture();
-  input.grid.cards[0].tabs[0].plugin="browser";
+  input.grid.cards[0].tabs[0].plugin="probeplain";
   assert.throws(()=>comparePublicHostStates({wailsv3:{fresh:publicHostState(fixture())},tauriv2:{fresh:publicHostState(fixture())},mygo:{fresh:publicHostState(input)}}),/semantic/i);
 });
 

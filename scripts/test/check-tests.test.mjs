@@ -142,7 +142,7 @@ test("the inventory enforces every declared requirement through its existing own
 });
 
 test("the package index holds only the packages of this checkout and reads no declared repository", (t) => {
-  // A CI job checks out only core, so a declared repository folder such as ../plugins/browser does not exist beside it.
+  // A CI job checks out only core, so a declared repository folder such as ../plugins/probe does not exist beside it.
   const away = mkdtempSync(join(tmpdir(), "soksak-parity-index-"));
   const previous = process.cwd();
   process.chdir(away);
@@ -432,8 +432,8 @@ test("ownership audit fails a plugin that names a declared sidecar or a private 
 });
 
 test("ownership audit refuses a core source that names an undeclared package", { timeout: 1000 }, () => {
-  const errors = auditOwnership(["packages/x/a.js"], () => `import "${scoped("hwp")}";\n`, declared);
-  assert.deepEqual(errors, [`packages/x/a.js: core implementation names undeclared package ${scoped("hwp")}`]);
+  const errors = auditOwnership(["packages/x/a.js"], () => `import "${scoped("probeplain")}";\n`, declared);
+  assert.deepEqual(errors, [`packages/x/a.js: core implementation names undeclared package ${scoped("probeplain")}`]);
 });
 
 test("ownership audit allows a subpath only when the exports map lists it or the package is its own", { timeout: 1000 }, () => {
