@@ -114,8 +114,9 @@ export function colours(frame, rect) {
 
 /** Runs the view display assertions; readRecording supplies decoded frames at the recording boundary. */
 export async function observeViewDisplay(s, t, readRecording = (directory) => frames(directory).map(readFrame), verifyContent, paramsForPlugin = () => undefined) {
-  const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
-  assert.ok(card, "no card holds the fixture terminal");
+  // Each view opens as a new tab of the focused card, the card of the start tab of the check.
+  const card = (await s.get("core.grid")).cards.find((item) => item.focused);
+  assert.ok(card, "the grid has no focused card for the opened views");
   const installed = await s.get("core.plugins");
   assert.equal(installed.error, null, `installed plugins failed: ${installed.error}`);
   const views = installed.plugins.filter((plugin) => plugin.installed?.enabled && plugin.composition === "view");

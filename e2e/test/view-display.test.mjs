@@ -6,12 +6,12 @@ import {
 } from "../view-display.mjs";
 
 /** A window with two installed views but only one open card, and decoded frames of that card. */
-function fixture({ blank = false, offset = 0, terminalOnly = false } = {}) {
+function fixture({ blank = false, offset = 0, openedOnly = false } = {}) {
   const applied = { x: 20, y: 40, w: 120, h: 80 };
-  const card = { id: "probe-card", x: 0, y: 0, w: 160, h: 140, tabs: [{ id: "probe-original", plugin: "terminal" }] };
+  const card = { id: "probe-card", x: 0, y: 0, w: 160, h: 140, focused: true, tabs: [{ id: "probe-original", plugin: "layoutprobe" }] };
   const surface = (id, plugin) => ({ surface: id, plugin, visible: true, composition: "view", applied, declared: applied,
     status: { phase: "ready", error: null }, exposes: ["status core.surface.document"] });
-  const original = surface("probe-original", "terminal");
+  const original = surface("probe-original", "layoutprobe");
   let current = null;
   const opened = [];
   const frame = { width: 400, height: 400, stride: 1600, scale: 1, contentScale: 1,
@@ -22,7 +22,7 @@ function fixture({ blank = false, offset = 0, terminalOnly = false } = {}) {
   };
   if (blank) for (let y = 0; y < 30; y++) for (let x = 0; x < 160; x++) paint(x, y, x < 80 ? 0 : 160);
   else for (let y = 40; y < 120; y++) for (let x = 20; x < 80; x++) paint(x, y, 0);
-  const plugins = (terminalOnly ? ["terminal"] : ["terminal", "probe-unopened"]).map((id) => ({ id, composition: "view", state: "loaded",
+  const plugins = (openedOnly ? ["layoutprobe"] : ["layoutprobe", "probe-unopened"]).map((id) => ({ id, composition: "view", state: "loaded",
     installed: { enabled: true, version: "0.0.1" } }));
   const s = {
     async get(name, tab) {
@@ -65,7 +65,7 @@ function fixture({ blank = false, offset = 0, terminalOnly = false } = {}) {
 test("the view display checker covers an installed view that has no open card", { timeout: 5000 }, async (t) => {
   const f = fixture();
   await checkViewDisplay(f.s, t, f.readRecording);
-  assert.deepEqual(f.opened, ["terminal", "probe-unopened"], "an installed view without a card was omitted");
+  assert.deepEqual(f.opened, ["layoutprobe", "probe-unopened"], "an installed view without a card was omitted");
 });
 
 test("the view display checker rejects a blank view surrounded by coloured card chrome", { timeout: 5000 }, async (t) => {
@@ -80,17 +80,17 @@ test("the view display checker measures content at a nonzero capture offset", { 
 
 test("the view display checker rejects a missing plugin content case with its opened tab", { timeout: 5000 }, async (t) => {
   const f = fixture();
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /terminal.*probe-tab-1.*content case/);
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /layoutprobe.*probe-tab-1.*content case/);
 });
 
 test("view content readiness is verified before the recording stops", { timeout: 5000 }, async (t) => {
-  const f = fixture({ terminalOnly: true });
+  const f = fixture({ openedOnly: true });
   let stopped = false;
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
     stopped = true;
     return { count: 2, limited: false, longestGap: 16 };
   } });
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => {
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => {
     assert.equal(stopped, false, "recording ended before content readiness");
     return async () => {};
   } }]]));
@@ -98,7 +98,7 @@ test("view content readiness is verified before the recording stops", { timeout:
 });
 
 test("a failed view readiness check closes the opened tab", { timeout: 5000 }, async (t) => {
-  const f = fixture({ terminalOnly: true });
+  const f = fixture({ openedOnly: true });
   const until = f.s.until;
   let refused = false;
   f.s.until = async (...args) => {
@@ -114,20 +114,20 @@ test("a failed view readiness check closes the opened tab", { timeout: 5000 }, a
 });
 
 test("view display rejects a readiness-only case without a content verifier", { timeout: 5000 }, async (t) => {
-  const f = fixture({ terminalOnly: true });
+  const f = fixture({ openedOnly: true });
   await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording,
-    new Map([["terminal", { ready: async () => undefined }]])), /content verifier/);
+    new Map([["layoutprobe", { ready: async () => undefined }]])), /content verifier/);
 });
 
 test("view display runs the content verifier of the case after the recording stops", { timeout: 5000 }, async (t) => {
-  const f = fixture({ terminalOnly: true });
+  const f = fixture({ openedOnly: true });
   let stopped = false;
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
     stopped = true;
     return { count: 2, limited: false, longestGap: 16 };
   } });
   let verified = false;
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async (...args) => {
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async (...args) => {
     assert.deepEqual(args, [], "the content verifier received recorded pixels");
     assert.equal(stopped, true, "the content verifier ran before the recording stopped");
     verified = true;
@@ -136,13 +136,13 @@ test("view display runs the content verifier of the case after the recording sto
 });
 
 test("view display rejects missing finalized frame files", { timeout: 5000 }, async (t) => {
-  const f = fixture({ terminalOnly: true });
+  const f = fixture({ openedOnly: true });
   f.s.record = async () => ({ frames: "fixture-recording", stop: async () => ({ count: 3, limited: false, longestGap: 16 }) });
   await assert.rejects(checkViewDisplay(f.s, t, f.readRecording), /frame.*count|missing.*frame/);
 });
 
 test("view display audits controls after its declared content readiness", { timeout: 5000 }, async (t) => {
-  const f = fixture({ terminalOnly: true });
+  const f = fixture({ openedOnly: true });
   const get = f.s.get;
   let ready = false;
   f.s.get = async (...args) => {
@@ -150,52 +150,52 @@ test("view display audits controls after its declared content readiness", { time
     if (args[0] === "core.surface.document" && !ready) return { ...value, unbound: [{ role: "button" }] };
     return value;
   };
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => {
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => {
     ready = true;
     return async () => {};
   } }]]));
 });
 
 test("a content verifier decides the content of a view whose sampled colours are blank", { timeout: 5000 }, async (t) => {
-  const f = fixture({ terminalOnly: true, blank: true });
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async () => {
-    throw new Error("terminal probe-tab-1 does not show the expected text");
+  const f = fixture({ openedOnly: true, blank: true });
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async () => {
+    throw new Error("layoutprobe probe-tab-1 does not show the expected text");
   } }]])), /does not show the expected text/);
-  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", { ready: async () => async () => {} }]]));
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["layoutprobe", { ready: async () => async () => {} }]]));
 });
 
 const traceRow = (event, fields) => ({ layer: "host", event, ts: "2026-10-29T00:00:00.000Z", ...fields });
 
 test("view presentation joins name the phases and abandonments of one surface in row order", { timeout: 5000 }, () => {
   const rows = [
-    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "requested" }),
-    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "result", joined: true }),
-    traceRow("view.presentation-join", { surface: "terminal-b", generation: 1, ticket: 4, phase: "requested" }),
-    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 4, phase: "presented" }),
-    { layer: "workbench", event: "view.presentation-join", surface: "terminal-a", phase: "presented" },
+    traceRow("view.presentation-join", { surface: "view-a", generation: 1, ticket: 4, phase: "requested" }),
+    traceRow("view.presentation-join", { surface: "view-a", generation: 1, ticket: 4, phase: "result", joined: true }),
+    traceRow("view.presentation-join", { surface: "view-b", generation: 1, ticket: 4, phase: "requested" }),
+    traceRow("view.presentation-join", { surface: "view-a", generation: 1, ticket: 4, phase: "presented" }),
+    { layer: "workbench", event: "view.presentation-join", surface: "view-a", phase: "presented" },
   ];
-  assert.deepEqual(viewPresentationJoins(rows, "terminal-a"), {
+  assert.deepEqual(viewPresentationJoins(rows, "view-a"), {
     phases: ["requested", "result", "presented"], abandoned: [],
   });
-  assert.deepEqual(viewPresentationJoins(rows, "terminal-b"), { phases: ["requested"], abandoned: [] });
-  assert.deepEqual(viewPresentationJoins(rows, "terminal-c"), { phases: [], abandoned: [] });
+  assert.deepEqual(viewPresentationJoins(rows, "view-b"), { phases: ["requested"], abandoned: [] });
+  assert.deepEqual(viewPresentationJoins(rows, "view-c"), { phases: [], abandoned: [] });
 });
 
 test("view presentation joins report presentation-abandoned rows and reject unknown phases", { timeout: 5000 }, () => {
   const rows = [
-    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 5, phase: "abandoned", reason: "hidden" }),
-    traceRow("view.presentation-abandoned", { surface: "terminal-a", reason: "hidden" }),
+    traceRow("view.presentation-join", { surface: "view-a", generation: 1, ticket: 5, phase: "abandoned", reason: "hidden" }),
+    traceRow("view.presentation-abandoned", { surface: "view-a", reason: "hidden" }),
   ];
-  assert.deepEqual(viewPresentationJoins(rows, "terminal-a"), { phases: ["abandoned"], abandoned: ["hidden"] });
+  assert.deepEqual(viewPresentationJoins(rows, "view-a"), { phases: ["abandoned"], abandoned: ["hidden"] });
   assert.throws(() => viewPresentationJoins([
-    traceRow("view.presentation-join", { surface: "terminal-a", generation: 1, ticket: 6, phase: "pending" }),
-  ], "terminal-a"), /unknown phase/);
+    traceRow("view.presentation-join", { surface: "view-a", generation: 1, ticket: 6, phase: "pending" }),
+  ], "view-a"), /unknown phase/);
   assert.throws(() => viewPresentationJoins(rows, ""), /surface must be nonempty/);
-  assert.throws(() => viewPresentationJoins({}, "terminal-a"), /must be an array/);
+  assert.throws(() => viewPresentationJoins({}, "view-a"), /must be an array/);
 });
 
 test("a hidden region keeps its raster identity when a later frame of the same raster is presented", { timeout: 5000 }, () => {
-  // The values that the hiding check of terminal.test.mjs recorded for one terminal: the same generation and raster, with a later sequence.
+  // The values that a hiding check recorded for one image region: the same generation and raster, with a later sequence.
   const shown = { generation: 311, height: 286, raster: 1, scale: 1, sequence: 2, width: 180 };
   const hidden = { ...shown, sequence: 4 };
   assert.deepEqual(rasterIdentity(hidden), rasterIdentity(shown), "hiding changed its raster");
@@ -212,30 +212,30 @@ test("the raster identity changes when the generation, raster or size of the ras
 
 const placedAt = (surface, x) => traceRow("surface", { phase: "placed", surface, x, y: 0, w: 200, h: 300, visible: true });
 
-test("a terminal whose placement does not change in a divider drag is not awaited", { timeout: 5000 }, () => {
-  const baseline = [placedAt("terminal-a", 0), placedAt("terminal-b", 200)];
+test("a view whose placement does not change in a divider drag is not awaited", { timeout: 5000 }, () => {
+  const baseline = [placedAt("view-a", 0), placedAt("view-b", 200)];
   const window = [
-    placedAt("terminal-a", 0), placedAt("terminal-b", 260),
-    placedAt("terminal-a", 0), placedAt("terminal-b", 320),
+    placedAt("view-a", 0), placedAt("view-b", 260),
+    placedAt("view-a", 0), placedAt("view-b", 320),
   ];
-  assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
+  assert.deepEqual(expectedPresentations(baseline, window, ["view-a", "view-b"]), ["view-b"]);
 });
 
-test("a terminal that moves once from its placement before the drag is awaited", { timeout: 5000 }, () => {
-  const baseline = [placedAt("terminal-a", 0), placedAt("terminal-b", 200)];
-  const window = [placedAt("terminal-a", 0), placedAt("terminal-b", 260)];
-  assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
+test("a view that moves once from its placement before the drag is awaited", { timeout: 5000 }, () => {
+  const baseline = [placedAt("view-a", 0), placedAt("view-b", 200)];
+  const window = [placedAt("view-a", 0), placedAt("view-b", 260)];
+  assert.deepEqual(expectedPresentations(baseline, window, ["view-a", "view-b"]), ["view-b"]);
 });
 
-test("a terminal created before the drag without a placed row is awaited", { timeout: 5000 }, () => {
-  const baseline = [placedAt("terminal-a", 0), traceRow("surface", { phase: "created", surface: "terminal-b" })];
-  const window = [placedAt("terminal-a", 0), placedAt("terminal-b", 200)];
-  assert.deepEqual(expectedPresentations(baseline, window, ["terminal-a", "terminal-b"]), ["terminal-b"]);
+test("a view created before the drag without a placed row is awaited", { timeout: 5000 }, () => {
+  const baseline = [placedAt("view-a", 0), traceRow("surface", { phase: "created", surface: "view-b" })];
+  const window = [placedAt("view-a", 0), placedAt("view-b", 200)];
+  assert.deepEqual(expectedPresentations(baseline, window, ["view-a", "view-b"]), ["view-b"]);
 });
 
-test("a terminal that the baseline rows do not cover is rejected instead of awaited", { timeout: 5000 }, () => {
+test("a view that the baseline rows do not cover is rejected instead of awaited", { timeout: 5000 }, () => {
   // The rows of set 0 of a Wails run: the baseline started after the last placement before the drag, and tab-pmhp35 kept its
-  // placement while the two other terminals moved.
+  // placement while the two other views moved.
   const placed = (surface, x, w) => traceRow("surface", { phase: "placed", surface, x, y: 116, w, h: 286, visible: true });
   const window = [placed("tab-l3zyob", 210, 263), placed("tab-pmhp35", 597, 373), placed("tab-pre4dr", 487, 96)];
   assert.throws(() => expectedPresentations([], window, ["tab-l3zyob", "tab-pmhp35", "tab-pre4dr"]),

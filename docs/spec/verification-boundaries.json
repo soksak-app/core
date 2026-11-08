@@ -512,11 +512,6 @@
       "reason": "\"view content reads the value that holds the shown text of each plugin\" -> plugin cohort (browser/editor/hwp/term/terminal), so it should move to each plugin; \"terminal content readiness preserves omitted blank cell characters\" -> plugin:terminal; \"view content refuses a missing, wrong or not presented value\" -> core (plain-view with a content-read command); \"view pixel crops include the capture content origin and scale once\" -> core (capture, any fixture); \"view pixel crops reject clipping and incomplete pixel storage\" -> core (capture, any fixture)"
     },
     {
-      "file": "e2e/test/view-display.test.mjs",
-      "owner": "core",
-      "reason": "Tests the view-display checker (recording, readiness, blank view, capture offset, presentation joins) and uses \"terminal\" only as a placeholder plugin id. Replace with plain-view plus a content-verifier/readiness capability."
-    },
-    {
       "file": "e2e/test/view-drag-case.test.mjs",
       "owner": "core",
       "reason": "Tests the B3 view-drag benchmark mechanics (native input drags, process CPU and footprint, GC_LOOP, judgment) and has no real-plugin references. It already fits the view-drag fixture."
@@ -535,11 +530,6 @@
       "file": "e2e/view-content.mjs",
       "owner": "mixed",
       "reason": "This helper (not a test) reads the shown content of each real plugin (`browser.content.read`, `editor.read`, hwp page SVG, `term`/`terminal.screen.read`) and builds the cases for those plugins. The per-plugin readers belong to plugin:browser, plugin:editor, plugin:hwp, plugin:term and plugin:terminal; the generic harness is core and should use a plain-view content-read command."
-    },
-    {
-      "file": "e2e/view-display.mjs",
-      "owner": "core",
-      "reason": "View-display harness that looks for a card holding \"the fixture terminal\". Replace with plain-view as the displayed view."
     },
     {
       "file": "e2e/view-input.test.mjs",
@@ -570,11 +560,6 @@
       "file": "e2e/window-sidebars.test.mjs",
       "owner": "core",
       "reason": "Tests that fixed sidebars apply plugin rail overrides and card focus, using terminal and browser tabs (rail groups 0 vs 1). Replace with two fake fixtures, one declaring a rail group and one declaring none (plain-view plus extension-probe)."
-    },
-    {
-      "file": "e2e/workbench-capture.test.mjs",
-      "owner": "core",
-      "reason": "Tests that the project-tab add control keeps contrast in second-drag frames, using `prepareTerminalDrag` from the terminal benchmark case. Replace with the view-drag fixture plan."
     },
     {
       "file": "scripts/measure-app-usage.mjs",
