@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cropViewPixels, readViewContent, viewContentProof } from "../view-content.mjs";
+import { cropViewPixels, readViewContent, viewContentProof, visibleDocument } from "../view-content.mjs";
 
 function frame() {
   const data = Buffer.alloc(8 * 8 * 4);
@@ -55,4 +55,12 @@ test("view content refuses a missing, wrong or not presented value", { timeout: 
   await assert.rejects(viewContentProof(session({ "probe.content.read": () => null }), "probe", "PROBE CONTENT", READ),
     /probe.content.read of probe answered no text: null/);
   await assert.rejects(readViewContent(session({}), "probe", {}), /the content read of probe names no command/);
+});
+
+test("the visible document region of a view is its host.window row, and a region that is absent or not shown fails", { timeout: 5000 }, async () => {
+  assert.deepEqual(await visibleDocument(session({}), "probe", "page"),
+    { surface: "probe", document: "page", visible: true, frame: { x: 0, y: 0, width: 100, height: 50 } });
+  assert.equal((await visibleDocument(session({}), "probe")).document, "");
+  await assert.rejects(visibleDocument(session({}), "probe", "studio"), /probe shows no document region "studio": undefined/);
+  await assert.rejects(visibleDocument(session({}, { visible: false }), "probe", "page"), /probe shows no document region "page"/);
 });

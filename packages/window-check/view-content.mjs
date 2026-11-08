@@ -25,8 +25,11 @@ export function cropViewPixels(frame, rect) {
   return { width, height, data };
 }
 
-/** The visible document region `document` of surface in host.window, or a failure that names what it holds. */
-async function visibleDocument(s, surface, document) {
+/**
+ * The row of host.window of the visible document region `document` of surface (the root document "" by default), or a failure that
+ * names what the row holds. A check whose view answers its content in another form than text reads the region with it.
+ */
+export async function visibleDocument(s, surface, document = "") {
   const host = await s.get("host.window");
   const row = host.documents.find((item) => item.surface === surface && item.document === document);
   assert.ok(row?.visible && row.frame.width > 0 && row.frame.height > 0,
