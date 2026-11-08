@@ -237,8 +237,8 @@ func (s *Shell) workspaceChanged() {
 }
 
 // compareData takes the projects of a workspace snapshot: a project that another window removed leaves this window as readProjects of
-// packages/workbench/projects.js ends it (docs/spec/projects.md#settings), a project that this window does not hold takes its whole
-// record, and one that it holds takes its plugin data.
+// packages/workbench/projects.js ends it (docs/spec/projects.md#settings), a project that another window stored joins the list, a
+// project that this window does not hold takes its whole record, and one that it holds takes its plugin data.
 func (s *Shell) compareData(value any) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
@@ -272,40 +272,56 @@ func (s *Shell) compareData(value any) error {
 	}
 	s.takeOpen(snapshot.Open)
 	s.options.Invalidate()
+	// The window lists the projects of the store in the order of the store, as readProjects of the page does: a project that this
+	// window never read is its stored record, and one that it read takes the stored record or its plugin data (takeStored).
+	next := make([]projectRecord, 0, len(reads))
 	for _, read := range reads {
 		project := s.project(read.ID)
 		if project == nil {
-			continue // A project that this window never read holds no view here.
-		}
-		// The read stands before a write of this window that the record already holds. The host answers that write with this event again.
-		if s.surfaces.dataWrites[read.ID] > 0 {
+			next = append(next, read)
 			continue
 		}
-		before, err := storedPlugins(project)
+		taken, err := s.takeStored(project, read)
 		if err != nil {
 			return err
 		}
-		now, err := storedPlugins(&read)
-		if err != nil {
-			return err
-		}
-		// The window keeps the spaces of a project that it holds, which it writes itself; every other project takes its stored record,
-		// which another window or another environment may have changed, as readProjects of the page does.
-		if !s.windowProjects[read.ID] {
-			*project = read
-		} else if stored, ok := read.Rest["plugins"]; ok {
-			if project.Rest == nil {
-				project.Rest = map[string]json.RawMessage{}
-			}
-			project.Rest["plugins"] = stored
-		} else {
-			delete(project.Rest, "plugins")
-		}
-		for _, changed := range changedKeys(before, now) {
-			s.dataChanged(project.ID, changed[0], changed[1])
-		}
+		next = append(next, taken)
 	}
+	s.projects = next
 	return nil
+}
+
+// takeStored is the record that this window lists for a project that it read, after the store gave the stored record read, and
+// reports each key of plugin data that changed.
+func (s *Shell) takeStored(project *projectRecord, read projectRecord) (projectRecord, error) {
+	// The read stands before a write of this window that the record already holds. The host answers that write with this event again.
+	if s.surfaces.dataWrites[read.ID] > 0 {
+		return *project, nil
+	}
+	before, err := storedPlugins(project)
+	if err != nil {
+		return *project, err
+	}
+	now, err := storedPlugins(&read)
+	if err != nil {
+		return *project, err
+	}
+	// The window keeps the spaces of a project that it holds, which it writes itself; every other project takes its stored record,
+	// which another window or another environment may have changed, as readProjects of the page does.
+	if !s.windowProjects[read.ID] {
+		*project = read
+	} else if stored, ok := read.Rest["plugins"]; ok {
+		if project.Rest == nil {
+			project.Rest = map[string]json.RawMessage{}
+		}
+		project.Rest["plugins"] = stored
+	} else {
+		delete(project.Rest, "plugins")
+	}
+	for _, changed := range changedKeys(before, now) {
+		s.dataChanged(project.ID, changed[0], changed[1])
+	}
+	return *project, nil
 }
 
 // changedKeys returns each plugin and key whose stored value differs, in a stable order.
