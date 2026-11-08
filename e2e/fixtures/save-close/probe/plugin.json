@@ -6,7 +6,7 @@
   "mark": "C",
   "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
   "exposes": {
-    "status": [{ "name": "probeclose.state", "description": "The observed save count and reported modified state.",
+    "status": [{ "name": "probeclose.state", "description": "The save count of the tab, kept in the local storage of the view under its surface id so that it survives a reload of the tab, and the reported modified state.",
       "schema": { "type": "object", "properties": { "saves": { "type": "integer" }, "modified": { "type": "boolean" } } } }],
     "commands": [
       { "name": "probeclose.prepare", "description": "Marks the tab modified and chooses whether its next save retains changes.",
