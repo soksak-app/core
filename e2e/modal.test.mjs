@@ -7,6 +7,7 @@ import test from "node:test";
 import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
+import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
 import { readStillCapture } from "./still-capture.mjs";
 
 // Functional paint checks explicitly render covered windows without activation.
@@ -19,19 +20,16 @@ async function fresh(s, options) {
   return tab;
 }
 
-/** The raster probe: a view whose image region a sidecar session paints. */
-const RASTER = "rasterprobe";
 /** The second layout probe: a plugin whose tab view exposes elements. */
 const SECOND = "layoutprobe2";
 /** The card of the grid that holds the tab surface. */
 const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
 
-/** Waits until a visible raster probe tab of the window is ready with a connected session and returns its surface id. */
+/** Waits until a visible raster probe tab of the window is ready (rasterReady) and returns its surface id. */
 async function readyRaster(s, message) {
   const ready = (item) => item.plugin === RASTER && item.visible && item.status?.phase === "ready";
   const { surface } = (await s.until("core.surfaces", (list) => list.some(ready), message)).find(ready);
-  await s.until("rasterprobe.session", (value) => value?.connected === true && typeof value.session === "string",
-    `${message}: the raster probe ${surface} has no connected session`, { surface });
+  await rasterReady(s, surface);
   return surface;
 }
 
@@ -42,21 +40,19 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: reloading under settings leaves successor raster images and documents unblurred`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     const { surface: start } = await fresh(s);
-    await s.request("diagnostics.window.draw-covered", { draw: true });
-    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
     s.cleanup(async () => {
       // Capture a failed native state before cleanup can close its dialog.
       if (!t.passed) await readStillCapture(s, t);
       await s.run("core.settings.close");
     });
     // A raster probe tab on the start card gives the window a native image region. The saved layout keeps it through the reload.
-    await s.run("core.card.add-tab", { card: cardOf(await s.get("core.grid"), start), plugin: RASTER });
     s.cleanup(async () => {
       for (const card of (await s.get("core.grid")).cards) {
         for (const tab of card.tabs ?? []) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.id });
       }
     });
-    const raster = await readyRaster(s, "the raster probe tab did not become ready");
+    // The image regions of the window draw while it is covered (addRasterTab and rasterReady).
+    const { surface: raster } = await addRasterTab(s, cardOf(await s.get("core.grid"), start));
     await s.run("core.projects.flush");
     const before = await s.until("host.window", (host) => host.regions.some((region) =>
       region.surface === raster && region.name === "raster" && region.visible && region.presented && region.blurred === false),

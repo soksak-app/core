@@ -9,12 +9,7 @@ import { APPS, failure, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { processTable } from "@soksak/window-check/process-table.mjs";
-
-/**
- * The plugin of the views with a native image region: the raster probe, whose fake persistent sidecar keeps one session with one
- * child process for each surface (e2e/fixtures/raster-probe).
- */
-const RASTER = "rasterprobe";
+import { RASTER, rasterReady } from "./raster-probe.mjs";
 
 /** One window of the window list that is not in known. */
 const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
@@ -222,6 +217,8 @@ for (const app of Object.values(APPS)) {
     }
     await s.until("core.surfaces", (surfaces) => surfaces.filter((item) => item.visible && item.plugin === RASTER).length >= 3,
       "three visible raster surfaces did not render");
+    // The image regions of the window draw while it is covered (rasterReady).
+    for (const { surface } of await s.surfaces(RASTER)) await rasterReady(s, surface);
     await s.presented();
     await assertVisibleRasters(s, 3, "before leaving the project");
     const processesAtThree = await rasterProcessSnapshot(s, "before leaving the project");
