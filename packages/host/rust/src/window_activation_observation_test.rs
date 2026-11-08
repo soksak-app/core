@@ -2,6 +2,7 @@
 //! invalid values are refused. The same cases run in the Go host.
 use super::*;
 
+// contract: window.facts.activation-observation-is-the-native-object
 #[test]
 fn host_window_preserves_exact_activation_observation() {
     for observation in [
@@ -13,6 +14,7 @@ fn host_window_preserves_exact_activation_observation() {
     }
 }
 
+// contract: window.facts.activation-observation-refuses-invalid-native-evidence
 #[test]
 fn host_window_refuses_missing_or_invalid_activation_observation() {
     let invalid = [
@@ -43,6 +45,7 @@ fn host_window_refuses_missing_or_invalid_activation_observation() {
     }
 }
 
+// contract: window.facts.activation-observation-declares-its-schema
 #[test]
 fn host_window_declares_exact_activation_observation_schema() {
     let declarations = host_declarations();

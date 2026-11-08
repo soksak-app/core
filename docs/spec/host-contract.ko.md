@@ -125,6 +125,9 @@ fn invalid_json_closes_connection() {
 | `window.facts.modal-order-is-above-every-webview` | `host.window`은 열린 modal의 `order`를 창의 native surface 수와 web view 수의 합으로 보고한다. native surface의 order와 web view의 order는 두 목록의 index이고 modal은 둘 위에 붙으므로, 이 값은 모든 native surface, 모든 web view와 document region의 `order`보다 크다. | all |
 | `window.facts.document-reports-its-blur` | `host.window`은 dialog 배경의 native blur filter를 가진 각 document web view(view 표면의 page와 document region)에 `blurred: true`를, filter가 없는 것에 `blurred: false`를 보고한다. | all |
 | `window.facts.region-reports-its-blur` | `host.window`의 각 image region 항목은 region이 dialog 배경의 native blur filter를 가진 동안 `blurred: true`를, filter가 없는 동안 `blurred: false`를 보고한다. | all |
+| `window.facts.activation-observation-is-the-native-object` | `host.window`는 `activationObservation`을 native window facts가 준 그대로 보고한다. `registered`는 boolean이고 `count`는 `"18446744073709551615"`를 포함한 canonical unsigned 64-bit 10진 문자열이다. | all |
+| `window.facts.activation-observation-refuses-invalid-native-evidence` | `activationObservation`이 없거나, `registered`가 boolean이 아니거나, `count`가 canonical unsigned 64-bit 10진 문자열이 아니면(숫자, 빈 문자열, 앞자리 0이나 부호, 소수, 18446744073709551615 초과) `host.window` 읽기는 `activationObservation`을 이름으로 밝힌 오류로 실패한다. | all |
+| `window.facts.activation-observation-declares-its-schema` | `host.window` 선언은 `activationObservation`에 `registered` `{"type": "boolean"}`과 `count` `{"type": "string", "pattern": "^(0\|[1-9][0-9]*)$"}` property를 준다. | all |
 | `links.open.accepts-web-and-mail-schemes` | 절대 `http`, `https`, `mailto` URL은 열기를 받아들인다. | all |
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | all |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | all |

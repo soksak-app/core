@@ -23,6 +23,7 @@ func (p *activationObservationPlatform) WindowFacts(platform.Window) (string, er
 	return string(text), err
 }
 
+// contract: window.facts.activation-observation-is-the-native-object
 func TestHostWindowPreservesExactActivationObservation(t *testing.T) {
 	for _, raw := range []string{`{"registered":true,"count":"0"}`, `{"registered":false,"count":"18446744073709551615"}`} {
 		s := pageProcessSurfaces(t, pagelessFramework{}, 0)
@@ -52,6 +53,7 @@ func TestHostWindowPreservesExactActivationObservation(t *testing.T) {
 	}
 }
 
+// contract: window.facts.activation-observation-refuses-invalid-native-evidence
 func TestHostWindowRefusesMissingOrInvalidActivationObservation(t *testing.T) {
 	for _, raw := range []string{"", `null`, `{}`, `{"registered":true}`, `{"count":"1"}`, `{"registered":"true","count":"1"}`, `{"registered":false,"count":1}`, `{"registered":false,"count":""}`, `{"registered":false,"count":"01"}`, `{"registered":false,"count":"-1"}`, `{"registered":false,"count":"+1"}`, `{"registered":false,"count":"1.0"}`, `{"registered":false,"count":"18446744073709551616"}`} {
 		t.Run(raw, func(t *testing.T) {
@@ -69,6 +71,7 @@ func TestHostWindowRefusesMissingOrInvalidActivationObservation(t *testing.T) {
 	}
 }
 
+// contract: window.facts.activation-observation-declares-its-schema
 func TestHostWindowDeclaresExactActivationObservationSchema(t *testing.T) {
 	props := hostStatus["host.window"].Schema["properties"].(map[string]any)
 	declaration, ok := props["activationObservation"].(map[string]any)
