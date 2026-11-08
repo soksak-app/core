@@ -108,8 +108,13 @@ for (const app of Object.values(APPS)) {
     const shown = await s.get("layoutprobe.document", surface);
     assert.deepEqual([shown.document, shown.changes], ["visible", 0], "the document of the covered window was hidden");
 
-    // Still C: a change of the theme and of the document while covered is drawn.
-    await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
+    // Still C: a change of the theme and of the document while covered is drawn. The fixture starts from the default theme
+    // (diagnostics.fixture, docs/spec/endpoint.md), so the change is to the other mode of the active theme, whose colors differ.
+    const { theme, mode } = (await s.get("core.settings")).values;
+    const other = mode === "dark" ? "light" : "dark";
+    const palettes = (await s.get("core.themes")).find((item) => item.name === theme);
+    assert.notDeepEqual(palettes?.[other], palettes?.[mode], `the theme ${theme} has the same colors in ${mode} and ${other}`);
+    await s.run("core.settings.theme", { name: theme, mode: other });
     await s.run("layoutprobe.document.color", { color: hex(BLUE) }, surface);
     await s.until("layoutprobe.document", (at) => at.color === css(BLUE) && at.document === "visible" && at.changes === 0,
       "the region document of the covered window did not report itself visible and blue", { surface });
