@@ -9,8 +9,8 @@ import { basename, join } from "node:path";
 import { validateDiagnostics } from "@soksak/plugin-api";
 import { START_PLUGIN } from "../../fixture.mjs";
 import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
-import { collectViewReclaimMeasurements, collectViewStartAndMemory, waitForViewReadiness } from "../../view-metrics-collection.mjs";
-import { activeCoreTheme, markerDragObservation, markerLayoutObservation, requireMarkerColor } from "./marker-view.mjs";
+import { collectViewReclaimMeasurements, collectViewStartAndMemory, waitForViewReadiness } from "@soksak/window-check/view-metrics-collection.mjs";
+import { activeCoreTheme, markerDragObservation, markerLayoutObservation, requireMarkerColor } from "@soksak/window-check/marker-view.mjs";
 
 const INSTALLED_FORMAT = 3;
 
@@ -126,7 +126,7 @@ const sidebarOfSurface = (sidebars, surface) => sidebars.find((row) => row.place
 
 /**
  * The placement of a section view, the `placement` of its view descriptor ({ card, open, close } of TAB_PLACEMENT in
- * e2e/view-metrics-collection.mjs). The window shows the measured section alone in the card-left sidebar of every card of
+ * @soksak/window-check/view-metrics-collection.mjs). The window shows the measured section alone in the card-left sidebar of every card of
  * ANCHOR_PLUGIN (cardSidebar of e2e/fixture.mjs):
  *   card   the preferred card when it has an ANCHOR_PLUGIN tab, else the first card with one; that tab is the anchor
  *   open   splits the tallest card with an ANCHOR_PLUGIN tab at its bottom with core.card.split and a new ANCHOR_PLUGIN tab, requires the
@@ -245,7 +245,7 @@ export function sectionViewDescriptor(view) {
 /**
  * Collects the measurements of the section view of `descriptor` (sectionViewDescriptor) in the window of `s`, which shows the section
  * alone in the card-left sidebar of every ANCHOR_PLUGIN card: the process starts, first displays, warm reuse, total and reclaim of
- * e2e/view-metrics-collection.mjs, then the layout (v) on the y axis and the drag (viii) of the top boundary of a new section card,
+ * @soksak/window-check/view-metrics-collection.mjs, then the layout (v) on the y axis and the drag (viii) of the top boundary of a new section card,
  * measured with the palette of the active core theme and the marker color of each trace start.
  */
 export async function collectSectionViewMeasurements(t, s, descriptor) {

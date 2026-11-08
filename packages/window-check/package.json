@@ -32,6 +32,8 @@
     "./view-content.mjs": "./view-content.mjs",
     "./view-frame-geometry.mjs": "./view-frame-geometry.mjs",
     "./view-process-footprint.mjs": "./view-process-footprint.mjs",
+    "./view-metrics-collection.mjs": "./view-metrics-collection.mjs",
+    "./marker-view.mjs": "./marker-view.mjs",
     "./package.json": "./package.json"
   },
   "files": [
@@ -64,6 +66,8 @@
     "view-content.mjs",
     "view-frame-geometry.mjs",
     "view-process-footprint.mjs",
+    "view-metrics-collection.mjs",
+    "marker-view.mjs",
     "fixtures/"
   ],
   "bin": {

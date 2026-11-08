@@ -1,14 +1,14 @@
 // The layout (v) and drag (viii) observations of a view that paints its document root with the `markerColor` of its
-// content-trace start: the section views (section-view.mjs). The pixels of each capture are measured with the palette of the active
-// core theme and that marker color. `owner` names the measured view in every error.
+// content-trace start, as the section views of the core benchmarks do. The pixels of each capture are measured with the palette of
+// the active core theme and that marker color. `owner` names the measured view in every error.
 import assert from "node:assert/strict";
 
-import { drag } from "@soksak/window-check/app.mjs";
-import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { valueProof } from "@soksak/window-check/view-content.mjs";
-import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "@soksak/window-check/view-frame-geometry.mjs";
+import { drag } from "./app.mjs";
+import { frames, readFrame } from "./frame.mjs";
+import { valueProof } from "./view-content.mjs";
+import { declaredSlotInsets, findFirstChangedSlotFrame, measureViewFrameGeometry } from "./view-frame-geometry.mjs";
 import { mapViewContentFramesToCapture, monotonicTimeMs, requireViewContentFrameCoverage, rootNativePlacementBeforeCapture,
-  selectOneShotViewSourceFrame, withDragTraceMode, withViewContentTrace } from "../../view-metrics-collection.mjs";
+  selectOneShotViewSourceFrame, withDragTraceMode, withViewContentTrace } from "./view-metrics-collection.mjs";
 
 /** The size field of a core.grid card and its name, by the axis of core.grid.size. */
 const AXIS = Object.freeze({ x: Object.freeze({ size: "w", name: "width" }), y: Object.freeze({ size: "h", name: "height" }) });

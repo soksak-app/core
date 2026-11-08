@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { readFrame } from "@soksak/window-check/frame.mjs";
-import { policyOfSetting, readPolicy } from "@soksak/window-check/log-policy.mjs";
+import { readFrame } from "../frame.mjs";
+import { policyOfSetting, readPolicy } from "../log-policy.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
 import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
   processStartSamples, TAB_PLACEMENT, viewContentFrameEvents, mapViewContentFramesToCapture, viewCardWithDifferentPluginTab,

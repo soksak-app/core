@@ -1601,9 +1601,9 @@ const FEATURE_LINKS = [
       { file: "e2e/real/hid.mjs", symbol: "export function readWindowElements(app) {" },
       { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeGeometry(gesture, decoded, { cornerRadiusPt, slotInsetsPt, measure = measureFloorLayoutFrame }) {" },
       { file: "e2e/benchmark/cases/resize.mjs", symbol: "export function resizeB3Values(state, { recorded }) {" },
-      { file: "e2e/view-metrics-collection.mjs", symbol: "export const TAB_PLACEMENT = Object.freeze({" },
-      { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {" },
-      { file: "e2e/benchmark/cases/marker-view.mjs", symbol: "export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {" },
+      { file: "packages/window-check/view-metrics-collection.mjs", symbol: "export const TAB_PLACEMENT = Object.freeze({" },
+      { file: "packages/window-check/marker-view.mjs", symbol: "export async function markerLayoutObservation(t, s, descriptor, surface, card, { owner, theme, cornerRadiusPt, axis }) {" },
+      { file: "packages/window-check/marker-view.mjs", symbol: "export async function markerDragObservation(t, s, descriptor, surface, card, palette, { owner, plan }) {" },
       { file: "packages/plugin-api/index.js", symbol: "export function validateDiagnostics(manifest, diagnostics) {" },
       { file: "e2e/benchmark/cases/section-view.mjs", symbol: "export function installedSectionViews(configDir, { plugin: only = null } = {}) {" },
       { file: "e2e/fixtures/plain-view/probe/ui/section-diagnostics.js", symbol: "export async function attach({ declaration, status, registerStatus, commands, view, content, log }) {" },
@@ -1629,7 +1629,7 @@ const FEATURE_LINKS = [
       { file: "e2e/test/resize-case.test.mjs", id: "the B3 values of the resize catch-up are its verdict in the state captured and the U7 figures of the maximise in the state frame-records" },
       { file: "e2e/test/idle-tab-case.test.mjs", id: "the idle tab limit is the bound of IDLE_TAB_BOUND_KB in the performance goals, and a measured cost above it fails the benchmark" },
       { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the performance goals, and a growth at or above it fails the benchmark" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a view descriptor without a placement is refused by every collector with an error that names the descriptor" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a view descriptor without a placement is refused by every collector with an error that names the descriptor" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose plugin does not declare the three entries of the section-view contract fails with its plugin and section" },
       { file: "e2e/test/section-view-case.test.mjs", id: "the declaration of a plugin that has sections and no surface is a valid diagnostics declaration" },
       { file: "e2e/test/section-view-case.test.mjs", id: "a section view whose ready status does not declare a single-entry enum content fails with its plugin, section and field" },
@@ -2197,13 +2197,13 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/surface-document.js", symbol: "return { page, timeOrigin: view.performance.timeOrigin, now: view.performance.now() };" },
       { file: "packages/plugin-api/view.js", symbol: "expose.command(\"core.surface.clock\", state.clock)," },
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "\"core.surface.hit\": true, \"core.surface.clock\": true}" },
-      { file: "e2e/view-metrics-collection.mjs", symbol: "async function narrowestClockBracket(s, surface, startBracket, page) {" },
+      { file: "packages/window-check/view-metrics-collection.mjs", symbol: "async function narrowestClockBracket(s, surface, startBracket, page) {" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view surface mounts with the core surface entries that exposure.json declares" },
       { file: "packages/workbench-mygo/tests/exposure_names_test.go", id: "TestTheRegistryServesEveryDeclaredCommandAndStatus" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
     ],
     expected: "Every view registers core.surface.clock in its document on the three hosts, the mygo workbench holds it as a name of the view, and the content trace of a view keeps the narrowest of five clock brackets of the same document.",
     levels: ["unit"],
@@ -2249,11 +2249,11 @@ const FEATURE_LINKS = [
     id: "F483-1",
     implementation: [
       { file: "packages/plugin-api/surface-document.js", symbol: "const page = view.sokView?.page;" },
-      { file: "e2e/view-metrics-collection.mjs", symbol: "async function documentPage(s, surface) {" },
+      { file: "packages/window-check/view-metrics-collection.mjs", symbol: "async function documentPage(s, surface) {" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "content trace maps document times through the narrowest clock bracket of the same document" },
     ],
     expected: "core.surface.clock returns the page identity of the view document, and the content trace names the document by it.",
     levels: ["unit"],
@@ -4163,33 +4163,33 @@ const FEATURE_LINKS = [
   "id": "F239-235",
   "implementation": [
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export async function openRecordedView("
     },
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export async function collectViewProcessGroups("
     },
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export async function collectViewStartAndMemory("
     }
   ],
   "tests": [
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "view totals are sampled at their declared count before extra process-start views open"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "one recording reads the content value after readiness and defers the content frame past the footprint sample"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "footprint failure retains recording paths and skips the deferred content frame"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "deferred content frame failure retains its recording path and rejects the collector"
     }
   ],
@@ -4285,13 +4285,13 @@ const FEATURE_LINKS = [
   "id": "F239-231",
   "implementation": [
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export async function withViewContentTrace("
     }
   ],
   "tests": [
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "generic content trace brackets the successful start command with native clock reads"
     }
   ],
@@ -4312,7 +4312,7 @@ const FEATURE_LINKS = [
       "symbol": "function evaluateDrag("
     },
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export function rootNativePlacementBeforeCapture("
     }
   ],
@@ -4337,37 +4337,37 @@ const FEATURE_LINKS = [
   "id": "F239-221-1",
   "implementation": [
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export function viewStartClockBracket("
     },
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export async function withViewContentTrace("
     },
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export async function monotonicTimeMs("
     }
   ],
   "tests": [
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "generic content trace brackets the successful start command with native clock reads"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "view start clock brackets require valid source identity and ordered native clock replies"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "content trace stops its observer when the post-start native clock read fails"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "content trace start failure does not read an after clock or stop an unstarted observer"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "content trace bracket rejects a replaced client, changed host process or target window"
     }
   ],
@@ -4378,15 +4378,15 @@ const FEATURE_LINKS = [
   "id": "F239-221",
   "implementation": [
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export function viewStartClockBracket("
     },
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export function viewContentFrameEvents("
     },
     {
-      "file": "e2e/view-metrics-collection.mjs",
+      "file": "packages/window-check/view-metrics-collection.mjs",
       "symbol": "export function requireViewContentFrameCoverage("
     },
     {
@@ -4396,15 +4396,15 @@ const FEATURE_LINKS = [
   ],
   "tests": [
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "view content-frame mapping uses the successful start's native clock bracket"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "view start clock brackets require valid source identity and ordered native clock replies"
     },
     {
-      "file": "e2e/test/view-metrics-collection.test.mjs",
+      "file": "packages/window-check/test/view-metrics-collection.test.mjs",
       "id": "one-shot layout preserves a boundary interval and selects a later guaranteed post-request frame"
     },
     {
@@ -4486,8 +4486,8 @@ const FEATURE_LINKS = [
 
   {
     id: "F239-222",
-    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function collectViewProcessGroups(" }],
-    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "view totals are sampled at their declared count before extra process-start views open" }],
+    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export async function collectViewProcessGroups(" }],
+    tests: [{ file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "view totals are sampled at their declared count before extra process-start views open" }],
     expected: "The one-view group is sampled after one view; the declared N-view workload is sampled while exactly N views are open; extra views for five process-start samples open afterward.",
     levels: ["unit"],
   },
@@ -7936,11 +7936,11 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-236",
-    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withViewContentTrace(" }],
+    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export async function withViewContentTrace(" }],
     tests: [
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "generic content trace brackets the successful start command with native clock reads" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace stops its diagnostic marker when the recorded action fails" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "content trace start failure does not read an after clock or stop an unstarted observer" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "generic content trace brackets the successful start command with native clock reads" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "content trace stops its diagnostic marker when the recorded action fails" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "content trace start failure does not read an after clock or stop an unstarted observer" },
     ],
     expected: "The content trace brackets the successful start command with native clock reads and stops the diagnostic marker on action failure; start failure does not read an after clock or stop an unstarted observer.",
     levels: ["unit"],
@@ -12514,15 +12514,15 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.14-5-26",
-    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
-    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "one-shot layout selects the exact-size source after request and before later placement readback" }],
+    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
+    tests: [{ file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "one-shot layout selects the exact-size source after request and before later placement readback" }],
     expected: "One-shot layout source selection uses the request boundary and exact final viewport projection, not a later geometry readback timestamp.",
     levels: ["unit"],
   },
   {
     id: "F212.14-5-29",
-    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
-    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "one-shot layout retains the target and every post-request candidate when no frame matches" }],
+    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export function selectOneShotViewSourceFrame(" }],
+    tests: [{ file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "one-shot layout retains the target and every post-request candidate when no frame matches" }],
     expected: "All one-shot view collectors use the request boundary and exact final viewport, with complete failed-selection evidence.",
     levels: ["unit"],
   },
@@ -12570,11 +12570,11 @@ const FEATURE_LINKS = [
   {
     id: "F212.14-5-31",
     implementation: [
-      { file: "e2e/view-metrics-collection.mjs", symbol: "export async function openRecordedView(" },
+      { file: "packages/window-check/view-metrics-collection.mjs", symbol: "export async function openRecordedView(" },
     ],
     tests: [
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "one recording reads the content value after readiness and defers the content frame past the footprint sample" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "recorded view observation window rejects nonpositive and nonfinite durations" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "one recording reads the content value after readiness and defers the content frame past the footprint sample" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "recorded view observation window rejects nonpositive and nonfinite durations" },
     ],
     expected: "HWP capture retains its declared observation window while the first content frame uses actual captured timestamps.",
     levels: ["unit"],
@@ -12655,8 +12655,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F212.14-5-2",
-    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
-    tests: [{ file: "e2e/test/view-metrics-collection.test.mjs", id: "shared readiness wrapper waits for the declared status exposure before reading it" }],
+    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export async function waitForViewReadiness(" }],
+    tests: [{ file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "shared readiness wrapper waits for the declared status exposure before reading it" }],
     expected: "View readiness reads begin only after the declared exposure notification.",
     levels: ["unit"],
   },
@@ -13010,13 +13010,13 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-243",
-    implementation: [{ file: "e2e/view-metrics-collection.mjs", symbol: "export async function withDragTraceMode" }],
+    implementation: [{ file: "packages/window-check/view-metrics-collection.mjs", symbol: "export async function withDragTraceMode" }],
     tests: [
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag stores only the frame class without the performance trace and restores both settings" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps the failure of its action and of the restoration" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag restores the settings when the settings cannot be read after it" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag refuses a log policy without the frame trace and changes nothing" },
-      { file: "e2e/test/view-metrics-collection.test.mjs", id: "a measured drag keeps a falsy rejection of its action" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a measured drag stores only the frame class without the performance trace and restores both settings" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a measured drag keeps the failure of its action and of the restoration" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a measured drag restores the settings when the settings cannot be read after it" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a measured drag refuses a log policy without the frame trace and changes nothing" },
+      { file: "packages/window-check/test/view-metrics-collection.test.mjs", id: "a measured drag keeps a falsy rejection of its action" },
     ],
     expected: "Terminal drag measurement disables only the global performance trace while preserving frame logging, restores the original setting before reporting failures, and retains action and restoration errors without changing cadence or geometry acceptance criteria.",
     levels: ["unit"],
