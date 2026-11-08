@@ -1,3 +1,6 @@
+// Checks view lifetime: a view whose process ends is created again with its stored tab state, a view that fails four times within the
+// restart window stops, and a stopped view is created again when its unloaded tab is reopened. The view is the unload probe
+// `probeunload`, which writes the address of its document region as its tab state and reports the tab state it read at its start.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -7,17 +10,26 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { readEventLines } from "@soksak/window-check/event-log.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, START_PLUGIN } from "./fixture.mjs";
+
+const PROBE = "probeunload";
 
 const STOP_REASON = "the view failed 4 times within 300 seconds and is created again when its tab is reopened";
 const viewProcess = (host, surface) => host.documents.find((entry) =>
   entry.surface === surface && entry.document === "")?.process;
 
-async function ready(s, surface, url) {
-  await s.until("core.surfaces", (items) => items.some((item) => item.surface === surface
-    && item.exposes.includes("status browser.location") && item.exposes.includes("command browser.reload")), "the restarted browser did not register its location");
-  const location = await s.until("browser.location", (value) => value.url === url && value.title === "restart-state"
-    && !value.loading && value.error === null, "the restarted browser did not restore its saved address", { surface });
+/**
+ * Waits until the view `surface` registered its location, read the stored tab state `{url}` at its start when `restored` is set,
+ * shows `url` in its document region (loading it again from the stored state when the new view starts empty), and its view and
+ * document region are visibly placed.
+ */
+async function ready(s, surface, url, { restored = true } = {}) {
+  await s.registered(surface, [`status ${PROBE}.location`, `command ${PROBE}.load`], "the restarted view did not register its location");
+  const start = await s.until(`${PROBE}.location`, (value) => !restored || value.restored?.url === url,
+    "the restarted view did not receive its saved tab state", { surface });
+  if (start.url !== url) await s.run(`${PROBE}.load`, { url: start.restored?.url ?? url }, surface);
+  const location = await s.until(`${PROBE}.location`, (value) => value.url === url && !value.loading,
+    "the view did not show the saved address", { surface });
   await s.until("host.window", (value) => ["", "page"].every((name) => value.documents.some((entry) =>
     entry.surface === surface && entry.document === name && entry.visible
       && entry.frame.width > 0 && entry.frame.height > 0)),
@@ -54,10 +66,9 @@ for (const app of Object.values(APPS)) {
       server.closeAllConnections();
       server.close((error) => error ? reject(error) : resolve());
     }));
-    const grid = await s.get("core.grid");
-    const card = grid.cards.find((entry) => entry.tabs.some((tab) => tab.plugin === "browser"));
-    assert.ok(card, "the fixture has no browser card");
-    const surface = card.tabs.find((tab) => tab.plugin === "browser").id;
+    const card = (await s.get("core.grid")).cards.find((entry) => entry.focused);
+    assert.ok(card, "the start layout has no focused card");
+    const { tab: surface } = await s.run("core.card.add-tab", { card: card.id, plugin: PROBE });
     const closeTarget = async () => {
       const current = await s.get("core.grid");
       if (current.cards.some((entry) => entry.tabs.some((tab) => tab.id === surface))) {
@@ -69,12 +80,13 @@ for (const app of Object.values(APPS)) {
     s.cleanup(closeTarget);
     await s.run("core.tab.select", { tab: surface });
     const url = `http://127.0.0.1:${server.address().port}/restart-state`;
-    await s.run("browser.navigate", { url }, surface);
-    await ready(s, surface, url);
+    await s.registered(surface, [`command ${PROBE}.load`]);
+    await s.run(`${PROBE}.load`, { url }, surface);
+    await ready(s, surface, url, { restored: false });
     await s.run("core.projects.flush");
     const stored = JSON.parse(readFileSync(join(app.configDir, "tab-state.json"), "utf8"));
     assert.equal(stored.format, 1, "tab-state.json has an unsupported format");
-    assert.ok(stored.tabs[surface]?.state, "the browser persisted no tab state before the fault");
+    assert.ok(stored.tabs[surface]?.state, "the view persisted no tab state before the fault");
 
     const directory = join(app.configDir, "logs", "view-restart");
     mkdirSync(directory, { recursive: true });
@@ -82,7 +94,7 @@ for (const app of Object.values(APPS)) {
     const persist = () => writeFileSync(join(directory, `${process.pid}.json`), `${JSON.stringify(evidence, null, 2)}\n`);
     const escapedSurface = RegExp.escape(surface), escapedReason = RegExp.escape(STOP_REASON);
     const processError = new RegExp(`^error host view channel: ${escapedSurface}: the view process ended$`);
-    const nativeError = /^error native document view: web content process terminated: soksak:\/\/browser\/ui\/index\.html$/;
+    const nativeError = new RegExp(`^error native document view: web content process terminated: soksak://${PROBE}/ui/page\\.html$`);
     const stopError = new RegExp(`^error host view channel: ${escapedSurface}: ${escapedReason}$`);
     const displayError = new RegExp(`^error workbench surface status ${RegExp.escape(card.id)} ${escapedSurface}: 표면 오류 · ${escapedReason}$`);
     for (const pattern of [processError, nativeError, stopError, displayError]) s.expectError(pattern);
@@ -104,7 +116,8 @@ for (const app of Object.values(APPS)) {
         }, "the ended view did not receive a replacement process");
         phase.replacement = viewProcess(changed, surface);
         await ready(s, surface, url);
-        await s.run("browser.reload", {}, surface);
+        // The replacement view loads its document again, as a reload of the view does.
+        await s.run(`${PROBE}.load`, { url }, surface);
         await ready(s, surface, url);
       } else {
         await s.until("core.surfaces", (items) => items.some((item) => item.surface === surface
@@ -119,7 +132,7 @@ for (const app of Object.values(APPS)) {
     }
     assert.ok(performance.now() - began < 300000, "the four failures fell outside the restart window");
     const reopening = await s.record();
-    const { tab: other } = await s.run("core.card.add-tab", { card: card.id, plugin: "browser" });
+    const { tab: other } = await s.run("core.card.add-tab", { card: card.id, plugin: START_PLUGIN });
     await s.until("core.grid", (value) => value.cards.some((entry) => entry.id === card.id && entry.active === other),
       "the stopped tab did not become hidden");
     await s.run("core.tab.unload", { tab: surface });

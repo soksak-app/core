@@ -1,21 +1,22 @@
 // Checks whether an unrendered area appears in the surface while the boundary is shaken.
 //
-// A web view renders only the area it laid out and fills the rest with white. The terminal surface and the card are both dark, so a white pixel
-// adjoining the card color is an unrendered area.
+// A web view renders only the area it laid out and fills the rest with white. The surface is a raster probe painted in the measured
+// color and the card is dark, so a white pixel adjoining the card color is an unrendered area.
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { terminalMarks } from "./outside.mjs";
+import { rasterMarks } from "./outside.mjs";
+import { addRasterTabAt } from "./raster-probe.mjs";
 import { bare, cardSize } from "./surface.mjs";
 
 /**
  * The boundaries to shake and the width.
  *
- * The initial layout of the example is fixed. x:2 is the left boundary of the terminal card and y:1 is the boundary below it.
- * In both, the terminal surface grows and shrinks. The pointer goes back and forth while pressed, so the boundary returns to its original position.
+ * The initial layout of the example is fixed. The raster probe is in the first card of the middle column; x:2 and y:1 are boundaries
+ * of that card. In both, the raster probe surface grows and shrinks. The pointer goes back and forth while pressed, so the boundary returns to its original position.
  * The boundary is designated by number and not by coordinate, so it does not miss when the window size differs.
  */
 const PLANS = {
@@ -24,7 +25,7 @@ const PLANS = {
 };
 
 /**
- * The change (points) of the width or the height of the terminal card by which the boundary counts as moved.
+ * The change (points) of the width or the height of the raster probe card by which the boundary counts as moved.
  *
  * If the boundary sits at the minimum card size, this value is close to 0, and the rendering check then passes
  * without checking anything, so the check first confirms in the recording that the boundary actually moved. The two drags move by at least 180pt.
@@ -36,7 +37,8 @@ for (const app of Object.values(APPS)) {
     test(`${app.name}: shaking the ${which} exposes no unrendered area`, async (t) => {
       const s = await open(t, app);
       await fresh(s);
-      const marks = await terminalMarks(s);
+      const { surface } = await addRasterTabAt(s, 1, 0);
+      const marks = await rasterMarks(s, surface, { measured: true });
       // The verifier of the page runs at every render and publishes the result as core.verify. The check collects all results during the drag.
       const verify = await s.collect("core.verify");
       const run = await drag(s, plan, { capture: true });
@@ -66,10 +68,10 @@ for (const app of Object.values(APPS)) {
           most[key] = Math.max(most[key], size[key]);
         }
       });
-      assert.equal(measured, files.length, `the terminal card was measured in only ${measured} of ${files.length} frames`);
+      assert.equal(measured, files.length, `the raster probe card was measured in only ${measured} of ${files.length} frames`);
       const moved = Math.max(most.width - least.width, most.height - least.height);
       assert.ok(moved >= MOVED,
-        `the terminal card changed by ${moved}pt while the boundary was shaken, so the boundary did not move`);
+        `the raster probe card changed by ${moved}pt while the boundary was shaken, so the boundary did not move`);
       assert.equal(worst.n, 0,
         `${seen} of ${files.length} frames show unrendered area; the worst is ${worst.n} pixels in frame ${worst.frame}`);
     });

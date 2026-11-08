@@ -7,11 +7,6 @@
       "reason": "Helper that pulls terminal compose and cursor state for IME checks; it is terminal-specific and must be reduced to a fixture probe status shape."
     },
     {
-      "file": "e2e/activation/terminal-view-focus.test.mjs",
-      "owner": "mixed",
-      "reason": "visible input preserves the prompt, handles wide cells, and ignores later blanks: plugin:terminal; sidecar screen facts preserve the numeric row count and frame cursor: plugin:terminal; terminal IME stage waits for cursor notification after composition changes: plugin:terminal; terminal IME stage waits for cursor movement when native preedit stays unchanged: plugin:terminal; terminal IME stage rereads coherent composition on a screen notification: plugin:terminal; terminal stage requires matching screen, cursor, and compose state: plugin:terminal; a terminal click accepts the same native keys as its AppKit reference: core (focus and key routing, plain-view probe key log); repeated Korean vowels stay visible before Space: core (IME, plain-view probe preedit status)."
-    },
-    {
       "file": "e2e/benchmark/browser-view.test.mjs",
       "owner": "plugin:browser",
       "reason": "Measures the browser view's own process and frame contract (B3 browser-view keys)."
@@ -62,34 +57,9 @@
       "reason": "Checks that the official CLI upgrade of browser keeps the starter cohort (including sidecar-files and sidecar-vt-alacritty) ready."
     },
     {
-      "file": "e2e/capture-covered.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a still capture of a covered window holds the document region (capture); replace the browser with a plain-view probe whose document can change colour on command."
-    },
-    {
-      "file": "e2e/capture-document-frame-identity.test.mjs",
-      "owner": "core",
-      "reason": "Checks capture frame identity of a live WebKit root document (capture) and uses the editor only to open a file; replace with a plain-view probe root document."
-    },
-    {
-      "file": "e2e/capture-frame-identity.test.mjs",
-      "owner": "core",
-      "reason": "Checks opt-in capture identity against the presented image and during drag (capture) and uses the terminal as the image; replace with a fixture view that presents identity-marked frames (floor-page plus identity)."
-    },
-    {
-      "file": "e2e/capture-still.test.mjs",
-      "owner": "core",
-      "reason": "Checks a still PNG's native bounds and the settings modal in stills, with the terminal only as default content; plain-view probe."
-    },
-    {
       "file": "e2e/editor.test.mjs",
       "owner": "plugin:editor",
       "reason": "Editor opening, saving, save error and ask-before-close of its documents (its save-close core part is already covered by the save-close probe)."
-    },
-    {
-      "file": "e2e/event-log.test.mjs",
-      "owner": "core",
-      "reason": "Checks the host event log and the trace (logging); one test traces sidecar memory, which should come from a fixture plugin with a fake sidecar process."
     },
     {
       "file": "e2e/hwp-startup.mjs",
@@ -112,36 +82,6 @@
       "reason": "Checks that the bytes the terminal sidecar writes to the PTY match what an independent receiver reads, which is the terminal sidecar's own contract."
     },
     {
-      "file": "e2e/late-reply.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the host discards a surface reply that arrives after its surface closed (exposure relay). It only opens a browser tab to have a surface; `plain-view` can replace it."
-    },
-    {
-      "file": "e2e/normal-shutdown-runner.mjs",
-      "owner": "tool",
-      "reason": "Shutdown helper that prepares a real terminal and audits its sidecar service at quit. Reduce it to fixtures: a fake persistent-service fixture should stand in for the terminal."
-    },
-    {
-      "file": "e2e/observation/terminal-focus-current.test.mjs",
-      "owner": "core",
-      "reason": "Observes that a click on a current view reaches it and gives it native focus. `plain-view` with a native region would replace the terminal."
-    },
-    {
-      "file": "e2e/outside.mjs",
-      "owner": "tool",
-      "reason": "Measurement helper that checks a surface is drawn only inside its card, using terminal screen marks and background. Reduce it to a fixture that paints a known color or marks (`view-drag`/`plain-view`)."
-    },
-    {
-      "file": "e2e/outside.test.mjs",
-      "owner": "core",
-      "reason": "Checks card, native-content and rail alignment, and that a divider drag leaves no white frame (drag and placement measurement). `view-drag` with a known paint color would replace the terminal."
-    },
-    {
-      "file": "e2e/plugin-outdated.test.mjs",
-      "owner": "core",
-      "reason": "Checks that the plugin page shows a persistent service running another version than the installed one and replaces it (core installation and persistent-service updates). A new versioned fake sidecar-service fixture would replace sidecar-vt-alacritty."
-    },
-    {
       "file": "e2e/prepare-terminal.mjs",
       "owner": "tool",
       "reason": "Helper that prepares the default terminal surface and waits for its session. Remove it or reduce it to preparing a fake-session fixture."
@@ -157,39 +97,9 @@
       "reason": "Checks that a mouse-reporting TUI drag inside the terminal survives repeated clicks."
     },
     {
-      "file": "e2e/retained-view-placement.test.mjs",
-      "owner": "core",
-      "reason": "Checks startup placement of a stored, inactive, unloadable view under both memory-saver settings. The `memory-saver` fixture would replace browser."
-    },
-    {
-      "file": "e2e/semantic-screen.test.mjs",
-      "owner": "mixed",
-      "reason": "Checks that hidden terminal and term screens keep notifying their screen status, which is those plugins' own screen subscription."
-    },
-    {
-      "file": "e2e/sidecar-recovery.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a surface reattaches without an app restart when its persistent sidecar service dies (core sidecar supervision). A new killable fake persistent-sidecar fixture would replace sidecar-vt-alacritty."
-    },
-    {
-      "file": "e2e/surface-sync-turn.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a surface layout runs in one main-thread turn. `plain-view` would replace the terminal card."
-    },
-    {
       "file": "e2e/terminal-font.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks the terminal's font.family fallback and wide-glyph centering."
-    },
-    {
-      "file": "e2e/terminal-fullscreen-fit.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a view's region returns to the card geometry in the same presentation that ends card full screen. A fixture that reports its size would replace the terminal's rows and columns."
-    },
-    {
-      "file": "e2e/terminal-hidden-reload.test.mjs",
-      "owner": "core",
-      "reason": "Checks that a hidden view's sidecar session detaches and reattaches its image across a main-page reload (view lifetime). A fake sidecar-backed raster fixture would replace the terminal."
     },
     {
       "file": "e2e/terminal-hidden-tab.test.mjs",
@@ -205,11 +115,6 @@
       "file": "e2e/terminal-keyboard.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Checks that native keys edit and execute commands independently in three terminal shells."
-    },
-    {
-      "file": "e2e/terminal-protocols.test.mjs",
-      "owner": "mixed",
-      "reason": "\"implemented CSI sequences change the screen, the cursor, and the replies\": plugin:terminal; \"implemented OSC sequences change the title, colors, cursor, and clipboard and reply\": plugin:terminal; \"mouse, focus, paste, and alternate-scroll modes report input\": plugin:terminal; \"repeated card focus keeps terminal drag PTY ownership idempotent\": plugin:terminal."
     },
     {
       "file": "e2e/terminal-reopen.test.mjs",
@@ -232,11 +137,6 @@
       "reason": "Checks that the selection highlight follows the pointer while a status line redraws (terminal P105)."
     },
     {
-      "file": "e2e/terminal.test.mjs",
-      "owner": "mixed",
-      "reason": "\"a newly split terminal presents its first native raster\": core (`plain-view`); \"balancing unequal cards presents every terminal at its new size\": core; \"four split terminals complete native presentation without a host crash\": core; \"endpoint split requests survive repeated native WebView presentation\": core; \"native presentation failure is explicit and the next split remains usable\": core; \"three terminals and two browsers keep one view web view each and one terminal service\": core (fake shared-service fixture); \"closing terminal tabs reaps every PTY child without killing the shared service\": plugin:terminal; \"padding settings inset the terminal grid and show the terminal background\": plugin:terminal; \"removing a project ends the terminal sessions that its layout held\": core (fake session fixture); \"a click gives native focus to the clicked terminal and its card\": core; \"the login shell setting starts the account's login shell as a login shell\": plugin:terminal; \"a resize redraws a wrapped ${shell} input line without rows of the previous width\": plugin:terminal; \"the terminal tab shows the program title unless the title setting is name\": plugin:terminal; \"a long tab title is cut at the width bound of a tab\": core; the two \"an OSC 9 notification from a terminal out of view ...\" tests: plugin:terminal (core tab notice reachable with a fixture notice command); \"OSC 8 linked cells are drawn with an underline and plain cells are not\": plugin:terminal; \"clear leaves no history and hides the scrollbar\": plugin:terminal; \"a presentation that fails while the terminal service is stopped leaves the next fixture and splits usable\": core; \"a terminal split from a terminal starts in the directory that terminal reported\": core (cwd-reporting fixture); \"a page start keeps the terminal sessions that the layouts hold\": core; \"hiding three terminals retains native geometry and rasters\": core; \"three terminals survive repeated divider drags and project returns\": core (`view-drag`); \"terminal input returns terminal output through the terminal sidecar\": plugin:terminal; \"inline image pixels follow scroll, resize, replacement, deletion, and cleanup\": plugin:terminal; \"the terminal background equals the card color of every theme and mode\": plugin:terminal; \"terminal raster follows application light and dark theme\": plugin:terminal; \"terminal cursor policy uses declared settings, persistence, and pixels\": plugin:terminal; \"each cursor shape and focus state renders its own cursor-cell pixels\": plugin:terminal; \"the terminal font follows the pressed card's text size\": plugin:terminal; \"a native drag over blank terminal cells ends without a surface error\": plugin:terminal; \"a terminal draws its screen after the window is resized from outside\": core; \"a native drag into the padding below the last row selects to the last row\": plugin:terminal; \"native terminal selection renders and copies through one explicit paste\": plugin:terminal; \"an explicit PNG paste writes an owned image and inserts its quoted path\": plugin:terminal; \"terminal file drop pastes quoted paths without executing\": plugin:terminal; \"diagnostic terminal entries inject preedit and record terminal input\": plugin:terminal; \"a terminal session error stays until the event that resolves it\": plugin:terminal; \"terminal image follows a window resize\": core; \"multiple terminals keep fixed cells during a divider drag\": plugin:terminal."
-    },
-    {
       "file": "e2e/test/activation/terminal-ime-document.test.mjs",
       "owner": "plugin:terminal",
       "reason": "Unit tests of reconstructing the terminal's input document from terminal.screen.read and VT receipts."
@@ -245,11 +145,6 @@
       "file": "e2e/test/browser-view-metrics-case.test.mjs",
       "owner": "plugin:browser",
       "reason": "Unit tests of the browser metrics benchmark case (browser readiness, history, diagnostic callbacks)."
-    },
-    {
-      "file": "e2e/test/capture-document-frame-identity.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of the capture harness for document frame identity. Editor and terminal appear only as tab names in data; a fixture tab name would replace them."
     },
     {
       "file": "e2e/test/editor-view-metrics-case.test.mjs",
@@ -265,21 +160,6 @@
       "file": "e2e/test/hwp-view-metrics-case.test.mjs",
       "owner": "plugin:hwp",
       "reason": "Unit tests of the HWP benchmark case (layout, marker, reclaim, footprint)."
-    },
-    {
-      "file": "e2e/test/normal-shutdown-audit.test.mjs",
-      "owner": "core",
-      "reason": "Unit tests of the normal-shutdown audit (sidecar sessions and service endpoints at quit). The \"terminal shutdown\" cases should use a fake persistent-service fixture."
-    },
-    {
-      "file": "e2e/test/normal-shutdown.test.mjs",
-      "owner": "core",
-      "reason": "Unit test that shutdown preparation waits for surface and session notifications. It uses prepare-terminal; replace it with fake-session fixture preparation."
-    },
-    {
-      "file": "e2e/test/reload-view-reply.test.mjs",
-      "owner": "core",
-      "reason": "Unit test of matching native view replies across a page reload. \"terminal\" is only the plugin and surface name in synthetic records; a fixture id (`plain-view`) would replace it."
     },
     {
       "file": "e2e/test/section-view-case.test.mjs",
@@ -302,54 +182,9 @@
       "reason": "\"view content reads the value that holds the shown text of each plugin\" -> plugin cohort (browser/editor/hwp/term/terminal), so it should move to each plugin; \"terminal content readiness preserves omitted blank cell characters\" -> plugin:terminal; \"view content refuses a missing, wrong or not presented value\" -> core (plain-view with a content-read command); \"view pixel crops include the capture content origin and scale once\" -> core (capture, any fixture); \"view pixel crops reject clipping and incomplete pixel storage\" -> core (capture, any fixture)"
     },
     {
-      "file": "e2e/test/view-display.test.mjs",
-      "owner": "core",
-      "reason": "Tests the view-display checker (recording, readiness, blank view, capture offset, presentation joins) and uses \"terminal\" only as a placeholder plugin id. Replace with plain-view plus a content-verifier/readiness capability."
-    },
-    {
       "file": "e2e/view-content.mjs",
       "owner": "mixed",
       "reason": "This helper (not a test) reads the shown content of each real plugin (`browser.content.read`, `editor.read`, hwp page SVG, `term`/`terminal.screen.read`) and builds the cases for those plugins. The per-plugin readers belong to plugin:browser, plugin:editor, plugin:hwp, plugin:term and plugin:terminal; the generic harness is core and should use a plain-view content-read command."
-    },
-    {
-      "file": "e2e/view-display.mjs",
-      "owner": "core",
-      "reason": "View-display harness that looks for a card holding \"the fixture terminal\". Replace with plain-view as the displayed view."
-    },
-    {
-      "file": "e2e/view-edges.test.mjs",
-      "owner": "core",
-      "reason": "Tests that a native view touches its card lines at each slot, using terminal surfaces as the native view. Replace with a native-view fixture (plain-view or view-drag with a native raster)."
-    },
-    {
-      "file": "e2e/view-restart.test.mjs",
-      "owner": "core",
-      "reason": "Tests view lifetime: restoring state, stopping after four failures and reopening after unload, using `browser.navigate`/`browser.reload`. Replace with a fake fixture that has restorable state, a crash/reload command and a location status."
-    },
-    {
-      "file": "e2e/view-start-handoff.test.mjs",
-      "owner": "core",
-      "reason": "Tests that core.file.open start parameters reach page views (`core.surface.document`), using editor and hwp as vehicles. Replace with a fixture that declares file types and publishes the received path/document (save-close or plain-view)."
-    },
-    {
-      "file": "e2e/wails-window-close-warning.test.mjs",
-      "owner": "core",
-      "reason": "Tests that closing a project window keeps the host available, using the editor and an .hwp fixture as the opened document. Replace with the save-close fixture with a document status."
-    },
-    {
-      "file": "e2e/window-close.test.mjs",
-      "owner": "core",
-      "reason": "Tests the close-window and quit modal flow for a modified tab, using `editor.edit`/`editor.document`. This is exactly the save-close fixture (modified document plus an edit command)."
-    },
-    {
-      "file": "e2e/window-occlusion.test.mjs",
-      "owner": "core",
-      "reason": "Tests that window occlusion hides a view's document, using a browser page title reporting visibility. Replace with plain-view/memory-saver publishing a document visibility status."
-    },
-    {
-      "file": "e2e/workbench-capture.test.mjs",
-      "owner": "core",
-      "reason": "Tests that the project-tab add control keeps contrast in second-drag frames, using `prepareTerminalDrag` from the terminal benchmark case. Replace with the view-drag fixture plan."
     },
     {
       "file": "scripts/measure-app-usage.mjs",

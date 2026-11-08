@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-terminal-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -720,8 +720,8 @@ test-app-section-design: $(E2E_BUILD)
 test-app-card-sidebar-current:
 	@pnpm -F @soksak/e2e run test-app:card-sidebar-current
 
-test-app-terminal-focus-current:
-	@pnpm -F @soksak/e2e run test-app:terminal-focus-current
+test-app-view-focus-current:
+	@pnpm -F @soksak/e2e run test-app:view-focus-current
 
 test-app-shutdown:
 	@pnpm -F @soksak/e2e run test-app:shutdown

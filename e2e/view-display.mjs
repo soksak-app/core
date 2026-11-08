@@ -112,15 +112,26 @@ export function colours(frame, rect) {
   return seen.size;
 }
 
-/** Runs the view display assertions; readRecording supplies decoded frames at the recording boundary. */
-export async function observeViewDisplay(s, t, readRecording = (directory) => frames(directory).map(readFrame), verifyContent, paramsForPlugin = () => undefined) {
-  const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
-  assert.ok(card, "no card holds the fixture terminal");
+/**
+ * Runs the view display assertions; readRecording supplies decoded frames at the recording boundary. `vehicles` names the view
+ * plugins to open, each of which must be an installed enabled view plugin; without it every installed enabled view plugin opens.
+ */
+export async function observeViewDisplay(s, t, readRecording = (directory) => frames(directory).map(readFrame), verifyContent, paramsForPlugin = () => undefined, vehicles) {
+  // Each view opens as a new tab of the focused card, the card of the start tab of the check.
+  const card = (await s.get("core.grid")).cards.find((item) => item.focused);
+  assert.ok(card, "the grid has no focused card for the opened views");
   const installed = await s.get("core.plugins");
   assert.equal(installed.error, null, `installed plugins failed: ${installed.error}`);
-  const views = installed.plugins.filter((plugin) => plugin.installed?.enabled && plugin.composition === "view");
-  t.diagnostic(`installed view plugins: ${views.map((plugin) => plugin.id).join(", ") || "none"}`);
-  assert.ok(views.length > 0, `core.plugins lists no installed enabled plugin with composition view: ${JSON.stringify(installed.plugins)}`);
+  const installedViews = installed.plugins.filter((plugin) => plugin.installed?.enabled && plugin.composition === "view");
+  t.diagnostic(`installed view plugins: ${installedViews.map((plugin) => plugin.id).join(", ") || "none"}`);
+  const views = vehicles === undefined ? installedViews : vehicles.map((id) => {
+    const view = installedViews.find((plugin) => plugin.id === id);
+    assert.ok(view, `${id} is not an installed enabled view plugin: ${JSON.stringify(installed.plugins)}`);
+    return view;
+  });
+  assert.ok(views.length > 0, vehicles === undefined
+    ? `core.plugins lists no installed enabled plugin with composition view: ${JSON.stringify(installed.plugins)}`
+    : "the display check names no view plugin to open");
   for (const view of views) {
     const recording = await s.record({});
     let displayed = 0;
@@ -167,8 +178,11 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
   assert.deepEqual((await s.get("core.workbench.audit")).unbound, [], "workbench controls without a command or element name");
 }
 
-/** Requires each installed view to have an explicit content case before accepting its display. */
-export async function checkViewDisplay(s, t, readRecording, contentCases = new Map()) {
+/**
+ * Opens each view plugin of `vehicles` (by default the plugins of the content cases) and requires each to have an explicit content
+ * case before accepting its display.
+ */
+export async function checkViewDisplay(s, t, readRecording, contentCases = new Map(), vehicles = [...contentCases.keys()]) {
   await observeViewDisplay(s, t, readRecording, async (observation) => {
     const content = contentCases.get(observation.plugin);
     assert.equal(typeof content?.ready, "function",
@@ -177,5 +191,5 @@ export async function checkViewDisplay(s, t, readRecording, contentCases = new M
     assert.equal(typeof verifyShown, "function",
       `${observation.plugin}: tab ${observation.tab} has no content verifier`);
     return verifyShown;
-  }, (plugin) => contentCases.get(plugin)?.params);
+  }, (plugin) => contentCases.get(plugin)?.params, vehicles);
 }

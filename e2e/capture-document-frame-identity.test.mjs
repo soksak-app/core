@@ -1,6 +1,7 @@
-// Checks that captured ScreenCaptureKit pixels carry the identity of a live plugin root WebKit document.
+// Checks that captured ScreenCaptureKit pixels carry the identity of a live plugin root WebKit document. The document is the root
+// document of a `layoutprobe2` tab, a view without regions, so no native child region covers it.
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
@@ -9,32 +10,29 @@ import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check
 import { fresh } from "./fixture.mjs";
 import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "./document-frame-identity.mjs";
 
+/** The fixture plugin whose root document the capture identifies: a view without regions. */
+const ROOT_VIEW = "layoutprobe2";
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: document-frame identity matches captured WebKit root pixels`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { performanceTrace: true });
-    const project = await s.get("core.project");
-    assert.ok(typeof project?.root === "string" && project.root.length > 0,
-      `the fixture project has no root: ${JSON.stringify(project)}`);
-    const relativePath = `document-frame-identity-${app.name}.txt`;
-    const fixturePath = join(project.root, relativePath);
-    writeFileSync(fixturePath, "A controlled WebKit root document for capture identity.\n");
-    s.cleanup(() => rmSync(fixturePath, { force: true }));
-
+    // Every card shows a tab of the view without regions, so no native region of another tab covers the identity ROI.
     const grid = await s.get("core.grid");
-    for (const card of documentIdentityCardIds(grid)) await s.run("core.card.add-tab", { card, plugin: "editor" });
-
     const offsets = currentEventOffsets(s.app.configDir);
-    const opened = await s.run("core.file.open", { path: relativePath });
-    assert.equal(typeof opened?.tab, "string", "core.file.open returned no editor surface");
+    let opened;
+    for (const card of documentIdentityCardIds(grid)) {
+      const { tab } = await s.run("core.card.add-tab", { card, plugin: ROOT_VIEW });
+      if (card === grid.cards.find((item) => item.focused)?.id) opened = { tab };
+    }
+    assert.equal(typeof opened?.tab, "string", "no tab of the focused card holds the root view");
     const visible = await s.until("core.surfaces", (surfaces) => surfaces.find((item) =>
-      item.surface === opened.tab && item.plugin === "editor" && item.visible
+      item.surface === opened.tab && item.plugin === ROOT_VIEW && item.visible
         && item.exposes.includes("status core.surface.document")),
-    `editor surface ${opened.tab} did not become visible`);
-    assert.ok(visible, `editor surface ${opened.tab} is not visible`);
-    await s.until("core.surface.document", (document) => document?.readyState === "complete"
-      && document.params?.path === relativePath,
-    `editor surface ${opened.tab} did not mount the controlled file`, { surface: opened.tab });
+    `root view surface ${opened.tab} did not become visible`);
+    assert.ok(visible, `root view surface ${opened.tab} is not visible`);
+    await s.until("core.surface.document", (document) => document?.readyState === "complete",
+      `root view surface ${opened.tab} did not load its document`, { surface: opened.tab });
     await s.presented();
 
     await s.flushLog();
@@ -42,7 +40,7 @@ for (const app of Object.values(APPS)) {
     const generation = viewGenerationForSurface(trace, opened.tab);
     const host = await s.get("host.window");
     const rootDocument = host.documents.find((item) => item.surface === opened.tab && item.document === "" && item.visible);
-    assert.ok(rootDocument, `editor surface ${opened.tab} has no visible native WebKit root document`);
+    assert.ok(rootDocument, `root view surface ${opened.tab} has no visible native WebKit root document`);
     assert.ok(host.regions.every((region) => !region.visible),
       `a visible native child region can cover the document identity ROI: ${JSON.stringify(host.regions.filter((region) => region.visible))}`);
 
