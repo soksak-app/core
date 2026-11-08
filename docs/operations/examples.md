@@ -305,7 +305,7 @@ A value is the median of its runs, and the spread of a value is the range of its
 | S3 | 30 repetitions of a tab of every installed surface plugin, a split, a plugin apply, a project window, the settings window opened and closed, a menu opened and closed and a divider drag | `make measure-object-counts BUILD=release REPETITIONS=30` | G3 |
 | S4 | S1 for 60 minutes without input | `make measure-host-allocations MINUTES=60`, the `runtime` figures of `diagnostics.objects`, `make measure-app-usage` | G3 |
 | S5 | Divider drag of a `terminal` tab; window maximise and restore | `make benchmark-view-drag`, `make benchmark-resize-catch-up` | G3, G4, G8 |
-| S6 | Idle browser tab on a blank page | `make benchmark-idle-tab` | G6 |
+| S6 | Idle layout probe fixture tab with its document region | `make benchmark-idle-tab` | G6 |
 | S7 | First display, reclaim, total and drag of every plugin view | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
 | S8 | Key to prompt in a `terminal` tab and a `term` tab | `make benchmark-input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | S1 with a second window of the application, on the library screen, placed over the window of S1 so that its `host.window` reports `occluded` true | `make measure-app-usage STATE=S9` | G2 |

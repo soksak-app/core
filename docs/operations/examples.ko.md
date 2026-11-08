@@ -304,7 +304,7 @@ run은 application을 번갈아 실행한다: 각 scenario마다 어느 applicat
 | S3 | 설치된 모든 surface plugin의 tab, split, plugin apply, project 창, settings 창 열고 닫기, menu 열고 닫기, divider drag의 30번 반복 | `make measure-object-counts BUILD=release REPETITIONS=30` | G3 |
 | S4 | 입력 없이 60분 동안의 S1 | `make measure-host-allocations MINUTES=60`, `diagnostics.objects`의 `runtime` figure, `make measure-app-usage` | G3 |
 | S5 | `terminal` tab의 divider drag; 창 maximise와 restore | `make benchmark-view-drag`, `make benchmark-resize-catch-up` | G3, G4, G8 |
-| S6 | 빈 page의 idle browser tab | `make benchmark-idle-tab` | G6 |
+| S6 | document region을 가진 idle layout probe fixture tab | `make benchmark-idle-tab` | G6 |
 | S7 | 모든 plugin view의 첫 표시, 회수, 합계, drag | `e2e/benchmark/{browser,editor,hwp,terminal,term}-view.test.mjs`, `e2e/benchmark/section-view.test.mjs`, `e2e/benchmark/editor-footprint.test.mjs` | G4 |
 | S8 | `terminal` tab과 `term` tab에서 key부터 prompt까지 | `make benchmark-input-latency` (`e2e/input-latency.test.mjs`) | G7 |
 | S9 | application의 두 번째 창을 library 화면으로 S1 창 위에 놓아 그 `host.window`가 `occluded` true를 보고하는 S1 | `make measure-app-usage STATE=S9` | G2 |

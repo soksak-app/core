@@ -1,6 +1,7 @@
 // The split, resize, reload and WebView churn stress, shared by the window check e2e/split-load-memory.test.mjs, which runs one round and
 // judges only the behaviour, and its benchmark e2e/benchmark/split-load.test.mjs, which runs SPLIT_LOAD_ROUNDS rounds and judges the host
-// RSS growth against SPLIT_LOAD_GROWTH_BOUND_KB. Each round samples the resident set size of the host process from the process table.
+// RSS growth against SPLIT_LOAD_GROWTH_BOUND_KB. Each round splits a card of fixture tabs (STRESS_TABS) off the card of the start tab
+// and closes it, and samples the resident set size of the host process from the process table.
 import assert from "node:assert/strict";
 import { realpathSync } from "node:fs";
 
@@ -12,6 +13,12 @@ import { failureWithSlowestPhase, readPhases } from "../../reload-phases.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";
 import { performanceGoalBound } from "./performance-goals.mjs";
+
+/**
+ * The tabs of the card that each round splits off and closes, by plugin: the plain view probe (a view and an empty document region),
+ * the layout probe (a view and its plugin document region) and the raster probe (a view, a native image region and its sidecar).
+ */
+export const STRESS_TABS = Object.freeze(["probeplain", "layoutprobe", "rasterprobe"]);
 
 /** The number of rounds of the benchmark. */
 export const SPLIT_LOAD_ROUNDS = 32;
@@ -59,20 +66,24 @@ function gridCards(grid) {
 export const STRESS_FIXTURE = Object.freeze({ ...fixtureSettings(B3_SETTINGS["split-load"]), reads: Object.freeze(["host.endpoint.call"]) });
 
 /**
- * Resets the fixture and reads the start state of the stress: the window, the card grid, the document inventory, the host RSS before the stress,
- * the position of the event log from which the phases of each round are read, and the B3 conditions of the prepared window.
+ * Resets the fixture and reads the start state of the stress: the card that holds the start tab, which each round splits, the window,
+ * the card grid, the document inventory, the host RSS before the stress, the position of the event log from which the phases of each
+ * round are read, and the B3 conditions of the prepared window.
  */
 export async function startStress(s, app) {
-  await fresh(s, STRESS_FIXTURE);
+  const start = await fresh(s, STRESS_FIXTURE);
   const conditions = await b3Conditions(s, B3_SETTINGS["split-load"]);
   const initialWindow = await s.get("host.window");
   const initialGrid = await s.get("core.grid");
+  const source = initialGrid.cards.find((card) => card.tabs?.some((tab) => tab.id === start.surface))?.id;
+  assert.ok(source, `the start tab ${start.surface} is in no card of the stress layout`);
   const baseline = hostRssKb(app.configDir);
   assert.ok(Number.isInteger(baseline), "host RSS was not measurable before stress");
   // The records of the requests before the stress are written first, so the first read starts at the stress.
   await s.flushLog();
   return {
     app,
+    source,
     conditions,
     initialWindow,
     initialGrid,
@@ -98,20 +109,27 @@ export async function recordPhases(s, ctx) {
   }
 }
 
-/** One round: a split of the source card, a resize, three reloads, the close of the split card, and the host RSS before and after the close. */
+/**
+ * One round: a split of the source card with a card of the tabs STRESS_TABS, a resize, three reloads, the close of the split card, and
+ * the host RSS before and after the close.
+ */
 export async function stressRound(s, ctx, round) {
   const { initialWindow } = ctx;
   const before = await s.get("core.grid");
-  const source = gridCards(before).find((card) => card.id === "terminal") ?? gridCards(before)[0];
-  assert.ok(source, "stress layout has no source card");
+  const source = gridCards(before).find((card) => card.id === ctx.source);
+  assert.ok(source, `stress layout has no source card ${ctx.source}`);
   await s.run("core.card.focus", { card: source.id });
   await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === source.id)?.focused === true,
     `stress source card ${source.id} did not focus`);
-  const result = await s.run("core.card.split", { card: source.id, side: "right", plugin: "browser" });
+  const [first, ...more] = STRESS_TABS;
+  const result = await s.run("core.card.split", { card: source.id, side: "right", plugin: first });
   const made = [result.card];
   ctx.created.push(result.card);
   await s.until("core.grid", (grid) => grid.cards.some((card) => card.id === result.card),
     `split ${result.card} did not appear`);
+  for (const plugin of more) await s.run("core.card.add-tab", { card: result.card, plugin });
+  await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === result.card)?.tabs?.length === STRESS_TABS.length,
+    `split ${result.card} did not hold the tabs ${STRESS_TABS.join(", ")}`);
   const width = round % 2 === 0 ? Math.max(640, initialWindow.content.width - 240) : initialWindow.content.width + 160;
   await s.run("host.window.resize", { width, height: initialWindow.content.height });
   await s.until("host.window", (window) => window.content.width === width, `stress resize did not reach ${width}`);

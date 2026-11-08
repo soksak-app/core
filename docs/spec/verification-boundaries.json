@@ -87,11 +87,6 @@
       "reason": "Checks HWP document history, studio bounds and native marker replies."
     },
     {
-      "file": "e2e/benchmark/cases/idle-tab.mjs",
-      "owner": "core",
-      "reason": "Measures the memory cost of an idle tab and document region (measurement harness) with a browser on a blank page; replace with a plain-view probe tab that has a document region."
-    },
-    {
       "file": "e2e/benchmark/cases/marker-view.mjs",
       "owner": "core",
       "reason": "Generic marker-colour layout and drag measurement harness that names editor and section views only as users; it needs a fixture view that paints `markerColor`."
@@ -100,11 +95,6 @@
       "file": "e2e/benchmark/cases/section-view.mjs",
       "owner": "core",
       "reason": "Measures the section-view contract over whatever plugins are installed (measurement harness); replace with a fixture plugin that declares a section view."
-    },
-    {
-      "file": "e2e/benchmark/cases/split-load.mjs",
-      "owner": "core",
-      "reason": "Split, resize, reload and WebView churn stress on host RSS, with terminal or browser as tabs; replace with plain-view probe tabs."
     },
     {
       "file": "e2e/benchmark/editor-footprint.test.mjs",
