@@ -608,7 +608,7 @@ func TestAHostCallIsRecorded(t *testing.T) {
 		"workspace":   func(context.Context, json.RawMessage) (any, error) { return nil, errors.New("no store") },
 		"performance": func(context.Context, json.RawMessage) (any, error) { return nil, nil },
 	})
-	f.calls.Observe(f.events.Call)
+	f.calls.Observe(f.events.Clock(), f.events.Call)
 	f.follow("debug")
 	f.call("windowReady", nil)
 	event := f.host.event(t, "workbench.call")
@@ -638,9 +638,34 @@ func TestAHostCallIsRecorded(t *testing.T) {
 	}
 }
 
+// workbench.call has the time of the end of the call: the step of its answer runs later on the main thread, and that delay does not
+// move the event, so the start of the call (its time less micros) is not after the request that the call made of the host.
+func TestAHostCallIsRecordedAtItsEndAndNotAtTheStepOfItsAnswer(t *testing.T) {
+	f := newWriter(t, map[string]workbench.HostCall{
+		"windowReady": func(context.Context, json.RawMessage) (any, error) { return nil, nil },
+	})
+	f.calls.Observe(f.events.Clock(), f.events.Call)
+	f.follow("debug")
+	f.sent()
+	answered := false
+	f.calls.Call("windowReady", nil, func(any, error) { answered = true })
+	answer := <-f.queue
+	f.host.pass(5 * time.Millisecond)
+	answer()
+	if !answered {
+		t.Fatal("the step of the answer did not answer the call")
+	}
+	f.events.Info("place: after the answer")
+	f.sent()
+	call, after := f.host.event(t, "workbench.call"), f.host.event(t, "workbench.record.info")
+	if gap := after["mono_ns"].(float64) - call["mono_ns"].(float64); gap != float64(5*time.Millisecond) {
+		t.Fatalf("the call is recorded %v ns before the record that follows its answer 5 ms later: %v", gap, call)
+	}
+}
+
 func TestTheLogCallIsNotRecorded(t *testing.T) {
 	f := newWriter(t, nil)
-	f.calls.Observe(f.events.Call)
+	f.calls.Observe(f.events.Clock(), f.events.Call)
 	f.follow("trace")
 	f.events.Error("place: first")
 	f.sent()
@@ -653,7 +678,7 @@ func TestACallStatesTheCodeOfItsRefusal(t *testing.T) {
 	f := newWriter(t, map[string]workbench.HostCall{
 		"windowNew": func(context.Context, json.RawMessage) (any, error) { return nil, workbench.Refuse(1003, "no window") },
 	})
-	f.calls.Observe(f.events.Call)
+	f.calls.Observe(f.events.Clock(), f.events.Call)
 	f.follow("warn")
 	f.call("windowNew", nil)
 	if got := f.host.event(t, "workbench.call")["fields"].(map[string]any)["error"]; got != "1003: no window" {
@@ -665,7 +690,7 @@ func TestASidecarSendCarriesTheIdentifiersOfItsArguments(t *testing.T) {
 	f := newWriter(t, map[string]workbench.HostCall{
 		"sidecarSend": func(context.Context, json.RawMessage) (any, error) { return nil, nil },
 	})
-	f.calls.Observe(f.events.Call)
+	f.calls.Observe(f.events.Clock(), f.events.Call)
 	f.follow("debug")
 	f.call("sidecarSend", map[string]any{"sidecar": "vt", "cids": []string{"op-1"}})
 	f.call("sidecarSend", map[string]any{"sidecar": "vt", "cids": []string{}})
@@ -684,7 +709,7 @@ func TestAViewSidecarSendCarriesTheIdentifiersOfItsArguments(t *testing.T) {
 	f := newWriter(t, map[string]workbench.HostCall{
 		"viewSidecarSend": func(context.Context, json.RawMessage) (any, error) { return nil, nil },
 	})
-	f.calls.Observe(f.events.Call)
+	f.calls.Observe(f.events.Clock(), f.events.Call)
 	f.follow("debug")
 	f.call("viewSidecarSend", map[string]any{"source": "tab-1", "generation": 3, "sidecar": "vt", "surface": "tab-1", "cids": []string{"op-2"}})
 	f.call("viewSidecarSend", map[string]any{"source": "tab-1", "generation": 3, "sidecar": "vt", "surface": "tab-1"})
@@ -787,7 +812,7 @@ func TestTheWriterOfTheHostStoresTheEvents(t *testing.T) {
 	}, f.queue.post)
 	events := workbench.NewEvents(workbench.EventsOptions{Calls: calls, Post: f.queue.post, Report: func(line string) { t.Errorf("the writer reported %s", line) }, Now: time.Now,
 		After: func(time.Duration, func()) {}})
-	calls.Observe(events.Call)
+	calls.Observe(events.Clock(), events.Call)
 	ready, answered, ended := false, false, false
 	events.Begin(func() { ready = true })
 	f.queue.until(t, func() bool { return ready })

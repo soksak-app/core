@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, paintProbeDocument, placeholderTabs, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, paintProbeDocument, placeholderTabs, pluginChangeStarted, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -264,4 +264,54 @@ test("the document region of a layout probe tab is painted after its document re
   applies = false;
   await assert.rejects(paintProbeDocument(s, "probe-1", "rgb(250, 250, 250)"),
     /probe-1 did not paint its document region rgb\(250, 250, 250\)/);
+});
+
+test("a plugin change waits for the new start in the event log and reads the workbench only when the page is ready again", async (t) => {
+  const configDir = mkdtempSync(join(tmpdir(), "check-plugin-change-"));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  mkdirSync(join(configDir, "logs"));
+  writeFileSync(join(configDir, "log-policy.json"),
+    JSON.stringify({ schema: 1, classes: { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" } }));
+  const log = join(configDir, "logs", "host-1-10.jsonl");
+  let seq = 0;
+  const write = (event, fields) => appendFileSync(log,
+    `${JSON.stringify({ ts_us: 1791000000000000 + ++seq, seq, level: "info", layer: "workbench", event, fields })}\n`);
+  write("log.open", { schema: 3 });
+  // The page starts again after the command answers. Until the host reports it ready, a page status refuses as the host does
+  // (1003), so a watch of core.window.workbench ends with that refusal, which ended the cleanup of the outdated-service check.
+  let workbench = { start: "old", readyState: "complete" };
+  let ready = true;
+  const notReady = () => Object.assign(new Error("the main page is not ready"), { code: 1003 });
+  const calls = [];
+  const s = {
+    app: { configDir },
+    get: async (name) => {
+      calls.push(["get", name]);
+      if (name !== "core.window.workbench") throw new Error(`unexpected status ${name}`);
+      if (!ready) throw notReady();
+      return workbench;
+    },
+    until: async (name) => { calls.push(["until", name]); throw notReady(); },
+    windows: async () => {
+      calls.push(["windows"]);
+      workbench = { start: "new", readyState: "complete" };
+      ready = true;
+    },
+  };
+  const change = async () => {
+    calls.push(["run"]);
+    ready = false;
+    write("workbench.start", { url: "app://new" });
+    return { reloaded: true };
+  };
+  const { workbench: started, result } = await pluginChangeStarted(s, change, "disabling probe");
+  assert.deepEqual(started, { start: "new", readyState: "complete" });
+  assert.deepEqual(result, { reloaded: true });
+  assert.deepEqual(calls, [["get", "core.window.workbench"], ["run"], ["windows"], ["get", "core.window.workbench"]]);
+
+  // A change that does not start the workbench again fails with its action.
+  workbench = { start: "same", readyState: "complete" };
+  const same = { ...s, windows: async () => {} };
+  await assert.rejects(pluginChangeStarted(same, async () => { write("workbench.start", { url: "app://same" }); }, "enabling probe"),
+    /enabling probe did not start the workbench again/);
 });

@@ -69,6 +69,8 @@ type storedHost struct {
 	sessionTabs []string
 	// startFails tells that the start of the shell shows an error, so the fixture does not audit it.
 	startFails bool
+	// refusedFiles are the errors of refused stored files that the snapshot carries, projectsError and settingsError.
+	refusedFiles map[string]string
 	// retains holds the argument of each sidecarsRetain call.
 	retains []json.RawMessage
 	failing map[string]error
@@ -455,7 +457,11 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"projects": json.RawMessage(projects), "open": h.open, "common": h.common}, nil
+		snapshot := map[string]any{"projects": json.RawMessage(projects), "open": h.open, "common": h.common}
+		for member, text := range h.refusedFiles {
+			snapshot[member] = text
+		}
+		return snapshot, nil
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
 		return nil, nil

@@ -14,7 +14,7 @@ import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { fresh, reading } from "./fixture.mjs";
+import { fresh, pluginChangeStarted, reading } from "./fixture.mjs";
 import { addRasterTab, RASTER, RASTER_SIDECAR as SIDECAR } from "./raster-probe.mjs";
 
 /** A fixture plugin that does not name the sidecar: disabling and enabling it makes the host read installed.json again. */
@@ -27,13 +27,9 @@ function replaceFile(file, text) {
   renameSync(temporary, file);
 }
 
-/** Runs a plugin change, which starts the workbench of the window again, and waits until the new start is ready. */
-async function change(s, action, plugin = OTHER) {
-  const before = (await s.get("core.window.workbench")).start;
-  await s.run(`core.plugins.${action}`, { plugin });
-  await s.until("core.window.workbench", (value) => value.start !== before && value.readyState === "complete", `${action} did not reload the window`);
-  await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `the workbench did not report ready after ${action}`);
-}
+/** Runs a plugin change, which starts the workbench of the window again, and waits until the new start is ready (pluginChangeStarted). */
+const change = (s, action, plugin = OTHER) =>
+  pluginChangeStarted(s, () => s.run(`core.plugins.${action}`, { plugin }), `${action} ${plugin}`);
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the plugin page shows an outdated persistent service and replaces it`, { timeout: 120000 }, async (t) => {

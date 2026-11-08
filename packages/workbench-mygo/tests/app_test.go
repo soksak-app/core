@@ -217,6 +217,31 @@ func TestAStartThatFailsShowsItsFailureAsItsFirstScreen(t *testing.T) {
 	}
 }
 
+// A refused projects.json or settings.json does not fail the start: the workbench shows each error and starts without the file
+// (docs/spec/projects.md#settings).
+func TestAStartWithRefusedStoredFilesShowsTheirErrorsAndStarts(t *testing.T) {
+	stored := &storedHost{startFails: true, refusedFiles: map[string]string{
+		"projectsError": "/config/projects.json: projects.json: format must be 1",
+		"settingsError": "/config/settings.json: settings.json: format must be 1",
+	}}
+	app, window, queue, _ := fixtureApp(t, stored)
+	app.Build(window)
+	app.Shown(window)
+	queue.drain(t)
+	if !stored.called("windowReady") {
+		t.Fatalf("the start with refused stored files did not report the window ready; it called %v", stored.calls)
+	}
+	var texts []string
+	for _, event := range stored.written("workbench.record.error") {
+		texts = append(texts, fmt.Sprint(event["fields"]))
+	}
+	for _, text := range stored.refusedFiles {
+		if !slices.ContainsFunc(texts, func(line string) bool { return strings.Contains(line, text) }) {
+			t.Fatalf("the start did not show %q; it showed %v", text, texts)
+		}
+	}
+}
+
 // A window that names a project that is gone starts at the library, without an address that names it.
 func TestAStartLeavesAnAddressOfAnUnknownProject(t *testing.T) {
 	stored := &storedHost{}
