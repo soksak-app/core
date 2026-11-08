@@ -26,17 +26,17 @@ type viewRead struct {
 func TestACommandOfAViewIsAnOpenCallUntilItsReply(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
 	if got := status[[]openCallRead](t, r.f, "core.plugin.open-calls"); len(got) != 0 {
 		t.Fatalf("the open calls are %+v before a command", got)
 	}
-	r.ask(9, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	request := r.request(0)
 	got := status[[]openCallRead](t, r.f, "core.plugin.open-calls")
-	if len(got) != 1 || got[0].Plugin != "terminal" || got[0].Count != 1 || got[0].OldestStartedAt == nil || *got[0].OldestStartedAt <= 0 {
+	if len(got) != 1 || got[0].Plugin != "textprobe" || got[0].Count != 1 || got[0].OldestStartedAt == nil || *got[0].OldestStartedAt <= 0 {
 		t.Fatalf("the open calls are %+v", got)
 	}
-	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "terminal", "id": request["id"], "result": nil})
+	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "textprobe", "id": request["id"], "result": nil})
 	r.answer(9)
 	if got := status[[]openCallRead](t, r.f, "core.plugin.open-calls"); len(got) != 0 {
 		t.Fatalf("the open calls are %+v after the reply", got)
@@ -47,18 +47,18 @@ func TestACommandOfAViewIsAnOpenCallUntilItsReply(t *testing.T) {
 func TestATimeoutAndALateReplyCountAsLosses(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.close"})
-	r.ask(9, "command.run", `{"name": "terminal.close", "params": {}}`)
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.close"})
+	r.ask(9, "command.run", `{"name": "textprobe.close", "params": {}}`)
 	request := r.request(0)
 	r.answer(9)
 	got := status[[]lossRead](t, r.f, "core.plugin.losses")
-	if len(got) != 1 || got[0] != (lossRead{Plugin: "terminal", Timeouts: 1}) {
+	if len(got) != 1 || got[0] != (lossRead{Plugin: "textprobe", Timeouts: 1}) {
 		t.Fatalf("the losses are %+v", got)
 	}
-	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "terminal", "id": request["id"], "result": nil})
+	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "textprobe", "id": request["id"], "result": nil})
 	r.f.pending.drain(t)
 	got = status[[]lossRead](t, r.f, "core.plugin.losses")
-	if len(got) != 1 || got[0] != (lossRead{Plugin: "terminal", Timeouts: 1, LateReplies: 1}) {
+	if len(got) != 1 || got[0] != (lossRead{Plugin: "textprobe", Timeouts: 1, LateReplies: 1}) {
 		t.Fatalf("the losses after the late reply are %+v", got)
 	}
 }
@@ -67,13 +67,13 @@ func TestATimeoutAndALateReplyCountAsLosses(t *testing.T) {
 func TestASurfaceThatClosesLosesItsOpenCalls(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	r.ask(9, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	r.request(0)
 	r.f.run("core.tab.close", map[string]string{"tab": surface})
 	r.f.pending.drain(t)
 	got := status[[]lossRead](t, r.f, "core.plugin.losses")
-	if len(got) != 1 || got[0] != (lossRead{Plugin: "terminal", PeerLost: 1}) {
+	if len(got) != 1 || got[0] != (lossRead{Plugin: "textprobe", PeerLost: 1}) {
 		t.Fatalf("the losses are %+v", got)
 	}
 	if open := status[[]openCallRead](t, r.f, "core.plugin.open-calls"); len(open) != 0 {
@@ -85,8 +85,8 @@ func TestASurfaceThatClosesLosesItsOpenCalls(t *testing.T) {
 func TestAViewThatEndsCountsNoLoss(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	r.ask(9, "command.run", `{"name": "terminal.input", "params": {}}`)
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {}}`)
 	r.request(0)
 	r.emit("view-process-ended", map[string]any{"surface": surface, "generation": 1})
 	r.answer(9)
@@ -99,7 +99,7 @@ func TestAViewThatEndsCountsNoLoss(t *testing.T) {
 func TestTheResponsivenessOfAViewFollowsItsNotices(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
 	r.emit("view-responsiveness", map[string]any{"surface": surface, "generation": 7, "responsive": false})
 	r.f.pending.drain(t)
 	if got := status[[]viewRead](t, r.f, "core.plugin.views"); len(got) != 0 {
@@ -108,7 +108,7 @@ func TestTheResponsivenessOfAViewFollowsItsNotices(t *testing.T) {
 	r.emit("view-responsiveness", map[string]any{"surface": surface, "generation": 1, "responsive": false})
 	r.f.pending.drain(t)
 	got := status[[]viewRead](t, r.f, "core.plugin.views")
-	if len(got) != 1 || got[0] != (viewRead{Plugin: "terminal", Surface: surface, Responsive: false}) {
+	if len(got) != 1 || got[0] != (viewRead{Plugin: "textprobe", Surface: surface, Responsive: false}) {
 		t.Fatalf("the views are %+v", got)
 	}
 	r.emit("view-responsiveness", map[string]any{"surface": surface, "generation": 1, "responsive": true})
@@ -129,14 +129,14 @@ func TestANoticeOfAnotherGenerationIsRecorded(t *testing.T) {
 	stored.classes, stored.common = traceClasses(), map[string]any{"diagnostics.log": traceClasses()}
 	r := newViewRelayOn(t, stored)
 	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.input"})
-	r.emit("view-responsiveness", map[string]any{"surface": surface, "plugin": "terminal", "generation": 7, "responsive": false})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	r.emit("view-responsiveness", map[string]any{"surface": surface, "plugin": "textprobe", "generation": 7, "responsive": false})
 	r.f.pending.drain(t)
 	got := stored.written("workbench.view.event.cancel")
 	if len(got) != 1 {
 		t.Fatalf("the host received %v", got)
 	}
-	if fields := got[0]["fields"].(map[string]any); fields["plugin"] != "terminal" || fields["surface"] != surface || fields["event"] != "view-responsiveness" {
+	if fields := got[0]["fields"].(map[string]any); fields["plugin"] != "textprobe" || fields["surface"] != surface || fields["event"] != "view-responsiveness" {
 		t.Fatalf("the fields are %v", fields)
 	}
 }
@@ -148,7 +148,7 @@ func TestAnAbandonedPresentationCountsALoss(t *testing.T) {
 	r.emit("view-presentation-abandoned", map[string]any{"surface": surface, "reason": "surface-closed"})
 	r.f.pending.drain(t)
 	got := status[[]lossRead](t, r.f, "core.plugin.losses")
-	if len(got) != 1 || got[0] != (lossRead{Plugin: "terminal", Abandoned: 1}) {
+	if len(got) != 1 || got[0] != (lossRead{Plugin: "textprobe", Abandoned: 1}) {
 		t.Fatalf("the losses are %+v", got)
 	}
 }

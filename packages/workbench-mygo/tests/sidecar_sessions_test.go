@@ -98,7 +98,7 @@ func TestTheSectionsOfTheShownProjectAreRetained(t *testing.T) {
 	f.run("core.tab.close", map[string]string{"tab": "tab-bbbbbb"})
 	f.settle()
 	calls := retained(t, stored)
-	if len(calls) != 1 || !strings.Contains(strings.Join(calls[0], ","), "/a spc-aaaaaa/left/files.tree") {
+	if len(calls) != 1 || !strings.Contains(strings.Join(calls[0], ","), "/a spc-aaaaaa/left/fieldprobe.tree") {
 		t.Fatalf("retained %v", calls)
 	}
 }
@@ -118,7 +118,7 @@ func TestARetainNamesThePluginOfEachSurface(t *testing.T) {
 	for _, item := range request.Surfaces {
 		plugins[item.Surface] = item.Plugin
 	}
-	if plugins["tab-aaaaaa"] != "notes" || plugins["spc-aaaaaa/left/files.tree"] != "files" {
+	if plugins["tab-aaaaaa"] != "notes" || plugins["spc-aaaaaa/left/fieldprobe.tree"] != "fieldprobe" {
 		t.Fatalf("retained %v", plugins)
 	}
 }
@@ -141,7 +141,7 @@ func TestTheStartKeepsTheSessionsOfTheSectionsOfTheStoredLayouts(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("retained %v", calls)
 	}
-	for _, want := range []string{"/a tab-aaaaaa", "/a spc-aaaaaa/left/files.tree", "/a spc-aaaaaa/" + card + ":left/files.tree"} {
+	for _, want := range []string{"/a tab-aaaaaa", "/a spc-aaaaaa/left/fieldprobe.tree", "/a spc-aaaaaa/" + card + ":left/fieldprobe.tree"} {
 		if !slices.Contains(calls[0], want) {
 			t.Fatalf("the start retains %v, without %s", calls[0], want)
 		}
@@ -165,7 +165,7 @@ func TestARetainKeepsTheSectionsOfTheSpacesThatAreNotShown(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("retained %v", calls)
 	}
-	for _, want := range []string{"/b spc-bbbbbb/left/files.tree", "/b spc-bbbbbb/" + card + ":left/files.tree"} {
+	for _, want := range []string{"/b spc-bbbbbb/left/fieldprobe.tree", "/b spc-bbbbbb/" + card + ":left/fieldprobe.tree"} {
 		if !slices.Contains(calls[0], want) {
 			t.Fatalf("the retain holds %v, without %s", calls[0], want)
 		}
@@ -179,7 +179,7 @@ func TestARetainTakesTheSetsOfEachProject(t *testing.T) {
 	other["spaces"].([]map[string]any)[0]["id"] = "spc-bbbbbb"
 	other["activeSpaceId"] = "spc-bbbbbb"
 	other["settings"] = map[string]any{
-		"sets":  []any{map[string]any{"id": "mine", "title": "mine", "sections": []any{"files.bookmarks"}, "layout": "list"}},
+		"sets":  []any{map[string]any{"id": "mine", "title": "mine", "sections": []any{"fieldprobe.bookmarks"}, "layout": "list"}},
 		"links": []any{map[string]any{"place": "left", "plugin": nil, "set": "mine"}},
 	}
 	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes")), other}}
@@ -188,26 +188,26 @@ func TestARetainTakesTheSetsOfEachProject(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("retained %v", calls)
 	}
-	if !slices.Contains(calls[0], "/b spc-bbbbbb/left/files.bookmarks") || slices.Contains(calls[0], "/b spc-bbbbbb/left/files.tree") {
+	if !slices.Contains(calls[0], "/b spc-bbbbbb/left/fieldprobe.bookmarks") || slices.Contains(calls[0], "/b spc-bbbbbb/left/fieldprobe.tree") {
 		t.Fatalf("the retain holds %v, want the set of the project prj-b", calls[0])
 	}
-	if !slices.Contains(calls[0], "/a spc-aaaaaa/left/files.tree") {
+	if !slices.Contains(calls[0], "/a spc-aaaaaa/left/fieldprobe.tree") {
 		t.Fatalf("the retain holds %v, without the common set of the project prj-a", calls[0])
 	}
 }
 
 // A card draws the side that the plugin of its active tab links, and the other tabs of the card can become active.
 func TestARetainKeepsTheLinkedSideOfEachTabOfACard(t *testing.T) {
-	project := storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "browser"))
+	project := storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "boxprobe"))
 	project["settings"] = map[string]any{
-		"sets":  []any{map[string]any{"id": "mine", "title": "mine", "sections": []any{"browser.history"}, "layout": "list"}},
-		"links": []any{map[string]any{"place": "card-top", "plugin": "browser", "set": "mine"}},
+		"sets":  []any{map[string]any{"id": "mine", "title": "mine", "sections": []any{"boxprobe.history"}, "layout": "list"}},
+		"links": []any{map[string]any{"place": "card-top", "plugin": "boxprobe", "set": "mine"}},
 	}
 	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]
 	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{project}}
 	newShell(t, stored)
 	calls := retained(t, stored)
-	want := "/a spc-aaaaaa/" + card["id"].(string) + ":top/browser.history"
+	want := "/a spc-aaaaaa/" + card["id"].(string) + ":top/boxprobe.history"
 	if len(calls) != 1 || !slices.Contains(calls[0], want) {
 		t.Fatalf("retained %v, without %s", calls, want)
 	}
@@ -233,11 +233,11 @@ func TestAFailedRetainIsShown(t *testing.T) {
 
 func TestTheStartRemovesTheStoredEntriesOfSurfacesInNoLayout(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))},
-		sessionTabs: []string{"spc-aaaaaa/left/files.tree", "spc-gone/left/files.tree", "tab-aaaaaa", "tab-gone"},
+		sessionTabs: []string{"spc-aaaaaa/left/fieldprobe.tree", "spc-gone/left/fieldprobe.tree", "tab-aaaaaa", "tab-gone"},
 		tabState:    map[string]any{"format": 1, "tabs": map[string]any{"tab-aaaaaa": map[string]any{"kept": true}, "tab-gone": map[string]any{"kept": true}}}}
 	f := newTabShell(t, stored)
 	slices.Sort(f.sessionPuts)
-	equal(t, f.sessionPuts, []string{"spc-gone/left/files.tree", "tab-gone"})
+	equal(t, f.sessionPuts, []string{"spc-gone/left/fieldprobe.tree", "tab-gone"})
 	f.timers.tick(1000)
 	f.settle()
 	equal(t, f.keptPuts, []string{`{"entry":null,"kind":"tabStatePut","tab":"tab-gone"}`})

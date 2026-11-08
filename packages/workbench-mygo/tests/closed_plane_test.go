@@ -75,7 +75,7 @@ func TestAHeldBoundaryMovesNoBoundaryOfAnotherSpace(t *testing.T) {
 	f.answerText("core.space.add", nil)
 	f.settle()
 	second := f.host.projects[0]["activeSpaceId"].(string)
-	made, err := f.answer("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "terminal"})
+	made, err := f.answer("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestNoCommandStopsTheHostAfterItsProjectClosed(t *testing.T) {
 		f, left, right := splitShell(t)
 		tab := f.tabsOf(right)[0].(map[string]any)["id"]
 		raw, err := json.Marshal(map[string]any{"card": left, "tab": tab, "id": left, "side": "left", "zone": "center",
-			"plugin": "terminal", "name": "x", "axis": "width", "size": 10, "title": "x", "from": left, "to": right})
+			"plugin": "textprobe", "name": "x", "axis": "width", "size": 10, "title": "x", "from": left, "to": right})
 		if err != nil {
 			t.Fatal(err)
 		}

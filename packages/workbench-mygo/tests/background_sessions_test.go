@@ -315,7 +315,7 @@ func TestTheHostSidecarsShareOneOrderAndOneRegistrationOfAPair(t *testing.T) {
 		"sidecarSend":   recordCall(&calls, "send", queue),
 	}, func(task func()) { task() })
 	sidecars := workbench.NewHostSidecars(host, func(text string) { calls = append(calls, "report "+text) })
-	port := sidecars.Port("files")
+	port := sidecars.Port("fieldprobe")
 	var messages []string
 	var stops []func()
 	listen := func() {
@@ -331,8 +331,8 @@ func TestTheHostSidecarsShareOneOrderAndOneRegistrationOfAPair(t *testing.T) {
 	}
 	listen()
 	listen()
-	sidecars.Message("files", "a", json.RawMessage(`{"n":1}`))
-	sidecars.Message("files", "b", json.RawMessage(`{"n":2}`))
+	sidecars.Message("fieldprobe", "a", json.RawMessage(`{"n":1}`))
+	sidecars.Message("fieldprobe", "b", json.RawMessage(`{"n":2}`))
 	sidecars.Message("other", "a", json.RawMessage(`{"n":3}`))
 	equal(t, messages, []string{`{"n":1}`, `{"n":1}`})
 	sent := make(chan struct{})
@@ -345,16 +345,16 @@ func TestTheHostSidecarsShareOneOrderAndOneRegistrationOfAPair(t *testing.T) {
 	<-sent
 	stops[0]()
 	equal(t, len(messages), 2)
-	sidecars.Message("files", "a", json.RawMessage(`{"n":4}`))
+	sidecars.Message("fieldprobe", "a", json.RawMessage(`{"n":4}`))
 	equal(t, len(messages), 3)
 	stops[1]()
 	<-queue
 	<-queue
 	<-queue
 	equal(t, calls, []string{
-		`listen {"id":"a","on":true,"sidecar":"files"}`,
-		`send {"body":{"operation":"open"},"cids":[],"sidecar":"files","surface":"a"}`,
-		`listen {"id":"a","on":false,"sidecar":"files"}`,
+		`listen {"id":"a","on":true,"sidecar":"fieldprobe"}`,
+		`send {"body":{"operation":"open"},"cids":[],"sidecar":"fieldprobe","surface":"a"}`,
+		`listen {"id":"a","on":false,"sidecar":"fieldprobe"}`,
 	})
 }
 

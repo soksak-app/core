@@ -39,17 +39,17 @@ func TestQueuedRetiredViewSidecarSendNeverReachesHostHandlerAfterReplacement(t *
 	f := surfaceShellOn(t, installedDocument, stored)
 	var surface string
 	for id, row := range stored.lastSurfaces(t) {
-		if row["plugin"] == "terminal" {
+		if row["plugin"] == "textprobe" {
 			surface = id
 			break
 		}
 	}
 	if surface == "" {
-		t.Fatal("fixture has no declared terminal view")
+		t.Fatal("fixture has no declared textprobe view")
 	}
 	send := func(generation, id uint64, operation string) {
-		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": generation, "id": id,
-			"command": "runtime.sidecar.send", "params": map[string]any{"sidecar": "@scope/sidecar-vt", "id": surface, "body": map[string]string{"operation": operation}, "cids": []string{}}}})
+		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": generation, "id": id,
+			"command": "runtime.sidecar.send", "params": map[string]any{"sidecar": "@scope/sidecar-probe", "id": surface, "body": map[string]string{"operation": operation}, "cids": []string{}}}})
 	}
 	send(1, 1, "blocking")
 	select {

@@ -2,7 +2,7 @@
   "starter": "starter",
   "registry": "https://soksak-app.github.io/registry/index.json",
   "settings": {
-    "terminal": {
+    "textprobe": {
       "cursor.shape": "block",
       "cursor.blink": "Off",
       "cursor.interval": 750,
@@ -12,7 +12,7 @@
     }
   },
   "workspace": {
-    "focus": "terminal",
+    "focus": "textprobe",
     "grid": {
       "xs": [
         0,
@@ -36,27 +36,27 @@
           "fixed": true
         },
         {
-          "id": "terminal",
+          "id": "textprobe",
           "c0": 1,
           "c1": 2,
           "r0": 0,
           "r1": 1,
           "tabs": [
             {
-              "plugin": "terminal",
+              "plugin": "textprobe",
               "title": "터미널"
             }
           ]
         },
         {
-          "id": "browser",
+          "id": "boxprobe",
           "c0": 1,
           "c1": 2,
           "r0": 1,
           "r1": 2,
           "tabs": [
             {
-              "plugin": "browser",
+              "plugin": "boxprobe",
               "title": "www 문서"
             }
           ]
@@ -79,8 +79,8 @@
         "id": "set-install",
         "title": "탐색기",
         "sections": [
-          "files.tree",
-          "files.bookmarks"
+          "fieldprobe.tree",
+          "fieldprobe.bookmarks"
         ],
         "layout": "list"
       },
@@ -88,17 +88,17 @@
         "id": "set-page",
         "title": "페이지",
         "sections": [
-          "browser.dom",
-          "browser.network"
+          "boxprobe.dom",
+          "boxprobe.network"
         ],
         "layout": "tabs"
       },
       {
-        "id": "set-browser",
+        "id": "set-boxprobe",
         "title": "브라우저",
         "sections": [
-          "browser.tabs",
-          "browser.history"
+          "boxprobe.tabs",
+          "boxprobe.history"
         ],
         "layout": "tabs"
       }
@@ -111,8 +111,8 @@
       },
       {
         "place": "window-right",
-        "plugin": "browser",
-        "set": "set-browser"
+        "plugin": "boxprobe",
+        "set": "set-boxprobe"
       }
     ]
   }

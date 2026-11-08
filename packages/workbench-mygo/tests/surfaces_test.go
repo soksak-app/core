@@ -19,23 +19,23 @@ import (
 
 // installedDocument is the document of the installed plugins with one plugin of a view and one without a surface.
 const installedDocument = `{"plugins": [
-	{"id": "terminal", "package": "@scope/plugin-terminal", "version": "1.0.0", "sidecars": {"@scope/sidecar-vt": {}},
-		"manifest": {"id": "terminal", "name": "터미널", "description": "terminal", "mark": "◊", "icon": "<path d=\"M1 1h14\"/>",
-			"dependencies": {"@scope/sidecar-vt": "^1.0.0"},
-			"exposes": {"element": [{"name": "terminal.view", "description": "the view"}], "status": [{"name": "terminal.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "terminal.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "terminal.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}, "timeout": 40}]},
+	{"id": "textprobe", "package": "@scope/plugin-textprobe", "version": "1.0.0", "sidecars": {"@scope/sidecar-probe": {}},
+		"manifest": {"id": "textprobe", "name": "터미널", "description": "textprobe", "mark": "◊", "icon": "<path d=\"M1 1h14\"/>",
+			"dependencies": {"@scope/sidecar-probe": "^1.0.0"},
+			"exposes": {"element": [{"name": "textprobe.view", "description": "the view"}], "status": [{"name": "textprobe.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "textprobe.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}, "timeout": 40}]},
 			"data": {"notes": {"schema": {"type": "string"}, "default": "none", "format": 2},
 				"marks": {"schema": {"type": "array", "items": {"type": "string"}}, "default": ["start"]},
 				"point": {"schema": {"type": "object"}, "default": {}}},
 			"settings": {"cursor.shape": {"type": "enum", "label": "모양", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "string", "label": "셸", "default": "login", "maxLength": 64}},
-			"surface": {"menu": [{"title": "닫기", "command": "terminal.close"}], "drop": "terminal.drop", "composition": {"kind": "view", "page": "ui/terminal.html", "regions": [{"name": "view", "kind": "image", "input": "dom", "sidecar": "@scope/sidecar-vt", "present": "copy"}]}}}},
-	{"id": "browser", "package": "@scope/plugin-browser", "version": "1.0.0",
-		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "browser.probe"}]}},
-		"manifest": {"id": "browser", "name": "브라우저", "description": "browser", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
+			"surface": {"menu": [{"title": "닫기", "command": "textprobe.close"}], "drop": "textprobe.drop", "composition": {"kind": "view", "page": "ui/textprobe.html", "regions": [{"name": "view", "kind": "image", "input": "dom", "sidecar": "@scope/sidecar-probe", "present": "copy"}]}}}},
+	{"id": "boxprobe", "package": "@scope/plugin-boxprobe", "version": "1.0.0",
+		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "boxprobe.probe"}]}},
+		"manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}, "sections": [
-				{"id": "browser.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160},
-				{"id": "browser.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
-				{"id": "browser.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
-				{"id": "browser.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}}
+				{"id": "boxprobe.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160},
+				{"id": "boxprobe.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+				{"id": "boxprobe.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
+				{"id": "boxprobe.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}}
 ]}`
 
 // surfaceHost records the surface calls of the workbench.
@@ -407,7 +407,7 @@ func TestTheThemeOfTheViewsPrecedesTheirPlacement(t *testing.T) {
 func TestSplitPlacesTheViewOfTheNewCard(t *testing.T) {
 	f, stored := surfaceShell(t)
 	before := len(stored.lastSurfaces(t))
-	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "terminal"})
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "textprobe"})
 	if got := len(stored.lastSurfaces(t)); got != before+1 {
 		t.Fatalf("the split placed %d surfaces after %d", got, before)
 	}
@@ -430,7 +430,7 @@ func TestLibraryHidesTheViews(t *testing.T) {
 // viewCall delivers a call of the view of the tab and returns its reply.
 func viewCall(t *testing.T, f *shellFixture, stored *surfaceHost, surface, command string, params any) map[string]any {
 	t.Helper()
-	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "command": command, "params": params}})
+	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 5, "command": command, "params": params}})
 	f.settle()
 	return viewReply(t, stored, surface, command)
 }
@@ -439,7 +439,7 @@ func viewCall(t *testing.T, f *shellFixture, stored *surfaceHost, surface, comma
 // the frames that settle the call, which fail on a record that no test took.
 func viewCallShowing(t *testing.T, f *shellFixture, stored *surfaceHost, surface, command string, params any) []shownRecord {
 	t.Helper()
-	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "command": command, "params": params}})
+	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 5, "command": command, "params": params}})
 	records := f.shownRecords()
 	f.settle()
 	viewReply(t, stored, surface, command)
@@ -479,19 +479,19 @@ func TestADiagnosticPluginAddsItsDeclarationsToTheSurface(t *testing.T) {
 		surface := item.(map[string]any)
 		start := surface["start"].(map[string]any)
 		declared, _ := json.Marshal(declarations[int(start["declarations"].(float64))])
-		if surface["plugin"] != "browser" {
-			if start["diagnostics"] != nil || strings.Contains(string(declared), "browser.probe") {
+		if surface["plugin"] != "boxprobe" {
+			if start["diagnostics"] != nil || strings.Contains(string(declared), "boxprobe.probe") {
 				t.Fatalf("surface %v starts with %v and %s", surface["id"], start, declared)
 			}
 			continue
 		}
 		found = true
-		if start["diagnostics"].(map[string]any)["module"] != "ui/diagnostics.js" || !strings.Contains(string(declared), "browser.probe") {
+		if start["diagnostics"].(map[string]any)["module"] != "ui/diagnostics.js" || !strings.Contains(string(declared), "boxprobe.probe") {
 			t.Fatalf("the view starts with %v and %s", start, declared)
 		}
 	}
 	if !found {
-		t.Fatal("no surface of the browser plugin")
+		t.Fatal("no surface of the boxprobe plugin")
 	}
 }
 
@@ -532,7 +532,7 @@ func TestViewCallOfAnUnservedCommandFails(t *testing.T) {
 func TestViewCallSubscribesItsSidecar(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := anySurface(t, stored)
-	reply := viewCall(t, f, stored, surface, "runtime.sidecar.on", map[string]any{"id": surface, "sidecar": "@scope/sidecar-vt"})
+	reply := viewCall(t, f, stored, surface, "runtime.sidecar.on", map[string]any{"id": surface, "sidecar": "@scope/sidecar-probe"})
 	if reply["error"] != nil {
 		t.Fatalf("the reply is %v", reply)
 	}
@@ -577,7 +577,7 @@ func TestViewCallFollowsAStatusOfTheWorkbench(t *testing.T) {
 func TestViewCallReportsItsFocus(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := anySurface(t, stored)
-	if reply := viewCall(t, f, stored, surface, "tab.focus", map[string]any{"name": "browser.address", "index": 0}); reply["error"] != nil {
+	if reply := viewCall(t, f, stored, surface, "tab.focus", map[string]any{"name": "boxprobe.address", "index": 0}); reply["error"] != nil {
 		t.Fatalf("the reply is %v", reply)
 	}
 	if reply := viewCall(t, f, stored, surface, "tab.focus", map[string]any{"name": ""}); reply["error"] == nil {
@@ -801,7 +801,7 @@ func TestAViewTakesThePointerUpToItsEdges(t *testing.T) {
 func TestEachStartOfARunTellsEachViewOnce(t *testing.T) {
 	f, stored := surfaceShell(t)
 	left := f.tabbedCards()[0]
-	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "terminal"})
+	made, err := f.answer("core.card.split", map[string]string{"card": left, "side": "right", "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -895,7 +895,7 @@ func TestAViewFollowsTheSettingsOfItsPlugin(t *testing.T) {
 	if got := pushed(); len(got) != 0 {
 		t.Fatalf("a change of another setting reached the view: %v", got)
 	}
-	f.run("core.settings.change", map[string]any{"key": "terminal.cursor.shape", "value": "beam"})
+	f.run("core.settings.change", map[string]any{"key": "textprobe.cursor.shape", "value": "beam"})
 	f.settle()
 	if got := pushed(); len(got) != 1 || got[0]["cursor.shape"] != "beam" {
 		t.Fatalf("the view received %v", got)
@@ -963,7 +963,7 @@ func TestARegionAttachAnswersWhetherItRestoredAHistory(t *testing.T) {
 			f, stored, attaches := attachShell(t, test.session, test.refuses)
 			surface := anySurface(t, stored)
 			// A refused history is recorded as a failure, which settle does not allow.
-			f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": 5, "command": "document.attach",
+			f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 5, "command": "document.attach",
 				"params": map[string]any{"name": "page"}}})
 			f.pending.drain(t)
 			if len(stored.replies) != 1 {
@@ -1070,7 +1070,7 @@ func TestAPressOnASectionOfAWindowSidebarLeavesTheFocusedCard(t *testing.T) {
 	f.settle()
 	var id string
 	for held, surface := range stored.lastSurfaces(t) {
-		if strings.HasSuffix(held, "/left/files.tree") && surface["visible"] == true {
+		if strings.HasSuffix(held, "/left/fieldprobe.tree") && surface["visible"] == true {
 			id = held
 		}
 	}
@@ -1211,7 +1211,7 @@ func TestARecoveredPlacementLeavesAnotherError(t *testing.T) {
 	f.shownErrors()
 	stored.presentFailure = nil
 	stored.declareFailure = errors.New("the host refused the declaration")
-	raw, err := json.Marshal(map[string]string{"card": f.tabbedCards()[0], "plugin": "terminal"})
+	raw, err := json.Marshal(map[string]string{"card": f.tabbedCards()[0], "plugin": "textprobe"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1360,7 +1360,7 @@ func TestAPressMovesTheTextScope(t *testing.T) {
 		f.settle()
 		section := ""
 		for id := range stored.lastSurfaces(t) {
-			if strings.HasSuffix(id, "/left/files.tree") {
+			if strings.HasSuffix(id, "/left/fieldprobe.tree") {
 				section = id
 			}
 		}
@@ -1666,7 +1666,7 @@ func TestSurfaceStatusExposesOnlyTheDeclaredCompositionKind(t *testing.T) {
 	checkedView := false
 	for _, row := range rows {
 		switch row["plugin"] {
-		case "browser":
+		case "boxprobe":
 			checkedView = true
 			if row["composition"] != "view" {
 				t.Errorf("public composition must be the declared kind string, not renderer configuration: %v", row)

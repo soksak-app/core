@@ -15,19 +15,19 @@ import (
 )
 
 const sidebarsEnvironment = `{"sidebars":{"sets":[
-	{"id":"set-install","title":"탐색기","sections":["files.tree","gone.section","files.bookmarks"],"layout":"list"},
-	{"id":"set-browser","title":"브라우저","sections":["browser.tabs","browser.history"],"layout":"tabs"}],
-	"links":[{"place":"left","plugin":null,"set":"set-install"},{"place":"window-right","plugin":"browser","set":"set-browser"}]}}`
+	{"id":"set-install","title":"탐색기","sections":["fieldprobe.tree","gone.section","fieldprobe.bookmarks"],"layout":"list"},
+	{"id":"set-boxprobe","title":"브라우저","sections":["boxprobe.tabs","boxprobe.history"],"layout":"tabs"}],
+	"links":[{"place":"left","plugin":null,"set":"set-install"},{"place":"window-right","plugin":"boxprobe","set":"set-boxprobe"}]}}`
 
 const sidebarsInstalled = `{"plugins":[
-	{"id":"browser","package":"b","version":"1.0.0","manifest":{"id":"browser","name":"브라우저","description":"browser","sections":[
-		{"id":"browser.tabs","name":"탭","composition":{"kind":"view","page":"ui/section.html"},"height":160},
-		{"id":"browser.history","name":"기록","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
-		{"id":"browser.dom","name":"DOM","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
-		{"id":"browser.network","name":"네트워크","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"}]}},
-	{"id":"files","package":"f","version":"1.0.0","manifest":{"id":"files","name":"파일","description":"files","sections":[
-		{"id":"files.tree","name":"파일 트리","composition":{"kind":"view","page":"ui/tree.html"},"height":"fill"},
-		{"id":"files.bookmarks","name":"북마크","composition":{"kind":"view","page":"ui/bookmarks.html"},"height":160}]}}]}`
+	{"id":"boxprobe","package":"b","version":"1.0.0","manifest":{"id":"boxprobe","name":"브라우저","description":"boxprobe","sections":[
+		{"id":"boxprobe.tabs","name":"탭","composition":{"kind":"view","page":"ui/section.html"},"height":160},
+		{"id":"boxprobe.history","name":"기록","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
+		{"id":"boxprobe.dom","name":"DOM","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
+		{"id":"boxprobe.network","name":"네트워크","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"}]}},
+	{"id":"fieldprobe","package":"f","version":"1.0.0","manifest":{"id":"fieldprobe","name":"파일","description":"fieldprobe","sections":[
+		{"id":"fieldprobe.tree","name":"파일 트리","composition":{"kind":"view","page":"ui/tree.html"},"height":"fill"},
+		{"id":"fieldprobe.bookmarks","name":"북마크","composition":{"kind":"view","page":"ui/bookmarks.html"},"height":160}]}}]}`
 
 type sidebarsFixture struct {
 	sidebars *workbench.Sidebars
@@ -82,10 +82,10 @@ func TestAWindowSidebarShowsTheLoadedSectionsOfItsSet(t *testing.T) {
 	if frame.Sidebar != "left" || frame.Side != "left" || frame.Layout != "list" || frame.Orientation != "vertical" {
 		t.Fatalf("the frame is %+v", frame)
 	}
-	if got := sectionIDs(frame); !reflect.DeepEqual(got, []string{"files.tree", "files.bookmarks"}) {
+	if got := sectionIDs(frame); !reflect.DeepEqual(got, []string{"fieldprobe.tree", "fieldprobe.bookmarks"}) {
 		t.Fatalf("the sections are %q", got)
 	}
-	if !frame.Sections[0].Fill || frame.Sections[1].Height != 160 || frame.Sections[1].Plugin != "files" || frame.Sections[0].Name != "파일 트리" {
+	if !frame.Sections[0].Fill || frame.Sections[1].Height != 160 || frame.Sections[1].Plugin != "fieldprobe" || frame.Sections[0].Name != "파일 트리" {
 		t.Fatalf("the sections are %+v", frame.Sections)
 	}
 	if frame.Status != "왼쪽 창 사이드바" {
@@ -101,9 +101,9 @@ func TestTheFocusedPluginChoosesItsWindowSidebar(t *testing.T) {
 	if frame := f.frame(t, "right", workbench.FocusedSurface{}); len(frame.Sections) != 0 || frame.Status != "오른쪽 창 사이드바" {
 		t.Fatalf("without a focus the right sidebar shows %+v", frame)
 	}
-	frame := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "browser"})
-	if frame.Layout != "tabs" || frame.Tab != "browser.tabs" || frame.Status != "오른쪽 창 사이드바 · browser" {
-		t.Fatalf("with the focus on the browser the frame is %+v", frame)
+	frame := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"})
+	if frame.Layout != "tabs" || frame.Tab != "boxprobe.tabs" || frame.Status != "오른쪽 창 사이드바 · boxprobe" {
+		t.Fatalf("with the focus on the boxprobe the frame is %+v", frame)
 	}
 	missing := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "gone"})
 	if len(missing.Sections) != 0 || missing.Status != "오른쪽 창 사이드바" {
@@ -112,12 +112,12 @@ func TestTheFocusedPluginChoosesItsWindowSidebar(t *testing.T) {
 }
 
 func TestPluginDefaultsApplyWithoutEnvironmentSidebars(t *testing.T) {
-	installed := `{"plugins":[{"id":"files","package":"f","version":"1.0.0","manifest":{
-		"sections":[{"id":"files.tree","name":"파일 트리","composition":{"kind":"view","page":"ui/tree.html"},"height":"fill"}],
-		"sidebars":{"sets":[{"id":"main","title":"파일","sections":["files.tree"],"layout":"list"}],"window":{"right":"main"}}}}]}`
+	installed := `{"plugins":[{"id":"fieldprobe","package":"f","version":"1.0.0","manifest":{
+		"sections":[{"id":"fieldprobe.tree","name":"파일 트리","composition":{"kind":"view","page":"ui/tree.html"},"height":"fill"}],
+		"sidebars":{"sets":[{"id":"main","title":"파일","sections":["fieldprobe.tree"],"layout":"list"}],"window":{"right":"main"}}}}]}`
 	f := newSidebars(t, `{}`, installed)
-	frame := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "files"})
-	if got := sectionIDs(frame); !reflect.DeepEqual(got, []string{"files.tree"}) {
+	frame := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "fieldprobe"})
+	if got := sectionIDs(frame); !reflect.DeepEqual(got, []string{"fieldprobe.tree"}) {
 		t.Fatalf("the sections are %q", got)
 	}
 }
@@ -152,7 +152,7 @@ func TestALinkToASetThatIsGoneIsRefused(t *testing.T) {
 func TestFoldingASectionFoldsItAndStoresTheChoice(t *testing.T) {
 	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
 	f.frame(t, "left", workbench.FocusedSurface{})
-	if err := f.run("core.sidebar.section.fold", `{"sidebar":"left","section":"files.tree"}`); err != nil {
+	if err := f.run("core.sidebar.section.fold", `{"sidebar":"left","section":"fieldprobe.tree"}`); err != nil {
 		t.Fatal(err)
 	}
 	if frame := f.frame(t, "left", workbench.FocusedSurface{}); !frame.Sections[0].Folded || frame.Sections[1].Folded {
@@ -165,10 +165,10 @@ func TestFoldingASectionFoldsItAndStoresTheChoice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := `{"left":{"tab":null,"folded":["files.tree"]}}`; string(stored) != want {
+	if want := `{"left":{"tab":null,"folded":["fieldprobe.tree"]}}`; string(stored) != want {
 		t.Fatalf("stored %s, want %s", stored, want)
 	}
-	if err := f.run("core.sidebar.section.fold", `{"sidebar":"left","section":"files.tree"}`); err != nil {
+	if err := f.run("core.sidebar.section.fold", `{"sidebar":"left","section":"fieldprobe.tree"}`); err != nil {
 		t.Fatal(err)
 	}
 	if frame := f.frame(t, "left", workbench.FocusedSurface{}); frame.Sections[0].Folded {
@@ -180,14 +180,14 @@ func TestSizingAndSelectingASection(t *testing.T) {
 	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
 	f.sidebars.Begin()
 	for _, place := range []string{"left", "right"} {
-		if _, err := f.sidebars.Frame(place, "spc-1", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "browser"}); err != nil {
+		if _, err := f.sidebars.Frame(place, "spc-1", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := f.run("core.sidebar.section.size", `{"sidebar":"left","section":"files.bookmarks","height":200}`); err != nil {
+	if err := f.run("core.sidebar.section.size", `{"sidebar":"left","section":"fieldprobe.bookmarks","height":200}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.run("core.sidebar.section.select", `{"sidebar":"right","section":"browser.history"}`); err != nil {
+	if err := f.run("core.sidebar.section.select", `{"sidebar":"right","section":"boxprobe.history"}`); err != nil {
 		t.Fatal(err)
 	}
 	f.sidebars.Begin()
@@ -198,7 +198,7 @@ func TestSizingAndSelectingASection(t *testing.T) {
 	if size := left.Sections[1].Size; size == nil || *size != 200 {
 		t.Fatalf("the size of the section is %v", size)
 	}
-	if right := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "browser"}); right.Tab != "browser.history" {
+	if right := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"}); right.Tab != "boxprobe.history" {
 		t.Fatalf("the selected tab is %q", right.Tab)
 	}
 }
@@ -207,19 +207,19 @@ func TestTheSectionCommandsRefuseWhatTheSidebarDoesNotHold(t *testing.T) {
 	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
 	f.frame(t, "left", workbench.FocusedSurface{})
 	cases := []struct{ name, params, want string }{
-		{"core.sidebar.section.fold", `{"sidebar":"right","section":"files.tree"}`, "no sidebar right is drawn"},
+		{"core.sidebar.section.fold", `{"sidebar":"right","section":"fieldprobe.tree"}`, "no sidebar right is drawn"},
 		{"core.sidebar.section.fold", `{"sidebar":"left","section":"gone.section"}`, "sidebar left has no section gone.section"},
-		{"core.sidebar.section.select", `{"sidebar":"left","section":"files.tree"}`, "sidebar left does not use the tabs layout"},
-		{"core.sidebar.section.size", `{"sidebar":"left","section":"files.tree","height":31}`, "section height must be an integer from 32 to 4096, got 31"},
+		{"core.sidebar.section.select", `{"sidebar":"left","section":"fieldprobe.tree"}`, "sidebar left does not use the tabs layout"},
+		{"core.sidebar.section.size", `{"sidebar":"left","section":"fieldprobe.tree","height":31}`, "section height must be an integer from 32 to 4096, got 31"},
 	}
 	for _, test := range cases {
 		if err := f.run(test.name, test.params); err == nil || err.Error() != test.want {
 			t.Fatalf("%s %s: %v, want %s", test.name, test.params, err, test.want)
 		}
 	}
-	f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "browser"})
+	f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"})
 	for _, name := range []string{"core.sidebar.section.fold", "core.sidebar.section.size"} {
-		err := f.run(name, `{"sidebar":"right","section":"browser.tabs","height":100}`)
+		err := f.run(name, `{"sidebar":"right","section":"boxprobe.tabs","height":100}`)
 		if err == nil || err.Error() != "sidebar right does not use the list layout" {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -228,7 +228,7 @@ func TestTheSectionCommandsRefuseWhatTheSidebarDoesNotHold(t *testing.T) {
 
 func TestStoredChoicesComeBackWithASpace(t *testing.T) {
 	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
-	stored := `{"left":{"tab":null,"folded":["files.bookmarks"],"sizes":{"files.tree":120}},"right":{"tab":"browser.history","folded":[]}}`
+	stored := `{"left":{"tab":null,"folded":["fieldprobe.bookmarks"],"sizes":{"fieldprobe.tree":120}},"right":{"tab":"boxprobe.history","folded":[]}}`
 	if err := f.sidebars.Restore(json.RawMessage(stored)); err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestStoredChoicesComeBackWithASpace(t *testing.T) {
 	if !left.Sections[1].Folded || left.Sections[0].Size == nil || *left.Sections[0].Size != 120 {
 		t.Fatalf("the sections are %+v", left.Sections)
 	}
-	if right := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "browser"}); right.Tab != "browser.history" {
+	if right := f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"}); right.Tab != "boxprobe.history" {
 		t.Fatalf("the selected tab is %q", right.Tab)
 	}
 	if err := f.sidebars.Restore(nil); err != nil {
@@ -245,8 +245,8 @@ func TestStoredChoicesComeBackWithASpace(t *testing.T) {
 	if left := f.frame(t, "left", workbench.FocusedSurface{}); left.Sections[1].Folded {
 		t.Fatal("a space without stored choices keeps the choices of the space before it")
 	}
-	err := f.sidebars.Restore(json.RawMessage(`{"left":{"tab":null,"folded":[],"sizes":{"files.tree":12}}}`))
-	if err == nil || !strings.Contains(err.Error(), "sidebar left stores an invalid size of files.tree: 12") {
+	err := f.sidebars.Restore(json.RawMessage(`{"left":{"tab":null,"folded":[],"sizes":{"fieldprobe.tree":12}}}`))
+	if err == nil || !strings.Contains(err.Error(), "sidebar left stores an invalid size of fieldprobe.tree: 12") {
 		t.Fatalf("the error is %v", err)
 	}
 }
@@ -271,7 +271,7 @@ func TestDrawingASidebarGivesEverySeatItsPlaceInTheWindow(t *testing.T) {
 		t.Fatalf("the seats are %+v", f.seats)
 	}
 	tree := f.seats[0]
-	if tree.SurfaceID != "spc-1/left/files.tree" || !tree.Visible || tree.Box.X != 10 || tree.Box.W != 190 {
+	if tree.SurfaceID != "spc-1/left/fieldprobe.tree" || !tree.Visible || tree.Box.X != 10 || tree.Box.W != 190 {
 		t.Fatalf("the seat of the tree is %+v", tree)
 	}
 	declared, err := workbench.Declared()
@@ -325,7 +325,7 @@ func TestStatusReportsTheDrawnSidebars(t *testing.T) {
 	if left.Sidebar != "left" || left.Set != "set-install" || left.Placement != "window" || left.Card != nil || left.Rect.W != 190 || left.Rect.X != 10 {
 		t.Fatalf("the status is %s", encoded)
 	}
-	if len(left.Sections) != 2 || left.Sections[0].SurfaceID != "spc-1/left/files.tree" {
+	if len(left.Sections) != 2 || left.Sections[0].SurfaceID != "spc-1/left/fieldprobe.tree" {
 		t.Fatalf("the status is %s", encoded)
 	}
 }

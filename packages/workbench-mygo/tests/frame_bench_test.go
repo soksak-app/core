@@ -39,7 +39,7 @@ func fullShell(b testing.TB) *shellFixture {
 		for _, card := range f.tabbedCards() {
 			for _, side := range []string{"right", "bottom"} {
 				if !split {
-					_, err := f.answer("core.card.split", map[string]string{"card": card, "side": side, "plugin": "terminal"})
+					_, err := f.answer("core.card.split", map[string]string{"card": card, "side": side, "plugin": "textprobe"})
 					split = err == nil
 				}
 			}
@@ -51,12 +51,12 @@ func fullShell(b testing.TB) *shellFixture {
 	}
 	cards := f.tabbedCards()
 	for added := 0; added < 12; added++ {
-		f.run("core.card.add-tab", map[string]string{"card": cards[added%len(cards)], "plugin": "browser"})
+		f.run("core.card.add-tab", map[string]string{"card": cards[added%len(cards)], "plugin": "boxprobe"})
 	}
 	f.run("core.card.tools", map[string]string{"card": cards[0]})
 	f.tester.Advance(2 * time.Second) // The strips glide to their new tabs.
 	f.settle()
-	if !f.has("core.sidebar.section.name", "left/files.tree") || !f.has("core.sidebar.section.name", "left/files.bookmarks") {
+	if !f.has("core.sidebar.section.name", "left/fieldprobe.tree") || !f.has("core.sidebar.section.name", "left/fieldprobe.bookmarks") {
 		b.Fatal("the window sidebar shows no two sections")
 	}
 	if !f.menu().Open {

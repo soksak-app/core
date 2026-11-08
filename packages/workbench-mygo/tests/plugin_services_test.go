@@ -17,11 +17,11 @@ import (
 func terminalSurface(t *testing.T, stored *surfaceHost) string {
 	t.Helper()
 	for id, surface := range stored.lastSurfaces(t) {
-		if surface["plugin"] == "terminal" {
+		if surface["plugin"] == "textprobe" {
 			return id
 		}
 	}
-	t.Fatal("no surface of the plugin terminal")
+	t.Fatal("no surface of the plugin textprobe")
 	return ""
 }
 
@@ -74,10 +74,10 @@ func TestTwoWritesInARowKeepBothKeys(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)
 	for id, write := range []map[string]any{{"key": "marks", "value": []string{"one"}}, {"key": "notes", "value": "two"}} {
-		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": id + 1, "command": "runtime.data.set", "params": write}})
+		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": id + 1, "command": "runtime.data.set", "params": write}})
 	}
 	f.settle()
-	if got := storedData(t, stored); got != `{"terminal":{"marks":{"format":1,"value":["one"]},"notes":{"format":2,"value":"two"}}}` {
+	if got := storedData(t, stored); got != `{"textprobe":{"marks":{"format":1,"value":["one"]},"notes":{"format":2,"value":"two"}}}` {
 		t.Fatalf("the project stores %s", got)
 	}
 }
@@ -87,7 +87,7 @@ func TestTwoReplacesFromOneReadKeepTheFirstAndTheSecondAnswersFalse(t *testing.T
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)
 	for id, value := range []string{"first", "second"} {
-		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": id + 1,
+		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": id + 1,
 			"command": "runtime.data.replace", "params": map[string]any{"key": "marks", "base": []string{"start"}, "value": []string{value}}}})
 	}
 	f.settle()
@@ -127,7 +127,7 @@ func projectDataValues(t *testing.T) []struct {
 
 // storePoint stores the JSON text of a value of the key point, as the store answers it, and lets the window read it.
 func storePoint(f *shellFixture, stored *surfaceHost, text string) {
-	stored.projects[0]["plugins"] = map[string]any{"terminal": map[string]any{"point": map[string]any{"format": 1, "value": json.RawMessage(text)}}}
+	stored.projects[0]["plugins"] = map[string]any{"textprobe": map[string]any{"point": map[string]any{"format": 1, "value": json.RawMessage(text)}}}
 	f.shell.Event("workspace-changed", nil)
 	f.settle()
 }
@@ -207,7 +207,7 @@ func TestAWriteOfAnotherWindowReachesTheViewsThatFollowTheData(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)
 	viewCall(t, f, stored, surface, "runtime.data.on", nil)
-	stored.projects[0]["plugins"] = map[string]any{"terminal": map[string]any{"marks": map[string]any{"format": 1, "value": []string{"other"}}}}
+	stored.projects[0]["plugins"] = map[string]any{"textprobe": map[string]any{"marks": map[string]any{"format": 1, "value": []string{"other"}}}}
 	f.shell.Event("workspace-changed", nil)
 	f.settle()
 	if got := dataEvents(t, stored, surface); len(got) != 1 || got[0] != "marks" {
@@ -269,11 +269,11 @@ func TestAFileDroppedOnAViewRunsTheDropCommandOfItsPlugin(t *testing.T) {
 	r := newViewRelay(t)
 	f, stored := r.f, r.stored
 	surface := terminalSurface(t, stored)
-	r.call(surface, "runtime.command.register", map[string]any{"name": "terminal.drop"})
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.drop"})
 	x, y := middle(stored.lastSurfaces(t)[surface])
 	f.shell.Event("files-dropped", []any{dropText(t, x, y)})
 	request := r.request(0)
-	if request["surface"] != surface || request["command"] != "terminal.drop" {
+	if request["surface"] != surface || request["command"] != "textprobe.drop" {
 		t.Fatalf("the view took %v", request)
 	}
 	if text, _ := json.Marshal(request["params"]); string(text) != `{"urls":["file:///work/a.txt"]}` {
@@ -285,7 +285,7 @@ func TestAFileDroppedOnAViewRunsTheDropCommandOfItsPlugin(t *testing.T) {
 		status = dropStatus(t, f)
 		return status["command"] != nil
 	})
-	if status["surface"] != surface || status["command"] != "terminal.drop" || status["error"] != nil || status["x"] != x {
+	if status["surface"] != surface || status["command"] != "textprobe.drop" || status["error"] != nil || status["x"] != x {
 		t.Fatalf("core.drop is %v", status)
 	}
 }
@@ -309,11 +309,11 @@ func TestADropOfTextThatIsNoDropIsRecordedAsItsReason(t *testing.T) {
 }
 
 func TestADropOnAViewWhosePluginDeclaresNoDropIsRecordedAsItsReason(t *testing.T) {
-	f, stored := surfaceShellOf(t, strings.ReplaceAll(installedDocument, `"drop": "terminal.drop", `, ""))
+	f, stored := surfaceShellOf(t, strings.ReplaceAll(installedDocument, `"drop": "textprobe.drop", `, ""))
 	x, y := middle(stored.lastSurfaces(t)[terminalSurface(t, stored)])
 	f.shell.Event("files-dropped", []any{dropText(t, x, y)})
-	droppedWith(t, f, "drop: plugin terminal declares no drop command")
-	if status := dropStatus(t, f); status["error"] != "plugin terminal declares no drop command" {
+	droppedWith(t, f, "drop: plugin textprobe declares no drop command")
+	if status := dropStatus(t, f); status["error"] != "plugin textprobe declares no drop command" {
 		t.Fatalf("core.drop is %v", status)
 	}
 }
@@ -322,7 +322,7 @@ func TestADropOnAViewWhosePluginDeclaresNoDropIsRecordedAsItsReason(t *testing.T
 func otherCard(t *testing.T, f *shellFixture, stored *surfaceHost) string {
 	t.Helper()
 	surface := terminalSurface(t, stored)
-	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "terminal"})
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "textprobe"})
 	f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[1]})
 	return surface
 }
@@ -485,7 +485,7 @@ func TestASnapshotThatAWriteOutranKeepsTheWrite(t *testing.T) {
 	surface := terminalSurface(t, stored)
 	viewCall(t, f, stored, surface, "runtime.data.on", nil)
 	write := func(id int, key string, value any) {
-		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "terminal", "generation": 1, "id": id,
+		f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": id,
 			"command": "runtime.data.set", "params": map[string]any{"key": key, "value": value}}})
 	}
 	// The store answers the first write with its event, whose read stands in the order before the second write.

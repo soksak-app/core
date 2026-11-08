@@ -21,7 +21,7 @@ func listFrame() workbench.SidebarFrame {
 		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left",
 		Status: "왼쪽 창 사이드바",
 		Sections: []workbench.SidebarSection{
-			{ID: "files.tree", Name: "Files", Plugin: "files", Height: 100},
+			{ID: "fieldprobe.tree", Name: "Files", Plugin: "fieldprobe", Height: 100},
 			{ID: "git.log", Name: "Log", Plugin: "git", Fill: true},
 		},
 	}
@@ -95,8 +95,8 @@ func TestAFoldedSectionKeepsOnlyItsHeader(t *testing.T) {
 		workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400,
 			func(_ *ui.Context, seat workbench.SidebarSeat) { seats[seat.SurfaceID] = seat.Visible })
 	}, 240, 400)
-	element(t, tt, "core.sidebar.section.header", "left/files.tree")
-	if visible, ok := seats["spc-1/left/files.tree"]; !ok || visible {
+	element(t, tt, "core.sidebar.section.header", "left/fieldprobe.tree")
+	if visible, ok := seats["spc-1/left/fieldprobe.tree"]; !ok || visible {
 		t.Fatalf("a folded section keeps its seat without a body: %v", seats)
 	}
 	if !seats["spc-1/left/git.log"] {
@@ -111,7 +111,7 @@ func TestTheSeatsOfASidebarNameEverySectionWithItsVisibility(t *testing.T) {
 	frame := listFrame()
 	frame.Sections[0].Folded = true
 	want := []workbench.SidebarSeat{
-		{SurfaceID: "spc-1/left/files.tree", Section: "files.tree", Sidebar: "left", Plugin: "files", Title: "Files", Visible: false},
+		{SurfaceID: "spc-1/left/fieldprobe.tree", Section: "fieldprobe.tree", Sidebar: "left", Plugin: "fieldprobe", Title: "Files", Visible: false},
 		{SurfaceID: "spc-1/left/git.log", Section: "git.log", Sidebar: "left", Plugin: "git", Title: "Log", Visible: true},
 	}
 	if got := workbench.SidebarSeats(frame); !reflect.DeepEqual(got, want) {
@@ -128,7 +128,7 @@ func TestATabsSidebarShowsTheSelectedSection(t *testing.T) {
 	var calls []call
 	var bodies []string
 	frame := listFrame()
-	frame.Layout, frame.Tab = "tabs", "files.tree"
+	frame.Layout, frame.Tab = "tabs", "fieldprobe.tree"
 	binder := recorder(t, &calls, sidebarCommands...)
 	tt := ui.NewTester(func(c *ui.Context) {
 		bodies = bodies[:0]
@@ -139,7 +139,7 @@ func TestATabsSidebarShowsTheSelectedSection(t *testing.T) {
 		})
 	}, 240, 400)
 	element(t, tt, "core.sidebar.tabs", "left")
-	if !slices.Equal(bodies, []string{"files.tree"}) {
+	if !slices.Equal(bodies, []string{"fieldprobe.tree"}) {
 		t.Fatalf("drawn bodies %q", bodies)
 	}
 	press(t, tt, "core.sidebar.section.tab", "left/git.log")
@@ -153,7 +153,7 @@ func TestATabsSidebarShowsTheSelectedSection(t *testing.T) {
 func TestTheStatusLineOfATabsSidebarEndsTheSidebar(t *testing.T) {
 	var calls []call
 	frame := listFrame()
-	frame.Layout, frame.Tab = "tabs", "files.tree"
+	frame.Layout, frame.Tab = "tabs", "fieldprobe.tree"
 	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
 	status := element(t, tt, "core.sidebar.status", "left")
 	if bottom := status.Bounds.Y + status.Bounds.H; bottom != 400 {
@@ -165,9 +165,9 @@ func TestTheStatusLineOfATabsSidebarEndsTheSidebar(t *testing.T) {
 func TestTheSelectedTabHasTheRailMarkOnItsPlainBackground(t *testing.T) {
 	var calls []call
 	frame := listFrame()
-	frame.Layout, frame.Tab, frame.Rail = "tabs", "files.tree", ui.Hex("#7279ff")
+	frame.Layout, frame.Tab, frame.Rail = "tabs", "fieldprobe.tree", ui.Hex("#7279ff")
 	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
-	tab := element(t, tt, "core.sidebar.section.tab", "left/files.tree").Bounds
+	tab := element(t, tt, "core.sidebar.section.tab", "left/fieldprobe.tree").Bounds
 	image := tt.Image()
 	rgb := func(x, y float32) [3]uint32 {
 		r, g, b, _ := image.At(int(x), int(y)).RGBA()
@@ -286,7 +286,7 @@ func TestTheSeatOfASectionIsItsBody(t *testing.T) {
 		}
 		return node
 	}
-	first, second := seat("spc-1/left/files.tree").Bounds, seat("spc-1/left/git.log").Bounds
+	first, second := seat("spc-1/left/fieldprobe.tree").Bounds, seat("spc-1/left/git.log").Bounds
 	if first.Y != 32 || first.H != 100 || first.W != 240 {
 		t.Fatalf("the seat of the first section is %+v", first)
 	}
@@ -313,7 +313,7 @@ func TestASectionHeadIsABandOverTheCard(t *testing.T) {
 			var calls []call
 			var text ui.Color
 			frame := listFrame()
-			frame.Layout, frame.Tab = layout, "files.tree"
+			frame.Layout, frame.Tab = layout, "fieldprobe.tree"
 			binder := recorder(t, &calls, sidebarCommands...)
 			tt := ui.NewTester(func(c *ui.Context) {
 				text = c.Theme().Text
@@ -323,7 +323,7 @@ func TestASectionHeadIsABandOverTheCard(t *testing.T) {
 			}, 240, 400)
 			item := "left"
 			if layout == "list" {
-				item = "left/files.tree"
+				item = "left/fieldprobe.tree"
 			}
 			box := element(t, tt, name, item).Bounds
 			scale := float32(tt.Image().Bounds().Dx()) / 240
