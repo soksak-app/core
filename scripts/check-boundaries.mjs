@@ -181,6 +181,22 @@ export function fixtureSidecarNames(root) {
   });
 }
 
+/**
+ * The plugin ids that e2e/fixtures/absent-plugins.json under root declares absent: a check names one for a plugin that is not
+ * installed, and the fixture registry never installs one, so no fixture plugin may use one as its id. Fails when the declaration holds
+ * no list of plugin ids or when a fixture plugin of `fixtures` uses one.
+ */
+export function absentPluginIds(root, fixtures) {
+  const file = join(root, "absent-plugins.json");
+  const { ids } = readJson(file);
+  if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === "string" && new RegExp(`^${ID}$`).test(id))) {
+    throw new Error(`${file}: ids must be a list of plugin ids`);
+  }
+  const used = ids.filter((id) => fixtures.includes(id));
+  if (used.length > 0) throw new Error(`${file}: the fixture plugins use the absent plugin ids ${used.join(", ")}`);
+  return ids;
+}
+
 /** The ids of the plugins that a line names, in the order of the line. */
 export function namedPlugins(line) {
   const found = [];
@@ -190,7 +206,7 @@ export function namedPlugins(line) {
 
 /**
  * Checks that the files name no plugin other than core, the host or a fixture plugin, and no sidecar other than a fake sidecar.
- * `fixtures` are the ids of the fixture plugins of e2e/fixtures, `sidecars` the names of its fake sidecars, `exempt` the files that
+ * `fixtures` are the ids of the fixture plugins of e2e/fixtures and of the absent plugins that it declares, `sidecars` the names of its fake sidecars, `exempt` the files that
  * docs/spec/verification-boundaries.json still lists, and readSource reads a relative path. Each error names the file, the line and
  * the plugin or sidecar.
  */
@@ -447,8 +463,9 @@ function main() {
   errors.push(...checkTestPathReads(corePackageFolders(ROOT), sources.filter((file) => TEST_FILE.test(file))));
   errors.push(...checkSpecReads(workspacePackages(ROOT).filter((folder) => folder !== "."), sources));
   const checks = pluginNameScope(sources);
+  const fixtures = fixturePluginIds(join(ROOT, "e2e/fixtures"));
   errors.push(...checkPluginNames(checks, {
-    fixtures: fixturePluginIds(join(ROOT, "e2e/fixtures")),
+    fixtures: [...fixtures, ...absentPluginIds(join(ROOT, "e2e/fixtures"), fixtures)],
     sidecars: fixtureSidecarNames(join(ROOT, "e2e/fixtures")),
     exempt: classifiedFiles(readJson(join(ROOT, "docs/spec/verification-boundaries.json"))),
   }));

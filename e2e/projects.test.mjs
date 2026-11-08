@@ -8,6 +8,8 @@ import test from "node:test";
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh, replacePlaceholders, START_PLUGIN, startTab } from "./fixture.mjs";
 import { projectRecords } from "./projects-file.mjs";
+// A plugin that the fixture registry never installs (e2e/fixtures/absent-plugins.json).
+import absentPlugins from "./fixtures/absent-plugins.json" with { type: "json" };
 import { frontmostApp } from "@soksak/window-check/frontmost.mjs";
 import { readEvents, currentEventOffsets, traceRows } from "@soksak/window-check/event-log.mjs";
 import { openStages, systemState } from "./open-report.mjs";
@@ -440,15 +442,16 @@ for (const app of Object.values(APPS)) {
     await child.close();
     await s.windows(1, "project window did not close");
 
-    // A layout saved in another environment: the first tab of the first card with tabs belongs to the plugin gone, which is not in
+    // A layout saved in another environment: the first tab of the first card with tabs belongs to an absent plugin, which is not in
     // this environment.
+    const [ABSENT] = absentPlugins.ids;
     const records = read(join(config, "projects.json"));
     const record = projectRecords(records, "projects.json").find((p) => p.id === saved.id);
     const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.data?.tabs?.length > 0);
     assert.ok(shell, "the saved layout holds no card with tabs");
     assert.deepEqual(record.spaces.flatMap((x) => x.layout.state.cards.flatMap((c) => c.data?.tabs ?? [])).filter((tab) => tab.plugin !== START_PLUGIN), [],
     "the saved layout holds a tab that is not a probe tab");
-    shell.data.tabs[0].plugin = "gone";
+    shell.data.tabs[0].plugin = ABSENT;
     write(join(config, "projects.json"), records);
     const stored = readFileSync(join(config, "projects.json"), "utf8");
 
@@ -460,16 +463,16 @@ for (const app of Object.values(APPS)) {
     await settings(s, { projectOpening: "tabs" }, "common");
     await s.run("core.project.activate", { id: saved.id });
     await s.until("core.project", (value) => value?.id === saved.id, "the project did not open");
-    const surfaces = await s.until("core.surfaces", (value) => value.some((surface) => surface.plugin === "gone"),
+    const surfaces = await s.until("core.surfaces", (value) => value.some((surface) => surface.plugin === ABSENT),
       "the tab of the plugin that is not loaded was not reported");
     assert.deepEqual(surfaces.filter((surface) => surface.placeholder !== null).map((surface) => [surface.plugin, surface.placeholder]),
-      [["gone", "missing"]]);
+      [[ABSENT, "missing"]]);
     assert.equal(await s.get("core.workbench.error"), null, "opening the layout reported an error");
     // Saving does not change that tab.
     await s.run("core.projects.flush");
     const after = projectRecords(read(join(config, "projects.json")), "projects.json").find((p) => p.id === saved.id);
     const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === shell.id);
-    assert.equal(kept.data.tabs[0].plugin, "gone", "saving changed the tab of the plugin that is not loaded");
+    assert.equal(kept.data.tabs[0].plugin, ABSENT, "saving changed the tab of the plugin that is not loaded");
     assert.ok(stored.length > 0);
     await s.run("core.project.activate", { id: first.id });
   });

@@ -7,13 +7,30 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  CORE_OWNERS, GATE_SOURCES, checkGateSources, checkNames, checkPluginNames, checkSpecReads, checkTestPathReads, classifiedFiles,
+  CORE_OWNERS, GATE_SOURCES, absentPluginIds, checkGateSources, checkNames, checkPluginNames, checkSpecReads, checkTestPathReads, classifiedFiles,
   corePackageFolders, corePackageNames, fixtureSidecarNames, namedPlugins, namedSidecars, pluginNameScope,
 } from "../check-boundaries.mjs";
+import { fixturePluginIds } from "../fixture-registry.mjs";
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
 const core = new Set([scoped("plugin-api"), scoped("workbench")]);
+
+test("the absent plugin ids of the fixtures name no fixture plugin, and the audit accepts them as fixture ids", { timeout: 1000 }, (t) => {
+  const root = fileURLToPath(new URL("../../e2e/fixtures/", import.meta.url));
+  const absent = absentPluginIds(root, fixturePluginIds(root));
+  assert.ok(absent.length > 0);
+  assert.deepEqual(absent.filter((id) => fixturePluginIds(root).includes(id)), [], "no fixture plugin.json uses an absent plugin id");
+  const fixtures = ["probeplain", "rasterprobe"];
+  const dir = mkdtempSync(join(tmpdir(), "soksak-boundaries-absent-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, "absent-plugins.json"), JSON.stringify({ ids: ["probeplain"] }));
+  assert.throws(() => absentPluginIds(dir, fixtures), /absent-plugins\.json: the fixture plugins use the absent plugin ids probeplain$/);
+  writeFileSync(join(dir, "absent-plugins.json"), JSON.stringify({ ids: [] }));
+  assert.throws(() => absentPluginIds(dir, fixtures), /absent-plugins\.json: ids must be a list of plugin ids$/);
+  const files = { "e2e/absent.test.mjs": `await s.run("core.card.add-tab", { card, plugin: "${absent[0]}" });\n` };
+  assert.deepEqual(checkPluginNames(Object.keys(files), { fixtures: [...fixtures, ...absent], readSource: (file) => files[file] }), []);
+});
 
 test("importing the boundary module runs no check", (t) => {
   // The probe is a file, so that process.argv[1] names it, as the entry guard of the imported modules expects.

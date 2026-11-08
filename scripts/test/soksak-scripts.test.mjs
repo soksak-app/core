@@ -144,7 +144,9 @@ test("boundary audit reports a check that names a plugin other than a fixture pl
   await write(join(core, "packages/a/package.json"), JSON.stringify({ name: scoped("a") }));
   await write(join(core, "packages/a/index.js"), `import "${scoped("sidecar-probe")}";\n`);
   await write(join(core, "e2e/fixtures/probe/plugin.json"), JSON.stringify({ id: "probe" }));
+  await write(join(core, "e2e/fixtures/absent-plugins.json"), JSON.stringify({ ids: ["absentprobe"] }));
   await write(join(core, "e2e/fixture-tab.test.mjs"), `await s.run("core.card.add-tab", { plugin: "probe" });\n`);
+  await write(join(core, "e2e/absent-tab.test.mjs"), `await s.run("core.card.add-tab", { plugin: "absentprobe" });\n`);
   await write(join(core, "e2e/other.test.mjs"), `const ready = () => true;\nawait s.until("other.session", ready);\n`);
   await write(join(core, "e2e/listed.test.mjs"), `await s.run("listed.focus");\n`);
   await write(join(core, "docs/spec/verification-boundaries.json"),
