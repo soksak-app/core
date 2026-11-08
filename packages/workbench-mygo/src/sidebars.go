@@ -411,7 +411,7 @@ func (s *Sidebars) CardFrame(set *SidebarSet, space, side string, owner FocusedS
 		Status: layout.SideName(side) + " 사이드바 · " + set.Title}
 	// The set must stop before the native-input grip at the inner card edge
 	// (example-model.md); its status line still spans the full column.
-	border, _ := s.options.Look()
+	border, _ := s.options.Look() // silent: the inset takes the line width; the caption size has no part in it.
 	inset := float32(s.divider) + border
 	switch side {
 	case "left":
