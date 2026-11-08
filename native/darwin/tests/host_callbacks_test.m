@@ -24,9 +24,7 @@ static int completionLeases;
 #define STUB_R(result, name, parameters) static result stub_##name parameters { return 0; }
 #define STUB(mode, result, name, parameters, arguments) STUB_##mode(result, name, parameters)
 SP_HOST_CALLBACKS(STUB)
-#ifdef SOKSAK_DIAGNOSTIC
 SP_HOST_DIAGNOSTIC_CALLBACKS(STUB)
-#endif
 
 static int failures;
 static void check(bool passed, const char *name) {
@@ -72,10 +70,8 @@ static void image(uintptr_t context, uint64_t generation, uint64_t raster, int s
     receivedImage = context == 17 && generation == UINT64_C(0xf123456789abcdef)
         && raster == UINT64_C(0x8123456789abcdef) && sequence == -7;
 }
-#ifdef SOKSAK_DIAGNOSTIC
 static bool receivedExit;
 static void processExited(uintptr_t context, bool exited) { receivedExit = context == 29 && exited; }
-#endif
 static bool serve(uintptr_t context, char *plugin, char *path, void **bytes, size_t *length, char **contentType) {
     if (context != 17 || strcmp(plugin, "plugin") || strcmp(path, "/file")) return false;
     *bytes = strdup("body");
@@ -136,7 +132,6 @@ int main(void) { @autoreleasepool {
     check(completionLeases == 1, "the copied completion retains its native state until completion");
     hostRunOnMain(^{ sp_host_presentation_complete(completion, "failure"); });
     check(completed && completionLeases == 0, "presentation completion invokes and releases its transferred block on the main thread");
-#ifdef SOKSAK_DIAGNOSTIC
     checkMissing("process_exit_answered", ^{ hostRunOnWorker(^{ sp_host_diagnostic_callback_process_exit_answered(0, false); }); });
     sp_host_diagnostic_callbacks diagnostics = {0};
 #define INITIALIZE_DIAGNOSTIC(mode, result, name, parameters, arguments) diagnostics.name = stub_##name;
@@ -157,6 +152,5 @@ int main(void) { @autoreleasepool {
     hostRunOnWorker(^{ sp_host_diagnostic_callback_process_exit_answered(29, true); });
     check(receivedExit, "a rejected diagnostic replacement preserves its installed callback");
     check(ON_WORKER(int, sp_host_callback_surface_hit(17, &view)) == -37, "diagnostic registration leaves the base callbacks unchanged");
-#endif
     return failures ? 1 : 0;
 }}
