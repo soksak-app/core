@@ -1,17 +1,12 @@
 // Extension points end to end (docs/spec/plugins.md#extension-points): a provider probe declares the point items, a contributor
-// probe contributes one item and names the provider in its dependencies. The check installs the contributor from the fixture
-// registry, which installs the provider with it, and requires that the item
-// is connected in core.contributions and that the provider page imports its module and reports its answer.
+// probe contributes one item and names the provider in its dependencies. Both probes are preinstalled in every check configuration
+// with the other fixture plugins; the check requires that the item is connected in core.contributions and that the provider page
+// imports its module and reports its answer.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
-import { dirname, join } from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { fixtureRegistry } from "./benchmark/cases/floor-page.mjs";
-import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
+import { fresh } from "./fixture.mjs";
 
 
 for (const app of Object.values(APPS)) {
@@ -19,26 +14,9 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);
-    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
-    s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-    s.cleanup(async () => {
-      await s.windows(1, "the page was not ready for the cleanup");
-      for (const id of ["probecontributor", "probeprovider"]) {
-        if (!(await s.get("core.plugins")).plugins.find((row) => row.id === id)?.installed) continue;
-        const offsets = currentEventOffsets(app.configDir);
-        await s.run("core.plugins.remove", { plugin: id });
-        await pluginChangeApplied(s, offsets, `remove ${id} in the cleanup`);
-      }
-      await restoreRegistry(s);
-    });
-    await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
-    await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "probecontributor"), "the probe registry did not list the contributor");
-    const offsets = currentEventOffsets(app.configDir);
-    await s.run("core.plugins.install", { plugin: "probecontributor" });
-    await pluginChangeApplied(s, offsets, "install probecontributor");
     const installed = (await s.get("core.plugins")).plugins;
     for (const id of ["probecontributor", "probeprovider"]) {
-      assert.ok(installed.find((row) => row.id === id)?.installed, `${id} is not installed after the install of the contributor`);
+      assert.ok(installed.find((row) => row.id === id)?.installed, `the fixture plugin ${id} is not installed in the check configuration`);
     }
     await s.until("core.contributions", (items) => items.some((item) => item.plugin === "probecontributor"
       && item.point === "probeprovider.items" && item.state === "connected"),

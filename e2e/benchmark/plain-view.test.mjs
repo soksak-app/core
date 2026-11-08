@@ -1,16 +1,13 @@
 // Measures the floor of a view drag: the same width drag and recording as the plugin view benchmarks, on a view without plugin code. It reports
 // the in-gesture source intervals and judges only that the recording covers the gesture, because the floor is an input of the targets.
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { fixtureRegistry } from "./cases/floor-page.mjs";
-import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "../fixture.mjs";
+import { fresh } from "../fixture.mjs";
 import { frameChange, frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { mapViewContentFramesToCapture, requireViewContentFrameCoverage, rightEdgeWidthDragPlan, withViewContentTrace } from "../view-metrics-collection.mjs";
 import { cardEdgeConvergence, cardEdgeSamples, sourceIntervalSummary } from "./cases/plain-view.mjs";
@@ -23,29 +20,11 @@ const descriptor = Object.freeze({
   stopContentTrace: (s, surface) => s.run("probeplain.measure", { action: "stop" }, surface),
 });
 
-async function pluginChange(s, action, run) {
-  const offsets = currentEventOffsets(s.app.configDir);
-  await run();
-  await pluginChangeApplied(s, offsets, action);
-}
-
 // The colour that the recording shows for the empty document region of the probe.
 const PROBE_COLOUR = [30, 30, 30];
 
-/** Installs the probe, opens it to the right of a card and returns the session state of its drag. */
-async function openProbe(t, s, app, prepare) {
-  const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
-  s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
-  s.cleanup(async () => {
-    await s.windows(1, "the page was not ready for the cleanup");
-    if ((await s.get("core.plugins")).plugins.find((row) => row.id === "probeplain")?.installed) {
-      await pluginChange(s, "the removal of probeplain", () => s.run("core.plugins.remove", { plugin: "probeplain" }));
-    }
-    await restoreRegistry(s);
-  });
-  await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
-  await s.until("core.plugins", (value) => value.plugins.some((row) => row.id === "probeplain"), "the registry did not list the probe");
-  await pluginChange(s, "the install of probeplain", () => s.run("core.plugins.install", { plugin: "probeplain" }));
+/** Prepares the window, opens the probe, which every check configuration has installed, to the right of a card and returns the session state of its drag. */
+async function openProbe(s, prepare) {
   await prepare();
   const anchor = (await s.get("core.grid")).cards.find((item) => item.pane !== null);
   const split = await s.run("core.card.split", { card: anchor.id, side: "right", plugin: descriptor.plugin });
@@ -59,7 +38,7 @@ async function openProbe(t, s, app, prepare) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the drag of a view without plugin code reports the floor of its latency with traces disabled`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    const { surface, grid, card } = await openProbe(t, s, app, () => fresh(s, { performanceTrace: false }));
+    const { surface, grid, card } = await openProbe(s, () => fresh(s, { performanceTrace: false }));
     const { frame } = (await s.get("host.window")).surfaces.find((item) => item.id === surface);
     const marks = { head: frame.y - 2, top: frame.y, bottom: frame.y + frame.height, colour: PROBE_COLOUR };
     const run = await drag(s, { ...rightEdgeWidthDragPlan(grid, card), ms: 400, times: 2 }, { capture: true });
@@ -90,7 +69,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: the drag of a view without plugin code reports the floor of its source intervals`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    const { surface, grid, card } = await openProbe(t, s, app,
+    const { surface, grid, card } = await openProbe(s,
       () => fresh(s, { log: { frame: "trace" }, reads: ["plugin.probeplain.view.content_frame"] }));
     const traced = await withViewContentTrace(t, s, descriptor, surface, () =>
       drag(s, rightEdgeWidthDragPlan(grid, card), { capture: true }));

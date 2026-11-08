@@ -1,14 +1,10 @@
 // The native core close boundary consumes a declared fixture's save reply and modified report.
-// Actual Editor save behavior is checked separately; this fixture performs no Editor filesystem write.
+// The file save of a plugin is checked by that plugin; this fixture writes no file.
+// The fixture plugin probeclose is preinstalled in every check configuration.
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
-import { dirname, join } from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
-import { fresh, pluginChangeApplied, restoreRegistry, useRegistry } from "./fixture.mjs";
-import { fixtureRegistry } from "./benchmark/cases/floor-page.mjs";
+import { fresh } from "./fixture.mjs";
 
 const tabOf = (grid, id) => grid.cards.flatMap((card) => card.tabs ?? []).find((tab) => tab.id === id);
 
@@ -16,21 +12,6 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: save replies that retain modified state keep the native tab open`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal });
-    s.cleanup(() => rmSync(folder, { recursive: true }));
-    const change = async (name, run) => {
-      const offsets = currentEventOffsets(app.configDir);
-      await run();
-      await pluginChangeApplied(s, offsets, name);
-    };
-    s.cleanup(async () => {
-      if ((await s.get("core.plugins")).plugins.some((entry) => entry.id === "probeclose" && entry.installed)) {
-        await change("remove close probe", () => s.run("core.plugins.remove", { plugin: "probeclose" }));
-      }
-      await restoreRegistry(s);
-    });
-    await useRegistry(s, pathToFileURL(join(folder, "index.json")).href);
-    await change("install close probe", () => s.run("core.plugins.install", { plugin: "probeclose" }));
     const card = (await s.get("core.grid")).cards.find((entry) => entry.pane !== null);
     const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin: "probeclose" });
     s.cleanup(async () => {
@@ -61,6 +42,6 @@ for (const app of Object.values(APPS)) {
     await s.run("probeclose.prepare", { keepModified: false }, tab);
     await saveAndClose();
     await s.until("core.grid", (grid) => !tabOf(grid, tab), "the same tab did not close after its next save cleared modified state");
-    t.diagnostic("The native core consumes save completion and modified reports separately; this fixture establishes no Editor write-race result.");
+    t.diagnostic("The native core consumes save completion and modified reports separately; this fixture establishes no file write-race result.");
   });
 }

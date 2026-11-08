@@ -1,5 +1,5 @@
 // The save close probe: it reports the modified state of its tab independently of a successful save reply. This consumer fixture
-// controls tab reports, not filesystem writes or Editor behavior. The save count of a tab lives in the local storage of the view under
+// controls tab reports and writes no file. The save count of a tab lives in the local storage of the view under
 // a key of its surface id, so a reload of the same tab reads the count it had before the reload.
 
 /** The local storage key of the save count of the tab with surface id surface. */
