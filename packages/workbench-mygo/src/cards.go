@@ -133,21 +133,27 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 		width := max(0, inner-sides.extent("left")-sides.extent("right"))
 		slot := max(0, body-foot-sides.extent("top")-sides.extent("bottom"))
 		x, y := float32(rect.X)+originX+edge, float32(rect.Y)+originY+edge+head
-		// Left and right run from below the header to the edge of the card, and the content column lies between them.
-		ui.Row(c).Size(inner, body).Children(func() {
-			s.drawCardSide(c, id, sides, "left", x, y, sides.extent("left"), body)
-			ui.Column(c).Size(width, body).Children(func() {
-				s.drawCardSide(c, id, sides, "top", x+sides.extent("left"), y, width, sides.extent("top"))
-				ui.Box(c).Size(width, slot).Children(func() {
-					if active := data.ActiveTab(); active != nil {
-						box := layout.Rect{X: float64(x + sides.extent("left")), Y: float64(y + sides.extent("top")), W: float64(width), H: float64(slot)}
-						s.drawSeat(c, *active, box)
-					}
-				})
-				s.drawCardSide(c, id, sides, "bottom", x+sides.extent("left"), y+sides.extent("top")+slot, width, sides.extent("bottom"))
+		// Left and right run from below the header to the edge of the card, and the content column lies between them: the slot, the
+		// top and bottom sides and the status line under them. The sides follow the slot in the order of the page, top, bottom, left
+		// and right (SIDEBAR_SIDES of packages/workbench/plane.js), so the index of a side element names the same side on each host.
+		left, top, bottom := sides.extent("left"), sides.extent("top"), sides.extent("bottom")
+		ui.Box(c).Size(inner, body).Children(func() {
+			ui.Box(c).Absolute().Left(left).Top(top).Size(width, slot).Children(func() {
+				if active := data.ActiveTab(); active != nil {
+					box := layout.Rect{X: float64(x + left), Y: float64(y + top), W: float64(width), H: float64(slot)}
+					s.drawSeat(c, *active, box)
+				}
+			})
+			places := map[layout.Side]layout.Rect{
+				"top": {X: float64(left), W: float64(width), H: float64(top)}, "bottom": {X: float64(left), Y: float64(top + slot), W: float64(width), H: float64(bottom)},
+				"left": {W: float64(left), H: float64(body)}, "right": {X: float64(left + width), W: float64(sides.extent("right")), H: float64(body)},
+			}
+			for _, side := range layout.SidebarSides {
+				s.drawCardSide(c, id, sides, side, x, y, places[side])
+			}
+			ui.Column(c).Absolute().Left(left).Top(top+slot+bottom).Size(width, foot).Children(func() {
 				s.drawStatus(c, id, data, sides.fold, foot)
 			})
-			s.drawCardSide(c, id, sides, "right", x+sides.extent("left")+width, y, sides.extent("right"), body)
 		})
 	})
 }
