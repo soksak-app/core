@@ -724,5 +724,10 @@ pub(crate) fn background_race_sidecars<O: Owner>(
 
 pub(crate) fn has_surface_session<O: Owner>(sidecars: &Sidecars<O>, surface: &str) -> bool {
     let state = sidecars.core.state.lock().unwrap();
-    state.roots.contains_key(surface) || state.owners.contains_key(surface) || state.running.values().any(|process| process.surfaces.contains(surface))
+    state.roots.contains_key(surface)
+        || state.owners.contains_key(surface)
+        || state
+            .running
+            .values()
+            .any(|process| process.surfaces.contains(surface))
 }

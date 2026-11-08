@@ -1249,6 +1249,12 @@ impl<O: Owner> Sidecars<O> {
     }
 }
 
+/// The body of a request to a sidecar and the correlation identifiers of the inputs it belongs to.
+struct Payload<'a> {
+    body: &'a RawValue,
+    cids: &'a [String],
+}
+
 impl<O: Owner> Sidecars<O> {
     /// Creates the channel with the declared sidecars. The executable is the executable path inside each folder.
     /// Creates the sidecar channel with the canonical application configuration directory.
@@ -1649,7 +1655,7 @@ impl<O: Owner> Sidecars<O> {
             state.roots.get(surface).cloned().unwrap_or(current)
         };
 
-        self.send_at_root(owner, name, surface, root, body, cids, None)
+        self.send_at_root(owner, name, surface, root, Payload { body, cids }, None)
     }
 
     pub(crate) fn send_from_window(
@@ -1673,7 +1679,14 @@ impl<O: Owner> Sidecars<O> {
         if root.is_empty() {
             return Err(format!("sidecar {name}: surface {surface} has no project"));
         }
-        self.send_at_root(owner, name, surface, root, body, cids, Some(authority))
+        self.send_at_root(
+            owner,
+            name,
+            surface,
+            root,
+            Payload { body, cids },
+            Some(authority),
+        )
     }
 
     pub(crate) fn send_from_view(
@@ -1690,8 +1703,7 @@ impl<O: Owner> Sidecars<O> {
             name,
             surface,
             authority.root.clone(),
-            body,
-            cids,
+            Payload { body, cids },
             Some(authority),
         )
     }
@@ -1702,10 +1714,10 @@ impl<O: Owner> Sidecars<O> {
         name: &str,
         surface: &str,
         root: String,
-        body: &RawValue,
-        cids: &[String],
+        payload: Payload<'_>,
         authority: Option<&crate::documents::ViewSidecarAuthority<'_>>,
     ) -> Result<(), String> {
+        let Payload { body, cids } = payload;
         // The JSON serialization is done outside the mutex.
         let mut line = serde_json::to_vec(&Request {
             surface,

@@ -339,6 +339,7 @@ The allowed differences are two tables, and a row ID is unique across both. The 
 | C10 | `src/event_log_idle_test.go` | `src/event_log_flush_test.rs`, `tests/event_log_idle_test.rs` | Both languages assert the same sleep of the writer and the same answers of a flush. The Go test is in `package sok` for the fixture of its file system, and the Rust flush test is a child of `event_log.rs` for the private `wait_for_flush` |
 | H53 | `src/platform/windows/com.go` | none | The Go host calls WebView2 through its COM tables with no cgo; the Rust host has those tables from the `webview2-com` crate |
 | H54 | `src/platform/windows/capture_diagnostics.go` | none | A Go build tag selects a whole file, so the methods of the diagnostic build are a file of their own; Rust selects each method in `src/platform/windows/windows.rs` with a feature |
+| H69 | none | `src/exposure_menu_executor_test.rs` | The Tauri host performs the item of `host.menu.select` from the UI queue of the platform after the framework callback has unwound, because a framework task would hold the locks of that callback while the item runs and the item can reenter the lifecycle callbacks of the application. This in-crate test reaches the unexported executor with the queue of the test framework. The Go host performs the item in one step of the UI thread with no framework callback around it, so it has no such executor to test. |
 
 ### Framework table
 

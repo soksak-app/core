@@ -339,6 +339,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | C10 | `src/event_log_idle_test.go` | `src/event_log_flush_test.rs`, `tests/event_log_idle_test.rs` | 두 언어는 writer의 같은 잠듦과 flush의 같은 응답을 확인한다. Go test는 file system fixture 때문에 `package sok`에 있고, Rust flush test는 비공개 `wait_for_flush` 때문에 `event_log.rs`의 자식이다 |
 | H53 | `src/platform/windows/com.go` | 없음 | Go host 는 cgo 없이 COM table 로 WebView2 를 호출한다. Rust host 는 그 table 을 `webview2-com` crate 에서 얻는다 |
 | H54 | `src/platform/windows/capture_diagnostics.go` | 없음 | Go build tag 는 파일 전체를 고르므로 diagnostic build 의 method 가 자기 파일을 가진다. Rust 는 `src/platform/windows/windows.rs` 에서 method 마다 feature 로 고른다 |
+| H69 | 없음 | `src/exposure_menu_executor_test.rs` | Tauri host 는 framework callback 이 풀린 뒤 platform 의 UI queue 에서 `host.menu.select` 의 항목을 실행한다. framework task 로 실행하면 항목이 도는 동안 그 callback 의 잠금을 쥐고 있고, 항목은 애플리케이션의 lifecycle callback 에 다시 들어갈 수 있기 때문이다. 이 crate 안 test 는 test framework 의 queue 로 공개되지 않은 executor 에 닿는다. Go host 는 framework callback 없이 UI thread 의 한 step 에서 항목을 실행하므로 test 할 executor 가 없다. |
 
 ### Framework 표
 
