@@ -13,6 +13,7 @@
 - F661: workbench는 exposure port를 가질 때만 제거하고, 다른 값이면 실패한다.
 - F699: modal reload 검사는 status와 blur 계약을 공유하는 모든 host에서 돈다.
 - F700: core exposure의 기본 debug 상태는 debug 명세대로 `captures`를 담는다.
+- F473: process identity build test는 저장소 Makefile을 package 옆에 복사해, build가 checkout에서처럼 macOS minimum을 읽는다.
 - F696-4-4: 화면 글자 인식기를 제거한다. 그 native test program, Makefile 규칙, native test 항목과 native test runner의 build 단계, window-check 준비의 인식 명령과 warm-up, Vision 글자 인식의 private-API 행, 그리고 이들을 다루던 소유 검사가 대상이다. 검증 pipeline에 글자 인식은 남지 않는다. capture의 frame identity code를 Vision으로 decode하는 일은 그 IME·drag 쓰임과 함께 남는다.
 
 - F696-4-3: 창 검사는 view의 콘텐츠를 그 콘텐츠를 가진 plugin의 공개 값에서 읽는다. `browser.content.read`, `editor.read`, `getPageSvg`의 page glyph, image region이 조회가 가리키는 frame을 presented한 뒤의 `term.screen.read`와 `terminal.screen.read`, section ready status의 `content`이다. browser·editor·hwp 값은 그 view의 document region이 보이는 동안 읽는다. 녹화한 view는 값을 읽은 뒤의 presentation 시각 이후 첫 frame을 첫 콘텐츠 frame으로 삼고, browser·hwp·terminal·marker-view layout case는 그 presentation 이후 선언된 slot과 맞는 첫 frame을 삼는다. anchor 인식과 `e2e/view-first-content.mjs`는 제거되고, 측정의 콘텐츠 증명은 `{method: "value", expected, actual}`이다.
