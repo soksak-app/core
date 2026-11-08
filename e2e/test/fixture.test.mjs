@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, placeholderTabs, replacePlaceholders, restoreRegistry, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, placeholderTabs, probeListSections, replacePlaceholders, restoreRegistry, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -153,22 +153,29 @@ test("a start layout whose focused card holds no ready layout probe tab fails", 
   await assert.rejects(startTab(s), /did not register status layoutprobe.view, status layoutprobe.surface/);
 });
 
-test("a card sidebar links a declared layout probe set or a stored set of the given sections to the cards of the plugin", async () => {
+test("a card sidebar stores its own set of the layout probe list sections, or of the given sections, and links it to the cards of the plugin", async () => {
+  const listed = JSON.parse(readFileSync(new URL("../fixtures/layout-probe/layoutprobe/plugin.json", import.meta.url), "utf8"))
+    .sidebars.sets.find((item) => item.id === "list").sections;
+  assert.deepEqual(probeListSections(), listed);
   const s = workbench(starterLayout());
   await replacePlaceholders(s);
   assert.deepEqual(await cardSidebar(s), ["upper:left", "lower:left"]);
+  assert.deepEqual(s.state.settings.values.sets, [{ id: "check-sections", title: "검사", sections: listed, layout: "list" }]);
   assert.deepEqual(s.calls.filter(([kind]) => kind === "run").at(-1),
-    ["run", "core.settings.link", { place: "card-left", plugin: START_PLUGIN, set: "layoutprobe.list", scope: "common" }]);
+    ["run", "core.settings.link", { place: "card-left", plugin: START_PLUGIN, set: "check-sections", scope: "common" }]);
+  assert.ok(s.state.sidebars.every((item) => item.set === "check-sections"));
   assert.equal(s.cleanups.length, 1, "the sets and links are restored when the check ends");
 
   const tabs = workbench(starterLayout());
   await replacePlaceholders(tabs);
-  await cardSidebar(tabs, { set: "layoutprobe.tabs" });
-  assert.ok(tabs.state.sidebars.every((item) => item.set === "layoutprobe.tabs"));
-  assert.equal(tabs.calls.some(([, name]) => name === "core.settings.set"), false, "a declared set is linked, not stored");
+  await cardSidebar(tabs, { set: "check-tabs", sections: ["layoutprobe.alpha", "layoutprobe.beta"], layout: "tabs" });
+  assert.deepEqual(tabs.state.settings.values.sets,
+    [{ id: "check-tabs", title: "검사", sections: ["layoutprobe.alpha", "layoutprobe.beta"], layout: "tabs" }]);
+  assert.ok(tabs.state.sidebars.every((item) => item.set === "check-tabs"));
 
   const own = workbench(starterLayout());
   await replacePlaceholders(own);
+  own.state.settings.values.sets = [{ id: "check-sections", title: "old", sections: ["layoutprobe.beta"], layout: "list" }];
   await cardSidebar(own, { sections: ["layoutprobe.alpha", "layoutprobe.fill"] });
   assert.deepEqual(own.state.settings.values.sets, [{ id: "check-sections", title: "검사", sections: ["layoutprobe.alpha", "layoutprobe.fill"], layout: "list" }]);
   assert.ok(own.state.sidebars.every((item) => item.set === "check-sections"));

@@ -61,25 +61,38 @@ export async function startTab(s) {
   return { surface: active.id, plugin: START_PLUGIN };
 }
 
+/** The manifest of the layout probe (e2e/fixtures/layout-probe/layoutprobe/plugin.json). */
+const LAYOUT_PROBE_MANIFEST = fileURLToPath(new URL("fixtures/layout-probe/layoutprobe/plugin.json", import.meta.url));
+
 /**
- * Puts a card-left sidebar on each card whose active tab is a tab of `plugin` (START_PLUGIN by default). Without `sections` it links
- * the set `set` that the plugin declares (the layout probe declares `layoutprobe.list`, list layout, and `layoutprobe.tabs`, tabs
- * layout); with `sections` it first stores a common list set with the id `set` (by default `check-sections`) that holds those
- * sections. keepCommonSettings restores the sets and the links when the check ends. Returns the ids of the card sidebars.
+ * The sections of the set `list` that the layout probe declares: the default sections of the card sidebar of a check. A check
+ * configuration does not hold that set, because the sidebars of environment.json replace the default sets of the plugins
+ * (docs/spec/plugins.md#default-sidebar-sets), so the check stores its own set of these sections.
  */
-export async function cardSidebar(s, { plugin = START_PLUGIN, set, sections } = {}) {
-  const id = set ?? (sections === undefined ? `${plugin}.list` : "check-sections");
+export function probeListSections(path = LAYOUT_PROBE_MANIFEST) {
+  const sets = JSON.parse(readFileSync(path, "utf8")).sidebars?.sets ?? [];
+  const list = sets.find((item) => item.id === "list");
+  if (!Array.isArray(list?.sections) || list.sections.length === 0) throw new Error(`${path} declares no sections of its set list`);
+  return list.sections;
+}
+
+/**
+ * Puts a card-left sidebar on each card whose active tab is a tab of `plugin` (START_PLUGIN by default): it stores a common set with
+ * the id `set` (by default `check-sections`) and the layout `layout` (list by default) that holds `sections` (by default the sections
+ * of the list set of the layout probe, probeListSections) and links it. keepCommonSettings restores the sets and the links when the
+ * check ends. Returns the ids of the card sidebars.
+ */
+export async function cardSidebar(s, { plugin = START_PLUGIN, set = "check-sections", sections = probeListSections(), layout = "list" } = {}) {
   await keepCommonSettings(s);
-  if (sections !== undefined) {
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: [...sets, { id, title: "검사", sections, layout: "list" }] }, scope: "common" });
-  }
-  await s.run("core.settings.link", { place: "card-left", plugin, set: id, scope: "common" });
+  const sets = (await s.get("core.settings")).values.sets;
+  await s.run("core.settings.set", { patch: { sets: [...sets.filter((item) => item.id !== set), { id: set, title: "검사", sections, layout }] },
+    scope: "common" });
+  await s.run("core.settings.link", { place: "card-left", plugin, set, scope: "common" });
   const cards = (await s.get("core.grid")).cards
     .filter((card) => card.tabs?.find((tab) => tab.id === card.active)?.plugin === plugin).map((card) => `${card.id}:left`);
   if (cards.length === 0) throw new Error(`no card shows an active ${plugin} tab for its card sidebar`);
-  await s.until("core.sidebars", (value) => cards.every((sidebar) => value.some((item) => item.sidebar === sidebar && item.set === id)),
-    `the card sidebars ${cards.join(", ")} did not show the set ${id}`);
+  await s.until("core.sidebars", (value) => cards.every((sidebar) => value.some((item) => item.sidebar === sidebar && item.set === set)),
+    `the card sidebars ${cards.join(", ")} did not show the set ${set}`);
   return cards;
 }
 
