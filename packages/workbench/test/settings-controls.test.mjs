@@ -69,6 +69,10 @@ test("every setting form is drawn with its one control", async (t) => {
     assert.equal(controlOf("fixture.columns").type, "range");
     assert.equal(controlOf("fixture.family").type, "text");
     assert.equal(controlOf("fixture.home").type, "text");
+    // A text control fills its row as every text field does (.text-field in app.css), not at the default size of the browser.
+    for (const key of ["fixture.family", "fixture.home"]) {
+      assert.ok(document.querySelector(`[data-set="${key}"]`).classList.contains("text-field"), `${key} does not fill its row`);
+    }
 
     ui.showSection("sidebars");
     ui.editSet("set-1");
@@ -76,6 +80,7 @@ test("every setting form is drawn with its one control", async (t) => {
     assert.deepEqual([layout?.name, layout?.value, layout?.options, layout?.command],
       ["core.settings-modal.set", "list", ["list", "tabs"], { name: "core.settings.sets.update", params: { id: "set-1", scope: "common" } }]);
     assert.equal(document.querySelector('[data-set="layout:set-1"]').dataset.value, "layout");
+    assert.ok(document.querySelector('[data-set="title:set-1"]').classList.contains("text-field"), "the set name does not fill its row");
   } finally {
     ui.closeSettings();
     dom.window.close();
