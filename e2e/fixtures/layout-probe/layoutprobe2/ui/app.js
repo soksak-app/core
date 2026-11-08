@@ -1,4 +1,4 @@
-// The entry of the second layout probe: a tab view without sidebar defaults that serves its surface and size as
+// The entry of the second layout probe: a tab view without sidebar defaults that serves its surface, size and text size as
 // layoutprobe2.surface, so a check places it beside the first probe and sees a window sidebar without an override.
 import { createExpose } from "@soksak/plugin-api";
 import { createViewBridge, createViewReporter } from "@soksak/plugin-api/view";
@@ -13,4 +13,4 @@ const expose = createExpose({
   report: (text) => bridge.runtime.error("layoutprobe2 exposure", text),
   onRequest: (answer) => bridge.runtime.native.on("exposure-request", answer),
 }, () => window.sokSurface.declarations);
-await startSecondProbe({ expose, view: window });
+await startSecondProbe({ bridge, expose, view: window });

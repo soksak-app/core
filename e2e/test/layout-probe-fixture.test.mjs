@@ -12,7 +12,7 @@ import {
   documentAddress, followedSurface, FOOTER, regionVisibility, startLayoutProbe, startProbeSection,
 } from "../fixtures/layout-probe/layoutprobe/ui/layout-probe.js";
 import { startDocumentProbe, storageKey } from "../fixtures/layout-probe/layoutprobe/ui/document-probe.js";
-import { startSecondProbe } from "../fixtures/layout-probe/layoutprobe2/ui/second-probe.js";
+import { startSecondProbe, TEXT_SIZE } from "../fixtures/layout-probe/layoutprobe2/ui/second-probe.js";
 
 const folder = (plugin) => fileURLToPath(new URL(`../fixtures/layout-probe/${plugin}/`, import.meta.url));
 const read = (plugin, file) => JSON.parse(readFileSync(`${folder(plugin)}${file}`, "utf8"));
@@ -305,17 +305,47 @@ test("the region document reports its scheme, visibility, stored value and color
   assert.equal(storageKey({ href: "soksak://layoutprobe/ui/document.html" }), "layoutprobe.site.");
 });
 
-test("the second probe serves its declared status and follows its size", { timeout: 1000 }, async () => {
+/**
+ * Starts the second probe in a fake view whose line of text is 1.25 times its font size high, with a fake bridge whose text size
+ * starts at `factor` and an exposure that keeps the served statuses and the exposed elements.
+ */
+async function startSecond(factor = 1) {
   const view = fakeView({ surface: "tab-9", params: null, origin: { directory: null }, project: null, section: null });
+  const text = { style: {}, getBoundingClientRect: () => ({ height: Number.parseFloat(text.style.fontSize) * 1.25 }) };
+  const empty = { style: {} };
+  view.document.getElementById = (id) => ({ text, empty })[id] ?? null;
+  let textSize = null;
+  const bridge = { runtime: { textSize: { read: async () => factor, on: async (listener) => { textSize = listener; return () => {}; } } } };
   const { served, expose } = fakeExpose();
-  await startSecondProbe({ expose, view });
+  const elements = new Map();
+  expose.element = async (name, element) => { elements.set(name, element); };
+  await startSecondProbe({ bridge, expose, view });
+  return { view, served, elements, text, empty, textSize: (value) => textSize(value) };
+}
+
+test("the second probe serves its declared status and elements and follows its size", { timeout: 1000 }, async () => {
+  const { view, served, elements, text, empty } = await startSecond();
   assert.deepEqual([...served.keys()], second.exposes.status.map((status) => status.name));
+  assert.deepEqual([...elements.keys()], second.exposes.element.map((element) => element.name));
+  assert.deepEqual([elements.get("layoutprobe2.text"), elements.get("layoutprobe2.empty")], [text, empty]);
   assert.equal(second.sidebars, undefined);
   const status = served.get("layoutprobe2.surface");
   const values = [];
   status.subscribe((value) => values.push(value));
   view.innerHeight = 200;
   view.dispatch("resize");
-  assert.deepEqual(values, [{ surface: "tab-9", width: 640, height: 200, scale: 2 }]);
+  assert.deepEqual(values, [{ surface: "tab-9", width: 640, height: 200, scale: 2, text: { factor: 1, height: TEXT_SIZE * 1.25 } }]);
   assert.ok(matchesSchema(schemaOf(second, "layoutprobe2.surface"), status.read()));
+});
+
+test("the second probe draws its text at the text size of its surface and reports each change", { timeout: 1000 }, async () => {
+  const { served, text, textSize } = await startSecond(1.25);
+  const status = served.get("layoutprobe2.surface");
+  assert.equal(text.style.fontSize, `${TEXT_SIZE * 1.25}px`);
+  assert.deepEqual(status.read().text, { factor: 1.25, height: TEXT_SIZE * 1.25 * 1.25 });
+  const values = [];
+  status.subscribe((value) => values.push(value.text));
+  textSize(1.5);
+  assert.equal(text.style.fontSize, `${TEXT_SIZE * 1.5}px`);
+  assert.deepEqual(values, [{ factor: 1.5, height: TEXT_SIZE * 1.5 * 1.25 }]);
 });

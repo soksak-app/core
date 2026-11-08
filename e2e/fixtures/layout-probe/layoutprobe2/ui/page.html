@@ -4,9 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Layout probe 2</title>
-<style>html, body { height: 100%; margin: 0; background: var(--card); }</style>
+<style>
+html, body { height: 100%; margin: 0; background: var(--card); }
+#text { position: absolute; left: 8px; top: 8px; margin: 0; font: 13px/1.25 sans-serif; color: var(--fg); white-space: nowrap; }
+#empty { position: absolute; left: 8px; right: 8px; top: 48px; bottom: 8px; }
+</style>
 </head>
 <body>
+<p id="text">Layout probe 2</p>
+<div id="empty"></div>
 <script type="module" src="./app.js"></script>
 </body>
 </html>

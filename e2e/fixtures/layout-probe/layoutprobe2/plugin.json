@@ -1,7 +1,7 @@
 {
   "id": "layoutprobe2",
   "name": "Layout probe 2",
-  "description": "Window check fixture: a tab view without sidebar defaults that reports its size, so a window sidebar beside its tab keeps the general choice and draws no rail.",
+  "description": "Window check fixture: a tab view without sidebar defaults that reports its size and text size and exposes a line of text and an empty area.",
   "surface": { "composition": { "kind": "view", "page": "ui/page.html" } },
   "mark": "M",
   "icon": "<circle cx=\"8\" cy=\"8\" r=\"5\"/>",
@@ -9,11 +9,23 @@
     "status": [
       {
         "name": "layoutprobe2.surface",
-        "description": "The surface id and the size and scale of the tab view.",
-        "schema": { "type": "object", "properties": { "surface": { "type": "string" }, "width": { "type": "number" }, "height": { "type": "number" }, "scale": { "type": "number" } } }
+        "description": "The surface id, the size and scale of the tab view, and the text size of the surface with the height of the text drawn at 13 points times it.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "surface": { "type": "string" },
+            "width": { "type": "number" },
+            "height": { "type": "number" },
+            "scale": { "type": "number" },
+            "text": { "type": "object", "properties": { "factor": { "type": "number" }, "height": { "type": "number" } } }
+          }
+        }
       }
     ],
     "commands": [],
-    "element": []
+    "element": [
+      { "name": "layoutprobe2.text", "description": "The line of text of the view, drawn at 13 points times the text size of the surface." },
+      { "name": "layoutprobe2.empty", "description": "The empty area of the view below its text, painted only with the card background." }
+    ]
   }
 }
