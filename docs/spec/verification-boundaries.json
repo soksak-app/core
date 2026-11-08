@@ -2,11 +2,6 @@
   "schema": 1,
   "files": [
     {
-      "file": "e2e/activation/ime-capture-replay.mjs",
-      "owner": "tool",
-      "reason": "Replays recorded IME capture artifacts of a `plugin.terminal.*` session; it builds or installs nothing, but it is tied to the terminal and should be rewritten against an IME-capable plain-view fixture (text-input element plus a frame identity)."
-    },
-    {
       "file": "e2e/activation/ime-visual-capture.mjs",
       "owner": "tool",
       "reason": "Helper that starts the terminal-renderer IME capture and reads its frame identities (terminal sidecar); reduce it to a fixture view that reports its preedit and frame identity."
