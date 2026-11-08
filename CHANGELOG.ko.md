@@ -20,6 +20,7 @@
 - F292-70-3: `flock`에서 기다리는 page process의 stall record는 기다리는 파일과 그 lock을 가진 process를 적거나, 둘 중 하나를 읽을 수 없는 이유를 적는다.
 - F702: `make check-breaks`의 복사본은 F669 이후 bounded command가 import하는 `scripts/test-command.mjs`를 갖고, `workspace-copy.test`는 복사한 part 밖의 workspace 파일을 import하는 복사 module을 거부한다. Red: test가 `scripts/bounded.mjs imports scripts/test-command.mjs`로 실패했다. Green: test가 통과하고 `pnpm check-breaks`가 break 143개를 모두 잡는다.
 - F606-1: darwin 전용 Go test 는 `tests/platform/darwin/system/` 아래 test package 이고 함께 쓰는 fixture 는 `tests/support` 에 있으며, mygo 빈 window benchmark 는 `benchmark/platform/darwin` 이다. 그래서 `GOOS=windows go vet ./...` 가 `packages/host/go` 와 `packages/host/mygo` 에서 모든 tag 조합으로 통과한다. boundary check 는 fixtures 폴더 안의 package manifest 를 그 폴더를 가진 package 의 test payload 로 본다.
+- F709: mygo workbench 의 card side 크기 test 는, set 이 안쪽 border 와 grip 앞에서 멈추므로, 그 크기를 status line 이 걸치는 column 의 폭과 비교한다.
 - F708: HOME 의 cargo test 는 임시 HOME 의 cargo folder 에 가짜 cargo 를 두므로 Rust toolchain 이 설치되지 않은 곳에서도 통과한다.
 - F707: target directory 의 test 는 임시 toolchain folder 에 자기 cargo 를 두므로, Rust 를 설치하지 않는 Node test 의 CI job 에서 통과한다.
 - F706: dynamic native artifact 는 그 binding 을 link 하는 test executable 만 요구하므로, Wails host test 는 더 이상 mygo host 의 native library 를 요구하지 않는다.

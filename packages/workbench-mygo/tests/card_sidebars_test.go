@@ -73,12 +73,13 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 func TestATopSideLiesInTheContentColumn(t *testing.T) {
 	f, card := cardSidebar(t, "top")
 	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "left", "set": "set-install"})
-	left, top := f.box("core.sidebar", card+":left"), f.box("core.sidebar", card+":top")
+	// The set of the left side stops before its border and grip; its status line spans the whole column.
+	left, top := f.box("core.card.sidebar.status", card+":left"), f.box("core.sidebar", card+":top")
 	if top.X != left.X+left.W {
-		t.Fatalf("the top side %+v does not start after the left side %+v", top, left)
+		t.Fatalf("the top side %+v does not start after the column of the left side %+v", top, left)
 	}
-	// The top side is 190 tall: its set and the status line below the set.
-	if line := f.box("core.card.sidebar.status", card+":top"); line.Y != top.Y+top.H || top.H+line.H != 190 {
+	// The top side is 190 tall: its set, the inner border and grip (7) below the set, and the status line.
+	if line := f.box("core.card.sidebar.status", card+":top"); line.Y != top.Y+top.H+cardBorder+6 || line.Y+line.H-top.Y != 190 {
 		t.Fatalf("the top side is %+v and its status line %+v", top, line)
 	}
 	value, err := f.shell.Registry().Read("core.sidebars")
@@ -155,8 +156,9 @@ func TestAFoldedSideOpensAgainFromTheHeader(t *testing.T) {
 func TestTheSizeOfASideIsStoredWithinItsBounds(t *testing.T) {
 	f, card := cardSidebar(t, "right")
 	f.run("core.card.sidebar.size", map[string]any{"card": card, "side": "right", "size": 240})
-	if side := f.box("core.sidebar", card+":right"); side.W != 240 {
-		t.Fatalf("the side is %+v", side)
+	// The size is the width of the column, which the status line spans.
+	if line := f.box("core.card.sidebar.status", card+":right"); line.W != 240 {
+		t.Fatalf("the column of the side is %+v", line)
 	}
 	if sides := f.storedSides(card); sides["right"].(map[string]any)["size"] != float64(240) {
 		t.Fatalf("the stored sides are %v", sides)
@@ -205,8 +207,8 @@ func TestTheGripSizesTheSideAndAPressFoldsIt(t *testing.T) {
 	f.tester.Frame()
 	f.tester.Release(x+30, y)
 	f.settle()
-	if side := f.box("core.sidebar", item); side.W != 220 {
-		t.Fatalf("after the drag the side is %+v", side)
+	if line := f.box("core.card.sidebar.status", item); line.W != 220 {
+		t.Fatalf("after the drag the column of the side is %+v", line)
 	}
 	grip = f.box("core.card.sidebar.grip", item)
 	x = grip.X + grip.W/2

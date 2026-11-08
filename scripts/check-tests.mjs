@@ -449,6 +449,18 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F709",
+    implementation: [{ file: "packages/workbench-mygo/src/sidebars.go", symbol: "inset := float32(s.divider) + border" }],
+    tests: [
+      { file: "packages/workbench-mygo/tests/card_sidebars_test.go", id: "TestATopSideLiesInTheContentColumn" },
+      { file: "packages/workbench-mygo/tests/card_sidebars_test.go", id: "TestTheSizeOfASideIsStoredWithinItsBounds" },
+      { file: "packages/workbench-mygo/tests/card_sidebars_test.go", id: "TestTheGripSizesTheSideAndAPressFoldsIt" },
+      { file: "packages/workbench-mygo/tests/plane_verify_test.go", id: "TestTheGridStatesTheSidesOfACard" },
+    ],
+    expected: "The size of a card side is the width of its column, which its status line spans, while its set stops before the inner border and grip.",
+    levels: ["unit"],
+  },
+  {
     id: "F708",
     implementation: [{ file: "Makefile", symbol: "export CARGO := $(shell PATH=\"$(PATH)\" command -v cargo)" }],
     tests: [{ file: "scripts/test/makefile-recipes.test.mjs", id: "a recipe line without shell characters runs CARGO when the PATH of make holds no cargo folder" }],

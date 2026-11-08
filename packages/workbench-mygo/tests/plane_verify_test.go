@@ -531,9 +531,10 @@ func TestTheGridStatesTheSidesOfACard(t *testing.T) {
 		if !ok || left.Set == nil || left.Size <= 0 || left.ShownSize == nil {
 			t.Fatalf("the sides of the card are %+v", drawn.Sidebars)
 		}
-		box := f.box("core.sidebar", card+":left")
+		// The shown size is the width of the column, which the status line spans.
+		box := f.box("core.card.sidebar.status", card+":left")
 		if *left.ShownSize != float64(box.W) {
-			t.Fatalf("the side states %v and the window drew %v", *left.ShownSize, box.W)
+			t.Fatalf("the side states %v and the window drew a column of %v", *left.ShownSize, box.W)
 		}
 		return
 	}
