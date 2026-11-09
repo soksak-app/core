@@ -5,6 +5,7 @@ import { execFile } from "node:child_process";
 import { readFile, statfs } from "node:fs/promises";
 import { loadavg } from "node:os";
 import { join } from "node:path";
+import { joinedFailure } from "./failure.mjs";
 
 /** The seconds in which sample watches the host. One short record shows the stack of the blocked main thread. */
 const SECONDS = 2;
@@ -267,7 +268,7 @@ export async function sampleStall({ host, pages, directory, time = Date.now(), s
   if (results[0].status === "rejected") {
     const errors = results.filter((result) => result.status === "rejected").map((result) => result.reason);
     if (errors.length === 1) throw errors[0];
-    throw new AggregateError(errors, errors.map((error) => error.message).join("; "));
+    throw joinedFailure(`the host ${host} and its pages were not sampled`, errors);
   }
   return results.map((result, index) => result.status === "fulfilled" ? result.value
     : `page ${pages[index - 1]} not sampled: ${result.reason.message}`);

@@ -11,6 +11,7 @@ import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
+import { joinedFailure } from "./failure.mjs";
 import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
@@ -236,7 +237,7 @@ function afterSession(t, finish, dispose) {
         sessionFinishes.delete(t);
       }
       if (failures.length === 1) throw failures[0];
-      if (failures.length) throw new AggregateError(failures, `${failures.length} session cleanups failed`);
+      if (failures.length) throw joinedFailure(`${failures.length} session cleanups failed`, failures);
     });
   }
   finishes.push({ finish, dispose });
@@ -322,7 +323,7 @@ export async function open(t, app, { clipboard = false, inactive = false } = {})
   } catch (error) {
     try { await finish(); } catch (cleanupError) {
       finished = Promise.resolve();
-      throw new AggregateError([error, cleanupError], "session preparation and cleanup failed");
+      throw joinedFailure("session preparation and cleanup failed", [error, cleanupError]);
     }
     throw error;
   }
@@ -381,7 +382,7 @@ function disposeSessionRecordings(t, folders, preserve) {
     }
   }
   if (failures.length === 1) throw failures[0];
-  if (failures.length) throw new AggregateError(failures, `${failures.length} recording disposals failed`);
+  if (failures.length) throw joinedFailure(`${failures.length} recording disposals failed`, failures);
 }
 
 async function finishSessionAudit(t, session, close, pendingDisposal) {
@@ -476,7 +477,7 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
     close();
   }
   if (failures.length === 1) throw failures[0];
-  if (failures.length) throw new AggregateError(failures, `${failures.length} cleanup steps failed`);
+  if (failures.length) throw joinedFailure(`${failures.length} cleanup steps failed`, failures);
 }
 
 /**
@@ -724,7 +725,7 @@ export class Session {
       }
     }
     if (failures.length === 1) throw failures[0];
-    if (failures.length) throw new AggregateError(failures, `${failures.length} synthetic presses stayed open`);
+    if (failures.length) throw joinedFailure(`${failures.length} synthetic presses stayed open`, failures);
     return released;
   }
 
@@ -851,7 +852,7 @@ export class Session {
       try {
         actual = await this.get("host.window");
       } catch (readError) {
-        throw new AggregateError([error, readError], `${this.app.name}: pointer-outside placement failed and final geometry could not be read`);
+        throw joinedFailure(`${this.app.name}: pointer-outside placement failed and final geometry could not be read`, [error, readError]);
       }
       const details = {
         initialPointer: pointer,

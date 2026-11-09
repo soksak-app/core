@@ -100,5 +100,5 @@ test("the session finish fails with the text of a stall sample that failed", asy
   const finish = finishSession(check, session, () => {});
   const error = Object.assign(new Error("Command failed"), { code: 1 });
   for (const { callback } of running) callback(error, "", "sample cannot examine process\n");
-  await assert.rejects(finish, /^Error: probe host\.window\.reload still pending after 3000 ms; sampling the host failed: sample 20 exited with 1: sample cannot examine process; sample 21 exited with 1: sample cannot examine process$/);
+  await assert.rejects(finish, /^Error: probe host\.window\.reload still pending after 3000 ms; sampling the host failed: the host 20 and its pages were not sampled: sample 20 exited with 1: sample cannot examine process; sample 21 exited with 1: sample cannot examine process$/);
 });
