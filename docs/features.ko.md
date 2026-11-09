@@ -1244,7 +1244,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F714-8 — 설정 창: 일반의 표시 스위치 넷, 일반 세트 선택 넷, 순서 줄, 플러그인 페이지의 창 선택 넷, 고친 묶음 설명. 두 workbench 모두.
   - [o] F714-9 — chrome 스위치 `core.chrome.top`, `core.chrome.bottom`, 보이기 tooltip, 고정 index 없는 버튼 순서, chrome 컨트롤 폭, 모든 변의 접기 컨트롤. 두 workbench 모두.
   - [ ] F714-10 — 다시 빌드한 Tauri, Wails, mygo 앱에서 네 변과 그 순서를 확인한다.
-  - [ ] F714-11 — kit의 용어 목록이 창 사이드바의 변과 사이드바 순서를 이름 짓고, `sidebar instance` 정의가 `top`과 `bottom`을 나열한다. 이 변경은 이 저장소가 pin하는 kit release로 들어온다.
+  - [ ] F714-11 — kit의 용어 목록이 창 사이드바의 변과 사이드바 순서를 이름 짓고, `sidebar instance` 정의가 `top`과 `bottom`을 나열한다. 이 변경은 이 저장소가 pin하는 kit release로 들어온다. kit은 이 변경을 main branch의 KR26으로 가진다: `terms.json`이 `window side`를 거부하는 `window edge`, `dock order`와 `edge order`를 거부하는 `sidebar order`, macOS의 Dock이 아닌, sidebar order대로 창 사이드바를 놓는 `dock`을 정의하고, `sidebar instance`가 `left`, `right`, `top`, `bottom`, `cardId:side`를 이름 짓는다. 그 kit의 term 검사는 이 저장소에서 거부어의 사용을 찾지 않는다. `docs/spec/terms.md`는 kit 목록을 하나의 용어 목록으로 이름 짓고 용어를 나열하지 않으므로 바뀌지 않는다. 이 항목은 kit release KR27(0.0.15)과 이 저장소의 pin을 기다린다.
 
 - [o] F239-57 — P0: Darwin process identity 패키지의 native test 두 개를 workspace Node test runner에서 발견 가능하게 유지한다. 기존 `test` script가 runner가 test 시작 전에 거부하는 `make test`를 사용했다. 발견되는 Node entrypoint 하나가 기존 process-identity와 package-relocation Make target을 각각 위임 실행하며, 각 target은 native runner를 통해 test별 진행 표시, 개별 제한 시간, 출력, 실패 상태를 유지한다. Red: 실제 package discovery owner test가 `make test`는 지원되는 Node test script가 아니라는 이유로 실패했다. Green: 같은 owner test가 1/1, package Node entrypoint가 2/2 통과하고 각 native target도 1/1 통과한다. Workspace runner가 package entrypoint를 발견하고 실행한다. 현재 목록은 lane 102개, 구현 파일 704개, 테스트 파일 1010개이며 미연결 구현 및 테스트 파일이 없다.
 
