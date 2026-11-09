@@ -336,7 +336,7 @@ func (s *Shell) event(name string, data []any) {
 		s.pluginOperations.RefreshOutdated(func() {})
 	case "window-active":
 		s.pluginOperations.Refresh(func() {})
-		s.appUpdates.Refresh()
+		s.appUpdates.Refresh(func() {})
 	case "project-close-request":
 		s.closeWindowAsked()
 	case "project-remove-request":

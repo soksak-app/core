@@ -267,7 +267,8 @@ static void checkReceipts(void) {
         "\"loading\":false,\"url\":\"about:blank\",\"view\":\"%p\"}", view];
     BOOL named = NO;
     for (NSString *line in [unreceived componentsSeparatedByString:@"\n"]) {
-        if ([line containsString:@" error native input inject: {\"kind\":\"unreceived\""] && [line containsString:awaited]
+        if ([line containsString:@" error native input inject: {"] && [line containsString:@"\"kind\":\"unreceived\""]
+            && [line containsString:awaited]
             && [line containsString:@"\"samePage\":true"] && [line containsString:@"\"type\":\"pointerdown\""]) named = YES;
     }
     check(named, [NSString stringWithFormat:@"a press the document did not receive names the awaited and the reached view (got %@)", unreceived]);
