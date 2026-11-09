@@ -26,8 +26,10 @@ test("a layout published before drawing waits for the host's placement answer", 
   }));
 
   const pending = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
-    new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]));
+    new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 }, grid: 2 }]]));
   assert.equal(typeof pending?.then, "function", "the caller needs the host's promise before it draws");
+  // Verify V7c judges the prediction on the grid that its layout was made on, which the display can leave before the check.
+  assert.equal(prepared.surfaces[0].grid, 2, "the prediction does not carry the grid of its layout");
   assert.equal(placementPending(), true, "the current DOM commit is waiting for the host placement answer");
   let drawn = false;
   pending.then(() => { drawn = true; });

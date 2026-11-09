@@ -213,7 +213,7 @@ export function verify(controls = null) {
       if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
       if (!placed(s)) continue;
       const drawn = drawnFrame(slot);
-      const delta = apart(drawn, s.declared);
+      const delta = apart(drawn, s.declared, s);
       if (delta > worst) {
         worst = delta;
         at = ` · ${s.id} drawn ${frameText(drawn)} declared ${frameText(s.declared)}`;
@@ -263,14 +263,19 @@ export function verify(controls = null) {
   // section surface is measured by the commit that follows, which V7a checks.
   // The plane lies on the device pixel grid (device-grid.js), so the plane coordinates of both rectangles share its lines.
   // The host seats the predicted rectangle fitted inward to the device pixels, and the page paints the drawn slot at the
-  // device pixels nearest to its edges, so V7c compares the two in device pixels of the one grid scale.
+  // device pixels nearest to its edges, so V7c compares the two in device pixels of one grid scale. That is the scale the layout
+  // of the prediction was made on: the plane writes the cards of that layout on its grid, and a change of the display before
+  // this check draws the plane again on the new grid, so the new layout is predicted and checked on its own grid.
   const scale = gridScale();
   if (!(scale > 0)) throw new Error(`verify: the device pixel ratio ${scale} is not a positive number`);
   const guess = ahead();
   if (!guess) skip("V7c 미리 게시한 자리 == 그려진 자리", "이번 렌더는 미리 게시하지 않았다");
   else if (pendingPlacement) skip("V7c 미리 게시한 자리 == 그려진 자리", "host placement pending");
   else {
-    const onScreen = (drawn, declared) => gridDelta(painted(drawn, scale), fitted(declared, scale), scale);
+    const onScreen = (drawn, declared, s) => {
+      if (!(s.grid > 0)) throw new Error(`verify: predicted surface ${s.id} has no grid scale (${s.grid})`);
+      return gridDelta(painted(drawn, s.grid), fitted(declared, s.grid), s.grid);
+    };
     const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(guess.surfaces, true, undefined, onScreen);
     add("V7c 미리 게시한 자리 == 그려진 자리",
         gone === 0 && missed === 0 && worst === 0 && dim === 0,

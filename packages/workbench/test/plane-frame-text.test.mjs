@@ -78,6 +78,9 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     assert.ok(held, "the factor change did not reach the layout receiver");
     assert.equal(held.titlebar, 54, "the preparation carries the 54px row that the draw at factor 1.5 shows");
     assert.equal(drawnFactor(), before, "the factor reached the document before the prepared draw");
+    // Verify V7c judges the prediction on the grid of its layout, which the display can leave before the check.
+    assert.deepEqual([...held.seated.values()].map((seat) => seat.grid), [globalThis.devicePixelRatio],
+      "the seats of the layout do not carry the device pixel scale that the view laid the cards out on");
 
     records.length = 0;
     compositor.publishAhead(held.made, held.seated, held.titlebar);

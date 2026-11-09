@@ -7,8 +7,11 @@ import { Soksak } from "soksak";
 
 const rect = (x, y, w, h) => ({ x, y, width: w, height: h, left: x, top: y, right: x + w, bottom: y + h });
 
-/** Runs verify over a plane at 7,83 with one card whose surface "probe" was predicted at declared and seated by the host at applied on the device pixels of seat, or without a seat scale for null. */
-async function verifyThirds(t, declared, applied, seat = 3) {
+/**
+ * Runs verify over a plane at 7,83 with one card whose surface "probe" was predicted at declared on the grid of laid and seated by
+ * the host at applied on the device pixels of seat, or without either scale for null. slot is the drawn rectangle of the surface.
+ */
+async function verifyThirds(t, declared, applied, seat = 3, laid = 3, slot = rect(210, 470.328125, 760, 259.65625)) {
   const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"><article class="card" data-card-id="one"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="probe"></div></article></div></div>');
   globalThis.document = dom.window.document;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
@@ -23,8 +26,8 @@ async function verifyThirds(t, declared, applied, seat = 3) {
   card.getBoundingClientRect = () => rect(209, 437.328125, 762, 315.65625);
   card.style.width = "762px";
   card.style.height = "315.666667px";
-  document.querySelector(".slot").getBoundingClientRect = () => rect(210, 470.328125, 760, 259.65625);
-  const guess = { seq: 40, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands: null }] };
+  document.querySelector(".slot").getBoundingClientRect = () => slot;
+  const guess = { seq: 40, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands: null, ...(laid === null ? {} : { grid: laid }) }] };
   const placed = { seq: 40, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, declared, applied, ...(seat === null ? {} : { scale: seat }) }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => null, placementPending: () => false, seated: () => placed } });
   t.mock.module("../plane.js", { exports: {
@@ -91,4 +94,18 @@ test("V7c names a surface drawn one device pixel lower than its prediction", asy
   const { v7c } = await verifyThirds(t, { ...thirds, y: thirds.y - 1 / 3 }, { x: 203, y: 1161 / 3, w: 760, h: (1940 - 1161) / 3 });
   assert.equal(v7c.ok, false);
   assert.match(v7c.note, /probe drawn 203,387\.33 760×259\.66 declared 203,387 760×259\.67/);
+});
+
+test("V7c judges a prediction on the grid that its layout was made on when the display changed scale before the check", async (t) => {
+  // The tauriv2 run: the plane laid the card out at 202,0 762×342.5 on the device pixels of scale 2 and drew its surface at that
+  // prediction, and the window showed the page at 3 before the check. On the grid of scale 3 the bottom edge 319.5 lies between two
+  // device pixels, so the inward fit and the paint of the same rectangle part by a device pixel, though nothing moved.
+  const declared = { x: 203, y: 33, w: 760, h: 286.5 };
+  const applied = { x: 203, y: 33, w: 760, h: 286 + 1 / 3 };
+  const { v7c } = await verifyThirds(t, declared, applied, 3, 2, rect(210, 116, 760, 286.5));
+  assert.equal(v7c.ok, true, v7c.note);
+});
+
+test("V7c refuses a predicted surface without the grid that its layout was made on", async (t) => {
+  await assert.rejects(verifyThirds(t, thirds, thirds, 3, null), /verify: predicted surface probe has no grid scale/);
 });
