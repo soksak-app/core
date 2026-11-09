@@ -1,6 +1,7 @@
 // A window that an application shows while it is not active stays behind the front window, and the front application
 // stays (docs/spec/hosts.md#launch-activation). The application of a check is launched without activation and a person
-// uses another application in front, so the first window and a new window of the check stay behind that application.
+// uses another application in front, so the first window and a new window of the check stay behind that application. The
+// check relaunches the application in the background and measures its first window right after that show.
 import assert from "node:assert/strict";
 import test from "node:test";
 
