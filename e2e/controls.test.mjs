@@ -87,9 +87,13 @@ for (const app of Object.values(APPS)) {
     await centred(s, "after recording");
   });
 
-  test(`${app.name}: full screen keeps the first row height`, async (t) => {
+  test(`${app.name}: full screen keeps the first row height`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
+    // A window that leaves native full screen stays in front of the windows of other applications. A check orders no window in
+    // front of them (docs/spec/hosts.md#launch-activation), so the check ends with a relaunch, whose window takes the place of a
+    // first show again, and the checks after it do not depend on the order that full screen left.
+    s.cleanup(() => s.relaunch());
     const row = (await s.rect("core.chrome.bar")).height;
     assert.ok(row > 0, "the first row has no height");
     await s.run("host.window.fullscreen", { on: true });
