@@ -215,8 +215,10 @@ type surfaceState struct {
 	reports map[string]*tabReport
 	// failed holds the reason of each view that stopped its restarts.
 	failed map[string]string
-	// command is the id of the last command request to a view.
-	command uint64
+	// command is the id of the last command request to a view, and compositionRevision the last composition revision that a view
+	// placed.
+	command             uint64
+	compositionRevision uint64
 	// commits holds the answers of the commits that wait for a placement, and placing those of the placement that runs.
 	commits, placing []func(err error)
 	// documents holds the names of the document regions that each surface attached and has not detached.
