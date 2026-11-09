@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { auditWorkbenchCases, auditCompletedFeatureLinks, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
+import { auditWorkbenchCases, auditCompletedFeatureLinks, auditJoinedFailures, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
 
 const files = repositoryFiles();
 
@@ -497,6 +497,24 @@ test("JS failure audit rejects promise handlers that hide rejection", { timeout:
   }[file] ?? ""));
   assert.equal(errors.length, 2);
   assert.ok(errors.every((error) => error.includes("hides a rejected operation")));
+});
+
+test("a window check joins several errors only through joinedFailure, so a failure names every cause", { timeout: 1000 }, () => {
+  const sources = {
+    "packages/window-check/failure.mjs": "export function joinedFailure(label, errors) { return new AggregateError(errors, label); }",
+    "packages/window-check/app.mjs": "throw new AggregateError(failures, \"cleanup failed\");",
+    "e2e/capture.test.mjs": "if (a && b) throw new  AggregateError([a, b], `check failed`);",
+    "e2e/test/fixture.test.mjs": "assert.ok(failure instanceof AggregateError);",
+    "e2e/joined.test.mjs": "throw joinedFailure(\"check failed\", [a, b]);",
+    "packages/other/src/index.mjs": "throw new AggregateError(errors, \"other package\");",
+  };
+  const errors = auditJoinedFailures(Object.keys(sources), (file) => sources[file]);
+  assert.deepEqual(errors, [
+    "e2e/capture.test.mjs:1: new AggregateError drops the messages of its errors from the report; throw joinedFailure (packages/window-check/failure.mjs)",
+    "packages/window-check/app.mjs:1: new AggregateError drops the messages of its errors from the report; throw joinedFailure (packages/window-check/failure.mjs)",
+  ]);
+  assert.ok(auditFailureMatrix(Object.keys(sources), (file) => sources[file]).errors
+    .includes("js-ts: packages/window-check/app.mjs:1: new AggregateError drops the messages of its errors from the report; throw joinedFailure (packages/window-check/failure.mjs)"));
 });
 
 test("Rust failure audit rejects ignored outcomes in the scoped production lane", { timeout: 1000 }, () => {

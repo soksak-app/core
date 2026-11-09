@@ -8,8 +8,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { APPS, keepCommonSettings, open, requireUncovered } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { joinedFailure } from "@soksak/window-check/failure.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
+
+/** The failure of several errors, which names the message of each (packages/window-check/failure.mjs). */
+export { joinedFailure };
 
 export { placeholderTabs, reading, restoreRegistry, useRegistry } from "@soksak/window-check/start.mjs";
 
@@ -75,14 +79,6 @@ export async function probeSidebarSets(s, path = LAYOUT_PROBE_MANIFEST) {
   if (sets.length === 0) throw new Error("the configuration holds no sidebar set");
   await s.run("core.settings.set", { patch: { sets }, scope: "common" });
   return sets;
-}
-
-/**
- * The failure `label` of the errors `errors`, which keeps them as its errors. Its message names the message of each error after the
- * label, because a test report and a log of the check show only the message of an AggregateError and not its errors.
- */
-export function joinedFailure(label, errors) {
-  return new AggregateError(errors, `${label}: ${errors.map((error) => error?.message ?? String(error)).join("; ")}`);
 }
 
 /**
