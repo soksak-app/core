@@ -18,6 +18,7 @@
     "head-fit.js",
     "card-data.js",
     "card-sidebars.js",
+    "device-grid.js",
     "card-tools.js",
     "card-insets.js",
     "sidebar-grip.js",
