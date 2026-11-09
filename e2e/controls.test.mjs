@@ -2,7 +2,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { rmSync } from "node:fs";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
@@ -57,22 +56,20 @@ for (const app of Object.values(APPS)) {
       await s.request("diagnostics.capture.start", {});
       const displayed = await s.presented();
       const { frames: directory } = await s.request("diagnostics.capture.stop", { after: displayed.displayed });
-      try {
-        const frame = readFrame(frames(directory).at(-1));
-        // The text is to the right, starting at 102 of the logo width 323.
-        const left = Math.round((logo.x + logo.width * 102 / 323) * frame.scale);
-        const right = Math.round((logo.x + logo.width) * frame.scale);
-        let matched = 0;
-        for (let y = Math.round(logo.y * frame.scale); y < Math.round((logo.y + logo.height) * frame.scale); y++) {
-          for (let x = left; x < right; x++) {
-            const value = pixel(frame, x, y);
-            if (value.every((channel, index) => Math.abs(channel - letters[index]) <= 12)) matched++;
-          }
+      // The session removes the recording when the check passes and keeps it when the check fails.
+      s.trackRecording(directory);
+      const frame = readFrame(frames(directory).at(-1));
+      // The text is to the right, starting at 102 of the logo width 323.
+      const left = Math.round((logo.x + logo.width * 102 / 323) * frame.scale);
+      const right = Math.round((logo.x + logo.width) * frame.scale);
+      let matched = 0;
+      for (let y = Math.round(logo.y * frame.scale); y < Math.round((logo.y + logo.height) * frame.scale); y++) {
+        for (let x = left; x < right; x++) {
+          const value = pixel(frame, x, y);
+          if (value.every((channel, index) => Math.abs(channel - letters[index]) <= 12)) matched++;
         }
-        assert.ok(matched >= 20, `${mode}: only ${matched} pixels of the logo letters are ${JSON.stringify(letters)}`);
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
       }
+      assert.ok(matched >= 20, `${mode}: only ${matched} pixels of the logo letters are ${JSON.stringify(letters)}`);
     }
   });
 
