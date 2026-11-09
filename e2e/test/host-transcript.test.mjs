@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { atRest, settledFrames, settledX } from "../host-transcript.mjs";
+import { atRest, restingFrames, settled, settledFrames, settledX } from "../host-transcript.mjs";
 
 const surface = (id, y, w, h, start) => ({
   id, dim: false, plugin: "layoutprobe", composition: { kind: "view", page: "ui/page.html", overlays: [] }, visible: true,
@@ -46,4 +46,20 @@ test("the start values that a settled preparation carries are not part of its la
   const earlier = atRest([sync(false, 760, { start, declarations: [{}] }), present(1, false, 760), sync(true, 560), present(2, true, 560)]);
   assert.equal(carried.request, earlier.request);
   assert.equal(carried.answer, earlier.answer);
+});
+
+test("a layout rests at the last settled presentation that no preparation follows", () => {
+  const frames = [{ x: 210, y: 116, width: 760, height: 286.5 }, { x: 210, y: 470.5, width: 760, height: 259.5 }];
+  const rested = [sync(false, 760), present(1, true, 760)];
+  assert.deepEqual(restingFrames(rested), frames);
+  // A preparation after the settled presentation moves the layout on, settled or not.
+  assert.equal(restingFrames([...rested, sync(false, 720)]), undefined);
+  assert.equal(restingFrames([...rested, sync(true, 760)]), undefined);
+  assert.deepEqual(restingFrames([...rested, sync(true, 760), present(2, true, 760)]), frames);
+});
+
+test("a transcript has settled once the page presented a preparation as settled", () => {
+  assert.equal(settled([sync(true, 760)]), false);
+  assert.equal(settled([sync(false, 760), present(1, false, 760)]), false);
+  assert.equal(settled([sync(false, 760), present(1, true, 760)]), true);
 });
