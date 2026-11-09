@@ -1232,6 +1232,19 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
+- [~] F714 — P1: 창 사이드바가 정한 순서로 네 변에 선다. 입력: 설정 창, 창 chrome, 플러그인 선언, 저장 배치는 왼쪽·오른쪽 창 사이드바만 알고, 그 사이드바는 언제나 높이 전체에 걸친다. 기대: 변 `left`, `right`, `top`, `bottom`이 각각 표시 스위치, 일반 세트, 플러그인 오버라이드, 저장 크기, chrome 스위치를 가진 고정 창 사이드바 하나를 갖고, 설정 `sidebarOrder`가 어느 사이드바가 plane의 공간을 먼저 차지하는지 정한다([외부 창 사이드바](spec/external-sidebars.ko.md)). JavaScript와 Go workbench가 같은 계약을 지킨다. 남은 것: 아래 하위 항목.
+  - [o] F714-1 — 네 변과 그 순서의 명세(외부 사이드바, 설정, 플러그인, 프로젝트).
+  - [ ] F714-2 — 네 변의 place와 연결: plugin API와 Go workbench의 연결 검사, manifest reader의 `sidebars.window`, 두 workbench의 `core.settings.link` exposure에 `top`, `bottom`, `window-top`, `window-bottom`.
+  - [ ] F714-3 — 창 사이드바의 저장 크기: `left`와 `right`는 `{width}`, `top`과 `bottom`은 `{height}`, 다른 축 레코드의 거부, `environment.json`과 저장 배치에서 변 이름을 내용 카드 ID로 쓰는 것의 거부.
+  - [ ] F714-4 — `workbench.json` 네 사본의 설정 `top`, `bottom`, `sidebarOrder`와 두 workbench의 그 검사.
+  - [ ] F714-5 — 순서의 역순으로 창 사이드바를 dock하고, 변이나 그 배치가 다르면 모든 창 사이드바를 닫고 다시 dock한다. 두 workbench가 `docs/spec/cases/layout/window-sidebars.json` 공용 case를 실행한다.
+  - [ ] F714-6 — plane 검사 `P 자리는 카드다`가 순서에서 각 창 사이드바의 기대 자리를 계산한다.
+  - [ ] F714-7 — 위·아래 창 사이드바의 섹션은 가로 방향을 쓰고, `core.sidebars`, `core.sidebar.status`, `core.rail`이 네 변을 설명한다.
+  - [ ] F714-8 — 설정 창: 일반의 표시 스위치 넷, 일반 세트 선택 넷, 순서 줄, 플러그인 페이지의 창 선택 넷, 고친 묶음 설명. 두 workbench 모두.
+  - [ ] F714-9 — chrome 스위치 `core.chrome.top`, `core.chrome.bottom`, 보이기 tooltip, 고정 index 없는 버튼 순서, chrome 컨트롤 폭, 모든 변의 접기 컨트롤. 두 workbench 모두.
+  - [ ] F714-10 — 다시 빌드한 Tauri, Wails, mygo 앱에서 네 변과 그 순서를 확인한다.
+  - [ ] F714-11 — kit의 용어 목록이 창 사이드바의 변과 사이드바 순서를 이름 짓고, `sidebar instance` 정의가 `top`과 `bottom`을 나열한다. 이 변경은 이 저장소가 pin하는 kit release로 들어온다.
+
 - [o] F239-57 — P0: Darwin process identity 패키지의 native test 두 개를 workspace Node test runner에서 발견 가능하게 유지한다. 기존 `test` script가 runner가 test 시작 전에 거부하는 `make test`를 사용했다. 발견되는 Node entrypoint 하나가 기존 process-identity와 package-relocation Make target을 각각 위임 실행하며, 각 target은 native runner를 통해 test별 진행 표시, 개별 제한 시간, 출력, 실패 상태를 유지한다. Red: 실제 package discovery owner test가 `make test`는 지원되는 Node test script가 아니라는 이유로 실패했다. Green: 같은 owner test가 1/1, package Node entrypoint가 2/2 통과하고 각 native target도 1/1 통과한다. Workspace runner가 package entrypoint를 발견하고 실행한다. 현재 목록은 lane 102개, 구현 파일 704개, 테스트 파일 1010개이며 미연결 구현 및 테스트 파일이 없다.
 
 - [o] F239-47-40-3 — P1, F239-47-40 연결: `diagnostics.capture.start`의 명시적 선택형 `frameIdentity` boolean을 양 host recording interface에서 Darwin capture로 전달한다. 생략 및 false는 identity capture를 끄고 boolean이 아닌 값은 거부한다. Red: Wails parser는 null을 false로 받았고 Tauri parser는 true를 무시했다. Green: strict parser test는 각각 3/3, 1/1 통과하고 recording fake는 true가 양쪽 platform 경계에 전달됨을 확인한다. Native boundary는 F239-47-40-4에서 opt-in identity 경로와 stop artifact 응답을 구현했다.

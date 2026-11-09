@@ -34,14 +34,14 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 테마 | 테마 견본 `theme`, 모드 `mode` |
 | 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
-| 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 왼쪽 사이드바 세트와 오른쪽 사이드바 세트(각각 모든 세트와 사용 안 함의 선택 상자, `core.settings.link {place, plugin: null, set}`) |
+| 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트, 아래 사이드바 세트(각각 모든 세트와 사용 안 함의 선택 상자, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 메모리 (전역 범위에서만) | 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (`core.settings.debug {on}`을 실행하는 switch) |
 
-창 선택은 고정 왼쪽 사이드바 하나와 고정 오른쪽 사이드바 하나의 내용을 선택한다. 포커스 활성 플러그인은 추가 열 없이 일반 변 선택을 오버라이드한다. 표시 스위치는 고정 변에 적용한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
+창 선택은 왼쪽, 오른쪽, 위, 아래 각 변의 고정 사이드바 하나의 내용을 선택한다. 포커스 활성 플러그인은 사이드바를 추가하지 않고 같은 자리에서 일반 변 선택을 오버라이드한다. 표시 스위치는 자기 변의 고정 사이드바에 적용하고, 사이드바 순서는 어느 사이드바가 plane의 공간을 먼저 차지하는지 정한다([외부 창 사이드바](external-sidebars.ko.md#고정-배치와-저장)). 묶음은 이름 아래에 이를 밝힌다: 한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
 
 ### 진단
 
@@ -68,7 +68,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 - 플러그인 이름과, 그 아래 설명 줄의 플러그인 id.
 - 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. 각 행은 그 형식의 [컨트롤](#컨트롤)이다. `enum`은 선택 상자, `integer`는 경계 사이의 슬라이더, `string`과 `address`는 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
 - 섹션: 플러그인이 선언한 섹션의 이름을 한 줄 글로 보여 준다.
-- 사이드바: 모든 플러그인은 창 좌우 선택이 있다. 표면이 있는 플러그인은 카드 내부 네 변 선택도 있다. 모든 선택은 사용 안 함과 모든 세트를 제공하고 `core.settings.link {place, plugin, set}`을 실행한다.
+- 사이드바: 모든 플러그인은 window-left, window-right, window-top, window-bottom 선택이 있고, 그 플러그인의 탭이 포커스 카드의 활성 탭인 동안 세트가 그 변 고정 사이드바의 내용을 바꾼다는 설명 아래에 있다. 표면이 있는 플러그인은 카드 내부 네 변 선택도 있다. 모든 선택은 사용 안 함과 모든 세트를 제공하고 `core.settings.link {place, plugin, set}`을 실행한다.
 
 ### 사이드바
 
@@ -99,20 +99,21 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 
 | 형식 | 컨트롤 | 명령 |
 |---|---|---|
-| Boolean (`left`, `right`, `dim`, `memorySaver`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
+| Boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
 | 나열된 값 중 하나 (`projectOpening`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
 | Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
 | 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위 | `core.settings.change {key, value, scope}` |
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
 | 세트 참조 ([사이드바 선택](#사이드바-선택)의 연결) | 사용 안 함과 모든 세트의 선택 상자 | `core.settings.link {place, plugin, set, scope}` |
+| 목록 값의 순서 (`sidebarOrder`) | 현재 순서대로 값마다 값의 이름이 붙은 줄 하나와, 첫 줄에 없는 ▲, 끝 줄에 없는 ▼. 버튼은 자기 줄을 위나 아래 줄과 바꾼다 | 새 목록 전체를 `value`로 한 `core.settings.change {key, value, scope}` |
 
-세트 편집도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 선택 상자, 섹션 행은 각각 선택 상자다. 버튼(전역값 사용, 편집, 삭제, 새 세트, ▲ ▼ − +, 목록, 플러그인 관리)은 동작을 실행하며 설정 컨트롤이 아니다. 범위 탭은 보이는 범위를 고르며 설정이 아니다. `textSize`, `sets`, `diagnostics.performance`, `diagnostics.log`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
+세트 편집도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 선택 상자, 섹션 행은 각각 선택 상자다. 버튼(전역값 사용, 편집, 삭제, 새 세트, 세트 행의 ▲ ▼ − +, 목록, 플러그인 관리)은 동작을 실행하며 설정 컨트롤이 아니다. 순서 줄의 ▲ ▼는 그 컨트롤이다. 범위 탭은 보이는 범위를 고르며 설정이 아니다. `textSize`, `sets`, `diagnostics.performance`, `diagnostics.log`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
 
 워크벤치는 `~/Projects/polyspec/crudui`의 폼 라이브러리로 창을 그리지 않고 이 컨트롤 묶음을 직접 정한다. 그 라이브러리는 폼 template을 compile하고, 애플리케이션이 한 번에 제출하는 record를 bind하며, 행 identity, undo history, `name` 기반 컨트롤과 자기 event binding(`connectForm`)을 가진다. 설정 창은 바뀐 값을 선언된 명령으로 바로 적용하고, 모든 컨트롤은 공유 binder로 자기 명령을 가리키며 element 이름을 가지고([exposure](exposure.ko.md)), host는 listener가 동작하지 않는 카드 사본을 그린다([네이티브 모달](native-modals.ko.md)). 그 라이브러리의 markup과 binding은 출력을 다시 쓰는 층 없이는 이 규칙을 하나도 만족하지 않고, plugin 설정 선언에는 위 표의 형식만 필요하므로 의존성을 더할 이유가 없다.
 
 ## 값
 
-core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와 모든 변경이 값을 그 형식으로 검사하고, 다른 형식의 값은 `Invalid setting <key>: <value>`와 그 이유로 실패한다. 읽기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다. `core.settings.change`는 설정의 형식인 값이나 컨트롤의 문자열을 받고, 그 문자열은 설정이 선언한 boolean이나 number가 된다. 다른 입력은 변환하지 않으므로 다른 type의 값은 거부된다. 일반의 컨트롤은 같은 선택지와 범위를 보인다.
+core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와 모든 변경이 값을 그 형식으로 검사하고, 다른 형식의 값은 `Invalid setting <key>: <value>`와 그 이유로 실패한다. 읽기는 오류를 보고하고 아무것도 바꾸지 않으며, 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다. `core.settings.change`는 설정의 형식인 값이나 컨트롤의 문자열을 받고, 그 문자열은 설정이 선언한 boolean이나 number가 된다. 다른 입력은 변환하지 않으므로 다른 type의 값은 거부된다. `sidebarOrder`처럼 목록 형식의 설정은 목록 전체를 배열로 받는다. 일반의 컨트롤은 같은 선택지와 범위를 보인다.
 
 | 키 | 형식 |
 |---|---|
@@ -124,7 +125,8 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `size` | 10에서 18까지의 정수(px) |
 | `textSize` | [글자 크기 단계](text-size.ko.md) 하나 |
 | `projectTabs` | `top` 또는 `left` |
-| `left`, `right`, `dim`, `diagnostics.performance` | boolean |
+| `left`, `right`, `top`, `bottom`, `dim`, `diagnostics.performance` | boolean. `left`와 `right`의 기본값은 `true`, `top`과 `bottom`은 `false` |
+| `sidebarOrder` | `left`, `right`, `top`, `bottom`을 하나씩 담은 배열, 기본값 `["left", "right", "top", "bottom"]`: 창 사이드바가 plane의 공간을 차지하는 순서([외부 창 사이드바](external-sidebars.ko.md#고정-배치와-저장)). 반복, 누락, 다른 값은 `Invalid setting sidebarOrder: <value> is not an order of "left", "right", "top", "bottom"`로 거부한다 |
 | `diagnostics.log` | class와 수준의 객체 |
 | `focusInd` | `border` 또는 `corner` |
 | `fullRule` | `under`, `over`, `none` 중 하나 |
@@ -142,7 +144,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 설정 file은 자기 형태를 member `format`에 실는다(형식 1이 현재 형태이고, 다른 형태의 file이나 member가 없는 file은 거부된다, [저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이 member는 저장 형태의 운반자이지 설정이 아니다. workspace는 snapshot에서 이것을 감추고 쓸 때 보존하며, `format`이라는 이름의 설정 key는 다른 알 수 없는 key처럼 거부된다. 아래는 운반자를 뺀 나머지 설정에 대해 성립한다.
 
-설정 파일은 현재 형식으로만 읽으며, page는 이를 변환하지 않는다. 선언한 설정이 아닌 키는, 이전 설정의 키(`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`)를 포함해, 공통 설정이면 `settings.json: unknown setting <key>`로, 창이 여는 프로젝트의 설정이면 `<project root>/.soksak/settings.json: unknown setting <key>`로 실패한다. `rail` 연결, 플러그인을 가리키는 `left`나 `right` 연결, 그 범위가 갖지 않은 세트를 가리키는 연결은 아래 세트와 연결 검사에서 실패한다. 실패는 아무것도 바꾸지 않고 아무것도 쓰지 않는다.
+설정 파일은 현재 형식으로만 읽으며, page는 이를 변환하지 않는다. 선언한 설정이 아닌 키는, 이전 설정의 키(`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`)를 포함해, 공통 설정이면 `settings.json: unknown setting <key>`로, 창이 여는 프로젝트의 설정이면 `<project root>/.soksak/settings.json: unknown setting <key>`로 실패한다. `rail` 연결, 플러그인을 가리키는 변(`left`, `right`, `top`, `bottom`) 연결, 그 범위가 갖지 않은 세트를 가리키는 연결은 아래 세트와 연결 검사에서 실패한다. 실패는 아무것도 바꾸지 않고 아무것도 쓰지 않는다.
 
 ## 저장되는 세트와 연결
 
@@ -165,11 +167,11 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 | 연결 | 뜻 |
 |---|---|
-| `{place: "left" 또는 "right", plugin: null, set}` | 고정 창 사이드바의 일반 내용 |
-| `{place: "window-left" 또는 "window-right", plugin, set}` | 고정 창 사이드바 내용의 플러그인 오버라이드 |
+| `{place: "left", "right", "top" 또는 "bottom", plugin: null, set}` | 그 변 고정 창 사이드바의 일반 내용 |
+| `{place: "window-left", "window-right", "window-top" 또는 "window-bottom", plugin, set}` | 그 변 고정 창 사이드바 내용의 플러그인 오버라이드 |
 | `{place: "card-top", "card-bottom", "card-left" 또는 "card-right", plugin, set}` | 플러그인 카드의 해당 내부 변 기본 세트 |
 
-모든 `set`은 알려진 세트 ID다. 위치/플러그인 조합은 한 번만 나온다. 플러그인 left/right 연결, null 세트, 레일 연결을 거부한다. 세트 ID `off`와 `inherit`는 예약 값이다. 고정 사이드바 선택과 오버라이드 레일 보더는 [외부 창 사이드바](external-sidebars.ko.md)를 따른다. `left`/`right` 스위치는 선택을 바꾸지 않고 해당 고정 사이드바를 숨긴다.
+모든 `set`은 알려진 세트 ID다. 위치/플러그인 조합은 한 번만 나온다. 플러그인 변 연결, null 세트, 레일 연결을 거부한다. 세트 ID `off`와 `inherit`는 예약 값이다. 고정 사이드바 선택과 오버라이드 레일 보더는 [외부 창 사이드바](external-sidebars.ko.md)를 따른다. 변의 스위치는 선택을 바꾸지 않고 그 고정 사이드바를 숨긴다.
 
 `core.settings.link {place, plugin, set, scope}`는 연결을 저장하는 세트 ID 또는 연결을 제거하는 `off`를 받는다. 모든 기본 링크에서 `inherit`는 -32602로 실패한다. 별도 명령 `core.card.sidebar.set`는 개별 카드의 명시적 덮어쓰기를 제거하는 `inherit`를 유지한다([예제 모델](example-model.ko.md)).
 
@@ -181,13 +183,13 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 |---|---|---|---|---|
 | `sidebarMinWidth` | 최소 폭 | 120 | 60–800 | 카드 안 사이드바의 가장 작은 폭 |
 | `sidebarMaxWidth` | 최대 폭 | 480 | 60–800 | 카드 안 사이드바의 가장 큰 폭 |
-| `sidebarWidth` | 처음 폭 | 190 | 60–800 | 초기 카드 내부 사이드바 크기와 저장 폭이 없는 새 창 사이드바 폭 |
+| `sidebarWidth` | 처음 폭 | 190 | 60–800 | 초기 카드 내부 사이드바 크기, 그리고 저장 크기가 없는 창 사이드바의 자기 축 크기: 왼쪽·오른쪽 사이드바의 폭, 위·아래 사이드바의 높이 |
 
 세 값은 60에서 800포인트의 한 범위를 함께 쓰고 슬라이더도 그 범위를 쓰므로, 같은 값은 같은 슬라이더 위치에 놓인다. 행 이름은 사이드바 크기 묶음 아래 한 줄의 최소 폭, 최대 폭, 처음 폭이다.
 
 `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth`를 깨는 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다. 현재 범위를 벗어난 저장된 카드 폭은 손잡이로 바꿀 때까지 저장된 대로 그린다.
 
-두 workbench가 읽는 배치 값의 원천은 하나, `workbench.json`의 chrome metric이다. 카드 머리 `head-h`와 바닥 `foot-h`는 drop zone의 경계이기도 하고, 탭 줄의 기준 폭은 `tab-peek-w`와 `tab-min-w`다. 각 workbench의 code에 적은 값은 처음 값에서 벗어나는 두 번째 사본이 된다. 새 스페이스의 왼쪽과 오른쪽 사이드바 폭은 `environment.json`의 `workspace.grid` 카드에서 온다.
+두 workbench가 읽는 배치 값의 원천은 하나, `workbench.json`의 chrome metric이다. 카드 머리 `head-h`와 바닥 `foot-h`는 drop zone의 경계이기도 하고, 탭 줄의 기준 폭은 `tab-peek-w`와 `tab-min-w`다. 각 workbench의 code에 적은 값은 처음 값에서 벗어나는 두 번째 사본이 된다. 새 스페이스의 창 사이드바 크기는 `environment.json`의 `workspace.grid` 카드에서 온다.
 
 워크벤치 stylesheet(`app.css`, `library.css`, `overlay.html`)의 길이, 비율, 지속 시간은 `packages/workbench/workbench.json`의 chrome metric이다. 워크벤치는 page가 그리기 전에 그 각각을 document root의 custom property로 정하고, stylesheet는 그 custom property를 읽는다. stylesheet는 literal 길이, 비율, 지속 시간을 담지 않는다. media condition은 custom property를 읽지 못하므로, 워크벤치는 window 폭이 `library-narrow-w` 이하인 동안 document root에 `data-library-narrow`를 표시하고, `library.css`는 그 표시로 library를 좁힌다. focus mark는 focus된 카드의 body 밖으로 사방 `focus-mark-t`만큼, 곧 stroke 두께만큼 나와 있어서 stroke가 surface를 덮지 않는다.
 
@@ -218,10 +220,11 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 ## 완료 기준
 
-- 일반은 사이드바 모양 컨트롤(`left`, `right`, 일반 좌우 연결, 폭)을 담고 플러그인 설정은 담지 않는다.
+- 일반은 사이드바 모양 컨트롤(`left`, `right`, `top`, `bottom`, 네 일반 연결, `sidebarOrder`, 폭)을 담고 플러그인 설정은 담지 않는다.
 - 일반, 플러그인 페이지, 세트 편집의 모든 설정은 [컨트롤](#컨트롤)에서 그 형식에 정한 컨트롤 하나로 그린다. 어떤 선택지도 버튼 줄로 그리지 않는다.
 - 사이드바는 세트 목록, 새 세트, 편집만 담는다. 편집에는 등록된 섹션마다의 컨트롤이 없다. 섹션 컨트롤은 행마다 선택 상자 하나와 ▲ ▼ −, 그리고 + 하나다.
 - 섹션 행은 `core.settings.sets.row`로 섹션을 고르고, 옮기고, 빼고, 더한다. 같은 섹션의 반복은 거부된다.
 - 플러그인은 불러온 플러그인을 이름으로 걸러진 목록에 보여 주고, 행은 설정, 섹션, 사이드바 선택이 있는 플러그인 페이지를 열며, 목록이 목록으로 돌아간다. 이 절은 플러그인 설명, 버전, 사이드카, 플러그인 작업을 보여 주지 않는다. 플러그인 관리는 창을 닫고 plugin 화면을 보여 준다.
 - 일반·플러그인 창·카드 내부 선택은 포커스와 탭 변경에도 독립적이다. 사용 안 함인 창 열이 다른 플러그인 열을 대체하지 않는다.
-- 배치 값이 카드 내부 사이드바의 한계·초기 크기와 새 창 사이드바 폭을 바꾼다.
+- 배치 값이 카드 내부 사이드바의 한계·초기 크기와 창 사이드바의 자기 축 처음 크기를 바꾼다.
+- 순서 줄이 순서 전체를 담은 `core.settings.change`로 변을 위아래로 옮기고, 창 사이드바가 새 순서로 dock한다.
