@@ -8,7 +8,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { coverCheckWindow, fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a covered window is occluded and hides the document of its tab`, { timeout: 90000 }, async (t) => {
@@ -36,9 +36,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.project.open", { root, color: "#7db4ff" });
     const windows = await s.windows(2, "the project window did not open");
     const cover = s.on(windows.find((w) => w.window !== s.window).window);
-    const covered = (await s.get("host.window")).frame;
-    await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
-    await cover.run("host.window.move", { x: covered.x - 100, y: covered.y - 50 });
+    await coverCheckWindow(s, cover);
 
     const state = async () => {
       const window = await s.get("host.window");
