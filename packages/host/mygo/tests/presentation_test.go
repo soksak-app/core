@@ -431,6 +431,40 @@ func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T
 	}
 }
 
+// The frame that opens the layout of its window asks for no frame after it, so a window that changes nothing during the transaction
+// is settled once that frame ended and draws no frame after the commit (docs/spec/hosts.md#native-views).
+func TestE2EAFrameThatOpensTheLayoutLeavesItsWindowSettled(t *testing.T) {
+	_, workbench, window := held(t, "opening-settled")
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened := make(chan error, 1)
+	workbench.InNextDraw(func() { opened <- system.BeginLayout(window.NativeWindow(), 1, func(bool) {}) })
+	mygo.RunOnMain(window.Invalidate)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("the frame did not open the layout of its window: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the window drew no frame within 10 s")
+	}
+	// The step runs after the frame that opened the layout ended.
+	mygo.RunOnMain(func() {})
+	if got := window.Frames().Counters(); !*got.Settled {
+		t.Fatal("the frame that opened the layout asked for a frame after it")
+	}
+	commit := begin(t, window, 2)
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the notice of the preparation that took the layout over failed: %v", err)
+	}
+	commit()
+	if got := window.Frames().Counters(); !*got.Settled {
+		t.Fatal("the window asked for a frame after the commit of a transaction that changed nothing")
+	}
+}
+
 func TestE2ETheSettledPresentationWaitsForTheTransactionOfAnotherWindow(t *testing.T) {
 	framework, workbench, first := held(t, "owner")
 	other := framework.NewWindow(host.WindowOptions{Name: "other", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
