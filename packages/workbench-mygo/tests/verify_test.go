@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func healthy(t *testing.T) workbench.VerifyInput {
 	t.Helper()
 	grid := threeCards(t)
 	rects := grid.Rects()
-	surface := workbench.VerifySurface{ID: "tab-1", Declared: layout.Rect{X: 506, Y: 40, W: 494, H: 500}, Applied: layout.Rect{X: 506, Y: 40, W: 494, H: 500}, Visible: true}
+	surface := workbench.VerifySurface{ID: "tab-1", Declared: layout.Rect{X: 506, Y: 40, W: 494, H: 500}, Applied: layout.Rect{X: 506, Y: 40, W: 494, H: 500}, Visible: true, Scale: 2}
 	record := &workbench.VerifyRecord{Seq: 3, Surfaces: []workbench.VerifySurface{surface}, Settled: true}
 	return workbench.VerifyInput{
 		Grid:       grid,
@@ -384,5 +385,63 @@ func TestVerifyNamesWhatItFound(t *testing.T) {
 	}
 	if note := row(t, rows, "V7b").Note; !strings.Contains(note, "갱신 중") {
 		t.Errorf("row V7b does not state an update in progress: %s", note)
+	}
+}
+
+// The window can move to a display of another scale after the host seated a surface. V7b judges the applied rectangle on the grid of
+// the scale that seated it, where it is exact, and names the seat, which is off the device pixels of the window until the next
+// placement (docs/spec/native-surfaces.md).
+func TestV7bJudgesASurfaceOnTheGridOfItsSeatScale(t *testing.T) {
+	in := healthy(t)
+	in.Seated.Surfaces[0].Scale = 1
+	rows, err := workbench.Verify(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v7b := row(t, rows, "V7b")
+	if v7b.OK || !strings.Contains(v7b.Note, "차이 0.00px") || !strings.Contains(v7b.Note, "다른 scale 에 놓인 표면 1 (tab-1 seated at 1, display 2)") {
+		t.Fatalf("V7b of a seat of scale 1 in a window of scale 2: %+v", v7b)
+	}
+}
+
+// The host answers a rectangle that it fitted in window coordinates in plane coordinates, so an edge on a third of a point carries
+// the remainder of the subtraction. V7b compares the two rectangles in whole device pixels of the seat scale.
+func TestV7bComparesTheAppliedRectangleInWholeDevicePixels(t *testing.T) {
+	in := healthy(t)
+	in.Scale = 3
+	declared := layout.Rect{X: 506, Y: 553.66, W: 494, H: 413.33}
+	origin := 117 + 2.0/3
+	top, bottom := math.Round((origin+declared.Y)*3)/3, math.Round((origin+declared.Y+declared.H)*3)/3
+	applied := layout.Rect{X: 506, Y: top - origin, W: 494, H: bottom - top}
+	if standing := workbench.DevicePixels(declared, 3); applied.Y == standing.Y {
+		t.Fatalf("the applied top %v carries no remainder", applied.Y)
+	}
+	in.Seated = &workbench.VerifyRecord{Seq: 3, Settled: true, Surfaces: []workbench.VerifySurface{{ID: "tab-1", Declared: declared, Applied: applied, Visible: true, Scale: 3}}}
+	rows, err := workbench.Verify(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v7b := row(t, rows, "V7b"); !v7b.OK {
+		t.Fatalf("V7b of the same device pixels: %+v", v7b)
+	}
+	in.Seated.Surfaces[0].Applied.H -= 1.0 / 3
+	if rows, err = workbench.Verify(in); err != nil {
+		t.Fatal(err)
+	}
+	if v7b := row(t, rows, "V7b"); v7b.OK || !strings.Contains(v7b.Note, "차이 0.33px") {
+		t.Fatalf("V7b of an edge one device pixel off: %+v", v7b)
+	}
+}
+
+// A visible surface that the answer of the host did not name has no seat scale: it stands on no grid, and V7b names it.
+func TestV7bNamesASurfaceThatTheHostDidNotSeat(t *testing.T) {
+	in := healthy(t)
+	in.Seated.Surfaces[0].Scale = 0
+	rows, err := workbench.Verify(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v7b := row(t, rows, "V7b"); v7b.OK || !strings.Contains(v7b.Note, "답 없는 표면 1 [tab-1]") {
+		t.Fatalf("V7b of a surface without a seat: %+v", v7b)
 	}
 }
