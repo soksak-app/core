@@ -100,7 +100,14 @@ for (const app of Object.values(APPS)) {
         && typeof row.identity.generation === "string" && /^\d+$/.test(row.identity.generation)
         && typeof row.identity.raster === "string" && /^\d+$/.test(row.identity.raster)
         && Number.isSafeInteger(row.identity.sequence));
-      assert.ok(matched.length > 0, `capture decoded no issued source identity: ${rawDecoded}`);
+      if (matched.length === 0) {
+        // The window state tells whether the captured window drew the view of the region: its surface, its native view element
+        // and the frames of a workbench that draws its own frames.
+        const { frames: drawn, commandBuffers, settled, surfaces, regions } = await s.get("host.window");
+        const seat = (await s.get("core.surfaces")).find((item) => item.surface === surface);
+        assert.fail(`capture decoded no issued source identity: ${rawDecoded}\nwindow after the capture: `
+          + JSON.stringify({ regionsBeforeStop: host.regions, frames: drawn, commandBuffers, settled, surfaces, regions, seat }));
+      }
       assert.ok(matched.some((row) => JSON.stringify(tuple(row.identity)) === JSON.stringify(current)),
         `no decoded sample matches the current presented image tuple ${JSON.stringify(current)}; `
           + `decoded identities: ${JSON.stringify(matched.map((row) => row.identity))}`);
