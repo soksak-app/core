@@ -374,20 +374,32 @@ func (s *Sidebars) Begin() { s.drawn = nil }
 // Holds reports whether the card id is a fixed sidebar of the window.
 func (s *Sidebars) Holds(id string) bool { return id == "left" || id == "right" }
 
+// Status returns the text of the status line of the fixed sidebar place: its side, and the plugin of the focused surface whose set
+// it shows. It records nothing, so a status read takes it without a build.
+func (s *Sidebars) Status(place string, focused FocusedSurface) string {
+	_, plugin := s.windowSet(place, focused)
+	return windowSidebarStatus(place, plugin)
+}
+
+// windowSidebarStatus is the status line of the fixed sidebar place that shows the set of plugin, or an ordinary set without one.
+func windowSidebarStatus(place, plugin string) string {
+	status := "왼쪽 창 사이드바"
+	if place == "right" {
+		status = "오른쪽 창 사이드바"
+	}
+	if plugin != "" {
+		status += " · " + plugin
+	}
+	return status
+}
+
 // Frame returns the frame of the fixed sidebar place in the space, and records the sidebar in the build.
 func (s *Sidebars) Frame(place, space string, focused FocusedSurface) (SidebarFrame, error) {
 	if !s.Holds(place) {
 		return SidebarFrame{}, fmt.Errorf("unknown window sidebar %s", place)
 	}
-	status := "왼쪽 창 사이드바"
-	if place == "right" {
-		status = "오른쪽 창 사이드바"
-	}
-	frame := SidebarFrame{Sidebar: place, Space: space, Orientation: "vertical", Side: place, Status: status}
 	set, plugin := s.windowSet(place, focused)
-	if plugin != "" {
-		frame.Status += " · " + plugin
-	}
+	frame := SidebarFrame{Sidebar: place, Space: space, Orientation: "vertical", Side: place, Status: windowSidebarStatus(place, plugin)}
 	if set == nil {
 		return frame, nil
 	}
