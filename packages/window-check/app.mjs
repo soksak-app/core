@@ -1232,8 +1232,8 @@ function requireCallbackStatusArtifact(result, frames) {
  * The owner name of the other window that covers the window. It is stated as the reason why the measurement is skipped
  * because the window is covered.
  */
-export function coveredBy(s, window) {
-  const covering = coveringWindows(s.client.endpoint.pid, window.frame);
+export function coveredBy(s, window, windows) {
+  const covering = coveringWindows(s.client.endpoint.pid, window.frame, windows);
   return covering.length ? covering.map(({ owner, frame }) => `${owner} at ${JSON.stringify(frame)}`).join(", ")
     : "windows that together cover it";
 }
@@ -1241,11 +1241,12 @@ export function coveredBy(s, window) {
 /**
  * Refuses a measurement of the pixels of a window that host.window `window` of session `s` reports `occluded`: WebKit renders a
  * window that is covered whole less often, so its frames do not show what the check does. The error names the covering windows
- * (coveredBy) and states that nothing was measured.
+ * (coveredBy, from the window list that `windows` gives, the window list of the screen by default) and states that nothing was
+ * measured.
  */
-export function requireUncovered(s, window) {
+export function requireUncovered(s, window, windows) {
   if (!window.occluded) return;
-  throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window)}, so WebKit renders it less often. ` +
+  throw new Error(`${s.app.name}'s window is completely covered by ${coveredBy(s, window, windows)}, so WebKit renders it less often. ` +
     "Nothing was measured: uncover the window, without activating the application, and run the check again.");
 }
 
