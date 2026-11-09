@@ -1232,7 +1232,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
-- [~] F714 — P1: 창 사이드바가 정한 순서로 네 변에 선다. 입력: 설정 창, 창 chrome, 플러그인 선언, 저장 배치는 왼쪽·오른쪽 창 사이드바만 알고, 그 사이드바는 언제나 높이 전체에 걸친다. 기대: 변 `left`, `right`, `top`, `bottom`이 각각 표시 스위치, 일반 세트, 플러그인 오버라이드, 저장 크기, chrome 스위치를 가진 고정 창 사이드바 하나를 갖고, 설정 `sidebarOrder`가 어느 사이드바가 plane의 공간을 먼저 차지하는지 정한다([외부 창 사이드바](spec/external-sidebars.ko.md)). JavaScript와 Go workbench가 같은 계약을 지킨다. 남은 것: 아래 하위 항목.
+- [~] F714 — P1: 창 사이드바가 정한 순서로 네 변에 선다. 입력: 설정 창, 창 chrome, 플러그인 선언, 저장 배치는 왼쪽·오른쪽 창 사이드바만 알고, 그 사이드바는 언제나 높이 전체에 걸친다. 기대: 변 `left`, `right`, `top`, `bottom`이 각각 표시 스위치, 일반 세트, 플러그인 오버라이드, 저장 크기, chrome 스위치를 가진 고정 창 사이드바 하나를 갖고, 설정 `sidebarOrder`가 어느 사이드바가 plane의 공간을 먼저 차지하는지 정한다([외부 창 사이드바](spec/external-sidebars.ko.md)). JavaScript와 Go workbench가 같은 계약을 지킨다. 남은 것: F714-10 다시 빌드한 앱의 확인, F714-11 kit의 용어 release.
   - [o] F714-1 — 네 변과 그 순서의 명세(외부 사이드바, 설정, 플러그인, 프로젝트).
   - [o] F714-2 — 네 변의 place와 연결: plugin API와 Go workbench의 연결 검사, manifest reader의 `sidebars.window`, 두 workbench의 `core.settings.link` exposure에 `top`, `bottom`, `window-top`, `window-bottom`.
   - [o] F714-3 — 창 사이드바의 저장 크기: `left`와 `right`는 `{width}`, `top`과 `bottom`은 `{height}`, 다른 축 레코드의 거부, `environment.json`과 저장 배치에서 변 이름을 내용 카드 ID로 쓰는 것의 거부.
