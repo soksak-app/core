@@ -43,6 +43,8 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
+  // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
+  globalThis.devicePixelRatio = dom.window.devicePixelRatio;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
   globalThis.CSS = dom.window.CSS;
   globalThis.PointerEvent = dom.window.PointerEvent;

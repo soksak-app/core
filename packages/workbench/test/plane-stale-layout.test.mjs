@@ -17,6 +17,8 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
+  // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
+  globalThis.devicePixelRatio = dom.window.devicePixelRatio;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
   globalThis.CSS = dom.window.CSS;
   globalThis.PointerEvent = dom.window.PointerEvent;

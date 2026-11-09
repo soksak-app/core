@@ -26,7 +26,9 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener() {}, removeEventListener() {} });
   for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document,
     getComputedStyle: dom.window.getComputedStyle.bind(dom.window), CSS: dom.window.CSS,
-    PointerEvent: dom.window.PointerEvent, MouseEvent: dom.window.MouseEvent })) {
+    PointerEvent: dom.window.PointerEvent, MouseEvent: dom.window.MouseEvent,
+    // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
+    devicePixelRatio: dom.window.devicePixelRatio })) {
     const before = Object.getOwnPropertyDescriptor(globalThis, name);
     Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
     t.after(() => before ? Object.defineProperty(globalThis, name, before) : delete globalThis[name]);
