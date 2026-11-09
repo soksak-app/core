@@ -374,17 +374,37 @@ func TestE2EATransactionHoldsTheOtherWindowsAndTheWindowsOpenedMeanwhile(t *test
 	support.Wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 })
 }
 
-func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {
+// A preparation that takes over a transaction whose frame a preparation already asked for has no frame of its own: that frame holds
+// its drawable until the commit, and the window changed meanwhile, as a resize does, so a second frame would wait for the commit that
+// waits for its notice. The notice fails at once, so the host cancels the preparation and commits the transaction, and the frame of
+// the change presents after the commit (docs/spec/hosts.md#native-views).
+func TestE2EAPreparationAfterTheFrameOfItsTransactionFailsAtOnce(t *testing.T) {
 	_, _, window := held(t, "newer")
 	begin(t, window, 1)
+	window.Window().SetSize(520, 410)
 	if err := presentation(t, window); err != nil {
 		t.Fatal(err)
 	}
 	commit := begin(t, window, 2)
-	if err := presentation(t, window); err != nil {
-		t.Fatalf("the notice of the newer preparation failed: %v", err)
+	window.Window().SetSize(560, 430)
+	result := make(chan error, 1)
+	var failed error
+	mygo.RunOnMain(func() { failed = window.AfterPresentation(func(err error) { result <- err }) })
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	select {
+	case err := <-result:
+		if err == nil || !strings.Contains(err.Error(), "the frame of the transaction already presented") {
+			t.Fatalf("the notice of the newer preparation heard %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the notice of the newer preparation did not come within 2 s: it waits for the commit")
 	}
 	commit()
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the frame after the commit did not present: %v", err)
+	}
 }
 
 // A frame that draws other surface lines opens the layout of its window while it builds and presents in it, and the preparation of
