@@ -128,10 +128,9 @@ func optionalText(value string) *string {
 	return &value
 }
 
-// planeOrigin is the origin of the plane in the window.
+// planeOrigin is the origin of the plane in the window, where the last drawing put it on the device pixel grid (alignPlane).
 func (s *Shell) planeOrigin() layout.Point {
-	inset := s.stageInset()
-	return layout.Point{X: float64(s.projectColumnWidth() + inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset)}
+	return layout.Point{X: s.planeBox.X, Y: s.planeBox.Y}
 }
 
 // projectStatus returns the stored record of a project with its open state.

@@ -334,6 +334,8 @@ type Shell struct {
 	dragging *tabDrag
 	// workBanner is the height of the error line over the row of the spaces in the last drawing.
 	workBanner float32
+	// planeBox is the rectangle of the plane in the window in the last drawing, on the device pixel grid (alignPlane).
+	planeBox layout.Rect
 	// controlsWidth is the width that the window keeps for its own buttons.
 	controlsWidth float32
 	held          *heldDivider
