@@ -70,6 +70,8 @@ core의 release는 registry를 읽지 않는다. registry가 자기 `core.json`�
 
 검사는 임시 폴더에 쓴 모든 폴더와 file을 실패할 때에도 지운다: Go test는 `t.TempDir`, Rust test는 보고하는 folder guard `tests/support/folder.rs`를 쓰고, Node test는 `t.after`에서 제거가 실패하면 throw하는 `fs.rmSync`로 폴더를 지우며, Objective-C 검사는 `native/darwin/tests/support/temporary_folder.h`의 `temporaryFolder`로 폴더를 만든다. `temporaryFolder`는 process가 `main`에서 반환하거나 `exit`를 호출할 때 폴더를 지우고, 제거가 실패하면 process를 실패시킨다. `NSTemporaryDirectory`는 사용자의 임시 폴더를 반환하고 `TMPDIR`를 무시하므로 `temporaryFolder`는 `TMPDIR`를 읽는다.
 
+Node·Go·Rust·native test와 window check를 실행하는 test runner `scripts/test-runner.mjs`는 각 process에, build에도, 자기 폴더를 `TMPDIR`로 주고 그 process의 group이 끝나면 지운다. Process가 실패했거나 limit에서 kill된 때에도 지운다. Kill된 process는 `t.after`, `finally`, exit handler를 하나도 실행하지 않기 때문이다. 통과한 process가 그곳에 entry를 남기면 `left in its temporary folder:`와 entry 이름으로 실패한다. Process는 `SOKSAK_CONFIG_ROOT`가 없으면 runner의 임시 폴더를 `SOKSAK_CONFIG_ROOT`로 받아 window check의 configuration 폴더 `soksak-check-*`가 실행 사이에 남고, `NODE_DISABLE_COMPILE_CACHE=1`을 받아 pnpm이 그곳에 compile cache를 쓰지 않는다. 검사가 일부러 남기는 증거는 임시 폴더가 아니라 repository의 `target/` 아래에 둔다. Mutation run은 `target/mutation-runs` 또는 `SOKSAK_MUTATION_RUN_FOLDER` 아래에, `native/darwin`의 activation repeat은 `target/activation-repeat` 또는 `ACTIVATION_REPEAT_EVIDENCE` 아래에 둔다.
+
 `make check-temp-files COMMAND="<command>"`(`scripts/check-temp-files.mjs`)는 `TMPDIR`를 새 빈 폴더로 지정해 command를 실행하고, command가 그곳에 남긴 `soksak-` prefix의 entry를 하나씩 밝히며(`TEMP LEFT <path>`), 하나라도 있거나 command가 실패하면 실패한다. 끝날 때 자기 폴더를 지운다. window check의 configuration 폴더 `soksak-check-*`는 설계상 실행 사이에 남으므로 세지 않는다. `/tmp` 아래의 고정 경로처럼 검사가 `TMPDIR` 밖에 쓰는 폴더는 audit이 보지 못한다.
 
 ## View drag benchmark

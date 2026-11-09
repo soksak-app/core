@@ -4,7 +4,8 @@
 // command that has no per-test limit, such as a build; no such limit is above 10 minutes. The exit limit (`exitLimitMs`) bounds only the
 // exit of a test file process after its tests ended, when no test runs.
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
@@ -15,6 +16,7 @@ import { createNodeTestEvidence } from './node-test-evidence.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
 import { processStacks } from './platform/platform.js';
 import { processWarnings } from './node-warnings.mjs';
+import { temporaryFolder } from './temporary-folder.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -26,6 +28,34 @@ const seconds = (ms) => (ms / 1000).toFixed(3);
  * the write takes milliseconds.
  */
 export const STACK_LIMIT_MS = 10_000;
+/**
+ * The environment of a test process beside its temporary folder (docs/operations/examples.md#temporary-folders). The window checks keep
+ * their configuration folders `soksak-check-*` across runs in the temporary folder of the runner, so a process gets that folder as
+ * `SOKSAK_CONFIG_ROOT` when the runner has none. pnpm turns on the compile cache of node, which writes `node-compile-cache` to the
+ * temporary folder; a test process keeps no cache beyond its end, so the cache is off.
+ */
+function temporaryEnv() {
+  return { SOKSAK_CONFIG_ROOT: process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), NODE_DISABLE_COMPILE_CACHE: '1' };
+}
+
+/**
+ * Removes the temporary folder of a test process after its group ended and returns its result. A process that passed and left an entry
+ * there fails with the names of the entries, because a check removes what it writes to the temporary folder; a process that failed or was
+ * killed skipped its own removal, and the runner removes what it left. A removal that fails fails the process.
+ */
+function endTemporary(folder, result) {
+  let left;
+  try {
+    left = readdirSync(folder).sort();
+    rmSync(folder, { recursive: true });
+  } catch (error) {
+    const removal = `could not remove its temporary folder: ${error.message}`;
+    return { ...result, status: 'fail', detail: result.detail ? `${result.detail}; ${removal}` : removal };
+  }
+  if (result.status !== 'pass' || left.length === 0) return result;
+  return { ...result, status: 'fail', detail: `left in its temporary folder: ${left.join(', ')}` };
+}
+
 /** The wall clock in microseconds, the unit of `ts_us` in the event logs, so a test window compares with the records. */
 const nowUs = () => Math.round((performance.timeOrigin + performance.now()) * 1000);
 
@@ -176,12 +206,12 @@ function endGroup(pgid, leader) {
  * ended and the test fails with the names of the leftovers. When the item declares a limit, the group is ended at that limit, and the
  * timeout names the leftovers other than the test process.
  */
-function runOne(item, limitMs, env, outputPath, stacks) {
+function runOne(item, limitMs, env, outputPath, stacks, temporary) {
   return new Promise((resolve) => {
     const started = performance.now();
     const chunks = [];
     const child = spawn(item.command, item.args, {
-      cwd: item.cwd, env: { ...process.env, ...env, ...item.env },
+      cwd: item.cwd, env: { ...process.env, ...temporaryEnv(), ...env, ...item.env, TMPDIR: `${temporary}/` },
       detached: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
     // The limit that ended the group, with the time of the stop and the reason; the leftovers are named when the group is ended.
@@ -336,7 +366,13 @@ function runOne(item, limitMs, env, outputPath, stacks) {
     // The result of a process that reports its test events carries the tests that it ran (`tests`), which the summaries of its files count;
     // a file that ended before its summary counts none.
     const reporting = item.eventLimitMs !== undefined;
-    const finish = (result) => resolve(reporting ? { ...result, tests: ran } : result);
+    let finished = false;
+    const finish = (result) => {
+      if (finished) return;
+      finished = true;
+      const ended = endTemporary(temporary, result);
+      resolve(reporting ? { ...ended, tests: ran } : ended);
+    };
     child.once('error', (error) => {
       clearLimit(timer);
       clearLimit(watchdog);
@@ -399,6 +435,9 @@ function runOne(item, limitMs, env, outputPath, stacks) {
  * starts; the line `WAIT <name>` names the test that waits for it. `run` (`{id, folder}`), when given, passes the identifier and the folder to each
  * test as `SOKSAK_RUN_ID` and the folder as `SOKSAK_RUN_FOLDER`, stores the output of every test in the folder, and keeps `manifest.json` there with each test, its status,
  * its start and its end in microseconds; the manifest is rewritten when a test starts and when it ends.
+ * Each process, a build too, runs with a folder of its own as `TMPDIR`, which the runner removes when the group of the process ended,
+ * also when the process failed or was killed; a process that passed and left an entry there fails with `left in its temporary folder:`
+ * and the names of the entries.
  * `stacks(pid, file)`, when given, records the thread stacks of a process that did not exit at its exit limit; the default is the
  * operation of the platform (scripts/platform/platform.js).
  */
@@ -419,6 +458,17 @@ export async function runTests(options) {
     const path = join(run.folder, 'manifest.json');
     writeFileSync(`${path}.tmp`, `${JSON.stringify(manifest, null, 2)}\n`);
     renameSync(`${path}.tmp`, path);
+  };
+  // The temporary folders of the processes of the run: one folder of the run, which is removed when the run ends or is ended by a signal
+  // (temporary-folder.mjs), and in it a folder of each process, which the process receives as TMPDIR and which is removed when its group
+  // ended (endTemporary).
+  const temporary = temporaryFolder('soksak-test-run-');
+  let processes = 0;
+  const processFolder = () => {
+    processes += 1;
+    const folder = join(temporary.path, String(processes));
+    mkdirSync(folder);
+    return folder;
   };
   const beat = setInterval(() => {
     if (running.size === 0) return;
@@ -450,7 +500,7 @@ export async function runTests(options) {
       if (item.build) {
         write(`BUILD ${item.name} (limit ${seconds(item.build.timeoutMs)}s)`);
         const built = await runOne({ name: item.name, command: item.build.command, args: item.build.args, cwd: item.cwd, env: item.env },
-          item.build.timeoutMs, env, outputPath, stacks);
+          item.build.timeoutMs, env, outputPath, stacks, processFolder());
         const ended = `${seconds(built.elapsedMs)}s${built.detail ? ` ${built.detail}` : ''}`;
         if (entry) {
           entry.build = { status: built.status, elapsed_ms: Math.round(built.elapsedMs), detail: built.detail };
@@ -465,7 +515,7 @@ export async function runTests(options) {
       }
       if (result === null) {
         write(`RUN  ${item.name} (${running.size} running, ${limit === undefined ? 'no runner limit' : `limit ${seconds(limit)}s`})`);
-        result = await runOne(item, limit, env, outputPath, stacks);
+        result = await runOne(item, limit, env, outputPath, stacks, processFolder());
       }
       running.delete(item.name);
       if (entry) {
@@ -482,6 +532,7 @@ export async function runTests(options) {
     await Promise.all(Array.from({ length: Math.min(concurrency, tests.length) }, worker));
   } finally {
     clearInterval(beat);
+    temporary.remove();
   }
   if (run) {
     manifest.finished_us = nowUs();
