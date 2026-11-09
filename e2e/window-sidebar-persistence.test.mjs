@@ -260,7 +260,11 @@ for (const app of Object.values(APPS))
             errors.push(error);
           }
         }
-        if (errors.length) throw new AggregateError(errors, `${label}: persistence recording failed`);
+        if (errors.length)
+          throw new AggregateError(
+            errors,
+            `${label}: persistence recording failed: ${errors.map((error) => error.message).join("; ")}`,
+          );
         return result.grid;
       }
       const assigned = await phase("independent settings and widths", async () => {
