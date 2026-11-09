@@ -841,6 +841,7 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.surfaces.seated)
 	s.surfaces.drawnPlane, s.surfaces.drawnLibrary = nil, false
 	s.library.drawnPreviews = nil
+	s.surfaces.row = s.chromeHeight()
 	width, height := c.Size()
 	s.followSize(width, height)
 	theme := *c.Theme()

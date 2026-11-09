@@ -208,7 +208,11 @@ type surfaceState struct {
 	// titlebar is 0 and no frame places for the first row.
 	placed   []surfaceLine
 	titlebar float32
-	running  bool
+	// row is the height of the first row that the current frame draws. A placement gives it, also one that the answer of a running
+	// placement makes after the frame, when the frame factor may have changed since: the title bar shows with the frame that drew the
+	// row (docs/spec/native-surfaces.md#title-bar-height).
+	row     float32
+	running bool
 	// going tells that the last placement belongs to a run.
 	going   bool
 	views   map[string]*viewState
@@ -579,7 +583,7 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
 				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section}})
 	}
-	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.chromeHeight(), "declarations": table}, nil
+	return map[string]any{"settled": s.held == nil, "surfaces": surfaces, "titlebar": s.surfaces.row, "declarations": table}, nil
 }
 
 // surfaceDimmed tells whether the setting dims the surface: a card has one surface shown, and the card without focus dims it.
@@ -638,7 +642,7 @@ func (s *Shell) placeSurfaces() {
 	lines := s.surfaceLines()
 	// The first row is part of the placement: the host sets the title bar, and so the window buttons, with the frame that draws the row
 	// (frameLayout of packages/workbench/frame-text.js), also when no surface moved.
-	same := slices.Equal(lines, s.surfaces.placed) && (s.surfaces.titlebar == 0 || s.chromeHeight() == s.surfaces.titlebar)
+	same := slices.Equal(lines, s.surfaces.placed) && (s.surfaces.titlebar == 0 || s.surfaces.row == s.surfaces.titlebar)
 	if !same {
 		s.openLayout()
 	}
@@ -674,7 +678,7 @@ func (s *Shell) placeSurfaces() {
 	}
 	// The preparation of these lines takes the opened layout over, and the host cancels it when the preparation fails.
 	s.surfaces.opened = 0
-	s.surfaces.placed, s.surfaces.titlebar = lines, s.chromeHeight()
+	s.surfaces.placed, s.surfaces.titlebar = lines, s.surfaces.row
 	s.surfaces.running = true
 	settledNow, _ := request["settled"].(bool) // silent: surfaceRequest writes settled as a bool.
 	s.followRun(!settledNow)
