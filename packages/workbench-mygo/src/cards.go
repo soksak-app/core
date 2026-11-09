@@ -24,7 +24,12 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.drawSpaces(c, project, width)
 	stage := height - s.workBanner - s.spaceRowHeight()
 	inset := s.stageInset()
-	s.plane.Resize(float64(width-2*inset), float64(stage-2*inset))
+	// The plane stands on the device pixel grid, so the stage holds it moved by the part of a device pixel that the rows above and
+	// left of it leave.
+	shiftX, shiftY := s.alignPlane(width, stage)
+	s.plane.Resize(s.planeBox.W, s.planeBox.H)
+	held := float32(s.planeBox.W) + 2*inset
+	heldHeight := float32(s.planeBox.H) + 2*inset
 	// A column takes its width from the plane, whose size only a frame knows, so a change of the columns waits for it.
 	if s.columnsChanged {
 		s.columnsChanged = false
@@ -38,43 +43,71 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	originX, originY := float32(origin.X), float32(origin.Y)
 	rules := s.plane.Rules()
 	var grips []dividerGrip
-	ui.Box(c).Size(width, stage).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
-		s.drawRail(p, r, inset)
-		paintGrips(p, r, inset, grips)
-		s.drawRules(p, r, inset, rules, true)
-	}).Children(func() {
-		s.drawStageEdge(c, width, stage)
-		cards := s.plane.Cards()
-		s.forgetCardReads(cards)
-		for _, card := range cards {
-			rect, ok := s.cardRect(card.ID)
-			if !ok {
-				continue
-			}
-			data, err := s.readCard(card)
-			if err != nil {
-				s.errors.Show(card.ID, err.Error(), "")
-				DrawError(c, s.errors, card.ID)
-				continue
-			}
-			if s.fullscreen != "" && card.ID != s.fullscreen {
-				s.drawAbsentCard(c, card.ID, data, rect)
-				continue
-			}
-			if data == nil {
-				if s.sidebars.Holds(card.ID) {
-					s.drawSidebarCard(c, card.ID, rect, inset, originX, originY)
+	ui.Box(c).Size(width, stage).Children(func() {
+		ui.Box(c).Absolute().Left(shiftX).Top(shiftY).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
+			s.drawRail(p, r, inset)
+			paintGrips(p, r, inset, grips)
+			s.drawRules(p, r, inset, rules, true)
+		}).Children(func() {
+			// The line around the stage stands where the stage does, outside the box that holds the plane on the grid.
+			s.drawStageEdge(c, -shiftX, -shiftY, width, stage)
+			cards := s.plane.Cards()
+			s.forgetCardReads(cards)
+			for _, card := range cards {
+				rect, ok := s.cardRect(card.ID)
+				if !ok {
+					continue
 				}
-				continue
+				data, err := s.readCard(card)
+				if err != nil {
+					s.errors.Show(card.ID, err.Error(), "")
+					DrawError(c, s.errors, card.ID)
+					continue
+				}
+				if s.fullscreen != "" && card.ID != s.fullscreen {
+					s.drawAbsentCard(c, card.ID, data, rect)
+					continue
+				}
+				if data == nil {
+					if s.sidebars.Holds(card.ID) {
+						s.drawSidebarCard(c, card.ID, rect, inset, originX, originY)
+					}
+					continue
+				}
+				s.drawCard(c, card.ID, data, rect, inset, originX, originY)
 			}
-			s.drawCard(c, card.ID, data, rect, inset, originX, originY)
-		}
-		if s.fullscreen == "" {
-			grips = s.drawDividers(c, inset)
-		}
-		s.drawDropPreview(c, inset)
+			if s.fullscreen == "" {
+				grips = s.drawDividers(c, inset)
+			}
+			s.drawDropPreview(c, inset)
+		})
 	})
 	s.forgetStrips()
+}
+
+// alignPlane puts the plane of the stage of width by height on the device pixel grid of the window, as alignPlane of
+// packages/workbench/device-grid.js does: whatever lies above or left of the stage, the plane starts and ends on a grid line. It
+// is the one place that sets planeBox. It returns how far the plane moved right and down from where the rows leave it. A window
+// whose scale cannot be read shows that failure and keeps the plane where the rows leave it.
+func (s *Shell) alignPlane(width, stage float32) (float32, float32) {
+	inset := s.stageInset()
+	area := layout.Rect{
+		X: float64(s.projectColumnWidth() + inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset),
+		W: float64(width - 2*inset), H: float64(stage - 2*inset),
+	}
+	s.planeBox = area
+	window, err := s.windowView()
+	if err != nil {
+		s.failWindowRead(err)
+		return 0, 0
+	}
+	aligned, err := layout.GridPlane(area, window.Scale)
+	if err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	s.planeBox = aligned
+	return float32(aligned.X - area.X), float32(aligned.Y - area.Y)
 }
 
 // drawWorkError draws the error line above the spaces, as #applicationError of packages/workbench/app.css, and returns its height, which

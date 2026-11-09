@@ -8887,9 +8887,12 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/device-grid.js", symbol: "export function alignPlane(plane, scale = gridScale()) {" },
       { file: "packages/workbench/index.html", symbol: "observePlaneGrid(plane);" },
+      { file: "packages/workbench-mygo/src/layout/device_grid.go", symbol: "func GridPlane(area Rect, scale float64) (Rect, error) {" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) alignPlane(width, stage float32) (float32, float32) {" },
     ],
     tests: [
       { file: "packages/workbench/test/device-grid.test.mjs", id: "a shown error of 34.4px above the plane leaves the plane origin and size on the device pixel grid" },
+      { file: "packages/workbench-mygo/tests/plane_grid_test.go", id: "TestAShownErrorAboveThePlaneLeavesThePlaneOnTheDevicePixelGrid" },
       { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
       { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7b names the surface and its declared and applied rectangles" },
     ],
