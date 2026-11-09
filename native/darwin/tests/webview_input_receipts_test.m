@@ -130,6 +130,30 @@ int main(void) { @autoreleasepool {
     check(sent == 0 && completed == 1 && !received,
         [NSString stringWithFormat:@"a timed-out wait cancels its held pre-send drain (sent %lu, completed %lu)",
             (unsigned long)sent, (unsigned long)completed]);
+    // A sent press whose receipt misses the limit records whether the document holds the receipt listener, and a receipt that
+    // comes after the limit records its delay: a document without the listener, a document that never received the press, and a
+    // late document are then told apart at the error level alone.
+    view.hold=NO; view.held=nil; completed=0; received=YES;
+    NSString *missed = capturedRecords(^{
+        webviewInputSendThen(view, @"pointerdown", 0.05, ^BOOL { return YES; }, ^(BOOL value) { received=value; completed++; });
+        until(^BOOL { return completed > 0; });
+    });
+    // The listener answer and the late receipt each take one round trip to the web process; one second holds both.
+    NSString *late = capturedRecords(^{
+        postReceipt(view);
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1];
+        while (deadline.timeIntervalSinceNow > 0)
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    });
+    NSString *both = [missed stringByAppendingString:late];
+    check(!received && completed == 1, @"a sent press without a receipt in time completes as not received");
+    check([missed containsString:@" error native webview input: receipt of pointerdown did not arrive within 0.05 seconds"]
+        && [both containsString:@" error native webview input: the receipt listener of the document at the limit of pointerdown: present"],
+        [NSString stringWithFormat:@"a missed receipt records the receipt listener of the document (got %@)", both]);
+    check([late containsString:@" error native webview input: receipt of pointerdown arrived "]
+        && [late containsString:@" ms after its wait ended at the limit"],
+        [NSString stringWithFormat:@"a receipt after the limit records its delay (got %@)", late]);
+    view.hold=YES;
     // If unregistering ends the wait, the late drain is not sent and does not complete again.
     view.held=nil; completed=0; received=YES; sent=0;
     webviewInputSendThen(view, @"pointerdown", 10, ^BOOL { sent++; return NO; },

@@ -728,6 +728,51 @@ static void pointerNow(SPPointer *pointer, void *handle, double x, double y, int
     heldDone(done, context, result, held);
 }
 
+// The facts of view for the record of a press or release that its document did not receive: class, address, frame in window
+// coordinates, whether it is in window and hidden, and for a web view its address of document and whether it loads.
+static id viewFacts(NSView *view, NSWindow *window) {
+    if (!view) return NSNull.null;
+    NSRect frame = [view convertRect:view.bounds toView:nil];
+    NSMutableDictionary *facts = [NSMutableDictionary dictionaryWithDictionary:@{
+        @"class": NSStringFromClass(view.class),
+        @"view": [NSString stringWithFormat:@"%p", view],
+        @"frame": @[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)],
+        @"inWindow": @(view.window == window),
+        @"hidden": @(view.isHiddenOrHasHiddenAncestor),
+    }];
+    if ([view isKindOfClass:WKWebView.class]) {
+        WKWebView *web = (WKWebView *)view;
+        facts[@"url"] = web.URL.absoluteString ?: (id)NSNull.null;
+        facts[@"loading"] = @(web.loading);
+    }
+    return facts;
+}
+
+// Records, at the level error, a press or release that the document of target did not receive within the limit: the web view
+// whose receipt was awaited, the view the press reached when it was sent (nil when it was not sent) and its page, and the key
+// state of window, so a press that reached another page is told from a page that did not answer.
+static void logUnreceived(NSWindow *window, WKWebView *target, NSView *reached, NSString *type, double x, double y) {
+    NSView *page = reached ? pageOf(reached) : nil;
+    NSResponder *first = window.firstResponder;
+    NSDictionary *record = @{
+        @"kind": @"unreceived",
+        @"type": type,
+        @"x": @(x),
+        @"y": @(y),
+        @"target": viewFacts(target, window),
+        @"reached": viewFacts(reached, window),
+        @"reachedPage": viewFacts(page, window),
+        @"samePage": @(page == target),
+        @"firstResponder": first ? NSStringFromClass(first.class) : (id)NSNull.null,
+        @"key": @(window.isKeyWindow),
+        @"virtual": @(sp_input_virtual_is((__bridge void *)window)),
+        @"throughApplication": @(sp_input_virtual_through_application((__bridge void *)window)),
+    };
+    NSData *json = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys | NSJSONWritingWithoutEscapingSlashes
+        error:nil];
+    sp_log_error("input inject", [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease].UTF8String);
+}
+
 // Innermost web view that receives the event at the coordinates.
 static WKWebView *webViewAt(NSWindow *window, double x, double y) {
     NSView *view = hitView(window, windowPoint(window, x, y));
@@ -822,13 +867,20 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
     }
     sp_input_press_context pressContext = {0};
     if (hasPressContext) sp_input_press_context_push(&pressContext, window, originX, originY);
+    NSString *type = phase == 3 ? @"pointerup" : @"pointerdown";
+    // The view that the press or release reaches when it is sent, which deliverPointer chooses in the same way.
+    __block NSView *reached = nil;
     @try {
-        webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
+        webviewInputSendThen(target, type, timeoutSeconds, ^BOOL {
+            reached = [pointerTarget(pointer, window, windowPoint(window, x, y), phase, button) retain];
             result = pointerInput(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
             return result == SP_INPUT_DELIVERED;
         }, ^(BOOL received) {
             sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
                 result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
+            if (final == SP_INPUT_UNRECEIVED) logUnreceived(window, target, reached, type, x, y);
+            [reached release];
+            reached = nil;
             logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, final,
                 final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why, held.holder);
             heldDone(done, context, final, held);
