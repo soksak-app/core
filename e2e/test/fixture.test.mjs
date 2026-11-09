@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, paintProbeDocument, placeholderTabs, pluginChangeStarted, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, paintProbeDocument, placeholderTabs, pluginChangeStarted, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsClosed, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -235,6 +235,30 @@ test("the settings dialog is shown when the modal web view of a main page shows 
   await settingsShown(mygo.s, "not shown");
   assert.deepEqual(mygo.waited, ["core.modal"]);
   await assert.rejects(settingsShown(shown({ "host.window": { pageProcess: null, modal: null }, "core.modal": null }).s, "not shown"), /not shown/);
+});
+
+test("the settings dialog is closed when the main page has no modal web view, and on the mygo host when core.modal is empty", async () => {
+  const closed = (state) => {
+    const waited = [];
+    const s = {
+      get: async (name) => { if (name !== "host.window") throw new Error(`unexpected status ${name}`); return state["host.window"]; },
+      until: async (name, predicate, message) => {
+        waited.push(name);
+        if (!predicate(state[name])) throw new Error(message);
+        return state[name];
+      },
+    };
+    return { s, waited };
+  };
+  const page = closed({ "host.window": { pageProcess: 7, modal: null } });
+  await settingsClosed(page.s, "not closed");
+  assert.deepEqual(page.waited, ["host.window"]);
+  await assert.rejects(settingsClosed(closed({ "host.window": { pageProcess: 7, modal: { id: "settings", shown: true } } }).s, "not closed"), /not closed/);
+
+  const mygo = closed({ "host.window": { pageProcess: null, modal: null }, "core.modal": null });
+  await settingsClosed(mygo.s, "not closed");
+  assert.deepEqual(mygo.waited, ["core.modal"]);
+  await assert.rejects(settingsClosed(closed({ "host.window": { pageProcess: null, modal: null }, "core.modal": { id: "settings", mode: "dialog", document: null } }).s, "not closed"), /not closed/);
 });
 
 test("the document region of a layout probe tab is painted after its document reports and is ready once it reports the colour", async () => {

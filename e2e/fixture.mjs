@@ -90,6 +90,17 @@ export async function settingsShown(s, message) {
 }
 
 /**
+ * Waits until the settings dialog that core.settings.close closed is gone: a host with a main page removes its native modal web
+ * view from host.window, and the mygo workbench, which draws it itself, empties core.modal (docs/spec/exposure.md).
+ */
+export async function settingsClosed(s, message) {
+  if ((await s.get("host.window")).pageProcess !== null) {
+    return s.until("host.window", (window) => window.modal === null, message);
+  }
+  return s.until("core.modal", (modal) => modal === null, message);
+}
+
+/**
  * Puts a card-left sidebar on each card whose active tab is a tab of `plugin` (START_PLUGIN by default): it stores a common set
  * (start.mjs cardSidebar, the id `check-sections` by default) of `sections`, by default the sections of the list set of the layout
  * probe (probeListSections), and links it. Returns the ids of the card sidebars.
