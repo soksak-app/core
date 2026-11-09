@@ -8,12 +8,14 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a covered window is occluded and hides the document of its tab`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     const { surface } = await fresh(s);
+    // The check windows overlap and can cover this one whole; the check starts from a window that is not occluded.
+    await uncoverFromCheckWindows(t, s);
     await s.until("layoutprobe.document", (at) => at.reported && at.document === "visible",
       "the region document did not report itself visible", { surface });
 
