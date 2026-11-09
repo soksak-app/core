@@ -7,6 +7,8 @@
 #import "quit_request.h"
 #import "support/records.h"
 #import "event_ring.h"
+#import <spawn.h>
+#import <sys/wait.h>
 
 static int failures = 0;
 
@@ -53,30 +55,78 @@ static OSErr replyError(const AppleEvent *reply) {
     return (OSErr)error;
 }
 
-// Sends a quit event to this process by its process identifier from a thread other than the main thread, and runs the main loop
-// until the send returned and the request arrived, or five seconds passed. A send on the main thread is dispatched to the handler
-// within the send, and the handler suspends the event, so that send ends with errAETimeout (-1712) although the request ran. From
-// another thread the event goes through the event queue of the main thread, as the event of another process does, and the
-// sender does not wait for the answer (kAENoReply). The Apple event manager names the sending process either way.
-static OSStatus sendQuitToSelf(const int *requests, int before) {
-    __block OSStatus status = 1;
-    __block BOOL returned = NO;
-    pid_t pid = getpid();
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSAppleEventDescriptor *target = [NSAppleEventDescriptor descriptorWithProcessIdentifier:pid];
-        NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
-            eventID:kAEQuitApplication targetDescriptor:target returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
-        OSStatus sent = AESendMessage(event.aeDesc, NULL, kAENoReply, kAEDefaultTimeout);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            status = sent;
-            returned = YES;
-        });
-    });
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-    while ((!returned || (status == noErr && *requests == before)) && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+// The argument that makes this executable the sender of a quit event to the process whose identifier follows it.
+static const char *const senderArgument = "--send-quit-to";
+
+// A send to the current process is dispatched directly to its handler (AEMach.h, AESendMessage), on any thread, and the
+// send does not return while the handler keeps the event suspended. The sender is therefore a second process: this
+// executable started with senderArgument. It checks in as an application, so it has a running application and a name,
+// sends the quit event without waiting for an answer and without prompting for consent (AppleEvents.h,
+// kAEDoNotPromptForUserConsent), writes the status of the send as a decimal number to its standard output, and stays
+// until its standard input closes, so that the handler finds it running.
+static int sendQuitAsChild(pid_t target) {
+    [NSApplication sharedApplication];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
+    NSAppleEventDescriptor *address = [NSAppleEventDescriptor descriptorWithProcessIdentifier:target];
+    NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
+        eventID:kAEQuitApplication targetDescriptor:address returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
+    OSStatus status = AESendMessage(event.aeDesc, NULL, kAENoReply | kAEDoNotPromptForUserConsent, kAEDefaultTimeout);
+    printf("%d", (int)status);
+    fflush(stdout);
+    char end;
+    while (read(STDIN_FILENO, &end, 1) > 0) {}
+    return 0;
+}
+
+// The sender process of sendQuitFromChild and the status of its send.
+typedef struct {
+    pid_t pid;
+    OSStatus status;
+} SentQuit;
+
+// Starts this executable as the sender of a quit event to this process, runs the main loop until the request arrives or
+// five seconds pass, then lets the sender end and reads the status of its send. The status is 1 when the sender could not
+// be started or reported no status.
+static SentQuit sendQuitFromChild(const int *requests, int before) {
+    SentQuit sent = {-1, 1};
+    int input[2], output[2];
+    if (pipe(input) || pipe(output)) return sent;
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_adddup2(&actions, input[0], STDIN_FILENO);
+    posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO);
+    posix_spawn_file_actions_addclose(&actions, input[1]);
+    posix_spawn_file_actions_addclose(&actions, output[0]);
+    char target[16];
+    snprintf(target, sizeof target, "%d", getpid());
+    const char *executable = NSBundle.mainBundle.executablePath.fileSystemRepresentation;
+    char *arguments[] = {(char *)executable, (char *)senderArgument, target, NULL};
+    extern char **environ;
+    int spawned = posix_spawn(&sent.pid, executable, &actions, NULL, arguments, environ);
+    posix_spawn_file_actions_destroy(&actions);
+    close(input[0]);
+    close(output[1]);
+    if (spawned == 0) {
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+        while (*requests == before && deadline.timeIntervalSinceNow > 0) {
+            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            if (event) [NSApp sendEvent:event];
+        }
+    } else {
+        sent.pid = -1;
     }
-    return status;
+    close(input[1]);
+    char text[32] = {0};
+    size_t length = 0;
+    ssize_t count;
+    while (length < sizeof text - 1 && (count = read(output[0], text + length, sizeof text - 1 - length)) > 0) length += (size_t)count;
+    close(output[0]);
+    if (sent.pid > 0) waitpid(sent.pid, NULL, 0);
+    char *end = NULL;
+    long status = strtol(text, &end, 10);
+    if (length > 0 && end == text + length) sent.status = (OSStatus)status;
+    return sent;
 }
 
 // Checks after [NSApp run] has installed the default handler, as in a real application.
@@ -114,16 +164,17 @@ static void runChecks(SPCancellingDelegate *delegate) {
     check(senderPid == 0 && sender == nil,
           [NSString stringWithFormat:@"an event that names no sending process gives the sender 0 and no name (%d, %@)", senderPid, sender]);
 
-    // A quit event that a process sends names that process, and the name of a running sender is its bundle identifier or name.
-    // The requests before the send are the request of the dispatched event above; the send adds exactly one.
+    // A quit event that another process sends names that process, and the name of a running sender is its bundle identifier or
+    // name. The sender is this executable, so its name is the name of this process. The requests before the send are the
+    // request of the dispatched event above; the send adds exactly one.
     int before = requests;
-    OSStatus sent = sendQuitToSelf(&requests, before);
+    SentQuit sent = sendQuitFromChild(&requests, before);
     sp_quit_request_answer();
     NSRunningApplication *current = NSRunningApplication.currentApplication;
     NSString *expected = current.bundleIdentifier ?: current.localizedName;
-    check(sent == noErr && requests - before == 1 && senderPid == getpid() && [sender isEqual:expected],
+    check(sent.status == noErr && requests - before == 1 && sent.pid > 0 && senderPid == sent.pid && [sender isEqual:expected],
           [NSString stringWithFormat:@"a sent quit event names its sender process and its name (want %d %@; status %d, requests of the send %d, sender %d %@)",
-              getpid(), expected, (int)sent, requests - before, senderPid, sender]);
+              sent.pid, expected, (int)sent.status, requests - before, senderPid, sender]);
     check(delegate.terminateCalls == 0,
           [NSString stringWithFormat:@"the quit event does not reach applicationShouldTerminate: (%d calls)", delegate.terminateCalls]);
     sp_quit_request_answer();
@@ -146,7 +197,8 @@ static void runChecks(SPCancellingDelegate *delegate) {
     AEDisposeDesc(&cancelledReply);
 }
 
-int main(void) { @autoreleasepool {
+int main(int argc, char **argv) { @autoreleasepool {
+    if (argc == 3 && strcmp(argv[1], senderArgument) == 0) return sendQuitAsChild((pid_t)atoi(argv[2]));
     // The records that this test reads include events below the level error, which the default policy refuses (docs/spec/logging.md#policy):
     // the policy that stores every level is set here, and the default policy is tested in event_ring_test.
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
