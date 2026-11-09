@@ -74,7 +74,8 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
     try {
       await dragLog.until((lines) => {
         const actualFrames = settledFrames(lines);
-        const lastSync = lines.findLastIndex((line) => /^info workbench workbench: host syncSurfaces .*"settled":true/.test(line));
+        // A preparation after the last settled presentation moves the layout on, settled or not.
+        const lastSync = lines.findLastIndex((line) => /^info workbench workbench: host syncSurfaces /.test(line));
         const lastPresent = lines.findLastIndex((line) => /^info workbench workbench: host presentSurfaces .*"settled":true.* ->/.test(line));
         return actualFrames?.length === expectedFrames.length && actualFrames.every((frame, index) =>
           ["x", "y", "width", "height"].every((key) => Math.abs(frame[key] - expectedFrames[index][key]) < 0.5)) &&
@@ -102,7 +103,7 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
   }
 
   const { baseline, others } = comparison(sessions);
-  const rested = Object.fromEntries(Object.keys(sessions).map((name) => [name, atRest(transcript(dragged[name]))]));
+  const rested = Object.fromEntries(Object.keys(sessions).map((name) => [name, atRest(dragged[name])]));
   for (const [name, found] of Object.entries(rested)) {
     assert.ok(found, `${name} recorded no settled commit:\n${dragged[name].join("\n")}`);
   }
@@ -157,7 +158,7 @@ if (requiresAll(process.env)) test("every host lays out the same page the same w
     await s.until("core.window.workbench", (workbench) => workbench.width === SIZE.width && workbench.height === SIZE.height,
       "the workbench did not take the new size");
     const lines = await log.until(settled, "the resize did not end with a settled commit").then(() => log.stop());
-    const found = atRest(transcript(lines));
+    const found = atRest(lines);
     assert.ok(found, `${name} recorded no settled commit after the resize:\n${lines.join("\n")}`);
     rested[name] = found;
   }
