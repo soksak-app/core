@@ -13,6 +13,7 @@ import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
+import { exitEvidence } from "./host-exit.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -222,34 +223,6 @@ function exitedEndpointPid(configDir) {
     return null;
   }
   return Number.isInteger(endpoint?.pid) && !processRuns(endpoint.pid) ? endpoint.pid : null;
-}
-
-/**
- * The last records of the host log of process pid that tell how it ended: its closing records with their cause and its error
- * records, in the order of the log.
- */
-function exitEvidence(configDir, pid) {
-  const pattern = new RegExp(`^host-\\d+-${pid}\\.jsonl$`);
-  let name;
-  try {
-    name = readdirSync(join(configDir, "logs")).find((entry) => pattern.test(entry));
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  if (name === undefined) return `no host log of process ${pid}`;
-  const file = join(configDir, "logs", name);
-  const records = [];
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    if (line === "") continue;
-    let record;
-    try { record = JSON.parse(line); } catch { continue; }
-    if (record.event === "log.closed") records.push(`seq ${record.seq} log.closed cause ${record.fields?.cause}`);
-    else if (record.level === "error") {
-      const fields = record.fields ?? {};
-      records.push(`seq ${record.seq} ${record.event} ${fields.text ?? JSON.stringify(fields)}${fields.where ? ` (${fields.where})` : ""}`);
-    }
-  }
-  return `the last records of ${file} that tell how it ended: ${records.slice(-8).join("; ") || "none"}`;
 }
 
 /** Records that the host process pid of the application exited, as the check named check found, and returns the failure of that check. */
