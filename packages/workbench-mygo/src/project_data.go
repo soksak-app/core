@@ -267,6 +267,11 @@ func (s *Shell) compareData(value any) error {
 			removed = append(removed, project.ID)
 		}
 	}
+	// The window first stores the plane of its active project that the store still lists, as readProjects of the page does before
+	// it cleans up after the removed projects: the tabs of that plane are kept with the stored layout.
+	if len(removed) > 0 && listed[s.active] {
+		s.keep()
+	}
 	for _, id := range removed {
 		s.dropProject(id)
 	}

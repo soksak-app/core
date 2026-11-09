@@ -409,6 +409,8 @@ type Shell struct {
 	}
 	// drawnSize is the size of the window that the last frame drew, which tells a frame that the window was resized.
 	drawnSize [2]float32
+	// geometrySave cancels the pending save of the geometry after a resize.
+	geometrySave func()
 	// started is set once the host took the first state of the shell, and changed once plugins changed before that. applying is set
 	// while a plugin change applies, applyDue when a change arrived during it, and applied holds what the running apply answers. They
 	// belong to the main thread.
@@ -777,17 +779,39 @@ func (s *Shell) windowView() (WindowView, error) {
 	return s.frameWindow, s.frameWindowFailure
 }
 
-// traceSize stores the action marker of a window that changed its size (docs/spec/performance-trace.md#producers), as the resize
-// listener of packages/workbench/core-exposure.js does: the first frame sets the size, which is no resize.
-func (s *Shell) traceSize(width, height float32) {
+// geometrySaveDelay is the time after the last resize of the window before its geometry is saved, as the resize listener of
+// packages/workbench/index.html waits.
+const geometrySaveDelay = 200
+
+// followSize follows a window that changed its size: the first frame sets the size, which is no resize. A resize stores the action
+// marker of the window (docs/spec/performance-trace.md#producers), as the resize listener of packages/workbench/core-exposure.js does,
+// and saves the geometry geometrySaveDelay after the last resize, as the resize listener of packages/workbench/index.html does.
+func (s *Shell) followSize(width, height float32) {
 	size := [2]float32{width, height}
 	if size == s.drawnSize {
 		return
 	}
-	if s.drawnSize != ([2]float32{}) {
-		s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "resize", "width": width, "height": height} })
-	}
+	resized := s.drawnSize != ([2]float32{})
 	s.drawnSize = size
+	if !resized {
+		return
+	}
+	s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "resize", "width": width, "height": height} })
+	// The timer port of the window is the one of its tab parts; a window without them has no later step.
+	if s.tabs == nil {
+		return
+	}
+	if s.geometrySave != nil {
+		s.geometrySave()
+	}
+	s.geometrySave = s.tabs.ports.After(geometrySaveDelay, func() {
+		s.geometrySave = nil
+		s.saveGeometry(func(err error) {
+			if err != nil {
+				s.fail(err)
+			}
+		})
+	})
 }
 
 // View draws the workbench of the window.
@@ -811,7 +835,7 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.surfaces.seated)
 	s.surfaces.drawnPlane, s.surfaces.drawnLibrary = nil, false
 	width, height := c.Size()
-	s.traceSize(width, height)
+	s.followSize(width, height)
 	theme := *c.Theme()
 	theme.Background = s.palette.Bg
 	theme.Text = s.palette.Fg
