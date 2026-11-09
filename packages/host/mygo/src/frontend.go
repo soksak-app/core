@@ -531,11 +531,14 @@ func (f *Frontend) FirstScreen() {
 
 // startHeld gives the workbench that the window built its new start, and then tells it that the host answers its calls. A start
 // that the host refused ends as the failure of that start, as a main page whose start document failed: the workbench is not told
-// that it started (docs/spec/native-host.md#page-start). Call it outside the main thread, because the start waits for steps of the
-// main thread.
+// that it started (docs/spec/native-host.md#page-start). A start whose window closed meanwhile, as a quit closes the last window,
+// names no window and ends without a failure, since no screen shows it and no workbench takes it. Call it outside the main thread,
+// because the start waits for steps of the main thread.
 func (f *Frontend) startHeld() {
 	if h := f.framework.host.Load(); h != nil {
-		if err := f.framework.start(h, f); err != nil {
+		if err := f.framework.start(h, f); errors.Is(err, host.ErrNoStartWindow) {
+			return
+		} else if err != nil {
 			host.LogError("workbench start", err)
 			f.framework.workbench.StartFailed(f, err)
 			return

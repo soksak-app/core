@@ -59,3 +59,17 @@ func TestAWorkbenchWhoseStartFailsIsNotShown(t *testing.T) {
 		t.Fatalf("the workbench received %q, want %q", workbench.received, want)
 	}
 }
+
+// A quit closes the last window while the start of its workbench runs. The start then names no window, which has no screen to show a
+// failure on and no workbench to tell, so the start ends without a failure.
+func TestAStartWhoseWindowClosedEndsWithoutAFailure(t *testing.T) {
+	workbench := &startRecord{}
+	framework := NewFramework(workbench)
+	framework.start = func(*host.Host, host.Frontend) error { return fmt.Errorf("workbench start: %w", host.ErrNoStartWindow) }
+	framework.host.Store(&host.Host{})
+	window := &Frontend{name: "main", framework: framework}
+	window.startHeld()
+	if len(workbench.received) != 0 {
+		t.Fatalf("the workbench of a closed window received %q", workbench.received)
+	}
+}
