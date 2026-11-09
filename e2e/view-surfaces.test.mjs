@@ -37,13 +37,11 @@ async function lastFrame(session) {
   await session.request("diagnostics.capture.start", {});
   const displayed = await session.presented();
   const { frames: frameDir } = await session.request("diagnostics.capture.stop", { after: displayed.displayed });
-  try {
-    const paths = frames(frameDir);
-    assert.ok(paths.length > 0, "the capture produced no frames");
-    return readFrame(paths.at(-1));
-  } finally {
-    rmSync(frameDir, { recursive: true, force: true });
-  }
+  // The session removes the recording when the check passes and keeps it when the check fails.
+  session.trackRecording(frameDir);
+  const paths = frames(frameDir);
+  assert.ok(paths.length > 0, "the capture produced no frames");
+  return readFrame(paths.at(-1));
 }
 
 async function assertGridFillsPlane(session, message) {

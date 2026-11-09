@@ -15,33 +15,33 @@ const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab
 async function clickFullscreen(t, s, card, expected) {
   const control = await s.rect("core.card.fullscreen", card.pane);
   const { frames: directory } = await s.request("diagnostics.capture.start", {});
+  // The session removes the recording when the check passes and keeps it when the check fails.
+  s.trackRecording(directory);
+  let displayed = 0;
+  let stopped;
   try {
-    let displayed = 0;
-    let stopped;
-    try {
-      await s.click(control.x + control.width / 2, control.y + control.height / 2);
-      await s.until("core.grid", grid => grid.fullscreen === expected, "fullscreen button did not toggle its card");
-      ({ displayed } = await s.presented());
-    } finally { stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 }); }
-    const captured = frames(directory).map(readFrame);
-    assert.ok(captured.length > 1, "fullscreen click recording is incomplete");
-    assert.equal(stopped.limited, false, "fullscreen recording reached its bounded buffer");
-    assert.ok(stopped.longestGap <= 100, `fullscreen recording gap ${stopped.longestGap}ms`);
-    const grid = await s.get("core.grid");
-    const shown = grid.cards.find(item => item.id === card.id);
-    const last = captured.at(-1);
-    const ratio = last.scale * last.contentScale;
-    const y = Math.floor((grid.plane.y + shown.y + shown.h / 2) * ratio);
-    const edges = [];
-    for (let x = Math.floor(grid.plane.x * ratio); x < Math.floor((grid.plane.x + grid.width) * ratio); x++) {
-      const [r, g, b] = pixel(last, x, y);
-      if (r > 140 && r > g + 35 && g > b + 15) edges.push(x / ratio);
-    }
-    assert.ok(edges.length >= 2, "recording has no measured focused card edges");
-    assert.ok(Math.abs(edges[0] - (grid.plane.x + shown.x)) <= 1, `recorded left edge ${edges[0]}`);
-    assert.ok(Math.abs(edges.at(-1) - (grid.plane.x + shown.x + shown.w)) <= 1, `recorded right edge ${edges.at(-1)}`);
-    t.diagnostic(`fullscreen=${expected}: ${captured.length} frames, gap=${stopped.longestGap}ms, measured edges=${edges[0]},${edges.at(-1)}`);
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+    await s.click(control.x + control.width / 2, control.y + control.height / 2);
+    await s.until("core.grid", grid => grid.fullscreen === expected, "fullscreen button did not toggle its card");
+    ({ displayed } = await s.presented());
+  } finally { stopped = await s.request("diagnostics.capture.stop", { after: displayed ? displayed + 100 : 0 }); }
+  const captured = frames(directory).map(readFrame);
+  assert.ok(captured.length > 1, "fullscreen click recording is incomplete");
+  assert.equal(stopped.limited, false, "fullscreen recording reached its bounded buffer");
+  assert.ok(stopped.longestGap <= 100, `fullscreen recording gap ${stopped.longestGap}ms`);
+  const grid = await s.get("core.grid");
+  const shown = grid.cards.find(item => item.id === card.id);
+  const last = captured.at(-1);
+  const ratio = last.scale * last.contentScale;
+  const y = Math.floor((grid.plane.y + shown.y + shown.h / 2) * ratio);
+  const edges = [];
+  for (let x = Math.floor(grid.plane.x * ratio); x < Math.floor((grid.plane.x + grid.width) * ratio); x++) {
+    const [r, g, b] = pixel(last, x, y);
+    if (r > 140 && r > g + 35 && g > b + 15) edges.push(x / ratio);
+  }
+  assert.ok(edges.length >= 2, "recording has no measured focused card edges");
+  assert.ok(Math.abs(edges[0] - (grid.plane.x + shown.x)) <= 1, `recorded left edge ${edges[0]}`);
+  assert.ok(Math.abs(edges.at(-1) - (grid.plane.x + shown.x + shown.w)) <= 1, `recorded right edge ${edges.at(-1)}`);
+  t.diagnostic(`fullscreen=${expected}: ${captured.length} frames, gap=${stopped.longestGap}ms, measured edges=${edges[0]},${edges.at(-1)}`);
 }
 
 for (const app of Object.values(APPS)) {
