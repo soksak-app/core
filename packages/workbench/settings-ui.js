@@ -185,11 +185,11 @@ function slide(key, min, max, now, unit) {
   return wrap;
 }
 
-/** A one-line string input. The value arrives as change. */
+/** A one-line string input that fills its row as every text field does (.text-field). The value arrives as change. */
 function text(key, maxLength, now) {
   const el = document.createElement("input");
   el.type = "text";
-  el.className = "set-text";
+  el.className = "text-field";
   el.dataset.set = key;
   el.dataset.expose = "core.settings-modal.set";
   valueCommand(el, key);
@@ -478,7 +478,7 @@ function sectionSelect(s, index, now) {
 function setEditor(s) {
   const title = document.createElement("input");
   title.type = "text";
-  title.className = "set-text";
+  title.className = "text-field";
   title.dataset.set = `title:${s.id}`;
   title.dataset.expose = "core.settings-modal.set";
   mark(title, "core.settings.sets.update", { id: s.id, scope }, "title");

@@ -464,7 +464,7 @@ func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRo
 		})
 		look.text(c, row.ID, look.Caption, look.Muted).Wrap()
 		if row.Description != "" {
-			look.text(c, row.Description, look.Small, look.Fg).Wrap()
+			ui.Text(binder.Name(c, "core.library.plugins.about", row.ID), row.Description).LineHeight(look.LineHeight).FontSize(look.Small).TextColor(look.Fg).Wrap()
 		}
 		if line := versionLine(page, row); line != "" {
 			look.text(c, line, look.Caption, look.Muted).Wrap()
@@ -478,26 +478,31 @@ func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRo
 		if row.Sidecars != nil {
 			look.text(c, sidecarLine(row.Sidecars), look.Caption, look.Muted).Wrap()
 		}
-		drawPluginContributions(c, page, row, shown, look)
+		drawPluginContributions(c, binder, page, row, shown, look)
 		drawCardActions(c, binder, page, row, look)
 		drawCardOperation(c, page, row, shown, look)
 	})
 }
 
-func drawPluginContributions(c *ui.Context, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {
+// drawPluginContributions draws the contribution lines of a card at the size of .library-plugin__contribution, the caption, and an
+// invalid contribution as its error in the same line.
+func drawPluginContributions(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {
 	for _, entry := range page.Contributions {
 		if entry.Plugin != row.ID {
 			continue
 		}
 		number := entry.Index + 1
 		where := fmt.Sprintf("library plugin %s contribution %s %d", row.ID, entry.Point, number)
+		line := binder.Name(c, "core.library.plugins.contribution", fmt.Sprintf("%s/%s/%d", row.ID, entry.Point, number))
 		if entry.State == "invalid" {
 			shown.Show(where, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, entry.Reason), "")
-			look.error(c, shown, where)
+			if text, ok := shown.Text(where); ok {
+				look.text(line, text, look.Caption, look.No).Wrap().Role(ui.RoleStatus).Label(text)
+			}
 			continue
 		}
 		shown.Hide(where)
-		look.text(c, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, contributionStates[entry.State]), look.Control, look.Fg).Wrap()
+		look.text(line, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, contributionStates[entry.State]), look.Caption, look.Fg).Wrap()
 	}
 }
 

@@ -777,11 +777,13 @@ func (s *Shell) drawPickerItem(c *ui.Context, index int, item pickerItem, metric
 				}
 			})
 			ui.Text(s.binder.Name(c, "core.picker.item-name", item.Key), item.Name).FontSize(s.textControl()).SingleLine().Ellipsis("…")
-			// The exposed name is intrinsic; an unexposed spacer owns spare row space.
-			ui.Box(c).Grow(1)
-			if item.Mark != "" {
-				ui.Text(c, item.Mark).FontSize(s.textCaption()).TextColor(s.palette.Muted).MarginStart(metrics.noteGap)
-			}
+			// The exposed name is intrinsic. The note stands as .picker__item small of app.css: one gap after the name, its own
+			// note gap, and the spare row space before the mark (margin-left:auto), also when the item has no mark.
+			ui.Row(c).Grow(1).Justify(ui.End).AlignItems(ui.Center).PaddingStart(metrics.noteGap).Children(func() {
+				if item.Mark != "" {
+					ui.Text(c, item.Mark).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+				}
+			})
 		})
 	})
 }

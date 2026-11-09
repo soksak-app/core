@@ -97,6 +97,23 @@ func TestVerifyPassesADrawnPlane(t *testing.T) {
 	}
 }
 
+// An invisible declaration with zero width or zero height has no presented area, so V7a has no place to compare and passes it wherever
+// its empty slot is drawn (V7a in docs/spec/surface-composition.md#failure-behavior).
+func TestVerifyComparesNoPlaceOfAnEmptyInvisibleDeclaration(t *testing.T) {
+	in := healthy(t)
+	empty := workbench.VerifySurface{ID: "tab-1", Visible: false}
+	in.Latest = &workbench.VerifyRecord{Seq: 3, Surfaces: []workbench.VerifySurface{empty}, Settled: true}
+	in.Seated = in.Latest
+	in.Drawn["tab-1"] = workbench.DrawnSurface{Frame: layout.Rect{X: 1, Y: 1}, Card: "c"}
+	rows, err := workbench.Verify(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := row(t, rows, "V7a"); !got.OK {
+		t.Fatalf("V7a failed an empty invisible declaration: %s", got.Note)
+	}
+}
+
 // Each row fails on the state that it exists to find, and only a named row of the case fails.
 func TestVerifyRowsFindTheirDefects(t *testing.T) {
 	for _, c := range []struct {

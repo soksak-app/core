@@ -26,7 +26,12 @@ async function probeMarks(s, surface) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: vertical dragging preserves the footer border`, async (t) => {
     const s = await open(t, app);
-    const { surface } = await fresh(s);
+    await fresh(s);
+    // The drag moves the boundary below the upper content card, so the measured surface is the active tab of that card, found by the
+    // geometry of the grid: the start tab of fresh stands in the lower card, whose bottom the drag does not move.
+    const [upper] = (await s.get("core.grid")).cards.filter((card) => !card.fixed && card.tabs?.length > 0).sort((a, b) => a.y - b.y);
+    if (!upper?.active) throw new Error("the start layout holds no content card with an active tab");
+    const surface = upper.active;
     const marks = await probeMarks(s, surface);
     const run = await drag(s, { axis: "y", line: 1, dx: 0, dy: 173, ms: 400, times: 2 }, { capture: true });
     const recorded = frames(run.frames);

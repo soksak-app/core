@@ -54,6 +54,7 @@ body[data-screen=library] #chromeActs .act[title="우측 사이드바 위치"]{d
 .library-plugin p{margin:0;overflow-wrap:anywhere}
 .library-plugin__id,.library-plugin__versions,.library-plugin__sidecars{color:var(--muted);font-size:var(--text-caption)}
 .library-plugin__about{font-size:var(--text-small)}
+.library-plugin__contribution{font-size:var(--text-caption)}
 .library-plugin__actions{display:flex;flex-wrap:wrap;gap:var(--space-2);margin-top:var(--space-1)}
 .library-plugin__operation{font-size:var(--text-caption);color:var(--muted)}
 /* An outdated persistent service: its text takes the free width and the action that replaces it follows. */

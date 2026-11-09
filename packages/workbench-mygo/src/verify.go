@@ -214,6 +214,14 @@ func compare(in VerifyInput, surfaces []VerifySurface) surfaceComparison {
 			out.gone = append(out.gone, surface.ID)
 			continue
 		}
+		if surface.Dim != slot.Dim {
+			out.dim++
+		}
+		// An invisible declaration with zero width or zero height has no presented area, so it has no place to compare (V7a in
+		// docs/spec/surface-composition.md#failure-behavior); it still counts for the slots and the dimming.
+		if !surface.Visible && (surface.Declared.W == 0 || surface.Declared.H == 0) {
+			continue
+		}
 		if delta := maxDelta(slot.Frame, surface.Declared); delta > out.worst {
 			out.worst = delta
 			out.at = fmt.Sprintf(" · %s drawn %s declared %s", surface.ID, frameText(slot.Frame), frameText(surface.Declared))
@@ -224,9 +232,6 @@ func compare(in VerifyInput, surfaces []VerifySurface) surfaceComparison {
 				out.at += fmt.Sprintf(" · card %s inset %.2f,%.2f,%.2f,%.2f · plane %s · devicePixelRatio %v", frameText(card),
 					frame.X-card.X, frame.Y-card.Y, card.X+card.W-frame.X-frame.W, card.Y+card.H-frame.Y-frame.H, frameText(in.Plane), in.Scale)
 			}
-		}
-		if surface.Dim != slot.Dim {
-			out.dim++
 		}
 	}
 	for id := range in.Drawn {

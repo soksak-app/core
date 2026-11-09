@@ -143,7 +143,9 @@ export function verify(controls = null) {
   else add("V6 마지막 하나 빼고 전부 닫힌다", open.every((c) => grid.canClose(c.id)),
       `${open.filter((c) => grid.canClose(c.id)).length}/${open.length}`);
 
-  // V7a — does the last commit hold the surfaces that are drawn now, exactly, at the places where they are drawn.
+  // V7a — does the last commit hold the surfaces that are drawn now, exactly, at the places where they are drawn (V7a in
+  // docs/spec/surface-composition.md#failure-behavior). An invisible declaration with zero width or zero height has no presented area,
+  // so it has no place to compare; it still counts for the slots and the dimming.
   //
   // It counts the surfaces that are only in the commit and the surfaces that are only in the plane together. A commit
   // that overlaps nothing passes because nothing overlaps, not because it is correct.
@@ -164,7 +166,7 @@ export function verify(controls = null) {
   const predicted = (id) => onPlane.get(id).dataset.nativeSurface !== "view";
   // The ids of a list, so a failure names the surfaces that it counts.
   const named = (ids) => (ids.length ? ` [${ids.join(", ")}]` : "");
-  const compare = (surfaces, onlyPredicted = false) => {
+  const compare = (surfaces, onlyPredicted = false, placed = () => true) => {
     const told = new Set(surfaces.map((s) => s.id));
     let worst = 0;
     // The surface that is off the most and its two places. A failure states the measured values with which the cause can be found.
@@ -173,6 +175,8 @@ export function verify(controls = null) {
     for (const s of surfaces) {
       const slot = onPlane.get(s.id);
       if (!slot) continue;
+      if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
+      if (!placed(s)) continue;
       const drawn = drawnFrame(slot);
       const delta = maxDelta(drawn, s.declared);
       if (delta > worst) {
@@ -195,7 +199,6 @@ export function verify(controls = null) {
             ` · card style ${owner.style.width}×${owner.style.height} · devicePixelRatio ${devicePixelRatio}`;
         }
       }
-      if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
     }
     const gone = surfaces.filter((s) => !onPlane.has(s.id)).map((s) => s.id);
     // default: without onlyPredicted every surface of the plane is checked.
@@ -209,7 +212,10 @@ export function verify(controls = null) {
   else if (pendingPlacement) skip("V7a element − declared == 0", "host placement pending");
   else if (record.surfaces.length === 0 && onPlane.size === 0) skip("V7a element − declared == 0", "커밋에도 판에도 표면이 없다");
   else {
-    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(record.surfaces);
+    // A declaration has a place when it is visible or has an area (native-surfaces.md: a slot with zero width or zero height is
+    // submitted as invisible and has no presented area).
+    const hasPlace = (s) => s.visible !== false || (s.declared.w > 0 && s.declared.h > 0);
+    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(record.surfaces, false, hasPlace);
     add("V7a element − declared == 0", gone === 0 && missed === 0 && worst < 0.5 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 커밋에 없는 표면 ${missed}${missedIds} · 사라진 표면 ${gone}${goneIds} · ` +
         `흐림이 다른 표면 ${dim} · 0이 아니면 커밋이 뒤처진 것 (seq ${record.seq}, ` +

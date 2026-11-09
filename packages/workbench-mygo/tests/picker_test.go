@@ -796,6 +796,34 @@ func TestTheLayerOfAPickerTakesTheMiddleRadius(t *testing.T) {
 	}
 }
 
+// The mark of a menu item stands one gap and the note gap after the name, as .picker__item small of app.css stands (gap, then its
+// padding-left), so a menu as wide as its widest item has the width of the page.
+func TestTheMarkOfAMenuItemStandsAGapAndTheNoteGapAfterItsName(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gap, _ := declared.Metric("picker-gap")
+	noteGap, _ := declared.Metric("picker-item-note-gap")
+	pad, _ := declared.Metric("picker-pad")
+	// A long name makes the item wider than the least width of the menu, so the menu takes the width of its content.
+	host := acme()
+	host.installed = strings.Replace(acmeDocument, `"name":"Acme"`, `"name":"Acme with a name longer than the least menu width"`, 1)
+	f := projectOn(t, host)
+	f.click("core.card.add", f.tabbedCards()[0])
+	name, item := f.box("core.picker.item-name", "acme"), f.box("core.picker.item", "acme")
+	mark, ok := f.tester.Find("Ac")
+	if !ok {
+		t.Fatalf("the menu shows %q", f.tester.Texts())
+	}
+	if got, want := mark.X-(name.X+name.W), float32(gap+noteGap); got < want-0.01 || got > want+0.01 {
+		t.Fatalf("the mark stands %v after the name, %v is wanted", got, want)
+	}
+	if got, want := item.X+item.W-(mark.X+mark.W), float32(pad); got < want-0.01 || got > want+0.01 {
+		t.Fatalf("the item ends %v after its mark, %v is wanted", got, want)
+	}
+}
+
 // A close request of the window, as Cmd+W sends, asks about a modified tab: discarding closes the window and keeping keeps it and tells
 // the host (docs/spec/plugins.md#tab-reports).
 func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
