@@ -14,6 +14,7 @@ import { untilEndpoint } from "./endpoint-wait.mjs";
 import { joinedFailure } from "./failure.mjs";
 import { endWatches } from "./folder-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart } from "./event-log.mjs";
+import { exitEvidence } from "./host-exit.mjs";
 import { policyFile, policyOfSetting, readPolicy, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restorableItems, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -197,6 +198,49 @@ function unresponsiveError(app, consequence = "this request is not sent") {
   return new Error(`${app.name} stopped replying in the check "${record.check}" at ${record.request}, so ${consequence}; ${record.error}`);
 }
 
+/**
+ * The record of an application whose host process exited, in its configuration folder. The check that finds the exit fails with
+ * it, and each later check of the application is reported as not run because of it: those checks cannot run, and starting the
+ * application again would hide the exit.
+ */
+const exitedPath = (configDir) => join(configDir, "exited.json");
+
+/** Whether process pid runs; a process of another user that runs refuses the signal with EPERM. */
+function processRuns(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
+/** The process of endpoint.json when it names one that no longer runs, or null. */
+function exitedEndpointPid(configDir) {
+  let endpoint;
+  try {
+    endpoint = JSON.parse(readFileSync(join(configDir, "endpoint.json"), "utf8"));
+  } catch {
+    return null;
+  }
+  return Number.isInteger(endpoint?.pid) && !processRuns(endpoint.pid) ? endpoint.pid : null;
+}
+
+/** Records that the host process pid of the application exited, as the check named check found, and returns the failure of that check. */
+function hostExited(app, pid, check, how) {
+  const evidence = exitEvidence(app.configDir, pid);
+  writeFileSync(exitedPath(app.configDir), `${JSON.stringify({ check, pid, evidence })}\n`);
+  return new Error(`${app.name} process ${pid} ${how}, and its later checks do not run; ${evidence}`);
+}
+
+/** The reason that a check of the application does not run, when an earlier check found its host process exited, or null. */
+function exitedReason(app) {
+  const path = exitedPath(app.configDir);
+  if (!existsSync(path)) return null;
+  const record = JSON.parse(readFileSync(path, "utf8"));
+  return `not run: ${app.name} process ${record.pid} exited, found by the check "${record.check}"; ${record.evidence}`;
+}
+
 /** Whether the workbench of the window answers one status request; a reply in any form, also an error, shows that it runs. */
 async function workbenchReplies(client, window) {
   try {
@@ -256,6 +300,16 @@ export async function open(t, app, { clipboard = false, inactive = false } = {})
   // An application whose document stopped replying in an earlier check of this configuration fails the check at once (F351).
   const stopped = unresponsiveError(app, "this check does not run");
   if (stopped) throw stopped;
+  // An application whose host process exited in an earlier check reports this check as not run because of that exit; the check
+  // that found the exit failed with it.
+  const notRun = exitedReason(app);
+  if (notRun !== null) {
+    if (typeof t.skip === "function") t.skip(notRun);
+    throw new Error(notRun);
+  }
+  // A host process that exited between checks leaves endpoint.json naming it: this check finds the exit and fails with it.
+  const exited = exitedEndpointPid(app.configDir);
+  if (exited !== null) throw hostExited(app, exited, t.name, `exited before the check "${t.name}", so nothing was measured`);
   lock();
   const releaseSlot = await acquireWindowCheckSlot(app.name);
   let client;
@@ -544,7 +598,15 @@ export class Session {
     const next = untilEndpoint(this.app.configDir, previous, 60000);
     this.step(`relaunch process ${previous}`);
     await this.request("diagnostics.host.relaunch");
-    const endpoint = await next;
+    let endpoint;
+    try {
+      endpoint = await next;
+    } catch (error) {
+      // A process that exited and that no process replaced is an exit of the application, which ends its later checks too.
+      if (processRuns(previous)) throw error;
+      throw hostExited(this.app, previous, this.check ?? null,
+        `exited in the check "${this.check}" and no process took its place (${error.message})`);
+    }
     this.client.close();
     this.client = await connect({ configDir: this.app.configDir });
     if (this.client.endpoint.pid !== endpoint.pid) {

@@ -52,13 +52,37 @@
           },
           "signal": {
             "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "apple-event",
+              "signal",
+              "host",
+              "menu"
+            ]
+          },
+          "sender_pid": {
+            "type": "number"
+          },
+          "sender": {
+            "type": "string"
+          },
+          "request": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "number"
+          },
+          "code": {
+            "type": "number"
           }
         },
         "required": [
           "cause"
         ]
       },
-      "description": "The host process is ending. cause is signal for the first termination signal before quit, quit-command for host.quit, quit-request for a termination request of the operating system, last-window-closed for the close of the last window and update for the start of an update, each stored before the process is asked to end; exit-request is the request that reaches the event loop, alone when the application menu or the framework asked for it, and exit is the end of the process; signal is the number of the termination signal when cause is signal. The writer stores it through its own path, so it passes every gate."
+      "description": "The host process is ending. cause is signal for the first termination signal before quit, quit-command for host.quit, quit-request for a termination request of the operating system, last-window-closed for the close of the last window and update for the start of an update, each stored before the process is asked to end; exit-request is the request that reaches the event loop, and exit is the end of the process; signal is the number of the termination signal when cause is signal. An exit-request names where the quit came from in source: apple-event for a quit Apple event, with sender_pid, the process that sent it, and sender, its bundle identifier or name while it runs; signal for a termination signal, with signal and sender_pid; host for a quit that the host asked for itself, with request quit-command, last-window-closed or update; menu for the menu or a key equivalent, with event_type, the NSEventType of the event that the application handled at the request. An exit that ends the process without its shutdown, after a fatal error or a panic, names its exit code in code. The writer stores it through its own path, so it passes every gate."
     },
     "log.dropped": {
       "layer": "host",

@@ -614,7 +614,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.protocol.failure-fails-the-pending-requests` | sidecar의 실패는 기다리는 요청이 있는 surface마다 level `warn`에 `ok: false`, `bytes: 0`, `error` `-32603: <reason>`(page가 받는 이유)과 그 요청들의 `cids`를 가진 event `host.sidecar.reply`를 저장한다. | all |
 | `log.input.region-event-with-cids-is-recorded` | JSON에 `cids`가 있는 image region event는 그 `cids`, region의 `surface`와 `name`, event의 `type`을 가진 level `info`의 event `host.input.relay`가 된다. `cids`가 없는 region event는 `host.input.relay`를 저장하지 않는다. | all |
 | `sidecars.stderr.lines-are-written-as-records` | 표준 입출력 사이드카의 표준 오류 각 줄과 줄바꿈 없이 끝난 마지막 글은 기록 `<time> info sidecar <name>: <line>`으로 쓴다. | all |
-| `log.panic.records-an-event` | 진입점(`routine.Go`, `spawn_named`)으로 시작한 goroutine이나 스레드가 panic하면 프로세스가 0이 아닌 상태(Go는 2, Rust는 101)로 끝나기 전에 받은 `name`, panic 값 `text`, `stack`을 담은 `error` 수준 event `host.panic` 하나를 저장한다. | all |
+| `log.panic.records-an-event` | 진입점(`routine.Go`, `spawn_named`)으로 시작한 goroutine이나 스레드가 panic하면 프로세스가 0이 아닌 상태(Go는 2, Rust는 101)로 끝나기 전에 받은 `name`, panic 값 `text`, `stack`을 담은 `error` 수준 event `host.panic` 하나와, 그 뒤에 그 상태를 `code`로 담은 원인 `exit`의 `log.closed`를 저장한다. | all |
 | `log.panic.does-not-wait-for-the-writer` | panic hook은 writer가 멈춰 있어도 writer를 기다리지 않고 panic한 스레드에 돌아오며, writer가 풀리면 event가 저장되고 프로세스가 끝난다. | tauriv2 only: goroutine의 panic은 진입점이 recover하며 hook이 없다 |
 | `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. 5초 안에 붙은 writer가 없으면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. | all |
 | `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | all |
@@ -906,6 +906,8 @@ fn invalid_json_closes_connection() {
 | `termination.signal.begins-the-quit-state` | 첫 종료 신호는 종료를 요청하기 전에 종료 상태를 시작한다. `host.quit`이 시작하는 상태와 같으므로, 그 종료 중의 WebContent process 종료는 오류 줄을 쓰지 않는다. | all |
 | `log.closed.signal-before-quit` | 첫 종료 신호는 quit을 요청하기 전에 원인 `signal`과 번호를 담은 `log.closed`를 저장하므로, quit의 flush가 실행될 때 기록이 로그에 있다. | all |
 | `log.closed.cause-before-quit` | 프로세스 종료 요청은 quit을 실행하기 전에 원인(`quit-command`, `quit-request`, `last-window-closed`, `update`)을 담은 `log.closed`를 저장한다. | all |
+| `log.closed.exit-request-source` | 원인 `exit-request`의 `log.closed`는 quit이 어디서 왔는지 밝힌다: 보낸 process와 그 이름을 담은 `apple-event`, signal과 보낸 process를 담은 `signal`, host의 요청을 담은 `host`, 그리고 host의 어떤 부분도 quit을 요청하지 않았을 때 현재 event의 type을 담은 `menu`. | all |
+| `log.closed.fatal-exit-code` | shutdown 없이 프로세스를 끝내는 fatal error는 그 오류 기록 뒤에 종료 코드 1을 담은 원인 `exit`의 `log.closed`를 저장한다. | wailsv3, mygo만: Rust host는 panic 뒤에만 shutdown 없이 프로세스를 끝내며, 그것은 `log.panic.records-an-event`가 다룬다 |
 | `log.closed.passes-every-gate` | writer는 class `lifecycle`을 끈 정책에서도 level `info`, class `lifecycle`의 `log.closed`를 저장한다. | all |
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | all |
 | `window-close.native-window.used-in-reading-step` | native 창을 쓰는 host 요청은 native 창을 native code에 넘기는 main thread 단계에서 읽으므로(Wails host에서는 main thread가 그 단계를 위해 C에서 기다리는 동안 worker가 읽고, main thread가 같은 단계에서 실행하는 C 호출로 넘긴다: [hosts](hosts.ko.md#wails-host의-main-thread)), 요청의 앞선 단계 뒤에 main thread가 처리한 닫기가 닫힌 창을 native code에 넘기지 않는다. 그 단계 전에 닫힌 창은 native code에 닿지 않고, 요청은 오류 1003 `window "<name>" does not exist`로 실패한다. | all |

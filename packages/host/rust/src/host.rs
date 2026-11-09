@@ -312,10 +312,14 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     let quit = app.clone();
     // A request that the native work of an endpoint request causes, such as the Quit menu item that host.menu.select
     // performs, quits after the response of that request.
-    platform::current()?.on_quit_request(Box::new(move || {
+    platform::current()?.on_quit_request(Box::new(move |sender_pid: i32, sender: String| {
         let quit = quit.clone();
         crate::quit::after_owner_response(move || {
-            event_record::quit_with_cause("quit-request", || quit.quit())
+            event_record::quit_with_cause(
+                "quit-request",
+                event_record::apple_event_quit_source(sender_pid, &sender),
+                || quit.quit(),
+            )
         })
     }))?;
     // The one memory pressure source of the process starts with the host, and each report goes to every window
@@ -448,11 +452,25 @@ pub fn web_content_process_terminated(webview: &Webview) {
     }
 }
 
+/// The type of the event that the application handles now, which names a quit of the menu or a key equivalent; -1 when the
+/// platform cannot be read.
+fn quit_event_type() -> i32 {
+    match platform::current() {
+        Ok(platform) => platform.quit_event_type(),
+        Err(error) => {
+            eprintln!("exit request: the current event cannot be read: {error}");
+            -1
+        }
+    }
+}
+
 /// Runs the menu item with id.
 pub fn menu_event(app: &AppHandle, id: &str) {
     if id == "quit" {
-        // The Quit item of the host runs the host quit, whose exit request records it (log.closed exit-request); a
-        // quit that the native work of an endpoint request causes follows the response of that request.
+        // The Quit item of the host runs the host quit, whose exit request records it with the event of the click or the key
+        // that chose it (log.closed exit-request); a quit that the native work of an endpoint request causes follows the
+        // response of that request.
+        event_record::request_quit_source(event_record::menu_quit_source(quit_event_type()));
         let quit = app.clone();
         crate::quit::after_owner_response(move || quit.quit());
     } else if id == "new-window" {
@@ -501,11 +519,11 @@ pub fn run_event(app: &AppHandle, event: RunEvent) {
         RunEvent::Ready => app_events::record_app_event("started"),
         RunEvent::ExitRequested { .. } => {
             app_events::record_app_event("exit_requested");
-            event_record::emit_closed("exit-request", None);
+            event_record::emit_exit_request(quit_event_type);
         }
         RunEvent::Exit => {
             app_events::record_app_event("exit");
-            event_record::emit_closed("exit", None);
+            event_record::emit_closed("exit", serde_json::Map::new());
         }
     }
     if let RunEvent::ExitRequested {

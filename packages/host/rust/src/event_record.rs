@@ -291,12 +291,12 @@ pub fn emit_host(level: Level, event: &str, fields: serde_json::Value) {
     }
 }
 
-/// Stores the event `log.closed` of the host process that ends (docs/spec/logging.md#policy). `cause` is `exit`,
-/// `exit-request` or `signal`, and `signal` is the termination signal of the cause `signal`.
-pub fn emit_closed(cause: &str, signal: Option<i32>) {
+/// Stores the event `log.closed` of the host process that ends (docs/spec/logging.md#policy) with `cause` and the fields
+/// beside it: the termination signal of the cause `signal`, the source of the cause `exit-request`.
+pub fn emit_closed(cause: &str, fields: serde_json::Map<String, serde_json::Value>) {
     let log = records().log.clone();
     match log {
-        Some(log) if log.record_closed(cause, signal) => {}
+        Some(log) if log.record_closed(cause, fields) => {}
         Some(_) => {
             eprintln!("event writer: log.closed ({cause}) cannot be stored: the queue has no room")
         }
@@ -306,11 +306,90 @@ pub fn emit_closed(cause: &str, signal: Option<i32>) {
     }
 }
 
+/// The fields of the record `exit-request` that name where a quit came from (docs/spec/logging.md#policy).
+pub type QuitSource = serde_json::Map<String, serde_json::Value>;
+
+/// A quit that the host asked for itself: `request` is `quit-command`, `last-window-closed` or `update`.
+pub fn host_quit_source(request: &str) -> QuitSource {
+    let mut source = QuitSource::new();
+    source.insert("source".into(), json!("host"));
+    source.insert("request".into(), json!(request));
+    source
+}
+
+/// A quit Apple event and the process that sent it, 0 when the event names none, with the bundle identifier or name of that
+/// process while it runs, empty otherwise.
+pub fn apple_event_quit_source(sender_pid: i32, sender: &str) -> QuitSource {
+    let mut source = QuitSource::new();
+    source.insert("source".into(), json!("apple-event"));
+    if sender_pid > 0 {
+        source.insert("sender_pid".into(), json!(sender_pid));
+    }
+    if !sender.is_empty() {
+        source.insert("sender".into(), json!(sender));
+    }
+    source
+}
+
+/// A quit of the menu or a key equivalent, named by the type of its event (NSEventType), -1 without one.
+pub fn menu_quit_source(event_type: i32) -> QuitSource {
+    let mut source = QuitSource::new();
+    source.insert("source".into(), json!("menu"));
+    if event_type >= 0 {
+        source.insert("event_type".into(), json!(event_type));
+    }
+    source
+}
+
+/// The source of the quit that the next exit request records; none when no part of the host asked for the quit.
+static PENDING_QUIT: Mutex<Option<QuitSource>> = Mutex::new(None);
+
+/// Holds `source` for the exit request that the quit of the caller leads to.
+pub fn request_quit_source(source: QuitSource) {
+    *PENDING_QUIT.lock().unwrap_or_else(PoisonError::into_inner) = Some(source);
+}
+
 /// Requests the end of the process for `cause` (docs/spec/logging.md#policy): the event `log.closed` names what
-/// requested the end before `quit` runs, because `exit-request` alone does not.
-pub fn quit_with_cause(cause: &str, quit: impl FnOnce()) {
-    emit_closed(cause, None);
+/// requested the end before `quit` runs, because `exit-request` alone does not, and the exit request that `quit` leads to
+/// names `source`.
+pub fn quit_with_cause(cause: &str, source: QuitSource, quit: impl FnOnce()) {
+    emit_closed(cause, QuitSource::new());
+    request_quit_source(source);
     quit();
+}
+
+/// Stores the termination signal and the process that sent it (0 when unknown), and runs the quit of host.quit for it after
+/// it began the quit state; the exit request that `quit` leads to names the signal as its source.
+pub fn quit_from_signal(
+    state: &crate::quit::Quit,
+    signal: i32,
+    sender_pid: i32,
+    quit: impl FnOnce(),
+) {
+    let mut fields = QuitSource::new();
+    fields.insert("signal".into(), json!(signal));
+    // The record of the signal is queued before quit runs, so it precedes the flush that the quit ends with.
+    emit_closed("signal", fields.clone());
+    fields.insert("source".into(), json!("signal"));
+    if sender_pid > 0 {
+        fields.insert("sender_pid".into(), json!(sender_pid));
+    }
+    request_quit_source(fields);
+    // The quit that the signal requests is the quit of host.quit, so the quit state begins before quit runs; the end of a page
+    // process during that quit is not an error (docs/spec/hosts.md#process-lifecycle).
+    state.request(quit);
+}
+
+/// Stores the record `exit-request` with the source of the quit that the host asked for. A quit that no part of the host
+/// asked for came from the menu or a key equivalent of the framework, and `event_type` reads the type of the current event,
+/// -1 without one.
+pub fn emit_exit_request(event_type: impl FnOnce() -> i32) {
+    let pending = PENDING_QUIT
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .take();
+    let source = pending.unwrap_or_else(|| menu_quit_source(event_type()));
+    emit_closed("exit-request", source);
 }
 
 /// Stores an event of the layer `host` with the correlation identifiers of the inputs it belongs to, like `emit_host`. An

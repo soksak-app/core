@@ -332,8 +332,7 @@ func TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.SetPolicy(policy, "file")
-	signal := 15
-	if !log.RecordClosed("signal", &signal) {
+	if !log.RecordClosed("signal", map[string]any{"signal": 15}) {
 		t.Fatal("the record was refused")
 	}
 	if err := log.Flush(5 * time.Second); err != nil {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/routine"
@@ -44,6 +45,8 @@ func recordPanic(name, text, stack string) {
 		return
 	}
 	EmitHost(LevelError, "host.panic", map[string]any{"name": name, "text": text, "stack": stack})
+	// The process ends after this record without its shutdown, so the record of its end names the exit code.
+	EmitClosed("exit", map[string]any{"code": routine.PanicStatus})
 	if err := FlushRecords(panicFlushDeadline); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record of the panic of %s is not stored: %v\n", name, err)
 	}
@@ -93,9 +96,9 @@ var records struct {
 	lost [sok.ChannelCount]struct{ count, bytes uint64 }
 }
 
-// EmitClosed stores the event `log.closed` of the host process that ends (docs/spec/logging.md#policy). cause is `exit`,
-// `exit-request` or `signal`, and signal is the termination signal of the cause `signal`.
-func EmitClosed(cause string, signal *int) {
+// EmitClosed stores the event `log.closed` of the host process that ends (docs/spec/logging.md#policy) with cause and the
+// fields beside it: the termination signal of the cause `signal`, the source of the cause `exit-request`.
+func EmitClosed(cause string, fields map[string]any) {
 	records.Lock()
 	log := records.log
 	records.Unlock()
@@ -103,16 +106,70 @@ func EmitClosed(cause string, signal *int) {
 		fmt.Fprintf(os.Stderr, "event writer: log.closed (%s) cannot be stored: the writer is not attached\n", cause)
 		return
 	}
-	if !log.RecordClosed(cause, signal) {
+	if !log.RecordClosed(cause, fields) {
 		fmt.Fprintf(os.Stderr, "event writer: log.closed (%s) cannot be stored: the queue has no room\n", cause)
 	}
 }
 
+// QuitSource is the fields of the record `exit-request` that name where a quit came from (docs/spec/logging.md#policy).
+type QuitSource map[string]any
+
+// HostQuitSource is a quit that the host asked for itself: request is `quit-command`, `last-window-closed` or `update`.
+func HostQuitSource(request string) QuitSource { return QuitSource{"source": "host", "request": request} }
+
+// AppleEventQuitSource is a quit Apple event and the process that sent it, 0 when the event names none, with the bundle
+// identifier or name of that process while it runs, empty otherwise.
+func AppleEventQuitSource(senderPid int, sender string) QuitSource {
+	source := QuitSource{"source": "apple-event"}
+	if senderPid > 0 {
+		source["sender_pid"] = senderPid
+	}
+	if sender != "" {
+		source["sender"] = sender
+	}
+	return source
+}
+
+// pendingQuit is the source of the quit that the next exit request records; nil when no part of the host asked for the quit.
+var pendingQuit atomic.Pointer[QuitSource]
+
 // QuitWithCause requests the end of the process for cause (docs/spec/logging.md#policy): the event `log.closed`
-// names what requested the end before quit runs, because `exit-request` alone does not.
-func QuitWithCause(cause string, quit func()) {
+// names what requested the end before quit runs, because `exit-request` alone does not, and the exit request that quit leads to
+// names source.
+func QuitWithCause(cause string, source QuitSource, quit func()) {
 	EmitClosed(cause, nil)
+	pendingQuit.Store(&source)
 	quit()
+}
+
+// QuitFromSignal stores the termination signal and the process that sent it (0 when unknown), and runs the quit of host.quit
+// for it after it began the quit state; the exit request that quit leads to names the signal as its source.
+func QuitFromSignal(state *Quit, signal, senderPid int, quit func()) {
+	// The record of the signal is queued before quit runs, so it precedes the flush that the quit ends with.
+	EmitClosed("signal", map[string]any{"signal": signal})
+	source := QuitSource{"source": "signal", "signal": signal}
+	if senderPid > 0 {
+		source["sender_pid"] = senderPid
+	}
+	pendingQuit.Store(&source)
+	// The quit that the signal requests is the quit of host.quit, so the quit state begins before quit runs; the end of a page
+	// process during that quit is not an error (docs/spec/hosts.md#process-lifecycle).
+	state.Request(quit)
+}
+
+// EmitExitRequest stores the record `exit-request` with the source of the quit that the host asked for. A quit that no part
+// of the host asked for came from the menu or a key equivalent of the framework, and eventType reads the type of the current
+// event, -1 without one.
+func EmitExitRequest(eventType func() int) {
+	if source := pendingQuit.Swap(nil); source != nil {
+		EmitClosed("exit-request", *source)
+		return
+	}
+	source := map[string]any{"source": "menu"}
+	if kind := eventType(); kind >= 0 {
+		source["event_type"] = kind
+	}
+	EmitClosed("exit-request", source)
 }
 
 // UseHostEventLog makes log the writer of the records of the host and hands it the records of the start buffer in their

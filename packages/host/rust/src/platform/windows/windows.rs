@@ -635,11 +635,14 @@ impl Platform for Windows {
         adopted(unsupported::change_input_source())
     }
 
-    fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
+    fn on_termination(&self, quit: Box<dyn Fn(i32, i32) + Send>) -> Result<(), String> {
         unsupported::on_termination(quit)
     }
-    fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String> {
+    fn on_quit_request(&self, quit: Box<dyn Fn(i32, String)>) -> Result<(), String> {
         unsupported::on_quit_request(quit)
+    }
+    fn quit_event_type(&self) -> i32 {
+        unsupported::quit_event_type()
     }
     fn answer_quit_requests(&self) {
         unsupported::answer_quit_requests()

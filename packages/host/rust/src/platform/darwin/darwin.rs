@@ -776,11 +776,14 @@ impl Platform for Darwin {
         input_source::restore(source, adopted)
     }
 
-    fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String> {
+    fn on_termination(&self, quit: Box<dyn Fn(i32, i32) + Send>) -> Result<(), String> {
         termination::on_termination(quit)
     }
-    fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String> {
+    fn on_quit_request(&self, quit: Box<dyn Fn(i32, String)>) -> Result<(), String> {
         termination::on_quit_request(quit)
+    }
+    fn quit_event_type(&self) -> i32 {
+        termination::quit_event_type()
     }
     fn answer_quit_requests(&self) {
         termination::answer_quit_requests()

@@ -24,7 +24,7 @@ type Callbacks struct {
 	NativeLayoutEnded         func(uintptr)
 	NativeSettledDone         func(uintptr, float64, *byte)
 	NotificationEvent         func(uintptr, *byte)
-	QuitRequest               func()
+	QuitRequest               func(int32, *byte)
 	NativeUiRun               func(uintptr)
 	NativeResponderChanged    func(uintptr)
 	NativeFullscreenDone      func(uintptr)

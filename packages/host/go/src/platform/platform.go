@@ -649,13 +649,17 @@ type Platform interface {
 	// the Go signal handler and its signal stack do not run on the main thread (docs/spec/hosts.md, main thread of the Wails
 	// host). Call it on the main thread before the application runs; it fails on another thread.
 	BlockAsyncSignals() error
-	// OnTermination makes quit be called with the first termination signal (SIGTERM, SIGINT, SIGHUP) that is received. A termination
-	// signal after that ends the process with the default action.
-	OnTermination(quit func(signal os.Signal)) error
+	// OnTermination makes quit be called with the first termination signal (SIGTERM, SIGINT, SIGHUP) that is received and the
+	// process that sent it (0 when unknown). A termination signal after that ends the process with the default action.
+	OnTermination(quit func(signal os.Signal, senderPid int)) error
 	// OnQuitRequest makes quit be called when a termination request of the operating system (quit from the Dock, logout, restart, a quit Apple event of another program) is
-	// received, and that request is not answered until AnswerQuitRequests. Call it on the UI thread after the application
-	// started.
-	OnQuitRequest(quit func()) error
+	// received, with the process that sent it (0 when the request names none) and, while that process runs, its bundle identifier
+	// or name (empty otherwise); that request is not answered until AnswerQuitRequests. Call it on the UI thread after the
+	// application started.
+	OnQuitRequest(quit func(senderPid int, sender string)) error
+	// QuitEventType is the type of the event that the application handles now (NSEventType on macOS), or -1 without one; a quit
+	// that the menu or a key equivalent asked for is named by it.
+	QuitEventType() int
 	// AnswerQuitRequests answers the received termination requests without an error. Call it on the UI thread right before the application ends after the save finished.
 	AnswerQuitRequests()
 	// CancelQuitRequests answers the received termination requests with userCanceledErr. Call it on the UI thread when a window protects a modified

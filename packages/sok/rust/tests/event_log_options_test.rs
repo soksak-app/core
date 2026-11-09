@@ -326,7 +326,13 @@ fn a_closed_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
     .unwrap();
     log.set_policy(policy, "file");
     assert!(
-        log.record_closed("signal", Some(15)),
+        log.record_closed(
+            "signal",
+            serde_json::json!({"signal": 15})
+                .as_object()
+                .unwrap()
+                .clone()
+        ),
         "the record was refused"
     );
     log.flush(Duration::from_secs(5)).unwrap();

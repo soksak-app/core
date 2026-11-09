@@ -643,6 +643,14 @@ test("window-source audit reports a timer whose callback is a name", { timeout: 
     ["e2e/timeout-case.mjs:1: uses setTimeout as a wait; a timeout must reject"]);
 });
 
+// The harness reports a check of an application whose host process exited as not run, since the check that found the exit failed
+// with it; a window check that skips itself still hides a failed precondition.
+test("window-source audit accepts the not-run report of the harness and rejects a check that skips itself", { timeout: 1000 }, () => {
+  const source = "if (notRun !== null) t.skip(notRun);";
+  assert.deepEqual(auditE2ESource(source, "packages/window-check/app.mjs"), []);
+  assert.deepEqual(auditE2ESource(source, "e2e/skip-case.mjs"), ["e2e/skip-case.mjs:1: uses a skipped test; assert its precondition"]);
+});
+
 test("window-source audit does not resolve a timeout helper through a callback shadow", { timeout: 1000 }, () => {
   const source = `
 new Promise((resolve, reject) => {

@@ -87,6 +87,10 @@ pub fn start_panic_ender_with(writer_deadline: Duration) {
                 );
                 std::process::exit(PANIC_STATUS);
             }
+            // The process ends after the record of the panic without its shutdown, so the record of its end names the exit code.
+            let mut code = serde_json::Map::new();
+            code.insert("code".into(), serde_json::json!(PANIC_STATUS));
+            crate::event_record::emit_closed("exit", code);
             if let Err(error) = flush_records(FLUSH_DEADLINE) {
                 eprintln!("event writer: the record of the panic is not stored: {error}");
             }

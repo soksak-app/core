@@ -22,7 +22,7 @@ extern void goHost_native_layout_started(uintptr_t arg0);
 extern void goHost_native_layout_ended(uintptr_t arg0);
 extern void goHost_native_settled_done(uintptr_t arg0, double arg1, char * arg2);
 extern void goHost_notification_event(uintptr_t arg0, char * arg1);
-extern void goHost_quit_request(void);
+extern void goHost_quit_request(int arg0, char * arg1);
 extern void goHost_native_ui_run(uintptr_t arg0);
 extern void goHost_native_responder_changed(uintptr_t arg0);
 extern void goHost_native_fullscreen_done(uintptr_t arg0);
@@ -298,8 +298,8 @@ func goHost_notification_event(arg0 C.uintptr_t, arg1 *C.char) {
 }
 
 //export goHost_quit_request
-func goHost_quit_request() {
-	callbackHandlers.QuitRequest()
+func goHost_quit_request(arg0 C.int, arg1 *C.char) {
+	callbackHandlers.QuitRequest(int32(arg0), (*byte)(unsafe.Pointer(arg1)))
 }
 
 //export goHost_native_ui_run

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -535,16 +536,27 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		h.notifyWorkspace()
 		routine.Go("windows-changed", h.windowsChanged)
 		if quit {
-			QuitWithCause("last-window-closed", func() { routine.Go("quit", framework.Quit) })
+			QuitWithCause("last-window-closed", HostQuitSource("last-window-closed"), func() { routine.Go("quit", framework.Quit) })
 		}
 		return false
 	})
 	return s
 }
 
+// quitEventType is the type of the event that the application handles now, which names a quit of the menu or a key
+// equivalent; -1 when the platform cannot be read.
+func quitEventType() int {
+	current, err := platform.Current()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "exit request: the current event cannot be read: %v\n", err)
+		return -1
+	}
+	return current.QuitEventType()
+}
+
 func (h *Host) shouldQuit() bool {
 	RecordAppEvent("exit_requested")
-	EmitClosed("exit-request", nil)
+	EmitExitRequest(quitEventType)
 	h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(h.windows))
 	unready := make([]*Surfaces, 0)

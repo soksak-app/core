@@ -152,6 +152,7 @@ type NativeFunctions struct {
 	MainSpPreferredLanguage               func() *byte
 	MainSpQuitRequestAnswer               func()
 	MainSpQuitRequestCancel               func()
+	MainSpQuitRequestEventType            func() int32
 	MainSpRegionBackground                func(unsafe.Pointer, bool)
 	MainSpRegionCaret                     func(unsafe.Pointer, float64, float64, float64, float64)
 	MainSpRegionClose                     func(unsafe.Pointer)
@@ -242,6 +243,8 @@ type NativeFunctions struct {
 	SpObserveFlush                        func()
 	SpStallAwaitAwake                     func()
 	SpStallHeartbeat                      func(*uint64, *uint64)
+	SpTerminationSignalSender             func(int32) int32
+	SpTerminationSignalsRecord            func() int32
 	StartMemoryPressure                   func() bool
 	StartNotifications                    func() *byte
 	Strlen                                func(*byte) uint64
@@ -428,6 +431,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpQuitRequestCancel == nil {
 		return fmt.Errorf("native API function is missing: main_sp_quit_request_cancel")
+	}
+	if functions.MainSpQuitRequestEventType == nil {
+		return fmt.Errorf("native API function is missing: main_sp_quit_request_event_type")
 	}
 	if functions.MainSpRegionBackground == nil {
 		return fmt.Errorf("native API function is missing: main_sp_region_background")
@@ -698,6 +704,12 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.SpStallHeartbeat == nil {
 		return fmt.Errorf("native API function is missing: sp_stall_heartbeat")
+	}
+	if functions.SpTerminationSignalSender == nil {
+		return fmt.Errorf("native API function is missing: sp_termination_signal_sender")
+	}
+	if functions.SpTerminationSignalsRecord == nil {
+		return fmt.Errorf("native API function is missing: sp_termination_signals_record")
 	}
 	if functions.StartMemoryPressure == nil {
 		return fmt.Errorf("native API function is missing: startMemoryPressure")

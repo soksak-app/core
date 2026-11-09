@@ -13,7 +13,7 @@ import (
 func TestAQuitStoresItsCauseBeforeItRuns(t *testing.T) {
 	log := support.UseEventLog(t)
 	var fields any
-	host.QuitWithCause("quit-command", func() {
+	host.QuitWithCause("quit-command", host.HostQuitSource("quit-command"), func() {
 		if err := log.Flush(5 * time.Second); err != nil {
 			t.Fatal(err)
 		}

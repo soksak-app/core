@@ -68,4 +68,15 @@ fn a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends() {
         "host.panic event {:?}",
         panics[0]
     );
+    // The process ends without its shutdown, so the record of its end after the panic names the exit code.
+    let closed: Vec<&serde_json::Value> = events
+        .iter()
+        .filter(|event| event["event"] == "log.closed")
+        .map(|event| &event["fields"])
+        .collect();
+    assert_eq!(
+        closed,
+        vec![&serde_json::json!({"cause": "exit", "code": soksak_host::routine::PANIC_STATUS})],
+        "events {events:?}"
+    );
 }

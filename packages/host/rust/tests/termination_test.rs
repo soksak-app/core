@@ -120,14 +120,18 @@ fn a_quit_stores_its_cause_before_it_runs() {
         let directory = PathBuf::from(std::env::var_os(DIRECTORY).unwrap());
         let log = Arc::new(event_log::start_host(&directory).unwrap());
         use_host_event_log(Some(Arc::clone(&log)));
-        soksak_host::event_record::quit_with_cause("quit-command", || {
-            log.flush(Duration::from_secs(5)).unwrap();
-            let events = records::read_events(&records::event_log_path(&directory));
-            match events.iter().find(|event| event["event"] == "log.closed") {
-                Some(event) => println!("log.closed: {}", event["fields"]),
-                None => println!("log.closed: none"),
-            }
-        });
+        soksak_host::event_record::quit_with_cause(
+            "quit-command",
+            soksak_host::event_record::host_quit_source("quit-command"),
+            || {
+                log.flush(Duration::from_secs(5)).unwrap();
+                let events = records::read_events(&records::event_log_path(&directory));
+                match events.iter().find(|event| event["event"] == "log.closed") {
+                    Some(event) => println!("log.closed: {}", event["fields"]),
+                    None => println!("log.closed: none"),
+                }
+            },
+        );
         use_host_event_log(None);
         return;
     }
@@ -229,5 +233,92 @@ fn quit_during_signal() {
             std::process::exit(3);
         }
         None => println!("quit requested"),
+    }
+}
+
+const SOURCE_CHILD: &str = "SOKSAK_TERMINATION_SOURCE_CHILD";
+const SOURCE_NAME: &str = "the_exit_request_names_the_source_of_its_quit";
+
+// contract: log.closed.exit-request-source
+// The record of an exit request names where the quit came from: an Apple event with its sender, a quit of the host itself with
+// its request, a signal with the process that sent it, or the menu or a key with the type of the current event.
+#[test]
+fn the_exit_request_names_the_source_of_its_quit() {
+    if std::env::var_os(SOURCE_CHILD).is_some() {
+        return record_quit_sources();
+    }
+    let directory = folder::Folder::new();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", SOURCE_NAME, "--nocapture", "--test-threads=1"])
+        .env(SOURCE_CHILD, "1")
+        .env(DIRECTORY, directory.path())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "status {}, output {text:?}",
+        output.status
+    );
+    let pid = text
+        .lines()
+        .find_map(|line| line.strip_prefix("pid: "))
+        .unwrap_or_else(|| panic!("output {text:?}"));
+    let requests: Vec<&str> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("exit-request: "))
+        .collect();
+    assert_eq!(
+        requests,
+        vec![
+            r#"{"cause":"exit-request","sender":"com.apple.dt.Xcode","sender_pid":77,"source":"apple-event"}"#.to_string(),
+            r#"{"cause":"exit-request","request":"update","source":"host"}"#.to_string(),
+            format!(r#"{{"cause":"exit-request","sender_pid":{pid},"signal":15,"source":"signal"}}"#),
+            r#"{"cause":"exit-request","event_type":10,"source":"menu"}"#.to_string(),
+            r#"{"cause":"exit-request","source":"menu"}"#.to_string(),
+        ],
+        "output {text:?}"
+    );
+}
+
+/// Records an exit request for each source of a quit, the signal sent by this process with raise, and prints their fields.
+fn record_quit_sources() {
+    use soksak_host::event_record::{
+        apple_event_quit_source, emit_exit_request, host_quit_source, quit_with_cause,
+    };
+    let directory = PathBuf::from(std::env::var_os(DIRECTORY).unwrap());
+    let log = Arc::new(event_log::start_host(&directory).unwrap());
+    use_host_event_log(Some(Arc::clone(&log)));
+    let no_menu = || -> i32 {
+        panic!("the exit request read the current event although its quit named a source")
+    };
+    quit_with_cause(
+        "quit-request",
+        apple_event_quit_source(77, "com.apple.dt.Xcode"),
+        || emit_exit_request(no_menu),
+    );
+    quit_with_cause("update", host_quit_source("update"), || {
+        emit_exit_request(no_menu)
+    });
+    let (quit, quitted) = mpsc::channel();
+    termination::on_termination(
+        Arc::new(Quit::default()),
+        Box::new(move || {
+            emit_exit_request(no_menu);
+            let _ = quit.send(());
+        }),
+    )
+    .unwrap();
+    raise(SIGTERM).unwrap();
+    quitted.recv().unwrap();
+    emit_exit_request(|| 10);
+    emit_exit_request(|| -1);
+    log.flush(Duration::from_secs(5)).unwrap();
+    use_host_event_log(None);
+    println!("pid: {}", std::process::id());
+    for event in records::read_events(&records::event_log_path(&directory)) {
+        if event["event"] == "log.closed" && event["fields"]["cause"] == "exit-request" {
+            println!("exit-request: {}", event["fields"]);
+        }
     }
 }

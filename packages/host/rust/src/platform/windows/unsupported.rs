@@ -487,12 +487,17 @@ pub fn change_input_source() -> Result<(), String> {
     missing("keyboard input sources")
 }
 
-pub fn on_termination(_quit: Box<dyn Fn() + Send>) -> Result<(), String> {
+pub fn on_termination(_quit: Box<dyn Fn(i32, i32) + Send>) -> Result<(), String> {
     missing("termination requests")
 }
 
-pub fn on_quit_request(_quit: Box<dyn Fn()>) -> Result<(), String> {
+pub fn on_quit_request(_quit: Box<dyn Fn(i32, String)>) -> Result<(), String> {
     missing("quit requests")
+}
+
+/// The application does not run on this platform, so it handles no event.
+pub fn quit_event_type() -> i32 {
+    -1
 }
 
 /// No termination request was received, so there is nothing to answer. When on_quit_request fails, the application does

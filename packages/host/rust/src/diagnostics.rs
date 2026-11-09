@@ -622,7 +622,11 @@ fn relaunch(host: &Host) -> Result<Value, Failure> {
         command,
         relaunch: true,
     });
-    crate::event_record::quit_with_cause("update", || host.0.quit());
+    crate::event_record::quit_with_cause(
+        "update",
+        crate::event_record::host_quit_source("update"),
+        || host.0.quit(),
+    );
     Ok(Value::Null)
 }
 

@@ -29,7 +29,7 @@
     X(V, void, native_layout_ended, (uintptr_t window), (window)) \
     X(V, void, native_settled_done, (uintptr_t context, double displayed, char *message), (context, displayed, message)) \
     X(V, void, notification_event, (uintptr_t context, char *json), (context, json)) \
-    X(V, void, quit_request, (void), ()) \
+    X(V, void, quit_request, (int sender_pid, char *sender), (sender_pid, sender)) \
     X(V, void, native_ui_run, (uintptr_t context), (context)) \
     X(V, void, native_responder_changed, (uintptr_t context), (context)) \
     X(V, void, native_fullscreen_done, (uintptr_t context), (context)) \
