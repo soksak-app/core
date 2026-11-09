@@ -91,6 +91,21 @@ test("watch resolves with the current value when it already satisfies the predic
   assert.deepEqual(server.requests.map((m) => m.method), ["status.watch", "status.get", "status.unwatch"]);
 });
 
+test("a predicate that answers anything but true or false ends the watch with an error and unwatches", async (t) => {
+  const sample = sampleHandlers();
+  const server = await startFakeEndpoint(sample.handlers);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  for (const [answer, type] of [["home", "string"], [null, "null"], [undefined, "undefined"], [{ text: 1 }, "object"], [1, "number"]]) {
+    const unwatched = requested(server, (m) => m.method === "status.unwatch");
+    await assert.rejects(client.watch("main", "core.screen", () => answer),
+      new RegExp(`^Error: the predicate of core\\.screen returned ${type}, not a boolean$`));
+    await unwatched;
+  }
+  assert.equal(await client.watch("main", "core.screen", () => false, { timeout: 50 }).catch((error) => error.code), "ETIMEDOUT");
+});
+
 test("watch resolves only after its final status.unwatch is acknowledged", async (t) => {
   let finishUnwatch;
   const server = await startFakeEndpoint({

@@ -120,7 +120,8 @@ class Client {
 
   /**
    * Watches a value with status.watch and resolves with the first value that satisfies the predicate.
-   * It also checks the current value. If the predicate is not satisfied within timeout (ms), it rejects with code "ETIMEDOUT".
+   * It also checks the current value. The predicate returns true or false; any other answer rejects the watch with an error that names
+   * the status and the type of the answer. If the predicate is not satisfied within timeout (ms), it rejects with code "ETIMEDOUT".
    * surface names the surface that a surface page registered under that name.
    */
   watch(window, name, predicate, { timeout = 10000, surface } = {}) {
@@ -153,6 +154,12 @@ class Client {
           ok = predicate(value);
         } catch (error) {
           finish(error);
+          return;
+        }
+        // The predicate answers whether the value satisfies it; watch resolves with the value, so an answer that is a part of the value
+        // or another truthy value is a mistake of the caller.
+        if (typeof ok !== "boolean") {
+          finish(new Error(`the predicate of ${name} returned ${ok === null ? "null" : typeof ok}, not a boolean`));
           return;
         }
         if (ok) finish(null, value);

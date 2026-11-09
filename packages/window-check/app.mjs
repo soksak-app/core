@@ -893,7 +893,8 @@ export class Session {
   }
 
   /**
-   * Waits by notification until the status satisfies the predicate. A wait on a status of a surface starts when the
+   * Waits by notification until the status satisfies the predicate and returns that status value. The predicate returns true or
+   * false (client watch refuses any other answer). A wait on a status of a surface starts when the
    * surface has registered the status, because a view surface registers its exposure after its phase `ready`.
    */
   async until(name, predicate, message, { surface, timeout = REQUEST } = {}) {
