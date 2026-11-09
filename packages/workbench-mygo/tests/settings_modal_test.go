@@ -199,6 +199,27 @@ func TestTheGeneralSectionDrawsEachFormWithItsOneControl(t *testing.T) {
 		!slices.Contains(got, "sidebarWidth") || !slices.Contains(got, "memorySaverDelay") {
 		t.Fatalf("settings %q", got)
 	}
+	for _, want := range []string{"top", "bottom", "link:right:", "link:top:", "link:bottom:"} {
+		if !slices.Contains(status.keys("core.settings-modal.set"), want) {
+			t.Fatalf("no control %s", want)
+		}
+	}
+	// The order of the window sidebars: one row per edge with ▲ (not on the first row) and ▼ (not on the last row), each running
+	// core.settings.change with the whole new order (docs/spec/settings.md#controls).
+	if got := status.keys("core.settings-modal.order"); !slices.Equal(got, []string{"order:sidebarOrder:0:down", "order:sidebarOrder:1:up",
+		"order:sidebarOrder:1:down", "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"}) {
+		t.Fatalf("order %q", got)
+	}
+	for _, control := range status.Controls {
+		if control.Name == "core.settings-modal.order" && *control.Key == "order:sidebarOrder:0:down" {
+			if got, _ := json.Marshal(control.Command); string(got) != `{"name":"core.settings.change","params":{"key":"sidebarOrder","scope":"common","value":["right","left","top","bottom"]}}` {
+				t.Fatalf("the first ▼ runs %s", got)
+			}
+		}
+	}
+	if !f.tester.HasText("한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.") {
+		t.Fatalf("the sidebar group does not state one fixed sidebar per edge")
+	}
 	if got := len(status.keys("core.settings-modal.theme")); got != 10 {
 		t.Fatalf("%d theme swatches", got)
 	}
@@ -239,7 +260,8 @@ func TestASwitchAndASwatchRunTheirCommandAndTheChangeIsWritten(t *testing.T) {
 
 func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	f := opened(t)
-	f.tester.SetSize(1200, 2400)
+	// The window is tall enough to show the whole general section, whose sidebar group holds the four edges and their order.
+	f.tester.SetSize(1200, 3200)
 	f.settle()
 	f.click("core.settings-modal.set", "mode")
 	if err := f.tester.Click("밝음"); err != nil {
@@ -408,7 +430,7 @@ func TestAPluginPageShowsItsSettingsSectionsAndSidebarChoices(t *testing.T) {
 		t.Fatalf("status %+v", status)
 	}
 	keys := status.keys("core.settings-modal.set")
-	for _, want := range []string{"acme.level", "acme.mode", "link:window-left:acme", "link:window-right:acme", "link:card-left:acme", "link:card-bottom:acme"} {
+	for _, want := range []string{"acme.level", "acme.mode", "link:window-left:acme", "link:window-right:acme", "link:window-top:acme", "link:window-bottom:acme", "link:card-left:acme", "link:card-bottom:acme"} {
 		if !slices.Contains(keys, want) {
 			t.Fatalf("no control %s in %q", want, keys)
 		}

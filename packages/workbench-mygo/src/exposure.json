@@ -4555,6 +4555,11 @@
         "many": true
       },
       {
+        "name": "core.settings-modal.order",
+        "description": "The ▲ and ▼ buttons of the order rows of a list setting (사이드바 순서) in workbench order; each runs core.settings.change with the whole new order.",
+        "many": true
+      },
+      {
         "name": "core.settings-modal.add",
         "description": "The + button of the set editor, which adds a section row."
       },

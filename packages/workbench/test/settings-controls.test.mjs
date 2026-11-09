@@ -50,7 +50,7 @@ test("every setting form is drawn with its one control", async (t) => {
     assert.deepEqual(controlOf("fullRule").options, settings.CHOICES.fullRule);
     assert.equal(document.querySelectorAll('[data-key^="pick:"]:not([data-expose="core.settings-modal.scope"])').length, 0,
       "a choice is drawn as buttons");
-    for (const key of ["left", "right", "dim"]) assert.equal(controlOf(key).type, "checkbox", `${key} is not a switch`);
+    for (const key of ["left", "right", "top", "bottom", "dim"]) assert.equal(controlOf(key).type, "checkbox", `${key} is not a switch`);
     for (const key of ["gap", "radius", "size", "sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth"]) {
       assert.equal(controlOf(key).type, "range", `${key} is not a slider`);
     }
@@ -60,6 +60,17 @@ test("every setting form is drawn with its one control", async (t) => {
     assert.deepEqual([controlOf("memorySaverDelay").type, delay.min, delay.max, delay.nextSibling.textContent],
       ["range", "5", "720", "120분"]);
     assert.equal(controlOf("link:left:").tag, "SELECT");
+    for (const edge of ["right", "top", "bottom"]) assert.equal(controlOf(`link:${edge}:`).tag, "SELECT", `${edge} has no set select`);
+    // The order of the window sidebars: one row per edge with ▲ (not on the first row) and ▼ (not on the last row), each running
+    // core.settings.change with the whole new order (docs/spec/settings.md#controls).
+    const order = ui.settingsModalState().controls.filter((item) => item.name === "core.settings-modal.order");
+    assert.deepEqual(order.map((item) => item.key), ["order:sidebarOrder:0:down", "order:sidebarOrder:1:up", "order:sidebarOrder:1:down",
+      "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"]);
+    assert.deepEqual(order[0].command, { name: "core.settings.change", params: { key: "sidebarOrder", value: ["right", "left", "top", "bottom"], scope: "common" } });
+    assert.deepEqual(order[5].command.params.value, ["left", "right", "bottom", "top"]);
+    const group = [...document.querySelectorAll(".set-group")].find((item) => item.textContent.includes("사이드바 순서"));
+    assert.ok(group?.textContent.includes("한 변에는 고정 사이드바가 하나 있고"), "the sidebar group does not state one fixed sidebar per edge");
+    assert.ok(!group.textContent.includes("독립된 열"), "the sidebar group still states independent columns");
     assert.equal(document.querySelectorAll('[data-expose="core.settings-modal.theme"]').length, settings.THEMES.length);
 
     ui.showSection("plugins");
@@ -69,6 +80,8 @@ test("every setting form is drawn with its one control", async (t) => {
     assert.equal(controlOf("fixture.columns").type, "range");
     assert.equal(controlOf("fixture.family").type, "text");
     assert.equal(controlOf("fixture.home").type, "text");
+    for (const edge of ["left", "right", "top", "bottom"]) assert.equal(controlOf(`link:window-${edge}:fixture`).tag, "SELECT", `no window ${edge} selector`);
+    assert.ok(!document.body.textContent.includes("포커스와 무관하게"), "the plugin page states that the window sets ignore the focus");
 
     ui.showSection("sidebars");
     ui.editSet("set-1");
