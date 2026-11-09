@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -269,4 +270,79 @@ func TestAFlushOfTheProjectsAnswersAStoreThatFailed(t *testing.T) {
 	if failure != nil || !slices.Contains(taken, "patch activeSpaceId named spaces") {
 		t.Fatalf("the flush after the refusal answered %v after the workspace calls %v", failure, taken)
 	}
+}
+
+// The page saves the geometry 200 ms after the last resize event of its window (the resize listener of packages/workbench/index.html),
+// so the store holds the size of a window that is resized and not flushed. Each resize starts the 200 ms again.
+func TestAResizedWindowSavesItsGeometryAfterTheLastResize(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	stored.workspaces = nil
+	stored.geometry = map[string]any{"width": 1000, "height": 700}
+	f.tester.SetSize(1000, 700)
+	f.settle()
+	f.timers.tick(199)
+	f.settle()
+	f.tester.SetSize(900, 700)
+	stored.geometry = map[string]any{"width": 900, "height": 700}
+	f.settle()
+	f.timers.tick(199)
+	f.settle()
+	if slices.Contains(stored.workspaces, "patch geometry") {
+		t.Fatalf("the geometry was saved before 200 ms passed after the last resize: %v", stored.workspaces)
+	}
+	f.timers.tick(1)
+	f.settle()
+	if n := len(slices.DeleteFunc(slices.Clone(stored.workspaces), func(taken string) bool { return taken != "patch geometry" })); n != 1 {
+		t.Fatalf("the resizes took the workspace calls %v", stored.workspaces)
+	}
+	if geometry, _ := json.Marshal(stored.projects[0]["geometry"]); string(geometry) != `{"height":700,"width":900}` {
+		t.Fatalf("the store holds the geometry %s", geometry)
+	}
+}
+
+// readProjects of packages/workbench/projects.js stores the plane of the active project before it cleans up after a project that the
+// store no longer lists, so a plane that changed during a drag is stored when another window removes a project.
+func TestARemovedProjectStoresThePlaneOfTheActiveProject(t *testing.T) {
+	f, left, right := splitShell(t)
+	f.settle()
+	other := storedProject(tab("tab-bbbbbb", "other"))
+	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
+	f.host.mu.Lock()
+	f.host.projects = append(f.host.projects, other)
+	f.host.mu.Unlock()
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Move(x, y)
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.tester.Move(x-40, y)
+	f.tester.Advance(300 * time.Millisecond)
+	f.tester.Frame()
+	f.pending.drain(t)
+	f.host.mu.Lock()
+	before, err := json.Marshal(f.host.projects[0]["spaces"])
+	f.host.projects = f.host.projects[:1]
+	f.host.workspaces = nil
+	f.host.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.shell.Event("workspace-changed", nil)
+	f.pending.drain(t)
+	f.host.mu.Lock()
+	taken := slices.Clone(f.host.workspaces)
+	after, err := json.Marshal(f.host.projects[0]["spaces"])
+	f.host.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(taken, "patch activeSpaceId named spaces") || string(after) == string(before) {
+		t.Fatalf("the removal took the workspace calls %v and left the spaces %s", taken, after)
+	}
+	f.tester.Release(x-40, y)
+	f.settle()
 }
