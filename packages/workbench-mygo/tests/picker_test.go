@@ -857,9 +857,9 @@ func TestACloseRequestOfTheWindowAsksAboutAModifiedTab(t *testing.T) {
 	}
 }
 
-// A plugin change asks about a modified tab before the new start: 적용하지 않기 keeps the workbench, core.plugins.apply asks again and
-// answers reloaded false for a kept tab, and 저장하지 않고 적용 starts the workbench again after the answer reloaded true
-// (docs/spec/installation.md#applying-a-change).
+// A plugin change asks about a modified tab before the new start: the answer that does not apply keeps the workbench, core.plugins.apply
+// asks again and answers reloaded false for a kept tab, and the answer that applies without saving starts the workbench again after the
+// answer reloaded true (docs/spec/installation.md#applying-a-change).
 func TestAPluginChangeAsksAboutAModifiedTab(t *testing.T) {
 	f := modifiedShell(t)
 	f.shell.Event("plugins-changed", nil)
