@@ -31,6 +31,38 @@ type previewPane struct {
 	H    float32 `json:"h"`
 }
 
+// readPreviews places the panes of the previews that the last frame drew where that frame drew them, as the page reads the rectangles
+// of its panes after it laid them out. A pane lies inside the open control of its project card, which the element tree reports in place
+// of its content, so a pane stands at the place of that control in the tree of the frame and at the offset in the control that the
+// frame laid out. The tree of a frame cannot be read while the frame builds, so the step after the frame reads it.
+func (s *Shell) readPreviews() error {
+	previews := make(map[string][]previewPane, len(s.library.drawnPreviews))
+	if len(s.library.drawnPreviews) > 0 {
+		tree, err := s.options.Elements.ElementTree()
+		if err != nil {
+			return err
+		}
+		var walk func(nodes []ui.ElementNode)
+		walk = func(nodes []ui.ElementNode) {
+			for _, node := range nodes {
+				if exposed, ok := node.Key.(Exposed); ok && exposed.Name == "core.library.open" {
+					if panes, drawn := s.library.drawnPreviews[exposed.Item]; drawn {
+						placed := make([]previewPane, len(panes))
+						for i, pane := range panes {
+							placed[i] = previewPane{Card: pane.Card, X: node.Bounds.X + pane.X, Y: node.Bounds.Y + pane.Y, W: pane.W, H: pane.H}
+						}
+						previews[exposed.Item] = placed
+					}
+				}
+				walk(node.Children)
+			}
+		}
+		walk(tree)
+	}
+	s.library.previews = previews
+	return nil
+}
+
 // folderReasons are the folder errors of the host (workspace.folder.messages) and the reason that a card shows.
 var folderReasons = []struct{ prefix, reason string }{
 	{"project directory does not exist: ", "폴더가 없습니다."},
@@ -248,7 +280,7 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	gap := 2 * s.palette.Gap
 	columns := max(1, int((width+gap)/(least+gap)))
 	cardWidth := (width - float32(columns-1)*gap) / float32(columns)
-	previews := map[string][]previewPane{}
+	drawn := map[string][]previewPane{}
 	errors := map[string]string{}
 	count := len(shown) + 1
 	ui.Column(c).FillWidth().Gap(gap).Children(func() {
@@ -261,7 +293,7 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 					}
 					project := shown[index]
 					panes, failure := s.drawProjectCard(c, &project, cardWidth)
-					previews[project.ID] = panes
+					drawn[project.ID] = panes
 					if failure != "" {
 						errors[project.ID] = failure
 					}
@@ -269,7 +301,7 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 			})
 		}
 	})
-	s.library.previews, s.library.previewErrors = previews, errors
+	s.library.drawnPreviews, s.library.previewErrors = drawn, errors
 }
 
 func (s *Shell) drawLibraryAdd(c *ui.Context, width float32) {
@@ -287,10 +319,11 @@ func (s *Shell) drawLibraryAdd(c *ui.Context, width float32) {
 	})
 }
 
-// drawProjectCard draws the card of project, and returns the panes of its preview and the reason its stored layout cannot be opened.
+// drawProjectCard draws the card of project, and returns the panes of its preview, at their offsets in the open control of the card,
+// and the reason its stored layout cannot be opened.
 func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord, width float32) ([]previewPane, string) {
 	m := s.metrics
-	var panes []previewPane
+	panes := []previewPane{}
 	failure := ""
 	_, folderFailed := s.library.folderErrors[project.Root]
 	open := s.isOpen(project.ID)
@@ -368,7 +401,7 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord, width float32
 	margin := s.palette.Gap
 	height := m.libraryPreviewH
 	padX, padY := 2*m.space4, m.space4
-	var panes []previewPane
+	panes := []previewPane{}
 	failure := ""
 	frame := ui.Box(c).Size(width-2*margin, height).Margin(margin).Radius(s.radiusSmall()).Clip().Background(s.palette.Bg)
 	frame.Children(func() {
@@ -391,9 +424,9 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord, width float32
 			x, y := padX+columns[card.C0].at, padY+rows[card.R0].at
 			w := columns[card.C1-1].at + columns[card.C1-1].size - columns[card.C0].at
 			h := rows[card.R1-1].at + rows[card.R1-1].size - rows[card.R0].at
-			pane := s.drawPreviewPane(c, card, x, y, w, h)
-			bounds := pane.Bounds()
-			panes = append(panes, previewPane{Card: card.ID, X: bounds.X, Y: bounds.Y, W: bounds.W, H: bounds.H})
+			s.drawPreviewPane(c, card, x, y, w, h)
+			// The frame stands at its margin in the open control, and the pane at its place in the frame.
+			panes = append(panes, previewPane{Card: card.ID, X: margin + x, Y: margin + y, W: w, H: h})
 		}
 	})
 	return panes, failure
@@ -433,7 +466,7 @@ func previewTracks(state layout.State, length, height, gap float32) (columns, ro
 
 // drawPreviewPane draws a pane: the mark of the plugin of its active tab and two lines, or a line for a window sidebar. A tab of a plugin that is not
 // loaded has no mark.
-func (s *Shell) drawPreviewPane(c *ui.Context, card layout.Card, x, y, w, h float32) ui.Element {
+func (s *Shell) drawPreviewPane(c *ui.Context, card layout.Card, x, y, w, h float32) {
 	m := s.metrics
 	ink := s.palette.Muted
 	var mark *ui.SVG
@@ -469,7 +502,6 @@ func (s *Shell) drawPreviewPane(c *ui.Context, card layout.Card, x, y, w, h floa
 		line(m.space2)
 		line(m.previewLineStep - m.previewLineH)
 	})
-	return pane
 }
 
 // inkColor is the color of a theme token that a plugin names for its preview, and the muted color for the absent token.

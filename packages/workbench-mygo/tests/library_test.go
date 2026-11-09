@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -30,6 +31,55 @@ type libraryRead struct {
 		W    float64 `json:"w"`
 		H    float64 `json:"h"`
 	} `json:"previews"`
+}
+
+// core.projects.browse answers after the frame that shows the library and after a watcher of core.library received the value of that
+// frame, and core.library gives the panes of each preview where that frame drew them, as the page reads the rectangles of its panes:
+// each pane stands inside its card.
+func TestTheLibraryAnswersWithThePanesOfTheFrameThatShowsIt(t *testing.T) {
+	f, alpha, _ := twoProjects(t)
+	var watched []libraryRead
+	if _, err := f.shell.Registry().Answer("status.watch", json.RawMessage(`{"name":"core.library"}`), func(_ string, value any) {
+		text, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var read libraryRead
+		if err := json.Unmarshal(text, &read); err != nil {
+			t.Fatal(err)
+		}
+		watched = append(watched, read)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var got libraryRead
+	answered := false
+	var pushed []libraryRead
+	f.shell.Registry().RunLater("core.projects.browse", nil, func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.projects.browse failed: %v", err)
+		}
+		answered = true
+		pushed = slices.Clone(watched)
+		got = status[libraryRead](t, f, "core.library")
+	})
+	f.settle()
+	if !answered {
+		t.Fatal("core.projects.browse did not answer")
+	}
+	if len(pushed) == 0 || !reflect.DeepEqual(pushed[len(pushed)-1], got) {
+		t.Fatalf("the watcher of core.library had %d values before the answer, the last %+v, and the status is %+v", len(pushed), pushed, got)
+	}
+	panes := got.Previews[alpha]
+	if len(panes) == 0 {
+		t.Fatalf("the preview of %s has no pane: %+v", alpha, got.Previews)
+	}
+	card := f.box("core.library.open", alpha)
+	for _, pane := range panes {
+		if pane.W <= 0 || pane.H <= 0 || pane.X < float64(card.X) || pane.X+pane.W > float64(card.X+card.W) || pane.Y < float64(card.Y) {
+			t.Fatalf("the pane %+v is outside the card %v; the panes are %+v", pane, card, panes)
+		}
+	}
 }
 
 // libraryOfTwoProjects returns a shell on the library page with the projects alpha and beta, of which beta is open.
