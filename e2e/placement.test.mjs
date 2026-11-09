@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open, requiresAll, windowPosition } from "@soksak/window-check/app.mjs";
-import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { coverCheckWindow, fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 
 // The check places the window of every application, so it is registered only when the required set holds all of them.
 if (requiresAll(process.env)) test("fresh places every check window at its own frame", async (t) => {
@@ -73,12 +73,10 @@ for (const app of Object.values(APPS)) {
         if (project.root === root) await s.run("core.project.close", { id: project.id });
       }
     });
-    const covered = (await s.get("host.window")).frame;
     await s.run("core.project.open", { root, color: "#7db4ff" });
     const windows = await s.windows(2, "the covering project window did not open");
     const cover = s.on(windows.find((w) => w.window !== s.window).window);
-    await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
-    await cover.run("host.window.move", { x: covered.x - 100, y: covered.y });
+    await coverCheckWindow(s, cover);
     try {
       await s.until("host.window", (w) => w.occluded === true, `${app.name} was not reported occluded under its project window`,
         { timeout: 2000 });
