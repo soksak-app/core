@@ -11,6 +11,7 @@ import { currentGrid, dropBands, plane, presentedCardRect, railOutline, tabsOf }
 import { isPlace } from "./registry.js";
 import { expectedRailLoops, windowSidebarsPlaced } from "./verify-checks.js";
 import { cardRadius } from "./settings.js";
+import { gridScale } from "./device-grid.js";
 
 /** How far a goes beyond b at the farthest point. It is 0 when a is inside b. */
 const beyond = (a, b) => a.w <= 0 || a.h <= 0 ? 0 :
@@ -241,7 +242,7 @@ export function verify(controls = null) {
   // the declared rectangle inward to the device pixels (docs/spec/native-surfaces.md), so the applied rectangle is compared
   // with the declared one fitted the same way: a display of one device pixel per point cannot show half a point.
   // The alignment between frames on screen is checked separately by outside.test.mjs.
-  const scale = globalThis.devicePixelRatio;
+  const scale = gridScale();
   if (!(scale > 0)) throw new Error(`verify: the device pixel ratio ${scale} is not a positive number`);
   const placed = seated();
   let land = 0, landed = 0, escaped = 0;
