@@ -109,6 +109,34 @@ export function keepWindowSidebarWidths(cards, records) {
   }
 }
 
+/** The plane state of the last dock of each grid and the arrangement it could not place: a refused dock writes it, and a settle on the same plane state does not attempt the refused arrangement again. */
+const dockedPlanes = new WeakMap();
+
+/** One string that changes when the plane changes: the count of the cards, the lines of both axes with their places, and the size of the plane. */
+function planeToken(grid) {
+  return `${grid.cards.length}|${grid.lines("x")}|${grid.lines("y")}|${grid.width}x${grid.height}`;
+}
+
+/**
+ * The largest size that an insertion at the boundary holds with every card above the layout's minimum, found by asking the
+ * insertion itself: a refused insertion restores the plane, and an accepted one is undone by putting the recorded state back.
+ * Returns 0 when no size holds.
+ */
+function fittingSize(grid, axis, line, wanted) {
+  const restore = grid.toJSON();
+  let low = 0, high = wanted;
+  while (high - low > 1) {
+    const mid = (low + high) / 2;
+    if (grid.insertAt(axis, line, { size: mid }) !== null) {
+      low = mid;
+      grid.replace(restore);
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
 /** The sides that hold a window sidebar, in the order: a side that has a choice (sides) and whose switch is on. */
 export function arrangedSides(order, sides, shown) {
   return order.filter(side => sides.includes(side) && shown(side));
@@ -161,15 +189,21 @@ export function windowSidebarsArranged(grid, arranged) {
  * sides are the sides that have a choice, and shown(side) is the switch of a side. When the window sidebars of the plane already stand
  * where the order places them, nothing moves, so a change of focus or of the override does not move a sidebar. Otherwise every window
  * sidebar is closed, the lines that no card references are removed, and the arranged sides are inserted in the reverse of the order at the
- * border line of their side with their saved size and set fixed, so the first side reaches across the plane. A sidebar whose only filler is
- * a fixed card while its slots hold another card cannot leave yet (R7 of packages/soksak/docs/layout.md); it leaves after the others.
+ * border line of their side with their saved size and set fixed, so the first side reaches across the plane; the plane may not hold a
+ * saved size with every card above the layout's minimum, so a sidebar stands at the largest size that an insertion holds, a side whose
+ * sidebar no size holds is skipped with an error that names it, and a dock that the same plane state already refused is not attempted
+ * again. A sidebar whose only filler is a fixed card while its slots hold another card cannot leave yet (R7 of
+ * packages/soksak/docs/layout.md); it leaves after the others.
  * Returns whether the plane changed.
  */
 export function arrangeWindowSidebars(grid, order, sides, records, initialWidth, shown) {
   const arranged = arrangedSides(order, sides, shown);
   reconcileWindowSidebars(records, [...arranged, ...grid.cards.filter(card => windowSidebar(card.id)).map(card => card.id)].map(id => ({ id })), initialWidth);
+  const token = planeToken(grid);
+  const seen = dockedPlanes.get(grid);
   keepWindowSidebarWidths(grid.cards, records);
-  if (windowSidebarsArranged(grid, arranged)) return false;
+  // A dock that this plane state already refused is not attempted again, so a plane that holds no size for a sidebar keeps answering.
+  if (windowSidebarsArranged(grid, arranged) || (seen?.token === token && JSON.stringify(seen.refused) === JSON.stringify(arranged))) return false;
   // A sidebar that cannot leave yet waits until another window sidebar has left.
   for (let left = grid.cards.filter(card => windowSidebar(card.id)); left.length; left = grid.cards.filter(card => windowSidebar(card.id))) {
     const closed = left.find(card => {
@@ -183,12 +217,25 @@ export function arrangeWindowSidebars(grid, order, sides, records, initialWidth,
     // would accumulate in one slot.
     grid.tidy();
   }
+  const unplaceable = [];
   for (const side of [...arranged].reverse()) {
     const axis = windowAxis(side);
     const line = side === "left" || side === "top" ? 0 : grid.lines(axis).length - 1;
     if (!grid.canInsertAt(axis, line)) throw new Error(`cannot place window sidebar ${side}`);
-    grid.insertAt(axis, line, { id: side, data: null, size: records[side][sizeKey(side)] });
+    const saved = records[side][sizeKey(side)];
+    // default: the plane holds the saved size, and a sidebar without room stands at the largest size that an insertion holds.
+    let size = saved;
+    if (grid.insertAt(axis, line, { id: side, data: null, size }) === null) {
+      size = fittingSize(grid, axis, line, saved);
+      if (size <= 0 || grid.insertAt(axis, line, { id: side, data: null, size }) === null) {
+        // The plane holds no size for this sidebar, so the others still stand and the refusal names it.
+        unplaceable.push(side);
+        continue;
+      }
+    }
     grid.setFixed(side, true);
   }
+  dockedPlanes.set(grid, { token: planeToken(grid), refused: unplaceable.length ? arranged : undefined });
+  if (unplaceable.length) throw new Error(`cannot place window sidebars ${unplaceable.join(", ")}`);
   return true;
 }

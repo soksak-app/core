@@ -5,7 +5,7 @@
 ## 미배포
 
 
-
+- F714-14: 저장 크기가 콘텐츠 카드에 방을 남기지 않는 창 사이드바의 dock이 두 workbench에서 자기 변 경계선 삽입이 담는 가장 큰 크기로 서고 기록이 그 크기를 따르며, 어떤 크기도 담지 못하는 변은 건너뛰고 그 변을 밝히는 오류를 내며 다른 변은 그대로 서고, 같은 plane 상태가 이미 거부한 배치를 다시 시도하지 않는다. 이전에는 JavaScript dock이 거부된 사이드바를 말 없이 버려 스위치가 켜진 채 사라지고 매 settle이 모든 사이드바를 다시 배치했고, Go dock은 오류와 함께 배치가 중간에 멈췄다.
 - F714-13: `core.settings-modal`이 두 workbench에서 `card` 옆에 설정 창이 굴러가는 상자 `pane`을 보고하고, native modal 루트 안 요소의 `element.rect`가 굴러가지 않는 메인 문서 사본의 사각형 대신 모달 문서가 보고한 사각형(사본의 스크롤을 따르는)을 답하며, 모달 문서가 내용이 굴러갈 때도 자기 상태를 보고한다. 카드의 고정 head가 스크롤이 잘라 낸 내용을 덮으므로, 창 컨트롤은 pane 안에서만 눌러 닿을 수 있다.
 - F714-1: 명세가 변 `left`, `right`, `top`, `bottom` 각각에 고정 창 사이드바 하나를 두고, 설정 `sidebarOrder`의 순서로 dock하고, 위·아래 사이드바의 `{height}`를 저장하며, 위·아래 사이드바의 chrome 스위치와 설정 창의 순서 줄을 더한다.
 - F714-2: 창 연결과 플러그인 선언이 변 `top`과 `bottom`을 받는다. plugin API, Go workbench, 두 manifest reader가 일반 연결 `top`, `bottom`, 플러그인 연결 `window-top`, `window-bottom`, 네 변의 `sidebars.window` 매핑을 받고, 두 workbench의 `core.settings.link` exposure가 그것을 나열한다.
