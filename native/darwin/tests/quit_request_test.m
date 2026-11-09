@@ -53,15 +53,27 @@ static OSErr replyError(const AppleEvent *reply) {
     return (OSErr)error;
 }
 
-// Sends a quit event to this process by its process identifier, so the Apple event manager delivers it as an event of another
-// sender and names the sending process, and runs the main loop until the request arrives or five seconds pass.
+// Sends a quit event to this process by its process identifier from a thread other than the main thread, and runs the main loop
+// until the send returned and the request arrived, or five seconds passed. A send on the main thread is dispatched to the handler
+// within the send, and the handler suspends the event, so that send ends with errAETimeout (-1712) although the request ran. From
+// another thread the event goes through the event queue of the main thread, as the event of another process does, and the
+// sender does not wait for the answer (kAENoReply). The Apple event manager names the sending process either way.
 static OSStatus sendQuitToSelf(const int *requests, int before) {
-    NSAppleEventDescriptor *target = [NSAppleEventDescriptor descriptorWithProcessIdentifier:getpid()];
-    NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
-        eventID:kAEQuitApplication targetDescriptor:target returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
-    OSStatus status = AESendMessage(event.aeDesc, NULL, kAENoReply, kAEDefaultTimeout);
+    __block OSStatus status = 1;
+    __block BOOL returned = NO;
+    pid_t pid = getpid();
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSAppleEventDescriptor *target = [NSAppleEventDescriptor descriptorWithProcessIdentifier:pid];
+        NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
+            eventID:kAEQuitApplication targetDescriptor:target returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
+        OSStatus sent = AESendMessage(event.aeDesc, NULL, kAENoReply, kAEDefaultTimeout);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            status = sent;
+            returned = YES;
+        });
+    });
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
-    while (status == noErr && *requests == before && deadline.timeIntervalSinceNow > 0) {
+    while ((!returned || (status == noErr && *requests == before)) && deadline.timeIntervalSinceNow > 0) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
     }
     return status;
@@ -103,13 +115,15 @@ static void runChecks(SPCancellingDelegate *delegate) {
           [NSString stringWithFormat:@"an event that names no sending process gives the sender 0 and no name (%d, %@)", senderPid, sender]);
 
     // A quit event that a process sends names that process, and the name of a running sender is its bundle identifier or name.
-    OSStatus sent = sendQuitToSelf(&requests, requests);
+    // The requests before the send are the request of the dispatched event above; the send adds exactly one.
+    int before = requests;
+    OSStatus sent = sendQuitToSelf(&requests, before);
     sp_quit_request_answer();
     NSRunningApplication *current = NSRunningApplication.currentApplication;
     NSString *expected = current.bundleIdentifier ?: current.localizedName;
-    check(sent == noErr && requests == 2 && senderPid == getpid() && [sender isEqual:expected],
-          [NSString stringWithFormat:@"a sent quit event names its sender process and its name (want %d %@; status %d, requests %d, sender %d %@)",
-              getpid(), expected, (int)sent, requests, senderPid, sender]);
+    check(sent == noErr && requests - before == 1 && senderPid == getpid() && [sender isEqual:expected],
+          [NSString stringWithFormat:@"a sent quit event names its sender process and its name (want %d %@; status %d, requests of the send %d, sender %d %@)",
+              getpid(), expected, (int)sent, requests - before, senderPid, sender]);
     check(delegate.terminateCalls == 0,
           [NSString stringWithFormat:@"the quit event does not reach applicationShouldTerminate: (%d calls)", delegate.terminateCalls]);
     sp_quit_request_answer();
