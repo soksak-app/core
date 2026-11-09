@@ -247,26 +247,30 @@ fn the_exit_request_names_the_source_of_its_quit() {
     if std::env::var_os(SOURCE_CHILD).is_some() {
         return record_quit_sources();
     }
+    // The parent reads the records from the event log of the child and takes the pid of the child from its spawn, so the
+    // check does not depend on how the test harness of the child lays out its output.
     let directory = folder::Folder::new();
-    let output = Command::new(std::env::current_exe().unwrap())
+    let child = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", SOURCE_NAME, "--nocapture", "--test-threads=1"])
         .env(SOURCE_CHILD, "1")
         .env(DIRECTORY, directory.path())
-        .output()
+        .stdout(Stdio::piped())
+        .spawn()
         .unwrap();
+    let pid = child.id();
+    let output = child.wait_with_output().unwrap();
     let text = String::from_utf8_lossy(&output.stdout);
     assert!(
         output.status.success(),
         "status {}, output {text:?}",
         output.status
     );
-    let pid = text
-        .lines()
-        .find_map(|line| line.strip_prefix("pid: "))
-        .unwrap_or_else(|| panic!("output {text:?}"));
-    let requests: Vec<&str> = text
-        .lines()
-        .filter_map(|line| line.strip_prefix("exit-request: "))
+    let requests: Vec<String> = records::read_events(&records::event_log_path(directory.path()))
+        .iter()
+        .filter(|event| {
+            event["event"] == "log.closed" && event["fields"]["cause"] == "exit-request"
+        })
+        .map(|event| event["fields"].to_string())
         .collect();
     assert_eq!(
         requests,
@@ -281,7 +285,8 @@ fn the_exit_request_names_the_source_of_its_quit() {
     );
 }
 
-/// Records an exit request for each source of a quit, the signal sent by this process with raise, and prints their fields.
+/// Records an exit request for each source of a quit and the signal sent by this process with raise, in the event log in
+/// DIRECTORY.
 fn record_quit_sources() {
     use soksak_host::event_record::{
         apple_event_quit_source, emit_exit_request, host_quit_source, quit_with_cause,
@@ -315,10 +320,4 @@ fn record_quit_sources() {
     emit_exit_request(|| -1);
     log.flush(Duration::from_secs(5)).unwrap();
     use_host_event_log(None);
-    println!("pid: {}", std::process::id());
-    for event in records::read_events(&records::event_log_path(&directory)) {
-        if event["event"] == "log.closed" && event["fields"]["cause"] == "exit-request" {
-            println!("exit-request: {}", event["fields"]);
-        }
-    }
 }
