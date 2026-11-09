@@ -414,9 +414,10 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane setting
 	if selector.Trigger.Focused() {
 		edge = s.palette.Focus
 	}
-	// .select-field select:focus-visible: the focus color on the border, without an outline.
-	selector.Trigger.FocusRing(false).Grow(1).Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
-		ui.Text(c, control.labels[value]).FontSize(s.textControl()).TextColor(s.palette.Fg).NoWrap().Grow(1)
+	// .select-field select:focus-visible: the focus color on the border, without an outline. The select has the width of its column
+	// and no minimum (min-width:0), so the label of a long choice is cut at its end and does not widen it.
+	selector.Trigger.FocusRing(false).Grow(1).Shrink(1).MinWidth(0).Clip().Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
+		ui.Text(c, control.labels[value]).FontSize(s.textControl()).TextColor(s.palette.Fg).NoWrap().Grow(1).Shrink(1).MinWidth(0)
 		ui.Text(c, "▾").FontSize(s.textCaption()).TextColor(s.palette.Muted)
 	})
 	selector.Popup(func(panel ui.Element) {

@@ -1504,3 +1504,34 @@ func TestScrollingTheSettingsCardRedrawsTheCardAlone(t *testing.T) {
 		t.Fatal("the scroll drew no frame")
 	}
 }
+
+// A select fills the control column of its row whatever its value, as `.select-field select` of the page has the width of its column
+// and no minimum: the label of a long choice does not widen it.
+func TestASelectWithALongChoiceKeepsTheWidthOfItsColumn(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings.sets.update", map[string]any{"id": "set-1", "title": strings.Repeat("세트이름", 10)})
+	f.run("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-1", "scope": "common"})
+	f.run("core.settings-modal.nav", map[string]string{"section": "general"})
+	f.settle()
+	long, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "link:left:")
+	short, found := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "mode")
+	if !ok || !found {
+		t.Fatalf("the selects are not drawn in %q", f.tester.Texts())
+	}
+	if long.Bounds.X != short.Bounds.X || long.Bounds.W != short.Bounds.W {
+		t.Fatalf("the select of a long choice stands at %+v, the select of a short one at %+v", long.Bounds, short.Bounds)
+	}
+	// The text field of the long title (.text-field, width:100% and min-width:0) and the select of the layout of the edited set fill
+	// the same column.
+	f.run("core.settings-modal.nav", map[string]string{"section": "sidebars"})
+	f.run("core.settings-modal.edit", map[string]any{"set": "set-1"})
+	f.settle()
+	title, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "title:set-1")
+	layout, found := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "layout:set-1")
+	if !ok || !found {
+		t.Fatalf("the set editor is not drawn in %q", f.tester.Texts())
+	}
+	if title.Bounds.X != layout.Bounds.X || title.Bounds.W != layout.Bounds.W || layout.Bounds.W != short.Bounds.W {
+		t.Fatalf("the title stands at %+v and the layout at %+v, a select of the column at %+v", title.Bounds, layout.Bounds, short.Bounds)
+	}
+}
