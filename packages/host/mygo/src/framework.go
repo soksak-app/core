@@ -18,7 +18,7 @@ type Framework struct {
 	// host is the prepared host, which starts each workbench.
 	host atomic.Pointer[host.Host]
 	// start leaves the previous workbench of a window in the host before the new one starts: host.StartWorkbench.
-	start     func(h *host.Host, window host.Frontend) error
+	start     func(h *host.Host, window host.Frontend, shown bool) error
 	mu        sync.Mutex
 	frontends map[*mygo.Window]*Frontend
 	// transaction belongs to the main thread: whether a surface layout transaction is open.

@@ -165,7 +165,7 @@ func TestAWorkbenchStartFailsWhenItsWindowCannotCancelItsLayout(t *testing.T) {
 	owner := &Host{windows: map[uint]*Surfaces{1: surfaces}, workspace: NewWorkspace(t.TempDir()),
 		relay: &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}}
 	surfaces.host = owner
-	err := StartWorkbench(owner, &startingWindow{})
+	err := StartWorkbench(owner, &startingWindow{}, false)
 	if !errors.Is(err, cancel) || err.Error() != "page reload: the layout of the window is not cancelled" {
 		t.Fatalf("the start returned %v, want the failed cancel of the layout", err)
 	}

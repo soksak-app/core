@@ -592,7 +592,11 @@ func (f *Frontend) FirstScreen() {
 // because the start waits for steps of the main thread.
 func (f *Frontend) startHeld() {
 	if h := f.framework.host.Load(); h != nil {
-		if err := f.framework.start(h, f); errors.Is(err, host.ErrNoStartWindow) {
+		// A window that went on the screen shows the last frame of its previous workbench until the first screen of the new one.
+		f.mu.Lock()
+		shown := f.revealed
+		f.mu.Unlock()
+		if err := f.framework.start(h, f, shown); errors.Is(err, host.ErrNoStartWindow) {
 			return
 		} else if err != nil {
 			host.LogError("workbench start", err)
