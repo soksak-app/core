@@ -6,7 +6,7 @@
 // of the focused card.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, requireUncovered } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { recordCatalog as catalogOfConfiguration } from "@soksak/window-check/catalog.mjs";
 import * as start from "@soksak/window-check/start.mjs";
@@ -136,7 +136,7 @@ export async function pluginChangeStarted(s, change, action) {
 
 /** Prepares a real visible occlusion baseline without raising or activating a
  * window. The caller supplies only windows of its declared diagnostic cohort. */
-export async function prepareOcclusionFixture(target, otherWindows) {
+export async function prepareOcclusionFixture(target, otherWindows, { windows } = {}) {
   const key = session => `${session.app.name}/${session.window}`;
   if (!target || !Array.isArray(otherWindows)) throw new TypeError("placement fixture requires an explicit owned cohort");
   const own = key(target), seen = new Set();
@@ -209,10 +209,17 @@ export async function prepareOcclusionFixture(target, otherWindows) {
     if (inactiveCount(actual) !== originalCount) throw new Error("placement cohort activation count changed during preparation");
     parked.push({ application:session.app.name, window:session.window, originalFrame:frame, parkedFrame:actual.frame });
   }
-  // Other apps and user windows remain untouched. Their real occlusion is a
-  // preparation failure, never a product failure or a reason to fake visibility.
-  const baseline = await target.until("host.window", value => value.occluded === false,
-    "placement fixture preparation remains occluded after owned cohort moves", { timeout: 2000 });
+  // Other apps and user windows remain untouched. A window that their cover keeps occluded ends the check as every covered
+  // window does (requireUncovered), naming the covering windows: nothing was measured, never a product failure or a reason to
+  // fake visibility.
+  let baseline;
+  try {
+    baseline = await target.until("host.window", value => value.occluded === false,
+      "placement fixture preparation remains occluded after owned cohort moves", { timeout: 2000 });
+  } catch (error) {
+    requireUncovered(target, await target.get("host.window"), windows);
+    throw error;
+  }
   if (inactiveCount(baseline) !== count) throw new Error("placement target activation count changed during preparation");
   return { before, baseline, parked };
 }
@@ -225,7 +232,7 @@ export async function prepareOcclusionFixture(target, otherWindows) {
  * renders a covered window less often (`host.window`, docs/spec/exposure.md#host-entries), and a check orders no window in front of
  * the windows of other applications (docs/spec/hosts.md#launch-activation).
  */
-export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = open } = {}) {
+export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = open, windows } = {}) {
   const otherWindows = [];
   for (const other of Object.values(apps)) {
     if (other.name === s.app.name) continue;
@@ -233,5 +240,5 @@ export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = ope
     if (peer === null) continue;
     for (const window of await peer.get("host.windows")) otherWindows.push(peer.on(window.window));
   }
-  return prepareOcclusionFixture(s, otherWindows);
+  return prepareOcclusionFixture(s, otherWindows, { windows });
 }

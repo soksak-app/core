@@ -2,16 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as fixtures from "../fixture.mjs";
 
-async function prepare(target, others) {
+async function prepare(target, others, options) {
   assert.equal(typeof fixtures.prepareOcclusionFixture,"function","placement fixture must own inactive cohort preparation");
-  return fixtures.prepareOcclusionFixture(target,others);
+  return fixtures.prepareOcclusionFixture(target,others,options);
 }
+// The window of another application in front of every check window, which covers each of them whole.
+const EDITOR={owner:"Editor",pid:900,frame:{x:0,y:0,width:1800,height:1100}};
+// The window list of the screen, front to back: the editor, then the check windows in their order.
+const screenWindows=rows=>()=>[EDITOR,...rows.map(row=>({owner:row.app.name,pid:row.client.endpoint.pid,frame:{...row.frame}}))];
+// The refusal of a covered window that requireUncovered states, naming first the window list entry in front that covers it.
+const COVERED=/mygo's window is completely covered by Editor at \{"x":0,"y":0,"width":1800,"height":1100\}(, [^ ]+ at \{[^}]*\})*, so WebKit renders it less often\. Nothing was measured/;
 // The height of the title bar that a window frame holds above its content area in this fake host.
 const TITLE_BAR=28;
 function cohort({external=false,targetName="mygo",failure=null}={}) {
   const calls=[],cleanups=[];
-  const rows=[{name:"wailsv3",x:0},{name:"tauriv2",x:600},{name:"mygo",x:300}].map(({name,x})=>({
-    app:{name},window:`${name}-window`,frame:{x,y:39,width:1200,height:760},
+  const rows=[{name:"wailsv3",x:0},{name:"tauriv2",x:600},{name:"mygo",x:300}].map(({name,x},index)=>({
+    app:{name},window:`${name}-window`,frame:{x,y:39,width:1200,height:760},client:{endpoint:{pid:100+index}},
   }));
   const target=rows.find(row=>row.app.name===targetName);
   const others=rows.filter(row=>row!==target);
@@ -64,7 +70,7 @@ test("placement preparation uses target-left and cohort-right for a right-hand t
 
 test("a user-front cover fails preparation rather than forging a visible state or skipping",async()=>{
   const f=cohort({external:true});
-  await assert.rejects(prepare(f.target,f.others),/placement fixture preparation.*occluded/);
+  await assert.rejects(prepare(f.target,f.others,{windows:screenWindows(f.rows)}),COVERED);
   assert.equal(f.cleanups.length,1,"failed preparation must still own restoration");
   await f.cleanups[0]();
   assert.deepEqual(f.rows.map(row=>row.frame.x),[0,600,300]);
@@ -82,7 +88,7 @@ test("cohort restoration is registered before a partial move failure",async()=>{
 
 test("a selected single host still requires a real visible baseline",async()=>{
   const f=cohort({external:true});
-  await assert.rejects(prepare(f.target,[]),/placement fixture preparation.*occluded/);
+  await assert.rejects(prepare(f.target,[],{windows:screenWindows(f.rows)}),COVERED);
   assert.deepEqual(f.calls,[{app:"mygo",command:"host.window.move",params:{x:0,y:39}}]);
   assert.equal(f.cleanups.length,1);
   await f.cleanups[0]();
