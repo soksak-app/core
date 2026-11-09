@@ -387,6 +387,36 @@ func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {
 	commit()
 }
 
+// A frame that draws other surface lines opens the layout of its window and presents in it, and the preparation of those lines takes
+// the transaction over (docs/spec/hosts.md#native-views). The frame of that preparation changes the scene again, so its notice comes
+// before the commit that the preparation makes after it: a frame that waited for the commit for a drawable would hold the
+// preparation until the host gives up.
+func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T) {
+	_, _, window := held(t, "taken")
+	begin(t, window, 1)
+	window.Window().SetSize(520, 410)
+	if err := presentation(t, window); err != nil {
+		t.Fatal(err)
+	}
+	commit := begin(t, window, 2)
+	window.Window().SetSize(560, 430)
+	result := make(chan error, 1)
+	var failed error
+	mygo.RunOnMain(func() { failed = window.AfterPresentation(func(err error) { result <- err }) })
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("the notice of the preparation that took the layout over failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the frame of the preparation that took the layout over did not present within 2 s: it waits for the commit")
+	}
+	commit()
+}
+
 func TestE2ETheSettledPresentationWaitsForTheTransactionOfAnotherWindow(t *testing.T) {
 	framework, workbench, first := held(t, "owner")
 	other := framework.NewWindow(host.WindowOptions{Name: "other", Title: "soksak", Width: 400, Height: 300}).(*adapter.Frontend)
