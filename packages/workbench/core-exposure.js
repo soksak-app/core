@@ -46,6 +46,7 @@ import { foldSection, onSectionsChange, selectSection, sidebarsState, sizeSectio
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
+import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -418,6 +419,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
     }
   };
+  // The host asks it before it waits for the presentation of the window (docs/spec/host-contract.md).
+  registry.method(PLACEMENT_LAST, placementLast);
   registry.command("core.settings.set", invalid(async ({ patch, scope }) => {
     await set(patch, scope, "core.settings.set");
   }));

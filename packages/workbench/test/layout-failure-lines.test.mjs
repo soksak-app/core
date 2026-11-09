@@ -21,7 +21,7 @@ mock.module("@soksak/runtime", { namedExports: { host: {
   },
 } } });
 const { report, surfaces } = await import("../host.js");
-const { createErrorDisplay, createPageLayout, layoutsPlaced, reportUncaught } = await import("../page-layout.js");
+const { createErrorDisplay, createPageLayout, placementLast, reportUncaught } = await import("../page-layout.js");
 const { hideError } = await import("../shown-errors.js");
 const { connectExposure, registry } = await import("../exposure.js");
 const { bind } = await import("../commands.js");
@@ -99,7 +99,8 @@ test("a successful presentation reports completion", async () => {
   assert.equal(await page.presented(), true);
 });
 
-test("the wait of a drag ends after the layout that waited behind the running layout", async () => {
+// The host asks it before it waits for the presentation of the window (workbench.placement.last).
+test("the last placement answers after the layout that waited behind the running layout", async () => {
   const opened = [];
   const page = createPageLayout({
     document, showError, setVerify: () => {}, log: () => {}, surfaces: { waitPresented: async () => {} },
@@ -114,16 +115,16 @@ test("the wait of a drag ends after the layout that waited behind the running la
   await settle();
   layout();
   let ended = false;
-  const wait = layoutsPlaced().then(() => { ended = true; });
+  const wait = placementLast().then((answer) => { ended = true; return answer; });
   opened[0].resolve({});
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(opened.length, 2, "the waiting layout did not start after the running layout");
   assert.equal(ended, false, "the wait ended with the layout that ran when the next one arrived");
   opened[1].resolve({});
-  await wait;
+  assert.equal(await wait, null);
 
   layout();
-  const failed = layoutsPlaced();
+  const failed = placementLast();
   await settle();
   opened[2].reject(new Error(TIMEOUT));
   await assert.rejects(failed, (error) => error.message === TIMEOUT);

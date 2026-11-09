@@ -88,9 +88,17 @@ export function armLayoutFault() {
 /* Waits for the newest layout of the page that createPageLayout made last (diagnostics.drag in docs/spec/endpoint.md). */
 let newestLayout = async () => {};
 
-/** Ends when the newest layout ran to the end. It fails with the failure of that layout. */
-export function layoutsPlaced() {
-  return newestLayout();
+/**
+ * The workbench method that the host asks before it waits for the presentation of the window (host.window.presented and
+ * diagnostics.drag): a layout that waits behind a running one is known only to the page
+ * (exposure.window-presented.waits-for-the-last-placement in docs/spec/host-contract.md).
+ */
+export const PLACEMENT_LAST = "workbench.placement.last";
+
+/** Answers null when the newest layout ran to the end. It fails with the failure of that layout. */
+export async function placementLast() {
+  await newestLayout();
+  return null;
 }
 
 /**
