@@ -5,7 +5,7 @@ import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { fresh, paintProbeDocument } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
-import { rasterRow } from "./outside.mjs";
+import { measuredRun } from "./outside.mjs";
 
 /** The paint of the document region of the layout probe while it is measured: a dark gray apart from the card and the plane. */
 const MEASURED = [30, 30, 30];
@@ -43,10 +43,11 @@ for (const app of Object.values(APPS)) {
       const frame = readFrame(path);
       const scale = frame.contentScale * frame.scale;
       const contentBottom = Math.round(frame.content.height * scale);
-      // The bottom edge of the surface follows the last row of the document region painted with the measurement color. The distance
-      // between that row and the bottom edge of the surface is measured against the declared position in the first frame.
+      // The bottom edge of the surface follows the last row of the document region painted with the measurement color, which ends the
+      // run of measured rows below the top of the surface: the lower card shows its own document region below it. The distance between
+      // that row and the bottom edge of the surface is measured against the declared position in the first frame.
       const x = Math.round(marks.cx * scale);
-      const line = rasterRow(frame, marks.colour, { from: contentBottom - 1, to: Math.round(marks.top * scale) });
+      const line = measuredRun(frame, marks.colour, { from: Math.round(marks.top * scale), to: contentBottom });
       if (!line) return;
       offset ??= Math.round(marks.bottom * scale) - line.y;
       const bottom = line.y + offset - 1;

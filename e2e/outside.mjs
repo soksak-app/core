@@ -58,6 +58,30 @@ export function rasterRow(f, colour, { from, to }) {
 }
 
 /**
+ * Walks the rows from from toward to (to is excluded) to the first row where colour continues for at least LINE, and returns the
+ * last row of the rows that follow it without a break, each with the longest span of colour within the columns of that first row.
+ * The run of one surface ends there, so a measured row of another surface lower in the frame, such as the bottom device row of a
+ * document region that its page does not cover, is not taken for it. Coordinates are pixels.
+ */
+export function measuredRun(f, colour, { from, to }) {
+  const first = rasterRow(f, colour, { from, to });
+  if (!first) return null;
+  let last = first;
+  for (let y = first.y + 1; y < Math.min(to, f.height); y++) {
+    let best = null;
+    for (let x = first.l; x <= first.r; x++) {
+      if (!near(pixel(f, x, y), colour)) continue;
+      const l = x;
+      while (x + 1 <= first.r && near(pixel(f, x + 1, y), colour)) x++;
+      if (!best || x - l > best.r - best.l) best = { y, l, r: x };
+    }
+    if (!best || best.r - best.l + 1 < LINE) break;
+    last = best;
+  }
+  return last;
+}
+
+/**
  * The reference to find the raster probe surface `surface` in its card. It is read from the declared position of the surface
  * (host.window). head is one row of the card head directly above the surface, top and bottom are the top and the bottom of the
  * surface, and cx is the column 24pt inside the right edge of the surface. All are in points. The check drags the left or the bottom
