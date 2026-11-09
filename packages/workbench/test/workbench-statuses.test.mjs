@@ -65,6 +65,10 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
     await assert.rejects(registry.run("core.focus.set", { name: "core.fixture.absent", index: 0 }), /^Error: unknown element core\.fixture\.absent$/);
     await assert.rejects(registry.run("core.focus.set", { name: "core.brand", index: 9 }), /^Error: element core\.brand has no element at index 9$/);
 
+    // The host asks the last placement of the workbench before it waits for the presentation of the window; a workbench
+    // that has not placed a layout answers at once.
+    assert.deepEqual(await registry.handle({ method: "workbench.placement.last" }), { result: null });
+
     for (const name of ["core.window.document", "core.page.error", "core.page.audit"]) {
       assert.equal((await get(name)).error?.code, EXPOSURE_ERRORS.unknownName, `${name} is still declared`);
     }

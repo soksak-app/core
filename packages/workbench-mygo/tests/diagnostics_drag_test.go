@@ -111,7 +111,7 @@ func TestTheRecordOfADragHoldsTheBoundaryBeforeTheDragAndAfterEachStep(t *testin
 	}
 }
 
-// A drag asks for its last placement. A placement that runs when the steps arrive holds none of them, so the answer waits for
+// A drag asks the window for its last placement (workbench.placement.last). A placement that runs when the steps arrive holds none of them, so the answer waits for
 // the placement that follows it. The frame of those steps opened the layout, which holds the frames of the window, so the answer
 // of the running placement places the steps at once.
 func TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns(t *testing.T) {
@@ -144,7 +144,7 @@ func TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns(t *testing.T) 
 	answered := false
 	var failure error
 	answeredAt := 0
-	f.shell.Registry().Reply("diagnostics.drag.placed", nil, nil, func(_ any, err error) {
+	f.shell.Registry().Reply("workbench.placement.last", nil, nil, func(_ any, err error) {
 		answered, failure, answeredAt = true, err, len(stored.requests)
 	})
 	if answered {
@@ -192,7 +192,7 @@ func TestAFailedLastPlacementAnswersItsFailure(t *testing.T) {
 	f.tester.Frame()
 	var failure error
 	answered := false
-	f.shell.Registry().Reply("diagnostics.drag.placed", nil, nil, func(_ any, err error) { answered, failure = true, err })
+	f.shell.Registry().Reply("workbench.placement.last", nil, nil, func(_ any, err error) { answered, failure = true, err })
 	// The placement that runs when the steps arrive is the first after the press, and the steps are placed after it.
 	stored.presentFailure = errors.New("the current image raster did not present within 10s")
 	stored.presentFailureFrom = began + 2

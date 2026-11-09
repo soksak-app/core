@@ -971,7 +971,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 	case "host.window.reload":
 		return nil, s.reloadPage()
 	case "host.window.presented":
-		displayed, err := s.presented()
+		displayed, err := windowPresented(b.h, s)
 		if err != nil {
 			return nil, err
 		}
@@ -1688,6 +1688,41 @@ func (s *Surfaces) fullscreen(on bool) error {
 	case <-time.After(pageTimeout):
 		return rpcError(codeTimeout, "the window did not change full screen within %s", pageTimeout)
 	}
+}
+
+// placementLast is the method of the workbench of a window that answers once the last placement that the workbench made or holds
+// ended, with the failure of that placement (docs/spec/host-contract.md, exposure.window-presented.waits-for-the-last-placement).
+const placementLast = "workbench.placement.last"
+
+// windowPresented waits until the window presented its current layout and returns the display time of that screen. A placement
+// that waits behind a running one is known only to the workbench of the window, so the wait asks the workbench for its last
+// placement first; a workbench that has not started holds none. host.window.presented and diagnostics.drag wait with it.
+func windowPresented(h *Host, s *Surfaces) (float64, error) {
+	return lastPlacementPresented(func(limit time.Duration) error {
+		h.mu.Lock()
+		ready := s.ready
+		h.mu.Unlock()
+		if !ready {
+			return nil
+		}
+		_, err := h.ask(s, placementLast, nil, limit)
+		return err
+	}, s.whenSettled, s.presented, pageTimeout)
+}
+
+// lastPlacementPresented waits for placed, then for settled, the end of a continuous update, and then for presented. Each wait
+// of the window ends at limit, so a workbench that does not answer fails the wait.
+func lastPlacementPresented(placed func(limit time.Duration) error, settled func() <-chan struct{}, presented func() (float64, error),
+	limit time.Duration) (float64, error) {
+	if err := placed(limit); err != nil {
+		return 0, fmt.Errorf("the last placement of the window: %w", err)
+	}
+	select {
+	case <-settled():
+	case <-time.After(limit):
+		return 0, rpcError(codeTimeout, "the continuous update of the window did not end within %s", limit)
+	}
+	return presented()
 }
 
 // presented waits until the surface layout transaction of the window and the current picture raster are fixed and the main page and the visible app document

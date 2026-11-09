@@ -16,7 +16,7 @@ import { createTranscript, transcriptSender } from "./transcript.js";
 import { createSurfaceReplyHold } from "./surface-reply-hold.js";
 import { mountedSurface } from "./surface-modules.js";
 import { watchResizeLoop } from "./resize-loop.js";
-import { armLayoutFault, layoutsPlaced } from "./page-layout.js";
+import { armLayoutFault } from "./page-layout.js";
 import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
 
@@ -45,12 +45,6 @@ registry.method("diagnostics.transcript", ({ on }) => {
 });
 
 registry.method("diagnostics.drag", (plan) => shake(plan));
-
-// The host asks after a drag whether its last layout ran: while one layout runs, the next waits on this page and the host sees neither.
-registry.method("diagnostics.drag.placed", async () => {
-  await layoutsPlaced();
-  return null;
-});
 
 // The host asks for the point of the boundary before it delivers a drag as native input (diagnostics.drag with native: true in
 // docs/spec/endpoint.md), so that its press lands where the drag of this page presses.

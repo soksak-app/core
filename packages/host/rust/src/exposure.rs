@@ -2369,6 +2369,54 @@ pub fn presented(window: &Window, timeout: Duration) -> Result<f64, Failure> {
     }
 }
 
+/// The method of the workbench of a window that answers once the last placement that the workbench made or holds ended,
+/// with the failure of that placement (docs/spec/host-contract.md,
+/// exposure.window-presented.waits-for-the-last-placement).
+pub(crate) const PLACEMENT_LAST: &str = "workbench.placement.last";
+
+/// Waits until the window presented its current layout and returns the presentation time of that screen. A placement
+/// that waits behind a running one is known only to the workbench of the window, so the wait asks the workbench for its
+/// last placement first; a workbench that has not started holds none. host.window.presented and diagnostics.drag wait
+/// with it.
+pub(crate) fn window_presented(host: &Host, window: &Window) -> Result<f64, Failure> {
+    let data = window_data(window).map_err(internal)?;
+    last_placement_presented(
+        |limit| {
+            if !data.ready.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+            host.page(window, PLACEMENT_LAST, Map::new(), limit)
+                .map(|_| ())
+        },
+        || crate::surfaces::when_settled(&data.running).map_err(internal),
+        || presented(window, TIMEOUT),
+        TIMEOUT,
+    )
+}
+
+/// Waits for placed, then for settled, the end of a continuous update, and then for presented. Each wait of the window
+/// ends at limit, so a workbench that does not answer fails the wait.
+pub(crate) fn last_placement_presented(
+    placed: impl FnOnce(Duration) -> Result<(), Failure>,
+    settled: impl FnOnce() -> Result<mpsc::Receiver<()>, Failure>,
+    presented: impl FnOnce() -> Result<f64, Failure>,
+    limit: Duration,
+) -> Result<f64, Failure> {
+    placed(limit).map_err(|failure| {
+        Failure::new(
+            failure.code,
+            format!("the last placement of the window: {}", failure.message),
+        )
+    })?;
+    if settled()?.recv_timeout(limit).is_err() {
+        return Err(Failure::new(
+            TIMED_OUT,
+            format!("the continuous update of the window did not end within {limit:?}"),
+        ));
+    }
+    presented()
+}
+
 #[cfg(feature = "diagnostics")]
 pub(crate) fn inject_presentation_failure(window: &Window) -> Result<(), Failure> {
     let platform = platform::current().map_err(internal)?;
@@ -2572,7 +2620,7 @@ impl Host {
             })(),
             "host.window.reload" => reload(self, window),
             "host.window.presented" => {
-                presented(window, TIMEOUT).map(|displayed| json!({"displayed": displayed}))
+                window_presented(self, window).map(|displayed| json!({"displayed": displayed}))
             }
             "host.window.move" => (|| {
                 let x = number(arguments, "x")?;

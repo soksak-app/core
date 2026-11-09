@@ -1247,8 +1247,7 @@ pub(crate) struct Running {
 }
 
 /// Returns the receiver that gets a value when the continuous update ends. When no update is in progress, it already
-/// has a value. Only the diagnostic method diagnostics.drag uses it.
-#[cfg(feature = "diagnostics")]
+/// has a value. The wait for the presentation of the window uses it (window_presented of exposure.rs).
 pub(crate) fn when_settled(running: &Running) -> Result<std::sync::mpsc::Receiver<()>, String> {
     let (tx, rx) = std::sync::mpsc::channel();
     // default: a lock that a panicking thread poisoned still holds the run flag, which is only read; the panic hook
