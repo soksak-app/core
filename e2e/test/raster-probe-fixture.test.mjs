@@ -309,6 +309,7 @@ test("a raster probe waits for its first frame while its window draws its image 
   const calls = [];
   const cleanups = [];
   const s = {
+    client: { endpoint: { pid: 4242 } },
     registered: async (surface, entries) => { calls.push(["registered", surface, entries]); },
     request: async (method, params) => { calls.push(["request", method, params]); return null; },
     until: async (name, accept, _what, options) => {
@@ -322,7 +323,7 @@ test("a raster probe waits for its first frame while its window draws its image 
   assert.deepEqual(await rasterReady(s, "tab-1"), { session: "s1", connected: true });
   await rasterReady(s, "tab-2");
   const covered = calls.filter(([kind]) => kind === "request");
-  assert.deepEqual(covered, [["request", "diagnostics.window.draw-covered", { draw: true }], ["request", "diagnostics.window.draw-covered", { draw: true }]]);
+  assert.deepEqual(covered, [["request", "diagnostics.window.draw-covered", { draw: true }]], "the session holds the covered drawing once");
   const frame = calls.findIndex(([kind, name]) => kind === "until" && name === "rasterprobe.frame");
   assert.ok(calls.findIndex(([kind]) => kind === "request") < frame, "the window draws covered before the wait for the frame");
   assert.deepEqual(calls[0], ["registered", "tab-1", RASTER_ENTRIES]);
@@ -358,6 +359,7 @@ test("a raster probe tab that a check opens while it watches the window draws co
     "host.window": { regions: [{ surface: "tab-7", name: "raster", visible: true, presented: { generation: 1, raster: 1, sequence: 1 } }] },
   };
   const s = {
+    client: { endpoint: { pid: 4242 } },
     run: async (name, params) => { calls.push(["run", name, params]); return { tab: "tab-7" }; },
     registered: async (surface, entries) => { calls.push(["registered", surface, entries]); },
     request: async (method, params) => { calls.push(["request", method, params]); return null; },

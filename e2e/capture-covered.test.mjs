@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, open } from "@soksak/window-check/app.mjs";
 import { readPng, distance } from "@soksak/window-check/png.mjs";
 import { fresh } from "./fixture.mjs";
 
@@ -54,8 +54,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a still of a covered window holds the document of its tab and its changes`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     const { surface } = await fresh(s);
-    await s.request("diagnostics.window.draw-covered", { draw: true });
-    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+    s.cleanup(await holdCovered(s));
     await s.registered(surface, ["command layoutprobe.document.color", "status layoutprobe.document"]);
     await s.until("layoutprobe.document", (at) => at.reported, "the region document did not report", { surface });
     await s.run("layoutprobe.document.color", { color: hex(RED) }, surface);

@@ -30,7 +30,7 @@ async function openProbe(t, app) {
   await fresh(s, { performanceTrace: true, log: { ...NATIVE_INPUT_LOG, lifecycle: "info", call: "debug" }, reads: READS });
   await keepCommonSettings(s);
   s.cleanup(async () => {
-    if ((await s.get("host.window")).modal?.id === "settings") await s.run("core.settings.close");
+    if ((await s.get("core.modal"))?.id === "settings") await s.run("core.settings.close");
     if ((await s.get("core.picker")).open) await s.run("core.picker.close");
     if ((await s.get("core.screen")).screen === "library") {
       await s.run("core.library.page", { page: "projects" });

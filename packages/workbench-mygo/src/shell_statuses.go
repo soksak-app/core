@@ -471,13 +471,14 @@ func (s *Shell) surfaceProgress(id string) (phase, reason string) {
 	return "loading", ""
 }
 
-// surfacePhase is the page status of a surface.
+// surfacePhase is the page status of a surface, `{phase, error}` (docs/spec/exposure.md): the error is the reason of a failure, and
+// null while the surface has none.
 func (s *Shell) surfacePhase(id string) map[string]any {
 	phase, reason := s.surfaceProgress(id)
 	if phase == "error" {
-		return map[string]any{"phase": phase, "reason": reason}
+		return map[string]any{"phase": phase, "error": reason}
 	}
-	return map[string]any{"phase": phase}
+	return map[string]any{"phase": phase, "error": nil}
 }
 
 // sectionProgress is the state of a section surface in core.sidebars. A section is mounted once its view answered, and a view that

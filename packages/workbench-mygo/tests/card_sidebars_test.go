@@ -4,6 +4,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -397,6 +398,32 @@ func TestASectionShowsThatItsViewStopped(t *testing.T) {
 	stopped := f.sectionOf("left", "fieldprobe.tree")
 	if stopped.Mounted || stopped.Phase == nil || *stopped.Phase != "error" || stopped.Error == nil || *stopped.Error != "the view stopped" {
 		t.Fatalf("a section whose view stopped is %+v", stopped)
+	}
+}
+
+// The status of a surface in core.surfaces is `{phase, error}` (docs/spec/exposure.md): the error is null while the view lives and
+// names the reason once it stopped.
+func TestTheSurfaceStatusNamesTheErrorOfAStoppedView(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	id := f.sectionOf("left", "fieldprobe.tree").SurfaceID
+	viewCall(t, f, stored, id, "runtime.settings.read", nil)
+	statusOf := func() map[string]any {
+		t.Helper()
+		for _, row := range status[[]map[string]any](t, f, "core.surfaces") {
+			if row["surface"] == id {
+				return row["status"].(map[string]any)
+			}
+		}
+		t.Fatalf("core.surfaces has no surface %s", id)
+		return nil
+	}
+	if got := statusOf(); !reflect.DeepEqual(got, map[string]any{"phase": "ready", "error": nil}) {
+		t.Fatalf("the status of a live view is %v", got)
+	}
+	f.shell.Event("view-stopped", []any{map[string]any{"surface": id, "reason": "the view stopped"}})
+	f.settle()
+	if got := statusOf(); !reflect.DeepEqual(got, map[string]any{"phase": "error", "error": "the view stopped"}) {
+		t.Fatalf("the status of a stopped view is %v", got)
 	}
 }
 

@@ -4,7 +4,7 @@ import test from "node:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { distance } from "@soksak/window-check/png.mjs";
 import { readStillCapture } from "./still-capture.mjs";
@@ -17,8 +17,7 @@ for (const app of Object.values(APPS))
     const start = await fresh(s);
     // An inactive application shows its window behind the frontmost window, where its image regions do not draw. The still
     // reads the pixels of the window wherever it is in the window order (docs/spec/native-surfaces.md#image-regions).
-    await s.request("diagnostics.window.draw-covered", { draw: true });
-    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+    s.cleanup(await holdCovered(s));
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === start.surface));
     assert.ok(card, "start card absent");
@@ -73,8 +72,7 @@ for (const app of Object.values(APPS))
   test(`${app.name}: a still with the settings modal open holds the modal`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await s.request("diagnostics.window.draw-covered", { draw: true });
-    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+    s.cleanup(await holdCovered(s));
     const still = async () => {
       await s.presented();
       return (await readStillCapture(s, t)).image;
@@ -108,8 +106,7 @@ for (const app of Object.values(APPS))
   test(`${app.name}: a still of a covered window with the settings modal open holds the modal`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await s.request("diagnostics.window.draw-covered", { draw: true });
-    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+    s.cleanup(await holdCovered(s));
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-capture-still-covered-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {

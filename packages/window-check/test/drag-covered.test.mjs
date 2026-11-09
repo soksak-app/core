@@ -7,7 +7,7 @@ const frontmost = await import("../frontmost.mjs");
 mock.module(pathToFileURL(new URL("../frontmost.mjs", import.meta.url).pathname).href, {
   namedExports: { ...frontmost, coveringWindows: () => [] },
 });
-const { drag } = await import("../app.mjs");
+const { drag, holdCovered } = await import("../app.mjs");
 
 // A covered window draws its image regions only while the check asks for it (docs/spec/native-surfaces.md#image-regions),
 // and the drag measures the page and the regions of that window, so the drag asks for it around the gesture and does not
@@ -58,4 +58,21 @@ test("a drag of an active window is refused before anything is requested", { tim
   const calls = [];
   await assert.rejects(drag(session({ active: true, occluded: false, pointer: {}, frame: {} }, calls), plan), /host\.window\.active is true/);
   assert.deepEqual(calls, []);
+});
+
+// The covered drawing is one state of the window (diagnostics.window.draw-covered), so the holds of a check and of a drag share it:
+// a drag inside the drawing that a check holds for its whole run leaves that drawing on, and only the last release ends it.
+test("a drag inside a held covered drawing leaves the drawing on", { timeout: 5000 }, async (t) => {
+  const calls = [];
+  const s = session({ active: false, occluded: true }, calls);
+  const release = await holdCovered(s);
+  await drag(s, plan);
+  await drag(s, plan);
+  assert.deepEqual(calls.map(({ method, params }) => method === "diagnostics.drag" ? method : `${method} ${params.draw}`),
+    ["diagnostics.window.draw-covered true", "diagnostics.drag", "diagnostics.drag"]);
+  await release();
+  await release();
+  assert.deepEqual(calls.at(-1), { method: "diagnostics.window.draw-covered", params: { draw: false } });
+  assert.equal(calls.filter(({ method, params }) => method === "diagnostics.window.draw-covered" && params.draw === false).length, 1,
+    "a second release of one hold ended the drawing again");
 });

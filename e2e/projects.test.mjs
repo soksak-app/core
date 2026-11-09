@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh, replacePlaceholders, settingsShown, START_PLUGIN, startTab } from "./fixture.mjs";
+import { fresh, replacePlaceholders, settingsClosed, settingsShown, START_PLUGIN, startTab } from "./fixture.mjs";
 import { projectRecords } from "./projects-file.mjs";
 // A plugin that the fixture registry never installs (e2e/fixtures/absent-plugins.json).
 import absentPlugins from "./fixtures/absent-plugins.json" with { type: "json" };
@@ -64,10 +64,10 @@ async function openSettings(s) {
   await settingsShown(s, "settings did not render");
 }
 
-/** Closes the settings modal. */
+/** Closes the settings modal and waits until it is gone (settingsClosed). */
 async function closeSettings(s) {
   await s.run("core.settings.close");
-  await s.until("host.window", (w) => w.modal === null, "settings did not close");
+  await settingsClosed(s, "settings did not close");
 }
 
 /** The settings scope tabs: title, whether selected, and index. */
@@ -249,7 +249,7 @@ for (const app of Object.values(APPS)) {
     await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
       "project scope was not selected before leaving the workspace");
     await closeSettings(child);
-    assert.equal((await s.get("host.window")).modal?.shown, true);
+    await settingsShown(s, "settings of the other project closed with the settings of the child");
     await closeSettings(s);
 
     await settings(s, { mode: "dark" }, "common");

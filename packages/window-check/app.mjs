@@ -1277,6 +1277,40 @@ export function requireUncovered(s, window, windows) {
     "Nothing was measured: uncover the window, without activating the application, and run the check again.");
 }
 
+/** The holds of the covered drawing, by the connection of a session and its window. */
+const coveredHolds = new WeakMap();
+
+/**
+ * Holds the covered drawing of the window of session `s` (diagnostics.window.draw-covered): its image regions draw and its
+ * document regions render while the window is occluded or minimized, and the window keeps reporting its occlusion
+ * (docs/spec/native-surfaces.md#image-regions). The drawing is one state of the window, so every hold of it on one connection
+ * shares it: the first hold turns it on and the last release turns it off, and a gesture that holds it for its own duration
+ * does not end the drawing that a check holds for its whole run. Returns the release, which ends this hold once.
+ */
+export async function holdCovered(s) {
+  let windows = coveredHolds.get(s.client);
+  if (!windows) coveredHolds.set(s.client, windows = new Map());
+  const window = s.window ?? "main";
+  const held = windows.get(window) ?? 0;
+  windows.set(window, held + 1);
+  if (held === 0) {
+    try {
+      await s.request("diagnostics.window.draw-covered", { draw: true });
+    } catch (error) {
+      windows.set(window, windows.get(window) - 1);
+      throw error;
+    }
+  }
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    const left = windows.get(window) - 1;
+    windows.set(window, left);
+    if (left === 0) await s.request("diagnostics.window.draw-covered", { draw: false });
+  };
+}
+
 async function dragOnce(s, plan, capture, frameIdentity) {
   // An active window receives the cursor update of AppKit when the layout changes, and the window passes the real
   // pointer position to the page as a move. A diagnostic drag that is synthesized without a button mixes with that
@@ -1289,13 +1323,13 @@ async function dragOnce(s, plan, capture, frameIdentity) {
       "nothing was measured.");
   }
   // An inactive application shows a new window behind the frontmost window, where its image regions do not draw. The drag
-  // makes them draw while covered for its duration, so the recording holds the regions; the window keeps its place and
-  // keeps reporting its occlusion (docs/spec/native-surfaces.md#image-regions).
-  await s.request("diagnostics.window.draw-covered", { draw: true });
+  // holds the covered drawing for its duration, so the recording holds the regions; the window keeps its place and keeps
+  // reporting its occlusion, and a covered drawing that the check holds stays on after the drag (holdCovered).
+  const release = await holdCovered(s);
   try {
     return await dragDrawing(s, plan, capture, frameIdentity);
   } finally {
-    await s.request("diagnostics.window.draw-covered", { draw: false });
+    await release();
   }
 }
 
