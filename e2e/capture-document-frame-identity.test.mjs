@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows } from "@soksak/window-check/event-log.mjs";
-import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
 import { documentIdentityCardIds, verifyDocumentFrameIdentityCapture, viewGenerationForSurface } from "./document-frame-identity.mjs";
 
 /** The fixture plugin whose root document the capture identifies: a view without regions. */
@@ -108,10 +108,10 @@ for (const app of Object.values(APPS)) {
         cpSync(recording.frames, preserved, { recursive: true });
         t.diagnostic(`${app.name}: preserved document identity capture at ${preserved}`);
       } catch (error) {
-        cleanupError = cleanupError ? new AggregateError([cleanupError, error], "document identity evidence preservation failed") : error;
+        cleanupError = cleanupError ? joinedFailure("document identity evidence preservation failed", [cleanupError, error]) : error;
       }
     }
-    if (operationError && cleanupError) throw new AggregateError([operationError, cleanupError], "document identity check and cleanup failed");
+    if (operationError && cleanupError) throw joinedFailure("document identity check and cleanup failed", [operationError, cleanupError]);
     if (operationError) throw operationError;
     if (cleanupError) throw cleanupError;
   });

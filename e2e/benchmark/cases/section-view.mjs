@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { validateDiagnostics } from "@soksak/plugin-api";
-import { START_PLUGIN } from "../../fixture.mjs";
+import { joinedFailure, START_PLUGIN } from "../../fixture.mjs";
 import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
 import { collectViewReclaimMeasurements, collectViewStartAndMemory, waitForViewReadiness } from "@soksak/window-check/view-metrics-collection.mjs";
 import { activeCoreTheme, markerDragObservation, markerLayoutObservation, requireMarkerColor } from "@soksak/window-check/marker-view.mjs";
@@ -228,7 +228,7 @@ export function sectionViewDescriptor(view) {
         try {
           await s.run(`${plugin}.view.frames`, { action: "stop" }, surface);
         } catch (stopError) {
-          throw new AggregateError([error, stopError], `${owner} answered a start without a marker color and did not stop on ${surface}`);
+          throw joinedFailure(`${owner} answered a start without a marker color and did not stop on ${surface}`, [error, stopError]);
         }
         throw error;
       }

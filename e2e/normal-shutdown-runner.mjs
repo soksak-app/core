@@ -8,6 +8,7 @@ import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { untilShutdown } from "@soksak/window-check/shutdown-wait.mjs";
 import { prepareRasterSession } from "./raster-probe.mjs";
 import { auditShutdownErrors } from "./shutdown-audit.mjs";
+import { joinedFailure } from "./fixture.mjs";
 
 const STARTUP_LIMIT = 15_000;
 const SHUTDOWN_LIMIT = 5_000;
@@ -138,11 +139,11 @@ export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SE
             child.kill("SIGKILL");
             await closed;
           } catch (reapError) {
-            throw new AggregateError([error, cleanupError, reapError], `${error.message}; ${cleanupError.message}; observer SIGKILL/reap failed: ${reapError?.message ?? reapError}`);
+            throw joinedFailure("the shutdown, its observer cleanup and the observer SIGKILL/reap failed", [error, cleanupError, reapError]);
           }
-          throw new AggregateError([error, cleanupError], `${error.message}; ${cleanupError.message}; SIGKILL sent and observer child reaped`);
+          throw joinedFailure("the shutdown and its observer cleanup failed; SIGKILL sent and observer child reaped", [error, cleanupError]);
         }
-        throw new AggregateError([error, cleanupError], `${error.message}; observer cleanup failed: ${cleanupError?.message ?? cleanupError}`);
+        throw joinedFailure("the shutdown and its observer cleanup failed", [error, cleanupError]);
       } finally {
         clearTimeout(cleanupTimer);
       }
@@ -252,7 +253,7 @@ export async function runNormalShutdown({
   failures.push(...closeErrors);
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) {
-    throw new AggregateError(failures, `${app.name}: shutdown reported ${failures.length} errors; primary failure: ${failures[0]?.message ?? String(failures[0])}`);
+    throw joinedFailure(`${app.name}: shutdown reported ${failures.length} errors`, failures);
   }
 
   write(`PASS normal-shutdown app=${app.name} by=${result.by} pid=${result.pid} raster=${result.raster?.session ?? "none"} endpoint_absent_at_close=true endpoint_closed_ms=${result.closedMs} service_exit_observation_ms=${result.serviceObservationMs}`);

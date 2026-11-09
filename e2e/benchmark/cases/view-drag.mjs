@@ -9,6 +9,7 @@
 // third drag and off after it, on a window whose host.window reports pageProcess null. This module holds the order of the steps and the
 // figures; the benchmark gives the steps of a running application.
 import { readFootprint } from "../../../scripts/footprints.mjs";
+import { joinedFailure } from "../../fixture.mjs";
 import { readCpuSeconds } from "../../../scripts/measure-app-usage.mjs";
 import { FRAME_RECORDS } from "../../../scripts/measure-trace.mjs";
 import { gestureB3Values } from "./gesture-records.mjs";
@@ -45,7 +46,7 @@ async function withCleanup(action, cleanup, what, cleaning) {
   try {
     await cleanup();
   } catch (error) {
-    if (failure) throw new AggregateError([failure, error], `${what} failed (${failure.message}) and ${cleaning} failed (${error.message})`);
+    if (failure) throw joinedFailure(`${what} and ${cleaning} failed`, [failure, error]);
     throw error;
   }
   if (failure) throw failure;
@@ -114,7 +115,7 @@ export async function completeViewDrag(captured, publishMeasurements) {
     failures.push(error);
   }
   if (failures.length === 1) throw failures[0];
-  if (failures.length > 1) throw new AggregateError(failures, "view-drag measurements and captured performance failed");
+  if (failures.length > 1) throw joinedFailure("view-drag measurements and captured performance failed", failures);
 }
 
 /**

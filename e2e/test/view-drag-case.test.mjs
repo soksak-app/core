@@ -128,7 +128,7 @@ test("a third-drag metric failure and a valid captured threshold failure both su
     catch (error) { metricFailure = error; throw error; }
   };
   await assert.rejects(runViewDrag({ options: { accessibility: false, gcLoop: false }, pageProcess: 812, steps }),
-    (error) => error instanceof AggregateError && error.message === "view-drag measurements and captured performance failed" &&
+    (error) => error instanceof AggregateError && error.message === `view-drag measurements and captured performance failed: ${metricFailure.message}; ${judged[0].message}` &&
       error.errors.length === 2 && error.errors[0] === metricFailure && error.errors[1] === judged[0]);
   assert.equal(judged.length, 1, "a metric failure must not hide or repeat the captured threshold judgment");
   assert.match(metricFailure.message, /writes the U7 records of the third drag/);
@@ -212,7 +212,7 @@ test("a failed third drag turns the collector loop off, and a failure of both is
   await assert.rejects(runViewDrag({ options: { accessibility: false, gcLoop: true }, pageProcess: null, steps }),
     (error) => error instanceof AggregateError &&
       error.errors.map(({ message }) => message).join(", ") === "uncaptured drag failed, the loop did not stop" &&
-      error.message === "the third drag failed (uncaptured drag failed) and turning diagnostics.gc.loop off failed (the loop did not stop)");
+      error.message === "the third drag and turning diagnostics.gc.loop off failed: uncaptured drag failed; the loop did not stop");
 });
 
 test("the figures of the first drag are the CPU time and the peak footprint of each process before and after it", { timeout: 5000 }, () => {

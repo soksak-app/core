@@ -7,7 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
-import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
 import { addRasterTab, presentedFrame, presentRasterTab, REGION } from "./raster-probe.mjs";
 
 const tuple = (value) => ({ generation: String(value.generation), raster: String(value.raster), sequence: value.sequence });
@@ -142,10 +142,10 @@ for (const app of Object.values(APPS)) {
           "preserved evidence is missing the frame-identities directory");
         t.diagnostic(`${app.name}: preserved frame-identity evidence at ${preserved}`);
       } catch (error) {
-        preservationError = preservationError ? new AggregateError([preservationError, error], "capture evidence preservation failed") : error;
+        preservationError = preservationError ? joinedFailure("capture evidence preservation failed", [preservationError, error]) : error;
       }
     }
-    if (operationError && preservationError) throw new AggregateError([operationError, preservationError], "frame-identity check and evidence preservation failed");
+    if (operationError && preservationError) throw joinedFailure("frame-identity check and evidence preservation failed", [operationError, preservationError]);
     if (operationError) throw operationError;
     if (preservationError) throw preservationError;
   });

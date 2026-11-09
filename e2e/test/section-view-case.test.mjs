@@ -327,7 +327,8 @@ test("a section view trace start without a marker color is refused with its plug
     return { ...started, markerColor: undefined };
   } });
   await assert.rejects(descriptor.startContentTrace(stuck, surface), (error) => error instanceof AggregateError
-    && error.message === `probeplain section view probeplain.section answered a start without a marker color and did not stop on ${surface}`
+    && error.message === `probeplain section view probeplain.section answered a start without a marker color and did not stop on ${surface}: `
+      + "probeplain section view probeplain.section trace start must declare a three-channel RGB paint marker color; probeplain.view.frames stop failed"
     && error.errors.map((item) => item.message).join(" | ")
       === "probeplain section view probeplain.section trace start must declare a three-channel RGB paint marker color | probeplain.view.frames stop failed");
   const unstarted = frames({ enabled: false });

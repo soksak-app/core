@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 const sides = ["top", "bottom", "left", "right"];
@@ -326,9 +326,6 @@ for (const app of Object.values(APPS))
           errors.push(error);
         }
       }
-      // The test report prints the message of an AggregateError and not its errors, so the message names each of them.
-      if (errors.length) {
-        throw new AggregateError(errors, `sidebar space acceptance failed: ${errors.map((error) => error.message).join("; ")}`);
-      }
+      if (errors.length) throw joinedFailure("sidebar space acceptance failed", errors);
     },
   );

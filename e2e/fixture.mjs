@@ -78,6 +78,14 @@ export async function probeSidebarSets(s, path = LAYOUT_PROBE_MANIFEST) {
 }
 
 /**
+ * The failure `label` of the errors `errors`, which keeps them as its errors. Its message names the message of each error after the
+ * label, because a test report and a log of the check show only the message of an AggregateError and not its errors.
+ */
+export function joinedFailure(label, errors) {
+  return new AggregateError(errors, `${label}: ${errors.map((error) => error?.message ?? String(error)).join("; ")}`);
+}
+
+/**
  * Waits until the settings dialog that core.settings.open opened is shown. A host with a main page shows it in a native modal web
  * view, which host.window reports shown; the mygo workbench draws it itself, and core.modal names it while it is open
  * (docs/spec/exposure.md, docs/spec/native-modals.md).
@@ -203,10 +211,7 @@ export async function prepareOcclusionFixture(target, otherWindows, { windows } 
         failures.push(new Error(`${session.app.name} ${session.window}: ${error?.message ?? error}`, { cause: error }));
       }
     }
-    // The message names each cause, because a log of the check shows the message of an AggregateError without its errors.
-    if (failures.length) {
-      throw new AggregateError(failures, `placement owned cohort restoration failed: ${failures.map((failure) => failure.message).join("; ")}`);
-    }
+    if (failures.length) throw joinedFailure("placement owned cohort restoration failed", failures);
   });
   const parked = [];
   for (const { session, frame, count: originalCount } of snapshots) {

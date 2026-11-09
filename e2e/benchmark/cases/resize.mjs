@@ -14,7 +14,7 @@ import { FRAME_RECORDS } from "../../../scripts/measure-trace.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";
 import { fixtureSettings } from "./b3-run.mjs";
 import { gestureB3Values } from "./gesture-records.mjs";
-import { fresh } from "../../fixture.mjs";
+import { fresh, joinedFailure } from "../../fixture.mjs";
 import { frameEvidence, lagStages, measureFrame, writeEvidence } from "../../resize-frames.mjs";
 import { effectiveCardCornerRadiusPt } from "@soksak/window-check/view-frame-geometry.mjs";
 import { dragGeometryFrame, floorSlotInsets, measureFloorLayoutFrame, openFloorPage } from "./floor-page.mjs";
@@ -65,7 +65,7 @@ async function record(s, gesture, change, sized, geometry) {
       try {
         judged = resizeGeometry(gesture, decoded, geometry);
       } catch (error) {
-        failure = failure ? new AggregateError([failure, error], `${gesture} failed (${failure.message}) and its frames have no geometry (${error.message})`) : error;
+        failure = failure ? joinedFailure(`${gesture} failed and its frames have no geometry`, [failure, error]) : error;
       }
     }
     // The stages name where the time of a late layout went: the resize event, the layout transaction that caught up, the view

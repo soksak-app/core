@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, joinedFailure } from "./fixture.mjs";
 import { preserveDisplayLinkArtifact } from "./display-link-artifact.mjs";
 
 for (const app of Object.values(APPS)) {
@@ -68,6 +68,6 @@ for (const app of Object.values(APPS)) {
       failures.push(error);
     }
     if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) throw new AggregateError(failures, "capture artifact check failed");
+    if (failures.length > 1) throw joinedFailure("capture artifact check failed", failures);
   });
 }
