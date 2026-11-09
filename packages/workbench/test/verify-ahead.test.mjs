@@ -88,7 +88,7 @@ test("a failed V7b names the surface and its declared and applied rectangles", a
   // is off by half a point.
   globalThis.devicePixelRatio = 2;
   t.after(() => { delete globalThis.devicePixelRatio; });
-  const placed = { seq: 39, settled: true, surfaces: [{ id: "probe", visible: true, dim: false,
+  const placed = { seq: 39, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, scale: 2,
     declared: { x: 10, y: 45.25, w: 380, h: 200 }, applied: { x: 10, y: 45.5, w: 380, h: 200 } }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => placed } });
   t.mock.module("../plane.js", { exports: {
@@ -114,7 +114,7 @@ test("V7b compares the applied rectangle with the declared rectangle fitted inwa
   const plane = document.querySelector("#plane");
   plane.getBoundingClientRect = () => rect(6, 6, 2400, 700);
   const grid = new Soksak(undefined, { width: 2400, height: 700 });
-  const placed = { seq: 9, settled: true, surfaces: [{ id: "probe", visible: true, dim: false,
+  const placed = { seq: 9, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, scale: 1,
     declared: { x: 203, y: 33, w: 2120, h: 580.5 }, applied: { x: 203, y: 33, w: 2120, h: 580 } }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => placed } });
   t.mock.module("../plane.js", { exports: {

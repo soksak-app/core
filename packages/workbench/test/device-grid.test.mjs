@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { alignPlane, gridInsets } from "../device-grid.js";
+import { alignPlane, gridInsets, observePlaneGrid } from "../device-grid.js";
 
 /**
  * A stage and its plane laid out the way app.css lays them out: the content box of the stage starts at top and left and ends at
@@ -50,6 +50,33 @@ test("aligning the plane again keeps the insets it already holds, and a plane on
   alignPlane(plane, 2);
   assert.equal(stage.getAttribute("style"), first, "a second alignment changed the insets of an aligned plane");
   assert.deepEqual(gridInsets({ top: 117.5, left: 7, bottom: 900, right: 1193 }, 2), { top: 0, right: 0, bottom: 0, left: 0 });
+});
+
+test("a change of the display realigns the plane on the new grid and then places the surfaces again", () => {
+  const { plane } = laidOut({ top: 117.4, left: 7, bottom: 900, right: 1193 });
+  const view = plane.ownerDocument.defaultView;
+  const queries = [];
+  view.ResizeObserver = class { observe() {} };
+  view.matchMedia = (query) => {
+    const listeners = new Set();
+    const list = { query, listeners, addEventListener: (_, fn) => listeners.add(fn), removeEventListener: (_, fn) => listeners.delete(fn) };
+    queries.push(list);
+    return list;
+  };
+  globalThis.devicePixelRatio = 2;
+  try {
+    const placedAt = [];
+    observePlaneGrid(plane, () => placedAt.push(plane.getBoundingClientRect().top));
+    assert.deepEqual(placedAt, [], "the first alignment places nothing: the first draw places the surfaces");
+    assert.equal(queries.at(-1).query, "(resolution: 2dppx)");
+    globalThis.devicePixelRatio = 3;
+    for (const fn of [...queries.at(-1).listeners]) fn();
+    assert.equal(placedAt.length, 1, "a change of the display placed no surface, so each stays on the device pixels of the earlier display");
+    assert.ok(onGrid(placedAt[0], 3), `the surfaces were placed again over a plane top ${placedAt[0]} off the grid of scale 3`);
+    assert.equal(queries.at(-1).query, "(resolution: 3dppx)", "the watch did not move to the new scale");
+  } finally {
+    delete globalThis.devicePixelRatio;
+  }
 });
 
 test("the plane grid refuses a box that is not a number and a scale that is not positive", () => {

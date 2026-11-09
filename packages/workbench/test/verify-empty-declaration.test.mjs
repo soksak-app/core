@@ -19,7 +19,7 @@ async function v7a(t, slot, surface) {
   document.querySelector(".card").getBoundingClientRect = () => rect(0, 0, slot.w + 2, slot.h + 2);
   document.querySelector(".slot").getBoundingClientRect = () => rect(1, 1, slot.w, slot.h);
   const grid = new Soksak(undefined, { width: 400, height: 300 });
-  const record = { seq: 10, surfaces: [{ id: "probe", dim: false, ...surface, applied: surface.declared }] };
+  const record = { seq: 10, surfaces: [{ id: "probe", dim: false, scale: 2, ...surface, applied: surface.declared }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => record, placementPending: () => false, seated: () => record } });
   t.mock.module("../plane.js", { exports: {
     currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,

@@ -13,10 +13,6 @@ import { expectedRailLoops, windowSidebarsPlaced } from "./verify-checks.js";
 import { cardRadius } from "./settings.js";
 import { gridScale } from "./device-grid.js";
 
-/** How far a goes beyond b at the farthest point. It is 0 when a is inside b. */
-const beyond = (a, b) => a.w <= 0 || a.h <= 0 ? 0 :
-  Math.max(0, b.x - a.x, b.y - a.y, a.x + a.w - (b.x + b.w), a.y + a.h - (b.y + b.h));
-
 /** Returns the maximum difference of two rectangles. They are not compared when either one is missing. */
 const maxDelta = (a, b) =>
   !a || !b ? Infinity
@@ -44,6 +40,32 @@ const painted = (r, scale) => {
   const left = edge(r.x);
   const top = edge(r.y);
   return { x: left, y: top, w: edge(r.x + r.w) - left, h: edge(r.y + r.h) - top };
+};
+
+/**
+ * The edges of r, a rectangle on the device pixels of scale, as whole device pixels. Two rectangles on one grid are compared by
+ * these numbers and not by their points, which carry the remainders of the coordinates in which each side computed them: the
+ * host fits in window coordinates and answers in plane coordinates, so an edge on a third of a point reads 413.0000000000001.
+ */
+const pixelEdges = (r, scale) => ({
+  left: Math.round(r.x * scale), top: Math.round(r.y * scale),
+  right: Math.round((r.x + r.w) * scale), bottom: Math.round((r.y + r.h) * scale),
+});
+
+/** The largest difference of the edges of two rectangles on the device pixels of scale, in points. */
+const gridDelta = (a, b, scale) => {
+  if (!a || !b) return Infinity;
+  const p = pixelEdges(a, scale);
+  const q = pixelEdges(b, scale);
+  return Math.max(Math.abs(p.left - q.left), Math.abs(p.top - q.top), Math.abs(p.right - q.right), Math.abs(p.bottom - q.bottom)) / scale;
+};
+
+/** How far a goes beyond b, both on the device pixels of scale, in points. It is 0 when a is inside b. */
+const gridBeyond = (a, b, scale) => {
+  if (a.w <= 0 || a.h <= 0) return 0;
+  const p = pixelEdges(a, scale);
+  const q = pixelEdges(b, scale);
+  return Math.max(0, q.left - p.left, q.top - p.top, p.right - q.right, p.bottom - q.bottom) / scale;
 };
 
 /**
@@ -248,7 +270,7 @@ export function verify(controls = null) {
   if (!guess) skip("V7c 미리 게시한 자리 == 그려진 자리", "이번 렌더는 미리 게시하지 않았다");
   else if (pendingPlacement) skip("V7c 미리 게시한 자리 == 그려진 자리", "host placement pending");
   else {
-    const onScreen = (drawn, declared) => maxDelta(painted(drawn, scale), fitted(declared, scale));
+    const onScreen = (drawn, declared) => gridDelta(painted(drawn, scale), fitted(declared, scale), scale);
     const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(guess.surfaces, true, undefined, onScreen);
     add("V7c 미리 게시한 자리 == 그려진 자리",
         gone === 0 && missed === 0 && worst === 0 && dim === 0,
@@ -257,25 +279,36 @@ export function verify(controls = null) {
   }
 
   // V7b — compares the declared coordinates of the same request with the coordinates that the host applied. The host fits
-  // the declared rectangle inward to the device pixels (docs/spec/native-surfaces.md), so the applied rectangle is compared
-  // with the declared one fitted the same way: a display of one device pixel per point cannot show half a point.
+  // the declared rectangle inward to the device pixels of the backing scale of its window (docs/spec/native-surfaces.md), so
+  // the applied rectangle is compared with the declared one fitted the same way: a display of one device pixel per point cannot
+  // show half a point. The host answers that scale with each visible placement, and the window can change display between the
+  // placement and this check, so each rectangle is judged on the grid of the scale that seated it, and a seat of a scale other
+  // than the one of the display that shows the page is named: it is off the device pixels of that display until the next placement.
   // The alignment between frames on screen is checked separately by outside.test.mjs.
   const placed = seated();
   let land = 0, landed = 0, escaped = 0;
   // The surface that is off the most and its two places. A failure states the measured values with which the cause can be found (F36).
   let landedAt = "";
+  const elsewhere = [];
   // default: when no layout has been seated yet, there is no surface to measure.
   for (const s of placed?.surfaces ?? []) {
     if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
-    const delta = maxDelta(fitted(s.declared, scale), s.applied);
+    const seat = s.scale;
+    if (!(seat > 0)) throw new Error(`verify: seated surface ${s.id} has no seat scale (${seat})`);
+    // Both rectangles lie on the device pixels of the seat, so they are compared in whole device pixels; the fitted declared
+    // rectangle is the largest one on that grid inside the declared one, so an applied edge outside it leaves the declared rectangle.
+    const fit = fitted(s.declared, seat);
+    const delta = gridDelta(fit, s.applied, seat);
     if (delta > land) landedAt = ` · ${s.id} declared ${frameText(s.declared)} applied ${frameText(s.applied)}`;
     land = Math.max(land, delta);
-    escaped = Math.max(escaped, beyond(s.applied, s.declared));
+    escaped = Math.max(escaped, gridBeyond(s.applied, fit, seat));
+    if (seat !== scale) elsewhere.push(`${s.id} seated at ${seat}`);
     landed++;
   }
   if (landed === 0) skip("V7b applied == declared", "아직 답 없음");
-  else add("V7b applied == declared", escaped === 0 && land === 0,
+  else add("V7b applied == declared", escaped === 0 && land === 0 && elsewhere.length === 0,
       `밖으로 ${escaped.toFixed(2)}px · 차이 ${land.toFixed(2)}px · ` +
+        `다른 scale 에 놓인 표면 ${elsewhere.length}${elsewhere.length ? ` (${elsewhere.join(", ")}, display ${scale})` : ""} · ` +
         `${placed.settled ? "정지" : "갱신 중"} (seq ${placed.seq})${landedAt}`);
 
   const transformed = [...plane.querySelectorAll(".card")]

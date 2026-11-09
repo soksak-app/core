@@ -702,7 +702,9 @@ pub struct Rect {
     pub h: f64,
 }
 
-/// The position where a surface was actually placed. It is in page coordinates.
+/// The position where a surface was actually placed. It is in page coordinates. scale is the backing scale whose device
+/// pixels the host fitted a visible surface to: the window can change display before the page reads the placement, so the
+/// page judges the rectangle on that grid. A hidden surface has no scale.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Placement {
     pub(crate) id: String,
@@ -711,6 +713,39 @@ pub struct Placement {
     pub(crate) w: f64,
     pub(crate) h: f64,
     pub(crate) visible: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) scale: Option<f64>,
+}
+
+/// The placement of the surface id at frame. A visible surface names the backing scale whose device pixels the host fitted it
+/// to; a hidden one is fitted to no grid and names none.
+pub(crate) fn seated_placement(
+    id: &str,
+    [x, y, w, h]: [f64; 4],
+    visible: bool,
+    scale: Option<f64>,
+) -> Placement {
+    Placement {
+        id: id.into(),
+        x,
+        y,
+        w,
+        h,
+        visible,
+        scale: if visible { scale } else { None },
+    }
+}
+
+/// The backing scale of a window whose device pixels a layout fits its surfaces to. A window without a backing scale has no
+/// device pixels, so the layout fails.
+pub(crate) fn backing_scale(scale: f64) -> Result<f64, String> {
+    if scale > 0.0 && scale.is_finite() {
+        Ok(scale)
+    } else {
+        Err(format!(
+            "surface alignment: the window has backing scale {scale}"
+        ))
+    }
 }
 
 /// The answer of a preparation. chrome is the window button area and the title bar height after the host set the title
@@ -1649,7 +1684,7 @@ fn apply_surfaces(
         .into_iter()
         .filter_map(|(handle, id, visible)| {
             with_registered_surface(surface_hosts, &id, handle, |handle| {
-                surface_handle_placement(platform, handle, &id, visible)
+                surface_handle_placement(platform, handle, &id, visible, scale)
             })
             .transpose()
         })
@@ -1736,7 +1771,7 @@ pub fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, S
     let turn_context = Arc::clone(&context);
     exposure::on_main(window, move || {
         surface_dispatch_result(dispatch, || {
-            let scale = turn_window.scale_factor().map_err(|e| e.to_string())?;
+            let scale = backing_scale(turn_window.scale_factor().map_err(|e| e.to_string())?)?;
             let main = crate::windows::root_view(&turn_window)
                 .ok_or_else(|| "the main webview is gone".to_string())?;
             let (handle_tx, handle_rx) = mpsc::channel::<Result<Handle, String>>();
@@ -1891,17 +1926,12 @@ fn surface_handle_placement(
     handle: Handle,
     id: &str,
     visible: bool,
+    scale: f64,
 ) -> Result<Placement, String> {
-    let [x, y, w, h] = platform.surface_frame(handle)?;
-    crate::performance::surface("placed", id, Some(([x, y, w, h], visible)));
-    Ok(Placement {
-        id: id.into(),
-        x,
-        y,
-        w,
-        h,
-        visible,
-    })
+    let frame = platform.surface_frame(handle)?;
+    let placement = seated_placement(id, frame, visible, Some(scale));
+    crate::performance::surface("placed", id, Some((frame, visible, placement.scale)));
+    Ok(placement)
 }
 
 /// Asks the presentation notice of window in a step of the main thread. ready receives the end of the notice.
@@ -2040,15 +2070,9 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                                             handle,
                                             !placement.visible,
                                         )?;
-                                        let [x, y, w, h] = platform.surface_frame(handle)?;
-                                        Ok(Placement {
-                                            id: placement.id.clone(),
-                                            x,
-                                            y,
-                                            w,
-                                            h,
-                                            visible: placement.visible,
-                                        })
+                                        // The frame was fitted by the preparation of this ticket, so it keeps the scale that the preparation answered.
+                                        let frame = platform.surface_frame(handle)?;
+                                        Ok(seated_placement(&placement.id, frame, placement.visible, placement.scale))
                                     })
                                     .collect::<Result<Vec<_>, String>>()?;
                                 documents::join_shown_views(&target, platform, ticket, &placed)
@@ -2118,15 +2142,9 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                             .ok_or_else(|| {
                                 format!("surface {:?} closed before presentation", p.id)
                             })?;
-                        let [x, y, w, h] = platform.surface_frame(handle)?;
-                        Ok(Placement {
-                            id: p.id.clone(),
-                            x,
-                            y,
-                            w,
-                            h,
-                            visible: p.visible,
-                        })
+                        // The frame was fitted by the preparation of this ticket, so it keeps the scale that the preparation answered.
+                        let frame = platform.surface_frame(handle)?;
+                        Ok(seated_placement(&p.id, frame, p.visible, p.scale))
                     })
                     .collect::<Result<Vec<_>, String>>()
                 {

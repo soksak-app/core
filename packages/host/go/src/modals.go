@@ -148,7 +148,7 @@ func (s *Surfaces) endModalHold() {
 func (s *Surfaces) showModal(win Frontend, req OverlayRequest) (Rect, error) {
 	var at Rect
 	var alignErr error
-	mainThreadStep(func() { at, alignErr = aligned(win, req.Rect) })
+	mainThreadStep(func() { at, _, alignErr = aligned(win, req.Rect) })
 	if alignErr != nil {
 		return Rect{}, alignErr
 	}
@@ -222,7 +222,7 @@ func (s *Surfaces) OverlayPlace(req PlaceRequest) (Rect, error) {
 	var at Rect
 	var alignErr error
 	mainThreadStep(func() {
-		at, alignErr = aligned(win, req.Rect)
+		at, _, alignErr = aligned(win, req.Rect)
 	})
 	if alignErr != nil {
 		return Rect{}, alignErr

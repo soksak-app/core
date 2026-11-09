@@ -18,16 +18,16 @@ func (*createdPlatform) CreateSurface(platform.Window) (unsafe.Pointer, error) {
 	return unsafe.Pointer(new(byte)), nil
 }
 
-func (*createdPlatform) AlignRect(_ platform.Window, at platformRect) (platformRect, error) {
-	return platformRect{X: at.X + 0.5, Y: at.Y + 0.5, W: at.W, H: at.H}, nil
+func (*createdPlatform) AlignRect(_ platform.Window, at platformRect) (platformRect, float64, error) {
+	return platformRect{X: at.X + 0.5, Y: at.Y + 0.5, W: at.W, H: at.H}, 2, nil
 }
 
 func (p *createdPlatform) SetSurfaceBounds(surface unsafe.Pointer, x, y, w, h float64) {
 	p.bounds[surface] = Rect{X: x, Y: y, W: w, H: h}
 }
 
-func (*createdPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)              {}
-func (*createdPlatform) SetSurfaceAlphaHandle(unsafe.Pointer, float64)            {}
+func (*createdPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                            {}
+func (*createdPlatform) SetSurfaceAlphaHandle(unsafe.Pointer, float64)                          {}
 func (*createdPlatform) PlaceDocument(unsafe.Pointer, float64, float64, float64, float64, bool) {}
 
 // A surface that a preparation creates has no element in the frame of the transaction, which was built before the surface existed,

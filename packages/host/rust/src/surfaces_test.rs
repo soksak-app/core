@@ -1,5 +1,50 @@
 //! Checks that a window status read during the creation and the close of a surface finds the registered surface.
 
+// A visible surface lies on the device pixels of the backing scale that the host fitted it to, and the window can change display
+// before the page reads the answer, so the placement and its trace name that scale; a hidden surface is fitted to no grid and names
+// none (docs/spec/native-surfaces.md).
+#[test]
+fn a_seated_placement_names_the_backing_scale_of_a_visible_surface() {
+    let frame = [203.0, 553.0 + 2.0 / 3.0, 1360.0, 413.0];
+    let visible =
+        serde_json::to_value(super::seated_placement("probe", frame, true, Some(3.0))).unwrap();
+    assert_eq!(
+        visible["scale"],
+        serde_json::json!(3.0),
+        "the visible placement {visible} does not name the scale 3"
+    );
+    let hidden =
+        serde_json::to_value(super::seated_placement("probe", frame, false, Some(3.0))).unwrap();
+    assert!(
+        hidden.get("scale").is_none(),
+        "the hidden placement {hidden} names a scale"
+    );
+    let traced =
+        crate::performance::surface_record("placed", "probe", Some((frame, true, Some(3.0))));
+    assert_eq!(
+        traced["scale"],
+        serde_json::json!(3.0),
+        "the trace {traced} does not name the scale 3"
+    );
+    let untraced =
+        crate::performance::surface_record("placed", "probe", Some((frame, false, None)));
+    assert!(
+        untraced.get("scale").is_none(),
+        "the trace of the hidden placement {untraced} names a scale"
+    );
+}
+
+// A window without a backing scale has no device pixels to fit a surface to, so the layout fails instead of seating the surface on a
+// grid that no display has.
+#[test]
+fn a_layout_in_a_window_without_a_backing_scale_fails() {
+    assert_eq!(super::backing_scale(2.0), Ok(2.0));
+    assert_eq!(
+        super::backing_scale(0.0),
+        Err("surface alignment: the window has backing scale 0".to_string())
+    );
+}
+
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
@@ -507,6 +552,7 @@ fn a_replacement_generation_is_not_committed_without_its_own_join() {
         w: 300.0,
         h: 200.0,
         visible: true,
+        scale: Some(2.0),
     }];
     let stages = Arc::new(Mutex::new(Vec::new()));
     let join_stages = Arc::clone(&stages);
@@ -557,6 +603,7 @@ fn presentation_state_does_not_commit_an_unjoined_visible_generation() {
         w: 300.0,
         h: 200.0,
         visible: true,
+        scale: Some(2.0),
     }];
     let prior_join = [("tab-recreated".to_string(), 12)];
 
@@ -568,6 +615,7 @@ fn presentation_state_does_not_commit_an_unjoined_visible_generation() {
 
     let hidden = [super::Placement {
         visible: false,
+        scale: None,
         ..visible[0].clone()
     }];
     let hidden_updates = committed_view_updates(&hidden, &prior_join, |_| Some(13));
@@ -590,6 +638,7 @@ fn a_required_replacement_join_failure_stops_before_native_commit() {
         w: 300.0,
         h: 200.0,
         visible: true,
+        scale: Some(2.0),
     }];
     let mut commit_called = false;
 
@@ -632,6 +681,7 @@ fn an_unchanged_committed_root_does_not_join_again() {
         w: 300.0,
         h: 200.0,
         visible: true,
+        scale: Some(2.0),
     }];
     let mut join_called = false;
     let (committed, joined) = commit_layout_after_root_joins(

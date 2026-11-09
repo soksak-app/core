@@ -49,8 +49,8 @@ type modalKeyboardPlatform struct {
 	refuse bool
 }
 
-func (p *modalKeyboardPlatform) AlignRect(_ platform.Window, at platform.Rect) (platform.Rect, error) {
-	return at, nil
+func (p *modalKeyboardPlatform) AlignRect(_ platform.Window, at platform.Rect) (platform.Rect, float64, error) {
+	return at, 1, nil
 }
 
 func (p *modalKeyboardPlatform) CreateWebview(platform.Window, platform.WebviewOptions) (unsafe.Pointer, error) {

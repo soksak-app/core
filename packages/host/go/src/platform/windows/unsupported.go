@@ -456,8 +456,8 @@ func (implementation) FocusModal(unsafe.Pointer, bool) {
 	unreachable("modal focus")
 }
 
-func (implementation) AlignRect(platform.Window, platform.Rect) (platform.Rect, error) {
-	return platform.Rect{}, unsupported("pixel alignment")
+func (implementation) AlignRect(platform.Window, platform.Rect) (platform.Rect, float64, error) {
+	return platform.Rect{}, 0, unsupported("pixel alignment")
 }
 
 func (implementation) BeginLayout(platform.Window, uint64, func(bool)) error {

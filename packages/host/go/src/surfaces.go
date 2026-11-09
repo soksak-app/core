@@ -968,13 +968,26 @@ func ValidateRect(name string, x, y, width, height float64) error {
 	return nil
 }
 
-// aligned fits a region in page coordinates to the display pixels. Call it on the UI thread.
-func aligned(win Frontend, at Rect) (Rect, error) {
-	got, err := system.AlignRect(win.NativeWindow(), platformRect{X: at.X, Y: at.Y, W: max1(at.W), H: max1(at.H)})
+// aligned fits a region in page coordinates to the display pixels, and returns the backing scale of the window whose device pixels
+// it fitted the region to. A window without a backing scale has no device pixels, so the fit fails. Call it on the UI thread.
+func aligned(win Frontend, at Rect) (Rect, float64, error) {
+	got, scale, err := system.AlignRect(win.NativeWindow(), platformRect{X: at.X, Y: at.Y, W: max1(at.W), H: max1(at.H)})
 	if err != nil {
-		return Rect{}, fmt.Errorf("surface alignment: %w", err)
+		return Rect{}, 0, fmt.Errorf("surface alignment: %w", err)
 	}
-	return Rect(got), nil
+	if !(scale > 0) || math.IsInf(scale, 0) {
+		return Rect{}, 0, fmt.Errorf("surface alignment: the window has backing scale %v", scale)
+	}
+	return Rect(got), scale, nil
+}
+
+// seatedPlacement is the placement of the surface id at rect. A visible surface names the backing scale whose device pixels the host
+// fitted it to; a hidden one is fitted to no grid and names none.
+func seatedPlacement(id string, rect Rect, visible bool, scale float64) Placement {
+	if !visible {
+		scale = 0
+	}
+	return Placement{ID: id, Rect: rect, Visible: visible, Scale: scale}
 }
 
 // CheckSyncRequest checks the whole synchronization request before the layout starts and returns the window
@@ -1225,11 +1238,14 @@ func (s *Surfaces) watchInput(win Frontend) {
 }
 
 // Placement is the actual position of one surface in page coordinates. The host fits the region that the page declared to the display pixels,
-// so the two values differ, and the page receives that difference.
+// so the two values differ, and the page receives that difference. Scale is the backing scale whose device pixels the host fitted a
+// visible surface to: the window can change display before the page reads the placement, so the page judges the rectangle on that
+// grid. A hidden surface has no scale.
 type Placement struct {
 	ID string `json:"id"`
 	Rect
-	Visible bool `json:"visible"`
+	Visible bool    `json:"visible"`
+	Scale   float64 `json:"scale,omitempty"`
 }
 
 // PreparedSurfaces is the reply of the preparation. Chrome is the window button region and the title bar height after the host set the title bar in this transaction,
@@ -1612,7 +1628,8 @@ func (s *Surfaces) finishLayoutPresentation(window platform.Window, req PresentR
 			}
 			return nil, failure
 		}
-		out = append(out, Placement{ID: p.ID, Rect: Rect(system.SurfaceFrame(view.NativeView())), Visible: p.Visible})
+		// The frame was fitted by the preparation of this ticket, so it keeps the scale that the preparation answered.
+		out = append(out, seatedPlacement(p.ID, Rect(system.SurfaceFrame(view.NativeView())), p.Visible, p.Scale))
 	}
 	committed := system.CommitLayout(window, req.Ticket)
 	if !committed {
@@ -1792,6 +1809,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		decl    Surface
 		view    *nativeWebview
 		aligned Rect
+		scale   float64
 		visible bool
 		// created tells that this preparation creates the surface.
 		created bool
@@ -1828,16 +1846,16 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 			opened = append(opened, surface)
 			PerformanceSurface("created", surface.ID, nil)
 		}
-		alignedWant := Rect{}
+		alignedWant, scale := Rect{}, 0.0
 		if visible {
 			var err error
-			alignedWant, err = aligned(win, Rect{X: surface.X, Y: surface.Y, W: w, H: h})
+			alignedWant, scale, err = aligned(win, Rect{X: surface.X, Y: surface.Y, W: w, H: h})
 			if err != nil {
 				rollback()
 				return nil, nil, err
 			}
 		}
-		desired = append(desired, desiredSurface{id: surface.ID, decl: surface, view: view, aligned: alignedWant, visible: visible, created: made})
+		desired = append(desired, desiredSurface{id: surface.ID, decl: surface, view: view, aligned: alignedWant, scale: scale, visible: visible, created: made})
 	}
 
 	placed := make([]Placement, 0, len(desired))
@@ -1866,7 +1884,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		if item.visible && (framework.MainPage() || item.created) {
 			item.view.SetBounds(item.aligned.X, item.aligned.Y, item.aligned.W, item.aligned.H)
 		}
-		placement := Placement{ID: item.id, Rect: placedRect(item.view, item.aligned, item.visible), Visible: item.visible}
+		placement := seatedPlacement(item.id, placedRect(item.view, item.aligned, item.visible), item.visible, item.scale)
 		PerformanceSurface("placed", item.id, &placement)
 		placed = append(placed, placement)
 	}

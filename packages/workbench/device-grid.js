@@ -53,8 +53,12 @@ export function alignPlane(plane, scale = gridScale()) {
  * Keeps the plane on the grid. The stage changes size whenever something above or left of it changes, and a change of the
  * display changes the scale. The observer must be created before the view of the plane creates its own, so that the plane
  * is aligned before the view reads its size in the same round.
+ *
+ * The host fits each surface to the device pixels of the backing scale of the window when the page places it, and a change of
+ * the display places nothing by itself: a layout whose rectangles stay the same is not sent again. After the plane is aligned on
+ * the new grid, rescaled places the surfaces again, so each lands on the device pixels of the display that shows it.
  */
-export function observePlaneGrid(plane) {
+export function observePlaneGrid(plane, rescaled) {
   const view = plane.ownerDocument.defaultView;
   new view.ResizeObserver(() => alignPlane(plane)).observe(plane.parentElement);
   let resolution = null;
@@ -66,6 +70,7 @@ export function observePlaneGrid(plane) {
   function changed() {
     watch();
     alignPlane(plane);
+    rescaled();
   }
   watch();
   alignPlane(plane);

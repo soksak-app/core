@@ -142,10 +142,10 @@ test("a deferred preparation is not recorded as an applied or predicted view", a
   assert.equal(compositor.placementPending(), false, "a completed deferred result remained pending");
 
   compositor.onCommit((value) => ({
-    placements: value.surfaces.map((surface) => ({ id: surface.id, visible: true, ...surface.applied })), deferred: [],
+    placements: value.surfaces.map((surface) => ({ id: surface.id, visible: true, scale: 2, ...surface.applied })), deferred: [],
   }));
   const drawn = await compositor.publish();
-  assert.deepEqual(drawn, [{ id: "deferred-view", visible: true, x: 2, y: 30, w: 196, h: 100 }]);
+  assert.deepEqual(drawn, [{ id: "deferred-view", visible: true, scale: 2, x: 2, y: 30, w: 196, h: 100 }]);
   assert.equal(compositor.seated().surfaces.length, 1, "the drawn view did not receive its real host placement");
   dom.window.close();
 });
@@ -189,7 +189,7 @@ test("a retained dormant view is validated with the host superset and projected 
       hostRequestIds = request.surfaces.map(({ id }) => id);
       return Promise.resolve({
         placements: request.surfaces.filter(({ id }) => id !== "tab-c2zkow")
-          .map(({ id, applied }) => ({ id, visible: true, ...applied })),
+          .map(({ id, applied }) => ({ id, visible: true, scale: 2, ...applied })),
         deferred: ["tab-c2zkow"],
       });
     }, ["placement-superset-probe"], retainedLifecycle);
@@ -200,11 +200,11 @@ test("a retained dormant view is validated with the host superset and projected 
     new Map([["visible-card", { id: "visible-view", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]),
   );
   assert.deepEqual(hostRequestIds, ["visible-view", "tab-c2zkow"], "the host request did not include the retained dormant tab");
-  assert.deepEqual(result, [{ id: "visible-view", visible: true, x: 2, y: 30, w: 196, h: 100 }]);
+  assert.deepEqual(result, [{ id: "visible-view", visible: true, scale: 2, x: 2, y: 30, w: 196, h: 100 }]);
   assert.deepEqual(record.surfaces.map(({ id }) => id), ["visible-view"], "the dormant tab entered the compositor record");
 
   const fullRequest = [visibleRecord.surfaces[0], dormant];
-  const currentPlacement = { id: "visible-view", visible: true, ...visibleRecord.surfaces[0].applied };
+  const currentPlacement = { id: "visible-view", visible: true, scale: 2, ...visibleRecord.surfaces[0].applied };
   let sentWithoutCurrent = false;
   await assert.rejects(placeCompositorRecord(visibleRecord, [dormant], () => { sentWithoutCurrent = true; },
     ["placement-superset-probe"], retainedLifecycle), /host placement request omits compositor surface visible-view/);
@@ -272,9 +272,42 @@ test("placement results reject missing, extra, duplicate, and drawn-deferred sur
     assert.throws(() => compositor.publish(), /surface placement result is missing contract-view/);
     compositor.onCommit(() => ({ placements: [{ id: "unexpected" }], deferred: [] }));
     assert.throws(() => compositor.publish(), /unexpected id unexpected/);
-    const duplicatePlacement = { id: "contract-view", visible: true, x: 1, y: 2, w: 30, h: 40 };
+    const duplicatePlacement = { id: "contract-view", visible: true, scale: 2, x: 1, y: 2, w: 30, h: 40 };
     compositor.onCommit(() => ({ placements: [duplicatePlacement, { ...duplicatePlacement }], deferred: [] }));
     assert.throws(() => compositor.publish(), /repeats a placement id/);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("a visible native placement carries the scale that seated it, and the seat records that scale", async (t) => {
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
+    <div data-native-surface data-native-surface-id="scale-view" data-native-plugin="scale-contract" data-native-layer="0"></div>
+  </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  t.mock.module(new URL("../host.js", import.meta.url).href, {
+    namedExports: { native: true, surfaces: { kinds: ["scale-contract"] } },
+  });
+  const slot = document.querySelector("[data-native-surface]");
+  slot.getBoundingClientRect = () => ({ left: 1, top: 2, width: 30, height: 40 });
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "scale-contract", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
+  const compositor = await import("../compositor.js?placement-scale-contract");
+  compositor.setSlotSurface(slot, { surfaceId: "scale-view", pluginId: "scale-contract", composition: { kind: "dom" } });
+  const placement = { id: "scale-view", visible: true, x: 1, y: 2, w: 30, h: 40 };
+  try {
+    compositor.onCommit(() => ({ placements: [placement], deferred: [] }));
+    assert.throws(() => compositor.publish(), /surface placement result has invalid scale scale-view: undefined/);
+    compositor.onCommit(() => ({ placements: [{ ...placement, scale: 0 }], deferred: [] }));
+    assert.throws(() => compositor.publish(), /surface placement result has invalid scale scale-view: 0/);
+    compositor.onCommit(() => ({ placements: [{ ...placement, visible: false, scale: 2 }], deferred: [] }));
+    assert.throws(() => compositor.publish(), /surface placement result has a scale for hidden scale-view/);
+    compositor.onCommit(() => ({ placements: [{ ...placement, scale: 2 }], deferred: [] }));
+    compositor.publish();
+    assert.equal(compositor.seated().surfaces[0].scale, 2, "the seat records the scale that the host fitted the surface with");
   } finally {
     dom.window.close();
   }
@@ -305,7 +338,7 @@ test("a preparation hides a section surface whose offsets do not fit the target 
   const records = [];
   compositor.onCommit((record) => {
     records.push(record);
-    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...item.applied })), deferred: [] };
+    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...(item.visible ? { scale: 2 } : {}), ...item.applied })), deferred: [] };
   });
 
   compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 4, h: 100 }]]), new Map());
@@ -343,7 +376,7 @@ test("a preparation places a section surface without a box like its drawn commit
   const records = [];
   compositor.onCommit((record) => {
     records.push(record);
-    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...item.applied })), deferred: [] };
+    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...(item.visible ? { scale: 2 } : {}), ...item.applied })), deferred: [] };
   });
 
   compositor.publishAhead(new Map([["place", { x: 2, y: 83, w: 206, h: 600 }]]), new Map());
@@ -383,7 +416,7 @@ test("a preparation keeps a section surface at its offsets, so the drawn commit 
   const records = [];
   compositor.onCommit((record) => {
     records.push(record);
-    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...item.applied })), deferred: [] };
+    return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...(item.visible ? { scale: 2 } : {}), ...item.applied })), deferred: [] };
   });
 
   compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 206, h: 600 }]]), new Map());

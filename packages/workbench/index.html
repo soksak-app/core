@@ -548,8 +548,9 @@ onImageDetachEnded((event) => {
   if (imageDetachEnded(event)) settle();
 });
 // The plane is kept on the device pixel grid from before its view exists, so the stage is aligned before the view reads the
-// plane size in the same observation round (device-grid.js).
-observePlaneGrid(plane);
+// plane size in the same observation round (device-grid.js). A change of the display changes the backing scale without a change of
+// the layout request, so the last request is forgotten and the plane draws again: the host fits each surface to the new device pixels.
+observePlaneGrid(plane, () => { host.forget(); settle(); });
 projects.begin(start.workspace);
 // The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
 applyFrameText(value("textSize"));

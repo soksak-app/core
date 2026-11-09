@@ -377,18 +377,29 @@ fn add_footprint(record: &mut Value, footprint: &platform::ProcessFootprint) {
 
 /// Stores a phase of the life of a surface (`created`, `placed`, `destroyed`) as the event `surface` of the trace. A
 /// placement adds the frame `[x, y, w, h]` the host gave the native view and whether the view is visible.
-pub fn surface(phase: &str, surface: &str, placement: Option<([f64; 4], bool)>) {
-    observe("host", || {
-        let mut record = json!({"event": "surface", "phase": phase, "surface": surface});
-        if let Some(([x, y, w, h], visible)) = placement {
-            record["x"] = json!(x);
-            record["y"] = json!(y);
-            record["w"] = json!(w);
-            record["h"] = json!(h);
-            record["visible"] = json!(visible);
+pub fn surface(phase: &str, surface: &str, placement: Option<([f64; 4], bool, Option<f64>)>) {
+    observe("host", || surface_record(phase, surface, placement));
+}
+
+/// The event `surface` of a phase of the life of a surface. A placement adds the frame the host gave the native view,
+/// whether the view is visible, and for a visible view the backing scale whose device pixels the host fitted the frame to.
+pub(crate) fn surface_record(
+    phase: &str,
+    surface: &str,
+    placement: Option<([f64; 4], bool, Option<f64>)>,
+) -> Value {
+    let mut record = json!({"event": "surface", "phase": phase, "surface": surface});
+    if let Some(([x, y, w, h], visible, scale)) = placement {
+        record["x"] = json!(x);
+        record["y"] = json!(y);
+        record["w"] = json!(w);
+        record["h"] = json!(h);
+        record["visible"] = json!(visible);
+        if let Some(scale) = scale {
+            record["scale"] = json!(scale);
         }
-        record
-    });
+    }
+    record
 }
 
 /// Whether the sampler of the trace runs.

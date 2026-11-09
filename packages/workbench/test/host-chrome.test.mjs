@@ -77,7 +77,7 @@ test("the preparation carries the title bar height and the presented chrome is t
         prepared++;
         return {
           ticket: prepared,
-          placements: [{ id: "surface", x: 1, y: 2, w: 3, h: 4, visible: true }],
+          placements: [{ id: "surface", x: 1, y: 2, w: 3, h: 4, visible: true, scale: 2 }],
           // The window button region that the host read after it set the title bar inside the transaction: the 14 pt buttons are centered in the row.
           chrome: { controls: { x: 13, y: (request.titlebar - 14) / 2, w: 54, h: 14 }, row: request.titlebar },
         };
@@ -99,7 +99,9 @@ test("the preparation carries the title bar height and the presented chrome is t
     assert.equal("titlebar" in chrome, false, "the page has no title bar request apart from the preparation");
     assert.equal(chrome.presented(), null, "no preparation has been presented");
 
-    await surfaces.place(record(54, false));
+    const prepared = await surfaces.place(record(54, false));
+    assert.deepEqual(prepared.placements, [{ id: "surface", visible: true, scale: 2, x: 1, y: 2, w: 3, h: 4 }],
+      "the answer keeps the scale whose device pixels the host fitted the surface to");
     assert.deepEqual(calls.map((c) => c.name), ["syncSurfaces"]);
     assert.equal(calls[0].request.titlebar, 54, "the preparation carries the row of the next draw");
     assert.deepEqual(calls[0].request.declarations, [], "a request without views must carry its empty declaration table");
@@ -266,7 +268,7 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
         return {
           ticket: 1,
           placements: request.surfaces.map((surface) => ({
-            id: surface.id, visible: true, x: surface.x, y: surface.y, w: surface.w, h: surface.h,
+            id: surface.id, visible: true, scale: 2, x: surface.x, y: surface.y, w: surface.w, h: surface.h,
           })),
           chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar },
         };
@@ -306,7 +308,7 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
     releaseRegistration();
     const second = await secondPending;
     assert.deepEqual(second, {
-      placements: [{ id: "view-mount-order", visible: true, x: 1, y: 2, w: 30, h: 40 }], deferred: [],
+      placements: [{ id: "view-mount-order", visible: true, scale: 2, x: 1, y: 2, w: 30, h: 40 }], deferred: [],
     });
     assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").at(-1).request.surfaces.map(({ id }) => [id]),
       [["view-mount-order"]], "the declared view was not sent after mount registration");

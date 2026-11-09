@@ -278,14 +278,21 @@ func PerformanceWindowRemove(window string) {
 // PerformanceSurface stores a phase of the life of a surface (`created`, `placed`, `destroyed`) as the event `surface` of
 // the trace. A placement adds the frame the host gave the native view and whether the view is visible.
 func PerformanceSurface(phase, surface string, placement *Placement) {
-	PerformanceObserve("host", func() map[string]any {
-		record := map[string]any{"event": "surface", "phase": phase, "surface": surface}
-		if placement != nil {
-			record["x"], record["y"], record["w"], record["h"] = placement.X, placement.Y, placement.W, placement.H
-			record["visible"] = placement.Visible
+	PerformanceObserve("host", func() map[string]any { return surfaceRecord(phase, surface, placement) })
+}
+
+// surfaceRecord is the event `surface` of a phase of the life of a surface. A placement adds the frame the host gave the native view,
+// whether the view is visible, and for a visible view the backing scale whose device pixels the host fitted the frame to.
+func surfaceRecord(phase, surface string, placement *Placement) map[string]any {
+	record := map[string]any{"event": "surface", "phase": phase, "surface": surface}
+	if placement != nil {
+		record["x"], record["y"], record["w"], record["h"] = placement.X, placement.Y, placement.W, placement.H
+		record["visible"] = placement.Visible
+		if placement.Visible {
+			record["scale"] = placement.Scale
 		}
-		return record
-	})
+	}
+	return record
 }
 
 // PerformanceSamplerRunning reports whether the sampler of the trace runs.
