@@ -31,7 +31,7 @@ const RULES = [
   { what: "TCP control port", pattern: /\b4973[1-3]\b|node:net/ },
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
   // A skipped test ends as a pass of its file, so a check whose precondition fails reports nothing.
-  { what: "a skipped test; assert its precondition", pattern: /\bt\.skip\s*\(/ },
+  { what: "a skipped test; assert its precondition", pattern: /\bt\.skip\s*\(/, skippedTest: true },
   { what: "a fixed sleep", pattern: /\b(sleep|delay|pause)\s*\(|timers\/promises/, inputPacing: true },
   { what: "application activation that takes user focus", pattern: /\bactivate\s*:\s*true\b/, activationTier: true },
   // The cleanup of a window check goes into session.cleanup. When the cleanup of open fails, a t.after registered after it does not run,
@@ -48,6 +48,9 @@ const ACTIVATION_DIRS = ["e2e/activation/", "e2e/real/"];
 // events, and it leaves an interval between HID events at the speed of a human movement. The interval is not a wait for state, and
 // the window server coalesces drag events sent without an interval. A fixed wait is not allowed outside this file.
 const REAL_INPUT_TOOL = "packages/window-check/hid.mjs";
+// app.mjs of the harness reports a check of an application whose host process exited as not run: the check that found the exit
+// failed with it and its log records, so the skip hides no failure, and starting the application again would hide the exit.
+const NOT_RUN_REPORTER = "packages/window-check/app.mjs";
 // app.mjs of the harness, which creates sessions, and unit checks that are not window checks use t.after.
 const SESSION_CLEANUP_EXEMPT = ["packages/window-check/app.mjs", "packages/window-check/test/", "e2e/test/"];
 
@@ -409,6 +412,7 @@ export function auditE2ESource(text, file) {
     for (const rule of RULES) {
       if (rule.activationTier && (ACTIVATION_DIRS.some((dir) => file.startsWith(dir)) || file === REAL_INPUT_TOOL)) continue;
       if (rule.inputPacing && file === REAL_INPUT_TOOL) continue;
+      if (rule.skippedTest && file === NOT_RUN_REPORTER) continue;
       if (rule.sessionCleanup && SESSION_CLEANUP_EXEMPT.some((exempt) => file === exempt || file.startsWith(exempt))) continue;
       if (rule.sourcePath) {
         const pattern = new RegExp(rule.pattern.source, "g");
