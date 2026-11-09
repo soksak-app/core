@@ -62,3 +62,12 @@ func TestAStepWithoutAFocusedWindowBelongsToTheOnlyOpenWindow(t *testing.T) {
 		t.Fatalf("two windows give %q", got)
 	}
 }
+
+// A frame that a layout transaction holds draws inside it, so it opens no layout of its own and reaches no host.
+func TestAFrameInsideALayoutTransactionOpensNoLayout(t *testing.T) {
+	f := &Frontend{framework: &Framework{transaction: true}}
+	ticket, err := f.OpenLayout()
+	if err != nil || ticket != 0 {
+		t.Fatalf("a frame inside a layout transaction opened the layout %d (%v)", ticket, err)
+	}
+}
