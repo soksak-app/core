@@ -79,8 +79,16 @@ for (const app of Object.values(APPS)) {
     const cover = s.on(windows.find((w) => w.window !== s.window).window);
     await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
     await cover.run("host.window.move", { x: covered.x - 100, y: covered.y });
-    await s.until("host.window", (w) => w.occluded === true, `${app.name} was not reported occluded under its project window`,
-      { timeout: 2000 });
+    try {
+      await s.until("host.window", (w) => w.occluded === true, `${app.name} was not reported occluded under its project window`,
+        { timeout: 2000 });
+    } catch (error) {
+      // The failure names the frames, the occlusion and the drawn frames of both windows, which tell a cover that has not shown its
+      // first screen or that moved from one that shows but is not reported.
+      const state = ({ frame, occluded, frames, settled }) => ({ frame, occluded, frames, settled });
+      error.message += `; ${JSON.stringify({ window: state(await s.get("host.window")), cover: state(await cover.get("host.window")) })}`;
+      throw error;
+    }
     await cover.close();
     await s.windows(1, "the covering project window did not close");
     await s.until("host.window", (w) => w.occluded === false,
