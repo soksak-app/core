@@ -737,6 +737,12 @@ func (s *Shell) placeSurfaces() {
 					}
 				}
 				s.placed(err)
+				// The plane keeps what it drew once its settled placement presented and no later placement replaced it, as the page
+				// keeps after a settled render (packages/workbench/index.html onRender): the choices of a drawn sidebar reach the store
+				// there and not at the next flush.
+				if err == nil && record.Settled && s.surfaces.latest == record {
+					s.keep()
+				}
 				s.options.Invalidate()
 			})
 	})
