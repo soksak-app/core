@@ -71,14 +71,16 @@ for (const app of Object.values(APPS))
       console.info(`START ${app.name}: window sidebar persistence`);
       const s = await open(t, app);
       t.diagnostic(`tested endpoint: ${JSON.stringify(s.client.endpoint)}`);
-      const { plugin } = await fresh(s);
+      const { surface: start, plugin } = await fresh(s);
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
       await s.run("core.settings.set", { patch: { focusInd: "corner" }, scope: "common" });
       const initial = await s.get("core.grid");
       const configured = initial.cards.filter((card) => card.tabs.length === 0).map((card) => card.id);
-      const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === plugin));
-      assert.ok(target, `${plugin} fixture absent`);
-      const probe = target.tabs.find((tab) => tab.plugin === plugin);
+      // A window sidebar follows the active tab of the focused card (docs/spec/plugins.md#sections), so the card of the plugin override is
+      // the card of the start tab, the focused card, and not the first card that holds a probe tab: every card of the start layout holds one.
+      const target = initial.cards.find((card) => card.focused && card.active === start);
+      assert.ok(target, `the focused card does not show the start tab ${start}: ${JSON.stringify(initial.cards)}`);
+      const probe = target.tabs.find((tab) => tab.id === start);
       // Stored list sets of the layout probe sections: the general left link shows one, and the right override of the probe, which
       // binds the fixed sidebar to the card of the probe tab, the other.
       await keepCommonSettings(s);
