@@ -102,8 +102,8 @@ func TestAFoldedSectionKeepsOnlyItsHeader(t *testing.T) {
 	if !seats["spc-1/left/git.log"] {
 		t.Fatalf("the open section draws no body: %v", seats)
 	}
-	if _, ok := keyed(tt.ElementTree(), "core.sidebar.section.divider", "left/git.log"); ok {
-		t.Fatal("a divider lies next to a folded section")
+	if divider := element(t, tt, "core.sidebar.section.divider", "left/git.log").Bounds; divider.W != 0 || divider.H != 0 {
+		t.Fatalf("a divider next to a folded section has the place %+v", divider)
 	}
 }
 
@@ -381,6 +381,57 @@ func TestTheSectionOfAnUnselectedTabStaysWithoutAPlace(t *testing.T) {
 	}
 	if unselected := element(t, tt, "core.sidebar.section", "left/git.log").Bounds; unselected.W != 0 || unselected.H != 0 {
 		t.Fatalf("the unselected section has the place %+v", unselected)
+	}
+}
+
+// dividers are the elements of the divider name in the frame, in tree order.
+func dividers(nodes []ui.ElementNode) []ui.ElementNode {
+	var found []ui.ElementNode
+	for _, node := range nodes {
+		if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == "core.sidebar.section.divider" {
+			found = append(found, node)
+		}
+		found = append(found, dividers(node.Children)...)
+	}
+	return found
+}
+
+// A list has a divider before each section after the first, as the page draws it: only a divider of a vertical list between two
+// open sections has a place, and the others stay without one, as the page hides them.
+func TestAListHasADividerBeforeEachSectionAfterTheFirst(t *testing.T) {
+	for _, shape := range []struct {
+		name        string
+		orientation string
+		folded      int
+		placed      []bool
+	}{
+		{"vertical open", "vertical", -1, []bool{true, true}},
+		{"vertical second folded", "vertical", 1, []bool{false, false}},
+		{"horizontal", "horizontal", -1, []bool{false, false}},
+	} {
+		frame := listFrame()
+		frame.Orientation = shape.orientation
+		frame.Sections = append(frame.Sections, workbench.SidebarSection{ID: "fieldprobe.outline", Name: "Outline", Plugin: "fieldprobe", Height: 60})
+		if shape.folded >= 0 {
+			frame.Sections[shape.folded].Folded = true
+		}
+		binder := recorder(t, new([]call), sidebarCommands...)
+		tt := ui.NewTester(func(c *ui.Context) {
+			workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
+		}, 240, 400)
+		found := dividers(tt.ElementTree())
+		if len(found) != len(frame.Sections)-1 {
+			t.Fatalf("%s: %d dividers for %d sections", shape.name, len(found), len(frame.Sections))
+		}
+		for i, divider := range found {
+			want := "left/" + frame.Sections[i+1].ID
+			if item := divider.Key.(workbench.Exposed).Item; item != want {
+				t.Fatalf("%s: divider %d is %s, want %s", shape.name, i, item, want)
+			}
+			if placed := divider.Bounds.W > 0 && divider.Bounds.H > 0; placed != shape.placed[i] {
+				t.Fatalf("%s: divider %s has the place %+v", shape.name, want, divider.Bounds)
+			}
+		}
 	}
 }
 

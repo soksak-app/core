@@ -130,8 +130,8 @@ func TestAFoldedSectionIsStoredWithTheSpace(t *testing.T) {
 	f := sidebarShell(t)
 	f.run("core.sidebar.section.fold", map[string]string{"sidebar": "left", "section": "fieldprobe.tree"})
 	f.settle()
-	if _, ok := keyed(f.tester.ElementTree(), "core.sidebar.section.divider", "left/fieldprobe.bookmarks"); ok {
-		t.Fatal("a divider lies next to the folded section")
+	if divider := element(t, f.tester, "core.sidebar.section.divider", "left/fieldprobe.bookmarks").Bounds; divider.W != 0 || divider.H != 0 {
+		t.Fatalf("a divider next to the folded section has the place %+v", divider)
 	}
 	encoded, err := json.Marshal(f.host.projects[0]["spaces"])
 	if err != nil {
