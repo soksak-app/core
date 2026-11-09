@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
 // The application menu is built from one ko/en table, so the check follows the menu language.
@@ -85,15 +85,23 @@ for (const app of Object.values(APPS)) {
     await s.until("core.text", (value) => value.frame === 1.5, "three frame steps did not reach factor 1.5");
     await s.presented();
     // The first row is outside the CSS zoom subtree, so its rectangle is in document pixels on every engine, and its height is
-    // round(max(40, 36 × frame factor)) (docs/spec/text-size.md). The rectangle of the space tab is inside the subtree, and WebKit
-    // before 7624 reports it divided by the zoom, so the tab is judged by its effective zoom, which every engine reports.
+    // round(max(40, 36 × frame factor)) (docs/spec/text-size.md). On a main page the rectangle of the space tab is inside the
+    // subtree, and WebKit before 7624 reports it divided by the zoom, so the tab is judged by its effective zoom, which every engine
+    // reports. The mygo workbench has no CSS zoom: it answers the frame of the tab in window points, drawn at the factor, with zoom 1
+    // (docs/spec/exposure.md), so the tab is judged by the growth of its height.
     const barAfter = await s.rect("core.chrome.bar");
     const spaceAfter = await s.rect("core.space-tab", 0);
     assert.equal(barBefore.height, 40, `the first row must be 40 px at factor 1: ${barBefore.height}`);
     assert.equal(barAfter.height, Math.round(Math.max(40, 36 * 1.5)),
       `the first row must follow the frame factor 1.5: ${barBefore.height} → ${barAfter.height}`);
     assert.equal(spaceTab.zoom, 1, `the space tab zoom must be 1 at factor 1: ${spaceTab.zoom}`);
-    assert.equal(spaceAfter.zoom, 1.5, `the space tab zoom must follow the frame factor 1.5: ${spaceAfter.zoom}`);
+    if (MAIN_PAGE_APPS.some((candidate) => candidate.name === app.name)) {
+      assert.equal(spaceAfter.zoom, 1.5, `the space tab zoom must follow the frame factor 1.5: ${spaceAfter.zoom}`);
+    } else {
+      assert.equal(spaceAfter.zoom, 1, `the mygo workbench answers zoom 1: ${spaceAfter.zoom}`);
+      assert.ok(grew(spaceTab.height, spaceAfter.height, 1.5),
+        `the space tab height must follow the frame factor 1.5: ${spaceTab.height} → ${spaceAfter.height}`);
+    }
     const cardRect = await s.rect("core.card", 0);
     assert.ok(cardRect.y + cardRect.height <= window.content.height + 0.5,
       `the plane must stay inside the window: card bottom ${cardRect.y + cardRect.height}, content ${window.content.height}`);
