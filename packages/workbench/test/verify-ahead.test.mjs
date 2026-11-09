@@ -25,7 +25,7 @@ test("a failed V7c names the surface and both of its rectangles", async (t) => {
   const declared = { x: 0, y: 34, w: 400, h: 240 };
   card.style.setProperty("--pt", "36px");
   const bands = { top: 6, bottom: 0, left: 0, right: 0 };
-  const guess = { seq: 12, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands }] };
+  const guess = { seq: 12, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands, grid: 1 }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => guess, placementPending: () => false, seated: () => null } });
   t.mock.module("../plane.js", { exports: {
     currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
@@ -52,7 +52,7 @@ async function verifyAhead(t, extra, guessed) {
   plane.getBoundingClientRect = () => rect(0, 0, 400, 300);
   for (const slot of document.querySelectorAll(".slot")) slot.getBoundingClientRect = () => rect(0, 34, 400, 240);
   const declared = { x: 0, y: 34, w: 400, h: 240 };
-  const guess = { seq: 7, surfaces: guessed.map((id) => ({ id, dim: false, declared, applied: declared, bands: null })) };
+  const guess = { seq: 7, surfaces: guessed.map((id) => ({ id, dim: false, declared, applied: declared, bands: null, grid: 1 })) };
   t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => null, placementPending: () => false, seated: () => null } });
   t.mock.module("../plane.js", { exports: {
     currentGrid: () => new Soksak(undefined, { width: 400, height: 300 }), dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane,

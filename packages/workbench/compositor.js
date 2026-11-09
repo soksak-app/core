@@ -480,6 +480,9 @@ export function publishAhead(rects, seated, titlebar) {
       dim: seat?.dim === true,
       // default: a surface without a seat has no predicted bands (null).
       bands: seat?.bands ?? null,
+      // The device pixel scale that the layout of the prediction was made on (verify V7c).
+      // default: a surface without a seat is not measurable, so the record of this preparation is no prediction and has no grid.
+      grid: seat?.grid ?? null,
       // The preparation is applied inside the layer transaction of the window and does not appear on screen before
       // the commit. A surface whose position was measured stays visible at its new seat, so the surface that is
       // visible on screen receives input meanwhile. Only a surface whose seat cannot be measured is hidden.
@@ -519,6 +522,8 @@ function commit(mine, snapshot, final, titlebar) {
       visible: s.visible, dim: s.dim,
       // default: a surface of a measured commit has no predicted bands (null).
       bands: s.bands ?? null,
+      // default: a surface of a measured commit or a section surface has no predicted grid (null).
+      grid: s.grid ?? null,
       // The plugin decides what a surface shows. If the host branched by kind, the host would have to change
       // every time a plugin is added.
       surface: s.surface,

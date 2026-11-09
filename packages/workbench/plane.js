@@ -1409,6 +1409,9 @@ export function onLayout(fn) {
  */
 function seats(rects) {
   const out = new Map();
+  // The grid of this layout: the view writes its cards on the device pixels of the ratio it read in the same turn, and verify V7c
+  // judges the prediction on that grid, because the display can change scale before the check.
+  const pixels = gridScale();
   for (const card of grid.cards) {
     if (isPlace(card.id)) continue;
     const el = cardElement(card.id);
@@ -1426,11 +1429,11 @@ function seats(rects) {
       const effective = presentation ?? {};
       bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
         const state = effective[side];
-        return [side, state ? (state.collapsed ? folded : deviceGridSize(state.shownSize, gridScale())) : 0];
+        return [side, state ? (state.collapsed ? folded : deviceGridSize(state.shownSize, pixels)) : 0];
       }));
       inset = targetCardInsets(el, slot, bands);
     }
-    out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id), inset, bands, presentation });
+    out.set(card.id, { id: activeTab(card).id, dim: dimmed(card.id), inset, bands, presentation, grid: pixels });
   }
   return out;
 }

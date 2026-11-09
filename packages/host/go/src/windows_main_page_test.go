@@ -114,6 +114,68 @@ func TestAWindowThatIsGoneReadsNoStateOnAChange(t *testing.T) {
 	}
 }
 
+// pagedEventFramework is a framework with a main page whose window holds the listeners of its window events.
+type pagedEventFramework struct{ pagelessFramework }
+
+func (pagedEventFramework) MainPage() bool { return true }
+
+// mainWebviewPlatform records each operation that places the main web view of a window.
+type mainWebviewPlatform struct {
+	pagelessPlatform
+	placed []string
+}
+
+func (p *mainWebviewPlatform) WindowOnScreen(platform.Window) (bool, error) { return true, nil }
+
+func (p *mainWebviewPlatform) SetMainWebview(platform.Window) error {
+	p.placed = append(p.placed, "main webview")
+	return nil
+}
+
+func (p *mainWebviewPlatform) ConfigureMainWindow(platform.Window, bool) error {
+	p.placed = append(p.placed, "main window")
+	return nil
+}
+
+func (p *mainWebviewPlatform) PrepareWindow(platform.Window) error {
+	p.placed = append(p.placed, "prepare")
+	return nil
+}
+
+func (p *mainWebviewPlatform) MainWebview(platform.Window) (unsafe.Pointer, error) {
+	p.placed = append(p.placed, "read main webview")
+	return unsafe.Pointer(new(byte)), nil
+}
+
+func (p *mainWebviewPlatform) FileDrop(unsafe.Pointer, func(string)) error {
+	p.placed = append(p.placed, "file drop")
+	return nil
+}
+
+// A window that closed may still report a resize or a show, as a window that leaves full screen while a quit closes it does. Its
+// main web view has left the window, so the window places nothing: a placement would fail, and its failure would end the
+// process before the quit finishes.
+// contract: application.window.closed-window-places-no-main-web-view
+func TestAClosedWindowPlacesNoMainWebView(t *testing.T) {
+	window := &eventWindow{listeners: map[WindowEvent][]func(){}}
+	previousFramework, previousSystem := framework, system
+	fake := &mainWebviewPlatform{}
+	framework, system = pagedEventFramework{pagelessFramework{window: window}}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}}
+	s := host.newWindow("main", "")
+	window.native = platform.Window(1)
+	mainThreadStep(func() { s.closed = true })
+	for _, event := range []WindowEvent{WindowResize, WindowShow} {
+		for _, listener := range window.listeners[event] {
+			listener()
+		}
+	}
+	if len(fake.placed) != 0 {
+		t.Fatalf("a closed window placed its main web view with %v", fake.placed)
+	}
+}
+
 // rasterPlatform reports each read of the placement of an image, the first step of a raster refresh.
 type rasterPlatform struct {
 	pagelessPlatform
