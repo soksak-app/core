@@ -242,3 +242,25 @@ export async function uncoverFromCheckWindows(t, s, { apps = APPS, openApp = ope
   }
   return prepareOcclusionFixture(s, otherWindows, { windows });
 }
+
+/**
+ * Covers the window of `s` with `cover`, a ready window of the same application that the check opened, and returns the frame
+ * of the covered window. host.windows lists a window ready before it is on the screen, because a host shows a new window after
+ * its first screen (docs/spec/native-host.md#page-start), so the cover is judged by its presented layout and by its own
+ * occlusion: once it shows in front of the covered window it reports `occluded` false. Only then does the occlusion of the
+ * covered window tell what the cover does. A cover that other windows keep occluded ends the check as every covered window does
+ * (requireUncovered): nothing was measured.
+ */
+export async function coverCheckWindow(s, cover, { windows } = {}) {
+  const covered = (await s.get("host.window")).frame;
+  await cover.run("host.window.resize", { width: covered.width + 200, height: covered.height + 100 });
+  await cover.run("host.window.move", { x: covered.x - 100, y: covered.y - 50 });
+  await cover.presented();
+  try {
+    await cover.until("host.window", (w) => w.occluded === false, "the covering window did not show on the screen");
+  } catch (error) {
+    requireUncovered(cover, await cover.get("host.window"), windows);
+    throw error;
+  }
+  return covered;
+}
