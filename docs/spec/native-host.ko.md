@@ -60,7 +60,7 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 시작 문서가 import하는 첫 module이 시작 오류 handler를 설치한다. page가 첫 화면을 그리기 전에는 `error` event(시작 문서의 module이 불러오지 못하거나 해석하지 못하거나 실행 중 던진 오류)와 `unhandledrejection` event가 `report` host 호출로 `error workbench start: <text> @ <file>:<line>`을 애플리케이션 로그에 쓴다. 같은 문구는 한 번만 쓴다. page는 첫 화면을 그린 뒤 이 handler를 제거(`finishPageStart`)하고, 그 뒤에는 page의 오류 표시([애플리케이션 로그](hosts.ko.md#애플리케이션-로그))가 이어받는다. 그래서 page가 시작하지 못한 창의 오류는 `<config-dir>/logs/application.log`에 남는다.
 
-mygo host에는 main page가 없다. framework adapter는 창의 워크벤치를 만들 때마다 시작 문서 없이 시작 문서의 시작 단계를 실행한 뒤 워크벤치에 시작했다고 알리고(`Shown`), 워크벤치는 host 호출로 시작 상태를 읽는다. 이 단계가 실패하면 그 시작은 실패한 시작 문서가 page의 시작을 끝내듯 끝난다. adapter는 그 이유를 place `workbench start`의 `error` record로 애플리케이션 로그에 쓰고, 워크벤치에 시작했다고 알리지 않는다(`Shown` 대신 `StartFailed`). 워크벤치는 host를 호출하지 않고 그 이유를 오류 표시(`core.workbench.error`)에 첫 화면으로 보이며, 이 첫 화면이 시작 동안 창이 붙잡은 frame을 놓고 새 창을 화면에 올린다. 워크벤치는 창이 ready라고 알리지 않는다.
+mygo host에는 main page가 없다. framework adapter는 창의 워크벤치를 만들 때마다 시작 문서 없이 시작 문서의 시작 단계를 실행한 뒤 워크벤치에 시작했다고 알리고(`Shown`), 워크벤치는 host 호출로 시작 상태를 읽는다. 이 단계가 실패하면 그 시작은 실패한 시작 문서가 page의 시작을 끝내듯 끝난다. adapter는 그 이유를 place `workbench start`의 `error` record로 애플리케이션 로그에 쓰고, 워크벤치에 시작했다고 알리지 않는다(`Shown` 대신 `StartFailed`). 워크벤치는 host를 호출하지 않고 그 이유를 오류 표시(`core.workbench.error`)에 첫 화면으로 보이며, 이 첫 화면이 시작 동안 창이 붙잡은 frame을 놓고 새 창을 화면에 올린다. 워크벤치는 창이 ready라고 알리지 않는다. 시작이 도는 동안 창이 닫히면(quit이 마지막 창을 닫을 때처럼) 그 시작은 실패 없이 끝난다. 닫힌 뒤의 시작 단계는 native 창을 건드리지 않고 창이 없다고 답하며(`ErrNoStartWindow`), adapter는 record를 쓰지 않고 닫힌 워크벤치에 아무것도 알리지 않는다.
 
 ## page 다시 읽기
 
