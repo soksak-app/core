@@ -42,9 +42,8 @@ const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1
 return JSON.stringify(list.map((item) => ({ owner: item.kCGWindowOwnerName, pid: item.kCGWindowOwnerPID,
   frame: { x: item.kCGWindowBounds.X, y: item.kCGWindowBounds.Y, width: item.kCGWindowBounds.Width, height: item.kCGWindowBounds.Height } })));`);
 
-// The windows in front of the front window of process pid, or null when the process has no window in the list.
-function windowsAbove({ pid }) {
-  const list = windowList();
+// The windows in front of the front window of process pid in list, or null when the process has no window in the list.
+function windowsAbove(pid, list) {
   const own = list.findIndex((item) => item.pid === pid);
   return own < 0 ? null : list.slice(0, own);
 }
@@ -80,11 +79,12 @@ export function windowPlace(pid) {
 
 /**
  * A window of the ordinary layer that is in front of the front window of process pid and covers the whole frame (screen
- * coordinates). It is stated as the reason when the window is covered and the check does not measure. It fails when the
- * window of pid is not in the window list.
+ * coordinates). It is stated as the reason when the window is covered and the check does not measure. windows gives the
+ * windows of the screen front to back, the window list of the screen unless a test gives its own. It fails when the window
+ * of pid is not in the window list.
  */
-export function coveringWindows(pid, frame) {
-  const above = windowsAbove({ pid });
+export function coveringWindows(pid, frame, windows = windowList) {
+  const above = windowsAbove(pid, windows());
   assert.ok(above !== null, `process ${pid} has no window in the window list`);
   return above.filter(({ frame: f }) => f.x <= frame.x && f.y <= frame.y &&
     f.x + f.width >= frame.x + frame.width && f.y + f.height >= frame.y + frame.height);
