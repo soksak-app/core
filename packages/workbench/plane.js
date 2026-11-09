@@ -18,7 +18,7 @@ import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sideName, sizeSidebar, spaceFoldText, toggleSidebar } from "./card-sidebars.js";
-import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
+import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
@@ -1621,9 +1621,10 @@ export const fresh = () => ({
   state: initial(),
   focusedId: environment().workspace.focus,
   windowSidebars: Object.fromEntries(environment().workspace.grid.cards
-    .filter(card => card.id === "left" || card.id === "right")
-    // default: a fixed sidebar whose width the environment declaration omits starts with the width of the sidebarWidth setting.
-    .map(card => [card.id, { width: card.width ?? value("sidebarWidth") }])),
+    .filter(card => windowSidebar(card.id))
+    // default: a fixed sidebar whose size the environment declaration omits starts with the sidebarWidth setting on its axis:
+    // the width of a left or right sidebar, the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
+    .map(card => [card.id, { [sizeKey(card.id)]: card[sizeKey(card.id)] ?? value("sidebarWidth") }])),
   named: 0,
   sidebars: {},
 });

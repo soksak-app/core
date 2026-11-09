@@ -193,12 +193,26 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.workspace.grid.cards[0].width = 0; }, /width must be a finite positive number/],
     [(e) => { e.workspace.grid.cards[0].width = -190; }, /width must be a finite positive number/],
     [(e) => { e.workspace.grid.cards[0].width = Infinity; }, /width must be a finite positive number/],
+    // The edges of the window are reserved card ids of the window sidebars, which hold no tabs and the size of their axis
+    // (docs/spec/external-sidebars.md).
+    [(e) => { e.workspace.grid.cards[0].tabs = [{ plugin: "probe", title: "p 2" }]; }, /environment.json: card left is a window sidebar and declares no tabs/],
+    [(e) => { e.workspace.grid.cards.push({ id: "top", c0: 0, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "probe", title: "p 2" }] }); }, /environment.json: card top is a window sidebar and declares no tabs/],
+    [(e) => { e.workspace.grid.cards.push({ id: "bottom", c0: 0, c1: 2, r0: 0, r1: 1, width: 80 }); }, /environment.json card bottom: unknown field width/],
+    [(e) => { e.workspace.grid.cards[0].height = 80; }, /environment.json card left: unknown field height/],
+    [(e) => { e.workspace.grid.cards[1].height = 80; }, /environment.json card main: unknown field height/],
+    [(e) => { e.workspace.grid.cards.push({ id: "top", c0: 0, c1: 2, r0: 0, r1: 1, height: 0 }); }, /environment.json: card top height must be a finite positive number/],
   ];
   for (const [change, message] of cases) {
     const value = environment();
     change(value);
     assert.throws(() => validateEnvironment(value), message);
   }
+});
+
+test("a top or bottom window sidebar card of the environment declares its height (docs/spec/external-sidebars.md)", () => {
+  const value = environment();
+  value.workspace.grid.cards.push({ id: "top", c0: 0, c1: 2, r0: 0, r1: 1, height: 96, fixed: true }, { id: "bottom", c0: 0, c1: 2, r0: 0, r1: 1, fixed: true });
+  assert.doesNotThrow(() => validateEnvironment(value));
 });
 
 test("environment setting values are checked against the owning manifest", () => {

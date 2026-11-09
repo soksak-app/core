@@ -1,6 +1,21 @@
-// Manages the content override and the per-side width of the fixed left and right sidebars.
+// Manages the content override and the size of the fixed window sidebars of the four edges (docs/spec/external-sidebars.md).
+import { WINDOW_EDGES } from "@soksak/plugin-api";
+
+export { WINDOW_EDGES };
+
 export function windowSidebar(id) {
-  return id === "left" || id === "right" ? { side: id, plugin: null } : null;
+  return WINDOW_EDGES.includes(id) ? { side: id, plugin: null } : null;
+}
+
+/** The axis of the sidebar of an edge: x for left and right, y for top and bottom. */
+export function windowAxis(edge) {
+  if (!windowSidebar(edge)) throw new Error(`unknown window sidebar ${edge}`);
+  return edge === "left" || edge === "right" ? "x" : "y";
+}
+
+/** The member of the saved size of the sidebar of an edge: width for left and right, height for top and bottom. */
+export function sizeKey(edge) {
+  return windowAxis(edge) === "x" ? "width" : "height";
 }
 
 export function windowSidebarCards(units, links, focused = null) {
@@ -26,9 +41,13 @@ export function restoreWindowSidebars(saved) {
   const out = {};
   for (const [id, record] of Object.entries(saved)) {
     if (!windowSidebar(id)) throw new Error(`unknown window sidebar ${id}`);
-    if (!record || typeof record !== "object" || Array.isArray(record) || Object.keys(record).some(key => key !== "width") ||
-        !Number.isFinite(record.width) || record.width <= 0) throw new Error(`invalid window sidebar ${id}`);
-    out[id] = { width: record.width };
+    const key = sizeKey(id);
+    const other = key === "width" ? "height" : "width";
+    const keys = record && typeof record === "object" && !Array.isArray(record) ? Object.keys(record) : null;
+    // The record of the other axis is an earlier or a wrong form; it is refused, not converted (docs/spec/external-sidebars.md).
+    if (keys?.length === 1 && keys[0] === other) throw new Error(`window sidebar ${id} saves ${key}, not ${other}`);
+    if (!keys || keys.some(item => item !== key) || !Number.isFinite(record[key]) || record[key] <= 0) throw new Error(`invalid window sidebar ${id}`);
+    out[id] = { [key]: record[key] };
   }
   return out;
 }
@@ -37,8 +56,8 @@ export function reconcileWindowSidebars(records, descriptors, initialWidth) {
   if (!Number.isFinite(initialWidth) || initialWidth <= 0) throw new Error("invalid initial window sidebar width");
   for (const descriptor of descriptors) {
     if (!windowSidebar(descriptor.id)) throw new Error(`unknown window sidebar ${descriptor.id}`);
-    // default: a fixed sidebar without a width record starts with the initial width.
-    records[descriptor.id] ??= { width: initialWidth };
+    // default: a fixed sidebar without a size record starts with the initial size on its axis.
+    records[descriptor.id] ??= { [sizeKey(descriptor.id)]: initialWidth };
   }
 }
 
@@ -58,10 +77,11 @@ export function railSidebars(descriptors, present) {
   return descriptors.filter(item => item.plugin !== null && present(item.id)).map(item => item.id);
 }
 
-/** Copies the width drawn on the fixed sidebar cards of the plane into the records records. */
+/** Copies the size drawn on its axis of the fixed sidebar cards of the plane into the records records: the width of a left or right card, the height of a top or bottom card. */
 export function keepWindowSidebarWidths(cards, records) {
   for (const card of cards.filter(card => windowSidebar(card.id))) {
-    if (card.width !== undefined) records[card.id].width = card.width;
+    const key = sizeKey(card.id);
+    if (card[key] !== undefined) records[card.id] = { [key]: card[key] };
   }
 }
 

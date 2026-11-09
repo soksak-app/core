@@ -386,11 +386,19 @@ func SpaceFoldText(presented map[Side]PresentedSidebar) string {
 	return strings.Join(names, "·") + " 사이드바: 공간 부족으로 접힘"
 }
 
-// KeepWindowSidebarWidths copies the width drawn on the fixed sidebar cards of the plane into records.
+// KeepWindowSidebarWidths copies the size drawn on its axis of the fixed sidebar cards of the plane into records: the width of a left or
+// right card, the height of a top or bottom card.
 func KeepWindowSidebarWidths(g *Grid, records map[string]WindowSidebar) {
 	for _, card := range g.Cards() {
-		if isWindowSidebar(card.ID) && card.Width != nil {
-			records[card.ID] = WindowSidebar{Width: *card.Width}
+		if !isWindowSidebar(card.ID) {
+			continue
+		}
+		size := card.Width
+		if WindowAxis(card.ID) == "y" {
+			size = card.Height
+		}
+		if size != nil {
+			records[card.ID] = SidebarSize(card.ID, *size)
 		}
 	}
 }
@@ -428,7 +436,7 @@ func ArrangeWindowSidebars(g *Grid, sides []string, records map[string]WindowSid
 		}
 		record, ok := records[side]
 		if !ok {
-			record = WindowSidebar{Width: initialWidth}
+			record = SidebarSize(side, initialWidth)
 			records[side] = record
 		}
 		line := 0
@@ -438,7 +446,7 @@ func ArrangeWindowSidebars(g *Grid, sides []string, records map[string]WindowSid
 		if !g.CanInsertAt("x", line, "") {
 			return changed, fmt.Errorf("cannot place window sidebar %s", side)
 		}
-		id, width := side, record.Width
+		id, width := side, record.Size()
 		if _, ok := g.InsertAt("x", line, InsertInit{ID: &id, Size: &width}); !ok {
 			return changed, fmt.Errorf("cannot place window sidebar %s", side)
 		}

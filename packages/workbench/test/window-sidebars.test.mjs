@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {windowSidebar, windowSidebarCards, restoreWindowSidebars, reconcileWindowSidebars} from "../window-sidebars.js";
+import {windowSidebar, windowSidebarCards, restoreWindowSidebars, reconcileWindowSidebars, keepWindowSidebarWidths} from "../window-sidebars.js";
+
+test("a top or bottom window sidebar keeps and starts with its height (docs/spec/external-sidebars.md)", () => {
+  const records = {};
+  reconcileWindowSidebars(records, [{ id: "left" }, { id: "top" }, { id: "bottom" }], 150);
+  assert.deepEqual(records, { left: { width: 150 }, top: { height: 150 }, bottom: { height: 150 } });
+  keepWindowSidebarWidths([{ id: "left", width: 210, height: 600 }, { id: "top", width: 900, height: 88 }, { id: "main", width: 400, height: 300 }], records);
+  assert.deepEqual(records, { left: { width: 210 }, top: { height: 88 }, bottom: { height: 150 } });
+});
 
 const units = [{id:"pane"},{id:"tree"}];
 for (const side of ["left", "right"]) {

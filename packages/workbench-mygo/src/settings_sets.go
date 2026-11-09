@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The sidebar sets and links of the settings (docs/spec/settings.md#stored-sets-and-links). Each function takes a list and
@@ -142,13 +144,6 @@ func ChangeRow(sets []StoredSet, id, action string, index int, section string, r
 	return next, nil
 }
 
-// WindowEdges are the edges of a window; each holds at most one fixed window sidebar, whose card id is the edge
-// (docs/spec/external-sidebars.md).
-var WindowEdges = []string{"left", "right", "top", "bottom"}
-
-// IsWindowEdge reports whether id names an edge of the window.
-func IsWindowEdge(id string) bool { return slices.Contains(WindowEdges, id) }
-
 // linkPlaces are the places of a link: the general edge choices, the plugin window choices and the internal card sides.
 var linkPlaces = []string{"left", "right", "top", "bottom", "window-left", "window-right", "window-top", "window-bottom", "card-left", "card-right", "card-top", "card-bottom"}
 
@@ -158,7 +153,7 @@ func ChooseLink(links []StoredLink, place, plugin, choice string) ([]StoredLink,
 	if !slices.Contains(linkPlaces, place) {
 		return nil, fmt.Errorf("unknown sidebar place %s", place)
 	}
-	general := IsWindowEdge(place)
+	general := layout.IsWindowEdge(place)
 	if general != (plugin == "") {
 		return nil, fmt.Errorf("invalid plugin for %s", place)
 	}
@@ -255,7 +250,7 @@ func validateSidebars(sets, links any, where string, loaded map[string]bool) err
 		if link["plugin"] != nil && (!named || plugin == "") {
 			return fmt.Errorf("%s: a link plugin is null or a plugin id", where)
 		}
-		general := IsWindowEdge(place)
+		general := layout.IsWindowEdge(place)
 		if general && named {
 			return fmt.Errorf("%s: a general window link requires plugin null", where)
 		}

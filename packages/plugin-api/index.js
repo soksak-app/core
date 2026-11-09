@@ -962,9 +962,14 @@ export function validateEnvironment(environment) {
   only("environment.json workspace.grid", grid, ["xs", "ys", "cards"]);
   for (const card of grid.cards) {
     if (!isObject(card) || !isText(card.id)) throw new Error("environment.json: every card requires an id");
-    only(`environment.json card ${card.id}`, card, ["id", "c0", "c1", "r0", "r1", "width", "fixed", "tabs"]);
-    if (card.width !== undefined && !(Number.isFinite(card.width) && card.width > 0)) {
-      throw new Error(`environment.json: card ${card.id} width must be a finite positive number`);
+    // The card named by an edge is the window sidebar of that edge: it holds no tabs, and its size is the width of a left or
+    // right sidebar and the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
+    const edge = WINDOW_EDGES.includes(card.id);
+    if (edge && card.tabs !== undefined) throw new Error(`environment.json: card ${card.id} is a window sidebar and declares no tabs`);
+    const size = card.id === "top" || card.id === "bottom" ? "height" : "width";
+    only(`environment.json card ${card.id}`, card, ["id", "c0", "c1", "r0", "r1", size, "fixed", ...(edge ? [] : ["tabs"])]);
+    if (card[size] !== undefined && !(Number.isFinite(card[size]) && card[size] > 0)) {
+      throw new Error(`environment.json: card ${card.id} ${size} must be a finite positive number`);
     }
     if (card.tabs !== undefined) {
       if (!Array.isArray(card.tabs) || card.tabs.length === 0) {
