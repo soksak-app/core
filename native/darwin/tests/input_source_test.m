@@ -143,22 +143,47 @@ int main(void) { @autoreleasepool {
     check(noClientCalls == 1 && noClientError == nil,
         @"an idempotent global source request without an active text client completes once");
 
+    NSTextInputContext *(^noCurrentContext)(void) = ^NSTextInputContext *{ return nil; };
     SPChosenContextTextResponder *contextless = [[[SPChosenContextTextResponder alloc] initWithFrame:NSZeroRect] autorelease];
-    check(![sp_input_source_live_driver(nil, contextless) hasActiveTextClient],
+    NSTextInputContext *otherContext = [[[NSTextInputContext alloc] initWithClient:contextless] autorelease];
+    check(![sp_input_source_live_driver(nil, contextless, ^NSTextInputContext *{ return otherContext; }) hasActiveTextClient],
         @"a text input client without an input context is not an active text client");
     __block NSUInteger contextlessCalls = 0;
     __block NSString *contextlessError = nil;
-    sp_input_source_select_and_await_with_driver(current, sp_input_source_live_driver(nil, contextless),
+    sp_input_source_select_and_await_with_driver(current, sp_input_source_live_driver(nil, contextless, noCurrentContext),
         ^(const char *error) {
             contextlessCalls++;
             contextlessError = error ? @(error) : nil;
         });
     check(contextlessCalls == 1 && contextlessError == nil,
         @"a key responder without an input context takes the global selection path and completes once");
+
     SPChosenContextTextResponder *withContext = [[[SPChosenContextTextResponder alloc] initWithFrame:NSZeroRect] autorelease];
     withContext.hasContext = YES;
-    check([sp_input_source_live_driver(nil, withContext) hasActiveTextClient],
-        @"a text input client with an input context is an active text client");
+    check(![sp_input_source_live_driver(nil, withContext, noCurrentContext) hasActiveTextClient],
+        @"a text input client in an application without a current input context is not an active text client");
+    __block NSUInteger inactiveCalls = 0;
+    __block NSString *inactiveError = nil;
+    sp_input_source_select_and_await_with_driver(current, sp_input_source_live_driver(nil, withContext, noCurrentContext),
+        ^(const char *error) {
+            inactiveCalls++;
+            inactiveError = error ? @(error) : nil;
+        });
+    check(inactiveCalls == 1 && inactiveError == nil,
+        @"an inactive application's key responder with an input context selects globally and completes once");
+    check([sp_input_source_live_driver(nil, withContext, ^NSTextInputContext *{ return withContext.inputContext; })
+            hasActiveTextClient],
+        @"a text input client with an input context is an active text client while the application has a current context");
+    __block NSUInteger foreignCalls = 0;
+    __block NSString *foreignError = nil;
+    sp_input_source_select_and_await_with_driver(current,
+        sp_input_source_live_driver(nil, withContext, ^NSTextInputContext *{ return otherContext; }),
+        ^(const char *error) {
+            foreignCalls++;
+            foreignError = error ? @(error) : nil;
+        });
+    check(foreignCalls == 1 && [foreignError hasPrefix:@"the key responder's text input context is not current"],
+        @"a text input client whose context is not the current context of the application fails explicitly once");
     free(current);
 
     SPControlledInputSourceDriver *driver = [[[SPControlledInputSourceDriver alloc] init] autorelease];
