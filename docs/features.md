@@ -1236,7 +1236,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F714-1 — The specification of the four edges and their order (external sidebars, settings, plugins, projects).
   - [o] F714-2 — The places and links of the four edges: `top`, `bottom`, `window-top` and `window-bottom` in the link check of the plugin API and of the Go workbench, in `sidebars.window` of the manifest readers and in the `core.settings.link` exposure of both workbenches.
   - [o] F714-3 — The stored sizes of the window sidebars: `{width}` for `left` and `right`, `{height}` for `top` and `bottom`, the refusal of a record of the other axis, and the refusal of an edge name as a content card ID in `environment.json` and in a stored layout.
-  - [ ] F714-4 — The settings `top`, `bottom` and `sidebarOrder` in the four copies of `workbench.json` and their checks in both workbenches.
+  - [o] F714-4 — The settings `top`, `bottom` and `sidebarOrder` in the four copies of `workbench.json` and their checks in both workbenches.
   - [ ] F714-5 — The dock of the window sidebars in the reverse of the order, closing every window sidebar and docking again when the edges or their arrangement differ, with the shared cases of `docs/spec/cases/layout/window-sidebars.json` in both workbenches.
   - [ ] F714-6 — The plane check `P 자리는 카드다` computes the expected place of each window sidebar from the order.
   - [ ] F714-7 — The sections of a top or bottom window sidebar use the horizontal orientation, and `core.sidebars`, `core.sidebar.status` and `core.rail` describe the four edges.

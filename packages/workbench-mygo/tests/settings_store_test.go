@@ -2,6 +2,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"reflect"
 	"slices"
@@ -79,6 +80,25 @@ func TestAChangeIsCheckedAppliedAndWrittenToItsScope(t *testing.T) {
 	}
 }
 
+// The order of the window sidebars takes the whole order, and the top and bottom sidebars have switches that are off at first
+// (docs/spec/settings.md#values).
+func TestTheOrderOfTheWindowSidebarsTakesTheWholeOrder(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	if err := store.Begin(nil, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(store.Value("sidebarOrder"), store.Value("top"), store.Value("bottom")); got != "[left right top bottom] false false" {
+		t.Fatalf("defaults: %s", got)
+	}
+	if err := store.Set(map[string]any{"sidebarOrder": []any{"top", "left", "right", "bottom"}, "top": true}, "common"); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(store.Value("sidebarOrder"), store.Value("top")); got != "[top left right bottom] true" {
+		t.Fatalf("changed: %s", got)
+	}
+}
+
 func TestAValueOfAnotherFormIsRefusedWithItsReason(t *testing.T) {
 	var writes []saved
 	store := settingsStore(t, &writes, workbench.SettingDefinition{Key: "acme.level", Plugin: "acme", Type: "integer", Minimum: 1, Maximum: 5, Default: 2.0})
@@ -92,6 +112,10 @@ func TestAValueOfAnotherFormIsRefusedWithItsReason(t *testing.T) {
 	}{
 		{"mode", "dusk", `Invalid setting mode: "dusk" is not one of "dark", "light"`},
 		{"dim", "yes", `Invalid setting dim: "yes" is not a boolean`},
+		{"top", "yes", `Invalid setting top: "yes" is not a boolean`},
+		{"sidebarOrder", []any{"left", "left", "top", "bottom"}, `Invalid setting sidebarOrder: ["left","left","top","bottom"] is not an order of "left", "right", "top", "bottom"`},
+		{"sidebarOrder", []any{"left", "right", "top"}, `Invalid setting sidebarOrder: ["left","right","top"] is not an order of "left", "right", "top", "bottom"`},
+		{"sidebarOrder", "left,right,top,bottom", `Invalid setting sidebarOrder: "left,right,top,bottom" is not an order of "left", "right", "top", "bottom"`},
 		{"gap", 99.0, `Invalid setting gap: 99 is not an integer from 0 to 24`},
 		{"memorySaverDelay", 1.0, `Invalid setting memorySaverDelay: 1`},
 		{"acme.level", 9.0, `Invalid setting acme.level: integer value is outside its declared range`},

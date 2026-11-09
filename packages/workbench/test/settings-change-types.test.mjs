@@ -76,6 +76,15 @@ test("core.settings.change gives each setting a value of its declared type", asy
     }
   });
 
+  await t.test("the order of the window sidebars takes the whole order, and the top and bottom switches a boolean (docs/spec/settings.md#values)", async () => {
+    await change("sidebarOrder", ["top", "left", "right", "bottom"]);
+    assert.deepEqual(memory.common.sidebarOrder, ["top", "left", "right", "bottom"]);
+    for (const key of ["top", "bottom"]) {
+      await change(key, "true");
+      assert.strictEqual(memory.common[key], true, key);
+    }
+  });
+
   await t.test("a value of the declared type passes without a conversion", async () => {
     for (const [key, value] of [["dim", true], ["gap", 8], ["fixture.columns", 90]]) {
       await change(key, value);
@@ -95,6 +104,11 @@ test("core.settings.change gives each setting a value of its declared type", asy
       ["gap", true, "Invalid setting gap: true is not an integer from 0 to 24"],
       ["gap", null, "Invalid setting gap: null is not an integer from 0 to 24"],
       ["mode", {}, "Invalid setting mode: {} is not one of \"dark\", \"light\""],
+      ["top", "maybe", "Invalid setting top: \"maybe\" is not a boolean"],
+      ["sidebarOrder", ["left", "left", "top", "bottom"], "Invalid setting sidebarOrder: [\"left\",\"left\",\"top\",\"bottom\"] is not an order of \"left\", \"right\", \"top\", \"bottom\""],
+      ["sidebarOrder", ["left", "right", "top"], "Invalid setting sidebarOrder: [\"left\",\"right\",\"top\"] is not an order of \"left\", \"right\", \"top\", \"bottom\""],
+      ["sidebarOrder", ["left", "right", "top", "middle"], "Invalid setting sidebarOrder: [\"left\",\"right\",\"top\",\"middle\"] is not an order of \"left\", \"right\", \"top\", \"bottom\""],
+      ["sidebarOrder", "left,right,top,bottom", "Invalid setting sidebarOrder: \"left,right,top,bottom\" is not an order of \"left\", \"right\", \"top\", \"bottom\""],
       ["fixture.family", {}, "Invalid setting fixture.family: string value must be non-empty and at most 40 characters"],
       ["fixture.family", 5, "Invalid setting fixture.family: string value must be non-empty and at most 40 characters"],
     ]) {

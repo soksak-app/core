@@ -136,6 +136,15 @@ const SWITCHES = declaration.settings.switches;
 /* The core settings that hold an object or a list: the log policy, and the sets and links that checkSidebars validates. */
 const STRUCTURED = ["diagnostics.log", "sets", "links"];
 
+/* The core settings whose value is an order of their listed values, each once: the order of the window sidebars
+   (docs/spec/settings.md#values). The order rows of the settings window show the values in the current order. */
+export const ORDERS = declaration.settings.orders;
+
+/** Whether value is an array that holds each of the values once. */
+function isOrder(value, values) {
+  return Array.isArray(value) && value.length === values.length && values.every((item) => value.includes(item));
+}
+
 /** Validates the effective settings: the sidebar sets and links, and whether the initial width of a sidebar inside a card is between the minimum and the maximum. */
 function checkValues(values) {
   checkSidebars(values);
@@ -174,6 +183,9 @@ function validateValue(key, value) {
   }
   if (SWITCHES.includes(key) && typeof value !== "boolean") {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not a boolean`);
+  }
+  if (Object.hasOwn(ORDERS, key) && !isOrder(value, ORDERS[key])) {
+    throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an order of ${ORDERS[key].map((item) => JSON.stringify(item)).join(", ")}`);
   }
   if (key === "diagnostics.log") {
     try {
@@ -215,7 +227,7 @@ function validateValue(key, value) {
 /** The JavaScript type of the values of a setting, which its declaration decides. */
 export function settingType(key) {
   if (SWITCHES.includes(key)) return "boolean";
-  if (STRUCTURED.includes(key)) return "object";
+  if (STRUCTURED.includes(key) || Object.hasOwn(ORDERS, key)) return "object";
   if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay") return "number";
   if (CHOICES[key]) return typeof CHOICES[key][0];
   const definition = pluginDefinitions.get(key);
