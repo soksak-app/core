@@ -53,6 +53,10 @@ type ShellOptions struct {
 	Elements Elements
 	// Element returns the surface host and the key view of the surface id, for its native view element.
 	Element func(id string) (surface, key uintptr, ok bool)
+	// OpenLayout opens the surface layout transaction of the window for the frame being drawn, before the frame sets the frames of
+	// the surface hosts, and returns its ticket, or 0 while a layout transaction holds the frames of the window
+	// (docs/spec/hosts.md#native-views).
+	OpenLayout func() (uint64, error)
 	// Installed is the document of the installed plugins.
 	Installed []byte
 	// Window reads the state of the window that core.window.workbench states.

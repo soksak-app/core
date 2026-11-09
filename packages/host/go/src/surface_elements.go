@@ -68,6 +68,28 @@ func ElementSurface(h *Host, window Frontend, view uintptr) (unsafe.Pointer, boo
 	return nil, false
 }
 
+// OpenLayout opens the surface layout transaction of window for the frame that its workbench draws, and returns its ticket. A
+// frame whose native view elements move a surface host sets its frame in the Core Animation transaction of the frame, so a frame
+// drawn while no layout transaction of the window is open would show the new geometry before the rasters of its image regions
+// (docs/spec/native-surfaces.md#regions); the frame opens the transaction before it presents, and the next preparation of the
+// window takes it over (docs/spec/hosts.md#native-views). A frame calls it on the main thread while no layout transaction of the
+// window is open. It is no method of Host, because each exported method of Host is a host call of a page.
+func OpenLayout(h *Host, window Frontend) (uint64, error) {
+	h.mu.Lock()
+	s := h.windows[window.ID()]
+	h.mu.Unlock()
+	if s == nil || s.window == nil {
+		return 0, errNoWindow
+	}
+	s.lastPreparation++
+	ticket := s.lastPreparation
+	// The transaction waits for the preparation that takes it over, which a frame that opened it always makes or cancels.
+	if err := system.BeginLayout(s.window.NativeWindow(), ticket, func(bool) {}); err != nil {
+		return 0, err
+	}
+	return ticket, nil
+}
+
 func (s *Surfaces) element(id string) (SurfaceElement, bool) {
 	s.elements.mu.Lock()
 	defer s.elements.mu.Unlock()

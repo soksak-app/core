@@ -572,7 +572,9 @@ func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declar
 		Window: func() (workbench.WindowView, error) {
 			return workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, nil
 		},
-		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
+		Element: func(string) (uintptr, uintptr, bool) { return 0, 0, false },
+		// The fixture draws no native view element, so no frame of it has a surface host to move in a layout transaction.
+		OpenLayout:  func() (uint64, error) { return 0, nil },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.table(), f.pending.post),
 		Environment: environment(t),

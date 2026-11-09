@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -117,6 +118,20 @@ func (f *Frontend) placeSurfaces(system platform.Platform, surface func(view uin
 type placedSurface struct {
 	surface unsafe.Pointer
 	box     mygo.RectF
+}
+
+// OpenLayout opens the surface layout transaction of the window for the frame being built, before the frame sets the frames of the
+// surface hosts, and returns its ticket; it returns 0 while a layout transaction holds the frames, whose frame of the transaction
+// draws inside it (docs/spec/hosts.md#native-views). Call it on the main thread.
+func (f *Frontend) OpenLayout() (uint64, error) {
+	if f.framework.transaction {
+		return 0, nil
+	}
+	h := f.framework.host.Load()
+	if h == nil {
+		return 0, errors.New("the window has no host")
+	}
+	return host.OpenLayout(h, f)
 }
 
 // elementSurface returns the surface host of the element of the window whose surface host is view.

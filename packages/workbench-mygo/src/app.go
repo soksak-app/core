@@ -36,6 +36,9 @@ type Painted interface {
 	SetBackdrop(color string) error
 	// FirstScreen tells the window that its workbench shows its first screen, so a reloaded window draws again.
 	FirstScreen()
+	// OpenLayout opens the surface layout transaction of the window for the frame being drawn and returns its ticket, or 0 while a
+	// layout transaction holds the frames of the window (docs/spec/hosts.md#native-views).
+	OpenLayout() (uint64, error)
 }
 
 // projectOfAddress returns the project that a window address names, and "" without one.
@@ -138,6 +141,7 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 		Located:     func(project string) { painted.SetAddress(addressOfProject(project)) },
 		Backdrop:    painted.SetBackdrop,
 		FirstScreen: painted.FirstScreen,
+		OpenLayout:  painted.OpenLayout,
 		Element:     func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report,
 		Tabs: a.tabPorts, Window: func() (WindowView, error) {
 			scale, err := painted.Scale()

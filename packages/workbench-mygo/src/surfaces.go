@@ -239,6 +239,9 @@ type surfaceState struct {
 	// the placement, and the elements of that frame place the views (docs/spec/hosts.md#native-views), so its answer states where
 	// lines stand that the placement did not declare, and the frame after the answer places what the window draws.
 	moved bool
+	// opened is the layout transaction that a frame opened for the lines it drew, which no preparation has taken over yet, and 0
+	// without one (openLayout).
+	opened uint64
 	// applied holds where the host applied each visible surface, in window coordinates.
 	applied map[string]layout.Rect
 	// controls is the area of the window buttons that the host answered, and failure the error of the last placement.
@@ -637,12 +640,16 @@ func (s *Shell) placeSurfaces() {
 	// (frameLayout of packages/workbench/frame-text.js), also when no surface moved.
 	same := slices.Equal(lines, s.surfaces.placed) && (s.surfaces.titlebar == 0 || s.chromeHeight() == s.surfaces.titlebar)
 	if s.surfaces.running {
+		if !same {
+			s.openLayout()
+		}
 		s.surfaces.moved = s.surfaces.moved || !same
 		return
 	}
 	// The host ends a run on a settled placement, so the end of a run places also when its last move placed these lines.
 	runEnds := s.surfaces.going && s.held == nil
 	if same && !runEnds {
+		s.cancelOpened()
 		s.afterKeyboard(s.surfaces.commits)
 		s.surfaces.commits = nil
 		return
@@ -651,6 +658,7 @@ func (s *Shell) placeSurfaces() {
 		// The placement fails without a change, so the next frame places the lines again, also when the window came back to
 		// the lines of the last placement.
 		s.surfaces.layoutFault = false
+		s.cancelOpened()
 		s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
 		s.surfaces.placed = nil
 		s.placed(errors.New(layoutFaultText))
@@ -659,9 +667,16 @@ func (s *Shell) placeSurfaces() {
 	}
 	request, err := s.surfaceRequest()
 	if err != nil {
+		s.cancelOpened()
 		s.fail(err)
 		return
 	}
+	if !same {
+		s.openLayout()
+	}
+	// The preparation of these lines takes the opened layout over, and a preparation that fails cancels it.
+	opened := s.surfaces.opened
+	s.surfaces.opened = 0
 	s.surfaces.placed, s.surfaces.titlebar = lines, s.chromeHeight()
 	s.surfaces.running = true
 	settledNow, _ := request["settled"].(bool) // silent: surfaceRequest writes settled as a bool.
@@ -688,6 +703,7 @@ func (s *Shell) placeSurfaces() {
 	requested := slices.Clone(s.surfaces.order)
 	s.calls.CallInOrder(surfaceOrder, "syncSurfaces", request, func(value any, err error) {
 		if err != nil {
+			s.cancelLayout(opened)
 			s.placed(err)
 			return
 		}
@@ -726,6 +742,43 @@ func (s *Shell) placeSurfaces() {
 	})
 }
 
+// openLayout opens the layout transaction of the window in the frame that draws other lines than the last placement, before the
+// frame presents: the elements of the frame set the frames of the surface hosts in the Core Animation transaction of the frame, which
+// would otherwise show the new geometry before the image regions present the raster of the new size
+// (docs/spec/native-surfaces.md#regions). The preparation of those lines takes the transaction over (docs/spec/hosts.md#native-views).
+// The host opens none while a layout transaction holds the frames of the window, whose frame of the transaction draws inside it.
+func (s *Shell) openLayout() {
+	if s.surfaces.opened != 0 {
+		return
+	}
+	ticket, err := s.options.OpenLayout()
+	if err != nil {
+		s.fail(fmt.Errorf("opening the layout of the frame: %w", err))
+		return
+	}
+	s.surfaces.opened = ticket
+}
+
+// cancelOpened cancels the opened layout for a placement that ends without a preparation.
+func (s *Shell) cancelOpened() {
+	ticket := s.surfaces.opened
+	s.surfaces.opened = 0
+	s.cancelLayout(ticket)
+}
+
+// cancelLayout cancels the layout transaction ticket, which commits it and releases the frames of the window; a ticket that a later
+// preparation took over is no longer the open one, and its cancel changes nothing. Ticket 0 names no layout.
+func (s *Shell) cancelLayout(ticket uint64) {
+	if ticket == 0 {
+		return
+	}
+	s.calls.CallInOrder(surfaceOrder, "cancelSurfaces", map[string]any{"ticket": ticket}, func(_ any, err error) {
+		if err != nil {
+			s.fail(fmt.Errorf("cancelling the layout of the frame: %w", err))
+		}
+	})
+}
+
 // followRun tells each view the start of a run: an update that continues, such as a divider drag. The view asks for one frame, so
 // the first size of the run waits for the display like every later size (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Shell) followRun(going bool) {
@@ -761,11 +814,21 @@ func (s *Shell) placed(err error) {
 	s.surfaces.placing = nil
 	if err != nil {
 		s.answerCommits(placing, err)
+		s.placeOpened()
 		return
 	}
 	s.afterKeyboard(placing)
 	s.followKeyboard(false)
 	s.endRestores()
+	s.placeOpened()
+}
+
+// placeOpened places the lines of a frame that drew them while a placement ran and opened the layout: the layout holds the frames
+// of the window, so no frame comes to place them, and they are placed from the frame that drew them.
+func (s *Shell) placeOpened() {
+	if s.surfaces.opened != 0 {
+		s.placeSurfaces()
+	}
 }
 
 // endRestores ends the restore of each restoring tab whose surface the host placed.
