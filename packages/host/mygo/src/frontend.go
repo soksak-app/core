@@ -518,7 +518,7 @@ func (f *Frontend) FirstScreen() {
 // outside the main thread, because the start waits for steps of the main thread.
 func (f *Frontend) startHeld() {
 	if h := f.framework.host.Load(); h != nil {
-		if err := host.StartWorkbench(h, f); err != nil {
+		if err := f.framework.start(h, f); err != nil {
 			host.LogError("workbench start", err)
 		}
 	}
