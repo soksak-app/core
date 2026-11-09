@@ -183,7 +183,7 @@ func (f *Framework) layoutEnded(platform.Window) {
 	f.transaction = false
 	for _, frontend := range f.windows() {
 		frontend.window.TransactionCommitted()
-		frontend.opening, frontend.framed = false, false
+		frontend.opening, frontend.framed, frontend.transacted = false, false, false
 		frontend.release()
 	}
 }

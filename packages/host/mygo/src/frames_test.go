@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"errors"
 	"testing"
 	"unsafe"
 
@@ -104,6 +105,21 @@ func TestAPreparationThatTakesOverTheLayoutOfAPresentedFrameHearsThatFrame(t *te
 	}
 	if trace.requested != 1 || trace.presented != 1 {
 		t.Fatalf("the trace recorded %d requests and %d presentations of the frame of the transaction", trace.requested, trace.presented)
+	}
+}
+
+// A preparation that took over a transaction whose frame a preparation already asked for, and which presented in it, fails its notice
+// at once: that frame holds its drawable until the commit, so another frame would wait for the commit that waits for the notice. The
+// window keeps its hold, and the window of the check is none, so a frame that the notice asked for fails the check.
+func TestAPreparationAfterTheFrameOfItsTransactionFailsAtOnce(t *testing.T) {
+	t.Cleanup(platform.Substitute(&tracePlatform{}))
+	f := &Frontend{name: "main", framework: &Framework{transaction: true}, held: true, transacted: true}
+	var heard []error
+	if err := f.AfterPresentation(func(err error) { heard = append(heard, err) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(heard) != 1 || !errors.Is(heard[0], errTransactionPresented) || !f.held {
+		t.Fatalf("the notice of the preparation heard %v, and the window is held %v", heard, f.held)
 	}
 }
 

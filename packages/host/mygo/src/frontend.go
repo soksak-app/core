@@ -48,9 +48,10 @@ type Frontend struct {
 	// starting belongs to the main thread: the window holds its frames from the start of its workbench until that workbench shows its
 	// first screen.
 	starting bool
-	// building, opening and framed belong to the main thread: the view of the window runs, the frame being built opened the layout
-	// transaction and its notice has not come, and the frame that opened the open layout transaction presented in it.
-	building, opening, framed bool
+	// building, opening, framed and transacted belong to the main thread: the view of the window runs, the frame being built opened the
+	// layout transaction and its report has not come, the frame that opened the open layout transaction presented in it, and a frame
+	// that a preparation asked for presented in the open layout transaction.
+	building, opening, framed, transacted bool
 	// placed belongs to the main thread: the surface host of each native view element and the box that the element last gave it.
 	placed map[uintptr]placedSurface
 	// address belongs to the main thread: the address of the window, which names the project that it shows.
@@ -422,8 +423,11 @@ func AwaitPresentation(name string, notice func(func(mygo.Presentation, error)) 
 // the window in the transaction: the call releases the window and holds it again from inside that notice, so that no later frame
 // presents before the transaction ends. A preparation that took over the transaction that a frame of the window opened has that frame
 // for its frame once it presented in the transaction: the frame drew the lines that the preparation placed, and done runs at once
-// without asking for another, which could only present after the commit that waits for this notice. A diagnostics recording holds
-// the time of this call as the request of the frame of the transaction and the time of the notice as its presentation.
+// without asking for another, which could only present after the commit that waits for this notice, and the preparation places the
+// surfaces that it creates itself. A preparation that took over a transaction whose frame a preparation already asked for has no
+// frame: that frame holds its drawable until the commit, so another frame would wait for the commit that waits for this notice, and
+// done fails at once. A diagnostics recording holds the time of this call as the request of the frame of the transaction and the time
+// of the notice as its presentation.
 func (f *Frontend) AfterPresentation(done func(err error)) error {
 	recorded := func() {}
 	if f.framework.transaction {
@@ -439,16 +443,24 @@ func (f *Frontend) AfterPresentation(done func(err error)) error {
 			done(nil)
 			return nil
 		}
+		if f.transacted {
+			done(errTransactionPresented)
+			return nil
+		}
 		f.release()
 	}
 	return f.presented(false, func(err error) {
 		if err == nil && f.framework.transaction {
 			recorded()
+			f.transacted = true
 			f.hold()
 		}
 		done(err)
 	})
 }
+
+// errTransactionPresented is the failure of the notice of a preparation that took over a transaction whose frame already presented.
+var errTransactionPresented = errors.New("the frame of the transaction already presented; another frame would wait for the commit")
 
 // opensLayout reports whether the layout transaction that owner starts opens in the frame being built of the window: the view of the
 // window runs, which opens the layout of its frame (OpenLayout), and nothing holds the frames of the window.
