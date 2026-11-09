@@ -1063,33 +1063,17 @@ function drawCardSidebars(el, card, rect) {
 }
 
 /**
- * Removes the fixed slot.
- *
- * `fixed` means that the layout neither moves nor closes that card, so it is released before removal.
- * `canClose` always returns false for a `fixed` card.
- */
-function dismiss(id) {
-  if (!grid.card(id)) return;
-  grid.setFixed(id, false);
-  if (!grid.close(id)) { grid.setFixed(id, true); throw new Error(`cannot remove window sidebar ${id}`); }   // If it could not be removed, the role stays as it was
-  // After a card is closed, nothing references the lines that card referenced. The library leaves such lines and leaves the time
-  // of their removal to the host. If they remain, an expanded card does not cross such a line and `standings` does not return
-  // it as a candidate, and when the sidebar opens again a new line is added, so lines accumulate in the same slot.
-  grid.tidy();
-}
-
-/**
- * Adds or removes the sidebar at the end of the plane. The left and the right behave the same, so they use the same
- * function.
+ * Docks the window sidebars of the four edges in the order of sidebarOrder (arrangeWindowSidebars of window-sidebars.js).
  *
  * It uses `insertAt` and not `splitToward`. A split inherits the row range of the split card and occupies only one row,
- * but a sidebar must span the plane.
+ * but a sidebar must reach along its edge as far as the order lets it.
  */
 function settle() {
   if (!grid) return;
   closePicker("settled");
-  arrangeWindowSidebars(grid, windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()), windowSidebars,
-    value("sidebarWidth"), side => value(side), dismiss);
+  // The edges that have a choice hold a sidebar while their switch is on, docked in the order (docs/spec/external-sidebars.md).
+  arrangeWindowSidebars(grid, value("sidebarOrder"), windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).map(item => item.id),
+    windowSidebars, value("sidebarWidth"), edge => value(edge));
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));

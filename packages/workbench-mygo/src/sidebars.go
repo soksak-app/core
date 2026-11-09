@@ -302,10 +302,10 @@ func (s *Sidebars) set(id string) *SidebarSet {
 	return nil
 }
 
-// Sides returns the sides that have a fixed sidebar: those that a link of the window chooses content for.
+// Sides returns the edges that have a fixed sidebar: those that a link of the window chooses content for.
 func (s *Sidebars) Sides() []string {
 	sides := []string{}
-	for _, side := range []string{"left", "right"} {
+	for _, side := range layout.WindowEdges {
 		if slices.ContainsFunc(s.links, func(link SidebarLink) bool { return link.Place == side || link.Place == "window-"+side }) {
 			sides = append(sides, side)
 		}

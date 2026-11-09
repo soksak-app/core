@@ -23,7 +23,7 @@ export function windowSidebarCards(units, links, focused = null) {
   // (docs/spec/plugins.md).
   const focusedPlugin = focused !== null && units.some(unit => unit.id === focused) ? focused : null;
   const out = [];
-  for (const side of ["left", "right"]) {
+  for (const side of WINDOW_EDGES) {
     const choices = links.filter(link => link.place === side || link.place === `window-${side}`);
     if (!choices.length) continue;
     const override = focusedPlugin === null ? undefined : choices.find(link => link.place === `window-${side}` && link.plugin === focusedPlugin);
@@ -85,34 +85,86 @@ export function keepWindowSidebarWidths(cards, records) {
   }
 }
 
+/** The edges that hold a window sidebar, in the order: an edge that has a choice (sides) and whose switch is on. */
+export function dockedEdges(order, sides, shown) {
+  return order.filter(edge => sides.includes(edge) && shown(edge));
+}
+
 /**
- * Matches the fixed sidebar columns to the choice. The column of a side where shown(side) is false is removed with dismiss, and if there is no column to show, one is put on that
- * edge of the side with the stored width. Columns are moved only when the order differs, and a change of focus or override does not move columns.
+ * The place that the order gives the sidebar of each docked edge, in grid lines: the line of its edge on its axis, and its range on the
+ * other axis from the border or the inner line of the sidebar of an earlier edge of that axis to the opposite border or the inner line of
+ * such a sidebar (docs/spec/external-sidebars.md#fixed-placement-and-persistence). An edge whose earlier cross sidebar is not on the
+ * plane takes the border. Returns a map from edge to {axis, edge, line, from, to}.
  */
-export function arrangeWindowSidebars(grid, descriptors, records, initialWidth, shown, dismiss) {
-  reconcileWindowSidebars(records, [...descriptors, ...grid.cards.filter(card => windowSidebar(card.id)).map(card => ({ id: card.id, ...windowSidebar(card.id) }))], initialWidth);
+export function dockedPlaces(grid, docked) {
+  const last = { x: grid.lines("x").length - 1, y: grid.lines("y").length - 1 };
+  const places = new Map();
+  docked.forEach((edge, index) => {
+    const axis = windowAxis(edge);
+    const cross = axis === "x" ? "y" : "x";
+    const earlier = docked.slice(0, index);
+    const low = cross === "y" ? "top" : "left";
+    const high = cross === "y" ? "bottom" : "right";
+    const lowCard = earlier.includes(low) ? grid.card(low) : undefined;
+    const highCard = earlier.includes(high) ? grid.card(high) : undefined;
+    const end = cross === "y" ? ["r0", "r1"] : ["c0", "c1"];
+    places.set(edge, {
+      axis,
+      line: edge === "left" || edge === "top" ? 0 : last[axis],
+      from: lowCard ? lowCard[end[1]] : 0,
+      to: highCard ? highCard[end[0]] : last[cross],
+    });
+  });
+  return places;
+}
+
+/** Whether the window sidebars of grid stand where the order places the docked edges, and no other window sidebar is on the plane. */
+export function windowSidebarsDocked(grid, docked) {
+  const present = grid.cards.filter(card => windowSidebar(card.id)).map(card => card.id);
+  if (present.length !== docked.length || docked.some(edge => !present.includes(edge))) return false;
+  const places = dockedPlaces(grid, docked);
+  return docked.every(edge => {
+    const card = grid.card(edge);
+    const place = places.get(edge);
+    const [own0, own1, cross0, cross1] = place.axis === "x" ? ["c0", "c1", "r0", "r1"] : ["r0", "r1", "c0", "c1"];
+    const atEdge = edge === "left" || edge === "top" ? card[own0] === place.line : card[own1] === place.line;
+    return card.fixed && atEdge && card[cross0] === place.from && card[cross1] === place.to;
+  });
+}
+
+/**
+ * Docks the window sidebars in the order (docs/spec/external-sidebars.md#fixed-placement-and-persistence). order lists the four edges,
+ * sides are the edges that have a choice, and shown(edge) is the switch of an edge. When the window sidebars of the plane already stand
+ * where the order places them, nothing moves, so a change of focus or of the override does not move a sidebar. Otherwise every window
+ * sidebar is closed, the lines that no card references are removed, and the docked edges are inserted in the reverse of the order at the
+ * border line of their edge with their saved size and set fixed, so the first edge reaches across the plane. A sidebar whose only filler is
+ * a fixed card while its slots hold another card cannot leave yet (R7 of packages/soksak/docs/layout.md); it leaves after the others.
+ * Returns whether the plane changed.
+ */
+export function arrangeWindowSidebars(grid, order, sides, records, initialWidth, shown) {
+  const docked = dockedEdges(order, sides, shown);
+  reconcileWindowSidebars(records, [...docked, ...grid.cards.filter(card => windowSidebar(card.id)).map(card => card.id)].map(id => ({ id })), initialWidth);
   keepWindowSidebarWidths(grid.cards, records);
-  for (const card of [...grid.cards].filter(card => windowSidebar(card.id))) {
-    if (!descriptors.some(item => item.id === card.id && shown(item.side))) dismiss(card.id);
+  if (windowSidebarsDocked(grid, docked)) return false;
+  // A sidebar that cannot leave yet waits until another window sidebar has left.
+  for (let left = grid.cards.filter(card => windowSidebar(card.id)); left.length; left = grid.cards.filter(card => windowSidebar(card.id))) {
+    const closed = left.find(card => {
+      grid.setFixed(card.id, false);
+      if (grid.close(card.id)) return true;
+      grid.setFixed(card.id, true);
+      return false;
+    });
+    if (!closed) throw new Error(`cannot remove window sidebars ${left.map(card => card.id).join(", ")}`);
+    // After a card is closed, nothing references the lines that card referenced; a sidebar that opens again adds new lines, so they
+    // would accumulate in one slot.
+    grid.tidy();
   }
-  for (const side of ["left", "right"]) {
-    const desired = descriptors.filter(item => item.side === side && shown(side));
-    for (const item of desired) {
-      if (!grid.card(item.id)) {
-        const line = side === "left" ? 0 : grid.lines("x").length - 1;
-        if (!grid.canInsertAt("x", line)) throw new Error(`cannot place window sidebar ${item.id}`);
-        grid.insertAt("x", line, { id: item.id, data: null, size: records[item.id].width });
-        grid.setFixed(item.id, true);
-      }
-    }
-    const actual = grid.cards.filter(card => windowSidebar(card.id)?.side === side).sort((a,b) => a.c0-b.c0).map(card => card.id);
-    const expected = (side === "left" ? desired : [...desired].reverse()).map(item => item.id);
-    if (JSON.stringify(actual) === JSON.stringify(expected)) continue;
-    for (const item of [...desired].reverse()) {
-      const card = grid.card(item.id);
-      if ((side === "left" && card.c0 !== 0) || (side === "right" && card.c1 !== grid.lines("x").length - 1)) {
-        if (!grid.moveTo(item.id, "x", side === "left" ? 0 : grid.lines("x").length - 1)) throw new Error(`cannot order window sidebar ${item.id}`);
-      }
-    }
+  for (const edge of [...docked].reverse()) {
+    const axis = windowAxis(edge);
+    const line = edge === "left" || edge === "top" ? 0 : grid.lines(axis).length - 1;
+    if (!grid.canInsertAt(axis, line)) throw new Error(`cannot place window sidebar ${edge}`);
+    grid.insertAt(axis, line, { id: edge, data: null, size: records[edge][sizeKey(edge)] });
+    grid.setFixed(edge, true);
   }
+  return true;
 }
