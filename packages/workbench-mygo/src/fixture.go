@@ -117,10 +117,8 @@ func (s *Shell) prepareFixture(raw json.RawMessage, answer func(any, error)) {
 // A reload or an end of the window follows done, so done runs after the host answered these writes and every store before them, with
 // the failure of a write that failed.
 func (s *Shell) flushProjects(done func(error)) {
-	finish := func() {
-		// A call in the order of the stores ends after them.
-		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(_ any, err error) { done(err) })
-	}
+	// The flush ends after the writes of the store that started before it, as the page awaits its pending writes; it reads nothing.
+	finish := func() { s.calls.AfterOrder("workspace", func() { done(nil) }) }
 	tabs := func() {
 		if s.tabs == nil {
 			finish()
@@ -143,7 +141,7 @@ func (s *Shell) flushProjects(done func(error)) {
 		done(err)
 		return
 	}
-	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": project.ID, "patch": spacesPatch(project)}, func(_ any, err error) {
+	s.storeSpacesDone(project, func(err error) {
 		if err != nil {
 			done(err)
 			return

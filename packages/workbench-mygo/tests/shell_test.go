@@ -78,6 +78,8 @@ type storedHost struct {
 	policies []map[string]string
 	// policyBatches captures what actually reached the host before each policy transition.
 	policyBatches [][]map[string]any
+	// workspaces holds each workspace call that the host took: its kind, and for a patch the patched members in their order.
+	workspaces []string
 	// holdWorkspace keeps an actual settings handler pending for retirement owners.
 	holdWorkspace <-chan struct{}
 	traces        []string
@@ -445,6 +447,13 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
 	}
+	taken := request.Kind
+	for _, member := range slices.Sorted(maps.Keys(request.Patch)) {
+		taken += " " + member
+	}
+	h.mu.Lock()
+	h.workspaces = append(h.workspaces, taken)
+	h.mu.Unlock()
 	switch request.Kind {
 	case "snapshot":
 		for _, project := range h.projects {

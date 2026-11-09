@@ -408,6 +408,8 @@ func (s *Shell) showThen(id string, done func(err error)) {
 		return
 	}
 	s.active, s.browsing = id, false
+	// The shown project has no spaces that this window stored, as select of packages/workbench/projects.js.
+	s.savedLayout = ""
 	s.windowProjects[id] = true
 	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
@@ -568,9 +570,39 @@ func (s *Shell) storeSpaces(project *projectRecord) {
 	s.storeSpacesThen(project, func() {})
 }
 
-// storeSpacesThen stores the spaces of project and runs stored after the write is confirmed.
+// storeSpacesThen stores the spaces of project and runs stored after the write is confirmed. A refused write shows its error.
 func (s *Shell) storeSpacesThen(project *projectRecord, stored func()) {
-	s.patchThen(project.ID, spacesPatch(project), stored)
+	s.storeSpacesDone(project, func(err error) {
+		if err != nil {
+			s.fail(err)
+			return
+		}
+		stored()
+	})
+}
+
+// storeSpacesDone stores the spaces of project unless they are the spaces that this window stored last, as keep of
+// packages/workbench/projects.js does, and runs done after the writes of the store that started before it. A refused write reaches
+// done, and the same spaces are written again by the next store.
+func (s *Shell) storeSpacesDone(project *projectRecord, done func(error)) {
+	patch := spacesPatch(project)
+	encoded, err := json.Marshal(patch)
+	if err != nil {
+		done(err)
+		return
+	}
+	key := string(encoded)
+	if key == s.savedLayout {
+		s.calls.AfterOrder("workspace", func() { done(nil) })
+		return
+	}
+	s.savedLayout = key
+	s.calls.CallInOrder("workspace", "workspace", map[string]any{"kind": "patch", "id": project.ID, "patch": patch}, func(_ any, err error) {
+		if err != nil && s.savedLayout == key {
+			s.savedLayout = ""
+		}
+		done(err)
+	})
 }
 
 // spacesPatch is the patch that stores the spaces of project.
@@ -703,6 +735,7 @@ func (s *Shell) dropProject(id string) {
 	if s.active == id {
 		s.leavePlace()
 		s.active, s.browsing, s.fullscreen = "", true, ""
+		s.savedLayout = ""
 		s.showPlane(nil)
 		s.options.Located("")
 		for _, project := range s.projects {

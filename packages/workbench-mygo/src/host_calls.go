@@ -234,6 +234,26 @@ func (c *Calls) CallInOrder(order, name string, argument any, answer func(value 
 	c.Caused(nil).CallInOrder(order, name, argument, answer)
 }
 
+// AfterOrder runs then as a step of the main thread after every call of order that started before it answered, as a page awaits the
+// promise of its pending writes. It makes no call. A call frees its order before it posts its answer, so the entry posts the step
+// that posts then: that step runs after the answer of the previous call.
+func (c *Calls) AfterOrder(order string, then func()) {
+	begin := func() {
+		c.post(func() { c.post(then) })
+		c.next(order)
+	}
+	c.mu.Lock()
+	waiting, running := c.orders[order]
+	if running {
+		c.orders[order] = append(waiting, begin)
+		c.mu.Unlock()
+		return
+	}
+	c.orders[order] = nil
+	c.mu.Unlock()
+	begin()
+}
+
 // Caused returns the calls that carry out the operation with the correlation identifiers cids (docs/spec/logging.md#operation-chains).
 func (c *Calls) Caused(cids []string) CausedCalls { return CausedCalls{calls: c, cids: cids} }
 
