@@ -1,6 +1,7 @@
 package host
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -57,5 +58,38 @@ func TestAPreparationThatFailsCancelsTheLayoutThatAFrameOpened(t *testing.T) {
 	case got := <-fake.cancels:
 		t.Fatalf("a second failed preparation cancelled the layout %d", got)
 	default:
+	}
+}
+
+// refusingPlatform is the platform of a preparation of a closed window: it records the layouts that begin and refuses them, as the
+// layout of a window that is gone never becomes ready.
+type refusingPlatform struct{ openPlatform }
+
+func (p *refusingPlatform) BeginLayout(window platform.Window, ticket uint64, ready func(bool)) error {
+	if err := p.openPlatform.BeginLayout(window, ticket, ready); err != nil {
+		return err
+	}
+	ready(false)
+	return nil
+}
+
+// The close of a window cancels the layouts that it began, and its workbench commits none after the close, so a preparation that
+// reaches the main thread after the close begins no layout: that layout would stay open and hold the layouts and the frames of every
+// other window (docs/spec/hosts.md#native-views).
+func TestAPreparationOfAClosedWindowBeginsNoLayout(t *testing.T) {
+	fake := &refusingPlatform{openPlatform{layoutPlatform: layoutPlatform{commits: make(chan uint64, 1), cancels: make(chan uint64, 2)}}}
+	saved, savedFramework := system, framework
+	window := &openFrontend{}
+	// A mygo window has no main page, so its preparation places no window overlays.
+	system, framework = fake, pagelessFramework{window: window}
+	t.Cleanup(func() { system, framework = saved, savedFramework })
+	s := &Surfaces{window: window, images: NewImages(), documents: NewDocuments(), sourceOrigins: newSourceOrigins(), closed: true}
+	// The page of the window was ready before the close.
+	s.first.Do(func() {})
+	if _, err := s.SyncSurfaces(SyncRequest{Titlebar: 40}); !errors.Is(err, errWindowClosed) {
+		t.Fatalf("the preparation of a closed window ended with %v, not that the window closed", err)
+	}
+	if len(fake.begun) != 0 {
+		t.Fatalf("the preparation of a closed window began the layouts %v", fake.begun)
 	}
 }
