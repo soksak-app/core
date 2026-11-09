@@ -197,16 +197,31 @@ function runOne(item, limitMs, env, outputPath, stacks) {
     let watchdog = null;
     // The sampling and the end of a process that did not exit after its tests ended; the result waits for it.
     let ending = null;
+    // Whether the runner took the exit of the process.
+    let exited = false;
+    // Each limit of the runner decides only after the runner took the events that were pending when the limit passed. A runner whose
+    // own process stalled past a limit runs its expired timers before it reads the exit and the output that wait for it, and it would
+    // end a process that had already ended, or whose event re-armed the limit, and report its own stall as the timeout of the test.
+    const limits = new Set();
+    const atLimit = (decide, ms) => {
+      const handle = setTimeout(() => setImmediate(() => { if (limits.delete(handle) && !exited) decide(); }), ms);
+      limits.add(handle);
+      return handle;
+    };
+    const clearLimit = (handle) => {
+      clearTimeout(handle);
+      limits.delete(handle);
+    };
     const endAtLimit = (reason) => {
       if (limit !== null) return;
       limit = { elapsedMs: performance.now() - started, reason, leftovers: [] };
-      clearTimeout(watchdog);
+      clearLimit(watchdog);
       try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
     };
     const arm = () => {
       if (item.eventLimitMs === undefined) return;
-      clearTimeout(watchdog);
-      watchdog = setTimeout(() => endAtLimit(`no test event for ${item.eventLimitMs} ms, the largest limit of a test; last event: ${lastEvent}`), item.eventLimitMs);
+      clearLimit(watchdog);
+      watchdog = atLimit(() => endAtLimit(`no test event for ${item.eventLimitMs} ms, the largest limit of a test; last event: ${lastEvent}`), item.eventLimitMs);
     };
     // The exit limit of a process with `exitLimitMs`: `test:summary` is the last event of the tests of a file, so the process only exits
     // after it, and no test limit applies to that exit. A process that does not exit within the limit waits in its shutdown, which a
@@ -231,19 +246,20 @@ function runOne(item, limitMs, env, outputPath, stacks) {
       })();
     };
     const armExit = () => {
-      clearTimeout(watchdog);
-      watchdog = setTimeout(endAfterTests, item.exitLimitMs);
+      clearLimit(watchdog);
+      watchdog = atLimit(endAfterTests, item.exitLimitMs);
     };
     // At the limit the group is stopped first, and the elapsed time is taken at that stop, so a slow listing of the leftovers does not
     // move the time of the timeout.
     // A process without a declared limit has no timer; its tests end by their own limits.
-    // A process with `stacksAtLimit` ends itself at its own limit with its stacks, and its exit after the limit is its timeout (the
-    // exit handler). The runner sends it no signal: a SIGQUIT that arrives while a Go test binary panics at its -test.timeout ends the
-    // Go runtime with `fatal error: semasleep on Darwin signal stack` and no stacks. Its timer only ends a process that did not end
-    // itself within STACK_LIMIT_MS after the limit.
+    // A process with `stacksAtLimit` ends itself at its own limit with its stacks and a failure status, and its failing exit after the
+    // limit is its timeout (the exit handler); a passing exit came before that limit, whenever the runner takes it. The runner sends it
+    // no signal: a SIGQUIT that arrives while a Go test binary panics at its -test.timeout ends the Go runtime with `fatal error:
+    // semasleep on Darwin signal stack` and no stacks. Its timer only ends a process that did not end itself within STACK_LIMIT_MS
+    // after the limit.
     const timer = limitMs === undefined ? null : item.stacksAtLimit
-      ? setTimeout(() => endAtLimit(`exceeded ${seconds(limitMs)}s and did not end itself with its stacks within ${seconds(STACK_LIMIT_MS)}s; it was killed`), limitMs + STACK_LIMIT_MS)
-      : setTimeout(() => endAtLimit(`exceeded ${seconds(limitMs)}s and was killed`), limitMs);
+      ? atLimit(() => endAtLimit(`exceeded ${seconds(limitMs)}s and did not end itself with its stacks within ${seconds(STACK_LIMIT_MS)}s; it was killed`), limitMs + STACK_LIMIT_MS)
+      : atLimit(() => endAtLimit(`exceeded ${seconds(limitMs)}s and was killed`), limitMs);
     arm();
     // The tests of a process that reports its test events, by `nesting` and name: `queued` holds the tests enqueued and not yet
     // dequeued, `running` the tests dequeued and not yet complete, each with its count. node --test reports no result, error or
@@ -298,12 +314,13 @@ function runOne(item, limitMs, env, outputPath, stacks) {
         }
       }
     });
-    child.once('exit', () => {
-      clearTimeout(watchdog);
-      // A process with `stacksAtLimit` that exits after its limit ended itself at that limit, whose clock starts after the runner's; the
+    child.once('exit', (code) => {
+      exited = true;
+      clearLimit(watchdog);
+      // A process with `stacksAtLimit` that fails after its limit ended itself at that limit, whose clock starts after the runner's; the
       // processes that remain in its group are ended now.
-      if (limit === null && item.stacksAtLimit && performance.now() - started >= limitMs) {
-        clearTimeout(timer);
+      if (limit === null && item.stacksAtLimit && code !== 0 && performance.now() - started >= limitMs) {
+        clearLimit(timer);
         endAtLimit(`exceeded ${seconds(limitMs)}s and ended itself with its stacks`);
       }
       if (limit !== null) return;
@@ -321,13 +338,13 @@ function runOne(item, limitMs, env, outputPath, stacks) {
     const reporting = item.eventLimitMs !== undefined;
     const finish = (result) => resolve(reporting ? { ...result, tests: ran } : result);
     child.once('error', (error) => {
-      clearTimeout(timer);
-      clearTimeout(watchdog);
+      clearLimit(timer);
+      clearLimit(watchdog);
       finish({ status: 'fail', elapsedMs: performance.now() - started, output: error.message, detail: `could not start: ${error.message}` });
     });
     child.once('close', async (code, signal) => {
-      clearTimeout(timer);
-      clearTimeout(watchdog);
+      clearLimit(timer);
+      clearLimit(watchdog);
       await ending;
       const elapsedMs = performance.now() - started;
       // The event lines are the reporter's record for the runner, so they are not part of the output of the test.
