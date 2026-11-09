@@ -5,6 +5,8 @@ package workbench_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -284,6 +286,49 @@ func TestAnAttachThatWaitsForTheSessionOfAClosedTabEndsWithItsView(t *testing.T)
 		if reply["surface"] == "tab-aaaaaa" {
 			t.Fatalf("the attach of the closed tab has the reply %v", reply)
 		}
+	}
+}
+
+// A document region attach that the host answers after the project of its tab closed belongs to the view that ended: the window keeps
+// no region of that tab, so a later save asks no closed surface for its state, which the host would refuse.
+func TestAnAttachThatTheHostAnswersAfterItsProjectClosedKeepsNoRegion(t *testing.T) {
+	stored := &surfaceHost{}
+	stored.installed = unloadDocument
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}
+	attaching, attached := make(chan struct{}), make(chan struct{})
+	var states []string
+	var mu sync.Mutex
+	stored.calls = map[string]workbench.HostCall{
+		"documentAttach": func(context.Context, json.RawMessage) (any, error) {
+			close(attaching)
+			<-attached
+			return nil, nil
+		},
+		"documentInteractionState": func(_ context.Context, argument json.RawMessage) (any, error) {
+			var request struct{ Surface string }
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			mu.Lock()
+			states = append(states, request.Surface)
+			mu.Unlock()
+			return nil, nil
+		},
+	}
+	f := newTabApp(t, stored, unloadDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	f.app.Emit(f.window, "view-call", map[string]any{"surface": "tab-aaaaaa", "plugin": "notes", "generation": 1, "id": 1, "command": "document.attach",
+		"params": map[string]any{"name": "page"}})
+	f.settle()
+	<-attaching
+	f.command("core.project.close", map[string]string{"id": "prj-a"})
+	close(attached)
+	f.settle()
+	f.command("core.projects.flush", map[string]any{})
+	mu.Lock()
+	defer mu.Unlock()
+	if slices.Contains(states, "tab-aaaaaa") {
+		t.Fatalf("the save read the state of a tab of the closed project: %v", states)
 	}
 }
 

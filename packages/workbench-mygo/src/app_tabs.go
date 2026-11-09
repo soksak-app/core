@@ -97,6 +97,11 @@ func (s *Shell) storedSessionOf(tab string, ready func(session *storedSession)) 
 // (docs/spec/plugins.md#memory-saver).
 func (s *Shell) attachDocument(call viewCallEvent, name string, answer viewAnswer) {
 	attached := func(history bool) {
+		// The host may answer an attach that began before the view ended, as when the project of its tab closes. The region belongs
+		// to the ended view, so the window keeps none, and a later save asks no closed surface for its state.
+		if call.ctx != nil && call.ctx.Err() != nil {
+			return
+		}
 		if s.surfaces.documents[call.Surface] == nil {
 			s.surfaces.documents[call.Surface] = map[string]bool{}
 		}
