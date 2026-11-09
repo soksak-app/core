@@ -289,6 +289,47 @@ test("a test that does not end itself at its own limit is ended at the stack lim
   assert.ok(result.elapsedMs >= 10500, `the test ended after ${result.elapsedMs} ms, before its limit and the stack limit`);
 });
 
+// Blocks the event loop of the runner from the start of a test that writes `marker` and exits until the test exited and `ms` passed,
+// as a runner whose own process stalls, so the limit of the test passes while its exit waits for the runner.
+async function stalledRun(item, marker, ms) {
+  const pending = run([item], { concurrency: 1 });
+  const start = performance.now();
+  while (!existsSync(marker) || performance.now() - start < ms) {
+    if (performance.now() - start > 30000) throw new Error("the test process wrote no marker within 30 s");
+  }
+  const until = performance.now() + 300;
+  while (performance.now() < until) {}
+  return pending;
+}
+
+test("a test that exited while the runner stalled past its limit has its own result, not a timeout", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "runner-stall-"));
+  try {
+    const marker = join(folder, "exited");
+    const source = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, ""); process.exit(0)`;
+    const { results } = await stalledRun(node("exits", source, { timeoutMs: 300 }), marker, 1000);
+    const result = results.get("exits");
+    assert.equal(result.status, "pass", result.detail);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a test that writes its stacks at its own limit and passed while the runner stalled past that limit is a pass", async () => {
+  // A process that ends itself at its own limit ends with its stacks and a failure status, so a passing exit came before that limit,
+  // whenever the runner sees it.
+  const folder = mkdtempSync(join(tmpdir(), "runner-stall-"));
+  try {
+    const marker = join(folder, "exited");
+    const source = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, ""); process.exit(0)`;
+    const { results } = await stalledRun(node("passes", source, { timeoutMs: 300, stacksAtLimit: true }), marker, 1000);
+    const result = results.get("passes");
+    assert.equal(result.status, "pass", result.detail);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test("stacksAtLimit needs a limit of the test", async () => {
   await assert.rejects(run([{ name: "unlimited", command: process.execPath, args: ["-e", ""], stacksAtLimit: true }], { concurrency: 1 }),
     /unlimited: stacksAtLimit must be true and needs timeoutMs/);

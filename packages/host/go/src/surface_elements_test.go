@@ -156,6 +156,22 @@ func TestAClosedWindowReleasesTheViewsOfItsElements(t *testing.T) {
 	}
 }
 
+// A quit closes the last window while the start of its workbench runs, so the title bar step of a start that reaches a closed window
+// leaves the native window alone and names no window, with or without a main page.
+func TestAStartThatReachesAClosedWindowSetsNoTitleBar(t *testing.T) {
+	for _, drawn := range []bool{true, false} {
+		surfaces, fake := elements(t, &elementWindow{})
+		surfaces.elements.drawn = drawn
+		mainThreadStep(func() { surfaces.closed = true })
+		if err := surfaces.startTitlebar(Record{"textSize": 2.0}); !errors.Is(err, ErrNoStartWindow) {
+			t.Fatalf("the start of a closed window (elements drawn %v) ended with %v, want %v", drawn, err, ErrNoStartWindow)
+		}
+		if len(fake.heights) != 0 || fake.titlebar != 0 {
+			t.Fatalf("the start of a closed window (elements drawn %v) set the title bar %v and asked for the page title bar %d times", drawn, fake.heights, fake.titlebar)
+		}
+	}
+}
+
 // contract: surface-layout.element-holds-its-views-until-the-next-frame
 func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	surfaces, _ := elements(t, &elementWindow{})

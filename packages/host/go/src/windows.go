@@ -663,13 +663,25 @@ func (s *Surfaces) startTitlebar(common Record) error {
 	}
 	// A window without a main page has no first row to wait for: the title bar takes the row at once, and the workbench gives each
 	// later row with its layout. A shown window held the frame of its last workbench, which placed the row of the same settings.
+	// A quit closes the last window while its start runs, and the close ends the window on the main thread, so the step of a start that
+	// comes after it leaves the native window alone and names no window.
 	if s.elements.drawn {
 		var set error
-		mainThreadStep(func() { set = system.SetTitlebarHeight(win.NativeWindow(), height) })
+		mainThreadStep(func() {
+			if s.closed {
+				set = ErrNoStartWindow
+				return
+			}
+			set = system.SetTitlebarHeight(win.NativeWindow(), height)
+		})
 		return set
 	}
 	done := make(chan error, 1)
 	mainThreadStep(func() {
+		if s.closed {
+			done <- ErrNoStartWindow
+			return
+		}
 		s.lastPreparation++
 		if began := system.StartPageTitlebar(win.NativeWindow(), s.lastPreparation, height, func(failure error) { done <- failure }); began != nil {
 			done <- began
