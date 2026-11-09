@@ -58,9 +58,12 @@ test('test-app-activation-backspace-repeat forwards its focused variant and stop
   t.after(() => rmSync(build, { recursive: true }));
   const executable = fake(build, 'image_region_ime_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "arg:$1 run:$n"; [ "$1" = "--backspace-trace-abc-baseline" ] && [ "$n" -lt 2 ]');
   const probe = fake(build, 'ime_source_probe', 'echo \'{"source":"com.apple.inputmethod.Korean.2SetKorean","frontmostPID":100,"processPID":200}\'');
-  const result = spawnSync('make', ['-C', native, 'test-app-activation-backspace-repeat', 'COUNT=3', `BUILD=${build}`, '-o', executable, '-o', probe], {
+  const evidence = join(build, 'evidence');
+  const result = spawnSync('make', ['-C', native, 'test-app-activation-backspace-repeat', 'COUNT=3', `BUILD=${build}`, `ACTIVATION_REPEAT_EVIDENCE=${evidence}`, '-o', executable, '-o', probe], {
     encoding: 'utf8', timeout: 60000,
   });
+  // The evidence of the repeat is kept on purpose, so it lies in the folder that the caller names and not in the temporary folder.
+  assert.match(result.stdout, new RegExp(`^EVIDENCE: ${evidence}/F239-47-8\\.[A-Za-z0-9]{6}$`, 'm'), result.stdout + result.stderr);
   assert.match(result.stdout, /^RUN  image_region_ime_test --backspace-trace-abc-baseline \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS image_region_ime_test --backspace-trace-abc-baseline \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^FAIL image_region_ime_test --backspace-trace-abc-baseline \d+\.\d{3}s exit 1$/m, result.stdout + result.stderr);
@@ -69,6 +72,15 @@ test('test-app-activation-backspace-repeat forwards its focused variant and stop
   assert.equal(result.stdout.split('\n').filter((line) => line.startsWith('RUN  image_region_ime_test')).length, 2, result.stdout);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stderr, /FAIL: image_region_ime_test --backspace-trace-abc-baseline run 2 of 3; /, result.stdout + result.stderr);
+});
+
+test('the activation repeat keeps its evidence under target/activation-repeat of the repository by default', () => {
+  const result = spawnSync('make', ['-n', '-C', native, 'test-app-activation-backspace-repeat', 'COUNT=1', '-o', join(native, 'build/image_region_ime_test'), '-o', join(native, 'build/ime_source_probe')], {
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const kept = resolve(native, '../../target/activation-repeat');
+  assert.ok(result.stdout.includes(`mktemp -d "${kept}/F239-47-8.XXXXXX"`), result.stdout);
 });
 
 test('the activation build alias resolves absolute targets without running either executable', (t) => {
