@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { frames, readFrame } from "./frame.mjs";
+import { joinedFailure } from "./failure.mjs";
 import { currentEventOffsets, readEvents } from "./event-log.mjs";
 import { policyOfSetting, untilPolicy } from "./log-policy.mjs";
 import { valueProof } from "./view-content.mjs";
@@ -482,7 +483,7 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
       try {
         await descriptor.stopContentTrace(s, surface);
       } catch (stopError) {
-        throw new AggregateError([error, stopError], `content trace start clock bracket and cleanup failed for ${surface}`);
+        throw joinedFailure(`content trace start clock bracket and cleanup failed for ${surface}`, [error, stopError]);
       }
     }
     throw error;
@@ -512,11 +513,10 @@ export async function withViewContentTrace(t, s, descriptor, surface, action) {
     t.diagnostic(`content-frame events could not be read for ${surface}: ${error.stack ?? error}`);
   }
   if (actionError && (stopError || eventError)) {
-    throw new AggregateError([actionError, ...[stopError, eventError].filter(Boolean)],
-      `content trace action and evidence finalization failed for ${surface}`);
+    throw joinedFailure(`content trace action and evidence finalization failed for ${surface}`, [actionError, ...[stopError, eventError].filter(Boolean)]);
   }
   if (actionError) throw actionError;
-  if (stopError && eventError) throw new AggregateError([stopError, eventError], `content trace finalization failed for ${surface}`);
+  if (stopError && eventError) throw joinedFailure(`content trace finalization failed for ${surface}`, [stopError, eventError]);
   if (stopError) throw stopError;
   if (eventError) throw eventError;
   const contentFrames = viewContentFrameEvents(events, descriptor.plugin, surface, startBracket);
@@ -580,8 +580,8 @@ export async function withDragTraceMode(s, action) {
 
   const restoreFailed = restoreErrors.length > 0;
   const restoreError = restoreErrors.length === 1 ? restoreErrors[0]
-    : restoreFailed ? new AggregateError(restoreErrors, "drag trace-mode restoration failed") : undefined;
-  if (actionFailed && restoreFailed) throw new AggregateError([actionError, restoreError], "drag and trace-mode restoration failed");
+    : restoreFailed ? joinedFailure("drag trace-mode restoration failed", restoreErrors) : undefined;
+  if (actionFailed && restoreFailed) throw joinedFailure("drag and trace-mode restoration failed", [actionError, restoreError]);
   if (actionFailed) throw actionError;
   if (restoreFailed) throw restoreError;
   return {

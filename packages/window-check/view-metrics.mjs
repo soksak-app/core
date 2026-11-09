@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import { joinedFailure } from "./failure.mjs";
 
 const TOTAL_MARGIN_BYTES = 10_000_000;
 const RECLAIM_FRACTION = 0.9;
@@ -795,7 +796,7 @@ function evaluateDrag(value) {
   }
   if (criterionFailures.length > 1) {
     const errors = criterionFailures.map(({ criterion, error }) => new Error(`${criterion}: ${error.message}`, { cause: error }));
-    const aggregate = new AggregateError(errors, `view measurement drag criteria failed: ${criterionFailures.map(({ criterion }) => criterion).join(", ")}`);
+    const aggregate = joinedFailure("view measurement drag criteria failed", errors);
     aggregate.criteria = criteria;
     throw aggregate;
   }
@@ -852,7 +853,7 @@ export function assertViewMeasurements(measurements, { plugin, host, baselineMs,
       const message = error instanceof Error ? error.message : String(error);
       return new Error(`${category}: ${message}`, { cause: error });
     });
-    throw new AggregateError(errors, `view measurement criteria failed: ${failures.map(({ category }) => category).join(", ")}`);
+    throw joinedFailure("view measurement criteria failed", errors);
   }
 
   const { total, reclaim, warmDisplay, newProcess, layoutDisplay, editorFootprint, drag } = evaluations;
@@ -931,8 +932,7 @@ export async function runViewMeasurements(t, s, descriptor) {
     try {
       await writeFile(join(artifactDirectory, "error.json"), errorDocument(error), "utf8");
     } catch (artifactError) {
-      throw new AggregateError([error, artifactError],
-        `view measurement failed and its error artifact could not be written in ${artifactDirectory}`);
+      throw joinedFailure(`view measurement failed and its error artifact could not be written in ${artifactDirectory}`, [error, artifactError]);
     }
     throw error;
   }
