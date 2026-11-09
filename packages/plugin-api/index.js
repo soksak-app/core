@@ -1024,6 +1024,12 @@ const RESERVED_SET_IDS = ["off", "inherit"];
 /** The maximum length of a set title. */
 const SET_TITLE_MAX = 40;
 
+/** The edges of a window; each holds at most one fixed window sidebar, whose card id is the edge (docs/spec/external-sidebars.md). */
+export const WINDOW_EDGES = Object.freeze(["left", "right", "top", "bottom"]);
+
+/** The places of a sidebar link: the general edge choices, the plugin window choices and the internal card sides (docs/spec/settings.md#sidebar-choices). */
+export const LINK_PLACES = Object.freeze([...WINDOW_EDGES, ...WINDOW_EDGES.map((edge) => `window-${edge}`), "card-left", "card-right", "card-top", "card-bottom"]);
+
 function validatePluginSidebarDefaults(manifest) {
   const where = `plugin ${manifest.id}`;
   const sidebars = manifest.sidebars;
@@ -1034,7 +1040,7 @@ function validatePluginSidebarDefaults(manifest) {
     if (!ID.test(set.id)) throw new Error(`${where}: invalid local set id ${set.id}`);
   }
   const ids = new Set(sidebars.sets.map((set) => set.id));
-  for (const [kind, sides] of [["card", ["top", "bottom", "left", "right"]], ["window", ["left", "right"]]]) {
+  for (const [kind, sides] of [["card", ["top", "bottom", "left", "right"]], ["window", WINDOW_EDGES]]) {
     const mapping = sidebars[kind];
     if (mapping === undefined) continue;
     if (kind === "card" && !manifest.surface) throw new Error(`${where}: card defaults require a surface`);
@@ -1102,16 +1108,16 @@ export function validateSidebars(sidebars, where, loaded = null) {
     if (setIds.has(set.id)) throw new Error(`${where}: duplicate set ${set.id}`);
     setIds.add(set.id);
   }
-  // The meaning of a link is the sidebar choice of docs/spec/settings.md. A left or right link whose plugin is null is a general choice;
+  // The meaning of a link is the sidebar choice of docs/spec/settings.md. An edge link whose plugin is null is a general choice;
   // the window (window-*) and card (card-*) links of a plugin are independent of each other and require a known set.
   const seen = new Set();
   for (const link of sidebars.links) {
-    if (!isObject(link) || !["left", "right", "window-left", "window-right", "card-left", "card-right", "card-top", "card-bottom"].includes(link.place)) {
-      throw new Error(`${where}: every link requires a place (left, right, window-left, window-right, card-left, card-right, card-top, card-bottom) and a known set`);
+    if (!isObject(link) || !LINK_PLACES.includes(link.place)) {
+      throw new Error(`${where}: every link requires a place (${LINK_PLACES.join(", ")}) and a known set`);
     }
     only(`${where} link`, link, ["place", "plugin", "set"]);
     if (link.plugin !== null && !isText(link.plugin)) throw new Error(`${where}: a link plugin is null or a plugin id`);
-    const general = link.place === "left" || link.place === "right";
+    const general = WINDOW_EDGES.includes(link.place);
     if (general && link.plugin !== null) throw new Error(`${where}: a general window link requires plugin null`);
     if (!general && link.plugin === null) throw new Error(`${where}: a ${link.place} link names a plugin`);
     const kept = loaded !== null && link.plugin !== null && !loaded.has(link.plugin);

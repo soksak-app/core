@@ -2662,8 +2662,12 @@
               "enum": [
                 "left",
                 "right",
+                "top",
+                "bottom",
                 "window-left",
                 "window-right",
+                "window-top",
+                "window-bottom",
                 "card-left",
                 "card-right",
                 "card-top",

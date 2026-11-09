@@ -1357,7 +1357,7 @@ fn check_sidebar_defaults(
     }
     for (kind, sides) in [
         ("card", &["top", "bottom", "left", "right"][..]),
-        ("window", &["left", "right"][..]),
+        ("window", &["left", "right", "top", "bottom"][..]),
     ] {
         let Some(mapping_raw) = sidebars.get(kind) else {
             continue;

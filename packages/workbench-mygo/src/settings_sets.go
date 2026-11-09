@@ -142,16 +142,23 @@ func ChangeRow(sets []StoredSet, id, action string, index int, section string, r
 	return next, nil
 }
 
-// linkPlaces are the places of a link.
-var linkPlaces = []string{"left", "right", "window-left", "window-right", "card-left", "card-right", "card-top", "card-bottom"}
+// WindowEdges are the edges of a window; each holds at most one fixed window sidebar, whose card id is the edge
+// (docs/spec/external-sidebars.md).
+var WindowEdges = []string{"left", "right", "top", "bottom"}
+
+// IsWindowEdge reports whether id names an edge of the window.
+func IsWindowEdge(id string) bool { return slices.Contains(WindowEdges, id) }
+
+// linkPlaces are the places of a link: the general edge choices, the plugin window choices and the internal card sides.
+var linkPlaces = []string{"left", "right", "top", "bottom", "window-left", "window-right", "window-top", "window-bottom", "card-left", "card-right", "card-top", "card-bottom"}
 
 // ChooseLink returns links with one choice changed: choice is a set id or off, and plugin is empty for the general choice of
-// left or right.
+// an edge.
 func ChooseLink(links []StoredLink, place, plugin, choice string) ([]StoredLink, error) {
 	if !slices.Contains(linkPlaces, place) {
 		return nil, fmt.Errorf("unknown sidebar place %s", place)
 	}
-	general := place == "left" || place == "right"
+	general := IsWindowEdge(place)
 	if general != (plugin == "") {
 		return nil, fmt.Errorf("invalid plugin for %s", place)
 	}
@@ -248,7 +255,7 @@ func validateSidebars(sets, links any, where string, loaded map[string]bool) err
 		if link["plugin"] != nil && (!named || plugin == "") {
 			return fmt.Errorf("%s: a link plugin is null or a plugin id", where)
 		}
-		general := place == "left" || place == "right"
+		general := IsWindowEdge(place)
 		if general && named {
 			return fmt.Errorf("%s: a general window link requires plugin null", where)
 		}

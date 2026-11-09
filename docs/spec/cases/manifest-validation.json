@@ -6147,6 +6147,104 @@
       ]
     },
     {
+      "id": "sidebars.window-edges",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill"
+          }
+        ],
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                "probe.a"
+              ],
+              "layout": "list"
+            }
+          ],
+          "window": {
+            "left": "s",
+            "right": "s",
+            "top": "s",
+            "bottom": "s"
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.window-unknown-edge",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill"
+          }
+        ],
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                "probe.a"
+              ],
+              "layout": "list"
+            }
+          ],
+          "window": {
+            "middle": "s"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe sidebar window: unknown field middle",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "data.enum-object-members-in-any-order",
       "manifest": {
         "id": "probe",

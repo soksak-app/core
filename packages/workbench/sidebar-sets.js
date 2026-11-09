@@ -1,6 +1,7 @@
 // Creating, editing, and deleting the sidebar set list (docs/spec/settings.md).
 //
 // Takes a list and returns a new list. The set() of the settings stores it. The received list is not changed.
+import { LINK_PLACES, WINDOW_EDGES } from "@soksak/plugin-api";
 
 const LAYOUTS = ["list", "tabs"];
 const TITLE_MAX = 40;
@@ -80,11 +81,11 @@ export function changeRow(sets, id, { action, index, section }, registered) {
 
 /**
  * Returns the link list with one sidebar choice changed (sidebar choice in docs/spec/settings.md).
- * choice is a set id or off. When plugin is null, it is the general choice of left or right.
+ * choice is a set id or off. When plugin is null, it is the general choice of an edge.
  */
 export function chooseLink(links, place, plugin, choice) {
-  if (!["left", "right", "window-left", "window-right", "card-left", "card-right", "card-top", "card-bottom"].includes(place)) throw new Error(`unknown place ${place}`);
-  const general = place === "left" || place === "right";
+  if (!LINK_PLACES.includes(place)) throw new Error(`unknown place ${place}`);
+  const general = WINDOW_EDGES.includes(place);
   if (general ? plugin !== null : plugin === null) throw new Error(`invalid plugin for ${place}`);
   if (choice === "inherit") throw new Error(`${place} has no inherit choice`);
   const rest = links.filter(link => !(link.place === place && link.plugin === plugin));

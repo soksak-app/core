@@ -294,6 +294,18 @@ func TestAChoiceOfASidebarReplacesItsLinkAndOffRemovesIt(t *testing.T) {
 	if _, err := workbench.ChooseLink(nil, "left", "", "inherit"); err == nil || err.Error() != "left has no inherit choice" {
 		t.Fatalf("inherit: %v", err)
 	}
+	// Every edge of the window takes a general choice and a plugin window choice (docs/spec/external-sidebars.md).
+	for _, edge := range []string{"top", "bottom"} {
+		if links, err := workbench.ChooseLink(nil, edge, "", "a"); err != nil || len(links) != 1 || links[0].Place != edge {
+			t.Fatalf("the general choice of %s: %+v %v", edge, links, err)
+		}
+		if links, err := workbench.ChooseLink(nil, "window-"+edge, "acme", "a"); err != nil || len(links) != 1 || links[0].Place != "window-"+edge {
+			t.Fatalf("the window choice of %s: %+v %v", edge, links, err)
+		}
+		if _, err := workbench.ChooseLink(nil, edge, "acme", "a"); err == nil || err.Error() != "invalid plugin for "+edge {
+			t.Fatalf("a plugin of the general choice of %s: %v", edge, err)
+		}
+	}
 }
 
 func TestDeletingASetRemovesTheLinksToIt(t *testing.T) {
@@ -370,7 +382,7 @@ func TestTheSetsAndLinksAreCheckedAsThePageChecksThem(t *testing.T) {
 		t.Fatal(err)
 	}
 	const good = `{"id":"a","title":"a","sections":["acme.tree"],"layout":"list"}`
-	places := "settings: every link requires a place (left, right, window-left, window-right, card-left, card-right, card-top, card-bottom) and a known set"
+	places := "settings: every link requires a place (left, right, top, bottom, window-left, window-right, window-top, window-bottom, card-left, card-right, card-top, card-bottom) and a known set"
 	cases := []struct{ sets, links, want string }{
 		{`{}`, `[]`, "settings: sidebars requires sets and links"},
 		{`[{"id":"a","sections":[],"layout":"list"}]`, `[]`, "settings: every set requires id, title, and sections"},
