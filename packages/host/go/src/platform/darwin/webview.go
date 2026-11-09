@@ -234,8 +234,9 @@ func (implementation) FocusModal(view unsafe.Pointer, take bool) {
 	native.ModalViewFocus(view, value)
 }
 
-func (implementation) AlignRect(window platform.Window, at platform.Rect) (platform.Rect, error) {
-	var out [4]float64
+func (implementation) AlignRect(window platform.Window, at platform.Rect) (platform.Rect, float64, error) {
+	// The native fit writes the rectangle and then the backing scale of the window whose device pixels it fitted the rectangle to.
+	var out [5]float64
 	native.ModalAligned(uintptr(window), float64(at.X), float64(at.Y), float64(at.W), float64(at.H), &out[0])
-	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}, nil
+	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}, float64(out[4]), nil
 }

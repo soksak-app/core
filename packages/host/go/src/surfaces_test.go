@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -1731,5 +1732,68 @@ func TestSurfaceDispatchOfACompositionNamesItsSurface(t *testing.T) {
 	}
 	if got := bufferedTraces(t, "host.frame.surface.dispatch"); len(got) != 1 || !reflect.DeepEqual(got[0], want) {
 		t.Fatalf("composition dispatch records = %#v, want one record %#v", got, want)
+	}
+}
+
+// scalePlatform fits a rectangle inward to the device pixels of its backing scale, as AppKit fits it, and answers that scale.
+type scalePlatform struct {
+	platform.Platform
+	scale float64
+}
+
+func (p *scalePlatform) AlignRect(_ platform.Window, at platform.Rect) (platform.Rect, float64, error) {
+	if p.scale <= 0 {
+		return at, p.scale, nil
+	}
+	left, top := math.Ceil(at.X*p.scale)/p.scale, math.Ceil(at.Y*p.scale)/p.scale
+	right, bottom := math.Floor((at.X+at.W)*p.scale)/p.scale, math.Floor((at.Y+at.H)*p.scale)/p.scale
+	return platform.Rect{X: left, Y: top, W: right - left, H: bottom - top}, p.scale, nil
+}
+
+// A visible surface lies on the device pixels of the backing scale that the host fitted it to, and the window can change display
+// before the page reads the answer, so the placement names that scale; a hidden surface is fitted to no grid and names none
+// (docs/spec/native-surfaces.md).
+func TestAnAlignedSurfaceNamesTheBackingScaleItWasFittedTo(t *testing.T) {
+	saved := system
+	system = &scalePlatform{scale: 3}
+	t.Cleanup(func() { system = saved })
+	at, scale, err := aligned(&openFrontend{}, Rect{X: 203, Y: 636.66, W: 1360, H: 413.33})
+	if err != nil || scale != 3 {
+		t.Fatalf("the surface was fitted at scale %v (%v), want 3", scale, err)
+	}
+	visible, err := json.Marshal(seatedPlacement("probe", at, true, scale))
+	if err != nil || !strings.Contains(string(visible), `"scale":3`) {
+		t.Fatalf("the visible placement %s (%v) does not name the scale 3", visible, err)
+	}
+	hidden, err := json.Marshal(seatedPlacement("probe", at, false, scale))
+	if err != nil || strings.Contains(string(hidden), "scale") {
+		t.Fatalf("the hidden placement %s (%v) names a scale", hidden, err)
+	}
+}
+
+// The trace of a placement names the scale of a visible view with its frame, so a trace shows on which device pixels the host seated
+// it (docs/spec/performance-trace.md).
+func TestTheTraceOfAPlacementNamesTheScaleOfAVisibleView(t *testing.T) {
+	visible := seatedPlacement("probe", Rect{X: 203, Y: 553 + 2.0/3, W: 1360, H: 413}, true, 3)
+	if got := surfaceRecord("placed", "probe", &visible); got["scale"] != 3.0 || got["visible"] != true {
+		t.Fatalf("the trace of the visible placement is %v", got)
+	}
+	hidden := seatedPlacement("probe", Rect{}, false, 3)
+	if got := surfaceRecord("placed", "probe", &hidden); got["scale"] != nil {
+		t.Fatalf("the trace of the hidden placement names the scale %v", got["scale"])
+	}
+	if got := surfaceRecord("created", "probe", nil); got["scale"] != nil || got["x"] != nil {
+		t.Fatalf("the trace of a created surface carries a placement: %v", got)
+	}
+}
+
+// A window without a backing scale has no device pixels to fit a surface to, so the alignment fails instead of seating the surface
+// on a grid that no display has.
+func TestASurfaceAlignedInAWindowWithoutABackingScaleFails(t *testing.T) {
+	saved := system
+	system = &scalePlatform{scale: 0}
+	t.Cleanup(func() { system = saved })
+	if _, _, err := aligned(&openFrontend{}, Rect{X: 1, Y: 2, W: 3, H: 4}); err == nil || !strings.Contains(err.Error(), "backing scale 0") {
+		t.Fatalf("the alignment in a window without a backing scale ended with %v", err)
 	}
 }

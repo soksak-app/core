@@ -462,8 +462,9 @@ type Platform interface {
 	ConfigureModal(view unsafe.Pointer, title string, radius float64)
 	// FocusModal moves the keyboard focus to the modal web view or returns it to the main web view.
 	FocusModal(view unsafe.Pointer, take bool)
-	// AlignRect fits a region in page coordinates inward to the display pixels.
-	AlignRect(window Window, at Rect) (Rect, error)
+	// AlignRect fits a region in page coordinates inward to the display pixels, and returns the backing scale of the window whose
+	// device pixels it fitted the region to.
+	AlignRect(window Window, at Rect) (Rect, float64, error)
 
 	// CreateDocument creates a hidden external document web view inside the surface web view surface, with the values of options.
 	// changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward, error, scroll}) on the UI thread.
