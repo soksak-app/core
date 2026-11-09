@@ -83,10 +83,11 @@ func OpenLayout(h *Host, window Frontend) (uint64, error) {
 	}
 	s.lastPreparation++
 	ticket := s.lastPreparation
-	// The transaction waits for the preparation that takes it over, which a frame that opened it always makes or cancels.
+	// The next preparation of the window takes the transaction over (SyncSurfaces), and a frame that makes none cancels it.
 	if err := system.BeginLayout(s.window.NativeWindow(), ticket, func(bool) {}); err != nil {
 		return 0, err
 	}
+	s.opened.Store(ticket)
 	return ticket, nil
 }
 
