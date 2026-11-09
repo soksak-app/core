@@ -49,8 +49,19 @@ type surfaceHost struct {
 	viewWindowReads []int
 	// windowFailure is the error of each read of the state of the window.
 	windowFailure error
-	// presentFailure and declareFailure are the errors of each presentSurfaces and compositionDeclare.
+	// presentFailure and declareFailure are the errors of each presentSurfaces and compositionDeclare, and syncFailure the error of
+	// each syncSurfaces.
 	presentFailure error
+	syncFailure    error
+	// presentFailureFrom is the number of syncSurfaces from which presentFailure fails presentSurfaces, and 0 for every one.
+	presentFailureFrom int
+	// transaction tells that a layout transaction of the window is open, so a frame opens none; opened holds the ticket of each
+	// layout that a frame opened, openedAt the number of host calls made before each opening, which is no host call of a page, and
+	// cancelled the ticket of each cancelSurfaces.
+	transaction bool
+	opened      []uint64
+	openedAt    []int
+	cancelled   []uint64
 	// presentGate, when set, holds each presentSurfaces until it closes, so a frame draws while a placement runs.
 	presentGate    chan struct{}
 	declareFailure error
@@ -125,6 +136,9 @@ func (h *surfaceHost) keyboardTarget() (*string, bool) {
 func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	table := h.table()
 	table["syncSurfaces"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		if h.syncFailure != nil {
+			return nil, h.syncFailure
+		}
 		var request map[string]any
 		if err := json.Unmarshal(argument, &request); err != nil {
 			return nil, err
@@ -133,11 +147,22 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		h.called("syncSurfaces")
 		return map[string]any{"ticket": len(h.requests), "placements": []any{}, "chrome": map[string]any{}}, nil
 	}
+	table["cancelSurfaces"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		var request struct{ Ticket uint64 }
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		h.orderMu.Lock()
+		h.cancelled = append(h.cancelled, request.Ticket)
+		h.orderMu.Unlock()
+		h.called("cancelSurfaces")
+		return nil, nil
+	}
 	table["waitPresented"] = func(context.Context, json.RawMessage) (any, error) {
 		return 0, h.presentedFailure
 	}
 	table["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
-		if h.presentFailure != nil {
+		if h.presentFailure != nil && len(h.requests) >= h.presentFailureFrom {
 			return nil, h.presentFailure
 		}
 		h.orderMu.Lock()
@@ -240,6 +265,19 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	return table
 }
 
+// openLayout opens the layout transaction of the window for the frame being drawn, unless one is open, as the host does.
+func (h *surfaceHost) openLayout() (uint64, error) {
+	if h.transaction {
+		return 0, nil
+	}
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	ticket := uint64(1000 + len(h.opened))
+	h.opened = append(h.opened, ticket)
+	h.openedAt = append(h.openedAt, len(h.order))
+	return ticket, nil
+}
+
 // element returns the views of a surface once the host holds them: the view of the surface and the view inside it that takes the
 // keyboard.
 func (h *surfaceHost) element(id string) (uintptr, uintptr, bool) {
@@ -299,6 +337,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Element:     func(id string) (uintptr, uintptr, bool) { return stored.element(id) },
+		OpenLayout:  stored.openLayout,
 		Reload:      func() { f.reloads++ },
 		Elements:    fixtureElements{f},
 		Tabs:        stored.tabs,
@@ -1798,5 +1837,102 @@ func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
 	f.settle()
 	if got := titlebar(); got != 108 {
 		t.Fatalf("the library at factor 3 gives the first row %v, want 108", got)
+	}
+}
+
+// callsSince returns the host calls made after the first count calls.
+func (h *surfaceHost) callsSince(count int) []string {
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	return slices.Clone(h.order[count:])
+}
+
+// openings returns the number of layouts that frames opened.
+func (h *surfaceHost) openings() int {
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	return len(h.opened)
+}
+
+// callCount returns the number of host calls so far.
+func (h *surfaceHost) callCount() int {
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	return len(h.order)
+}
+
+// A frame that moves a surface sets the frame of its surface host in its own Core Animation transaction, so it opens the layout
+// transaction of the window before it presents, and the placement of its lines takes that transaction over: the frame shows with the
+// commit, after the image regions present the raster of the new size (docs/spec/native-surfaces.md#regions).
+func TestAFrameThatMovesASurfaceOpensTheLayoutBeforeItsPlacement(t *testing.T) {
+	f, stored := surfaceShell(t)
+	before, opened := stored.callCount(), stored.openings()
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	if at := stored.openedAt[opened:]; !slices.Equal(at, []int{before}) {
+		t.Fatalf("the frame that moved the surfaces opened the layout after the host calls %v, want one opening after %d", at, before)
+	}
+	f.pending.drain(t)
+	calls := stored.callsSince(before)
+	if want := []string{"syncSurfaces", "presentSurfaces"}; !slices.Equal(calls, want) {
+		t.Fatalf("the placement of the moved surfaces made the host calls %q, want %q", calls, want)
+	}
+	// A frame that a layout transaction holds draws inside it and opens none.
+	stored.transaction = true
+	before, opened = stored.callCount(), stored.openings()
+	f.tester.SetSize(1000, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	if calls := stored.callsSince(before); stored.openings() != opened || !slices.Contains(calls, "syncSurfaces") {
+		t.Fatalf("a frame inside a layout transaction opened %d layouts with the host calls %q", stored.openings()-opened, calls)
+	}
+}
+
+// A frame that moves a surface while a placement runs opens the layout transaction, which holds the frames of the window, so the
+// answer of the running placement places the lines of that frame at once instead of waiting for a frame that the transaction holds.
+func TestAFrameThatMovesASurfaceDuringAPlacementIsPlacedAtItsAnswer(t *testing.T) {
+	f, stored := surfaceShell(t)
+	gate := make(chan struct{})
+	stored.orderMu.Lock()
+	stored.presentGate = gate
+	stored.orderMu.Unlock()
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	requests := len(stored.requests)
+	before, opened := stored.callCount(), stored.openings()
+	f.tester.SetSize(1000, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	if calls := stored.callsSince(before); len(calls) != 0 || stored.openings() != opened+1 {
+		t.Fatalf("a frame that moved the surfaces during a placement opened %d layouts with the host calls %q",
+			stored.openings()-opened, calls)
+	}
+	stored.orderMu.Lock()
+	stored.presentGate = nil
+	stored.orderMu.Unlock()
+	close(gate)
+	f.pending.drain(t)
+	if got := len(stored.requests); got != requests+1 {
+		t.Fatalf("the answer of the running placement made %d placements without a frame, want 1", got-requests)
+	}
+	if calls := stored.callsSince(before); slices.Contains(calls, "cancelSurfaces") {
+		t.Fatalf("the placement that took the opened layout over made the host calls %q", calls)
+	}
+}
+
+// A placement whose preparation fails leaves the layout that its frame opened to no preparation, so it cancels that layout, which
+// commits it and releases the frames of the window.
+func TestAPlacementThatFailsBeforeItsPreparationCancelsTheOpenedLayout(t *testing.T) {
+	f, stored := surfaceShell(t)
+	stored.syncFailure = errors.New("refused")
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	stored.orderMu.Lock()
+	opened, cancelled := slices.Clone(stored.opened), slices.Clone(stored.cancelled)
+	stored.orderMu.Unlock()
+	if len(opened) == 0 || !slices.Equal(cancelled, opened[len(opened)-1:]) {
+		t.Fatalf("a failed preparation cancelled the layouts %v after the frame opened %v", cancelled, opened)
 	}
 }

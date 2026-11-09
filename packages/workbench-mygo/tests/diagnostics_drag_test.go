@@ -112,7 +112,8 @@ func TestTheRecordOfADragHoldsTheBoundaryBeforeTheDragAndAfterEachStep(t *testin
 }
 
 // A drag asks for its last placement. A placement that runs when the steps arrive holds none of them, so the answer waits for
-// the placement that follows it.
+// the placement that follows it. The frame of those steps opened the layout, which holds the frames of the window, so the answer
+// of the running placement places the steps at once.
 func TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns(t *testing.T) {
 	f, stored := surfaceShell(t)
 	left := f.tabbedCards()[0]
@@ -142,22 +143,17 @@ func TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns(t *testing.T) 
 
 	answered := false
 	var failure error
-	f.shell.Registry().Reply("diagnostics.drag.placed", nil, nil, func(_ any, err error) { answered, failure = true, err })
+	answeredAt := 0
+	f.shell.Registry().Reply("diagnostics.drag.placed", nil, nil, func(_ any, err error) {
+		answered, failure, answeredAt = true, err, len(stored.requests)
+	})
 	if answered {
 		t.Fatalf("the window answered while a placement ran: %v", failure)
 	}
 	f.pending.drain(t)
-	if answered {
-		t.Fatal("the window answered with the placement that ran when the steps arrived")
+	if !answered || answeredAt != began+2 {
+		t.Fatalf("the window answered %t after %d placements, not after the placement that followed the one that ran", answered, answeredAt-began)
 	}
-	if got := len(stored.requests); got != began+1 {
-		t.Fatalf("the steps made %d placements while one ran", got-began)
-	}
-	f.tester.Frame()
-	if answered {
-		t.Fatal("the window answered before the host replied to the last placement")
-	}
-	f.pending.drain(t)
 	if got := len(stored.requests); got != began+2 {
 		t.Fatalf("after the first placement the window sent %d placements", got-began)
 	}
@@ -187,6 +183,7 @@ func TestAFailedLastPlacementAnswersItsFailure(t *testing.T) {
 	f.tester.Press(x, y)
 	f.tester.Frame()
 	f.pending.drain(t)
+	began := len(stored.requests)
 	f.tester.Move(x-20, y)
 	f.tester.Frame()
 	f.tester.Move(x-40, y)
@@ -196,12 +193,9 @@ func TestAFailedLastPlacementAnswersItsFailure(t *testing.T) {
 	var failure error
 	answered := false
 	f.shell.Registry().Reply("diagnostics.drag.placed", nil, nil, func(_ any, err error) { answered, failure = true, err })
-	f.pending.drain(t)
-	if answered {
-		t.Fatalf("the window answered with the placement that ran when the steps arrived: %v", failure)
-	}
+	// The placement that runs when the steps arrive is the first after the press, and the steps are placed after it.
 	stored.presentFailure = errors.New("the current image raster did not present within 10s")
-	f.tester.Frame()
+	stored.presentFailureFrom = began + 2
 	f.pending.drain(t)
 	if !answered || failure == nil || !strings.Contains(failure.Error(), stored.presentFailure.Error()) {
 		t.Fatalf("the window answered %t with %v", answered, failure)
