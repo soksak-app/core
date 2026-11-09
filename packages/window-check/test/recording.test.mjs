@@ -212,3 +212,42 @@ test("a capture is preserved when the final application error audit fails", asyn
   );
   assert.equal(existsSync(recording.frames), true, "the recording was removed before the final error audit");
 });
+
+/**
+ * A session whose captured drag stops with `longestGap` and the callback status lines `lines`: each is [status, display time in
+ * ms], on a timebase of nanoseconds.
+ */
+function gapSession(t, longestGap, lines) {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-drag-gap-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const s = newSession(directory, fakeClient(directory));
+  const frames = join(directory, "logs", "captures", "drag-1");
+  mkdirSync(frames);
+  const callbackStatus = join(frames, "callback-status.jsonl");
+  writeFileSync(callbackStatus, lines.map(([status, ms], index) => JSON.stringify({ sequence: index + 1, status,
+    frame: status === 0 ? `frame-${index + 1}.bgra` : null, displayTime: String(ms * 1e6),
+    machTimebaseNumerator: 1, machTimebaseDenominator: 1 })).join("\n") + "\n");
+  s.get = async () => ({ active: false, occluded: false });
+  s.presented = async () => ({ displayed: 12 });
+  s.request = async (method) => {
+    if (method === "diagnostics.window.draw-covered") return null;
+    if (method === "diagnostics.drag") return { frames, took: 100, asked: 100 };
+    if (method === "diagnostics.capture.stop") return { frames, callbackStatus, count: 3, limited: false, longestGap };
+    throw new Error(`unexpected ${method}`);
+  };
+  return s;
+}
+
+const gapPlan = { axis: "y", line: 1, dx: 0, dy: 10, ms: 100, times: 1 };
+
+test("a drag whose window presented nothing new for longer than the limit fails and says the recorder saw it unchanged", async (t) => {
+  const s = gapSession(t, 131, [[0, 0], [0, 16], [1, 32], [1, 48], [1, 64], [1, 80], [1, 96], [1, 112], [1, 128], [0, 147], [0, 163]]);
+  await assert.rejects(drag(s, gapPlan, { capture: true }),
+    /^Error: the window presented nothing new for 131ms \(the recorder saw it unchanged\); a drag changes the screen with every frame, so a presentation more than 100ms apart fails; 1-minute load average \d+\.\d\d$/);
+});
+
+test("a drag whose recording missed more than the limit fails and says the frames were not recorded", async (t) => {
+  const s = gapSession(t, 131, [[0, 0], [0, 16], [1, 32], [0, 147], [0, 163]]);
+  await assert.rejects(drag(s, gapPlan, { capture: true }),
+    /^Error: the recording has a 131ms gap between frames; frames longer than 100ms apart were not recorded, so this run did not measure the whole gesture; 1-minute load average \d+\.\d\d$/);
+});

@@ -1221,6 +1221,32 @@ const GAP = 100;
 
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
+/** The status of a stream callback whose window did not change since the last frame (SCFrameStatusIdle). */
+const IDLE = 1;
+
+/**
+ * Whether the recorder saw the window unchanged through the longest gap between the complete frames of the callback status
+ * file `path`: every callback inside that gap is idle, and no two callbacks, with the frames at its ends, are more than
+ * GAP apart.
+ */
+function sawUnchanged(path) {
+  const callbacks = readFileSync(path, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)).map((row) => ({
+    status: row.status,
+    complete: row.status === 0 && typeof row.frame === "string",
+    ms: Number(BigInt(row.displayTime) * BigInt(row.machTimebaseNumerator) / BigInt(row.machTimebaseDenominator)) / 1e6,
+  }));
+  const frames = callbacks.map((callback, index) => ({ ...callback, index })).filter((callback) => callback.complete);
+  let widest = null;
+  for (let i = 1; i < frames.length; i++) {
+    if (!widest || frames[i].ms - frames[i - 1].ms > widest[1].ms - widest[0].ms) widest = [frames[i - 1], frames[i]];
+  }
+  if (!widest) return false;
+  const inside = callbacks.slice(widest[0].index + 1, widest[1].index);
+  if (inside.length === 0 || inside.some((callback) => callback.status !== IDLE)) return false;
+  const times = [widest[0], ...inside, widest[1]].map((callback) => callback.ms);
+  return times.every((ms, i) => i === 0 || ms - times[i - 1] <= GAP);
+}
+
 function requireCallbackStatusArtifact(result, frames) {
   const expected = join(frames, "callback-status.jsonl");
   if (result.callbackStatus !== expected || !existsSync(expected)) {
@@ -1289,11 +1315,16 @@ async function dragDrawing(s, plan, capture, frameIdentity) {
   if (stopped.limited) {
     throw new Error("the recording reached its finite frame limit before the gesture completed");
   }
-  // When the recording was interrupted for longer than this at once, the screen in between was not recorded. An
-  // unmeasured interval is not a pass.
+  // A drag changes the screen with every frame, so recorded frames more than GAP apart fail the check, and the error
+  // says which of the two it was: the recorder saw the window unchanged through the gap, or it saw nothing.
   if (stopped.longestGap > GAP) {
-    throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +
-      `frames longer than ${GAP}ms apart were not recorded, so this run did not measure the whole gesture`);
+    const gap = stopped.longestGap.toFixed(0);
+    const load = `1-minute load average ${loadavg()[0].toFixed(2)}`;
+    throw new Error(sawUnchanged(callbackStatus)
+      ? `the window presented nothing new for ${gap}ms (the recorder saw it unchanged); a drag changes the screen ` +
+        `with every frame, so a presentation more than ${GAP}ms apart fails; ${load}`
+      : `the recording has a ${gap}ms gap between frames; frames longer than ${GAP}ms apart were not recorded, so ` +
+        `this run did not measure the whole gesture; ${load}`);
   }
   return {
     ...result,
