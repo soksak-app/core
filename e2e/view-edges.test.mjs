@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { rmdirSync, unlinkSync } from "node:fs";
 import { dirname } from "node:path";
 import test from "node:test";
-import { APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, open } from "@soksak/window-check/app.mjs";
 import { readPng } from "@soksak/window-check/png.mjs";
 import { viewEdgeFaults } from "@soksak/window-check/view-edges.mjs";
 import { fresh } from "./fixture.mjs";
@@ -23,8 +23,7 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.resize", { width: 1200, height: 760 });
     // An inactive application shows its window behind the frontmost window, where its image regions do not draw. The still reads
     // the pixels of the window wherever it is in the window order (docs/spec/native-surfaces.md#image-regions).
-    await s.request("diagnostics.window.draw-covered", { draw: true });
-    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+    s.cleanup(await holdCovered(s));
     const shown = async (when) => t.diagnostic(`occluded ${when}: ${(await s.get("host.window")).occluded}`);
     await shown("at the start");
     const rasters = await ensureRasters(s, 2);
