@@ -316,6 +316,9 @@ type Shell struct {
 	windowProjects map[string]bool
 	// otherOpen are the projects that the store last named as owned by a window.
 	otherOpen map[string]bool
+	// savedLayout is the patch of the spaces that this window last stored, as savedLayout of packages/workbench/projects.js: the same
+	// spaces are no pending write.
+	savedLayout string
 	// savedGeometry is the geometry that this window last stored for each project.
 	savedGeometry map[string]json.RawMessage
 	plane         *layout.Grid
