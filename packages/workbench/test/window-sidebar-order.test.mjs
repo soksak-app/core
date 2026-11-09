@@ -20,8 +20,12 @@ for (const side of ORDER) test(`window ${side} sidebar retains its edge and size
   assert.deepEqual(grid.cards.filter((card) => card.id !== "content").map((card) => card.id), [side]);
   const key = side === "left" || side === "right" ? "width" : "height";
   assert.deepEqual(records[side], { [key]: 190 });
+  assert.equal(grid.setSize(side, side === "left" || side === "right" ? "x" : "y", 230), true);
   const before = spans(grid);
   assert.equal(arrange("beta"), false, "an override must not move the fixed sidebar");
+  assert.equal(grid.card(side)[key], 230, "an override changed the size of the fixed sidebar");
+  assert.deepEqual(records[side], { [key]: 230 }, "the record does not keep the size of the fixed sidebar");
   assert.equal(arrange(null), false, "the general choice must not move the fixed sidebar");
+  assert.equal(grid.card(side)[key], 230, "the general choice changed the size of the fixed sidebar");
   assert.equal(spans(grid), before);
 });

@@ -27,6 +27,21 @@ test("placement verification checks every window sidebar's requested extent", ()
   assert.equal(windowSidebarsPlaced(grid([card("left", 0, 1, 0, 3, { fixed: false })]), ORDER), false, "a sidebar that is not fixed was accepted");
 });
 
+// An edge holds one window sidebar (docs/spec/external-sidebars.md#verification): a second card of an edge beside one that stands in its
+// place is refused.
+test("placement verification refuses two sidebars of one edge", () => {
+  const two = {
+    left: [card("left", 0, 1, 0, 3), card("left", 1, 2, 0, 3)],
+    right: [card("right", 2, 3, 0, 3), card("right", 1, 2, 0, 3)],
+    top: [card("top", 0, 3, 0, 1), card("top", 0, 3, 1, 2)],
+    bottom: [card("bottom", 0, 3, 2, 3), card("bottom", 0, 3, 1, 2)],
+  };
+  for (const [edge, cards] of Object.entries(two)) {
+    assert.equal(windowSidebarsPlaced(grid(cards.slice(0, 1)), ORDER), true, `one ${edge} sidebar in its place was refused`);
+    assert.equal(windowSidebarsPlaced(grid(cards), ORDER), false, `two ${edge} sidebars were accepted`);
+  }
+});
+
 // The expected place of each sidebar comes from the order (docs/spec/external-sidebars.md#verification).
 test("placement verification computes the place of the top and bottom sidebars from the order", () => {
   const between = [card("left", 0, 1, 0, 3), card("right", 2, 3, 0, 3), card("top", 1, 2, 0, 1), card("bottom", 1, 2, 2, 3)];

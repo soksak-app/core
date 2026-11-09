@@ -1239,6 +1239,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F714-4 — `workbench.json` 네 사본의 설정 `top`, `bottom`, `sidebarOrder`와 두 workbench의 그 검사.
   - [o] F714-5 — 순서의 역순으로 창 사이드바를 dock하고, 변이나 그 배치가 다르면 모든 창 사이드바를 닫고 다시 dock한다. 두 workbench가 `docs/spec/cases/layout/window-sidebars.json` 공용 case를 실행한다.
   - [o] F714-6 — plane 검사 `P 자리는 카드다`가 순서에서 각 창 사이드바의 기대 자리를 계산한다.
+    - [o] F714-6-1 — 자리 검사의 테스트가 한 변의 사이드바 둘을 거부하고 플러그인 오버라이드 동안 고정 사이드바의 크기를 지킨다: `windowSidebarsPlaced`는 네 변 각각의 둘째 카드를 거부하고, Go layout은 한 변의 둘째 카드를 가진 상태와 삽입을 거부하며, 각 변의 dock 테스트가 카드와 레코드에서 크기 230을 지킨다. F714-8의 Go 설정 테스트 창 높이 3200은 길어진 섹션 일반의 fixture다: 높이 2400에서 그 디버그 스위치는 카드 아래 끝 1848보다 아래인 2016에 서고, 카드 아래의 컨트롤에 닿는 것은 설정 카드의 스크롤 테스트가 검사한다.
   - [o] F714-7 — 위·아래 창 사이드바의 섹션은 가로 방향을 쓰고, `core.sidebars`, `core.sidebar.status`, `core.rail`이 네 변을 설명한다.
   - [o] F714-8 — 설정 창: 일반의 표시 스위치 넷, 일반 세트 선택 넷, 순서 줄, 플러그인 페이지의 창 선택 넷, 고친 묶음 설명. 두 workbench 모두.
   - [o] F714-9 — chrome 스위치 `core.chrome.top`, `core.chrome.bottom`, 보이기 tooltip, 고정 index 없는 버튼 순서, chrome 컨트롤 폭, 모든 변의 접기 컨트롤. 두 workbench 모두.
