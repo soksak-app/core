@@ -145,3 +145,28 @@ func TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError(t *test
 		t.Fatalf("start document %s", data)
 	}
 }
+
+// startingWindow is the window 1 of a workbench start.
+type startingWindow struct{ frontendRecord }
+
+func (*startingWindow) ID() uint { return 1 }
+
+// A start document request fails with the reason when the open layout of the window cannot be cancelled, so the start of a workbench
+// without a page fails with the same reason.
+// contract: application.window.no-main-page-start-fails-with-its-reason
+func TestAWorkbenchStartFailsWhenItsWindowCannotCancelItsLayout(t *testing.T) {
+	c := sidecarSessionSurfaces(t).sidecars
+	surfaces := NewSurfaces(nil, c)
+	surfaces.invoke = func(task func()) { task() }
+	cancel := errors.New("the layout of the window is not cancelled")
+	surfaces.reloadCancelLayout = func() error { return cancel }
+	surfaces.reloadKeyboardDecided = func() {}
+	surfaces.events = func(string, any) {}
+	owner := &Host{windows: map[uint]*Surfaces{1: surfaces}, workspace: NewWorkspace(t.TempDir()),
+		relay: &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}}
+	surfaces.host = owner
+	err := StartWorkbench(owner, &startingWindow{})
+	if !errors.Is(err, cancel) || err.Error() != "page reload: the layout of the window is not cancelled" {
+		t.Fatalf("the start returned %v, want the failed cancel of the layout", err)
+	}
+}
