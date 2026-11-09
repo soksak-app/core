@@ -31,8 +31,9 @@ test("Go discovery preserves the selected CGO0 environment through compilation, 
   assert.equal(results.get(tests[0].name).status, 'pass');
 });
 
-test("a Go package lists its tests and each test runs in the folder of its package", async () => {
+test("a Go package lists its tests and each test runs in the folder of its package", async (t) => {
   const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, "go.mod"), "module fixture\n\ngo 1.21\n");
   writeFileSync(join(root, "a_test.go"), [
     "package fixture", "", 'import ("os"; "testing")', "",
@@ -49,8 +50,9 @@ test("a Go package lists its tests and each test runs in the folder of its packa
   assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(), [["TestFails", "fail"], ["TestPasses", "pass"], ["TestSkips", "skip"]]);
 });
 
-test("a discovered Go test has the deadline of its limit", async () => {
+test("a discovered Go test has the deadline of its limit", async (t) => {
   const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, "go.mod"), "module deadline\n\ngo 1.21\n");
   writeFileSync(join(root, "a_test.go"), [
     "package deadline", "", 'import ("testing"; "time")', "",
@@ -67,8 +69,9 @@ test("a discovered Go test has the deadline of its limit", async () => {
   assert.equal(result.status, "pass", result.output);
 });
 
-test("a Go test over its limit prints the stacks of its goroutines before its group is ended", async () => {
+test("a Go test over its limit prints the stacks of its goroutines before its group is ended", async (t) => {
   const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, "go.mod"), "module hangs\n\ngo 1.21\n");
   writeFileSync(join(root, "a_test.go"), [
     "package hangs", "", 'import ("testing"; "time")', "",
@@ -84,8 +87,9 @@ test("a Go test over its limit prints the stacks of its goroutines before its gr
   assert.match(result.output, /hangs\.waitInTheFixture\(/, result.output);
 });
 
-test("a Go package that does not build is a failure that names the package", async () => {
+test("a Go package that does not build is a failure that names the package", async (t) => {
   const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, "go.mod"), "module broken\n\ngo 1.21\n");
   writeFileSync(join(root, "a_test.go"), "package broken\n\nfunc TestX( {\n");
   const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write() {}, concurrency: 1, timeoutMs: 20000 });
@@ -93,8 +97,9 @@ test("a Go package that does not build is a failure that names the package", asy
   assert.deepEqual(failures, ["go: the build of broken failed"]);
 });
 
-test("a Rust package lists its tests, each test runs by itself, and an ignored test is a skip", async () => {
+test("a Rust package lists its tests, each test runs by itself, and an ignored test is a skip", async (t) => {
   const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "src"));
   mkdirSync(join(root, "tests"));
   writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "fixture"\nversion = "0.0.1"\nedition = "2021"\n\n[workspace]\n');

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -17,8 +17,9 @@ function run(root, id, tests, { finished = true, classified } = {}) {
   return folder;
 }
 
-test("a run that passed is removed, and a run with an unclassified failure or a stop is kept and named", () => {
+test("a run that passed is removed, and a run with an unclassified failure or a stop is kept and named", (t) => {
   const root = mkdtempSync(join(tmpdir(), "runs-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   const passed = run(root, "r1", [["a", "pass"]]);
   const failed = run(root, "r2", [["a", "pass"], ["b", "fail"], ["c", "timeout"]]);
   const stopped = run(root, "r3", [["a", "running"]], { finished: false });
@@ -33,8 +34,9 @@ test("a run that passed is removed, and a run with an unclassified failure or a 
   assert.equal(existsSync(stopped), true);
 });
 
-test("a run whose failures are all named by a classification record is removed, and a partial record keeps it", () => {
+test("a run whose failures are all named by a classification record is removed, and a partial record keeps it", (t) => {
   const root = mkdtempSync(join(tmpdir(), "runs-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   run(root, "r1", [["b", "fail"], ["c", "fail"]], { classified: [{ name: "b", record: "F161.1" }, { name: "c", record: "F161.2" }] });
   run(root, "r2", [["b", "fail"], ["c", "fail"]], { classified: [{ name: "b", record: "F161.1" }] });
   const { removed, kept } = pruneRuns(root);
@@ -42,8 +44,9 @@ test("a run whose failures are all named by a classification record is removed, 
   assert.deepEqual(kept, [{ run: "r2", reason: "unclassified failures: c" }]);
 });
 
-test("a malformed manifest or classification is an error that names the file", () => {
+test("a malformed manifest or classification is an error that names the file", (t) => {
   const root = mkdtempSync(join(tmpdir(), "runs-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   const folder = run(root, "r1", [["a", "fail"]]);
   writeFileSync(join(folder, "classified.json"), "{}");
   assert.throws(() => pruneRuns(root), /r1\/classified\.json: expected an array of \{name, record\}/);

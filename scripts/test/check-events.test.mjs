@@ -22,8 +22,9 @@ const catalog = {
   },
 };
 
-test('the logs of a configuration folder are audited against the catalog and the findings name the file and the line', () => {
+test('the logs of a configuration folder are audited against the catalog and the findings name the file and the line', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'logs'));
   const line = (seq, event, fields, layer = 'host') => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', class: 'lifecycle', layer, event, fields });
   writeFileSync(join(root, 'logs', 'host-1-2.jsonl'), [
@@ -40,8 +41,9 @@ test('the logs of a configuration folder are audited against the catalog and the
   mkdirSync(join(root, 'empty', 'logs'), { recursive: true });
   assert.throws(() => auditLogDirectories(catalog, [join(root, 'empty')]), /empty\/logs: no host event file/);
 });
-test('the audit of a configuration folder reads the files of every layer, generation and the debug file, and reports an error event', () => {
+test('the audit of a configuration folder reads the files of every layer, generation and the debug file, and reports an error event', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'logs'));
   const line = (seq, event, fields, extra = {}) => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level: 'info', class: 'lifecycle', layer: 'host', event, fields, ...extra });
   const open = (seq, role) => line(seq, 'log.open', { schema: 3, pid: 2, role, boot: '1-2' });
@@ -199,8 +201,9 @@ test('the events of an installed sidecar are audited against its catalog, and a 
   ]);
 });
 
-test('a host stall record at warn that the gate exception stores is not an audit finding', () => {
+test('a host stall record at warn that the gate exception stores is not an audit finding', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'events-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'logs'));
   const line = (seq, event, fields, level = 'info') => JSON.stringify({ ts_us: 1000 + seq, mono_ns: 5_000_000 + seq, seq, level, class: 'lifecycle', layer: 'host', event, fields });
   const stall = {
