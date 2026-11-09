@@ -4,6 +4,7 @@ package workbench_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -99,6 +100,16 @@ func TestCoreAppReportsTheCandidateAndThePluginsThatDoNotFitIt(t *testing.T) {
 	}
 	if !f.tester.HasText("core: 1.0.0 → 2.0.0") {
 		t.Fatalf("the plugin page shows %q", f.tester.Texts())
+	}
+}
+
+func TestTheUpdateControlCountsTheApplicationUpdate(t *testing.T) {
+	f, _ := updateShell(t, appRelease)
+	if !f.has("core.chrome.updates", "") {
+		t.Fatalf("the window has no control of the updates; the texts are %q", f.tester.Texts())
+	}
+	if want := fmt.Sprintf("업데이트 %d", len(f.pluginStatus().Updates)+1); !f.tester.HasText(want) {
+		t.Fatalf("the window does not show %q: %q", want, f.tester.Texts())
 	}
 }
 

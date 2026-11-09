@@ -305,7 +305,13 @@ for (const app of Object.values(APPS)) {
     const created = await child.get("core.project");
     assert.equal(created.root, join(temporary, "created"));
     assert.equal(existsSync(created.root), true);
-    await child.until("core.grid", (grid) => grid?.cards.length > 0, "new project cards did not render");
+    // The start layout of a new project holds tabs of plugins that a check configuration does not install, which have no native
+    // surface, so the check adds a layout probe tab whose native surface the return to the project shows again.
+    const focused = (await child.until("core.grid", (grid) => grid?.cards.some((card) => card.focused),
+      "new project cards did not render")).cards.find((card) => card.focused);
+    const { tab: probe } = await child.run("core.card.add-tab", { card: focused.id, plugin: "layoutprobe" });
+    await child.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === probe && item.status?.phase === "ready"),
+      `the probe tab ${probe} of the created project did not become ready`);
     await child.run("core.projects.browse");
     await child.until("core.screen", (screen) => screen.screen === "library", "project list button did not open the library");
     await child.until("core.library", (state) => state.count === "프로젝트 2 · 열림 2", "open project count is not actual");

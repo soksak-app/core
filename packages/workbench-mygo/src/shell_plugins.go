@@ -76,18 +76,29 @@ func (s *Shell) drawPlugins(c *ui.Context, width float32) {
 
 func (s *Shell) libraryStatus() libraryStatus {
 	page := s.pluginPage()
+	// Each page reports only the cards that it shows, as render of packages/workbench/library.js empties the plugin list on the
+	// project page and the project grid on the plugin page.
+	plugins := s.library.page == pluginsPage
+	cards, actions := []string{}, []PluginAction{}
+	if plugins {
+		cards, actions = ShownPlugins(page), PluginPageActions(page)
+	}
 	shown, pinned := []string{}, []string{}
-	for _, project := range s.shownProjects() {
-		shown = append(shown, project.ID)
-		if project.Pinned {
-			pinned = append(pinned, project.ID)
+	var projects []projectRecord
+	if !plugins {
+		projects = s.projects
+		for _, project := range s.shownProjects() {
+			shown = append(shown, project.ID)
+			if project.Pinned {
+				pinned = append(pinned, project.ID)
+			}
 		}
 	}
-	status := libraryStatus{Page: s.library.page, Plugins: libraryPlugins{Query: page.Query, Shown: ShownPlugins(page), Actions: PluginPageActions(page)},
+	status := libraryStatus{Page: s.library.page, Plugins: libraryPlugins{Query: page.Query, Shown: cards, Actions: actions},
 		Shown: shown, Pinned: pinned, Count: fmt.Sprintf("프로젝트 %d · 열림 %d", len(s.projects), s.openCount()), Query: s.library.query, Sort: s.library.order,
-		Form: s.library.formMode != "", ReturnVisible: s.opened() != nil, Empty: len(s.projects) == 0,
-		NoResults: len(s.projects) > 0 && len(shown) == 0, Previews: map[string]any{}, PreviewErrors: map[string]string{}, FolderErrors: map[string]string{}}
-	for _, project := range s.projects {
+		Form: s.library.formMode != "", ReturnVisible: s.opened() != nil, Empty: !plugins && len(s.projects) == 0,
+		NoResults: len(projects) > 0 && len(shown) == 0, Previews: map[string]any{}, PreviewErrors: map[string]string{}, FolderErrors: map[string]string{}}
+	for _, project := range projects {
 		if reason, failed := s.library.folderErrors[project.Root]; failed {
 			status.FolderErrors[project.ID] = reason
 		}

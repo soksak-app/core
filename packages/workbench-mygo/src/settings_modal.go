@@ -1080,7 +1080,7 @@ func (s *Shell) registerSettings() {
 
 func (s *Shell) registerSettingsValues() {
 	act(s, "core.settings.set", func(value settingsParam) error {
-		return s.changing("core.settings.set", func() error { return s.settings.Set(value.Patch, value.Scope) })
+		return invalidSetting(s.changing("core.settings.set", func() error { return s.settings.Set(value.Patch, value.Scope) }))
 	})
 	act(s, "core.settings.reset", func(value settingsParam) error {
 		return s.changing("core.settings.reset", func() error { return s.settings.Reset(value.Key) })
@@ -1091,29 +1091,42 @@ func (s *Shell) registerSettingsValues() {
 	act(s, "core.settings.change", func(value settingsParam) error {
 		var input any
 		if err := json.Unmarshal(value.Value, &input); err != nil {
-			return fmt.Errorf("core.settings.change: %w", err)
+			return invalidSetting(fmt.Errorf("core.settings.change: %w", err))
 		}
-		return s.changing("core.settings.change", func() error { return s.settings.Change(value.Key, input, value.Scope) })
+		return invalidSetting(s.changing("core.settings.change", func() error { return s.settings.Change(value.Key, input, value.Scope) }))
 	})
 	act(s, "core.settings.theme", func(value settingsParam) error {
 		return s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
 	})
-	act(s, "core.settings.link", func(value settingsParam) error {
-		scope := inScope(value.Scope)
-		plugin := ""
-		if value.Plugin != nil {
-			plugin = *value.Plugin
-		}
-		links, err := s.settings.Links(scope)
-		if err != nil {
-			return err
-		}
-		next, err := ChooseLink(links, value.Place, plugin, value.Set)
-		if err != nil {
-			return err
-		}
-		return s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"links": next}, scope) })
-	})
+	act(s, "core.settings.link", func(value settingsParam) error { return invalidSetting(s.linkSet(value)) })
+}
+
+// linkSet runs core.settings.link.
+func (s *Shell) linkSet(value settingsParam) error {
+	scope := inScope(value.Scope)
+	plugin := ""
+	if value.Plugin != nil {
+		plugin = *value.Plugin
+	}
+	links, err := s.settings.Links(scope)
+	if err != nil {
+		return err
+	}
+	next, err := ChooseLink(links, value.Place, plugin, value.Set)
+	if err != nil {
+		return err
+	}
+	return s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"links": next}, scope) })
+}
+
+// invalidSetting answers a refused change of the settings as an invalid argument of the command, as invalid of
+// packages/workbench/core-exposure.js does (docs/spec/settings.md).
+func invalidSetting(err error) error {
+	var refused *Refusal
+	if err == nil || errors.As(err, &refused) {
+		return err
+	}
+	return Refuse(InvalidParams, "%s", err)
 }
 
 func (s *Shell) registerSettingsSets() {
@@ -1146,14 +1159,14 @@ func (s *Shell) registerSettingsSets() {
 		return s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"sets": next}, scope) })
 	}
 	act(s, "core.settings.sets.update", func(value settingsParam) error {
-		return change(value, func(sets []StoredSet) ([]StoredSet, error) {
+		return invalidSetting(change(value, func(sets []StoredSet) ([]StoredSet, error) {
 			return UpdateSet(sets, value.ID, value.Title, value.Layout)
-		})
+		}))
 	})
 	act(s, "core.settings.sets.row", func(value settingsParam) error {
-		return change(value, func(sets []StoredSet) ([]StoredSet, error) {
+		return invalidSetting(change(value, func(sets []StoredSet) ([]StoredSet, error) {
 			return ChangeRow(sets, value.ID, value.Action, value.Index, value.Section, s.registeredSections())
-		})
+		}))
 	})
 	act(s, "core.settings.sets.delete", func(value settingsParam) error {
 		scope := inScope(value.Scope)

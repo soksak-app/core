@@ -242,6 +242,26 @@ func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 	}
 }
 
+// core.projects reports the record of the store after a command of the project changed it, as the page reports its records.
+func TestCoreProjectsReportsTheChangeOfAProjectCommand(t *testing.T) {
+	f := openedShell(t)
+	id := f.host.projects[0]["id"].(string)
+	f.answerLater("core.library.pin", map[string]any{"id": id, "pinned": true})
+	f.answerLater("core.project.rename", map[string]string{"id": id, "title": "gamma"})
+	f.settle()
+	listed, err := f.shell.Registry().Read("core.projects")
+	if err != nil {
+		t.Fatal(err)
+	}
+	projects := listed.([]map[string]any)
+	if len(projects) != 1 || projects[0]["pinned"] != true || projects[0]["title"] != "gamma" {
+		t.Fatalf("core.projects is %v", projects)
+	}
+	if project := status[map[string]any](t, f, "core.project"); project["pinned"] != true || project["title"] != "gamma" {
+		t.Fatalf("core.project is %v", project)
+	}
+}
+
 // A project tab that is dropped on another tab moves its project to the place of that tab.
 func TestAProjectTabDraggedToAnotherMovesItsProject(t *testing.T) {
 	f, alpha, beta := libraryOfTwoProjects(t)

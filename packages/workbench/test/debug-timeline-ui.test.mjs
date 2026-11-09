@@ -129,7 +129,7 @@ test("the timeline asks for the newest page and shows it oldest first with the s
   assert.deepEqual(names(), ["log.open", "host.window.created", "workbench.call.slow"]);
   assert.deepEqual(ui.debugState().timeline, {
     following: true, appended: 0, held: 3, older: false, omitted: 0, context: 0, selected: 0, warning: WARNING,
-    channel: "other", level: "trace", class: "", layer: "all", text: "", event: "", event_prefix: "", surface: "", session: "", cid: "", run: "", from: "", to: "",
+    start: { "host-a": 3 }, tail: { "host-a": 3 }, channel: "other", level: "trace", class: "", layer: "all", text: "", event: "", event_prefix: "", surface: "", session: "", cid: "", run: "", from: "", to: "",
   });
   assert.equal(document.querySelector('[data-key="timeline-older"]').hidden, true);
   assert.equal(document.querySelector('[data-expose="core.debug.timeline.omitted"]').hidden, true);
@@ -354,6 +354,8 @@ test("a changed event file adds the rows after the tail in time order, also a ro
   const status = ui.debugState().timeline;
   assert.equal(status.held, 4);
   assert.equal(status.appended, 2);
+  // The appended rows are the rows after the tail of the page that showed the timeline, up to the tail of the last read.
+  assert.deepEqual([status.start, status.tail], [{ "host-a": 3 }, { "host-a": 5 }]);
   assert.equal(status.layer, "host");
   assert.equal(status.selected, 1);
   assert.deepEqual(names(), ["log.open", "host.window.created", "host.late.row", "host.app.event"]);

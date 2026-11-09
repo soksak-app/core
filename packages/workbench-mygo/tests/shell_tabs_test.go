@@ -484,6 +484,24 @@ func TestACloseRequestClosesTheWindowAfterTheSessionsAreRead(t *testing.T) {
 
 // A change of the store gives the window the stored record of each project that it does not hold, so it opens the layout that another
 // window or another environment stored, as readProjects of the page does.
+func TestAStoreChangeAddsAProjectThatAnotherWindowStored(t *testing.T) {
+	stored := &storedHost{common: map[string]any{"projectOpening": "tabs"}, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	added := storedProject(tab("tab-dddddd", "notes"))
+	added["id"], added["root"], added["identity"], added["title"] = "prj-b", "/b", "identity of /b", "b"
+	stored.projects = append([]map[string]any{added}, stored.projects...)
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+	var ids []string
+	for _, project := range status[[]map[string]any](t, f.shellFixture, "core.projects") {
+		ids = append(ids, project["id"].(string))
+	}
+	if want := []string{"prj-b", stored.projects[1]["id"].(string)}; !slices.Equal(ids, want) {
+		t.Fatalf("core.projects lists %v, the store %v", ids, want)
+	}
+}
+
 func TestAStoreChangeGivesTheStoredLayoutOfAProjectThatTheWindowDoesNotHold(t *testing.T) {
 	other := storedProject(tab("tab-dddddd", "notes"))
 	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"

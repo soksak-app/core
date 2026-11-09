@@ -9,6 +9,7 @@ import { fresh as prepare } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
 import { readStillCapture } from "./still-capture.mjs";
+import { channelOtherSeqs, expectedTimeline, PAGE_ROWS } from "./debug-timeline-files.mjs";
 
 // Functional paint checks explicitly render covered windows without activation.
 // This preparation does not change production benchmark visibility requirements.
@@ -550,23 +551,36 @@ for (const app of Object.values(APPS)) {
     await s.run("host.menu.select", { menu: titles.menu, title: titles.debug });
     await s.until("core.debug", (debug) => debug.open && debug.entries.length > 0, "the debug view did not list the files");
     await s.run("core.debug.timeline");
+    // Each status names the positions of the page that showed the timeline (start) and of its last read (tail). The rows that it holds
+    // are then the newest page of the event files up to start and every row after start up to tail, each once; the files keep their
+    // rows, so the files read after the status give the same counts (docs/spec/debug.md#timeline-following).
+    const matches = (debug, phase) => {
+      const { start, tail, held, appended, omitted } = debug.timeline;
+      const expected = expectedTimeline(channelOtherSeqs(s.app.configDir), start, tail, PAGE_ROWS);
+      assert.equal(appended, expected.appended, `${phase}: the appended rows are not the rows of the files after ${JSON.stringify(start)} up to ${JSON.stringify(tail)}`);
+      assert.equal(held, expected.first + appended - omitted, `${phase}: the held rows are not the first page and the appended rows`);
+    };
     const shown = await s.until("core.debug", (debug) => debug.timeline !== null && debug.timeline.held > 0, "the timeline did not show any row");
     assert.equal(shown.timeline.following, true, "a new timeline does not follow");
-    assert.equal(shown.timeline.appended, 0);
+    matches(shown, "shown");
     // A run command stores the event workbench.command, which the host writes and announces with debug-log-changed.
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     const grown = await s.until("core.debug", (debug) => debug.timeline.held > shown.timeline.held, "the timeline did not append the rows of a command");
-    assert.ok(grown.timeline.appended > 0, "the appended rows are not counted");
+    assert.ok(grown.timeline.appended > shown.timeline.appended, "the appended rows are not counted");
+    matches(grown, "grown");
     assert.equal(grown.error, null);
     await s.run("core.debug.timeline.follow", { on: false });
     const stopped = await s.until("core.debug", (debug) => debug.timeline.following === false, "the timeline did not stop following");
+    matches(stopped, "stopped");
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     await s.run("core.debug.timeline.select", { row: 0, selected: false });
     const held = await s.get("core.debug");
     assert.equal(held.timeline.held, stopped.timeline.held, "a stopped timeline appended rows");
+    assert.deepEqual(held.timeline.tail, stopped.timeline.tail, "a stopped timeline read on");
     await s.run("core.debug.timeline.follow", { on: true });
     const resumed = await s.until("core.debug", (debug) => debug.timeline.following === true && debug.timeline.held > stopped.timeline.held,
       "the timeline did not catch up with the rows written while it was stopped");
+    matches(resumed, "resumed");
     assert.equal(resumed.error, null);
   });
 }
