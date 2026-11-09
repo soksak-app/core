@@ -62,6 +62,16 @@ type SceneWorkbench struct {
 	records []string
 	// holding keeps the workbench from showing its first screen when it starts, as a start that still reads its state.
 	holding bool
+	// drawing runs in the next draw of the scene (InNextDraw).
+	drawing func()
+}
+
+// InNextDraw has the next draw of the scene run step while it builds the frame, as the workbench of the application opens the layout
+// of the frame that draws other surface lines (OpenLayout of the framework adapter).
+func (w *SceneWorkbench) InNextDraw(step func()) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.drawing = step
 }
 
 // HoldFirstScreen makes the starts after it show no first screen until the test calls FirstScreen of the window.
@@ -113,6 +123,13 @@ func (w *SceneWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 	w.Record("build %s", window.Name())
 	return func(c *ui.Context) {
 		w.Record("draw %s", window.Name())
+		w.mu.Lock()
+		step := w.drawing
+		w.drawing = nil
+		w.mu.Unlock()
+		if step != nil {
+			step()
+		}
 		ui.Text(c, "scene")
 	}
 }

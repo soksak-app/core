@@ -48,6 +48,10 @@ type Frontend struct {
 	// starting belongs to the main thread: the window holds its frames from the start of its workbench until that workbench shows its
 	// first screen.
 	starting bool
+	// building, opening, framed and transacted belong to the main thread: the view of the window runs, the frame being built opened the
+	// layout transaction and its report has not come, the frame that opened the open layout transaction presented in it, and a frame
+	// that a preparation asked for presented in the open layout transaction.
+	building, opening, framed, transacted bool
 	// placed belongs to the main thread: the surface host of each native view element and the box that the element last gave it.
 	placed map[uintptr]placedSurface
 	// address belongs to the main thread: the address of the window, which names the project that it shows.
@@ -417,8 +421,13 @@ func AwaitPresentation(name string, notice func(func(mygo.Presentation, error)) 
 // AfterPresentation is the presentation notice of the workbench: done runs after the frame of this step presented. In a layout
 // transaction the preparation held the frames of the window from its start, so the frame that this call asks for is the one frame of
 // the window in the transaction: the call releases the window and holds it again from inside that notice, so that no later frame
-// presents before the transaction ends. A diagnostics recording holds the time of this call as the request of the frame of the
-// transaction and the time of the notice as its presentation.
+// presents before the transaction ends. A preparation that took over the transaction that a frame of the window opened has that frame
+// for its frame once it presented in the transaction: the frame drew the lines that the preparation placed, and done runs at once
+// without asking for another, which could only present after the commit that waits for this notice, and the preparation places the
+// surfaces that it creates itself. A preparation that took over a transaction whose frame a preparation already asked for has no
+// frame: that frame holds its drawable until the commit, so another frame would wait for the commit that waits for this notice, and
+// done fails at once. A diagnostics recording holds the time of this call as the request of the frame of the transaction and the time
+// of the notice as its presentation.
 func (f *Frontend) AfterPresentation(done func(err error)) error {
 	recorded := func() {}
 	if f.framework.transaction {
@@ -429,15 +438,56 @@ func (f *Frontend) AfterPresentation(done func(err error)) error {
 		if capturer, ok := system.(platform.Capturer); ok {
 			recorded = capturer.LayoutTraceRequested()
 		}
+		if f.framed {
+			recorded()
+			done(nil)
+			return nil
+		}
+		if f.transacted {
+			done(errTransactionPresented)
+			return nil
+		}
 		f.release()
 	}
 	return f.presented(false, func(err error) {
 		if err == nil && f.framework.transaction {
 			recorded()
+			f.transacted = true
 			f.hold()
 		}
 		done(err)
 	})
+}
+
+// errTransactionPresented is the failure of the notice of a preparation that took over a transaction whose frame already presented.
+var errTransactionPresented = errors.New("the frame of the transaction already presented; another frame would wait for the commit")
+
+// opensLayout reports whether the layout transaction that owner starts opens in the frame being built of the window: the view of the
+// window runs, which opens the layout of its frame (OpenLayout), and nothing holds the frames of the window.
+func (f *Frontend) opensLayout(owner platform.Window) bool {
+	return f.building && !f.held && f.NativeWindow() == owner
+}
+
+// openedInFrame has the frame being built, which opened the layout transaction, be the frame of the transaction: the frame presents in
+// it, and the report of the frame holds the frames of the window (frameEnded). The frame asks for no notice, which would ask for
+// another frame: the window would draw it after the commit with nothing changed, and the report of the opening frame would tell that
+// the window asks for a frame, so the window would not be settled.
+func (f *Frontend) openedInFrame() {
+	f.opening = true
+}
+
+// frameEnded reads the report of each frame of the window (FrameRecorder), on the main thread that drew it. The report of the frame
+// that opened the layout transaction tells whether it presented in the transaction: then it is the frame of the transaction, the
+// window holds its frames until the transaction ends, and the preparation that takes the transaction over hears that frame
+// (AfterPresentation). A frame that waits for a drawable or found none leaves the preparation to ask for its own, and a frame built
+// for a capture leaves the transaction to the next frame of the surface. A report after the end of the transaction changes nothing.
+func (f *Frontend) frameEnded(outcome ui.FrameOutcome) {
+	if !f.opening || outcome == ui.FrameHeld {
+		return
+	}
+	f.opening = false
+	f.framed = outcome == ui.FrameTransaction || outcome == ui.FrameImmediate || outcome == ui.FrameUndamaged
+	f.hold()
 }
 
 // SettledPresentation is the settled presentation of the workbench: the block that asks for a frame of the window. A window that the

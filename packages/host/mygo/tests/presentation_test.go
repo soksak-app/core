@@ -374,25 +374,12 @@ func TestE2EATransactionHoldsTheOtherWindowsAndTheWindowsOpenedMeanwhile(t *test
 	support.Wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 })
 }
 
-func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {
+// A preparation that takes over a transaction whose frame a preparation already asked for has no frame of its own: that frame holds
+// its drawable until the commit, and the window changed meanwhile, as a resize does, so a second frame would wait for the commit that
+// waits for its notice. The notice fails at once, so the host cancels the preparation and commits the transaction, and the frame of
+// the change presents after the commit (docs/spec/hosts.md#native-views).
+func TestE2EAPreparationAfterTheFrameOfItsTransactionFailsAtOnce(t *testing.T) {
 	_, _, window := held(t, "newer")
-	begin(t, window, 1)
-	if err := presentation(t, window); err != nil {
-		t.Fatal(err)
-	}
-	commit := begin(t, window, 2)
-	if err := presentation(t, window); err != nil {
-		t.Fatalf("the notice of the newer preparation failed: %v", err)
-	}
-	commit()
-}
-
-// A frame that draws other surface lines opens the layout of its window and presents in it, and the preparation of those lines takes
-// the transaction over (docs/spec/hosts.md#native-views). The frame of that preparation changes the scene again, so its notice comes
-// before the commit that the preparation makes after it: a frame that waited for the commit for a drawable would hold the
-// preparation until the host gives up.
-func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T) {
-	_, _, window := held(t, "taken")
 	begin(t, window, 1)
 	window.Window().SetSize(520, 410)
 	if err := presentation(t, window); err != nil {
@@ -408,13 +395,94 @@ func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T
 	}
 	select {
 	case err := <-result:
+		if err == nil || !strings.Contains(err.Error(), "the frame of the transaction already presented") {
+			t.Fatalf("the notice of the newer preparation heard %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the notice of the newer preparation did not come within 2 s: it waits for the commit")
+	}
+	commit()
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the frame after the commit did not present: %v", err)
+	}
+}
+
+// A frame that draws other surface lines opens the layout of its window while it builds and presents in it, and the preparation of
+// those lines takes the transaction over (docs/spec/hosts.md#native-views). That frame drew the lines that the preparation places, so
+// it is the frame of the transaction, which the notice of the preparation hears: the window changes again before the preparation asks
+// for its frame, as a resize does, and a second frame would wait for the commit that the preparation makes after its notice, which
+// would hold the preparation until the host gives up. The frame of the change presents after the commit.
+func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T) {
+	_, workbench, window := held(t, "taken")
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened := make(chan error, 1)
+	workbench.InNextDraw(func() { opened <- system.BeginLayout(window.NativeWindow(), 1, func(bool) {}) })
+	window.Window().SetSize(520, 410)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("the frame did not open the layout of its window: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the resized window drew no frame within 10 s")
+	}
+	commit := begin(t, window, 2)
+	window.Window().SetSize(560, 430)
+	result := make(chan error, 1)
+	var failed error
+	mygo.RunOnMain(func() { failed = window.AfterPresentation(func(err error) { result <- err }) })
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	select {
+	case err := <-result:
 		if err != nil {
 			t.Fatalf("the notice of the preparation that took the layout over failed: %v", err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("the frame of the preparation that took the layout over did not present within 2 s: it waits for the commit")
+		t.Fatal("the notice of the preparation that took the layout over did not come within 2 s: it waits for the commit")
 	}
 	commit()
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the frame after the commit did not present: %v", err)
+	}
+}
+
+// The frame that opens the layout of its window asks for no frame after it, so a window that changes nothing during the transaction
+// is settled once that frame ended and draws no frame after the commit (docs/spec/hosts.md#native-views).
+func TestE2EAFrameThatOpensTheLayoutLeavesItsWindowSettled(t *testing.T) {
+	_, workbench, window := held(t, "opening-settled")
+	system, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened := make(chan error, 1)
+	workbench.InNextDraw(func() { opened <- system.BeginLayout(window.NativeWindow(), 1, func(bool) {}) })
+	mygo.RunOnMain(window.Invalidate)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("the frame did not open the layout of its window: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the window drew no frame within 10 s")
+	}
+	// The step runs after the frame that opened the layout ended.
+	mygo.RunOnMain(func() {})
+	if got := window.Frames().Counters(); !*got.Settled {
+		t.Fatal("the frame that opened the layout asked for a frame after it")
+	}
+	commit := begin(t, window, 2)
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the notice of the preparation that took the layout over failed: %v", err)
+	}
+	commit()
+	if got := window.Frames().Counters(); !*got.Settled {
+		t.Fatal("the window asked for a frame after the commit of a transaction that changed nothing")
+	}
 }
 
 func TestE2ETheSettledPresentationWaitsForTheTransactionOfAnotherWindow(t *testing.T) {
