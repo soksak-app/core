@@ -532,7 +532,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     /** The applied frame {x, y, w, h} of surface in the window, or null when the composition has applied none. */
     surfaceFrame: (surface) => options.surfaceFrame(surface),
 
-    /** Registers a method that handles a request by its name. Diagnostic methods use it. */
+    /** Registers a method that handles a request by its name: workbench.placement.last and the diagnostic methods. */
     method(name, fn) {
       if (methods.has(name)) throw new Error(`method ${name} is already registered`);
       methods.set(name, fn);
