@@ -34,7 +34,8 @@ type previewPane struct {
 // readPreviews places the panes of the previews that the last frame drew where that frame drew them, as the page reads the rectangles
 // of its panes after it laid them out. A pane lies inside the open control of its project card, which the element tree reports in place
 // of its content, so a pane stands at the place of that control in the tree of the frame and at the offset in the control that the
-// frame laid out. The tree of a frame cannot be read while the frame builds, so the step after the frame reads it.
+// frame laid out. The tree gives the laid out box of the control moved by the scroll, not clipped to the visible area, as the page
+// gives the rectangle of a pane. The tree of a frame cannot be read while the frame builds, so the step after the frame reads it.
 func (s *Shell) readPreviews() error {
 	previews := make(map[string][]previewPane, len(s.library.drawnPreviews))
 	if len(s.library.drawnPreviews) > 0 {

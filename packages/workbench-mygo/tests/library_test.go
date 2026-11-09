@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"testing"
@@ -78,6 +79,44 @@ func TestTheLibraryAnswersWithThePanesOfTheFrameThatShowsIt(t *testing.T) {
 	for _, pane := range panes {
 		if pane.W <= 0 || pane.H <= 0 || pane.X < float64(card.X) || pane.X+pane.W > float64(card.X+card.W) || pane.Y < float64(card.Y) {
 			t.Fatalf("the pane %+v is outside the card %v; the panes are %+v", pane, card, panes)
+		}
+	}
+}
+
+// In a library scrolled so that a card stands partly above the visible area, core.library gives the panes of its preview where the
+// laid out card puts them, not clipped to the visible area, as the page reads the rectangles of its panes: each pane moves by the
+// scroll and keeps its size.
+func TestAScrolledLibraryGivesThePanesWhereTheCardLaysThemOut(t *testing.T) {
+	f, alpha, _ := twoProjects(t)
+	for i := range 10 {
+		f.run("core.library.form.open", map[string]string{"mode": "open"})
+		f.run("core.library.form.set", map[string]string{"field": "parent", "value": fmt.Sprintf("/work/more%d", i)})
+		f.run("core.library.form.submit", nil)
+		f.settle()
+	}
+	f.run("core.projects.browse", nil)
+	f.settle()
+	before := status[libraryRead](t, f, "core.library").Previews[alpha]
+	card := f.box("core.library.open", alpha)
+	if len(before) == 0 {
+		t.Fatalf("the preview of %s has no pane", alpha)
+	}
+	f.tester.Scroll(card.X+card.W/2, card.Y+card.H/2, 0, card.H/2)
+	f.settle()
+	scrolled := f.box("core.library.open", alpha)
+	moved := scrolled.Y - card.Y
+	if moved >= 0 || scrolled.H != card.H {
+		t.Fatalf("the card did not scroll partly out of view: %v, then %v", card, scrolled)
+	}
+	after := status[libraryRead](t, f, "core.library").Previews[alpha]
+	if len(after) != len(before) {
+		t.Fatalf("the preview had %d panes, then %d", len(before), len(after))
+	}
+	for i, pane := range after {
+		was := before[i]
+		// The positions are float32 in the window, so the moved place is equal within their precision.
+		if pane.Card != was.Card || pane.X != was.X || math.Abs(pane.Y-(was.Y+float64(moved))) > 1e-3 || pane.W != was.W || pane.H != was.H {
+			t.Fatalf("the pane %+v of the scrolled library is not the pane %+v moved by %g", pane, was, moved)
 		}
 	}
 }
