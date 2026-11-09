@@ -321,3 +321,20 @@ func TestTheDescriptionAndContributionLinesOfACardAreNamedElements(t *testing.T)
 		}
 	}
 }
+
+// A space is a break opportunity of the description also before a word that opens with a point, as on the page: the description of the
+// layout probe takes five lines of its card at the window width of 1200, not six with "opens .lprobe" kept on one line.
+func TestADescriptionBreaksAtTheSpaceBeforeAWordWithAPoint(t *testing.T) {
+	const about = "Window check fixture that reports its tab reports, start values, surface size and a document region, opens .lprobe files, " +
+		"and declares sections, settings and a right sidebar override."
+	index := registryOf(map[string][]string{})
+	index["plugins"] = []any{map[string]any{"id": "layoutprobe", "name": "Layout probe", "description": about,
+		"versions": []any{map[string]any{"version": "0.0.40", "engines": map[string]string{"soksak": "*"}, "sidecars": map[string]string{}}}}}
+	f := pluginShell(t, &pluginsHost{registry: "file:///registry/index.json", index: index}, `{"plugins":[]}`)
+	f.run("core.library.page", map[string]string{"page": "plugins"})
+	// Five lines of the small size 11 at the line height 1.45, in the description width 259 of a card of four columns.
+	const lines = 5 * 11 * 1.45
+	if box := f.box("core.library.plugins.about", "layoutprobe"); math.Abs(float64(box.W)-259) > 0.01 || math.Abs(float64(box.H)-lines) > 0.01 {
+		t.Fatalf("the description is %v wide and %v high, want 259 wide and %v high", box.W, box.H, lines)
+	}
+}
