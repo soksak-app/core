@@ -7,7 +7,7 @@
 // is a fixture page without content, so the cost covers the tab and not the content of a site.
 import assert from "node:assert/strict";
 
-import { within } from "@soksak/window-check/app.mjs";
+import { holdCovered, within } from "@soksak/window-check/app.mjs";
 import { allRows, tailOf } from "@soksak/window-check/chains.mjs";
 import { fresh, START_PLUGIN } from "../../fixture.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
@@ -105,8 +105,7 @@ export async function recordIdleTab(s) {
 
   // The check windows overlap, and the document region of a covered window hides its document (docs/spec/native-surfaces.md#document-regions),
   // so the window keeps its documents shown while covered and the tab is measured as a shown tab.
-  await s.request("diagnostics.window.draw-covered", { draw: true });
-  s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+  s.cleanup(await holdCovered(s));
   const growthOf = idleTabGrowth({ window: s.window, pageProcess: (await s.get("host.window")).pageProcess });
   const growthBefore = await readings(s, await tailOf(s), growthOf.settled, `the settled ${growthOf.of} before the tab`);
   const { tab } = await s.run("core.card.split", { card: card.id, side: "right", plugin: IDLE_TAB_PLUGIN });
