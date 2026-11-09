@@ -907,7 +907,7 @@ fn invalid_json_closes_connection() {
 | `log.closed.signal-before-quit` | 첫 종료 신호는 quit을 요청하기 전에 원인 `signal`과 번호를 담은 `log.closed`를 저장하므로, quit의 flush가 실행될 때 기록이 로그에 있다. | all |
 | `log.closed.cause-before-quit` | 프로세스 종료 요청은 quit을 실행하기 전에 원인(`quit-command`, `quit-request`, `last-window-closed`, `update`)을 담은 `log.closed`를 저장한다. | all |
 | `log.closed.exit-request-source` | 원인 `exit-request`의 `log.closed`는 quit이 어디서 왔는지 밝힌다: 보낸 process와 그 이름을 담은 `apple-event`, signal과 보낸 process를 담은 `signal`, host의 요청을 담은 `host`, 그리고 host의 어떤 부분도 quit을 요청하지 않았을 때 현재 event의 type을 담은 `menu`. | all |
-| `log.closed.fatal-exit-code` | shutdown 없이 프로세스를 끝내는 fatal error는 그 오류 기록 뒤에 종료 코드 1을 담은 원인 `exit`의 `log.closed`를 저장한다. | wailsv3, mygo만: Rust host는 panic 뒤에만 shutdown 없이 프로세스를 끝내며, 그것은 `log.panic.records-an-event`가 다룬다 |
+| `log.closed.fatal-exit-code` | shutdown 없이 프로세스를 끝내는 fatal error는 그 오류 기록 뒤에 종료 코드 1을 담은 원인 `exit`의 `log.closed`를 저장한다. | wailsv3, mygo only: Rust host는 panic 뒤에만 shutdown 없이 프로세스를 끝내며, 그것은 `log.panic.records-an-event`가 다룬다 |
 | `log.closed.passes-every-gate` | writer는 class `lifecycle`을 끈 정책에서도 level `info`, class `lifecycle`의 `log.closed`를 저장한다. | all |
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | all |
 | `window-close.native-window.used-in-reading-step` | native 창을 쓰는 host 요청은 native 창을 native code에 넘기는 main thread 단계에서 읽으므로(Wails host에서는 main thread가 그 단계를 위해 C에서 기다리는 동안 worker가 읽고, main thread가 같은 단계에서 실행하는 C 호출로 넘긴다: [hosts](hosts.ko.md#wails-host의-main-thread)), 요청의 앞선 단계 뒤에 main thread가 처리한 닫기가 닫힌 창을 native code에 넘기지 않는다. 그 단계 전에 닫힌 창은 native code에 닿지 않고, 요청은 오류 1003 `window "<name>" does not exist`로 실패한다. | all |
