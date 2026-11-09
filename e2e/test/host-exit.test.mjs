@@ -90,6 +90,29 @@ test("the exit names the source of the exit request that its log holds", (t) => 
   assert.doesNotMatch(text, /no exit request/);
 });
 
+test("an exit with a non-zero code after an error record names that record and the code", (t) => {
+  const { configDir, log } = silentHost(t, 4242);
+  writeFileSync(log, [
+    { seq: 7, level: "error", event: "host.record.error", fields: { text: "the main webview is not in the window hierarchy", where: "main webview identity" } },
+    { seq: 8, level: "info", event: "log.closed", fields: { cause: "exit", code: 1 } },
+  ].map((record) => JSON.stringify(record)).join("\n") + "\n", { flag: "a" });
+  const text = exitEvidence(configDir, 4242, { reports: [], memory });
+  assert.match(text, /it exited with code 1 after the error record seq 7 host\.record\.error the main webview is not in the window hierarchy \(main webview identity\)/);
+  assert.doesNotMatch(text, /no exit request|not recorded/);
+});
+
+test("an exit after an error record without a record of its end names that record and the code it could not read", (t) => {
+  const { configDir, log } = silentHost(t, 4242);
+  writeFileSync(log, [
+    { seq: 5, level: "info", event: "log.closed", fields: { cause: "update" } },
+    { seq: 6, level: "info", event: "log.closed", fields: { cause: "exit-request", source: "host", request: "update" } },
+    { seq: 9, level: "error", event: "host.record.error", fields: { text: "the main webview is not in the window hierarchy", where: "main webview identity" } },
+  ].map((record) => JSON.stringify(record)).join("\n") + "\n", { flag: "a" });
+  const text = exitEvidence(configDir, 4242, { reports: [], memory });
+  assert.match(text, /it ended after the error record seq 9 host\.record\.error the main webview is not in the window hierarchy \(main webview identity\), before a record of its exit, so its exit code was not recorded/);
+  assert.doesNotMatch(text, /no exit request/);
+});
+
 test("the exit names the crash output of the host when it is not empty", (t) => {
   const { configDir, log } = silentHost(t, 4242);
   writeFileSync(log.replace(/\.jsonl$/, ".crash"), "");

@@ -30,13 +30,31 @@ function hostLog(configDir, pid) {
     if (line === "") continue;
     let record;
     try { record = JSON.parse(line); } catch { continue; }
-    if (record.event === "log.closed") closed.push(`seq ${record.seq} log.closed cause ${record.fields?.cause}${fieldText(record.fields)}`);
-    else if (record.level === "error") {
+    if (record.event === "log.closed") {
+      closed.push({ seq: record.seq, fields: record.fields ?? {}, text: `seq ${record.seq} log.closed cause ${record.fields?.cause}${fieldText(record.fields)}` });
+    } else if (record.level === "error") {
       const fields = record.fields ?? {};
-      errors.push(`seq ${record.seq} ${record.event} ${fields.text ?? JSON.stringify(fields)}${fields.where ? ` (${fields.where})` : ""}`);
+      errors.push({ seq: record.seq, text: `seq ${record.seq} ${record.event} ${fields.text ?? JSON.stringify(fields)}${fields.where ? ` (${fields.where})` : ""}` });
     }
   }
   return { file, boot: Number(name.match(pattern)[1]), closed, errors };
+}
+
+/**
+ * How a process ended that recorded an error at its end: the exit code that its record of the exit names after its last error
+ * record, or that it ended after that error record before any record of its exit; null when its log tells neither.
+ */
+function endingAfterError(log) {
+  const last = log.closed.at(-1);
+  const error = log.errors.at(-1);
+  if (last?.fields.cause === "exit" && Number.isInteger(last.fields.code) && last.fields.code !== 0) {
+    const before = log.errors.filter((record) => record.seq < last.seq).at(-1);
+    return `it exited with code ${last.fields.code}${before ? ` after the error record ${before.text}` : ""}`;
+  }
+  if (error !== undefined && (last === undefined || (error.seq > last.seq && last.fields.cause !== "exit"))) {
+    return `it ended after the error record ${error.text}, before a record of its exit, so its exit code was not recorded`;
+  }
+  return null;
 }
 
 /** The text of a crash output file of the host log beside it, when the file is not empty. */
@@ -96,17 +114,20 @@ export function memoryNow() {
 
 /**
  * How host process pid of the configuration folder ended, in this order: the closing records of its log with the source of its exit
- * request and its error records; a crash output file of it that is not empty; a crash report of the system for its process; a
- * jetsam report that names it. Without any of them, the process ended with no exit request, no crash output and no crash report,
- * which a SIGKILL or a jetsam kill without a report does, and the memory of the machine is named.
+ * request and its error records, with the exit code after its last error record or that it ended before recording one; a crash
+ * output file of it that is not empty; a crash report of the system for its process; a jetsam report that names it. Without any of
+ * them, the process ended with no exit request, no crash output and no crash report, which a SIGKILL or a jetsam kill without a
+ * report does, and the memory of the machine is named.
  */
 export function exitEvidence(configDir, pid, { reports = DIAGNOSTIC_REPORTS, memory = memoryNow } = {}) {
   const log = hostLog(configDir, pid);
   const boot = log?.boot ?? 0;
   const parts = [];
   if (log !== null) {
-    const records = [...log.closed, ...log.errors].sort((a, b) => Number(a.split(" ")[1]) - Number(b.split(" ")[1])).slice(-8);
-    if (records.length > 0) parts.push(`the last records of ${log.file} that tell how it ended: ${records.join("; ")}`);
+    const records = [...log.closed, ...log.errors].sort((a, b) => a.seq - b.seq).slice(-8);
+    if (records.length > 0) parts.push(`the last records of ${log.file} that tell how it ended: ${records.map((record) => record.text).join("; ")}`);
+    const ending = endingAfterError(log);
+    if (ending !== null) parts.push(ending);
     for (const suffix of [".crash", ".stderr"]) {
       const output = crashOutput(log, suffix);
       if (output !== null) parts.push(`the crash output ${output}`);
@@ -120,7 +141,7 @@ export function exitEvidence(configDir, pid, { reports = DIAGNOSTIC_REPORTS, mem
   const jetsam = all.find((report) => report.path.split("/").pop().startsWith("JetsamEvent-")
     && Array.isArray(report.body?.processes) && report.body.processes.some((process) => process.pid === pid));
   if (jetsam) parts.push(jetsamText(jetsam, pid));
-  if (!(log?.closed.length > 0) && parts.every((part) => !/^the (crash|jetsam)/.test(part))) {
+  if (!(log?.closed.length > 0) && !(log?.errors.length > 0) && parts.every((part) => !/^the (crash|jetsam)/.test(part))) {
     parts.push(`it ended with no exit request, no crash output and no crash report, as a SIGKILL or a jetsam kill does; ${memory()} when the exit was found`);
   }
   return parts.join("; ");
