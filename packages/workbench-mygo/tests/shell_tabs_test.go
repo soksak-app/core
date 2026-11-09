@@ -154,6 +154,8 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Backdrop:    func(string) error { return nil },
 		FirstScreen: func() {},
 		Element:     func(string) (uintptr, uintptr, bool) { return 0, 0, false },
+		// The fixture draws no native view element, so no frame of it has a surface host to move in a layout transaction.
+		OpenLayout:  func() (uint64, error) { return 0, nil },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),
 		Environment: environment(t),
