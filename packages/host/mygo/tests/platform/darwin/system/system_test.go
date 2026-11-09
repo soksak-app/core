@@ -171,7 +171,7 @@ func runStep(t *testing.T, step string) *running {
 func startStep(t *testing.T, step, config, executable string, env ...string) *running {
 	t.Helper()
 	child := exec.Command(executable)
-	child.Env = append(append(os.Environ(), systemHelper+"="+config, systemStep+"="+step), env...)
+	child.Env = append(append(os.Environ(), systemHelper+"="+config, systemStep+"="+step, support.ChildTemporary(t)), env...)
 	child.Stderr = os.Stderr
 	output, err := child.StdoutPipe()
 	if err != nil {

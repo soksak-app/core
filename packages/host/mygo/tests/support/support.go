@@ -206,3 +206,21 @@ func Logged(config string) string {
 	}
 	return text.String()
 }
+
+// ChildTemporary returns the TMPDIR entry of the environment of a child application: a short folder of the test, removed when the
+// test ends. The host keeps its socket folder `soksak` in the temporary folder across its runs (host.SocketDirectory), so a child
+// that starts the host writes that folder into the temporary folder that it receives. The name is short because a socket path holds
+// at most 103 bytes (docs/spec/host-contract.md, endpoint.socket.path-over-limit).
+func ChildTemporary(t *testing.T) string {
+	t.Helper()
+	folder, err := os.MkdirTemp("", "ct")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(folder); err != nil {
+			t.Errorf("cannot remove %s: %v", folder, err)
+		}
+	})
+	return "TMPDIR=" + folder
+}
