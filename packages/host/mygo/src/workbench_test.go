@@ -78,6 +78,7 @@ func TestAStartWhoseWindowClosedEndsWithoutAFailure(t *testing.T) {
 // A restarted workbench of a window that went on the screen starts over the last frame of the workbench before it, which the window
 // holds until the first screen, so the host keeps the title bar of that frame; a window that has not gone on the screen shows no frame,
 // and its title bar takes the row of the settings at once (docs/spec/native-surfaces.md#title-bar-height).
+// contract: mygo.framework.start-tells-whether-the-window-shows-a-frame
 func TestAStartTellsTheHostWhetherTheWindowShowsAFrame(t *testing.T) {
 	for _, revealed := range []bool{false, true} {
 		framework := NewFramework(&startRecord{})
