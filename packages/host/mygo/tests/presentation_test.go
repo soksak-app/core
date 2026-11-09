@@ -374,12 +374,25 @@ func TestE2EATransactionHoldsTheOtherWindowsAndTheWindowsOpenedMeanwhile(t *test
 	support.Wait(t, "the first frame of the window opened meanwhile", func() bool { return draws(workbench, "third") > 0 })
 }
 
-// A preparation that takes over a transaction whose frame a preparation already asked for has no frame of its own: that frame holds
-// its drawable until the commit, and the window changed meanwhile, as a resize does, so a second frame would wait for the commit that
-// waits for its notice. The notice fails at once, so the host cancels the preparation and commits the transaction, and the frame of
-// the change presents after the commit (docs/spec/hosts.md#native-views).
-func TestE2EAPreparationAfterTheFrameOfItsTransactionFailsAtOnce(t *testing.T) {
+func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {
 	_, _, window := held(t, "newer")
+	begin(t, window, 1)
+	if err := presentation(t, window); err != nil {
+		t.Fatal(err)
+	}
+	commit := begin(t, window, 2)
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the notice of the newer preparation failed: %v", err)
+	}
+	commit()
+}
+
+// A preparation that takes over a transaction whose frame an earlier preparation asked for hears that frame: the window has held its
+// frames since that frame, which drew the lines that the newer preparation places. The window changed meanwhile, as a resize does,
+// so a second frame would wait for the commit that waits for the notice; the frame of the change presents after the commit
+// (docs/spec/hosts.md#native-views).
+func TestE2EAPreparationAfterTheFrameOfItsTransactionHearsThatFrame(t *testing.T) {
+	_, _, window := held(t, "newer-changed")
 	begin(t, window, 1)
 	window.Window().SetSize(520, 410)
 	if err := presentation(t, window); err != nil {
@@ -395,8 +408,8 @@ func TestE2EAPreparationAfterTheFrameOfItsTransactionFailsAtOnce(t *testing.T) {
 	}
 	select {
 	case err := <-result:
-		if err == nil || !strings.Contains(err.Error(), "the frame of the transaction already presented") {
-			t.Fatalf("the notice of the newer preparation heard %v", err)
+		if err != nil {
+			t.Fatalf("the notice of the newer preparation failed: %v", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("the notice of the newer preparation did not come within 2 s: it waits for the commit")

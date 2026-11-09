@@ -31,9 +31,9 @@ func (*createdPlatform) SetSurfaceAlphaHandle(unsafe.Pointer, float64)          
 func (*createdPlatform) PlaceDocument(unsafe.Pointer, float64, float64, float64, float64, bool) {}
 
 // A surface that a preparation creates has no element in the frame of the transaction, which was built before the surface existed,
-// so the preparation places it in its box, and the element of the next frame keeps that place: a window without a main page shows
-// it at the commit in the place that the preparation reports (docs/spec/hosts.md#native-views). A surface that the preparation finds
-// keeps the place that its element gives it.
+// so the preparation places it in its box, and the element of the next frame keeps that place: a window without a main page has
+// it at the commit in the place that the preparation reports, where the element of the next frame shows it
+// (docs/spec/hosts.md#native-views). A surface that the preparation finds keeps the place that its element gives it.
 func TestAPreparationPlacesTheSurfaceThatItCreatesInAWindowWithoutAMainPage(t *testing.T) {
 	window := &pagelessWindow{native: platform.Window(1)}
 	fake := &createdPlatform{bounds: map[unsafe.Pointer]Rect{}}
