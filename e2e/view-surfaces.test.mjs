@@ -8,7 +8,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { APPS, MAIN_PAGE_APPS, drag, open, within } from "@soksak/window-check/app.mjs";
+import { APPS, drag, open, within } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents, traceRows, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { fresh, reading, START_PLUGIN } from "./fixture.mjs";
@@ -189,7 +189,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(shown.length, 3 + documentViews(surfaces).length,
       `the fixture must show three image region views and two document views, found ${JSON.stringify(shown)}`);
     const { mainPages, tabs: tabViews, sections: sectionViews, count: expectedAppDom } =
-      appDomWebviews(surfaces, { mainPage: MAIN_PAGE_APPS.includes(app) });
+      appDomWebviews(surfaces, { mainPage: window.pageProcess !== null });
     assert.equal(window.webviews.filter((webview) => webview.main).length, mainPages,
       `the window must have ${mainPages} main page web views`);
     assert.equal(window.appDomWebviews, expectedAppDom,
