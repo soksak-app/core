@@ -64,7 +64,9 @@ type storedHost struct {
 	open []string
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
 	appUpdate any
-	opened    []json.RawMessage
+	// holdAppUpdate, when set, keeps the answer of appUpdateState until it closes.
+	holdAppUpdate <-chan struct{}
+	opened        []json.RawMessage
 	// backgrounds are the values of setDialogBackground in their order.
 	backgrounds []bool
 	// forwards are the requests that the shell forwarded to surfaces, and each gets an empty result.
@@ -370,8 +372,13 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			plugins.starter = map[string]any{"format": 1, "state": request.State, "pack": request.Pack, "registry": request.Registry, "plugins": request.Plugins}
 			return nil, nil
 		}),
-		"linkOpen":         answer("linkOpen", func(argument json.RawMessage) (any, error) { h.opened = append(h.opened, argument); return nil, nil }),
-		"appUpdateState":   answer("appUpdateState", func(json.RawMessage) (any, error) { return h.appUpdate, nil }),
+		"linkOpen": answer("linkOpen", func(argument json.RawMessage) (any, error) { h.opened = append(h.opened, argument); return nil, nil }),
+		"appUpdateState": answer("appUpdateState", func(json.RawMessage) (any, error) {
+			if h.holdAppUpdate != nil {
+				<-h.holdAppUpdate
+			}
+			return h.appUpdate, nil
+		}),
 		"appUpdateStage":   answer("appUpdateStage", func(json.RawMessage) (any, error) { return map[string]string{"bundle": "/staged/soksak.app"}, nil }),
 		"appUpdateApply":   answer("appUpdateApply", none),
 		"sidecarsOutdated": answer("sidecarsOutdated", func(json.RawMessage) (any, error) { return h.pluginHost().outdated, nil }),

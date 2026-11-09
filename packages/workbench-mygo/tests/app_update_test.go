@@ -196,6 +196,41 @@ func TestCoreAppUpdateWithoutACandidateFails(t *testing.T) {
 	}
 }
 
+// core.plugins.registry answers after the frame that shows the application update of the new index, as the page answers after
+// appUpdate.refresh: a request that the caller sends after the answer finds the update control. The host answers the read of the
+// application update after the frame of the plugin state, so the command cannot answer with that frame.
+func TestTheRegistryCommandAnswersAfterTheFrameThatShowsTheApplicationUpdate(t *testing.T) {
+	f, stored := updateShell(t, "")
+	if f.has("core.chrome.updates", "") {
+		t.Fatalf("the window shows the update control before the index lists a release; the texts are %q", f.tester.Texts())
+	}
+	stored.appUpdate = map[string]any{"version": "1.0.0", "available": map[string]any{"version": "2.0.0",
+		"release": map[string]string{"url": appRelease, "sha256": strings.Repeat("0", 64)}}}
+	hold := make(chan struct{})
+	stored.holdAppUpdate = hold
+	answered := false
+	var found error
+	f.shell.Registry().RunLater("core.plugins.registry", json.RawMessage(`{"index":"file:///index.json"}`), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.plugins.registry failed: %v", err)
+		}
+		answered = true
+		_, found = f.shell.Registry().Answer("element.rect", json.RawMessage(`{"name":"core.chrome.updates"}`), nil)
+	})
+	f.settle()
+	if answered {
+		t.Fatalf("core.plugins.registry answered before the host answered the read of the application update (request after it: %v)", found)
+	}
+	close(hold)
+	f.settle()
+	if !answered {
+		t.Fatal("core.plugins.registry did not answer")
+	}
+	if found != nil {
+		t.Fatalf("a request after the answer of core.plugins.registry failed: %v", found)
+	}
+}
+
 // filterCalls returns the calls whose name starts with prefix.
 func filterCalls(calls []string, prefix string) []string {
 	var found []string

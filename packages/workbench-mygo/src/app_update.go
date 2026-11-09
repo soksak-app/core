@@ -42,8 +42,9 @@ func NewAppUpdates(calls *Calls, begin BeginOperation, plugins func() *PluginsSt
 	return &AppUpdates{calls: calls, begin: begin, plugins: plugins, changed: changed}
 }
 
-// Refresh reads the candidate of the registry index again. A read that fails is the error of the status.
-func (u *AppUpdates) Refresh() {
+// Refresh reads the candidate of the registry index again and runs done after the status took the read. A read that fails is the
+// error of the status.
+func (u *AppUpdates) Refresh(done func()) {
 	u.calls.Call("appUpdateState", nil, func(value any, err error) {
 		u.state, u.failure = nil, ""
 		if err == nil {
@@ -56,6 +57,7 @@ func (u *AppUpdates) Refresh() {
 			u.failure = err.Error()
 		}
 		u.changed()
+		done()
 	})
 }
 

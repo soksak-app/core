@@ -142,7 +142,7 @@ func (s *Shell) showLibraryPage(page string) error {
 	if page == pluginsPage {
 		s.pluginOperations.Refresh(func() {})
 		s.pluginOperations.RefreshOutdated(func() {})
-		s.appUpdates.Refresh()
+		s.appUpdates.Refresh(func() {})
 	}
 	s.options.Invalidate()
 	return nil
@@ -220,8 +220,9 @@ func (s *Shell) registerPlugins() {
 			return Refuse(InvalidParams, "index must be a non-empty string")
 		}
 		s.pluginOperations.UseRegistry(value.Index, func(err error) {
-			s.appUpdates.Refresh()
-			answer(err)
+			// The command answers after the read of the application update of the index, as the page answers after
+			// appUpdate.refresh, so the frame that it answers after shows that update.
+			s.appUpdates.Refresh(func() { answer(err) })
 		})
 		return nil
 	})
