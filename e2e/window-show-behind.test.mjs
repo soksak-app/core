@@ -1,22 +1,20 @@
 // A window that an application shows while it is not active stays behind the front window, and the front application
 // stays (docs/spec/hosts.md#launch-activation). The application of a check is launched without activation and a person
-// uses another application in front, so the first window and a new window of the check stay behind that application.
+// uses another application in front, so the first window and a new window of the check stay behind that application. The
+// check relaunches the application in the background and measures its first window right after that show.
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { APPS, open, runProcesses } from "@soksak/window-check/app.mjs";
-import { frontmostApp, windowPlace, windowsBehind } from "@soksak/window-check/frontmost.mjs";
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { frontmostApp, windowPlace } from "@soksak/window-check/frontmost.mjs";
 import { fresh } from "./fixture.mjs";
+import { firstWindowPlace } from "./window-show-behind.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a window of a check opens behind the front window and the front application stays`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     if (!s) return;
-    const pid = s.client.endpoint.pid;
-    const front = frontmostApp();
-    const first = windowPlace(pid);
-    const others = runProcesses().filter((item) => item !== pid);
-    const behind = windowsBehind(pid, others);
+    const { pid, front, first, behind } = await firstWindowPlace(s);
     t.diagnostic(`front application ${front}; application ${pid}; first window at place ${first}, ${behind} windows of other applications behind it`);
     assert.notEqual(front, pid, `${app.name} is the front application, so the check ran without another application in front`);
     // The first window of an application that shows no other window goes behind every window. The other applications of the run
