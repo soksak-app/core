@@ -13,6 +13,17 @@ export function windowAxis(edge) {
   return edge === "left" || edge === "right" ? "x" : "y";
 }
 
+/** The names of the edges in the status line, the fold control and the chrome switch of a window sidebar. */
+export const EDGE_NAMES = Object.freeze({ left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" });
+
+/** The fold chevron of the status line of the sidebar of each edge, pointing toward the edge. */
+export const FOLD_ICONS = Object.freeze({ left: "chevron-left", right: "chevron-right", top: "chevron-up", bottom: "chevron-down" });
+
+/** The orientation of the sections of the sidebar of an edge: vertical at left and right, horizontal at top and bottom. */
+export function windowOrientation(edge) {
+  return windowAxis(edge) === "x" ? "vertical" : "horizontal";
+}
+
 /** The member of the saved size of the sidebar of an edge: width for left and right, height for top and bottom. */
 export function sizeKey(edge) {
   return windowAxis(edge) === "x" ? "width" : "height";

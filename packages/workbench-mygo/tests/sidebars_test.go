@@ -329,3 +329,23 @@ func TestStatusReportsTheDrawnSidebars(t *testing.T) {
 		t.Fatalf("the status is %s", encoded)
 	}
 }
+
+// TestTheTopAndBottomWindowSidebarsLieHorizontally checks the frame of the top and bottom window sidebars
+// (docs/spec/external-sidebars.md).
+func TestTheTopAndBottomWindowSidebarsLieHorizontally(t *testing.T) {
+	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
+	f.sidebars.Begin()
+	for place, status := range map[string]string{"top": "위 창 사이드바", "bottom": "아래 창 사이드바", "left": "왼쪽 창 사이드바"} {
+		frame, err := f.sidebars.Frame(place, "spc-1", workbench.FocusedSurface{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		orientation := "horizontal"
+		if place == "left" {
+			orientation = "vertical"
+		}
+		if frame.Orientation != orientation || frame.Status != status || frame.Side != place {
+			t.Fatalf("the frame of %s is %s %q %s", place, frame.Orientation, frame.Status, frame.Side)
+		}
+	}
+}

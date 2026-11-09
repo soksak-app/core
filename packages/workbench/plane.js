@@ -18,7 +18,7 @@ import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sideName, sizeSidebar, spaceFoldText, toggleSidebar } from "./card-sidebars.js";
-import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
+import { arrangeWindowSidebars, EDGE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
@@ -273,12 +273,12 @@ function updateCard(el, card, rect) {
       const owner = kind === null ? { card: null, surface: null }
         : { card: focusedId, surface: activeTab(grid.card(focusedId)).id };
       // The content of an ordinary sidebar has no card-surface link and no rail.
-      drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: "vertical", window: true, plugin: kind, side });
+      drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     } else {
       clearSet(holder);
       holder.replaceChildren();
     }
-    setText(statusText, `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바${kind ? ` · ${kind}` : ""}`);
+    setText(statusText, `${EDGE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
     // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).
     let fold = status.querySelector(".sidebar-status__fold");
     if (!fold || fold.dataset.side !== side) {
@@ -288,9 +288,9 @@ function updateCard(el, card, rect) {
       fold.className = "sidebar-status__fold";
       fold.dataset.side = side;
       fold.dataset.expose = "core.sidebar.fold";
-      fold.title = `${side === "left" ? "왼쪽" : "오른쪽"} 창 사이드바 접기`;
+      fold.title = `${EDGE_NAMES[side]} 창 사이드바 접기`;
       fold.setAttribute("aria-label", fold.title);
-      fold.innerHTML = icon(side === "left" ? "chevron-left" : "chevron-right");
+      fold.innerHTML = icon(FOLD_ICONS[side]);
       bind(fold, "core.settings.set", { patch: { [side]: false } });
       status.appendChild(fold);
     }

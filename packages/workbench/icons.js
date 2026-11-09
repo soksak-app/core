@@ -19,8 +19,9 @@ const PATHS = {
   moon: declaredIcons["moon"],
   settings: declaredIcons["settings"],
   close: declaredIcons["close"],
-  // They are chevron-down, chevron-left, chevron-right, and rotate-cw of Lucide.
+  // They are chevron-down, chevron-up, chevron-left, chevron-right, and rotate-cw of Lucide.
   "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+  "chevron-up": '<path d="m18 15-6-6-6 6"/>',
   "chevron-left": '<path d="m15 18-6-6 6-6"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   "rotate-cw": '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',

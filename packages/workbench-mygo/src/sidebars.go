@@ -372,18 +372,26 @@ func (s *Sidebars) choice(sidebar string) *SidebarChoice {
 func (s *Sidebars) Begin() { s.drawn = nil }
 
 // Holds reports whether the card id is a fixed sidebar of the window.
-func (s *Sidebars) Holds(id string) bool { return id == "left" || id == "right" }
+func (s *Sidebars) Holds(id string) bool { return layout.IsWindowEdge(id) }
+
+// edgeNames are the names of the edges in the status line, the fold control and the chrome switch of a window sidebar.
+var edgeNames = map[string]string{"left": "왼쪽", "right": "오른쪽", "top": "위", "bottom": "아래"}
+
+// foldPaths are the chevrons of the fold control of the sidebar of each edge, pointing toward the edge, as packages/workbench/icons.js
+// holds them.
+var foldPaths = map[string]string{"left": "m15 18-6-6 6-6", "right": "m9 18 6-6-6-6", "top": "m18 15-6-6-6 6", "bottom": "m6 9 6 6 6-6"}
 
 // Frame returns the frame of the fixed sidebar place in the space, and records the sidebar in the build.
 func (s *Sidebars) Frame(place, space string, focused FocusedSurface) (SidebarFrame, error) {
 	if !s.Holds(place) {
 		return SidebarFrame{}, fmt.Errorf("unknown window sidebar %s", place)
 	}
-	status := "왼쪽 창 사이드바"
-	if place == "right" {
-		status = "오른쪽 창 사이드바"
+	// The sections of a top or bottom window sidebar lie horizontally, of a left or right one vertically (docs/spec/external-sidebars.md).
+	orientation := "vertical"
+	if layout.WindowAxis(place) == "y" {
+		orientation = "horizontal"
 	}
-	frame := SidebarFrame{Sidebar: place, Space: space, Orientation: "vertical", Side: place, Status: status}
+	frame := SidebarFrame{Sidebar: place, Space: space, Orientation: orientation, Side: place, Status: edgeNames[place] + " 창 사이드바"}
 	set, plugin := s.windowSet(place, focused)
 	if plugin != "" {
 		frame.Status += " · " + plugin
@@ -443,7 +451,7 @@ func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
 // them, whichever plugin has the focus.
 func (s *Sidebars) windowSurfaces(space string, sets []SidebarSet, links []SidebarLink) []string {
 	var surfaces []string
-	for _, place := range []string{"left", "right"} {
+	for _, place := range layout.WindowEdges {
 		seen := map[string]bool{}
 		for _, link := range links {
 			if (link.Place == place || link.Place == "window-"+place) && !seen[link.Set] {

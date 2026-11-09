@@ -151,7 +151,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in workbench order: the sidebar (`left` or `right` for a fixed window sidebar, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation, selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
+        "description": "The drawn sidebars in workbench order: the sidebar (`left`, `right`, `top` or `bottom` for the fixed window sidebar of that edge, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation (horizontal for a top or bottom window sidebar), selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
         "schema": {
           "type": "array",
           "items": {
@@ -1922,7 +1922,7 @@
       },
       {
         "name": "core.rail",
-        "description": "The rail outline path in plane coordinates and the focus corner mark rectangle; null without a layout.",
+        "description": "The rail outline path in plane coordinates, the groups that each join a content card with the fixed window sidebars of any edge that its plugin overrides, and the focus corner mark rectangle; null without a layout.",
         "schema": {
           "type": [
             "object",
@@ -4059,12 +4059,12 @@
       },
       {
         "name": "core.sidebar.status",
-        "description": "The status lines that end the fixed left and right window sidebars in workbench order.",
+        "description": "The status lines that end the fixed window sidebars of the edges left, right, top and bottom in workbench order.",
         "many": true
       },
       {
         "name": "core.sidebar.fold",
-        "description": "The fold controls at the end of the window sidebar status lines in workbench order; each turns its sidebar off with core.settings.set, and the window header control turns it on again.",
+        "description": "The fold controls at the end of the window sidebar status lines in workbench order; each turns its sidebar off with core.settings.set, and the window header control of its edge turns it on again.",
         "many": true
       },
       {
