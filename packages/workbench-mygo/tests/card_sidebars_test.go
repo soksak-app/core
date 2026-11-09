@@ -7,6 +7,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 // cardSidebar is a shown project whose card shows the set of the installed files on side. It returns the card.
@@ -216,6 +220,52 @@ func TestTheGripSizesTheSideAndAPressFoldsIt(t *testing.T) {
 	f.settle()
 	if f.has("core.sidebar", item) {
 		t.Fatal("a press on the grip did not fold the side")
+	}
+}
+
+// The grips of a card stand in the order of the sides of the page, top, bottom, left and right (SIDEBAR_SIDES of
+// packages/workbench/plane.js), so the index of a grip names the same side on each host, and a drag of each grip by 10 points
+// sizes its side by the displacement of the pointer (packages/workbench/sidebar-grip.js).
+func TestTheGripsOfACardStandInTheOrderOfTheSides(t *testing.T) {
+	f := sidebarShell(t)
+	f.tester.SetSize(1200, 760)
+	card := f.tabbedCards()[0]
+	f.run("core.card.fullscreen", map[string]string{"card": card})
+	sides := []string{"top", "bottom", "left", "right"}
+	for _, side := range sides {
+		f.run("core.card.sidebar.set", map[string]string{"card": card, "side": side, "set": "set-install"})
+		f.run("core.card.sidebar.size", map[string]any{"card": card, "side": side, "size": 120})
+	}
+	f.settle()
+	var order []string
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == "core.card.sidebar.grip" {
+				order = append(order, exposed.Item)
+			}
+			walk(node.Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	want := []string{card + ":top", card + ":bottom", card + ":left", card + ":right"}
+	if !slices.Equal(order, want) {
+		t.Fatalf("the grips stand in the order %v, want %v", order, want)
+	}
+	moves := map[string][2]float32{"top": {0, 10}, "bottom": {0, -10}, "left": {10, 0}, "right": {-10, 0}}
+	for _, side := range sides {
+		grip := f.box("core.card.sidebar.grip", card+":"+side)
+		x, y := grip.X+grip.W/2, grip.Y+grip.H/2
+		dx, dy := moves[side][0], moves[side][1]
+		f.tester.Press(x, y)
+		f.tester.Frame()
+		f.tester.Move(x+dx, y+dy)
+		f.tester.Frame()
+		f.tester.Release(x+dx, y+dy)
+		f.settle()
+		if size := f.storedSides(card)[side].(map[string]any)["size"]; size != float64(130) {
+			t.Fatalf("a drag of the %s grip by 10 points stored the size %v, want 130", side, size)
+		}
 	}
 }
 

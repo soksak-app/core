@@ -17,6 +17,10 @@ type Workbench interface {
 	// Shown tells the workbench that the host holds window and started it, so the host answers the calls of that window. It runs once
 	// for each Build of a window that the host holds.
 	Shown(window host.Frontend)
+	// StartFailed tells the workbench that the host refused the start of window with err, so the host answers no call of that start.
+	// The workbench shows err as its first screen and reports no ready window, as a main page whose start document failed. It runs
+	// in place of Shown.
+	StartFailed(window host.Frontend, err error)
 	// Close ends the workbench of window, when the window closes or before its workbench starts again.
 	Close(window host.Frontend)
 	// Emit delivers an event to the workbench of window.

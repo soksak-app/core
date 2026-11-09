@@ -28,6 +28,8 @@ type elementPlatform struct {
 	held     []unsafe.Pointer
 	settled  func(float64, error)
 	titlebar int
+	// heights are the title bar heights that were set at once.
+	heights []float64
 }
 
 func (p *elementPlatform) RetainView(view unsafe.Pointer) { p.held = append(p.held, view) }
@@ -38,6 +40,11 @@ func (p *elementPlatform) ReleaseView(view unsafe.Pointer) {
 		panic("a view that is not held was released")
 	}
 	p.held = slices.Delete(p.held, index, index+1)
+}
+
+func (p *elementPlatform) SetTitlebarHeight(_ platform.Window, height float64) error {
+	p.heights = append(p.heights, height)
+	return nil
 }
 
 func (p *elementPlatform) StartPageTitlebar(_ platform.Window, _ uint64, _ float64, ready func(error)) error {
@@ -107,6 +114,48 @@ func TestAnElementReleasesItsViewsWhenNoFrameCanFollow(t *testing.T) {
 	}
 }
 
+// closingWindow is an element window that holds the hook that its close runs.
+type closingWindow struct {
+	elementWindow
+	closing func() bool
+}
+
+func (w *closingWindow) OnClosing(hook func() bool) { w.closing = hook }
+
+// closingPlatform answers the calls of a window that opens and closes.
+type closingPlatform struct{ elementPlatform }
+
+func (p *closingPlatform) EnqueueUI(func()) error                 { return nil }
+func (p *closingPlatform) EndResponderObservation(unsafe.Pointer) {}
+
+// A closed window draws no frame that could still name the views of its elements, so its close hands them back after the frame
+// that the window can no longer present.
+// contract: surface-layout.element-holds-its-views-until-the-next-frame
+func TestAClosedWindowReleasesTheViewsOfItsElements(t *testing.T) {
+	window := &closingWindow{elementWindow: elementWindow{pagelessWindow: pagelessWindow{native: platform.Window(1)}}}
+	fake := &closingPlatform{}
+	previousFramework, previousSystem := framework, system
+	framework, system = pagelessFramework{window: window}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: &Sidecars{}, quit: &Quit{}, relay: NewRelay[relayTarget]()}
+	s := host.newWindow("main", "")
+	s.views = map[string]*nativeWebview{"a": {owner: s}}
+	s.setElement("a", SurfaceElement{Surface: unsafe.Pointer(new(byte)), Key: unsafe.Pointer(new(byte))})
+	if window.closing() {
+		t.Fatal("a window that is not ready kept its close")
+	}
+	if _, ok := s.element("a"); ok {
+		t.Fatal("a frame still reads the element of a closed window")
+	}
+	if fake.settled == nil {
+		t.Fatalf("the close waits for no frame, and %d views are held", len(fake.held))
+	}
+	fake.settled(0, errors.New("the window closed"))
+	if len(fake.held) != 0 {
+		t.Fatalf("%d views of a closed window are held", len(fake.held))
+	}
+}
+
 // contract: surface-layout.element-holds-its-views-until-the-next-frame
 func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	surfaces, _ := elements(t, &elementWindow{})
@@ -117,14 +166,18 @@ func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	}
 }
 
-// A window without a main page has no first row to wait for: the workbench sets its title bar with its layout.
+// A window without a main page has no first row to wait for: its title bar takes the row of the common settings at once, and the
+// workbench gives each later row with its layout.
 // contract: application.window.no-main-page-starts-without-the-page-title-bar
 func TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar(t *testing.T) {
 	surfaces, fake := elements(t, &elementWindow{})
-	if err := surfaces.startTitlebar(Record{}); err != nil {
+	if err := surfaces.startTitlebar(Record{"textSize": 2.0}); err != nil {
 		t.Fatal(err)
 	}
 	if fake.titlebar != 0 {
 		t.Fatal("the start asked for the title bar of a main page")
+	}
+	if !slices.Equal(fake.heights, []float64{72}) {
+		t.Fatalf("the start set the title bar to %v, want the first row 72 of factor 2", fake.heights)
 	}
 }

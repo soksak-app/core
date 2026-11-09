@@ -326,6 +326,9 @@ for (const app of Object.values(APPS))
           errors.push(error);
         }
       }
-      if (errors.length) throw new AggregateError(errors, "sidebar space acceptance failed");
+      // The test report prints the message of an AggregateError and not its errors, so the message names each of them.
+      if (errors.length) {
+        throw new AggregateError(errors, `sidebar space acceptance failed: ${errors.map((error) => error.message).join("; ")}`);
+      }
     },
   );

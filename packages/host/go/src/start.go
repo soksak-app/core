@@ -109,7 +109,14 @@ func StartWorkbench(h *Host, window Frontend) error {
 	if s == nil {
 		return ErrNoStartWindow
 	}
-	return h.pageStarting(s)
+	if err := h.pageStarting(s); err != nil {
+		return err
+	}
+	// The workbench draws its first row at the height of the common settings, which the title bar takes before the first screen
+	// (docs/spec/native-surfaces.md#title-bar-height).
+	snapshot, snapshotErr := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
+	_, _, _, err := startParts(snapshot, snapshotErr, s.startTitlebar, func() (Chrome, error) { return Chrome{}, nil })
+	return err
 }
 
 // startPage starts the main page of a window and builds the start document of that window. Before it answers, it leaves the window in the not ready state,

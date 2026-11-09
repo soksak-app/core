@@ -155,14 +155,16 @@ func (s *Shell) cardSides(id string, data *layout.CardData, rect layout.Rect) (c
 	return sides, nil
 }
 
-// drawCardSide draws side at the box of width and height, whose top left stands at x and y of the window.
-func (s *Shell) drawCardSide(c *ui.Context, id string, sides cardSides, side layout.Side, x, y, width, height float32) {
+// drawCardSide draws a side of a card at place, in the body of the card whose top left stands at originX and originY of the window.
+func (s *Shell) drawCardSide(c *ui.Context, id string, sides cardSides, side layout.Side, originX, originY float32, place layout.Rect) {
 	current, ok := sides.shown[side]
 	if !ok {
 		return
 	}
+	x, y := originX+float32(place.X), originY+float32(place.Y)
+	width, height := float32(place.W), float32(place.H)
 	frame := s.sidebars.CardFrame(current.set, s.opened().ActiveSpaceID, side, sides.owner)
-	ui.Box(c).Size(width, height).Background(s.palette.Card).Children(func() {
+	ui.Box(c).Absolute().Left(float32(place.X)).Top(float32(place.Y)).Size(width, height).Background(s.palette.Card).Children(func() {
 		if current.shown.Collapsed {
 			s.sidebars.Hide(c, frame)
 		} else {

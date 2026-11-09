@@ -16,7 +16,9 @@ import (
 type Framework struct {
 	workbench Workbench
 	// host is the prepared host, which starts each workbench.
-	host      atomic.Pointer[host.Host]
+	host atomic.Pointer[host.Host]
+	// start leaves the previous workbench of a window in the host before the new one starts: host.StartWorkbench.
+	start     func(h *host.Host, window host.Frontend) error
 	mu        sync.Mutex
 	frontends map[*mygo.Window]*Frontend
 	// transaction belongs to the main thread: whether a surface layout transaction is open.
@@ -25,7 +27,7 @@ type Framework struct {
 
 // NewFramework returns the framework that draws the windows with workbench.
 func NewFramework(workbench Workbench) *Framework {
-	return &Framework{workbench: workbench, frontends: map[*mygo.Window]*Frontend{}}
+	return &Framework{workbench: workbench, start: host.StartWorkbench, frontends: map[*mygo.Window]*Frontend{}}
 }
 
 // Serve connects the framework to the prepared host, before the first window exists.

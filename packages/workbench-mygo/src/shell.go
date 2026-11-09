@@ -557,13 +557,11 @@ func (s *Shell) Start() {
 	s.events.Begin(func() {
 		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
 			if err != nil {
-				s.fail(err)
-				s.options.FirstScreen()
+				s.StartFailed(err)
 				return
 			}
 			if err := s.adopt(value); err != nil {
-				s.fail(err)
-				s.options.FirstScreen()
+				s.StartFailed(err)
 				return
 			}
 			s.openTabs(func() {
@@ -589,6 +587,13 @@ func (s *Shell) Start() {
 			})
 		})
 	})
+}
+
+// StartFailed ends a start that failed with err: the workbench shows err as its first screen and reports no ready window, as a main
+// page that stops its start without reporting ready (docs/spec/native-host.md#page-start).
+func (s *Shell) StartFailed(err error) {
+	s.fail(err)
+	s.options.FirstScreen()
 }
 
 // showRequested shows the project that the address of the window names and then runs done. A window whose project is gone, or
@@ -641,7 +646,13 @@ func (s *Shell) adopt(value any) error {
 	}
 	s.projects = projects
 	s.takeOpen(snapshot.Open)
-	return s.beginSettings(snapshot.Common)
+	if err := s.beginSettings(snapshot.Common); err != nil {
+		return err
+	}
+	// The window shows the first row of the common settings: the host gives a new window the row of factor 1, and the workbench
+	// before a reload placed the row of the common settings, which the new workbench reads.
+	s.surfaces.titlebar = s.chromeHeight()
+	return nil
 }
 
 // decode reads the answer of a host call, which is the value of the handler or its JSON text.

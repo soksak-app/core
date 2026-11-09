@@ -217,6 +217,24 @@ func TestAStartThatFailsShowsItsFailureAsItsFirstScreen(t *testing.T) {
 	}
 }
 
+// A start that the host refused, as one whose window cannot cancel its open layout, shows that failure as its first screen, calls no
+// host and reports no ready window, as a main page whose start document failed (docs/spec/native-host.md#page-start).
+func TestAStartThatTheHostRefusedShowsItsFailureAsItsFirstScreen(t *testing.T) {
+	stored := &storedHost{}
+	app, window, queue, _ := fixtureApp(t, stored)
+	window.shown = func() { stored.note("firstScreen") }
+	app.Build(window)
+	app.StartFailed(window, errors.New("page reload: the layout of the window is not cancelled"))
+	queue.until(t, func() bool { return len(stored.written("workbench.record.error")) == 1 })
+	queue.drain(t)
+	if !slices.Equal(stored.calls, []string{"firstScreen"}) {
+		t.Fatalf("the refused start called %v, want only its first screen", stored.calls)
+	}
+	if text := fmt.Sprint(stored.written("workbench.record.error")); !strings.Contains(text, "page reload: the layout of the window is not cancelled") {
+		t.Fatalf("the refused start wrote %s", text)
+	}
+}
+
 // A refused projects.json or settings.json does not fail the start: the workbench shows each error and starts without the file
 // (docs/spec/projects.md#settings).
 func TestAStartWithRefusedStoredFilesShowsTheirErrorsAndStarts(t *testing.T) {

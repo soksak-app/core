@@ -15,6 +15,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -101,6 +103,8 @@ func (w *elementWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 
 // viewSession is the host session of the tests, with its only window.
 type viewSession struct {
+	// config is the configuration folder of the session, whose logs hold the event log of the host.
+	config    string
 	host      *host.Host
 	workbench *elementWorkbench
 	window    *adapter.Frontend
@@ -178,7 +182,7 @@ func startViewSession() (*viewSession, error) {
 	case <-time.After(10 * time.Second):
 		return nil, fmt.Errorf("the workbench did not start within 10 s: %v", workbench.Received())
 	}
-	return &viewSession{host: opened.Host(), workbench: workbench, window: window, system: system}, nil
+	return &viewSession{config: config, host: opened.Host(), workbench: workbench, window: window, system: system}, nil
 }
 
 // viewHost returns the shared session.
@@ -341,6 +345,82 @@ func TestE2EAViewPageHoldsTheKeyboardAgainAfterItsSurfaceHidAndShowed(t *testing
 	}
 }
 
+// hostEvents returns the events that the host wrote to the event log of the session, its debug file with them, in the order of their
+// sequence.
+func (s *viewSession) hostEvents() ([]map[string]any, error) {
+	if err := host.FlushRecords(2 * time.Second); err != nil {
+		return nil, err
+	}
+	paths, err := filepath.Glob(filepath.Join(s.config, "logs", "host-*.jsonl"))
+	if err != nil {
+		return nil, err
+	}
+	var events []map[string]any
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+			if line == "" {
+				continue
+			}
+			var event map[string]any
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				return nil, fmt.Errorf("%s: %w", path, err)
+			}
+			events = append(events, event)
+		}
+	}
+	sort.SliceStable(events, func(i, j int) bool { return sequence(events[i]) < sequence(events[j]) })
+	return events, nil
+}
+
+// sequence is the sequence number of an event of the event log.
+func sequence(event map[string]any) float64 {
+	seq, _ := event["seq"].(float64) // silent: an event without a number sorts first, and the log shows it whole.
+	return seq
+}
+
+// logOnFailure makes a test that fails write what happened while it ran: the records of the fixture workbench and the events of the
+// host, among them its error records and the events of the window, since the call.
+func (s *viewSession) logOnFailure(t *testing.T) {
+	t.Helper()
+	mark := -1.0
+	if events, err := s.hostEvents(); err != nil {
+		t.Logf("the host events before the test cannot be read: %v", err)
+	} else if len(events) > 0 {
+		mark = sequence(events[len(events)-1])
+	}
+	received := len(s.workbench.Received())
+	t.Cleanup(func() {
+		if !t.Failed() {
+			return
+		}
+		t.Logf("workbench records: %q", s.workbench.Received()[received:])
+		// The standard error and crash files of the host, as the application tests of this package write them.
+		if logged := support.Logged(s.config); logged != "" {
+			t.Logf("host log files:\n%s", logged)
+		}
+		events, err := s.hostEvents()
+		if err != nil {
+			t.Logf("the host events cannot be read: %v", err)
+			return
+		}
+		for _, event := range events {
+			if sequence(event) <= mark {
+				continue
+			}
+			line, err := json.Marshal(event)
+			if err != nil {
+				t.Logf("host event %v: %v", event, err)
+				continue
+			}
+			t.Logf("host event %s", line)
+		}
+	})
+}
+
 // count returns how often the workbench received the record.
 func (w *elementWorkbench) count(record string) int {
 	return len(slices.DeleteFunc(w.Received(), func(received string) bool { return received != record }))
@@ -351,6 +431,8 @@ func (w *elementWorkbench) count(record string) int {
 func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
 	session := viewHost(t)
 	t.Cleanup(func() { session.layout(t) })
+	// Registered after the cleanup layout, so it runs before it and writes the state that the failure left.
+	session.logOnFailure(t)
 	name := session.window.Name()
 	support.Wait(t, "the first start of the workbench", func() bool { return session.workbench.count("shown "+name) > 0 })
 	builds, starts := session.workbench.count("build "+name), session.workbench.count("shown "+name)
