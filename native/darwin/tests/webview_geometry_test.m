@@ -774,6 +774,21 @@ int main(void) { @autoreleasepool {
     // (190.5) shows the view page and not the backing of the region web view.
     check(webViewAtTopPoint(window, 180, 189.75) == region && webViewAtTopPoint(window, 180, 190.25) == page,
         @"the half point that the whole points of the region leave above its bottom inset shows the view page");
+    // A view web view is the root of its surface: the host places it with no insets, and it keeps the fractional frame of
+    // the surface, so the last device pixel row of the surface belongs to the view and not to the page below.
+    void *rootSurface = sp_surface_create(sp_window_set_main_webview(main.window, main));
+    webviewSetFrame(rootSurface, 360, 30, 200, 100.5);
+    webviewSetSurfaceHidden(rootSurface, false);
+    NSString *rootFolder = temporaryFolder(@"soksak-geometry-view-");
+    WKWebView *root = (WKWebView *)sp_document_create(rootSurface, store.fileSystemRepresentation,
+        rootFolder.fileSystemRepresentation, "probe", NULL, "", ignoreState, NULL);
+    check(root != NULL, @"a view web view is created in its surface");
+    sp_document_place(root, 0, 0, 0, 0, true);
+    check(NSHeight(root.frame) == 100.5 && webViewAtTopPoint(window, 460, 30 + 100.5 - 0.25) == root,
+        [NSString stringWithFormat:@"the view web view keeps the fractional height of its surface and its last device pixel row (height %g)",
+            NSHeight(root.frame)]);
+    sp_document_close(root);
+    sp_surface_close(rootSurface);
     double overlay[5] = {50, 50, 50, 50, 1};
     webviewSetSurfaceOverlays(surface, overlay, 1);
     check(webViewAtTopPoint(window, 190, 130) == page,
