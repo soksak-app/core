@@ -737,7 +737,7 @@ static id viewFacts(NSView *view, NSWindow *window) {
         @"class": NSStringFromClass(view.class),
         @"view": [NSString stringWithFormat:@"%p", view],
         @"frame": @[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)],
-        @"inWindow": @(view.window == window),
+        @"inWindow": @((BOOL)(view.window == window)),
         @"hidden": @(view.isHiddenOrHasHiddenAncestor),
     }];
     if ([view isKindOfClass:WKWebView.class]) {
@@ -762,7 +762,7 @@ static void logUnreceived(NSWindow *window, WKWebView *target, NSView *reached, 
         @"target": viewFacts(target, window),
         @"reached": viewFacts(reached, window),
         @"reachedPage": viewFacts(page, window),
-        @"samePage": @(page == target),
+        @"samePage": @((BOOL)(page == target)),
         @"firstResponder": first ? NSStringFromClass(first.class) : (id)NSNull.null,
         @"key": @(window.isKeyWindow),
         @"virtual": @(sp_input_virtual_is((__bridge void *)window)),
