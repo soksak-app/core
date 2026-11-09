@@ -47,6 +47,9 @@ func (w *appWindow) FirstScreen() {
 	}
 }
 
+// OpenLayout opens no layout transaction: the fixture window draws no native view element, so no frame of it moves a surface host.
+func (w *appWindow) OpenLayout() (uint64, error) { return 0, nil }
+
 // Address returns the address of the window.
 func (w *appWindow) Address() string { return w.address }
 
