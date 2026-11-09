@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh, START_PLUGIN } from "./fixture.mjs";
+import { fresh, joinedFailure, START_PLUGIN } from "./fixture.mjs";
 import { addRasterTab, REGION } from "./raster-probe.mjs";
 
 function nonDrawing(host, surface) {
@@ -96,7 +96,7 @@ test("hidden view statuses notify through every inactive host session", { timeou
       // Always await it, and retain both setup and watch failures if distinct.
       const result = await outcome;
       if (failure && result.error && failure !== result.error) {
-        throw new AggregateError([failure, result.error], "hidden status preparation and its watch both failed");
+        throw joinedFailure("hidden status preparation and its watch both failed", [failure, result.error]);
       }
       if (failure) throw failure;
       if (result.error) throw result.error;

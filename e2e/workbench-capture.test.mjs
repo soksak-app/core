@@ -9,7 +9,7 @@ import test from "node:test";
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, joinedFailure } from "./fixture.mjs";
 import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN } from "./benchmark/cases/floor-page.mjs";
 import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
 import { execute, windowApplicationRows } from "../scripts/measure-app-usage.mjs";
@@ -74,7 +74,7 @@ for (const app of Object.values(APPS)) {
         writeFileSync(join(directory, "evidence.json"), JSON.stringify(evidence, null, 2) + "\n");
         t.diagnostic(`root workbench capture evidence: ${directory}`);
       } catch (error) {
-        if (failure) throw new AggregateError([failure, error], "workbench capture failed and its diagnostic evidence could not be saved");
+        if (failure) throw joinedFailure("workbench capture failed and its diagnostic evidence could not be saved", [failure, error]);
         throw error;
       }
       if (failure) throw failure;
