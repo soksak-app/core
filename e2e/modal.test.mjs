@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { APPS, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
@@ -15,8 +15,7 @@ import { channelOtherSeqs, expectedTimeline, PAGE_ROWS } from "./debug-timeline-
 // This preparation does not change production benchmark visibility requirements.
 async function fresh(s, options) {
   const tab = await prepare(s, options);
-  s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
-  await s.request("diagnostics.window.draw-covered", { draw: true });
+  s.cleanup(await holdCovered(s));
   await s.presented();
   return tab;
 }

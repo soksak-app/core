@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { holdCovered } from "@soksak/window-check/app.mjs";
 import { processTable } from "@soksak/window-check/process-table.mjs";
 import { processRows } from "./service-processes.mjs";
 
@@ -26,7 +27,7 @@ export const RASTER_ENTRIES = Object.freeze(["status rasterprobe.view", "status 
 export const MEASURED = [30, 30, 30];
 export const MEASURED_HEX = `#${MEASURED.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 
-/** The sessions whose end already turns the covered drawing of drawCovered off. */
+/** The sessions that hold the covered drawing of drawCovered until their check ends. */
 const coveredSessions = new WeakSet();
 
 /**
@@ -36,11 +37,10 @@ const coveredSessions = new WeakSet();
  * (docs/spec/hosts.md#launch-activation, docs/spec/native-surfaces.md#image-regions). The window keeps reporting its occlusion.
  */
 async function drawCovered(s) {
-  if (!coveredSessions.has(s)) {
-    coveredSessions.add(s);
-    s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
-  }
-  await s.request("diagnostics.window.draw-covered", { draw: true });
+  if (coveredSessions.has(s)) return;
+  coveredSessions.add(s);
+  // The hold is shared with the drags of the check, so a drag leaves the drawing on (holdCovered).
+  s.cleanup(await holdCovered(s));
 }
 
 /**

@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import test from "node:test";
 
-import { APPS, open, requiresAll } from "@soksak/window-check/app.mjs";
+import { APPS, holdCovered, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { designDifferences } from "@soksak/window-check/design-rects.mjs";
 import { cardSidebar, fresh, replacePlaceholders, startTab } from "./fixture.mjs";
 import { retainDesignStateCapture } from "./still-capture.mjs";
@@ -84,8 +84,7 @@ async function walk(t, s, states) {
   await s.until("host.window", (w) => w.content.width === SIZE.width && w.content.height === SIZE.height, "the window did not resize");
   // An inactive application shows its window behind the frontmost window, where its image regions do not draw and no frame is
   // presented (docs/spec/native-surfaces.md#image-regions).
-  await s.request("diagnostics.window.draw-covered", { draw: true });
-  s.cleanup(() => s.request("diagnostics.window.draw-covered", { draw: false }));
+  s.cleanup(await holdCovered(s));
   const shown = async (when) => t.diagnostic(`${s.app.name} occluded ${when}: ${(await s.get("host.window")).occluded}`);
   await shown("at the start");
   const names = (await s.request("exposure.list")).element.map((entry) => entry.name).filter((name) => name.startsWith("core."));
