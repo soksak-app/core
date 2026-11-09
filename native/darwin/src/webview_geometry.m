@@ -528,13 +528,16 @@ static BOOL holdsSurface(NSView *view) {
     return NO;
 }
 
-// A press on the workbench: a press in the content view of a window that holds a surface, outside the views of its surfaces
-// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+// A press on the workbench: a press in the document of the main web view of the window, which holds a surface
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Every other web view is a document of its own: the page of a surface, or a
+// modal, whose document answers no keyboard decision of the workbench, so the release of a press on it must not open the decision
+// hold, which would hold every later input of the window.
 static bool pressOnWorkbench(void *owner, double x, double y) {
     NSView *content = ((NSWindow *)owner).contentView;
     if (!content || !holdsSurface(content)) return false;
     NSView *hit = [content hitTest:[content.superview convertPoint:NSMakePoint(x, y) fromView:nil]];
-    return hit && !surfaceHost(hit);
+    WKWebView *main = sp_window_main_webview(owner);
+    return hit && main && [hit isDescendantOf:main];
 }
 
 void *sp_surface_create(void *handle) {
