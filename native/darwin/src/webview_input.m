@@ -34,11 +34,12 @@ static void refreshPointerCursor(WKWebView *view, NSEvent *event) {
 }
 
 // Script that reports the trusted pointer events the document received. It runs in a content world
-// separate from the page.
+// separate from the page, and marks that world so a wait that ends at its limit can ask whether the document holds the listener.
 static NSString *const kReceiptWorld = @"soksak-input";
 static NSString *const kReceiptMessage = @"soksakInputReceipt";
 static NSString *const kReceiptScript =
-    @"for (const type of ['pointerdown', 'pointerup', 'click']) addEventListener(type, (event) => {"
+    @"globalThis.soksakInputReceipts = true;"
+    " for (const type of ['pointerdown', 'pointerup', 'click']) addEventListener(type, (event) => {"
     " if (event.isTrusted) webkit.messageHandlers.soksakInputReceipt.postMessage(type); }, true);";
 
 @interface SPInputWait : NSObject
@@ -52,9 +53,11 @@ static NSString *const kReceiptScript =
 // The receipt waits of one web view. The user content controller retains this object.
 @interface SPInputReceipts : NSObject <WKScriptMessageHandler>
 @property(nonatomic, retain) NSMutableArray<SPInputWait *> *waits;
+// The time at which the last wait of each type ended at its limit, until a receipt of that type arrives.
+@property(nonatomic, retain) NSMutableDictionary<NSString *, NSDate *> *ended;
 @end
 @implementation SPInputReceipts
-- (void)dealloc { [_waits release]; [super dealloc]; }
+- (void)dealloc { [_waits release]; [_ended release]; [super dealloc]; }
 - (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
     if (!message.frameInfo.isMainFrame || ![message.body isKindOfClass:NSString.class]) {
         sp_log_error("webview input", [NSString stringWithFormat:@"receipt message ignored: main frame %@, body class %@",
@@ -71,6 +74,14 @@ static NSString *const kReceiptScript =
         answered = YES;
     }
     if (answered) return;
+    // A receipt after the limit of its wait tells a late document from one that never received the event.
+    NSDate *ended = self.ended[message.body];
+    if (ended) {
+        sp_log_error("webview input", [NSString stringWithFormat:@"receipt of %@ arrived %.0f ms after its wait ended at the limit",
+            message.body, -ended.timeIntervalSinceNow * 1000].UTF8String);
+        [self.ended removeObjectForKey:message.body];
+        return;
+    }
     sp_log_info("webview input", [NSString stringWithFormat:@"receipt of %@ arrived without a wait", message.body].UTF8String);
 }
 @end
@@ -135,15 +146,29 @@ static BOOL hasPendingMouseDrain(WKWebView *view) {
     return NO;
 }
 
-// Logs that a receipt wait did not end within its time.
-static void logReceiptTimeout(NSString *type, NSTimeInterval timeout) {
+// Ends a receipt wait at its limit: records it, notes the time for a receipt that comes later, and records whether the document
+// of view holds the receipt listener, which the web process answers (or fails to answer) after this turn.
+static void endAtLimit(WKWebView *view, SPInputReceipts *handler, SPInputWait *wait, NSTimeInterval timeout) {
+    NSString *type = wait.type;
     sp_log_error("webview input", [NSString stringWithFormat:@"receipt of %@ did not arrive within %g seconds", type, timeout].UTF8String);
+    handler.ended[type] = [NSDate date];
+    [view evaluateJavaScript:@"globalThis.soksakInputReceipts === true" inFrame:nil
+        inContentWorld:[WKContentWorld worldWithName:kReceiptWorld] completionHandler:^(id value, NSError *error) {
+            NSString *answer = error ? [NSString stringWithFormat:@"not answered: %@", error.localizedDescription]
+                : [value isEqual:@YES] ? @"present" : @"absent";
+            sp_log_error("webview input", [NSString stringWithFormat:@"the receipt listener of the document at the limit of %@: %@",
+                type, answer].UTF8String);
+        }];
+    [[wait retain] autorelease];
+    [handler.waits removeObject:wait];
+    wait.done(NO);
 }
 
 static void installReceipts(WKWebView *view) {
     if (objc_getAssociatedObject(view, &registrationKey)) return;
     SPInputReceipts *handler = [[SPInputReceipts new] autorelease];
     handler.waits = [NSMutableArray array];
+    handler.ended = [NSMutableDictionary dictionary];
     WKContentWorld *world = [WKContentWorld worldWithName:kReceiptWorld];
     WKUserContentController *controller = view.configuration.userContentController;
     [controller addScriptMessageHandler:handler contentWorld:world name:kReceiptMessage];
@@ -169,11 +194,7 @@ void webviewInputReceive(WKWebView *view, NSString *type, NSTimeInterval timeout
     wait.done = done;
     [handler.waits addObject:wait];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (![handler.waits containsObject:wait]) return;
-        logReceiptTimeout(type, timeout);
-        [[wait retain] autorelease];
-        [handler.waits removeObject:wait];
-        wait.done(NO);
+        if ([handler.waits containsObject:wait]) endAtLimit(view, handler, wait, timeout);
     });
 }
 
@@ -208,11 +229,7 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
     };
     [handler.waits addObject:wait];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (![handler.waits containsObject:wait]) return;
-        logReceiptTimeout(type, timeout);
-        [[wait retain] autorelease];
-        [handler.waits removeObject:wait];
-        wait.done(NO);
+        if ([handler.waits containsObject:wait]) endAtLimit(view, handler, wait, timeout);
     });
     // After input to an image region the native drawing region can be the first responder. When the window is
     // inactive in that state, WebKit can exclude the target page from the mouse handling path, so the
