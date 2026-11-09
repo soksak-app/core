@@ -387,16 +387,27 @@ func TestE2EANewerPreparationReleasesTheHoldOfItsWindow(t *testing.T) {
 	commit()
 }
 
-// A frame that draws other surface lines opens the layout of its window and presents in it, and the preparation of those lines takes
-// the transaction over (docs/spec/hosts.md#native-views). The frame of that preparation changes the scene again, so its notice comes
-// before the commit that the preparation makes after it: a frame that waited for the commit for a drawable would hold the
-// preparation until the host gives up.
+// A frame that draws other surface lines opens the layout of its window while it builds and presents in it, and the preparation of
+// those lines takes the transaction over (docs/spec/hosts.md#native-views). That frame drew the lines that the preparation places, so
+// it is the frame of the transaction, which the notice of the preparation hears: the window changes again before the preparation asks
+// for its frame, as a resize does, and a second frame would wait for the commit that the preparation makes after its notice, which
+// would hold the preparation until the host gives up. The frame of the change presents after the commit.
 func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T) {
-	_, _, window := held(t, "taken")
-	begin(t, window, 1)
-	window.Window().SetSize(520, 410)
-	if err := presentation(t, window); err != nil {
+	_, workbench, window := held(t, "taken")
+	system, err := platform.Current()
+	if err != nil {
 		t.Fatal(err)
+	}
+	opened := make(chan error, 1)
+	workbench.InNextDraw(func() { opened <- system.BeginLayout(window.NativeWindow(), 1, func(bool) {}) })
+	window.Window().SetSize(520, 410)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("the frame did not open the layout of its window: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the resized window drew no frame within 10 s")
 	}
 	commit := begin(t, window, 2)
 	window.Window().SetSize(560, 430)
@@ -412,9 +423,12 @@ func TestE2EAPreparationThatTakesOverTheLayoutOfAFrameHearsItsFrame(t *testing.T
 			t.Fatalf("the notice of the preparation that took the layout over failed: %v", err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("the frame of the preparation that took the layout over did not present within 2 s: it waits for the commit")
+		t.Fatal("the notice of the preparation that took the layout over did not come within 2 s: it waits for the commit")
 	}
 	commit()
+	if err := presentation(t, window); err != nil {
+		t.Fatalf("the frame after the commit did not present: %v", err)
+	}
 }
 
 func TestE2ETheSettledPresentationWaitsForTheTransactionOfAnotherWindow(t *testing.T) {
