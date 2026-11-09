@@ -1,7 +1,6 @@
 // Checks the native pointer input of the card four-side handles and the recorded boundary coordinates.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
@@ -88,11 +87,14 @@ for (const app of Object.values(APPS)) {
           const poses = [{ phase: "initial", displayed: initialPresentation.displayed, size: 120, applied }];
           const recordingWindow = await s.get("host.window");
           const { frames: directory } = await s.request("diagnostics.capture.start", {});
+          // The session removes the recording when the check passes and keeps it, with its callback status and display link,
+          // when the check fails.
+          s.trackRecording(directory);
           let down = false;
           let stopped;
           const elapsed = [];
           const gestureErrors = [];
-          try {
+          {
             try {
               await s.pointer(x, y, "down");
               down = true;
@@ -226,18 +228,18 @@ for (const app of Object.values(APPS)) {
                 .map((frame) => +(frame.time - pose.displayed).toFixed(1)),
               frames: recorded.filter((frame) => Math.abs(frame.time - pose.displayed) <= 70)
                 .map((frame) => `${(frame.time - pose.displayed).toFixed(1)}:${frame.edges.join("/")}`),
+              // The layout transactions of the window around the display time, with each time relative to it: whether one committed
+              // after the state was reported displayed.
+              layouts: stopped.layouts.filter((layout) => ["begun", "requested", "presented", "committed"]
+                .some((key) => typeof layout[key] === "number" && Math.abs(layout[key] - pose.displayed) <= 70))
+                .map((layout) => Object.fromEntries(Object.entries(layout).map(([key, value]) =>
+                  [key, key !== "ticket" && typeof value === "number" ? +(value - pose.displayed).toFixed(1) : value]))),
             }));
             assert.deepEqual(missing, [], `${side}: displayed states missing from the recording at ${recordingWindow.refreshRate}Hz: ${JSON.stringify(around)}`);
             t.diagnostic(
               `${side}: 120 -> 160 -> 120 points, ${captured.length} frames at ${captured[0].width}x${captured[0].height}, ${stopped.layouts.length} layout transactions, gap ${stopped.longestGap}ms, input/presentation steps ${elapsed.join(",")}ms`,
             );
             console.info(`PASS ${app.name}: ${side} sidebar gesture (${Math.round(performance.now() - began)}ms)`);
-          } finally {
-            try {
-              rmSync(directory, { recursive: true, force: true });
-            } catch (error) {
-              failures.push(error);
-            }
           }
           await s.run("core.card.sidebar.size", { card: card.id, side, size: 120 });
           await s.presented();
