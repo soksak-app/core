@@ -686,7 +686,7 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.resize", { width: 800, height: 920 });
     await s.until("host.window", (w) => w.content.width === 800 && w.content.height > 0, "the window did not become narrow");
     await s.until("core.grid", (grid) =>
-      grid && Math.round(grid.width) === Math.round(grid.plane.w)
+      grid !== null && Math.round(grid.width) === Math.round(grid.plane.w)
       && Math.round(grid.height) === Math.round(grid.plane.h),
       "the narrow window did not resize the DOM plane");
     const narrow = await presentedFrame(s, surface, (frame) => frame.grid.cols < before.grid.cols,
@@ -696,7 +696,7 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.resize", { width: 1500, height: 920 });
     await s.until("host.window", (w) => w.content.width === 1500 && w.content.height > 0, "the window did not become wide");
     await s.until("core.grid", (grid) =>
-      grid && Math.round(grid.width) === Math.round(grid.plane.w)
+      grid !== null && Math.round(grid.width) === Math.round(grid.plane.w)
       && Math.round(grid.height) === Math.round(grid.plane.h),
       "the wide window did not resize the DOM plane");
     await presentedFrame(s, surface, (frame) => frame.grid.cols > narrow.grid.cols && frame.grid.rows > before.grid.rows,

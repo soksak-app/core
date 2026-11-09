@@ -16,7 +16,7 @@ async function geometry(s, surface, scale) {
     `the workbench did not take the content size ${content.width}×${content.height}`);
   await s.until("core.surfaces", (list) => {
     const placed = list.find((x) => x.surface === surface);
-    return placed && ["x", "y", "w", "h"].every((k) => placed.applied[k] === placed.declared[k]);
+    return placed !== undefined && ["x", "y", "w", "h"].every((k) => placed.applied[k] === placed.declared[k]);
   }, "the host did not apply the declared surface frame");
   await s.presented();
   const state = await s.get("host.window");

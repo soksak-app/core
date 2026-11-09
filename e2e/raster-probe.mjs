@@ -87,7 +87,7 @@ export async function addRasterTab(s, card) {
  */
 export async function presentRasterTab(s, card) {
   const { surface } = await addRasterTab(s, card);
-  await s.until("core.surfaces", (items) => items.find((item) => item.surface === surface && item.plugin === RASTER && item.visible
+  await s.until("core.surfaces", (items) => items.some((item) => item.surface === surface && item.plugin === RASTER && item.visible
     && item.exposes.includes("status rasterprobe.session")), `new raster probe ${surface} did not become a visible declared surface`);
   await s.until("host.window", (host) => host.regions.some((item) => item.surface === surface && item.name === REGION && item.visible
     && item.presented), `new raster probe ${surface} did not present an image region`);

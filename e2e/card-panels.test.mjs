@@ -222,7 +222,7 @@ for (const app of Object.values(APPS)) {
       await s.run("core.card.sidebar.set", { card: card0.id, side, set: set.id });
     }
     const grid = await s.until("core.grid",
-      (value) => value.cards.find((item) => item.id === card0.id)?.sidebars
+      (value) => value.cards.find((item) => item.id === card0.id)?.sidebars !== undefined
         && Object.keys(value.cards.find((item) => item.id === card0.id).sidebars).length === 4,
       "the four panels did not appear in core.grid");
     const panels = grid.cards.find((item) => item.id === card0.id).sidebars;
@@ -290,7 +290,7 @@ for (const app of Object.values(APPS)) {
     // Release: only that side disappears.
     await s.run("core.card.sidebar.set", { card: card0.id, side: "top", set: "off" });
     const cleared = await s.until("core.grid",
-      (value) => value.cards.find((item) => item.id === card0.id)?.sidebars
+      (value) => value.cards.find((item) => item.id === card0.id)?.sidebars !== undefined
         && !("top" in value.cards.find((item) => item.id === card0.id).sidebars),
       "the turned-off panel did not disappear");
     assert.ok("right" in cleared.cards.find((item) => item.id === card0.id).sidebars,

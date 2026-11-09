@@ -78,8 +78,8 @@ for (const app of Object.values(APPS)) {
     assert.ok(background && headless, "the replacement page did not open the hidden session headless");
 
     await s.run("core.tab.select", { tab: surface });
-    const attached = await s.until("host.window", (host) => host.regions.find((item) => item.surface === surface
-      && item.name === REGION && item.visible && item.presented && item.presented.generation !== oldGeneration),
+    const attached = await s.until("host.window", (host) => host.regions.some((item) => item.surface === surface
+      && item.name === REGION && item.visible && item.presented !== null && item.presented.generation !== oldGeneration),
     "the revealed raster probe did not present an image from a new attachment generation");
     const newRegion = attached.regions.find((item) => item.surface === surface && item.name === REGION);
     assert.ok(newRegion.presented.generation > oldGeneration,

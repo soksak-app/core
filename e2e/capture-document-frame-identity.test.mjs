@@ -29,7 +29,7 @@ for (const app of Object.values(APPS)) {
       if (card === grid.cards.find((item) => item.focused)?.id) opened = { tab };
     }
     assert.equal(typeof opened?.tab, "string", "no tab of the focused card holds the root view");
-    const visible = await s.until("core.surfaces", (surfaces) => surfaces.find((item) =>
+    const visible = await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === opened.tab && item.plugin === ROOT_VIEW && item.visible
         && item.exposes.includes("status core.surface.document")),
     `root view surface ${opened.tab} did not become visible`);

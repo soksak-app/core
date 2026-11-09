@@ -30,7 +30,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a section mounts in a card sidebar beside the same section of the window sidebar`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     const { plugin } = await fresh(s);
-    await s.until("core.project", (value) => value?.root, "the fixture project was not shown");
+    await s.until("core.project", (value) => typeof value?.root === "string" && value.root !== "", "the fixture project was not shown");
     await keepCommonSettings(s);
     // environment.json of each application declares its own sidebar sets, which replace the sets that plugins declare
     // (docs/spec/plugins.md#default-sidebar-sets), so the check stores the set of the window sidebar itself.
