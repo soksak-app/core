@@ -19,16 +19,24 @@ static void check(BOOL condition, NSString *what) {
 @interface RecordingWindow : NSWindow
 @property BOOL onScreen;
 @property(retain) NSMutableArray<NSString *> *calls;
+// constrains tells that the order of the window moves it onto the screen, as AppKit constrains the frame of a window that it puts on
+// the screen (constrainFrameRect:toScreen:), to constrained.
+@property BOOL constrains;
+@property NSRect constrained;
 @end
 
 @implementation RecordingWindow
 - (BOOL)isVisible { return self.onScreen; }
-- (void)makeKeyAndOrderFront:(id)sender { [self.calls addObject:@"makeKeyAndOrderFront"]; }
+- (void)ordered {
+    if (self.constrains && !self.onScreen) [self setFrame:self.constrained display:NO];
+}
+- (void)makeKeyAndOrderFront:(id)sender { [self.calls addObject:@"makeKeyAndOrderFront"]; [self ordered]; }
 - (void)makeKeyWindow { [self.calls addObject:@"makeKeyWindow"]; }
-- (void)orderFront:(id)sender { [self.calls addObject:@"orderFront"]; }
-- (void)orderFrontRegardless { [self.calls addObject:@"orderFrontRegardless"]; }
+- (void)orderFront:(id)sender { [self.calls addObject:@"orderFront"]; [self ordered]; }
+- (void)orderFrontRegardless { [self.calls addObject:@"orderFrontRegardless"]; [self ordered]; }
 - (void)orderWindow:(NSWindowOrderingMode)place relativeTo:(NSInteger)other {
     [self.calls addObject:[NSString stringWithFormat:@"order %@ %ld", place == NSWindowAbove ? @"above" : @"below", (long)other]];
+    [self ordered];
 }
 @end
 
@@ -77,6 +85,27 @@ int main(void) { @autoreleasepool {
     IMP real = method_setImplementation(answers, (IMP)answersActive);
     shown(NO, NO, none, (@[@"order below 0", @"makeKeyWindow"]), @"an application that only answers as active");
     method_setImplementation(answers, real);
+
+    // A window that the host sized and moved before it shows goes on the screen with that frame, as a window that showed before its
+    // move keeps it: the order that puts it on the screen would move it onto the screen. The frame reaches over the left and the top
+    // edge of the screen, where a window that covers another at an edge of the screen stands.
+    for (NSNumber *active in @[@YES, @NO]) {
+        RecordingWindow *window = [[RecordingWindow alloc] initWithContentRect:NSMakeRect(0, 0, 100, 100)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:YES];
+        window.releasedWhenClosed = NO;
+        window.calls = [NSMutableArray array];
+        NSRect given = NSMakeRect(-100, 900, 1400, 860);
+        [window setFrame:given display:NO];
+        window.constrains = YES;
+        window.constrained = NSMakeRect(0, 850, 1400, 860);
+        systemActive = active.boolValue;
+        ownWindows = @[@(window.windowNumber), @42];
+        sp_window_show(window);
+        check(NSEqualRects(window.frame, given), [NSString stringWithFormat:@"%@: the window showed with the frame %@, not the frame %@ that it was given",
+            active.boolValue ? @"an active application" : @"an application that is not active",
+            NSStringFromRect(window.frame), NSStringFromRect(given)]);
+        [window release];
+    }
 
     if (failures) return 1;
     printf("window show: ok\n");

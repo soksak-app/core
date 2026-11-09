@@ -74,11 +74,22 @@ bool sp_window_reveal_after_load(void *handle, char **error) {
     return true;
 }
 
+// keepFrame gives a window that the order put on the screen the frame that it had before, which the host gave it. AppKit constrains the
+// frame of a window that it puts on the screen (constrainFrameRect:toScreen:), and a window that a framework shows only after its
+// first screen goes on the screen after the moves of the host, so a window that reaches over an edge of the screen would move, where a
+// window that went on the screen before its moves keeps them.
+static void keepFrame(NSWindow *window, BOOL wasVisible, NSRect given) {
+    if (!wasVisible && !NSEqualRects(window.frame, given)) [window setFrame:given display:YES];
+}
+
 void sp_window_show(void *handle) {
     NSCAssert(NSThread.isMainThread, @"window show requires the UI thread");
     NSWindow *window = (NSWindow *)handle;
+    BOOL wasVisible = window.isVisible;
+    NSRect given = window.frame;
     if (NSRunningApplication.currentApplication.active) {
         [window makeKeyAndOrderFront:nil];
+        keepFrame(window, wasVisible, given);
         return;
     }
     NSInteger frontmost = 0;
@@ -93,5 +104,6 @@ void sp_window_show(void *handle) {
     } else if (!window.isVisible) {
         [window orderWindow:NSWindowBelow relativeTo:0];
     }
+    keepFrame(window, wasVisible, given);
     [window makeKeyWindow];
 }
