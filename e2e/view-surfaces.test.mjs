@@ -340,7 +340,7 @@ for (const app of Object.values(APPS)) {
     } catch (error) {
       const state = await s.get("core.notifications");
       if (state.authorization === "notDetermined") {
-        throw new Error(`${app.name}: the notification authorization of this application is not decided; answer its system notification prompt once`, { cause: error });
+        throw new Error(`${app.name}: the notification authorization of this application is not decided; answer its system notification prompt once (${error.message})`, { cause: error });
       }
       throw error;
     }
@@ -566,7 +566,7 @@ for (const app of Object.values(APPS)) {
         try {
           boxes = surfaceBoxes(frame, MEASURED, { expectedRow: headY }).sort((a, b) => a.card.l - b.card.l);
         } catch (error) {
-          throw new Error(`set ${set}, frame ${index} could not measure image region boxes: ${file}`, { cause: error });
+          throw new Error(`set ${set}, frame ${index} could not measure image region boxes: ${file}: ${error.message}`, { cause: error });
         }
         const rasterBoxes = boxes.filter((box) =>
           Math.abs(box.row / frame.scale - headY) <= 5);

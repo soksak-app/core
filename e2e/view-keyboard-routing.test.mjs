@@ -106,7 +106,7 @@ function injectedKeyEvents(events, key) {
       const input = JSON.parse(event.fields.text);
       return input.kind === "key" && input.key === key;
     } catch (error) {
-      throw new Error(`native input injection record is invalid JSON: ${event.fields.text}`, { cause: error });
+      throw new Error(`native input injection record is invalid JSON (${error.message}): ${event.fields.text}`, { cause: error });
     }
   });
 }
