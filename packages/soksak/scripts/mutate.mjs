@@ -9,10 +9,9 @@
  * Prints the score and, for every mutant that survived, the file, line and
  * edit — which is either a test worth writing or a branch worth deleting.
  */
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { mutationVerdict, runMutationTest } from "./mutation-runner.mjs";
+import { evidenceFolder, mutationVerdict, runMutationTest } from "./mutation-runner.mjs";
 import { copyWorkspace } from "./workspace-copy.mjs";
 
 // The mutants are written into a copy. Writing them into the repository leaves
@@ -87,7 +86,7 @@ if (listOnly) {
   process.exit(0);
 }
 
-const EVIDENCE = mkdtempSync(join(process.env.SOKSAK_MUTATION_RUN_FOLDER ?? tmpdir(), "soksak-mutation-evidence-"));
+const EVIDENCE = evidenceFolder(new URL("../../../", import.meta.url).pathname, "soksak-mutation-evidence-");
 console.log(`Evidence: ${EVIDENCE}`);
 const runTests = async (label) => {
   for (const file of TESTS) {

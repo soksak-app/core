@@ -1,6 +1,6 @@
 /** Shared execution and retained evidence for required and exploratory mutations. */
-import { closeSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { runBounded } from "./bounded.mjs";
 import { NODE_TEST_REPORTERS, readNodeTestEvidence } from "../../../scripts/node-test-evidence.mjs";
 import { EVENT_PREFIX } from "../../../scripts/test-event-reporter.mjs";
@@ -8,6 +8,17 @@ import { EVENT_PREFIX } from "../../../scripts/test-event-reporter.mjs";
 const ENVIRONMENT_CODES = new Set(["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_UNKNOWN_FILE_EXTENSION",
   "ERR_INVALID_PACKAGE_CONFIG", "ENOENT", "ENOSPC", "EACCES", "EMFILE", "ENFILE", "ENOMEM"]);
 const loaderFailure = new RegExp(`^(?:#\\s*)?(?:Error|TypeError|SyntaxError)(?: \\[(?:${[...ENVIRONMENT_CODES].join("|")})\\]:|: (?:${[...ENVIRONMENT_CODES].join("|")}):)`, "m");
+
+/**
+ * Creates the folder of the evidence of a mutation run, with the name prefix `prefix`. The evidence outlives the run, so the folder lies
+ * under `SOKSAK_MUTATION_RUN_FOLDER` of `env`, or else under target/mutation-runs of the repository `root`, and never in the temporary
+ * folder (docs/operations/examples.md#temporary-folders).
+ */
+export function evidenceFolder(root, prefix, env = process.env) {
+  const parent = env.SOKSAK_MUTATION_RUN_FOLDER ?? resolve(root, "target", "mutation-runs");
+  mkdirSync(parent, { recursive: true });
+  return mkdtempSync(join(parent, prefix));
+}
 
 export function mutationVerdict({ classification }) {
   if (classification === "passed") return "survived";
