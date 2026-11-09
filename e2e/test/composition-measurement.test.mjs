@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { glyphShape, outside, rasterRow, surfaceBoxes, whitePixels } from "../outside.mjs";
+import { glyphShape, measuredRun, outside, rasterRow, surfaceBoxes, whitePixels } from "../outside.mjs";
 import { bare, cardSize } from "../surface.mjs";
 import { assertHeldStatesShown, assertRoundTrips } from "@soksak/window-check/drag-measurement.mjs";
 
@@ -131,6 +131,20 @@ test("the raster row reads the longest measured run from the empty rows at the b
   for (let x = 30; x < 90; x += 30) paint(x, 119, x + 1, 120, [204, 204, 204]);
   assert.deepEqual(rasterRow(frame, MEASURED, { from: 149, to: 30 }), { y: 118, l: 11, r: 89 });
   assert.equal(rasterRow(frame, MEASURED, { from: 99, to: 30 }), null);
+});
+
+test("the measured run of a surface ends at its last measured row, above a measured row of another surface", () => {
+  const { frame, paint } = terminalFixture();
+  // A lower surface below the measured one shows one row in the measured color at its bottom, as the bottom device row of a document
+  // region that its page does not cover shows the default background of the web view, rgb(30, 30, 30).
+  paint(11, 140, 110, 141, MEASURED);
+  // The walk from the bottom of the window finds that row and not the measured surface.
+  assert.deepEqual(rasterRow(frame, MEASURED, { from: 159, to: 30 }), { y: 140, l: 11, r: 109 });
+  assert.deepEqual(measuredRun(frame, MEASURED, { from: 30, to: 160 }), { y: 119, l: 11, r: 109 });
+  // While the size changes, the raster of the previous size sticks to one side of the region.
+  paint(90, 110, 110, 120, [25, 27, 36]);
+  assert.deepEqual(measuredRun(frame, MEASURED, { from: 30, to: 160 }), { y: 119, l: 11, r: 89 });
+  assert.equal(measuredRun(frame, MEASURED, { from: 30, to: 100 }), null);
 });
 
 test("an unrendered white area next to the card color is found and card text is not", () => {
