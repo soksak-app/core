@@ -201,6 +201,15 @@ func (a *App) Shown(window host.Frontend) {
 	})
 }
 
+// StartFailed ends the start of window that the host refused with err.
+func (a *App) StartFailed(window host.Frontend, err error) {
+	a.options.Post(func() {
+		if shell := a.shell(window); shell != nil {
+			shell.StartFailed(err)
+		}
+	})
+}
+
 // Emit delivers an event to the workbench of window in a step of the main thread.
 func (a *App) Emit(window host.Frontend, name string, data ...any) {
 	a.options.Post(func() {
