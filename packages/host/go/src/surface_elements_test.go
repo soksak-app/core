@@ -183,18 +183,30 @@ func TestAWindowWithAMainPageHasNoElements(t *testing.T) {
 	}
 }
 
-// A window without a main page has no first row to wait for: its title bar takes the row of the common settings at once, and the
-// workbench gives each later row with its layout.
+// A window without a main page has no first row to wait for: a window that shows no frame yet takes the row of the common settings at
+// once, and the workbench gives each later row with its layout. A window that shows the last frame of its previous workbench keeps
+// the title bar of that frame until the first screen of the new workbench, which gives its row with its layout; its start still
+// checks the setting.
 // contract: application.window.no-main-page-starts-without-the-page-title-bar
 func TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar(t *testing.T) {
-	surfaces, fake := elements(t, &elementWindow{})
-	if err := surfaces.startTitlebar(Record{"textSize": 2.0}); err != nil {
-		t.Fatal(err)
-	}
-	if fake.titlebar != 0 {
-		t.Fatal("the start asked for the title bar of a main page")
-	}
-	if !slices.Equal(fake.heights, []float64{72}) {
-		t.Fatalf("the start set the title bar to %v, want the first row 72 of factor 2", fake.heights)
+	for _, shown := range []bool{false, true} {
+		surfaces, fake := elements(t, &elementWindow{})
+		if err := surfaces.startWorkbenchTitlebar(Record{"textSize": 2.0}, shown); err != nil {
+			t.Fatal(err)
+		}
+		if fake.titlebar != 0 {
+			t.Fatal("the start asked for the title bar of a main page")
+		}
+		want := []float64{72}
+		if shown {
+			want = nil
+		}
+		if !slices.Equal(fake.heights, want) {
+			t.Fatalf("the start of a window that shows a frame %t set the title bar to %v, want %v", shown, fake.heights, want)
+		}
+		if err := surfaces.startWorkbenchTitlebar(Record{"textSize": "2"}, shown); err == nil ||
+			err.Error() != "common setting textSize must be a number, not a string" {
+			t.Fatalf("the start of a window that shows a frame %t took the text size \"2\" with %v", shown, err)
+		}
 	}
 }

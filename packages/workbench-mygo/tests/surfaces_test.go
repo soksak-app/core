@@ -1859,6 +1859,76 @@ func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
 	}
 }
 
+// A placement that the answer of a running placement makes, outside a frame, places the lines of the frame that drew them, and so
+// gives the first row of that frame: the host sets the title bar in the layout transaction that frame opened, which commits it with
+// the frame. A frame factor that changed after the frame shows with the next frame, which places its own row.
+func TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew(t *testing.T) {
+	f, stored := surfaceShell(t)
+	gate := make(chan struct{})
+	stored.orderMu.Lock()
+	stored.presentGate = gate
+	stored.orderMu.Unlock()
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	requests := len(stored.requests)
+	f.tester.SetSize(1000, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	raw, err := json.Marshal(map[string]any{"patch": map[string]any{"textSize": 2}, "scope": "common"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The command answers once a frame placed the change, so the answer comes after the frame that draws it.
+	f.shell.Registry().RunLater("core.settings.set", raw, func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.settings.set: %v", err)
+		}
+	})
+	f.pending.drain(t)
+	if status, err := f.shell.Registry().Read("core.text"); err != nil || status.(workbench.TextStatus).Frame != 2 {
+		t.Fatalf("the frame factor did not change before the answer of the running placement: %v %v", status, err)
+	}
+	stored.orderMu.Lock()
+	stored.presentGate = nil
+	stored.orderMu.Unlock()
+	close(gate)
+	f.pending.drain(t)
+	if got := len(stored.requests); got != requests+1 {
+		t.Fatalf("the answer of the running placement made %d placements without a frame, want 1", got-requests)
+	}
+	if got, _ := stored.requests[len(stored.requests)-1]["titlebar"].(float64); got != 40 {
+		t.Fatalf("the placement of the frame that drew the first row 40 gives the first row %v", got)
+	}
+	f.settle()
+	if got, _ := stored.requests[len(stored.requests)-1]["titlebar"].(float64); got != 72 {
+		t.Fatalf("the frame that drew the frame factor 2 gives the first row %v, want 72", got)
+	}
+}
+
+// A restarted workbench shows its first screen over the last frame of the workbench before it, which the window holds until then, and
+// the title bar keeps the row of that frame: the row of its settings goes to the window with the layout of its first screen, also on
+// the library, which places no surface. A window whose title bar already has that row, as a new window, places nothing for it.
+func TestTheFirstScreenGivesItsRowToAWindowWithAnotherTitleBar(t *testing.T) {
+	for _, held := range []struct {
+		titlebar float64
+		places   bool
+	}{{40, true}, {72, false}} {
+		stored := &surfaceHost{storedHost: storedHost{common: map[string]any{"textSize": 2.0}, titlebar: held.titlebar}}
+		surfaceShellOn(t, installedDocument, stored)
+		if len(stored.requests) == 0 {
+			t.Fatalf("the workbench over the title bar %v placed nothing", held.titlebar)
+		}
+		first := stored.requests[0]
+		surfaces, _ := first["surfaces"].([]any)
+		library := len(surfaces) == 0
+		if library != held.places || first["titlebar"] != 72.0 {
+			t.Fatalf("over the title bar %v the first placement gives the first row %v for the library %t, want the row 72 placed for the library %t",
+				held.titlebar, first["titlebar"], library, held.places)
+		}
+	}
+}
+
 // callsSince returns the host calls made after the first count calls.
 func (h *surfaceHost) callsSince(count int) []string {
 	h.orderMu.Lock()

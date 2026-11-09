@@ -661,10 +661,10 @@ func (s *Surfaces) startTitlebar(common Record) error {
 	if !ok {
 		return errNoWindow
 	}
-	// A window without a main page has no first row to wait for: the title bar takes the row at once, and the workbench gives each
-	// later row with its layout. A shown window held the frame of its last workbench, which placed the row of the same settings.
-	// A quit closes the last window while its start runs, and the close ends the window on the main thread, so the step of a start that
-	// comes after it leaves the native window alone and names no window.
+	// A window without a main page has no first row to wait for: a window that shows no frame yet takes the row at once
+	// (startWorkbenchTitlebar), and the workbench gives each later row with its layout. A quit closes the last window while its start
+	// runs, and the close ends the window on the main thread, so the step of a start that comes after it leaves the native window
+	// alone and names no window.
 	if s.elements.drawn {
 		var set error
 		mainThreadStep(func() {
@@ -688,6 +688,19 @@ func (s *Surfaces) startTitlebar(common Record) error {
 		}
 	})
 	return <-done
+}
+
+// startWorkbenchTitlebar is the title bar step of the start of a workbench without a main page. A window that shows no frame yet takes
+// the row of the common settings at once (startTitlebar). A window that shows the last frame of its previous workbench (shown) keeps
+// the title bar of that frame, which it holds until the first screen of the new workbench: the row of that screen goes to the window
+// with its layout, as each later row does, since the frame held may show another row than the settings, as when another window
+// changed them and the previous workbench did not draw that change. The setting is checked either way.
+func (s *Surfaces) startWorkbenchTitlebar(common Record, shown bool) error {
+	if !shown {
+		return s.startTitlebar(common)
+	}
+	_, err := StartTitlebarHeight(common)
+	return err
 }
 
 // WindowControls returns the region that the window buttons occupy in page coordinates. The page leaves

@@ -100,9 +100,10 @@ func StartAssets(start func(window uint) ([]byte, error), windowHeader string) M
 }
 
 // StartWorkbench starts the workbench of window as a main page starts: the host leaves the previous workbench of the window. A workbench
-// without a page calls it for each build, in place of the request of the start document, and draws its own title bar row. It is no method
-// of Host, because each exported method of Host is a host call of a page.
-func StartWorkbench(h *Host, window Frontend) error {
+// without a page calls it for each build, in place of the request of the start document, and draws its own title bar row. shown tells
+// that the window shows the last frame of its previous workbench, which it holds until the first screen of the new workbench. It is no
+// method of Host, because each exported method of Host is a host call of a page.
+func StartWorkbench(h *Host, window Frontend, shown bool) error {
 	h.mu.Lock()
 	s := h.windows[window.ID()]
 	h.mu.Unlock()
@@ -112,10 +113,10 @@ func StartWorkbench(h *Host, window Frontend) error {
 	if err := h.pageStarting(s); err != nil {
 		return err
 	}
-	// The workbench draws its first row at the height of the common settings, which the title bar takes before the first screen
-	// (docs/spec/native-surfaces.md#title-bar-height).
+	// The workbench draws its first row at the height of the common settings (docs/spec/native-surfaces.md#title-bar-height).
 	snapshot, snapshotErr := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
-	_, _, _, err := startParts(snapshot, snapshotErr, s.startTitlebar, func() (Chrome, error) { return Chrome{}, nil })
+	titlebar := func(common Record) error { return s.startWorkbenchTitlebar(common, shown) }
+	_, _, _, err := startParts(snapshot, snapshotErr, titlebar, func() (Chrome, error) { return Chrome{}, nil })
 	return err
 }
 

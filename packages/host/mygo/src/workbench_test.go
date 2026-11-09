@@ -50,7 +50,7 @@ func TestAWorkbenchWhoseStartFailsIsNotShown(t *testing.T) {
 	workbench := &startRecord{}
 	framework := NewFramework(workbench)
 	cancel := fmt.Errorf("page reload: %w", errors.New("the layout of the window is not cancelled"))
-	framework.start = func(*host.Host, host.Frontend) error { return cancel }
+	framework.start = func(*host.Host, host.Frontend, bool) error { return cancel }
 	framework.host.Store(&host.Host{})
 	window := &Frontend{name: "main", framework: framework}
 	window.startHeld()
@@ -66,11 +66,31 @@ func TestAWorkbenchWhoseStartFailsIsNotShown(t *testing.T) {
 func TestAStartWhoseWindowClosedEndsWithoutAFailure(t *testing.T) {
 	workbench := &startRecord{}
 	framework := NewFramework(workbench)
-	framework.start = func(*host.Host, host.Frontend) error { return fmt.Errorf("workbench start: %w", host.ErrNoStartWindow) }
+	framework.start = func(*host.Host, host.Frontend, bool) error { return fmt.Errorf("workbench start: %w", host.ErrNoStartWindow) }
 	framework.host.Store(&host.Host{})
 	window := &Frontend{name: "main", framework: framework}
 	window.startHeld()
 	if len(workbench.received) != 0 {
 		t.Fatalf("the workbench of a closed window received %q", workbench.received)
+	}
+}
+
+// A restarted workbench of a window that went on the screen starts over the last frame of the workbench before it, which the window
+// holds until the first screen, so the host keeps the title bar of that frame; a window that has not gone on the screen shows no frame,
+// and its title bar takes the row of the settings at once (docs/spec/native-surfaces.md#title-bar-height).
+func TestAStartTellsTheHostWhetherTheWindowShowsAFrame(t *testing.T) {
+	for _, revealed := range []bool{false, true} {
+		framework := NewFramework(&startRecord{})
+		var told []bool
+		framework.start = func(_ *host.Host, _ host.Frontend, shown bool) error {
+			told = append(told, shown)
+			return nil
+		}
+		framework.host.Store(&host.Host{})
+		window := &Frontend{name: "main", framework: framework, revealed: revealed}
+		window.startHeld()
+		if !slices.Equal(told, []bool{revealed}) {
+			t.Fatalf("the start of a window that went on the screen %t told the host %v", revealed, told)
+		}
 	}
 }
