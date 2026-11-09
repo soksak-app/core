@@ -11900,6 +11900,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestADescriptionBreaksAtTheSpaceBeforeAWordWithAPoint" },
       { file: "packages/client/test/client.test.mjs", id: "a predicate that answers anything but true or false ends the watch with an error and unwatches" },
       { file: "native/darwin/tests/document_hidden_keyboard_release_test.m", id: "a document that closes while its hidden surface notes it as the keyboard owner is released" },
+      { file: "native/darwin/tests/document_hidden_keyboard_release_test.m", id: "a document that holds the keyboard and closes on a shown surface is released" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAFrameThatMovesASurfaceOpensTheLayoutBeforeItsPlacement" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAFrameThatMovesASurfaceDuringAPlacementIsPlacedAtItsAnswer" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAPlacementThatFailsBeforeItsPreparationCancelsTheOpenedLayout" },
