@@ -894,14 +894,22 @@ void webviewGetFrame(void *handle, double *out) {
 }
 
 // When a view that holds the first responder is hidden, AppKit moves the first responder to another view or window. The layout hides the surface only until the DOM
-// is drawn, so a hidden surface records the keyboard owner and the responder that AppKit chose instead.
-@interface SPHiddenResponder : NSObject
-@property(nonatomic, retain) NSView *owner;
+// is drawn, so a hidden surface records the keyboard owner and the responder that AppKit chose instead. The record does not keep the
+// owner: a document that closes while its surface is hidden is released with its web content process, and the surface gives nothing back.
+@interface SPHiddenResponder : NSObject {
+    id _owner;
+}
+@property(nonatomic, assign) NSView *owner;
 @property(nonatomic, assign) NSResponder *replacement;
 @property(nonatomic, assign) BOOL landed;
 @end
 @implementation SPHiddenResponder
-- (void)dealloc { [_owner release]; [super dealloc]; }
+- (NSView *)owner { return objc_loadWeak(&_owner); }
+- (void)setOwner:(NSView *)owner { objc_storeWeak(&_owner, owner); }
+- (void)dealloc {
+    objc_storeWeak(&_owner, nil);
+    [super dealloc];
+}
 @end
 
 static const char hiddenResponderKey;
