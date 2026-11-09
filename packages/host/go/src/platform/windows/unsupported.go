@@ -131,13 +131,16 @@ func (implementation) BlockAsyncSignals() error {
 	return unsupported("the asynchronous signal mask")
 }
 
-func (implementation) OnTermination(func(os.Signal)) error {
+func (implementation) OnTermination(func(os.Signal, int)) error {
 	return unsupported("termination requests")
 }
 
-func (implementation) OnQuitRequest(func()) error {
+func (implementation) OnQuitRequest(func(int, string)) error {
 	return unsupported("quit requests")
 }
+
+// QuitEventType has no current event: the application does not run on this platform.
+func (implementation) QuitEventType() int { return -1 }
 
 // AnswerQuitRequests has nothing to answer because no termination request was received. When OnQuitRequest fails, the application does not start.
 func (implementation) AnswerQuitRequests() {}

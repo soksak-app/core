@@ -592,6 +592,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpQuitRequestCancel, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_quit_request_event_type")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_quit_request_event_type: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_quit_request_event_type: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpQuitRequestEventType, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_region_background")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_region_background: %w", err)
@@ -1490,6 +1500,26 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 			return abi.NativeFunctions{}, fmt.Errorf("native API sp_stall_heartbeat: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.SpStallHeartbeat, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_termination_signal_sender")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_termination_signal_sender: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_termination_signal_sender: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpTerminationSignalSender, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_termination_signals_record")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_termination_signals_record: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_termination_signals_record: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpTerminationSignalsRecord, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "startMemoryPressure")

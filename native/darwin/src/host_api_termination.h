@@ -8,3 +8,4 @@
 bool installQuitRequest(void);
 void main_sp_quit_request_answer(void);
 void main_sp_quit_request_cancel(void);
+int main_sp_quit_request_event_type(void);

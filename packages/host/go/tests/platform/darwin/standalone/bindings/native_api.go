@@ -112,12 +112,13 @@ func Functions() abi.NativeFunctions {
 		MainSpNotificationsPost: func(a0 *byte, a1 *byte, a2 *byte) {
 			C.main_sp_notifications_post((*C.char)(unsafe.Pointer(a0)), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)))
 		},
-		MainSpNotificationsRemove: func(a0 *byte) { C.main_sp_notifications_remove((*C.char)(unsafe.Pointer(a0))) },
-		MainSpObserveActivity:     func() { C.main_sp_observe_activity() },
-		MainSpPreferredLanguage:   func() *byte { return (*byte)(unsafe.Pointer(C.main_sp_preferred_language())) },
-		MainSpQuitRequestAnswer:   func() { C.main_sp_quit_request_answer() },
-		MainSpQuitRequestCancel:   func() { C.main_sp_quit_request_cancel() },
-		MainSpRegionBackground:    func(a0 unsafe.Pointer, a1 bool) { C.main_sp_region_background(a0, C.bool(a1)) },
+		MainSpNotificationsRemove:  func(a0 *byte) { C.main_sp_notifications_remove((*C.char)(unsafe.Pointer(a0))) },
+		MainSpObserveActivity:      func() { C.main_sp_observe_activity() },
+		MainSpPreferredLanguage:    func() *byte { return (*byte)(unsafe.Pointer(C.main_sp_preferred_language())) },
+		MainSpQuitRequestAnswer:    func() { C.main_sp_quit_request_answer() },
+		MainSpQuitRequestCancel:    func() { C.main_sp_quit_request_cancel() },
+		MainSpQuitRequestEventType: func() int32 { return int32(C.main_sp_quit_request_event_type()) },
+		MainSpRegionBackground:     func(a0 unsafe.Pointer, a1 bool) { C.main_sp_region_background(a0, C.bool(a1)) },
 		MainSpRegionCaret: func(a0 unsafe.Pointer, a1 float64, a2 float64, a3 float64, a4 float64) {
 			C.main_sp_region_caret(a0, C.double(a1), C.double(a2), C.double(a3), C.double(a4))
 		},
@@ -274,11 +275,13 @@ func Functions() abi.NativeFunctions {
 		SpStallHeartbeat: func(a0 *uint64, a1 *uint64) {
 			C.sp_stall_heartbeat((*C.uint64_t)(unsafe.Pointer(a0)), (*C.uint64_t)(unsafe.Pointer(a1)))
 		},
-		StartMemoryPressure: func() bool { return bool(C.startMemoryPressure()) },
-		StartNotifications:  func() *byte { return (*byte)(unsafe.Pointer(C.startNotifications())) },
-		Strlen:              func(a0 *byte) uint64 { return uint64(C.strlen((*C.char)(unsafe.Pointer(a0)))) },
-		SurfaceRaise:        func(a0 unsafe.Pointer) { C.surfaceRaise(a0) },
-		SurfaceUnwatchMouse: func(a0 uintptr) { C.surfaceUnwatchMouse(C.uintptr_t(a0)) },
+		SpTerminationSignalSender:  func(a0 int32) int32 { return int32(C.sp_termination_signal_sender(C.int(a0))) },
+		SpTerminationSignalsRecord: func() int32 { return int32(C.sp_termination_signals_record()) },
+		StartMemoryPressure:        func() bool { return bool(C.startMemoryPressure()) },
+		StartNotifications:         func() *byte { return (*byte)(unsafe.Pointer(C.startNotifications())) },
+		Strlen:                     func(a0 *byte) uint64 { return uint64(C.strlen((*C.char)(unsafe.Pointer(a0)))) },
+		SurfaceRaise:               func(a0 unsafe.Pointer) { C.surfaceRaise(a0) },
+		SurfaceUnwatchMouse:        func(a0 uintptr) { C.surfaceUnwatchMouse(C.uintptr_t(a0)) },
 		SurfaceWatchMouse: func(a0 uintptr, a1 uintptr) uintptr {
 			return uintptr(C.surfaceWatchMouse(C.uintptr_t(a0), C.uintptr_t(a1)))
 		},

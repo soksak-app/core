@@ -6,7 +6,7 @@
 // Holds the quit event and notifies the host. applicationShouldTerminate: of the application framework replies cancel
 // while windows are saving, so the quit request of the operating system runs the quit request of the host instead of that path and replies just before the host ends.
 @interface SPQuitRequest : NSObject
-@property(copy) void (^request)(void);
+@property(copy) void (^request)(int senderPid, const char *sender);
 @property(retain) NSMutableArray<NSValue *> *suspended;
 @property(retain) NSMutableArray<NSAppleEventDescriptor *> *replies;
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply;
@@ -14,21 +14,24 @@
 
 @implementation SPQuitRequest
 - (void)handleQuit:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply {
-    (void)event;
     sp_observe_delivered("quit_request");
+    // The Apple event manager names the process that sent an event; a sender that runs is named by its bundle identifier or name.
+    int senderPid = [event attributeDescriptorForKeyword:keySenderPIDAttr].int32Value;
+    NSRunningApplication *running = senderPid > 0 ? [NSRunningApplication runningApplicationWithProcessIdentifier:senderPid] : nil;
+    NSString *sender = running.bundleIdentifier ?: running.localizedName;
     NSAppleEventManagerSuspensionID suspension = [[NSAppleEventManager sharedAppleEventManager] suspendCurrentAppleEvent];
     if (suspension) {
         [self.suspended addObject:[NSValue valueWithPointer:suspension]];
         [self.replies addObject:reply];
     }
-    self.request();
+    self.request(senderPid, sender.UTF8String);
 }
 - (void)dealloc { [_request release]; [_suspended release]; [_replies release]; [super dealloc]; }
 @end
 
 static SPQuitRequest *quitRequest;
 
-bool sp_quit_request_install(void (^request)(void)) {
+bool sp_quit_request_install(void (^request)(int senderPid, const char *sender)) {
     NSCAssert(NSThread.isMainThread, @"quit request registration requires the AppKit thread");
     if (quitRequest) return false;
     quitRequest = [[SPQuitRequest alloc] init];
@@ -67,4 +70,10 @@ void sp_quit_request_cancel(void) {
     NSCAssert(NSThread.isMainThread, @"quit request answers require the AppKit thread");
     sp_log_info("quit request", "the host cancelled the quit request");
     resumeSuspended(userCanceledErr);
+}
+
+int sp_quit_request_event_type(void) {
+    NSCAssert(NSThread.isMainThread, @"the current event is read on the AppKit thread");
+    NSEvent *event = NSApp.currentEvent;
+    return event ? (int)event.type : -1;
 }

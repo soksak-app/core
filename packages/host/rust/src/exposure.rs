@@ -2631,8 +2631,13 @@ impl Host {
             // closes; a request without a response quits at once.
             "host.quit" => {
                 let app = self.0.clone();
-                let quit =
-                    move || crate::event_record::quit_with_cause("quit-command", || app.quit());
+                let quit = move || {
+                    crate::event_record::quit_with_cause(
+                        "quit-command",
+                        crate::event_record::host_quit_source("quit-command"),
+                        || app.quit(),
+                    )
+                };
                 match reply {
                     Some(reply) => reply.after_response(move |_| quit()),
                     None => quit(),

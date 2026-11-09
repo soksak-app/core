@@ -1372,7 +1372,7 @@ func diagnosticHostRelaunch(e *Endpoint, _ *endpointConn, params json.RawMessage
 	h.mu.Lock()
 	h.update = &pendingStart{command: command, relaunch: true}
 	h.mu.Unlock()
-	QuitWithCause("update", func() { routine.Go("quit", framework.Quit) })
+	QuitWithCause("update", HostQuitSource("update"), func() { routine.Go("quit", framework.Quit) })
 	return nil, nil
 }
 

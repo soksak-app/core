@@ -991,7 +991,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		// The quit follows the response of this request, so the client receives null before the endpoint closes.
 		b.h.quit.Request(func() {
 			reply.AfterResponse(func(ReplyOutcome) {
-				QuitWithCause("quit-command", func() { routine.Go("quit", framework.Quit) })
+				QuitWithCause("quit-command", HostQuitSource("quit-command"), func() { routine.Go("quit", framework.Quit) })
 			})
 		})
 	default:

@@ -56,6 +56,16 @@ func TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds(t *testing.T)
 		!strings.Contains(stack, "routine_test.go") {
 		t.Fatalf("host.panic event %v", panics[0])
 	}
+	// The process ends without its shutdown, so the record of its end after the panic names the exit code.
+	var closed []any
+	for _, event := range readHostEventLog(t, config) {
+		if event["event"] == "log.closed" {
+			closed = append(closed, event["fields"])
+		}
+	}
+	if len(closed) != 1 || closed[0].(map[string]any)["cause"] != "exit" || closed[0].(map[string]any)["code"] != float64(routine.PanicStatus) {
+		t.Fatalf("log.closed events %v, want one of the cause exit and the code %d", closed, routine.PanicStatus)
+	}
 }
 
 const routineBeforeWriterChild = "SOKSAK_ROUTINE_BEFORE_WRITER_CHILD"

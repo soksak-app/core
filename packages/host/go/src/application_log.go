@@ -102,6 +102,8 @@ func logHost(level, where string, text any) {
 // fatalError writes an error record and ends the process with status 1. A fatal failure after the log is open uses it.
 func fatalError(where string, text any) {
 	LogError(where, text)
+	// The process ends here without its shutdown, so the record of its end names the exit code.
+	EmitClosed("exit", map[string]any{"code": 1})
 	if err := FlushRecords(2 * time.Second); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record of the failure is not stored: %v\n", err)
 	}

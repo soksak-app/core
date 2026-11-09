@@ -53,21 +53,40 @@ static OSErr replyError(const AppleEvent *reply) {
     return (OSErr)error;
 }
 
+// Sends a quit event to this process by its process identifier, so the Apple event manager delivers it as an event of another
+// sender and names the sending process, and runs the main loop until the request arrives or five seconds pass.
+static OSStatus sendQuitToSelf(const int *requests, int before) {
+    NSAppleEventDescriptor *target = [NSAppleEventDescriptor descriptorWithProcessIdentifier:getpid()];
+    NSAppleEventDescriptor *event = [NSAppleEventDescriptor appleEventWithEventClass:kCoreEventClass
+        eventID:kAEQuitApplication targetDescriptor:target returnID:kAutoGenerateReturnID transactionID:kAnyTransactionID];
+    OSStatus status = AESendMessage(event.aeDesc, NULL, kAENoReply, kAEDefaultTimeout);
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+    while (status == noErr && *requests == before && deadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    }
+    return status;
+}
+
 // Checks after [NSApp run] has installed the default handler, as in a real application.
 static void runChecks(SPCancellingDelegate *delegate) {
     __block int requests = 0;
     __block BOOL requestOnMain = NO;
     __block BOOL installed = NO;
+    __block int senderPid = -1;
+    __block NSString *sender = nil;
     NSArray<NSDictionary *> *installing = capturedEvents(^{
-        installed = sp_quit_request_install(^{
+        installed = sp_quit_request_install(^(int pid, const char *name) {
             requests++;
             requestOnMain = NSThread.isMainThread;
+            senderPid = pid;
+            [sender release];
+            sender = name ? [[NSString alloc] initWithUTF8String:name] : nil;
         });
     });
     check(installed, @"the quit request handler installs once");
     check(installing.count == 1 && [installing[0][@"name"] isEqual:@"native.observe.registered"] && [installing[0][@"fields"][@"source"] isEqual:@"quit_request"]
         && [installing[0][@"fields"][@"kind"] isEqual:@"apple_event"], [NSString stringWithFormat:@"the installation is one registration event: %@", installing]);
-    check(!sp_quit_request_install(^{ }), @"a second installation is rejected");
+    check(!sp_quit_request_install(^(int pid, const char *name) { (void)pid; (void)name; }), @"a second installation is rejected");
 
     __block OSErr result = noErr;
     NSArray<NSDictionary *> *quitting = capturedEvents(^{
@@ -80,6 +99,17 @@ static void runChecks(SPCancellingDelegate *delegate) {
         [NSString stringWithFormat:@"the quit request is one delivery and its answer is one record: %@", quitNames]);
     check(result == noErr, [NSString stringWithFormat:@"the handler accepts the quit event (%d)", result]);
     check(requests == 1 && requestOnMain, [NSString stringWithFormat:@"the request runs once on the main thread (%d)", requests]);
+    check(senderPid == 0 && sender == nil,
+          [NSString stringWithFormat:@"an event that names no sending process gives the sender 0 and no name (%d, %@)", senderPid, sender]);
+
+    // A quit event that a process sends names that process, and the name of a running sender is its bundle identifier or name.
+    OSStatus sent = sendQuitToSelf(&requests, requests);
+    sp_quit_request_answer();
+    NSRunningApplication *current = NSRunningApplication.currentApplication;
+    NSString *expected = current.bundleIdentifier ?: current.localizedName;
+    check(sent == noErr && requests == 2 && senderPid == getpid() && [sender isEqual:expected],
+          [NSString stringWithFormat:@"a sent quit event names its sender process and its name (want %d %@; status %d, requests %d, sender %d %@)",
+              getpid(), expected, (int)sent, requests, senderPid, sender]);
     check(delegate.terminateCalls == 0,
           [NSString stringWithFormat:@"the quit event does not reach applicationShouldTerminate: (%d calls)", delegate.terminateCalls]);
     sp_quit_request_answer();

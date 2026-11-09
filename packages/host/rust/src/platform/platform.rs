@@ -937,13 +937,17 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     // Termination request
 
-    /// Makes the first termination signal (SIGTERM, SIGINT, SIGHUP) call quit. The termination signals after it end the
-    /// process with the default action.
-    fn on_termination(&self, quit: Box<dyn Fn() + Send>) -> Result<(), String>;
+    /// Makes the first termination signal (SIGTERM, SIGINT, SIGHUP) call quit with its number and the process that sent
+    /// it (0 when unknown). The termination signals after it end the process with the default action.
+    fn on_termination(&self, quit: Box<dyn Fn(i32, i32) + Send>) -> Result<(), String>;
     /// Makes a termination request of the operating system (quit from the Dock, logout, restart, a quit Apple event
-    /// from another program) call quit, and does not answer that request until answer_quit_requests. Call it on the
-    /// main thread after the application started.
-    fn on_quit_request(&self, quit: Box<dyn Fn()>) -> Result<(), String>;
+    /// from another program) call quit with the process that sent it (0 when the request names none) and, while that
+    /// process runs, its bundle identifier or name (empty otherwise), and does not answer that request until
+    /// answer_quit_requests. Call it on the main thread after the application started.
+    fn on_quit_request(&self, quit: Box<dyn Fn(i32, String)>) -> Result<(), String>;
+    /// The type of the event that the application handles now (NSEventType on macOS), or -1 without one; a quit that the
+    /// menu or a key equivalent asked for is named by it. Call it on the main thread.
+    fn quit_event_type(&self) -> i32;
     /// Answers the termination request that was received without an error. Call it on the main thread just before the
     /// application ends after the save finished.
     fn answer_quit_requests(&self);

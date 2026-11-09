@@ -991,15 +991,17 @@ impl EventLog {
         self.queue(pending).is_ok()
     }
 
-    /// Queues the event `log.closed` that the writer reports when a host process ends (docs/spec/logging.md#policy).
-    /// `cause` is `exit`, `exit-request` or `signal`, and `signal` is the number of the termination signal of the cause
-    /// `signal`. Returns false when the queue has no room.
-    pub fn record_closed(&self, cause: &str, signal: Option<i32>) -> bool {
-        let fields = match signal {
-            Some(signal) => json!({"cause": cause, "signal": signal}),
-            None => json!({"cause": cause}),
-        };
-        let fields = to_raw_value(&fields).expect("a json value serializes");
+    /// Queues the event `log.closed` that the writer reports when a host process ends (docs/spec/logging.md#policy), with
+    /// `cause` and the fields beside it: the number of the termination signal of the cause `signal` and the source of the
+    /// cause `exit-request`. Returns false when the queue has no room.
+    pub fn record_closed(
+        &self,
+        cause: &str,
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> bool {
+        let mut record = fields;
+        record.insert("cause".into(), json!(cause));
+        let fields = to_raw_value(&record).expect("a json value serializes");
         self.enqueue_writer_event(Level::Info, "log.closed", fields, Vec::new())
     }
 

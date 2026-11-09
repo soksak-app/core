@@ -15,17 +15,12 @@ func OnTermination(state *Quit, quit func()) error {
 	if err != nil {
 		return err
 	}
-	return system.OnTermination(func(value os.Signal) {
-		// The record of the signal is queued before quit runs, so it precedes the flush that the quit ends with.
-		if number, ok := value.(syscall.Signal); ok {
-			code := int(number)
-			EmitClosed("signal", &code)
-		} else {
-			fmt.Fprintf(os.Stderr, "event writer: log.closed (signal) cannot be stored: the signal %v is not a system signal\n", value)
-			EmitClosed("signal", nil)
+	return system.OnTermination(func(value os.Signal, senderPid int) {
+		number, ok := value.(syscall.Signal)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "event writer: log.closed (signal) names no number: the signal %v is not a system signal\n", value)
+			number = 0
 		}
-		// The quit that the signal requests is the quit of host.quit, so the quit state begins before quit runs; the end of a page
-		// process during that quit is not an error (docs/spec/hosts.md#process-lifecycle).
-		state.Request(quit)
+		QuitFromSignal(state, int(number), senderPid, quit)
 	})
 }

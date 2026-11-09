@@ -52,7 +52,7 @@ int sp_test_callback_run(void) {
     sp_host_callback_native_layout_ended(token);
     sp_host_callback_native_settled_done(token, -12.5, strdup("transferred"));
     sp_host_callback_notification_event(token, text);
-    sp_host_callback_quit_request();
+    sp_host_callback_quit_request(-37, text);
     sp_host_callback_native_ui_run(token);
     sp_host_callback_native_responder_changed(token);
     sp_host_callback_native_fullscreen_done(token);
