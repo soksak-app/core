@@ -218,9 +218,9 @@ for (const app of Object.values(APPS))
     },
   );
 
-// The four edges dock in the order of sidebarOrder: the first edge reaches across the plane (docs/spec/external-sidebars.md).
+// The four sides arrange in the order of sidebarOrder: the first side reaches across the plane (docs/spec/external-sidebars.md).
 for (const app of Object.values(APPS))
-  test(`${app.name}: the window sidebars of four edges dock in their order`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: the window sidebars of four sides arrange in their order`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const { values } = await s.get("core.settings");
@@ -235,7 +235,7 @@ for (const app of Object.values(APPS))
     const near = (a, b) => Math.abs(a - b) <= 1;
     // The default order: left and right reach across the height, top and bottom stand between them.
     const sides = await s.until("core.grid", (grid) => ["left", "right", "top", "bottom"].every((id) => card(grid, id)),
-      "the four window sidebars are not docked");
+      "the four window sidebars are not arranged");
     const [left, right, top, bottom] = ["left", "right", "top", "bottom"].map((id) => card(sides, id));
     assert.ok(near(left.h, sides.height) && near(right.h, sides.height), "left or right does not reach across the height");
     assert.ok(near(top.x, left.x + left.w) || top.x > left.x + left.w, "top does not stand right of the left sidebar");
@@ -246,10 +246,10 @@ for (const app of Object.values(APPS))
     const first = await s.until("core.grid", (grid) => near(card(grid, "top").w, grid.width),
       "the top sidebar does not reach across the width with top first");
     assert.ok(card(first, "left").y >= card(first, "top").y + card(first, "top").h - 1, "the left sidebar does not stand below the top one");
-    // Hiding the first edge docks the others again, and the left sidebar reaches across the height.
+    // Hiding the first side arranges the others again, and the left sidebar reaches across the height.
     await s.run("core.settings.set", { patch: { top: false } });
     const hidden = await s.until("core.grid", (grid) => !card(grid, "top") && near(card(grid, "left").h, grid.height),
-      "hiding the first edge left the left sidebar short");
+      "hiding the first side left the left sidebar short");
     assert.ok(card(hidden, "bottom"), "hiding the top sidebar closed the bottom one");
   });
 

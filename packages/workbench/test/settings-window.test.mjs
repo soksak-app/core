@@ -176,11 +176,11 @@ test("window and card choices are independent without inherited focus selection"
   assert.throws(()=>chooseLink(links,"right","alpha","set-a"),/invalid plugin/);
   assert.throws(()=>chooseLink(links,"window-right","alpha","inherit"),/inherit/);
   assert.deepEqual(chooseLink(chooseLink([],"card-left","alpha","set-a"),"card-left","alpha","off"),[]);
-  // Every edge of the window takes a general choice and a plugin window choice (docs/spec/external-sidebars.md).
-  for (const edge of ["top", "bottom"]) {
-    assert.deepEqual(chooseLink([], edge, null, "set-a"), [{ place: edge, plugin: null, set: "set-a" }]);
-    assert.deepEqual(chooseLink([], `window-${edge}`, "alpha", "set-a"), [{ place: `window-${edge}`, plugin: "alpha", set: "set-a" }]);
-    assert.throws(() => chooseLink([], edge, "alpha", "set-a"), /invalid plugin/);
+  // Every side of the window takes a general choice and a plugin window choice (docs/spec/external-sidebars.md).
+  for (const side of ["top", "bottom"]) {
+    assert.deepEqual(chooseLink([], side, null, "set-a"), [{ place: side, plugin: null, set: "set-a" }]);
+    assert.deepEqual(chooseLink([], `window-${side}`, "alpha", "set-a"), [{ place: `window-${side}`, plugin: "alpha", set: "set-a" }]);
+    assert.throws(() => chooseLink([], side, "alpha", "set-a"), /invalid plugin/);
   }
 });
 

@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { chromeSwitches } from "../window-sidebars.js";
 
-// The window chrome has one switch per edge in the fixed order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls).
-test("the chrome has a switch for each window edge, named for showing its sidebar", () => {
+// The window chrome has one switch per side in the fixed order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls).
+test("the chrome has a switch for each window side, named for showing its sidebar", () => {
   assert.deepEqual(chromeSwitches(), [
-    { edge: "left", icon: "panel-left", title: "왼쪽 사이드바 보이기", expose: "core.chrome.left" },
-    { edge: "right", icon: "panel-right", title: "오른쪽 사이드바 보이기", expose: "core.chrome.right" },
-    { edge: "top", icon: "panel-top", title: "위 사이드바 보이기", expose: "core.chrome.top" },
-    { edge: "bottom", icon: "panel-bottom", title: "아래 사이드바 보이기", expose: "core.chrome.bottom" },
+    { side: "left", icon: "panel-left", title: "왼쪽 사이드바 보이기", expose: "core.chrome.left" },
+    { side: "right", icon: "panel-right", title: "오른쪽 사이드바 보이기", expose: "core.chrome.right" },
+    { side: "top", icon: "panel-top", title: "위 사이드바 보이기", expose: "core.chrome.top" },
+    { side: "bottom", icon: "panel-bottom", title: "아래 사이드바 보이기", expose: "core.chrome.bottom" },
   ]);
 });
 

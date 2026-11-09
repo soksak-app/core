@@ -20,7 +20,7 @@ import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { pluginUnits } from "./environment.js";
-import { EDGE_NAMES, WINDOW_EDGES } from "./window-sidebars.js";
+import { SIDE_NAMES, WINDOW_SIDES } from "./window-sidebars.js";
 import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
@@ -272,12 +272,12 @@ function drawGeneral() {
     row("프로젝트 탭 위치", choose("projectTabs", named("projectTabs", { top: "위", left: "왼쪽" }), value("projectTabs"))),
   ]));
 
-  // One fixed sidebar per edge; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
+  // One fixed sidebar per side; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
   body.append(group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", [
-    ...WINDOW_EDGES.map((edge) => row(`${EDGE_NAMES[edge]} 사이드바 보이기`, toggle(edge, value(edge)))),
-    ...WINDOW_EDGES.map((edge) => row(`${EDGE_NAMES[edge]} 사이드바 세트`, choose(`link:${edge}:`, generalOptions(), choiceOf(edge, null)))),
+    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 보이기`, toggle(side, value(side)))),
+    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 세트`, choose(`link:${side}:`, generalOptions(), choiceOf(side, null)))),
     ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
-    ...orderRows("sidebarOrder", "사이드바 순서", EDGE_NAMES),
+    ...orderRows("sidebarOrder", "사이드바 순서", SIDE_NAMES),
   ]));
 
   body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 저장 크기가 없는 창 사이드바가 여는 크기(위·아래 사이드바는 높이)이며 최소 폭과 최대 폭 사이여야 한다.",
@@ -439,8 +439,8 @@ function drawPluginPage(unit) {
   body.append(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [names]));
 
   body.append(group("창 사이드바", "이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 그 변 고정 사이드바의 내용을 이 세트로 바꾼다.",
-    WINDOW_EDGES.map((edge) => row(`창 ${EDGE_NAMES[edge]} 사이드바`,
-      choose(`link:window-${edge}:${unit.id}`, generalOptions(), choiceOf(`window-${edge}`, unit.id))))));
+    WINDOW_SIDES.map((side) => row(`창 ${SIDE_NAMES[side]} 사이드바`,
+      choose(`link:window-${side}:${unit.id}`, generalOptions(), choiceOf(`window-${side}`, unit.id))))));
   if (unit.surface) body.append(group("카드 사이드바", "카드 내부의 네 변에 표시한다.", [
     ...[["left", "왼쪽"], ["right", "오른쪽"], ["top", "상단"], ["bottom", "하단"]].map(([side,label]) =>
       row(`카드 ${label} 사이드바`, choose(`link:card-${side}:${unit.id}`, generalOptions(), choiceOf(`card-${side}`,unit.id)))),

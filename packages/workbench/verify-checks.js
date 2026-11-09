@@ -1,6 +1,6 @@
 // The parts of the verification computation that do not read the plane or the compositor. verify.js passes the values it read from the plane.
 import { isPlace } from "./registry.js";
-import { sizeKey, windowSidebarsDocked } from "./window-sidebars.js";
+import { sizeKey, windowSidebarsArranged } from "./window-sidebars.js";
 
 /**
  * Adds up the number of connected rectangle clusters of each rail group and returns the number of closed loops that the rail outline must have.
@@ -34,15 +34,15 @@ export function expectedRailLoops(groups, gap) {
  */
 /**
  * Whether the window sidebars stand where the order places them (docs/spec/external-sidebars.md#verification): each is fixed, stands at
- * the border line of its edge, reaches along the other axis between the sidebars of earlier edges of that axis, and is drawn no larger on
+ * the border line of its side, reaches along the other axis between the sidebars of earlier sides of that axis, and is drawn no larger on
  * its axis than its saved size.
  */
 export function windowSidebarsPlaced(grid, order) {
   const places = grid.cards.filter(card => isPlace(card.id));
-  const docked = order.filter(edge => places.some(card => card.id === edge));
+  const arranged = order.filter(side => places.some(card => card.id === side));
   const extent = card => {
     const key = sizeKey(card.id);
     return card[key] === undefined || (key === "width" ? grid.rect(card.id).w : grid.rect(card.id).h) <= card[key] + .5;
   };
-  return places.every(extent) && windowSidebarsDocked(grid, docked);
+  return places.every(extent) && windowSidebarsArranged(grid, arranged);
 }

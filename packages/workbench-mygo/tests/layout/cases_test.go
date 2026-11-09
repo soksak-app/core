@@ -462,7 +462,7 @@ func TestStoredCases(t *testing.T) {
 	}
 }
 
-// TestWindowSidebarCases docks the fixed window sidebars of the cases in their order
+// TestWindowSidebarCases arranges the fixed window sidebars of the cases in their order
 // (docs/spec/external-sidebars.md#fixed-placement-and-persistence).
 func TestWindowSidebarCases(t *testing.T) {
 	type spans struct {
@@ -503,9 +503,9 @@ func TestWindowSidebarCases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			changed, err := layout.ArrangeWindowSidebars(grid, kase.Order, kase.Sides, kase.Records, kase.Initial, func(edge string) bool {
+			changed, err := layout.ArrangeWindowSidebars(grid, kase.Order, kase.Sides, kase.Records, kase.Initial, func(side string) bool {
 				for _, shown := range kase.Shown {
-					if shown == edge {
+					if shown == side {
 						return true
 					}
 				}
@@ -513,15 +513,15 @@ func TestWindowSidebarCases(t *testing.T) {
 			})
 			if kase.Throws != nil {
 				if err == nil || err.Error() != *kase.Throws {
-					t.Fatalf("dock: throws %v, not %q", err, *kase.Throws)
+					t.Fatalf("arrange: throws %v, not %q", err, *kase.Throws)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("dock: %v", err)
+				t.Fatalf("arrange: %v", err)
 			}
 			if kase.Returns == nil || changed != *kase.Returns {
-				t.Fatalf("dock: returns %v", changed)
+				t.Fatalf("arrange: returns %v", changed)
 			}
 			got := []spans{}
 			for _, card := range grid.Cards() {

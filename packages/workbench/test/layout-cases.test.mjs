@@ -57,13 +57,13 @@ for (const kase of stored.cases) {
 
 const { Soksak } = await import("soksak");
 const windowSidebars = await import("../window-sidebars.js");
-const docks = read("window-sidebars.json");
-for (const kase of docks.cases) {
+const arranges = read("window-sidebars.json");
+for (const kase of arranges.cases) {
   test(`window sidebars: ${kase.name}`, () => {
-    const grid = new Soksak(structuredClone(kase.state), docks.options);
+    const grid = new Soksak(structuredClone(kase.state), arranges.options);
     const records = structuredClone(kase.records);
-    check(() => windowSidebars.arrangeWindowSidebars(grid, kase.order, kase.sides, records, kase.initial, (edge) => kase.shown.includes(edge)),
-      kase, "dock");
+    check(() => windowSidebars.arrangeWindowSidebars(grid, kase.order, kase.sides, records, kase.initial, (side) => kase.shown.includes(side)),
+      kase, "arrange");
     if (Object.hasOwn(kase, "throws")) return;
     const cards = grid.cards.map(({ id, c0, c1, r0, r1, fixed }) => ({ id, c0, c1, r0, r1, fixed })).sort((a, b) => (a.id < b.id ? -1 : 1));
     assert.deepEqual(cards, kase.cards, "cards");

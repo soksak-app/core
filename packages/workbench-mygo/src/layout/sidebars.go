@@ -403,40 +403,40 @@ func KeepWindowSidebarWidths(g *Grid, records map[string]WindowSidebar) {
 	}
 }
 
-// DockedEdges are the edges that hold a window sidebar, in the order: an edge that has a choice (sides) and whose switch is on.
-func DockedEdges(order, sides []string, shown func(edge string) bool) []string {
-	docked := []string{}
-	for _, edge := range order {
-		if slices.Contains(sides, edge) && shown(edge) {
-			docked = append(docked, edge)
+// ArrangedSides are the sides that hold a window sidebar, in the order: a side that has a choice (sides) and whose switch is on.
+func ArrangedSides(order, sides []string, shown func(side string) bool) []string {
+	arranged := []string{}
+	for _, side := range order {
+		if slices.Contains(sides, side) && shown(side) {
+			arranged = append(arranged, side)
 		}
 	}
-	return docked
+	return arranged
 }
 
-// DockedPlace is the place that the order gives the sidebar of an edge, in grid lines: Line is the line of its edge on Axis, and From
+// ArrangedPlace is the place that the order gives the sidebar of a side, in grid lines: Line is the line of its side on Axis, and From
 // and To its range on the other axis.
-type DockedPlace struct {
+type ArrangedPlace struct {
 	Axis           Axis
 	Line, From, To int
 }
 
-// DockedPlaces is the place that the order gives the sidebar of each docked edge: the line of its edge on its axis, and its range on
-// the other axis from the border or the inner line of the sidebar of an earlier edge of that axis to the opposite border or the inner
-// line of such a sidebar (docs/spec/external-sidebars.md#fixed-placement-and-persistence). An earlier edge whose sidebar is not on the
+// ArrangedPlaces is the place that the order gives the sidebar of each arranged side: the line of its side on its axis, and its range on
+// the other axis from the border or the inner line of the sidebar of an earlier side of that axis to the opposite border or the inner
+// line of such a sidebar (docs/spec/external-sidebars.md#fixed-placement-and-persistence). An earlier side whose sidebar is not on the
 // plane leaves the border.
-func DockedPlaces(g *Grid, docked []string) map[string]DockedPlace {
+func ArrangedPlaces(g *Grid, arranged []string) map[string]ArrangedPlace {
 	last := map[Axis]int{"x": len(g.Lines("x")) - 1, "y": len(g.Lines("y")) - 1}
-	places := map[string]DockedPlace{}
-	for index, edge := range docked {
-		axis := WindowAxis(edge)
+	places := map[string]ArrangedPlace{}
+	for index, side := range arranged {
+		axis := WindowAxis(side)
 		cross, low, high := Axis("y"), "top", "bottom"
 		if axis == "y" {
 			cross, low, high = "x", "left", "right"
 		}
-		earlier := docked[:index]
-		place := DockedPlace{Axis: axis, From: 0, To: last[cross]}
-		if edge == "right" || edge == "bottom" {
+		earlier := arranged[:index]
+		place := ArrangedPlace{Axis: axis, From: 0, To: last[cross]}
+		if side == "right" || side == "bottom" {
 			place.Line = last[axis]
 		}
 		if card, ok := g.Card(low); ok && slices.Contains(earlier, low) {
@@ -451,60 +451,60 @@ func DockedPlaces(g *Grid, docked []string) map[string]DockedPlace {
 				place.To = card.C0
 			}
 		}
-		places[edge] = place
+		places[side] = place
 	}
 	return places
 }
 
-// WindowSidebarsDocked is whether the window sidebars of g stand where the order places the docked edges, and no other window sidebar is
+// WindowSidebarsArranged is whether the window sidebars of g stand where the order places the arranged sides, and no other window sidebar is
 // on the plane.
-func WindowSidebarsDocked(g *Grid, docked []string) bool {
+func WindowSidebarsArranged(g *Grid, arranged []string) bool {
 	present := 0
 	for _, card := range g.Cards() {
 		if isWindowSidebar(card.ID) {
 			present++
-			if !slices.Contains(docked, card.ID) {
+			if !slices.Contains(arranged, card.ID) {
 				return false
 			}
 		}
 	}
-	if present != len(docked) {
+	if present != len(arranged) {
 		return false
 	}
-	places := DockedPlaces(g, docked)
-	for _, edge := range docked {
-		card, _ := g.Card(edge) // silent: every docked edge is present, counted above.
-		place := places[edge]
+	places := ArrangedPlaces(g, arranged)
+	for _, side := range arranged {
+		card, _ := g.Card(side) // silent: every arranged side is present, counted above.
+		place := places[side]
 		own0, own1, cross0, cross1 := card.C0, card.C1, card.R0, card.R1
 		if place.Axis == "y" {
 			own0, own1, cross0, cross1 = card.R0, card.R1, card.C0, card.C1
 		}
-		atEdge := own1 == place.Line
-		if edge == "left" || edge == "top" {
-			atEdge = own0 == place.Line
+		atSide := own1 == place.Line
+		if side == "left" || side == "top" {
+			atSide = own0 == place.Line
 		}
-		if !card.Fixed || !atEdge || cross0 != place.From || cross1 != place.To {
+		if !card.Fixed || !atSide || cross0 != place.From || cross1 != place.To {
 			return false
 		}
 	}
 	return true
 }
 
-// ArrangeWindowSidebars docks the window sidebars in the order (docs/spec/external-sidebars.md#fixed-placement-and-persistence). order
-// lists the four edges, sides are the edges that have a choice, and shown is the switch of an edge. When the window sidebars of the plane
+// ArrangeWindowSidebars arranges the window sidebars in the order (docs/spec/external-sidebars.md#fixed-placement-and-persistence). order
+// lists the four sides, sides are the sides that have a choice, and shown is the switch of a side. When the window sidebars of the plane
 // already stand where the order places them, nothing moves, so a change of focus or of the override does not move a sidebar. Otherwise
-// every window sidebar is closed, the lines that no card references are removed, and the docked edges are inserted in the reverse of the
-// order at the border line of their edge with their saved size and set fixed, so the first edge reaches across the plane. A sidebar whose
+// every window sidebar is closed, the lines that no card references are removed, and the arranged sides are inserted in the reverse of the
+// order at the border line of their side with their saved size and set fixed, so the first side reaches across the plane. A sidebar whose
 // only filler is a fixed card while its slots hold another card cannot leave yet (R7 of packages/soksak/docs/layout.md); it leaves after
 // the others. A sidebar without a record starts with initialWidth on its axis. It tells whether the plane changed.
-func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]WindowSidebar, initialWidth float64, shown func(edge string) bool) (bool, error) {
+func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]WindowSidebar, initialWidth float64, shown func(side string) bool) (bool, error) {
 	if !finite(initialWidth) || initialWidth <= 0 {
 		return false, errors.New("invalid initial window sidebar width")
 	}
-	docked := DockedEdges(order, sides, shown)
-	for _, edge := range docked {
-		if _, ok := records[edge]; !ok {
-			records[edge] = SidebarSize(edge, initialWidth)
+	arranged := ArrangedSides(order, sides, shown)
+	for _, side := range arranged {
+		if _, ok := records[side]; !ok {
+			records[side] = SidebarSize(side, initialWidth)
 		}
 	}
 	for _, card := range g.Cards() {
@@ -513,7 +513,7 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 		}
 	}
 	KeepWindowSidebarWidths(g, records)
-	if WindowSidebarsDocked(g, docked) {
+	if WindowSidebarsArranged(g, arranged) {
 		return false, nil
 	}
 	for {
@@ -542,27 +542,27 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 		// A closed card leaves its lines, and a sidebar that opens again adds new ones, so the lines would pile up in one slot.
 		g.Tidy()
 	}
-	for i := len(docked) - 1; i >= 0; i-- {
-		edge := docked[i]
-		axis := WindowAxis(edge)
+	for i := len(arranged) - 1; i >= 0; i-- {
+		side := arranged[i]
+		axis := WindowAxis(side)
 		line := 0
-		if edge == "right" || edge == "bottom" {
+		if side == "right" || side == "bottom" {
 			line = len(g.Lines(axis)) - 1
 		}
 		if !g.CanInsertAt(axis, line, "") {
-			return true, fmt.Errorf("cannot place window sidebar %s", edge)
+			return true, fmt.Errorf("cannot place window sidebar %s", side)
 		}
-		id, size := edge, records[edge].Size()
+		id, size := side, records[side].Size()
 		if _, ok := g.InsertAt(axis, line, InsertInit{ID: &id, Size: &size}); !ok {
-			return true, fmt.Errorf("cannot place window sidebar %s", edge)
+			return true, fmt.Errorf("cannot place window sidebar %s", side)
 		}
-		g.SetFixed(edge, true)
+		g.SetFixed(side, true)
 	}
 	return true, nil
 }
 
 // WindowSidebarsPlaced is whether the window sidebars stand where the order places them (docs/spec/external-sidebars.md#verification):
-// each is fixed, stands at the border line of its edge, reaches along the other axis between the sidebars of earlier edges of that
+// each is fixed, stands at the border line of its side, reaches along the other axis between the sidebars of earlier sides of that
 // axis, and is drawn no larger on its axis than its saved size.
 func WindowSidebarsPlaced(g *Grid, order []string) bool {
 	present := map[string]bool{}
@@ -580,11 +580,11 @@ func WindowSidebarsPlaced(g *Grid, order []string) bool {
 			return false
 		}
 	}
-	docked := []string{}
-	for _, edge := range order {
-		if present[edge] {
-			docked = append(docked, edge)
+	arranged := []string{}
+	for _, side := range order {
+		if present[side] {
+			arranged = append(arranged, side)
 		}
 	}
-	return WindowSidebarsDocked(g, docked)
+	return WindowSidebarsArranged(g, arranged)
 }

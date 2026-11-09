@@ -497,7 +497,7 @@ function drawBars() {
   if (wanted.length !== chromeActs.children.length || wanted.some((button, index) => chromeActs.children[index] !== button)) {
     chromeActs.replaceChildren(...wanted);
   }
-  for (const { edge, button } of sidebarSwitches) button.dataset.on = String(value(edge));
+  for (const { side, button } of sidebarSwitches) button.dataset.on = String(value(side));
   const mode = modeName() === "dark" ? "sun" : "moon";
   if (modeButton.dataset.icon !== mode) {
     modeButton.innerHTML = icon(mode);
@@ -508,16 +508,16 @@ function drawBars() {
 /* The logo is one declaration for both workbenches. */
 installBrandLogo(document.querySelector(".brand__logo"));
 
-/* Chrome buttons: project list, card auto-arrange, a switch for the sidebar of each window edge, light/dark, settings. The command arguments
+/* Chrome buttons: project list, card auto-arrange, a switch for the sidebar of each window side, light/dark, settings. The command arguments
    are computed from the values at the time of the press. Each button has a name, so a new button moves no other. */
 const layoutButtons = [
   act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"),
   // Keeps the layout and gives the cards a fair share (packages/soksak/docs/layout.md#balancing).
   act("columns-3", "카드 자동 정렬", false, "core.layout.balance", {}, "core.chrome.balance"),
 ];
-// The switch of each edge shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls).
-const sidebarSwitches = chromeSwitches().map(({ edge, icon: name, title, expose }) =>
-  ({ edge, button: act(name, title, value(edge), "core.settings.set", () => ({ patch: { [edge]: !value(edge) } }), expose) }));
+// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls).
+const sidebarSwitches = chromeSwitches().map(({ side, icon: name, title, expose }) =>
+  ({ side, button: act(name, title, value(side), "core.settings.set", () => ({ patch: { [side]: !value(side) } }), expose) }));
 // The same path as the mode segment of the modal. The theme command also applies the shape values of the theme
 // again, so calling it would revert the passage and corners that the user set.
 const modeButton = act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,

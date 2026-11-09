@@ -193,7 +193,7 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.workspace.grid.cards[0].width = 0; }, /width must be a finite positive number/],
     [(e) => { e.workspace.grid.cards[0].width = -190; }, /width must be a finite positive number/],
     [(e) => { e.workspace.grid.cards[0].width = Infinity; }, /width must be a finite positive number/],
-    // The edges of the window are reserved card ids of the window sidebars, which hold no tabs and the size of their axis
+    // The sides of the window are reserved card ids of the window sidebars, which hold no tabs and the size of their axis
     // (docs/spec/external-sidebars.md).
     [(e) => { e.workspace.grid.cards[0].tabs = [{ plugin: "probe", title: "p 2" }]; }, /environment.json: card left is a window sidebar and declares no tabs/],
     [(e) => { e.workspace.grid.cards.push({ id: "top", c0: 0, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "probe", title: "p 2" }] }); }, /environment.json: card top is a window sidebar and declares no tabs/],

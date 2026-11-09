@@ -66,11 +66,11 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 		s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "카드 자동 정렬", "columns-3", false, nil)
 	}
 	if !browsing {
-		// The switch of each edge shows or hides its window sidebar, in the order left, right, top, bottom
+		// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom
 		// (docs/spec/external-sidebars.md#window-controls).
-		for _, edge := range layout.WindowEdges {
-			on, _ := s.settings.Value(edge).(bool) // silent: the settings store checks the type of the value.
-			s.chromeAct(c, "core.chrome."+edge, "core.settings.set", edgeNames[edge]+" 사이드바 보이기", "panel-"+edge, on, settingsPatchParam{map[string]any{edge: !on}})
+		for _, side := range layout.WindowSides {
+			on, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
+			s.chromeAct(c, "core.chrome."+side, "core.settings.set", sideNames[side]+" 사이드바 보이기", "panel-"+side, on, settingsPatchParam{map[string]any{side: !on}})
 		}
 	}
 	next, icon := "light", "sun"

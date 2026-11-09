@@ -1,8 +1,8 @@
 // The section surfaces of the shown space and of the stored layouts (docs/spec/plugins.md#sections). The sidebars of the shown space
 // draw the first, and the project store reads the second to keep their sidecar sessions with the tabs of the layouts. This module
 // imports nothing of the workbench, because the sidebar sections import the surface modules, which import the project store; its
-// only import is the edge list of the plugin API, which imports nothing of the workbench.
-import { WINDOW_EDGES } from "@soksak/plugin-api";
+// only import is the side list of the plugin API, which imports nothing of the workbench.
+import { WINDOW_SIDES } from "@soksak/plugin-api";
 
 const shown = new Set();
 
@@ -38,7 +38,7 @@ export function spaceSectionSurfaces(space, cards, sets, links) {
       if (set) surfaces.push(...set.sections.map((section) => sectionSurfaceId(space, sidebar, section)));
     }
   };
-  for (const side of WINDOW_EDGES) {
+  for (const side of WINDOW_SIDES) {
     hold(side, links.filter((link) => link.place === side || link.place === `window-${side}`).map((link) => link.set));
   }
   for (const card of cards) {
@@ -66,7 +66,7 @@ export function storedSurfaceKept(tabIds, spaceCards) {
     const [space, sidebar] = id.split("/");
     const cards = spaceCards.get(space);
     if (!cards || sidebar === undefined) return false;
-    if (WINDOW_EDGES.includes(sidebar)) return true;
+    if (WINDOW_SIDES.includes(sidebar)) return true;
     const colon = sidebar.lastIndexOf(":");
     return colon > 0 && cards.has(sidebar.slice(0, colon));
   };

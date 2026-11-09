@@ -22,23 +22,23 @@ test("placement verification accepts one full-height sidebar at each window edge
 
 test("placement verification checks every window sidebar's requested extent", () => {
   assert.equal(windowSidebarsPlaced(grid([card("left", 0, 1, 0, 3)], { left: { w: 210 } }), ORDER), false, "a sidebar wider than its saved width was accepted");
-  assert.equal(windowSidebarsPlaced(grid([card("left", 1, 2, 0, 3)]), ORDER), false, "a left sidebar away from the window edge was accepted");
+  assert.equal(windowSidebarsPlaced(grid([card("left", 1, 2, 0, 3)]), ORDER), false, "a left sidebar away from the window side was accepted");
   assert.equal(windowSidebarsPlaced(grid([card("left", 0, 1, 0, 2)]), ORDER), false, "a sidebar shorter than the window was accepted");
   assert.equal(windowSidebarsPlaced(grid([card("left", 0, 1, 0, 3, { fixed: false })]), ORDER), false, "a sidebar that is not fixed was accepted");
 });
 
-// An edge holds one window sidebar (docs/spec/external-sidebars.md#verification): a second card of an edge beside one that stands in its
+// A side holds one window sidebar (docs/spec/external-sidebars.md#verification): a second card of a side beside one that stands in its
 // place is refused.
-test("placement verification refuses two sidebars of one edge", () => {
+test("placement verification refuses two sidebars of one side", () => {
   const two = {
     left: [card("left", 0, 1, 0, 3), card("left", 1, 2, 0, 3)],
     right: [card("right", 2, 3, 0, 3), card("right", 1, 2, 0, 3)],
     top: [card("top", 0, 3, 0, 1), card("top", 0, 3, 1, 2)],
     bottom: [card("bottom", 0, 3, 2, 3), card("bottom", 0, 3, 1, 2)],
   };
-  for (const [edge, cards] of Object.entries(two)) {
-    assert.equal(windowSidebarsPlaced(grid(cards.slice(0, 1)), ORDER), true, `one ${edge} sidebar in its place was refused`);
-    assert.equal(windowSidebarsPlaced(grid(cards), ORDER), false, `two ${edge} sidebars were accepted`);
+  for (const [side, cards] of Object.entries(two)) {
+    assert.equal(windowSidebarsPlaced(grid(cards.slice(0, 1)), ORDER), true, `one ${side} sidebar in its place was refused`);
+    assert.equal(windowSidebarsPlaced(grid(cards), ORDER), false, `two ${side} sidebars were accepted`);
   }
 });
 

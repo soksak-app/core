@@ -82,16 +82,16 @@ test("new window links require a plugin and a known set and reject duplicate cho
   ]) assert.throws(() => validateSidebars(sidebars(links), "settings"), message);
 });
 
-test("every edge of a window takes a general link and a plugin window link (docs/spec/external-sidebars.md)", () => {
-  for (const edge of ["left", "right", "top", "bottom"]) {
-    assert.doesNotThrow(() => validateSidebars(sidebars([{ place: edge, plugin: null, set: "set-1" },
-      { place: `window-${edge}`, plugin: "tree", set: "set-1" }]), "settings"), edge);
-    assert.throws(() => validateSidebars(sidebars([{ place: edge, plugin: "tree", set: "set-1" }]), "settings"),
-      /a general window link requires plugin null/, edge);
+test("every side of a window takes a general link and a plugin window link (docs/spec/external-sidebars.md)", () => {
+  for (const side of ["left", "right", "top", "bottom"]) {
+    assert.doesNotThrow(() => validateSidebars(sidebars([{ place: side, plugin: null, set: "set-1" },
+      { place: `window-${side}`, plugin: "tree", set: "set-1" }]), "settings"), side);
+    assert.throws(() => validateSidebars(sidebars([{ place: side, plugin: "tree", set: "set-1" }]), "settings"),
+      /a general window link requires plugin null/, side);
   }
 });
 
-test("a window mapping declares the top and bottom edges", () => {
+test("a window mapping declares the top and bottom sides", () => {
   const all = manifests();
   all[1].sidebars.window = { top: "tree", bottom: "tree" };
   assert.equal(validateManifest(all[1]), all[1]);

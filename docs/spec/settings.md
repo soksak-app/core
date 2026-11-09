@@ -41,7 +41,7 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 메모리 (common scope only) | 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (a switch that runs `core.settings.debug {on}`) |
 
-Window choices select content for one fixed sidebar on each edge, left, right, top and bottom. The focused active plugin overrides the general edge choice in the same place without adding a sidebar. A visibility switch affects the fixed sidebar of its edge, and 사이드바 순서 sets which sidebar takes the room of the plane first ([external window sidebars](external-sidebars.md#fixed-placement-and-persistence)). The group states this under its name: 한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
+Window choices select content for one fixed sidebar on each side, left, right, top and bottom. The focused active plugin overrides the general side choice in the same place without adding a sidebar. A visibility switch affects the fixed sidebar of its side, and 사이드바 순서 sets which sidebar takes the room of the plane first ([external window sidebars](external-sidebars.md#fixed-placement-and-persistence)). The group states this under its name: 한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
 
 ### 진단
 
@@ -68,7 +68,7 @@ The page of a plugin replaces the search field and the list. It shows:
 - The plugin name, with the plugin id as its caption.
 - 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. Each row has the [control](#controls) of its form: an `enum` a select box, an `integer` a slider between its bounds, and a `string` or an `address` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
 - 섹션: the names of the sections the plugin declares, as one line of text.
-- 사이드바: every plugin has window-left, window-right, window-top and window-bottom selectors, under the statement that the set replaces the content of the fixed sidebar of that edge while a tab of the plugin is the active tab of the focused card. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
+- 사이드바: every plugin has window-left, window-right, window-top and window-bottom selectors, under the statement that the set replaces the content of the fixed sidebar of that side while a tab of the plugin is the active tab of the focused card. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
 
 ### 사이드바
 
@@ -144,7 +144,7 @@ Plugin settings take the form of their declaration ([plugins](plugins.md)).
 
 The settings files carry their form in the member `format` (format 1 is the current form; a file of another form, or without the member, is refused, [stored data formats](installation.md#stored-data-formats)). The member is the carrier of the stored form, not a setting: the workspace hides it from the snapshot and preserves it when it writes, and a settings key named `format` is refused like any other unknown key. The rest of this section holds for the settings of the file after the carrier.
 
-The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, an edge link (`left`, `right`, `top` or `bottom`) that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
+The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a side link (`left`, `right`, `top` or `bottom`) that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
 
 ## Stored sets and links
 
@@ -167,11 +167,11 @@ An absent link explicitly selects `off`. Every selector rejects a current value 
 
 | Link | Meaning |
 |---|---|
-| `{place: "left", "right", "top" or "bottom", plugin: null, set}` | General content of the fixed window sidebar of that edge |
-| `{place: "window-left", "window-right", "window-top" or "window-bottom", plugin, set}` | Plugin content override of the fixed window sidebar of that edge |
+| `{place: "left", "right", "top" or "bottom", plugin: null, set}` | General content of the fixed window sidebar of that side |
+| `{place: "window-left", "window-right", "window-top" or "window-bottom", plugin, set}` | Plugin content override of the fixed window sidebar of that side |
 | `{place: "card-top", "card-bottom", "card-left", or "card-right", plugin, set}` | Default set for that internal side of the plugin's cards |
 
-Every `set` is a known set ID. Each place/plugin pair appears at most once. Reject plugin edge links, null sets and rail links. Set IDs `off` and `inherit` are reserved. Fixed sidebar selection and override rail borders follow [external window sidebars](external-sidebars.md). The switch of an edge hides its fixed sidebar without changing choices.
+Every `set` is a known set ID. Each place/plugin pair appears at most once. Reject plugin side links, null sets and rail links. Set IDs `off` and `inherit` are reserved. Fixed sidebar selection and override rail borders follow [external window sidebars](external-sidebars.md). The switch of a side hides its fixed sidebar without changing choices.
 
 `core.settings.link {place, plugin, set, scope}` accepts a set ID to store a link, or `off` to remove it. `inherit` fails with -32602 for every default link. The separate `core.card.sidebar.set` command still accepts `inherit` to remove a particular card's explicit override ([example model](example-model.md)).
 
@@ -227,4 +227,4 @@ The focus ring of such a control is the focus color of the system in the dark ap
 - 플러그인 shows a filtered list of the loaded plugins by name; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list. The section shows no plugin description, version, sidecar or plugin operation; 플러그인 관리 closes the window and shows the plugin screen.
 - General, plugin-window and internal card choices remain independent through focus and tab changes. A disabled window column does not replace another plugin column.
 - The layout values change internal sidebar limits and initial size and the initial size of a window sidebar on its axis.
-- The order rows move an edge up and down through `core.settings.change` with the whole order, and the window sidebars dock in the new order.
+- The order rows move a side up and down through `core.settings.change` with the whole order, and the window sidebars arrange in the new order.

@@ -76,7 +76,7 @@ Project activation과 library 정리는 활성 project의 registry 제거에 따
 
 스페이스의 배치는 `sidebars`를 저장한다. 사이드바 ID(`left`, `right`, 카드 내부 사이드바의 `카드id:변`)마다 `{tab, folded, sizes}`이며 `tabs` 세트에서 고른 섹션 ID 또는 null과 `list` 세트에서 접은 섹션 ID, 그리고 섹션 ID에서 사람이 끌어 정한 높이(32에서 4096의 정수)로 가는 객체 `sizes`다. sidebar의 어떤 섹션도 크기를 바꾸지 않았으면 배치는 `sizes`를 생략한다([섹션](plugins.ko.md#섹션)). 다른 형태의 `sizes` 값은 `sidebar <sidebar> stores an invalid size of <section>: <value>`로 거부된다. 선택은 스페이스마다 둔다. 오버라이드는 동일한 고정 사이드바의 내용을 바꾸며 식별자를 바꾸지 않는다. 선택을 바꾸면 다른 배치 변경처럼 저장된 스페이스가 바뀐다. `sidebars`가 없는 배치에는 저장된 선택이 없고 저장 섹션 선택은 해당 섹션이 선택 세트에 있을 때만 적용된다.
 
-`docs/spec/cases/layout`의 layout case는 이 형식을 값으로 기술한다. `stored.json`은 저장된 스페이스 배치의 검사와 고정 사이드바의 `{width}`와 `{height}` 레코드를, `window-sidebars.json`은 고정 창 사이드바의 순서대로의 dock을, `spaces.json`은 프로젝트 레코드의 스페이스, 활성 스페이스, 스페이스 counter를, `grid.json`과 `outline.json`은 배치가 저장하는 `packages/soksak`의 grid와 outline을 기술한다. `packages/soksak`와 `packages/workbench`의 test와 `packages/workbench-mygo`의 Go layout model([워크벤치](hosts.ko.md#workbench))이 같은 파일을 실행하므로, case 하나는 모든 구현이 지키는 저장 형식의 진술 하나다.
+`docs/spec/cases/layout`의 layout case는 이 형식을 값으로 기술한다. `stored.json`은 저장된 스페이스 배치의 검사와 고정 사이드바의 `{width}`와 `{height}` 레코드를, `window-sidebars.json`은 고정 창 사이드바의 순서대로의 배치을, `spaces.json`은 프로젝트 레코드의 스페이스, 활성 스페이스, 스페이스 counter를, `grid.json`과 `outline.json`은 배치가 저장하는 `packages/soksak`의 grid와 outline을 기술한다. `packages/soksak`와 `packages/workbench`의 test와 `packages/workbench-mygo`의 Go layout model([워크벤치](hosts.ko.md#workbench))이 같은 파일을 실행하므로, case 하나는 모든 구현이 지키는 저장 형식의 진술 하나다.
 
 ### 탭 origin
 

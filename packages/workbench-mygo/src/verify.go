@@ -161,8 +161,8 @@ func expectedRailLoops(groups [][]layout.Rect, gap float64) int {
 	return loops
 }
 
-// isPlace tells whether id is a fixed window sidebar card, whose id is the edge of the window.
-func isPlace(id string) bool { return layout.IsWindowEdge(id) }
+// isPlace tells whether id is a fixed window sidebar card, whose id is the side of the window.
+func isPlace(id string) bool { return layout.IsWindowSide(id) }
 
 // surfaceComparison is what comparing a record with the drawn slots found.
 type surfaceComparison struct {

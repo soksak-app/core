@@ -18,7 +18,7 @@ import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sideName, sizeSidebar, spaceFoldText, toggleSidebar } from "./card-sidebars.js";
-import { arrangeWindowSidebars, EDGE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
+import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
@@ -278,7 +278,7 @@ function updateCard(el, card, rect) {
       clearSet(holder);
       holder.replaceChildren();
     }
-    setText(statusText, `${EDGE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
+    setText(statusText, `${SIDE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
     // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).
     let fold = status.querySelector(".sidebar-status__fold");
     if (!fold || fold.dataset.side !== side) {
@@ -288,7 +288,7 @@ function updateCard(el, card, rect) {
       fold.className = "sidebar-status__fold";
       fold.dataset.side = side;
       fold.dataset.expose = "core.sidebar.fold";
-      fold.title = `${EDGE_NAMES[side]} 창 사이드바 접기`;
+      fold.title = `${SIDE_NAMES[side]} 창 사이드바 접기`;
       fold.setAttribute("aria-label", fold.title);
       fold.innerHTML = icon(FOLD_ICONS[side]);
       bind(fold, "core.settings.set", { patch: { [side]: false } });
@@ -1063,17 +1063,17 @@ function drawCardSidebars(el, card, rect) {
 }
 
 /**
- * Docks the window sidebars of the four edges in the order of sidebarOrder (arrangeWindowSidebars of window-sidebars.js).
+ * Arranges the window sidebars of the four sides in the order of sidebarOrder (arrangeWindowSidebars of window-sidebars.js).
  *
  * It uses `insertAt` and not `splitToward`. A split inherits the row range of the split card and occupies only one row,
- * but a sidebar must reach along its edge as far as the order lets it.
+ * but a sidebar must reach along its side as far as the order lets it.
  */
 function settle() {
   if (!grid) return;
   closePicker("settled");
-  // The edges that have a choice hold a sidebar while their switch is on, docked in the order (docs/spec/external-sidebars.md).
+  // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
   arrangeWindowSidebars(grid, value("sidebarOrder"), windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).map(item => item.id),
-    windowSidebars, value("sidebarWidth"), edge => value(edge));
+    windowSidebars, value("sidebarWidth"), side => value(side));
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));

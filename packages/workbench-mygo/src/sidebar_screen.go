@@ -461,7 +461,7 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 		if frame.Side == "" {
 			return
 		}
-		icon, title := foldIcon(foldPaths[frame.Side], metrics.IconStroke), edgeNames[frame.Side]+" 창 사이드바 접기"
+		icon, title := foldIcon(foldPaths[frame.Side], metrics.IconStroke), sideNames[frame.Side]+" 창 사이드바 접기"
 		fold := binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}}).Label(title).Size(metrics.FoldButton, metrics.FoldButton).
 			Radius(float32(math.Round(float64(theme.Radius * metrics.FoldRadiusRatio))))
 		color := theme.TextMuted

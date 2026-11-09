@@ -204,7 +204,7 @@ func TestTheGeneralSectionDrawsEachFormWithItsOneControl(t *testing.T) {
 			t.Fatalf("no control %s", want)
 		}
 	}
-	// The order of the window sidebars: one row per edge with ▲ (not on the first row) and ▼ (not on the last row), each running
+	// The order of the window sidebars: one row per side with ▲ (not on the first row) and ▼ (not on the last row), each running
 	// core.settings.change with the whole new order (docs/spec/settings.md#controls).
 	if got := status.keys("core.settings-modal.order"); !slices.Equal(got, []string{"order:sidebarOrder:0:down", "order:sidebarOrder:1:up",
 		"order:sidebarOrder:1:down", "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"}) {
@@ -218,7 +218,7 @@ func TestTheGeneralSectionDrawsEachFormWithItsOneControl(t *testing.T) {
 		}
 	}
 	if !f.tester.HasText("한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.") {
-		t.Fatalf("the sidebar group does not state one fixed sidebar per edge")
+		t.Fatalf("the sidebar group does not state one fixed sidebar per side")
 	}
 	if got := len(status.keys("core.settings-modal.theme")); got != 10 {
 		t.Fatalf("%d theme swatches", got)
@@ -260,7 +260,7 @@ func TestASwitchAndASwatchRunTheirCommandAndTheChangeIsWritten(t *testing.T) {
 
 func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	f := opened(t)
-	// The window is tall enough to show the whole general section, whose sidebar group holds the four edges and their order.
+	// The window is tall enough to show the whole general section, whose sidebar group holds the four sides and their order.
 	f.tester.SetSize(1200, 3200)
 	f.settle()
 	f.click("core.settings-modal.set", "mode")

@@ -29,31 +29,31 @@ type WindowSidebar struct {
 	Height float64 `json:"height,omitempty"`
 }
 
-// WindowEdges are the edges of a window; each holds at most one fixed window sidebar, whose card id is the edge.
-var WindowEdges = []string{"left", "right", "top", "bottom"}
+// WindowSides are the sides of a window; each holds at most one fixed window sidebar, whose card id is the side.
+var WindowSides = []string{"left", "right", "top", "bottom"}
 
-// IsWindowEdge is whether id names an edge of the window, and so the fixed window sidebar of that edge.
-func IsWindowEdge(id string) bool { return slices.Contains(WindowEdges, id) }
+// IsWindowSide is whether id names a side of the window, and so the fixed window sidebar of that side.
+func IsWindowSide(id string) bool { return slices.Contains(WindowSides, id) }
 
-// WindowAxis is the axis of the sidebar of an edge: x for left and right, y for top and bottom.
-func WindowAxis(edge string) Axis {
-	if edge == "left" || edge == "right" {
+// WindowAxis is the axis of the sidebar of a side: x for left and right, y for top and bottom.
+func WindowAxis(side string) Axis {
+	if side == "left" || side == "right" {
 		return "x"
 	}
 	return "y"
 }
 
-// SizeKey is the member of the saved size of the sidebar of an edge: width for left and right, height for top and bottom.
-func SizeKey(edge string) string {
-	if WindowAxis(edge) == "x" {
+// SizeKey is the member of the saved size of the sidebar of a side: width for left and right, height for top and bottom.
+func SizeKey(side string) string {
+	if WindowAxis(side) == "x" {
 		return "width"
 	}
 	return "height"
 }
 
-// SidebarSize returns the record of size on the axis of edge.
-func SidebarSize(edge string, size float64) WindowSidebar {
-	if WindowAxis(edge) == "x" {
+// SidebarSize returns the record of size on the axis of side.
+func SidebarSize(side string, size float64) WindowSidebar {
+	if WindowAxis(side) == "x" {
 		return WindowSidebar{Width: size}
 	}
 	return WindowSidebar{Height: size}
@@ -176,7 +176,7 @@ func list(raw json.RawMessage) ([]json.RawMessage, bool) {
 }
 
 // isWindowSidebar is whether id names a fixed window sidebar.
-func isWindowSidebar(id string) bool { return IsWindowEdge(id) }
+func isWindowSidebar(id string) bool { return IsWindowSide(id) }
 
 // CheckStoredLayout is the reason the stored layout of a space cannot be opened with the loaded plugins units, or nil when it can.
 func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {

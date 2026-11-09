@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {windowSidebar, windowSidebarCards, restoreWindowSidebars, reconcileWindowSidebars, keepWindowSidebarWidths, windowOrientation, EDGE_NAMES} from "../window-sidebars.js";
+import {windowSidebar, windowSidebarCards, restoreWindowSidebars, reconcileWindowSidebars, keepWindowSidebarWidths, windowOrientation, SIDE_NAMES} from "../window-sidebars.js";
 
 test("the sections of a top or bottom window sidebar lie horizontally, of a left or right one vertically (docs/spec/external-sidebars.md)", () => {
   assert.deepEqual(["left", "right", "top", "bottom"].map(windowOrientation), ["vertical", "vertical", "horizontal", "horizontal"]);
-  assert.deepEqual(EDGE_NAMES, { left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" });
+  assert.deepEqual(SIDE_NAMES, { left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" });
 });
 
 test("a top or bottom window sidebar keeps and starts with its height (docs/spec/external-sidebars.md)", () => {

@@ -6147,7 +6147,7 @@
       ]
     },
     {
-      "id": "sidebars.window-edges",
+      "id": "sidebars.window-sides",
       "manifest": {
         "id": "probe",
         "name": "Probe",
@@ -6197,7 +6197,7 @@
       ]
     },
     {
-      "id": "sidebars.window-unknown-edge",
+      "id": "sidebars.window-unknown-side",
       "manifest": {
         "id": "probe",
         "name": "Probe",

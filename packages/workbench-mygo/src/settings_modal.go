@@ -417,13 +417,13 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	if err != nil {
 		return err
 	}
-	// One fixed sidebar per edge; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
+	// One fixed sidebar per side; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
 	rows := []settingsRow{}
-	for _, edge := range layout.WindowEdges {
-		rows = append(rows, s.row(b, edgeNames[edge]+" 사이드바 보이기", s.toggle(b, edge)))
+	for _, side := range layout.WindowSides {
+		rows = append(rows, s.row(b, sideNames[side]+" 사이드바 보이기", s.toggle(b, side)))
 	}
-	for _, edge := range layout.WindowEdges {
-		row, err := s.linkChoice(b, edgeNames[edge]+" 사이드바 세트", edge, "", sets, links)
+	for _, side := range layout.WindowSides {
+		row, err := s.linkChoice(b, sideNames[side]+" 사이드바 세트", side, "", sets, links)
 		if err != nil {
 			return err
 		}
@@ -432,7 +432,7 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	if scope == "project" && s.settings.Overridden("links") {
 		rows = append(rows, settingsRow{controls: []*SettingsControl{b.resetButton("links", "전역 연결 사용")}})
 	}
-	rows = append(rows, s.orderRows(b, "sidebarOrder", "사이드바 순서", edgeNames, scope)...)
+	rows = append(rows, s.orderRows(b, "sidebarOrder", "사이드바 순서", sideNames, scope)...)
 	b.group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", rows...)
 
 	widths := catalog.Settings.LayoutRanges
@@ -575,11 +575,11 @@ func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error 
 		}
 		return rows, nil
 	}
-	edges := [][2]string{}
-	for _, edge := range layout.WindowEdges {
-		edges = append(edges, [2]string{"window-" + edge, "창 " + edgeNames[edge] + " 사이드바"})
+	sides := [][2]string{}
+	for _, side := range layout.WindowSides {
+		sides = append(sides, [2]string{"window-" + side, "창 " + sideNames[side] + " 사이드바"})
 	}
-	window, err := choices(edges)
+	window, err := choices(sides)
 	if err != nil {
 		return err
 	}
