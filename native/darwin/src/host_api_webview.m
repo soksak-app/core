@@ -77,7 +77,8 @@ static void modalViewFocusOnMain(void* handle, int take) {
 }
 
 // Fits the modal region in page coordinates inward to the display pixel grid. Fitting outward would cover the border of the card,
-// as with a surface.
+// as with a surface. out holds five values: the fitted x, y, width and height, and the backing scale of the window whose device
+// pixels the region was fitted to. A window that is gone writes nothing, so a caller that starts from zeros reads backing scale 0.
 static void modalAlignedOnMain(void* parentWindow, double x, double y, double w, double h,
                          double* out) {
     NSWindow* parent = (NSWindow*)parentWindow;
@@ -91,6 +92,7 @@ static void modalAlignedOnMain(void* parentWindow, double x, double y, double w,
     out[1] = content.bounds.size.height - r.origin.y - r.size.height;
     out[2] = r.size.width;
     out[3] = r.size.height;
+    out[4] = parent.backingScaleFactor;
 }
 
 void modalViewConfigure(void* handle, const char* title, double radius) {
