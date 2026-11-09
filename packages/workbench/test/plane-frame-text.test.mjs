@@ -16,6 +16,8 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
+  // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
+  globalThis.devicePixelRatio = dom.window.devicePixelRatio;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
   globalThis.CSS = dom.window.CSS;
   globalThis.PointerEvent = dom.window.PointerEvent;

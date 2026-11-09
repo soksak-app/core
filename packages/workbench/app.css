@@ -87,9 +87,9 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 :root[data-frame-text] .chrome-bar > .brand,:root[data-frame-text] .chrome-bar > .tabs--project,
 :root[data-frame-text] .chrome-bar__acts,:root[data-frame-text] .tabs--space,
 :root[data-frame-text] .workarea > .tabs--project{zoom:var(--frame-text)}
-/* The lines above and to the left of the plane round the scaled size to whole pixels. A fractional size places the origin of the plane between device pixels, so the
-   native surface that the host seats on the grid and the DOM differ by half a pixel and the card border blurs (F36). A zoom element draws the
-   specified size multiplied by the scale, so the rounded size is divided by the scale before it is specified. */
+/* The first row takes its scaled height in whole pixels, which is the title bar height that the page gives the host
+   (chromeRow of frame-text.js, docs/spec/native-surfaces.md#title-bar-height). The rows above and left of the plane need no
+   such rounding for the plane: the stage puts the plane on the device pixel grid (alignPlane of device-grid.js). */
 .chrome-bar{--chrome-row:round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),var(--pixel))}
 .chrome-bar{position:relative;flex:0 0 var(--chrome-row);height:var(--chrome-row);display:flex;align-items:center;
   gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
@@ -117,7 +117,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .tabs--project{align-self:center}
 
 /* Space tab row. It sits directly above the plane, so the bottom of a tab continues into the plane. */
-.tabs--space{flex:0 0 auto;gap:var(--space-tabs-gap);height:calc(round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),var(--pixel)) / var(--frame-text));
+.tabs--space{flex:0 0 auto;gap:var(--space-tabs-gap);
   padding:var(--tabs-pad) var(--space-3);
   align-items:center;background:var(--card);border-bottom:var(--bw) solid var(--edge)}
 .tabs--space .bar-tab{height:var(--space-tab-h);border-radius:var(--r-xs) var(--r-xs) 0 0}
@@ -149,7 +149,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* When the project tabs are placed on the left. They start above the space row and continue to the bottom. */
 .workarea{display:flex;flex:1 1 auto;min-height:0}
 .work{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
-.project-column{display:flex;flex-direction:column;gap:var(--project-column-gap);width:calc(round(nearest,calc(var(--project-column-w) * var(--frame-text)),var(--pixel)) / var(--frame-text));flex:0 0 auto;
+.project-column{display:flex;flex-direction:column;gap:var(--project-column-gap);width:var(--project-column-w);flex:0 0 auto;
   padding:var(--project-column-pad);background:var(--card);border-right:var(--bw) solid var(--edge)}
 .project-column .bar-tab{position:relative;width:var(--fill);height:var(--project-tab-h);justify-content:center;padding:0 var(--project-tab-pad)}
 .project-column .bar-tab__name{max-width:var(--fill);text-align:center}
@@ -162,7 +162,12 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .project-column .bar-tab--add{width:var(--fill);height:var(--project-tab-add-h);justify-content:center}
 
 /* Plane */
-.stage{position:relative;flex:1 1 auto;min-height:0;padding:var(--half-gap);
+/* The stage pads the plane by the half gap and by the insets that put the plane on the device pixel grid (alignPlane of
+   device-grid.js). */
+.stage{--stage-pad:var(--half-gap);--plane-grid-top:0px;--plane-grid-right:0px;--plane-grid-bottom:0px;--plane-grid-left:0px;
+  position:relative;flex:1 1 auto;min-height:0;
+  padding:calc(var(--stage-pad) + var(--plane-grid-top)) calc(var(--stage-pad) + var(--plane-grid-right))
+    calc(var(--stage-pad) + var(--plane-grid-bottom)) calc(var(--stage-pad) + var(--plane-grid-left));
   border:var(--bw) solid var(--rule);border-radius:var(--r-rail)}
 .plane{position:relative;width:var(--fill);height:var(--fill)}
 
@@ -220,7 +225,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    Focus paints the seam itself in its own color. The outline is drawn outside the card rect, and that outside
    is the seam. Painting the line of the head or the status line would paint another line 22px or
    32px away from the seam, which does not express the boundary of the card.          */
-:root[data-seam=line] .stage{padding:0;border-radius:0}
+:root[data-seam=line] .stage{--stage-pad:0px;border-radius:0}
 :root[data-seam=line] .card{border-width:0;border-radius:0}
 :root[data-seam=line] .chrome{border-bottom-color:var(--rule)}
 :root[data-seam=line] .status{border-top-color:var(--rule)}

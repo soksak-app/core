@@ -8885,13 +8885,15 @@ const FEATURE_LINKS = [
   {
     id: "F36",
     implementation: [
-      { file: "packages/workbench/app.css", symbol: "round(nearest,calc(var(--chrome-row-h) * var(--frame-text)),var(--pixel))" },
+      { file: "packages/workbench/device-grid.js", symbol: "export function alignPlane(plane, scale = gridScale()) {" },
+      { file: "packages/workbench/index.html", symbol: "observePlaneGrid(plane);" },
     ],
     tests: [
+      { file: "packages/workbench/test/device-grid.test.mjs", id: "a shown error of 34.4px above the plane leaves the plane origin and size on the device pixel grid" },
       { file: "e2e/text-size.test.mjs", id: "text size commands enlarge the pressed card or the frame and keep the plane in the window" },
       { file: "packages/workbench/test/verify-ahead.test.mjs", id: "a failed V7b names the surface and its declared and applied rectangles" },
     ],
-    expected: "The plane stays on the device pixel grid at every frame text factor, so native surfaces are seated where they are declared.",
+    expected: "The plane stays on the device pixel grid at every frame text factor and with whatever lies above or left of it, so native surfaces are seated where they are declared.",
     levels: ["unit", "application"],
   },
   {
