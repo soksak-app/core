@@ -794,31 +794,12 @@ func dragResult(h *Host, s *Surfaces, reply ExposureResult) (map[string]any, err
 	return result, nil
 }
 
-// dragPresented waits until the last layout of a drag is displayed.
+// dragPresented waits until the last layout of a drag is displayed (windowPresented).
 func dragPresented(h *Host, s *Surfaces) error {
-	err := lastLayoutPresented(func(limit time.Duration) error {
-		_, err := h.ask(s, "diagnostics.drag.placed", nil, limit)
-		return err
-	}, s.whenSettled, pageTimeout)
-	if err != nil {
+	if _, err := windowPresented(h, s); err != nil {
 		return err
 	}
 	s.note("diagnostics: drag presented")
-	return nil
-}
-
-// lastLayoutPresented waits for placed and then for settled. placed comes first because only the window knows of a layout it
-// has not placed: while one placement runs, the next waits in the window, and the host sees no run and no placement. Each wait
-// ends at limit, so a window that does not answer fails the drag.
-func lastLayoutPresented(placed func(limit time.Duration) error, settled func() <-chan struct{}, limit time.Duration) error {
-	if err := placed(limit); err != nil {
-		return fmt.Errorf("the last placement of the drag: %w", err)
-	}
-	select {
-	case <-settled():
-	case <-time.After(limit):
-		return rpcError(codeTimeout, "the drag was not presented within %s", limit)
-	}
 	return nil
 }
 
