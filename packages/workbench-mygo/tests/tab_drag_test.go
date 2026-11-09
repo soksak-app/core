@@ -189,7 +189,7 @@ func TestTheMoveCommandRefusesWhatADropCannotDo(t *testing.T) {
 	}{
 		{map[string]string{"tab": tab, "card": other, "zone": "middle"}, "unknown zone middle"},
 		{map[string]string{"tab": tab, "card": "absent", "zone": "centre"}, "no card absent"},
-		{map[string]string{"tab": "absent", "card": other, "zone": "centre"}, "absent"},
+		{map[string]string{"tab": "absent", "card": other, "zone": "centre"}, "no tab absent"},
 		{map[string]string{"tab": only, "card": other, "zone": "left"}, "cannot move to the left of " + other},
 	} {
 		if _, err := f.answer("core.tab.move", refused.params); err == nil || !strings.Contains(err.Error(), refused.text) {
@@ -201,6 +201,16 @@ func TestTheMoveCommandRefusesWhatADropCannotDo(t *testing.T) {
 	}
 	if !hasTab(f, other, tab) || hasTab(f, card, tab) {
 		t.Fatal("the command did not move the tab")
+	}
+}
+
+// A tab command that names no tab answers as the page answers it, no tab <id> (cardOfTab of packages/workbench/plane.js).
+func TestATabCommandRefusesATabThatNoCardHolds(t *testing.T) {
+	f, _, _, _ := cardWithTwoTabs(t)
+	for _, command := range []string{"core.tab.select", "core.tab.close"} {
+		if _, err := f.answer(command, map[string]string{"tab": "absent"}); err == nil || !strings.Contains(err.Error(), "no tab absent") {
+			t.Fatalf("%s of an absent tab answered %v", command, err)
+		}
 	}
 }
 
