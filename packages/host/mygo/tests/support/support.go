@@ -98,6 +98,17 @@ func (w *SceneWorkbench) Shown(window host.Frontend) {
 	}
 }
 
+// StartFailed records the refused start and shows its first screen as Shown does.
+func (w *SceneWorkbench) StartFailed(window host.Frontend, err error) {
+	w.Record("start failed %s: %v", window.Name(), err)
+	w.mu.Lock()
+	holding := w.holding
+	w.mu.Unlock()
+	if !holding {
+		mygo.RunOnMain(window.(*adapter.Frontend).FirstScreen)
+	}
+}
+
 func (w *SceneWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 	w.Record("build %s", window.Name())
 	return func(c *ui.Context) {
