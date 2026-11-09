@@ -1112,6 +1112,10 @@ func (s *Shell) selectTab(id string) error {
 		return err
 	}
 	s.focusCard(card)
+	// Selecting another card restores the arrangement (docs/spec/example-model.md#card-fullscreen).
+	if s.fullscreen != card {
+		s.fullscreen = ""
+	}
 	s.settle()
 	return nil
 }

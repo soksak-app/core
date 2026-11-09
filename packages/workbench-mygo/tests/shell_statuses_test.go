@@ -136,6 +136,27 @@ func TestFullscreenCoversThePlaneAndKeepsTheLayout(t *testing.T) {
 	}
 }
 
+// Selecting a tab of another card selects that card, so the arrangement comes back (docs/spec/example-model.md#card-fullscreen).
+func TestSelectingATabOfAnotherCardEndsFullscreen(t *testing.T) {
+	f, _ := surfaceShell(t)
+	f.run("core.card.split", map[string]string{"card": f.tabbedCards()[0], "side": "right", "plugin": "textprobe"})
+	cards := f.tabbedCards()
+	var other string
+	for _, card := range status[gridRead](t, f, "core.grid").Cards {
+		if card.ID == cards[1] && card.Active != nil {
+			other = *card.Active
+		}
+	}
+	if other == "" {
+		t.Fatalf("card %s has no active tab", cards[1])
+	}
+	f.run("core.card.fullscreen", map[string]string{"card": cards[0]})
+	f.run("core.tab.select", map[string]string{"tab": other})
+	if grid := status[gridRead](t, f, "core.grid"); grid.Fullscreen != nil {
+		t.Fatalf("selecting tab %s of card %s leaves fullscreen %v", other, cards[1], *grid.Fullscreen)
+	}
+}
+
 func TestProjectStatusesFollowTheWindow(t *testing.T) {
 	f, _ := surfaceShell(t)
 	project := status[map[string]any](t, f, "core.project")
