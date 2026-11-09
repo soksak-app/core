@@ -1793,6 +1793,8 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		view    *nativeWebview
 		aligned Rect
 		visible bool
+		// created tells that this preparation creates the surface.
+		created bool
 	}
 	desired := make([]desiredSurface, 0, len(req.Surfaces))
 	created := make([]string, 0)
@@ -1811,7 +1813,8 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		w, h := max1(surface.W), max1(surface.H)
 		visible := surface.Visible && surface.W >= 1 && surface.H >= 1
 		view := s.views[surface.ID]
-		if view == nil {
+		made := view == nil
+		if made {
 			var err error
 			view, err = s.createRegisteredSurface(mainThreadStep, surface.ID, func() (unsafe.Pointer, error) {
 				return system.CreateSurface(win.NativeWindow())
@@ -1834,7 +1837,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 				return nil, nil, err
 			}
 		}
-		desired = append(desired, desiredSurface{id: surface.ID, decl: surface, view: view, aligned: alignedWant, visible: visible})
+		desired = append(desired, desiredSurface{id: surface.ID, decl: surface, view: view, aligned: alignedWant, visible: visible, created: made})
 	}
 
 	placed := make([]Placement, 0, len(desired))
@@ -1857,8 +1860,10 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		}
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
 		// A window without a main page sets the frame of a surface in the frame that draws its card, when its native view element gives
-		// its placement (docs/spec/hosts.md#operation-groups).
-		if item.visible && framework.MainPage() {
+		// its placement (docs/spec/hosts.md#operation-groups). A surface that the preparation creates has no element in the frame of the
+		// transaction, which was built before the surface existed, so the preparation places it in its box here, and the element of the
+		// next frame keeps that place.
+		if item.visible && (framework.MainPage() || item.created) {
 			item.view.SetBounds(item.aligned.X, item.aligned.Y, item.aligned.W, item.aligned.H)
 		}
 		placement := Placement{ID: item.id, Rect: placedRect(item.view, item.aligned, item.visible), Visible: item.visible}
