@@ -86,6 +86,7 @@ test("a raster probe that a check makes ready draws its image regions covered be
   // a raster probe turns the covered drawing on first (rasterReady in e2e/raster-probe.mjs, docs/spec/hosts.md#launch-activation).
   const calls = [];
   const s = {
+    client: { endpoint: { pid: 4242 } },
     registered: async (surface, entries) => { calls.push(["registered", surface, entries]); },
     request: async (method, params) => { calls.push(["request", method, params]); return null; },
     until: async (name, accept) => {
