@@ -382,7 +382,7 @@ func pointerOf(element ui.Element) (float32, float32) {
 func (s *Shell) tabOf(id string) (layout.Tab, error) {
 	card := s.cardOfTab(id)
 	if card == "" {
-		return layout.Tab{}, fmt.Errorf("unknown tab %s", id)
+		return layout.Tab{}, fmt.Errorf("no tab %s", id)
 	}
 	data, err := s.cardData(card)
 	if err != nil {
@@ -393,7 +393,7 @@ func (s *Shell) tabOf(id string) (layout.Tab, error) {
 			return tab, nil
 		}
 	}
-	return layout.Tab{}, fmt.Errorf("unknown tab %s", id)
+	return layout.Tab{}, fmt.Errorf("no tab %s", id)
 }
 
 // tabMenuItems are the items of the context menu of a tab from the reasons of the memory saver, as tab-menu.js builds them: a tab

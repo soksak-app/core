@@ -186,7 +186,7 @@ func (s *Shell) dropRect(from string, hit *layout.ZoneHit) *layout.Rect {
 func (s *Shell) moveTab(tab, card, zone string) error {
 	from := s.cardOfTab(tab)
 	if from == "" {
-		return fmt.Errorf("Unknown tab: %s", tab)
+		return fmt.Errorf("no tab %s", tab)
 	}
 	if err := s.paneCard(card); err != nil {
 		return err

@@ -1101,7 +1101,7 @@ func checkTabParams(plugin *LoadedPlugin, params json.RawMessage) (json.RawMessa
 func (s *Shell) selectTab(id string) error {
 	card := s.cardOfTab(id)
 	if card == "" {
-		return fmt.Errorf("Unknown tab: %s", id)
+		return fmt.Errorf("no tab %s", id)
 	}
 	data, err := s.cardData(card)
 	if err != nil {
@@ -1120,7 +1120,7 @@ func (s *Shell) selectTab(id string) error {
 func (s *Shell) closeTab(id string) error {
 	card := s.cardOfTab(id)
 	if card == "" {
-		return fmt.Errorf("Unknown tab: %s", id)
+		return fmt.Errorf("no tab %s", id)
 	}
 	data, err := s.cardData(card)
 	if err != nil {
