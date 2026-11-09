@@ -5,27 +5,25 @@ import { orderNames } from "@soksak/window-check/order-names.mjs";
 
 const LINE = /^info workbench workbench: host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
 
-/** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name,
- * and the configuration directory of each host, which holds the project root of the start values, by one name. */
-export function transcript(lines) {
-  const ordered = orderNames();
-  const same = (text) => ordered(
-    Object.values(APPS).reduce((result, app) => result.replaceAll(app.configDir, "<config-dir>"), text)
-      .replace(/"ticket":\d+,/g, ""));
-  const calls = new Map();
-  for (const line of lines) {
-    const found = LINE.exec(line);
-    if (!found) continue;
-    const [, name, request, answer] = found;
-    if (!calls.has(name)) calls.set(name, []);
-    calls.get(name).push({ request: same(request), answer: same(answer) });
-  }
-  return calls;
-}
-
 /** The id that differs per window replaced by the order name, and the configuration directory of each host by one name. */
 const sameText = (ordered) => (text) => ordered(
   Object.values(APPS).reduce((result, app) => result.replaceAll(app.configDir, "<config-dir>"), text));
+
+/** The host calls of the transcript lines in their order, each as its name, request and answer. */
+const calls = (lines) => lines.map((line) => LINE.exec(line)).filter(Boolean)
+  .map(([, name, request, answer]) => ({ name, request, answer }));
+
+/** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name,
+ * the configuration directory of each host, which holds the project root of the start values, by one name, and the ticket is left out. */
+export function transcript(lines) {
+  const same = sameText(orderNames());
+  const byName = new Map();
+  for (const { name, request, answer } of calls(lines)) {
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push({ request: same(request.replace(/"ticket":\d+,/g, "")), answer: same(answer) });
+  }
+  return byName;
+}
 
 /**
  * The layouts that the transcript settled, in their order: for each presentation with settled true, the layout of the preparation that
@@ -33,22 +31,20 @@ const sameText = (ordered) => (text) => ordered(
  * synchronization (docs/spec/native-surfaces.md), so a settled layout is the preparation before a settled presentation, with settled
  * true. A view sends its start values with the first preparation after they changed, which can be the settled one or an earlier one,
  * so the layout leaves out the start values of its surfaces and their declaration table, as the layout of the page does
- * (surfaceSyncRequestWithDeclarationTable).
+ * (surfaceSyncRequestWithDeclarationTable). followed tells that a preparation came after the presentation: the layout moved on.
  */
 export function settledLayouts(lines) {
   const same = sameText(orderNames());
   const layouts = [];
   let prepared;
-  for (const line of lines) {
-    const found = LINE.exec(line);
-    if (!found) continue;
-    const [, name, request, answer] = found;
+  for (const { name, request, answer } of calls(lines)) {
     if (name === "syncSurfaces") {
       prepared = JSON.parse(request);
+      if (layouts.length) layouts.at(-1).followed = true;
     } else if (name === "presentSurfaces" && JSON.parse(request).settled === true && prepared) {
       const { declarations: _table, ...rest } = prepared;
       const layout = { ...rest, settled: true, surfaces: prepared.surfaces.map(({ start: _start, ...item }) => item) };
-      layouts.push({ layout, request: same(JSON.stringify(layout)), answer: same(answer) });
+      layouts.push({ layout, request: same(JSON.stringify(layout)), answer: same(answer), followed: false });
     }
   }
   return layouts;
@@ -66,12 +62,18 @@ export const settledX = (lines) => settledLayouts(lines).map(({ layout }) => lay
 /** Orders surface frames by position: the drawing order of host.window and the order of a layout request are unrelated. */
 export const byPosition = (a, b) => a.y - b.y || a.x - b.x;
 
+/** The frames of the visible surfaces of a settled layout, by position. */
+const framesOf = (settledLayout) => settledLayout && settledLayout.layout.surfaces.filter((surface) => surface.visible)
+  .map(({ x, y, w, h }) => ({ x, y, width: w, height: h })).sort(byPosition);
+
 /** Every surface frame that is visible in the last layout that the transcript settled. */
-export const settledFrames = (lines) => {
+export const settledFrames = (lines) => framesOf(settledLayouts(lines).at(-1));
+
+/** The frames of the last settled layout when no preparation followed its presentation, and undefined otherwise. */
+export const restingFrames = (lines) => {
   const last = settledLayouts(lines).at(-1);
-  return last && last.layout.surfaces.filter((surface) => surface.visible)
-    .map(({ x, y, w, h }) => ({ x, y, width: w, height: h })).sort(byPosition);
+  return last && !last.followed ? framesOf(last) : undefined;
 };
 
-/** The line that says the page displayed the settled layout. */
-export const settled = (lines) => lines.some((line) => /^info workbench workbench: host presentSurfaces .*"settled":true.* ->/.test(line));
+/** Whether the page presented a preparation of the transcript as settled. */
+export const settled = (lines) => settledLayouts(lines).length > 0;

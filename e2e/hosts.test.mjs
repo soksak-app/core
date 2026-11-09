@@ -7,7 +7,7 @@ import test from "node:test";
 import { APPS, MAIN_PAGE_APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { fresh, recordCatalog, settingsShown } from "./fixture.mjs";
 import { publicHostState, comparePublicHostStates } from "./host-public-parity.mjs";
-import { atRest, byPosition, settled, settledFrames, settledX, transcript } from "./host-transcript.mjs";
+import { atRest, byPosition, restingFrames, settled, settledFrames, settledX, transcript } from "./host-transcript.mjs";
 import { orderNames } from "@soksak/window-check/order-names.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
@@ -73,13 +73,9 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
     // before the drag.
     try {
       await dragLog.until((lines) => {
-        const actualFrames = settledFrames(lines);
-        // A preparation after the last settled presentation moves the layout on, settled or not.
-        const lastSync = lines.findLastIndex((line) => /^info workbench workbench: host syncSurfaces /.test(line));
-        const lastPresent = lines.findLastIndex((line) => /^info workbench workbench: host presentSurfaces .*"settled":true.* ->/.test(line));
+        const actualFrames = restingFrames(lines);
         return actualFrames?.length === expectedFrames.length && actualFrames.every((frame, index) =>
-          ["x", "y", "width", "height"].every((key) => Math.abs(frame[key] - expectedFrames[index][key]) < 0.5)) &&
-          lastPresent > lastSync;
+          ["x", "y", "width", "height"].every((key) => Math.abs(frame[key] - expectedFrames[index][key]) < 0.5));
       }, "the drag did not end with a settled commit at its starting surface frames");
     } catch (error) {
       const now = await s.get("host.window");
