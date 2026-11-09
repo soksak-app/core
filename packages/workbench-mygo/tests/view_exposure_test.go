@@ -592,3 +592,39 @@ func TestTheRegistrationsOfAViewEndWithItsProcess(t *testing.T) {
 		t.Fatalf("the next document lists %v", listed)
 	}
 }
+
+func TestAViewCreatedAgainPlacesAboveTheRevisionsOfItsSurface(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	place := map[string]any{"regions": []any{}, "overlays": []any{}}
+	r.call(surface, "composition.place", place)
+	r.call(surface, "composition.place", place)
+	r.f.shell.Event("view-process-ended", []any{map[string]any{"surface": surface, "generation": 1}})
+	r.f.settle()
+	r.f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 2, "id": 31,
+		"command": "composition.place", "params": place}})
+	r.f.settle()
+	reply := r.stored.replies[len(r.stored.replies)-1]
+	if reply["id"] != float64(31) || reply["generation"] != float64(2) || reply["error"] != nil {
+		t.Fatalf("the view created again could not place: %v", reply)
+	}
+	var revisions []float64
+	r.stored.hostNameMu.Lock()
+	defer r.stored.hostNameMu.Unlock()
+	for _, call := range r.stored.hostName {
+		argument, ok := strings.CutPrefix(call, "compositionPlace ")
+		if !ok {
+			continue
+		}
+		var request struct {
+			Revision float64 `json:"revision"`
+		}
+		if err := json.Unmarshal([]byte(argument), &request); err != nil {
+			t.Fatal(err)
+		}
+		revisions = append(revisions, request.Revision)
+	}
+	if !reflect.DeepEqual(revisions, []float64{1, 2, 3}) {
+		t.Fatalf("the surface placed the revisions %v", revisions)
+	}
+}

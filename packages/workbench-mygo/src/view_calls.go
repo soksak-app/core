@@ -45,7 +45,6 @@ type viewState struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	generation uint64
-	revision   uint64
 	pending    map[uint64]*viewPending
 	// events holds the native events that the view subscribed to. failures holds the sessions that it follows.
 	events   map[string]bool
@@ -394,8 +393,11 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if fields.Regions == nil || fields.Overlays == nil {
 			return fmt.Errorf("view call %s requires the arrays regions and overlays", call.Command)
 		}
-		view.revision++
-		s.surfaceCall(call, "compositionPlace", map[string]any{"revision": view.revision, "regions": fields.Regions, "overlays": fields.Overlays}, answer)
+		// The host keeps the last revision of a surface while the surface lives, so a view created again after its process ended
+		// places above the revisions of the view before it: the workbench numbers every placement with one increasing number, as the
+		// main page of its document does (docs/spec/surface-composition.md#revisions-and-atomicity).
+		s.surfaces.compositionRevision++
+		s.surfaceCall(call, "compositionPlace", map[string]any{"revision": s.surfaces.compositionRevision, "regions": fields.Regions, "overlays": fields.Overlays}, answer)
 	case "composition.report":
 		line, err := text()
 		if err != nil {
