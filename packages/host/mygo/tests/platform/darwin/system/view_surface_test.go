@@ -437,7 +437,13 @@ func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
 	support.Wait(t, "the first start of the workbench", func() bool { return session.workbench.count("shown "+name) > 0 })
 	builds, starts := session.workbench.count("build "+name), session.workbench.count("shown "+name)
 	session.layout(t, viewSurface("reloaded", true))
-	process := session.row(t, "reloaded").Process
+	// The process of a view page starts after its layout, so the test waits for it: a process read as 0 would leave the end
+	// below unmeasured.
+	var row viewRow
+	support.Wait(t, "the process of the view", func() bool {
+		row = session.row(t, "reloaded")
+		return row.Process != 0
+	})
 	session.window.Emit("page-reload")
 	support.Wait(t, "the second start of the workbench", func() bool { return session.workbench.count("shown "+name) == starts+1 })
 	if got := session.workbench.count("build " + name); got != builds+1 {
@@ -446,8 +452,15 @@ func TestE2EAReloadRequestStartsTheWorkbenchAgain(t *testing.T) {
 	if got := session.workbench.count("close " + name); got == 0 {
 		t.Fatal("the previous workbench did not close")
 	}
+	// The start closed the view page and took its element, so neither a frame nor the native view of the window holds it.
+	if _, ok := host.ElementOf(session.host, session.window, "reloaded"); ok {
+		t.Fatal("the surface keeps its element after the reload")
+	}
+	if slices.ContainsFunc(session.rows(t), func(other viewRow) bool { return other.View == row.View }) {
+		t.Fatal("the view page of the previous workbench is still in the native view of the window")
+	}
 	support.Wait(t, "the end of the view of the previous workbench", func() bool {
-		return process == 0 || errors.Is(syscall.Kill(int(process), 0), syscall.ESRCH)
+		return errors.Is(syscall.Kill(int(row.Process), 0), syscall.ESRCH)
 	})
 }
 
