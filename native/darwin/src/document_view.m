@@ -1298,16 +1298,21 @@ static BOOL sameDocument(WKNavigationAction *action, NSURL *current) {
 // Converts the insets to AppKit point coordinates of the surface view. A CSS pixel is larger than a point by the text
 // scale
 // (page zoom), and the backing scale applies only to the WebKit raster. WebKit lays out and paints the whole points of
-// the frame of a web view (it truncates the bounds to an integer size), so the region takes the whole points inside its
-// insets: the right and bottom edges move inward to the edge of its page, and no row of the region shows the backing of
-// the web view.
+// the frame of a web view (it truncates the bounds to an integer size), so a document region takes the whole points inside
+// its insets: the right and bottom edges move inward to the edge of its page, and no row of the region shows the backing of
+// the web view. A view web view is the root of its surface and keeps the native frame of the surface, so the last device
+// pixel row of the surface takes its input (docs/spec/surface-composition.md).
 - (void)applyInsets {
     NSView *surface = self.webSurface;
     if (!surface) return;
     NSRect bounds = self.superview.bounds;
     NSEdgeInsets insets = self.insets;
-    CGFloat width = floor(NSWidth(bounds) - (insets.left + insets.right));
-    CGFloat height = floor(NSHeight(bounds) - (insets.top + insets.bottom));
+    CGFloat width = NSWidth(bounds) - (insets.left + insets.right);
+    CGFloat height = NSHeight(bounds) - (insets.top + insets.bottom);
+    if (!self.pluginRootView) {
+        width = floor(width);
+        height = floor(height);
+    }
     CGFloat top = insets.top;
     CGFloat y = surface.isFlipped ? top : NSHeight(bounds) - top - height;
     self.frame = NSMakeRect(insets.left, y, MAX(width, 0), MAX(height, 0));
