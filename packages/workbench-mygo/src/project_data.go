@@ -227,13 +227,73 @@ func sameData(one, other json.RawMessage) (bool, error) {
 // write of another window reaches this window through the store.
 func (s *Shell) workspaceChanged() {
 	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
-		if err == nil {
-			err = s.compareData(value)
-		}
 		if err != nil {
 			s.fail(fmt.Errorf("workspace changed: %w", err))
+			return
+		}
+		if err := s.compareData(value); err != nil {
+			s.fail(fmt.Errorf("workspace changed: %w", err))
+		}
+		// The registry and the settings of the page each listen to the change and report their errors apart (connectSettings of
+		// packages/workbench/settings.js), so a refused setting does not stop the projects and the reverse.
+		if err := s.refreshSettings(value); err != nil {
+			s.fail(err)
 		}
 	})
+}
+
+// refreshSettings takes the common settings and the overrides of the shown project of a workspace snapshot, as refresh of
+// packages/workbench/settings.js: a window that writes its settings reads nothing until the host answered every write, the
+// settings file of the shown project that the host refuses is reported and the applied settings stay (docs/spec/projects.md#settings),
+// values that the window refuses leave the applied settings, and only changed values are applied.
+func (s *Shell) refreshSettings(value any) error {
+	if s.settings.saving > 0 {
+		return nil
+	}
+	snapshot, err := decode[struct {
+		Common   map[string]any    `json:"common"`
+		Projects []json.RawMessage `json:"projects"`
+	}](value)
+	if err != nil {
+		return err
+	}
+	var overrides map[string]any
+	if id := s.settings.Project(); id != "" {
+		for _, raw := range snapshot.Projects {
+			project, err := readProject(raw)
+			if err != nil {
+				return err
+			}
+			if project.ID != id {
+				continue
+			}
+			var refused *string
+			if err := member(project.Rest, "settingsError", &refused); err != nil {
+				return err
+			}
+			if refused != nil {
+				return errors.New(*refused)
+			}
+			if err := member(project.Rest, "settings", &overrides); err != nil {
+				return err
+			}
+		}
+	}
+	common, overrides := orEmpty(snapshot.Common), orEmpty(overrides)
+	if err := s.settings.Check(common, overrides); err != nil {
+		return err
+	}
+	if reflect.DeepEqual(common, s.settings.common) && reflect.DeepEqual(overrides, s.settings.overrides) {
+		return nil
+	}
+	if err := s.settings.Begin(common, overrides, s.settings.Project()); err != nil {
+		return err
+	}
+	if err := s.followDiagnostics(); err != nil {
+		return err
+	}
+	s.options.Invalidate()
+	return s.applySettings()
 }
 
 // compareData takes the projects of a workspace snapshot: a project that another window removed leaves this window as readProjects of

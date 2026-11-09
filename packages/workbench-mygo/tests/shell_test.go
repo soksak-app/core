@@ -22,6 +22,19 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
+// storedSettings is the stored settings values after a write that patches patch and removes remove.
+func storedSettings(values, patch map[string]any, remove []string) map[string]any {
+	stored := maps.Clone(values)
+	if stored == nil {
+		stored = map[string]any{}
+	}
+	maps.Copy(stored, patch)
+	for _, key := range remove {
+		delete(stored, key)
+	}
+	return stored
+}
+
 // storedHost answers the host calls of the shell from memory, as the workspace store of the language host library does.
 type storedHost struct {
 	folderSettings map[string]map[string]any // The settings files of the folders, by root.
@@ -473,6 +486,17 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		return snapshot, nil
 	case "settings":
 		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
+		// The host stores the write, so the next snapshot holds it: the common settings, or the settings file of the folder of the
+		// project.
+		if request.ID == "" {
+			h.common = storedSettings(h.common, request.Patch, request.Remove)
+		} else if project := h.project(request.ID); project != nil {
+			root := project["root"].(string)
+			if h.folderSettings == nil {
+				h.folderSettings = map[string]map[string]any{}
+			}
+			h.folderSettings[root] = storedSettings(h.folderSettings[root], request.Patch, request.Remove)
+		}
 		return nil, nil
 	case "tabState", "tabSession":
 		return nil, nil
