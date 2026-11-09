@@ -440,15 +440,20 @@ func (s *Sidebars) CardFrame(set *SidebarSet, space, side string, owner FocusedS
 	return frame
 }
 
-// Hide keeps the section surfaces of a folded sidebar known, which are not visible.
+// Hide draws the frame of a folded side without a place, and keeps its section surfaces known, which are not visible.
 func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
-	if s.options.Seat == nil {
-		return
-	}
-	for _, seat := range SidebarSeats(frame) {
-		seat.Visible = false
-		s.options.Seat(c, seat)
-	}
+	HideSidebar(c, s.options.Binder, frame, func(c *ui.Context, seat SidebarSeat) {
+		if s.options.Seat != nil {
+			s.options.Seat(c, seat)
+		}
+	})
+}
+
+// drawnMetrics are the metrics of the frame with the line width and the caption size of the window.
+func (s *Sidebars) drawnMetrics() SidebarMetrics {
+	metrics := s.metrics
+	metrics.BorderWidth, metrics.StatusText = s.options.Look()
+	return metrics
 }
 
 // windowSurfaces returns the ids of the section surfaces of the fixed sidebars of the space: every set of sets that a link of links gives
@@ -538,9 +543,7 @@ func (s *Sidebars) Draw(c *ui.Context, frame SidebarFrame, box layout.Rect) {
 	if s.options.Rail != nil {
 		frame.Rail = s.options.Rail()
 	}
-	metrics := s.metrics
-	metrics.BorderWidth, metrics.StatusText = s.options.Look()
-	DrawSidebar(c, s.options.Binder, drag, frame, metrics, float32(box.W), float32(box.H), func(c *ui.Context, seat SidebarSeat) {
+	DrawSidebar(c, s.options.Binder, drag, frame, s.drawnMetrics(), float32(box.W), float32(box.H), func(c *ui.Context, seat SidebarSeat) {
 		if s.options.Seat == nil {
 			return
 		}

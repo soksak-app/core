@@ -295,6 +295,95 @@ func TestTheSeatOfASectionIsItsBody(t *testing.T) {
 	}
 }
 
+// seatNode is the element of the frame whose key is the surface id of a seat.
+func seatNode(nodes []ui.ElementNode, id string) (ui.ElementNode, bool) {
+	for _, node := range nodes {
+		if node.Key == id {
+			return node, true
+		}
+		if found, ok := seatNode(node.Children, id); ok {
+			return found, true
+		}
+	}
+	return ui.ElementNode{}, false
+}
+
+// The seat of a section names the place of its body, which the insets of a set move, so the native view of the section stands on
+// the body that the frame draws.
+func TestASeatStandsOnItsBodyInsideTheInsetsOfTheSet(t *testing.T) {
+	for _, orientation := range []string{"vertical", "horizontal"} {
+		frame := listFrame()
+		frame.Orientation = orientation
+		frame.SetInsets.Left, frame.SetInsets.Top = 7, 7
+		binder := recorder(t, new([]call), sidebarCommands...)
+		places := map[string][2]float64{}
+		tt := ui.NewTester(func(c *ui.Context) {
+			workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(_ *ui.Context, seat workbench.SidebarSeat) {
+				if seat.Visible {
+					places[seat.SurfaceID] = [2]float64{seat.Box.X, seat.Box.Y}
+				}
+			})
+		}, 240, 400)
+		if len(places) != len(frame.Sections) {
+			t.Fatalf("%s: the seats %v", orientation, places)
+		}
+		for id, place := range places {
+			body, ok := seatNode(tt.ElementTree(), id)
+			if !ok {
+				t.Fatalf("%s: no body of %s", orientation, id)
+			}
+			if float32(place[0]) != body.Bounds.X || float32(place[1]) != body.Bounds.Y {
+				t.Fatalf("%s: the seat of %s stands at %v and its body at %+v", orientation, id, place, body.Bounds)
+			}
+		}
+	}
+}
+
+// A folded side keeps its set as the page keeps it under display:none: each section stays an element without a place, so the
+// section elements of the sidebars follow the order of their sections, and every section keeps its seat without a body.
+func TestAFoldedSidebarKeepsItsSectionsWithoutAPlace(t *testing.T) {
+	for _, set := range []string{"list", "tabs"} {
+		frame := listFrame()
+		frame.Layout = set
+		if set == "tabs" {
+			frame.Tab = "fieldprobe.tree"
+		}
+		binder := recorder(t, new([]call), sidebarCommands...)
+		seats := map[string]bool{}
+		tt := ui.NewTester(func(c *ui.Context) {
+			workbench.HideSidebar(c, binder, frame, func(_ *ui.Context, seat workbench.SidebarSeat) {
+				seats[seat.SurfaceID] = seat.Visible
+			})
+		}, 240, 400)
+		element(t, tt, "core.sidebar", "left")
+		for _, section := range frame.Sections {
+			node := element(t, tt, "core.sidebar.section", "left/"+section.ID)
+			if node.Bounds.W != 0 || node.Bounds.H != 0 {
+				t.Fatalf("%s: the folded section %s has the place %+v", set, section.ID, node.Bounds)
+			}
+			if visible, ok := seats["spc-1/left/"+section.ID]; !ok || visible {
+				t.Fatalf("%s: the folded section %s keeps no hidden seat: %v", set, section.ID, seats)
+			}
+		}
+	}
+}
+
+// The section of an unselected tab stays an element without a place, as the page keeps it under display:none.
+func TestTheSectionOfAnUnselectedTabStaysWithoutAPlace(t *testing.T) {
+	frame := listFrame()
+	frame.Layout, frame.Tab = "tabs", "fieldprobe.tree"
+	binder := recorder(t, new([]call), sidebarCommands...)
+	tt := ui.NewTester(func(c *ui.Context) {
+		workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
+	}, 240, 400)
+	if shown := element(t, tt, "core.sidebar.section", "left/fieldprobe.tree").Bounds; shown.W == 0 || shown.H == 0 {
+		t.Fatalf("the selected section has no place: %+v", shown)
+	}
+	if unselected := element(t, tt, "core.sidebar.section", "left/git.log").Bounds; unselected.W != 0 || unselected.H != 0 {
+		t.Fatalf("the unselected section has the place %+v", unselected)
+	}
+}
+
 // bandColor is the color of a band with share of the text color over body.
 func bandColor(body color.RGBA, text ui.Color, share float32) color.RGBA {
 	mix := func(from, to uint8) uint8 { return uint8(float32(from)*(1-share) + float32(to)*share + 0.5) }
