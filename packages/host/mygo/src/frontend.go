@@ -421,12 +421,10 @@ func AwaitPresentation(name string, notice func(func(mygo.Presentation, error)) 
 // AfterPresentation is the presentation notice of the workbench: done runs after the frame of this step presented. In a layout
 // transaction the preparation held the frames of the window from its start, so the frame that this call asks for is the one frame of
 // the window in the transaction: the call releases the window and holds it again from inside that notice, so that no later frame
-// presents before the transaction ends. A preparation that took over the transaction that a frame of the window opened has that frame
-// for its frame once it presented in the transaction: the frame drew the lines that the preparation placed, and done runs at once
-// without asking for another, which could only present after the commit that waits for this notice, and the preparation places the
-// surfaces that it creates itself. A preparation that took over a transaction whose frame a preparation already asked for has no
-// frame: that frame holds its drawable until the commit, so another frame would wait for the commit that waits for this notice, and
-// done fails at once. A diagnostics recording holds the time of this call as the request of the frame of the transaction and the time
+// presents before the transaction ends. A preparation that took over a transaction whose frame already presented in it, the frame that
+// opened it or the frame that an earlier preparation asked for, has that frame for its frame: the window has held its frames since
+// that frame, so the frame drew the lines that the preparation placed, and done runs at once without asking for another, which could
+// only present after the commit that waits for this notice; the preparation places the surfaces that it creates itself. A diagnostics recording holds the time of this call as the request of the frame of the transaction and the time
 // of the notice as its presentation.
 func (f *Frontend) AfterPresentation(done func(err error)) error {
 	recorded := func() {}
@@ -438,13 +436,9 @@ func (f *Frontend) AfterPresentation(done func(err error)) error {
 		if capturer, ok := system.(platform.Capturer); ok {
 			recorded = capturer.LayoutTraceRequested()
 		}
-		if f.framed {
+		if f.framed || f.transacted {
 			recorded()
 			done(nil)
-			return nil
-		}
-		if f.transacted {
-			done(errTransactionPresented)
 			return nil
 		}
 		f.release()
@@ -458,9 +452,6 @@ func (f *Frontend) AfterPresentation(done func(err error)) error {
 		done(err)
 	})
 }
-
-// errTransactionPresented is the failure of the notice of a preparation that took over a transaction whose frame already presented.
-var errTransactionPresented = errors.New("the frame of the transaction already presented; another frame would wait for the commit")
 
 // opensLayout reports whether the layout transaction that owner starts opens in the frame being built of the window: the view of the
 // window runs, which opens the layout of its frame (OpenLayout), and nothing holds the frames of the window.
