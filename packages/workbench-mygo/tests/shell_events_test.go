@@ -170,23 +170,55 @@ func flushProjects(t *testing.T, f *tabShell, stored *storedHost) ([]string, err
 //	the spaces are the ones stored last         -> no write
 //	the store refused the last write            -> the next flush writes the spaces again
 //	the geometry is the one stored last         -> no write
+//	a write of the store is pending             -> the answer after that write
 //
-// The host reloads the window after the answer of this command, so the answer comes when the store holds what the window held.
+// The page keeps the drawn layout after each settled render (onRender of packages/workbench/index.html), so the choices of the
+// sidebars that an opened project draws are stored before any flush, and a flush after the open has nothing to write.
+func TestTheDrawnSidebarsOfAnOpenedProjectAreStoredBeforeAFlush(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	spaces, err := json.Marshal(stored.projects[0]["spaces"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(spaces), `"sidebars":{"left":{"folded":[],"tab":null}}`) {
+		t.Fatalf("the store holds the spaces %s", spaces)
+	}
+	stored.calls = nil
+	taken, failure := flushProjects(t, f, stored)
+	if failure != nil || len(taken) > 0 {
+		t.Fatalf("the flush after the open answered %v after the workspace calls %v", failure, taken)
+	}
+	if !slices.Contains(stored.calls, "windowState") {
+		t.Fatalf("the flush did not read the geometry: %v", stored.calls)
+	}
+}
+
+// The host reloads the window after the answer of this command, so the answer comes when the store holds what the window held: after
+// the write that the store has not answered, as the page awaits its pending write.
 func TestTheFlushOfTheProjectsAnswersWhenTheStoreHoldsThem(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
 	f := newTabShell(t, stored)
 	f.open(t)
-	stored.calls = nil
-	taken, failure := flushProjects(t, f, stored)
-	if failure != nil {
-		t.Fatal(failure)
+	release := make(chan struct{})
+	stored.holdWorkspace = release
+	f.shell.Registry().RunLater("core.space.add", json.RawMessage(`{}`), func(any, error) {})
+	answered := false
+	f.shell.Registry().RunLater("core.projects.flush", json.RawMessage(`{}`), func(_ any, err error) {
+		if err != nil {
+			t.Error(err)
+		}
+		answered = true
+	})
+	f.settle()
+	if answered {
+		t.Fatal("the flush answered before the store took the pending write")
 	}
-	// The drawn sidebars are a change of the spaces that the store does not hold yet.
-	if !slices.Equal(taken, []string{"patch activeSpaceId named spaces"}) {
-		t.Fatalf("the flush took the workspace calls %v", taken)
-	}
-	if !slices.Contains(stored.calls, "windowState") {
-		t.Fatalf("the flush did not read the geometry: %v", stored.calls)
+	close(release)
+	f.settle()
+	if !answered {
+		t.Fatal("the flush did not answer after the pending write")
 	}
 }
 
@@ -214,13 +246,20 @@ func TestAFlushOfStoredProjectsTakesNoWorkspaceCall(t *testing.T) {
 	}
 }
 
-// The reload that follows a flush would lose what did not reach the store, so the host hears of a store that failed, and the next
-// flush writes the refused spaces again.
+// The reload that follows a flush would lose what did not reach the store, so the host hears of a store that failed. A refused write
+// leaves the spaces unstored, so the next flush writes them again, as keep of the page clears savedLayout.
 func TestAFlushOfTheProjectsAnswersAStoreThatFailed(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
 	f := newTabShell(t, stored)
 	f.open(t)
 	stored.failing = map[string]error{"workspace": errors.New("the disk is full")}
+	f.shell.Registry().RunLater("core.space.add", json.RawMessage(`{}`), func(any, error) {})
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.pending.drain(t)
+	if shown := f.shownErrors(); !slices.ContainsFunc(shown, func(text string) bool { return strings.Contains(text, "the disk is full") }) {
+		t.Fatalf("the refused space showed %q", shown)
+	}
 	_, failure := flushProjects(t, f, stored)
 	if failure == nil || !strings.Contains(failure.Error(), "the disk is full") {
 		t.Fatalf("the flush answered %v", failure)
