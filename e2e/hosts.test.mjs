@@ -7,56 +7,13 @@ import test from "node:test";
 import { APPS, MAIN_PAGE_APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { fresh, recordCatalog, settingsShown } from "./fixture.mjs";
 import { publicHostState, comparePublicHostStates } from "./host-public-parity.mjs";
+import { atRest, byPosition, restingFrames, settled, settledFrames, settledX, transcript } from "./host-transcript.mjs";
 import { orderNames } from "@soksak/window-check/order-names.mjs";
 import { textDifference } from "@soksak/window-check/text-difference.mjs";
 
 const PLAN = { axis: "x", line: 2, dx: -120, dy: 0, ms: 48, times: 2 };
 
-const LINE = /^info workbench workbench: host (\w+) (\{.*\}|\[.*\]|null) -> (.*)$/;
-
-/** Arranges the transcript lines into a list of requests and replies per call name. The id that differs per window is replaced by the order name,
- * and the configuration directory of each host, which holds the project root of the start values, by one name. */
-function transcript(lines) {
-  const ordered = orderNames();
-  const same = (text) => ordered(
-    Object.values(APPS).reduce((result, app) => result.replaceAll(app.configDir, "<config-dir>"), text)
-      .replace(/"ticket":\d+,/g, ""));
-  const calls = new Map();
-  for (const line of lines) {
-    const found = LINE.exec(line);
-    if (!found) continue;
-    const [, name, request, answer] = found;
-    if (!calls.has(name)) calls.set(name, []);
-    calls.get(name).push({ request: same(request), answer: same(answer) });
-  }
-  return calls;
-}
-
-const atRest = (calls) => {
-  const prepared = [...(calls.get("syncSurfaces") ?? [])].reverse().find((c) => /"settled":true/.test(c.request));
-  const presented = [...(calls.get("presentSurfaces") ?? [])].reverse().find((c) => /"settled":true/.test(c.request));
-  return prepared && presented && { request: prepared.request, answer: presented.answer };
-};
-
 const SIZE = { width: 1000, height: 620 };
-
-/** The x of the first surface for each layout request that the transcript settled. */
-const settledX = (lines) => (transcript(lines).get("syncSurfaces") ?? [])
-  .filter((call) => /"settled":true/.test(call.request)).map((call) => JSON.parse(call.request).surfaces[0]?.x);
-
-/** Orders surface frames by position: the drawing order of host.window and the order of a layout request are unrelated. */
-const byPosition = (a, b) => a.y - b.y || a.x - b.x;
-
-/** Every surface frame that is visible and settled in the last layout request. */
-const settledFrames = (lines) => {
-  const call = [...(transcript(lines).get("syncSurfaces") ?? [])].reverse()
-    .find((entry) => /"settled":true/.test(entry.request));
-  return call && JSON.parse(call.request).surfaces.filter((surface) => surface.visible)
-    .map(({ x, y, w, h }) => ({ x, y, width: w, height: h })).sort(byPosition);
-};
-
-/** The line that says the page displayed the settled layout. */
-const settled = (lines) => lines.some((line) => /^info workbench workbench: host presentSurfaces .*"settled":true.* ->/.test(line));
 
 /** Records the content size and the layout input when the host results are compared. */
 async function layoutState(s) {
@@ -116,12 +73,9 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
     // before the drag.
     try {
       await dragLog.until((lines) => {
-        const actualFrames = settledFrames(lines);
-        const lastSync = lines.findLastIndex((line) => /^info workbench workbench: host syncSurfaces .*"settled":true/.test(line));
-        const lastPresent = lines.findLastIndex((line) => /^info workbench workbench: host presentSurfaces .*"settled":true.* ->/.test(line));
+        const actualFrames = restingFrames(lines);
         return actualFrames?.length === expectedFrames.length && actualFrames.every((frame, index) =>
-          ["x", "y", "width", "height"].every((key) => Math.abs(frame[key] - expectedFrames[index][key]) < 0.5)) &&
-          lastPresent > lastSync;
+          ["x", "y", "width", "height"].every((key) => Math.abs(frame[key] - expectedFrames[index][key]) < 0.5));
       }, "the drag did not end with a settled commit at its starting surface frames");
     } catch (error) {
       const now = await s.get("host.window");
@@ -145,7 +99,7 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
   }
 
   const { baseline, others } = comparison(sessions);
-  const rested = Object.fromEntries(Object.keys(sessions).map((name) => [name, atRest(transcript(dragged[name]))]));
+  const rested = Object.fromEntries(Object.keys(sessions).map((name) => [name, atRest(dragged[name])]));
   for (const [name, found] of Object.entries(rested)) {
     assert.ok(found, `${name} recorded no settled commit:\n${dragged[name].join("\n")}`);
   }
@@ -200,7 +154,7 @@ if (requiresAll(process.env)) test("every host lays out the same page the same w
     await s.until("core.window.workbench", (workbench) => workbench.width === SIZE.width && workbench.height === SIZE.height,
       "the workbench did not take the new size");
     const lines = await log.until(settled, "the resize did not end with a settled commit").then(() => log.stop());
-    const found = atRest(transcript(lines));
+    const found = atRest(lines);
     assert.ok(found, `${name} recorded no settled commit after the resize:\n${lines.join("\n")}`);
     rested[name] = found;
   }

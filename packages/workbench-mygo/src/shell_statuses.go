@@ -224,6 +224,10 @@ func (s *Shell) gridState() (any, error) {
 				return nil, fmt.Errorf("card %s: %w", card.ID, err)
 			}
 		}
+		// A fixed sidebar of the window has no card data, and its status line describes the slot.
+		if s.sidebars.Holds(card.ID) {
+			entry.Status = s.sidebars.Status(card.ID, s.focusedSurface())
+		}
 		if entry.Acts != nil {
 			index := pane
 			entry.Pane = &index
