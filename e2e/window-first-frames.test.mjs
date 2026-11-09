@@ -10,7 +10,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { cardPoint, fullSize, inWindow, LOGO, sample, undrawn } from "./screen-drawn.mjs";
 
@@ -92,6 +92,10 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a new window shows its complete first screen from its first frame`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
+    // The check windows overlap and can cover this one whole. A new window of an inactive application shows right above the
+    // frontmost window of the application (native/darwin/src/window_reveal.m), so under the same cover, where the display
+    // recording cannot see it appear.
+    await uncoverFromCheckWindows(t, s);
     closeOthers(s, "new window");
     await firstFrames(t, s, "new window", () => s.run("core.window.new"), async (child) => {
       await child.until("core.screen", (value) => value.screen === "library", "the new window did not show the library");
@@ -102,6 +106,10 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a project window shows its complete first screen from its first frame`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
+    // The check windows overlap and can cover this one whole. A new window of an inactive application shows right above the
+    // frontmost window of the application (native/darwin/src/window_reveal.m), so under the same cover, where the display
+    // recording cannot see it appear.
+    await uncoverFromCheckWindows(t, s);
     await keepCommonSettings(s);
     const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-first-frames-")));
     const root = join(temporary, "project");
