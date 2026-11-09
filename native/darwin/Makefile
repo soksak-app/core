@@ -410,6 +410,7 @@ NATIVE_TESTS = observe_test \
   window_facts_blur_test \
   document_binary_test \
   document_surface_lifetime_test \
+  document_hidden_keyboard_release_test \
   document_typing_test \
   document_press_test \
   image_nonce_ownership_test \
