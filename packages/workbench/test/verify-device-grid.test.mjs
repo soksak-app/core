@@ -51,6 +51,25 @@ test("V7b accepts the applied rectangle of a prediction on thirds of a point", a
   assert.equal(v7b.ok, true, v7b.note);
 });
 
+test("V7b compares the applied rectangle with its declared one in whole device pixels", async (t) => {
+  // The host fits the declared rectangle of the tauriv2 run in window coordinates, 83 points below the plane, and answers it in plane
+  // coordinates: the same device pixels, whose height reads 413.0000000000001 instead of 413 after the subtraction.
+  const declared = { x: 203, y: 553.66, w: 1360, h: 413.33 };
+  const top = Math.ceil((83 + declared.y) * 3) / 3;
+  const bottom = Math.floor((83 + declared.y + declared.h) * 3) / 3;
+  const applied = { x: 203, y: top - 83, w: 1360, h: bottom - top };
+  assert.notEqual(applied.h, 413, "the applied height carries the remainder of the window coordinates");
+  const { v7b } = await verifyThirds(t, declared, applied);
+  assert.equal(v7b.ok, true, v7b.note);
+});
+
+test("V7b names an applied rectangle one device pixel off its declared one", async (t) => {
+  const declared = { x: 203, y: 553.66, w: 1360, h: 413.33 };
+  const { v7b } = await verifyThirds(t, declared, { x: 203, y: 1662 / 3, w: 1360, h: 413 - 1 / 3 });
+  assert.equal(v7b.ok, false);
+  assert.match(v7b.note, /차이 0\.33px/);
+});
+
 test("V7c names a surface drawn one device pixel lower than its prediction", async (t) => {
   const { v7c } = await verifyThirds(t, { ...thirds, y: thirds.y - 1 / 3 }, { x: 203, y: 1161 / 3, w: 760, h: (1940 - 1161) / 3 });
   assert.equal(v7c.ok, false);
