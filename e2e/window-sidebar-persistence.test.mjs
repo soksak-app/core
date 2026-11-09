@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rmSync } from "node:fs";
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, joinedFailure } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 import { frames, readFrame, pixel } from "@soksak/window-check/frame.mjs";
 
@@ -260,11 +260,7 @@ for (const app of Object.values(APPS))
             errors.push(error);
           }
         }
-        if (errors.length)
-          throw new AggregateError(
-            errors,
-            `${label}: persistence recording failed: ${errors.map((error) => error.message).join("; ")}`,
-          );
+        if (errors.length) throw joinedFailure(`${label}: persistence recording failed`, errors);
         return result.grid;
       }
       const assigned = await phase("independent settings and widths", async () => {

@@ -11,7 +11,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { captureCadence, frames, readFrame } from "@soksak/window-check/frame.mjs";
-import { fresh } from "../fixture.mjs";
+import { fresh, joinedFailure } from "../fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
 import { addRasterTab, REGION } from "../raster-probe.mjs";
 
@@ -211,7 +211,7 @@ async function recordGesture(s, t, name, action) {
   } catch (error) {
     captureError = error;
   }
-  if (actionError && captureError) throw new AggregateError([actionError, captureError], `${name}: action and capture stop failed`);
+  if (actionError && captureError) throw joinedFailure(`${name}: action and capture stop failed`, [actionError, captureError]);
   if (captureError) throw captureError;
   let captureValidationError;
   try {
@@ -312,7 +312,7 @@ async function recordGesture(s, t, name, action) {
     captureValidationError = error;
   }
   if (actionError && captureValidationError) {
-    throw new AggregateError([actionError, captureValidationError], `${name}: action and capture validation failed`);
+    throw joinedFailure(`${name}: action and capture validation failed`, [actionError, captureValidationError]);
   }
   if (captureValidationError) throw captureValidationError;
   if (actionError) throw actionError;
