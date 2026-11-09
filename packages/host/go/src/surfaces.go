@@ -1084,6 +1084,11 @@ func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	done := make(chan applyResult, 1)
 	var began error
 	began = runSurfaceDispatch(mainThreadStep, win.Name(), &prepared.Ticket, "sync", "sync-layout-ui", func() error {
+		// The close of the window cancelled its layouts on this thread, and its page commits none after the close, so a layout that
+		// began now would stay open and hold the layouts and the frames of every other window.
+		if s.closed {
+			return errWindowClosed
+		}
 		for _, surface := range req.Surfaces {
 			if _, err := s.viewStartOf(surface); err != nil {
 				return err
