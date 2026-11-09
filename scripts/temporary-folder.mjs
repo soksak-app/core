@@ -7,9 +7,12 @@ import { join } from 'node:path';
 
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
 
-/** Creates a folder with the name prefix `prefix` in the temporary folder. `remove` removes it and its signal handlers. */
-export function temporaryFolder(prefix) {
-  const path = mkdtempSync(join(tmpdir(), prefix));
+/**
+ * Creates a folder with the name prefix `prefix` and mode 0700 in `parent`, by default the temporary folder. `remove` removes it and its
+ * signal handlers.
+ */
+export function temporaryFolder(prefix, parent = tmpdir()) {
+  const path = mkdtempSync(join(parent, prefix));
   const handlers = new Map();
   const remove = () => {
     for (const [signal, handler] of handlers) process.removeListener(signal, handler);

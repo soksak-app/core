@@ -87,7 +87,8 @@ func terminate() {
 func TestATerminationSignalAfterTheStartQuitsTheFramework(t *testing.T) {
 	directory := t.TempDir()
 	command := exec.Command(os.Args[0])
-	command.Env = append(os.Environ(), terminationStart+"="+directory)
+	// The start makes the socket folder `soksak` in the temporary folder of the child and keeps it, so the child gets a folder of the test.
+	command.Env = append(os.Environ(), terminationStart+"="+directory, "TMPDIR="+support.SocketParent(t))
 	output, err := command.Output()
 	if err == nil && string(output) == "quit requested\n" {
 		return

@@ -422,6 +422,8 @@ export function auditPrefixes(tracked) {
  */
 export const MAIN_THREAD_FREE = {
   sp_block_async_signals: "startup masks asynchronous signals on the calling native main thread before the framework starts; another thread is rejected and no AppKit state is accessed",
+  sp_termination_signals_record: "startup installs the recorder of the senders of the termination signals with sigaction, which any thread may call, and accesses no AppKit state",
+  sp_termination_signal_sender: "the routine of a termination signal reads the sender that the signal handler stored in a sig_atomic_t, which any thread reads, and accesses no AppKit state",
   hostInstallMainThread: "startup installs the framework dispatch pointers before the host starts, without calling a block or accessing AppKit",
   hostMainThreadInstalled: "startup reads the installed dispatch pointers without calling a block or accessing AppKit",
   "sp_event_*": "the event ring and its policy are atomic state that any thread writes and the host drains",

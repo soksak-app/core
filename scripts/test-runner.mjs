@@ -4,7 +4,7 @@
 // command that has no per-test limit, such as a build; no such limit is above 10 minutes. The exit limit (`exitLimitMs`) bounds only the
 // exit of a test file process after its tests ended, when no test runs.
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -34,6 +34,17 @@ export const STACK_LIMIT_MS = 10_000;
  * `SOKSAK_CONFIG_ROOT` when the runner has none. pnpm turns on the compile cache of node, which writes `node-compile-cache` to the
  * temporary folder; a test process keeps no cache beyond its end, so the cache is off.
  */
+/**
+ * The folder that holds the temporary folders of the processes of a run (docs/operations/examples.md#temporary-folders). The host tests
+ * place unix sockets in their temporary folder, and a socket path holds at most 103 bytes (`endpoint.socket.path-over-limit` of
+ * docs/spec/host-contract.md). The temporary folder of the user on macOS has 49 bytes, which leaves the sockets too little room, so on a
+ * unix system the folders lie in `/tmp`, with its symbolic links resolved so that the path a test resolves has the same length. Windows
+ * has no such limit and keeps its temporary folder.
+ */
+function processFolderRoot() {
+  return process.platform === 'win32' ? tmpdir() : realpathSync('/tmp');
+}
+
 function temporaryEnv() {
   return { SOKSAK_CONFIG_ROOT: process.env.SOKSAK_CONFIG_ROOT ?? tmpdir(), NODE_DISABLE_COMPILE_CACHE: '1' };
 }
@@ -461,13 +472,13 @@ export async function runTests(options) {
   };
   // The temporary folders of the processes of the run: one folder of the run, which is removed when the run ends or is ended by a signal
   // (temporary-folder.mjs), and in it a folder of each process, which the process receives as TMPDIR and which is removed when its group
-  // ended (endTemporary).
-  const temporary = temporaryFolder('soksak-test-run-');
+  // ended (endTemporary). Both have mode 0700.
+  const temporary = temporaryFolder('soksak-', processFolderRoot());
   let processes = 0;
   const processFolder = () => {
     processes += 1;
     const folder = join(temporary.path, String(processes));
-    mkdirSync(folder);
+    mkdirSync(folder, { mode: 0o700 });
     return folder;
   };
   const beat = setInterval(() => {
