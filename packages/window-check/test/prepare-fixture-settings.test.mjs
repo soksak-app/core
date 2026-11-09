@@ -61,7 +61,7 @@ test("the preparation of a check restores the settings that it changed when the 
   const settings = { "diagnostics.performance": true, "diagnostics.log": { call: "info" }, theme: "dark" };
   const session = fixture(settings);
   await prepareFixture(session, { settings: { theme: "light" }, performanceTrace: false });
-  assert.deepEqual(settings, { "diagnostics.performance": false, "diagnostics.log": {}, theme: "light" }, "the preparation did not change the settings");
+  assert.deepEqual(settings, { "diagnostics.performance": false, "diagnostics.log": { lifecycle: "info" }, theme: "light" }, "the preparation did not change the settings");
   for (const clean of session.cleanups.reverse()) await clean();
   assert.deepEqual(settings, { "diagnostics.performance": true, "diagnostics.log": { call: "info" }, theme: "dark" });
 });
@@ -82,7 +82,7 @@ test("the preparation refuses a check that reads a record which its declared pol
   const session = fixture(settings);
   await assert.rejects(prepareFixture(session, { log: { io: "info" }, reads: ["sidecar.vt.pty_read"], catalog: CATALOG, performanceTrace: false }),
     { message: "the check reads sidecar.vt.pty_read (class io, level debug), which the log policy " +
-      '{"lifecycle":"error","input":"error","call":"error","io":"info","frame":"error"} of the declaration of the check does not store' });
+      '{"lifecycle":"info","input":"error","call":"error","io":"info","frame":"error"} of the declaration of the check does not store' });
   assert.deepEqual(settings, { theme: "dark" }, "the preparation changed the settings before it refused the declaration");
 });
 
@@ -96,5 +96,16 @@ test("the preparation with the performance trace stores the class call at the le
   const settings = { theme: "dark" };
   const session = fixture(settings);
   await prepareFixture(session, { log: { io: "debug" }, reads: ["sidecar.vt.pty_read"], catalog: CATALOG, performanceTrace: true });
-  assert.deepEqual(settings["diagnostics.log"], { io: "debug", call: "debug" });
+  assert.deepEqual(settings["diagnostics.log"], { io: "debug", call: "debug", lifecycle: "info" });
+});
+
+// A failed check keeps the lifecycle of its processes: the sidecars write the open and the close of each session in the class
+// lifecycle at the level info, and without them a session that a view lost leaves no record of who closed it.
+test("the preparation stores the class lifecycle at least at the level info whatever the check declares", async () => {
+  const settings = {};
+  const session = fixture(settings);
+  await prepareFixture(session, { performanceTrace: false });
+  assert.deepEqual(settings["diagnostics.log"], { lifecycle: "info" }, "a check without a declaration stores no lifecycle below error");
+  await prepareFixture(session, { log: { lifecycle: "debug" }, performanceTrace: false });
+  assert.deepEqual(settings["diagnostics.log"], { lifecycle: "debug" }, "the preparation narrowed the lifecycle that the check declared");
 });
