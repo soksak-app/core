@@ -16,6 +16,8 @@ async function runDrag(t, options) {
   const stoppedIdentity = { manifest: join(frames, "frame-identities", "manifest.json"), status: "complete" };
   const s = {
     app: { name: "wailsv3" },
+    // The connection of the session, which holds the covered drawing of its windows (holdCovered).
+    client: { endpoint: { pid: 4242 } },
     get: async () => ({ active: false, occluded: false }),
     presented: async () => ({ displayed: 12 }),
     trackRecording() {},
