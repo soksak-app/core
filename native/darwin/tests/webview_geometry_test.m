@@ -381,6 +381,12 @@ static void verifyRegion(WKWebView *region, CGFloat scale, double width, double 
     NSDictionary *state = documentState(region, scale, width, height);
     check(state != nil, [NSString stringWithFormat:@"%@: the document region renders at scale %g with size %g x %g",
         when, scale, width, height]);
+    // WebKit lays out and paints the whole points of the region frame, so a frame with a fractional size leaves its last
+    // device pixel row to the backing of the web view. The region frame is the area that its page fills.
+    NSSize frame = region.frame.size;
+    check(frame.width == [state[@"width"] doubleValue] && frame.height == [state[@"height"] doubleValue],
+        [NSString stringWithFormat:@"%@: the document region frame %g x %g is the CSS viewport of its page (%@)",
+            when, frame.width, frame.height, state]);
 }
 
 static void droppedFiles(void *context, const char *json) {
@@ -764,6 +770,10 @@ int main(void) { @autoreleasepool {
     check(region != NULL, @"a document region is created in the surface");
     sp_document_place(region, 10, 20, 30, 40, true);
     verifyRegion(region, 2, 260, 140.5, @"at 2x");
+    // The region ends at the whole points of its page (window y 50 + 140), so the half point above its bottom inset
+    // (190.5) shows the view page and not the backing of the region web view.
+    check(webViewAtTopPoint(window, 180, 189.75) == region && webViewAtTopPoint(window, 180, 190.25) == page,
+        @"the half point that the whole points of the region leave above its bottom inset shows the view page");
     double overlay[5] = {50, 50, 50, 50, 1};
     webviewSetSurfaceOverlays(surface, overlay, 1);
     check(webViewAtTopPoint(window, 190, 130) == page,
