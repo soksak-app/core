@@ -78,6 +78,8 @@ type CardChrome struct {
 // VerifyInput is what the verification reads, in plane coordinates.
 type VerifyInput struct {
 	Grid *layout.Grid
+	// Order is the order of the window sidebars, the setting sidebarOrder.
+	Order []string
 	// Tabs is the number of tabs of a card.
 	Tabs func(card string) int
 	// Scale is the number of device pixels of a point, and CardRadius the corner radius of a card.
@@ -159,29 +161,8 @@ func expectedRailLoops(groups [][]layout.Rect, gap float64) int {
 	return loops
 }
 
-// isPlace tells whether id is a fixed window sidebar card.
-func isPlace(id string) bool { return id == "left" || id == "right" }
-
-// windowSidebarsPlaced checks the drawn width and the place of the window sidebars. The id of a sidebar is its side, so a side holds
-// one sidebar at most: it stands in the edge column of that side at full height and does not exceed the stored width.
-func windowSidebarsPlaced(grid *layout.Grid) bool {
-	columns, rows := len(grid.Lines("x"))-1, len(grid.Lines("y"))-1
-	rects := grid.Rects()
-	for _, card := range grid.Cards() {
-		if !isPlace(card.ID) {
-			continue
-		}
-		fits := card.Width == nil || rects[card.ID].W <= *card.Width+.5
-		edge := card.C0 == 0
-		if card.ID == "right" {
-			edge = card.C1 == columns
-		}
-		if !fits || !card.Fixed || card.R0 != 0 || card.R1 != rows || !edge {
-			return false
-		}
-	}
-	return true
-}
+// isPlace tells whether id is a fixed window sidebar card, whose id is the edge of the window.
+func isPlace(id string) bool { return layout.IsWindowEdge(id) }
 
 // surfaceComparison is what comparing a record with the drawn slots found.
 type surfaceComparison struct {
@@ -555,7 +536,7 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 	if places == 0 {
 		skip("P 자리는 카드다", "창 사이드바가 없다")
 	} else {
-		add("P 자리는 카드다", windowSidebarsPlaced(grid), fmt.Sprintf("%d개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이", places))
+		add("P 자리는 카드다", layout.WindowSidebarsPlaced(grid, in.Order), fmt.Sprintf("%d개 창 사이드바 · 순서대로 가장자리 · 앞선 변 사이의 범위 · 저장 크기 상한", places))
 	}
 
 	// W: the buttons stand at the vertical center of the first row. In full screen the window moves them out of the row, so there is

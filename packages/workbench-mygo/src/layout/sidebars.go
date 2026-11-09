@@ -560,3 +560,31 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 	}
 	return true, nil
 }
+
+// WindowSidebarsPlaced is whether the window sidebars stand where the order places them (docs/spec/external-sidebars.md#verification):
+// each is fixed, stands at the border line of its edge, reaches along the other axis between the sidebars of earlier edges of that
+// axis, and is drawn no larger on its axis than its saved size.
+func WindowSidebarsPlaced(g *Grid, order []string) bool {
+	present := map[string]bool{}
+	rects := g.Rects()
+	for _, card := range g.Cards() {
+		if !isWindowSidebar(card.ID) {
+			continue
+		}
+		present[card.ID] = true
+		saved, drawn := card.Width, rects[card.ID].W
+		if WindowAxis(card.ID) == "y" {
+			saved, drawn = card.Height, rects[card.ID].H
+		}
+		if saved != nil && drawn > *saved+.5 {
+			return false
+		}
+	}
+	docked := []string{}
+	for _, edge := range order {
+		if present[edge] {
+			docked = append(docked, edge)
+		}
+	}
+	return WindowSidebarsDocked(g, docked)
+}

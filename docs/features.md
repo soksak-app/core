@@ -1238,7 +1238,7 @@ Completed entries and their scoped evidence are historical records; follow-up it
   - [o] F714-3 — The stored sizes of the window sidebars: `{width}` for `left` and `right`, `{height}` for `top` and `bottom`, the refusal of a record of the other axis, and the refusal of an edge name as a content card ID in `environment.json` and in a stored layout.
   - [o] F714-4 — The settings `top`, `bottom` and `sidebarOrder` in the four copies of `workbench.json` and their checks in both workbenches.
   - [o] F714-5 — The dock of the window sidebars in the reverse of the order, closing every window sidebar and docking again when the edges or their arrangement differ, with the shared cases of `docs/spec/cases/layout/window-sidebars.json` in both workbenches.
-  - [ ] F714-6 — The plane check `P 자리는 카드다` computes the expected place of each window sidebar from the order.
+  - [o] F714-6 — The plane check `P 자리는 카드다` computes the expected place of each window sidebar from the order.
   - [ ] F714-7 — The sections of a top or bottom window sidebar use the horizontal orientation, and `core.sidebars`, `core.sidebar.status` and `core.rail` describe the four edges.
   - [ ] F714-8 — The settings window: four visibility switches, four general set selects and the order rows in 일반, four window selectors on a plugin page, and the corrected group texts, in both workbenches.
   - [ ] F714-9 — The chrome switches `core.chrome.top` and `core.chrome.bottom`, the tooltips 보이기, the button order without a fixed index, the width of the chrome controls and the fold control of every edge, in both workbenches.

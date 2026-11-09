@@ -1238,7 +1238,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F714-3 — 창 사이드바의 저장 크기: `left`와 `right`는 `{width}`, `top`과 `bottom`은 `{height}`, 다른 축 레코드의 거부, `environment.json`과 저장 배치에서 변 이름을 내용 카드 ID로 쓰는 것의 거부.
   - [o] F714-4 — `workbench.json` 네 사본의 설정 `top`, `bottom`, `sidebarOrder`와 두 workbench의 그 검사.
   - [o] F714-5 — 순서의 역순으로 창 사이드바를 dock하고, 변이나 그 배치가 다르면 모든 창 사이드바를 닫고 다시 dock한다. 두 workbench가 `docs/spec/cases/layout/window-sidebars.json` 공용 case를 실행한다.
-  - [ ] F714-6 — plane 검사 `P 자리는 카드다`가 순서에서 각 창 사이드바의 기대 자리를 계산한다.
+  - [o] F714-6 — plane 검사 `P 자리는 카드다`가 순서에서 각 창 사이드바의 기대 자리를 계산한다.
   - [ ] F714-7 — 위·아래 창 사이드바의 섹션은 가로 방향을 쓰고, `core.sidebars`, `core.sidebar.status`, `core.rail`이 네 변을 설명한다.
   - [ ] F714-8 — 설정 창: 일반의 표시 스위치 넷, 일반 세트 선택 넷, 순서 줄, 플러그인 페이지의 창 선택 넷, 고친 묶음 설명. 두 workbench 모두.
   - [ ] F714-9 — chrome 스위치 `core.chrome.top`, `core.chrome.bottom`, 보이기 tooltip, 고정 index 없는 버튼 순서, chrome 컨트롤 폭, 모든 변의 접기 컨트롤. 두 workbench 모두.

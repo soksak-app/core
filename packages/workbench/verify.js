@@ -10,7 +10,7 @@ import { ahead, latest, placementPending, seated } from "./compositor.js";
 import { currentGrid, dropBands, plane, presentedCardRect, railOutline, tabsOf } from "./plane.js";
 import { isPlace } from "./registry.js";
 import { expectedRailLoops, windowSidebarsPlaced } from "./verify-checks.js";
-import { cardRadius } from "./settings.js";
+import { cardRadius, value } from "./settings.js";
 
 /** How far a goes beyond b at the farthest point. It is 0 when a is inside b. */
 const beyond = (a, b) => a.w <= 0 || a.h <= 0 ? 0 :
@@ -372,7 +372,7 @@ export function verify(controls = null) {
   // The declared value is a request, and the target of verification is the result.
   const places = grid.cards.filter(card => isPlace(card.id));
   if (places.length === 0) skip("P 자리는 카드다", "창 사이드바가 없다");
-  else add("P 자리는 카드다", windowSidebarsPlaced(grid), `${places.length}개 창 사이드바 · 가장자리 연속 열 · 저장 폭 상한 · 전체 높이`);
+  else add("P 자리는 카드다", windowSidebarsPlaced(grid, value("sidebarOrder")), `${places.length}개 창 사이드바 · 순서대로 가장자리 · 앞선 변 사이의 범위 · 저장 크기 상한`);
 
   // W — the buttons that the window draws are located at the vertical center of the first row. The OS draws the buttons and
   // the page cannot read that area, so the check compares the area that the host returned with the first row.

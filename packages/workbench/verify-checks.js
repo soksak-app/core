@@ -1,6 +1,6 @@
 // The parts of the verification computation that do not read the plane or the compositor. verify.js passes the values it read from the plane.
 import { isPlace } from "./registry.js";
-import { windowSidebar } from "./window-sidebars.js";
+import { sizeKey, windowSidebarsDocked } from "./window-sidebars.js";
 
 /**
  * Adds up the number of connected rectangle clusters of each rail group and returns the number of closed loops that the rail outline must have.
@@ -32,17 +32,17 @@ export function expectedRailLoops(groups, gap) {
  * Verifies the placement and the width of the window sidebars. It measures the drawn width, not the declared value. The declared value is a request, and the subject of verification is the result.
  * Each side has one sidebar, which stands in the edge column of that side at full height and does not exceed the stored width.
  */
-export function windowSidebarsPlaced(grid) {
+/**
+ * Whether the window sidebars stand where the order places them (docs/spec/external-sidebars.md#verification): each is fixed, stands at
+ * the border line of its edge, reaches along the other axis between the sidebars of earlier edges of that axis, and is drawn no larger on
+ * its axis than its saved size.
+ */
+export function windowSidebarsPlaced(grid, order) {
   const places = grid.cards.filter(card => isPlace(card.id));
-  const extent = card => card.width === undefined || grid.rect(card.id).w <= card.width + .5;
-  const fullHeight = card => card.fixed && card.r0 === 0 && card.r1 === grid.lines("y").length-1;
-  let placeOk = places.every(card => extent(card) && fullHeight(card));
-  for (const side of ["left", "right"]) {
-    const cardsOnSide = places.filter(card => windowSidebar(card.id).side === side).sort((a,b) => a.c0-b.c0);
-    if (!cardsOnSide.length) continue;
-    placeOk &&= cardsOnSide.length === 1;
-    placeOk &&= side === "left" ? cardsOnSide[0].c0 === 0 : cardsOnSide.at(-1).c1 === grid.lines("x").length-1;
-    placeOk &&= cardsOnSide.every((card,index) => index === 0 || cardsOnSide[index-1].c1 === card.c0);
-  }
-  return placeOk;
+  const docked = order.filter(edge => places.some(card => card.id === edge));
+  const extent = card => {
+    const key = sizeKey(card.id);
+    return card[key] === undefined || (key === "width" ? grid.rect(card.id).w : grid.rect(card.id).h) <= card[key] + .5;
+  };
+  return places.every(extent) && windowSidebarsDocked(grid, docked);
 }

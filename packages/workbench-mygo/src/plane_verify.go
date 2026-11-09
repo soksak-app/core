@@ -98,7 +98,8 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 		pendingFor = s.options.Now().Sub(s.surfaces.placedAt)
 	}
 	in := VerifyInput{
-		Grid: s.plane,
+		Grid:  s.plane,
+		Order: s.sidebarOrder(),
 		Tabs: func(id string) int {
 			card, ok := s.plane.Card(id)
 			if !ok {

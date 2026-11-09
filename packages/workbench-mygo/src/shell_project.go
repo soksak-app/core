@@ -477,13 +477,7 @@ func (s *Shell) arrangeWindowSidebars() (bool, error) {
 	}
 	width, _ := s.settings.Value("sidebarWidth").(float64) // silent: the settings store checks the type of the value.
 	// The edges that have a choice hold a sidebar while their switch is on, docked in the order (docs/spec/external-sidebars.md).
-	order := []string{}
-	items, _ := s.settings.Value("sidebarOrder").([]any) // silent: the settings store checks that the value is an order of the edges.
-	for _, item := range items {
-		edge, _ := item.(string) // silent: the settings store checks that the value is an order of the edges.
-		order = append(order, edge)
-	}
-	changed, err := layout.ArrangeWindowSidebars(s.plane, order, s.sidebars.Sides(), s.windowSidebars, width, shown)
+	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebarOrder(), s.sidebars.Sides(), s.windowSidebars, width, shown)
 	if _, ok := s.plane.Card(s.focused); !ok {
 		s.focusCard(s.firstCard(s.plane))
 	}
@@ -1092,4 +1086,15 @@ func (s *Shell) closeTab(id string) error {
 	}
 	s.settleThen(s.droppedTabs([]string{id}))
 	return nil
+}
+
+// sidebarOrder is the order of the window sidebars, the setting sidebarOrder (docs/spec/external-sidebars.md).
+func (s *Shell) sidebarOrder() []string {
+	order := []string{}
+	items, _ := s.settings.Value("sidebarOrder").([]any) // silent: the settings store checks that the value is an order of the edges.
+	for _, item := range items {
+		edge, _ := item.(string) // silent: the settings store checks that the value is an order of the edges.
+		order = append(order, edge)
+	}
+	return order
 }
