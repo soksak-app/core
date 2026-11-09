@@ -516,11 +516,15 @@ test-ime-cli: $(BUILD)/ime_cli_test
 $(BUILD)/ime_cli_test: tests/ime_cli_test.m tests/support/ime_cli.m tests/support/ime_cli.h Makefile | $(BUILD)
 	@clang $(CFLAGS) -I$(CURDIR)/tests $< tests/support/ime_cli.m -o $@
 
-# Repeat the focused activation variant and preserve each child output plus an independent source read after process exit.
+# Repeat the focused activation variant and preserve each child output plus an independent source read after process exit. The evidence
+# is kept on purpose, so each repeat writes it to a new folder under ACTIVATION_REPEAT_EVIDENCE, by default target/activation-repeat of
+# the repository, and not to the temporary folder (docs/operations/examples.md#temporary-folders).
+ACTIVATION_REPEAT_EVIDENCE ?= $(abspath $(CURDIR)/../../target/activation-repeat)
 test-app-activation-backspace-repeat: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "test-app-activation-backspace-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@set -eu; \
-	  evidence_root=$$(mktemp -d "$${TMPDIR:-/tmp}/soksak-F239-47-8-activation-repeat.XXXXXX"); \
+	  mkdir -p "$(ACTIVATION_REPEAT_EVIDENCE)"; \
+	  evidence_root=$$(mktemp -d "$(ACTIVATION_REPEAT_EVIDENCE)/F239-47-8.XXXXXX"); \
 	  echo "EVIDENCE: $$evidence_root"; \
 	  i=1; while [ $$i -le $(COUNT) ]; do \
 	  run_dir="$$evidence_root/run-$$i"; mkdir -p "$$run_dir"; \

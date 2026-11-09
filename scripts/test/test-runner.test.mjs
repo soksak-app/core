@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import childProcess, { execFileSync, spawn, spawnSync } from "node:child_process";
 import test from "node:test";
@@ -101,11 +101,12 @@ test("a test starts only after the gate of the runner opened, and the wait is no
   assert.ok(lines.some((line) => line.startsWith("RUN  gated")));
 });
 
-test("a run with a folder gives each test its identifier, stores the output of every test and writes a manifest", async () => {
+test("a run with a folder gives each test its identifier, stores the output of every test and writes a manifest", async (t) => {
   const { mkdtempSync, readFileSync, readdirSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const folder = mkdtempSync(join(tmpdir(), "run-"));
+  t.after(() => rmSync(folder, { recursive: true }));
   const { results } = await run([
     node("a/passes.test.mjs", "console.log('seen ' + process.env.SOKSAK_RUN_ID + ' in ' + process.env.SOKSAK_RUN_FOLDER)"),
     node("a/fails.test.mjs", "console.error('the detail'); process.exit(3)"),
@@ -125,11 +126,12 @@ test("a run with a folder gives each test its identifier, stores the output of e
   assert.match(readFileSync(join(folder, manifest.tests[1].output), "utf8"), /^the detail\n$/);
 });
 
-test("a manifest names a test that is still running, so a run that stops leaves the test it stopped in", async () => {
+test("a manifest names a test that is still running, so a run that stops leaves the test it stopped in", async (t) => {
   const { mkdtempSync, readFileSync, existsSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const folder = mkdtempSync(join(tmpdir(), "run-"));
+  t.after(() => rmSync(folder, { recursive: true }));
   const lines = [];
   let during = null;
   // A heartbeat line names the test in flight, and the runner saves the manifest before it starts the test, so the manifest is read at the first heartbeat.
@@ -712,4 +714,45 @@ test("a build needs a command, its arguments and a limit of at most ten minutes"
   await assert.rejects(build({ command: process.execPath, args: [] }), /x: build\.timeoutMs must be an integer from 1 through 600000/);
   await assert.rejects(build({ command: process.execPath, args: [], timeoutMs: 600_001 }), /x: build\.timeoutMs must be an integer from 1 through 600000/);
   await assert.rejects(build({ args: [], timeoutMs: 1000 }), /x: build needs a command and args/);
+});
+
+// The temporary folder of a test process (docs/operations/examples.md#temporary-folders): the process writes to a folder of its own,
+// which the runner removes when the group of the process ended, however it ended.
+const writesTemporaryFolder = (then) =>
+  `const fs = require('node:fs'); const path = require('node:path'); const os = require('node:os');
+   const made = fs.mkdtempSync(path.join(os.tmpdir(), 'left-'));
+   fs.writeFileSync(path.join(process.env.OUT, 'made'), made);
+   ${then}`;
+
+test("a test process killed at its limit leaves no folder that it made in its temporary folder", async (t) => {
+  const out = mkdtempSync(join(tmpdir(), "runner-temporary-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const { results } = await run([node("killed", writesTemporaryFolder(sleeping(60000)), { timeoutMs: 1000, env: { OUT: out } })], { concurrency: 1 });
+  assert.equal(results.get("killed").status, "timeout");
+  const made = readFileSync(join(out, "made"), "utf8");
+  assert.equal(existsSync(made), false, `the folder ${made} of the killed process remains`);
+});
+
+test("a test process that passes and leaves an entry in its temporary folder fails and names the entry", async (t) => {
+  const out = mkdtempSync(join(tmpdir(), "runner-temporary-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const { results, lines } = await run([node("leaves", writesTemporaryFolder("process.exit(0)"), { env: { OUT: out } })], { concurrency: 1 });
+  assert.equal(results.get("leaves").status, "fail");
+  const made = readFileSync(join(out, "made"), "utf8");
+  assert.equal(results.get("leaves").detail, `left in its temporary folder: ${basename(made)}`);
+  assert.ok(lines.some((line) => /^FAIL leaves \d+\.\d{3}s left in its temporary folder: left-/.test(line)), JSON.stringify(lines));
+  assert.equal(existsSync(made), false, `the folder ${made} remains after the run`);
+});
+
+test("a test process keeps the configuration root of the window checks and writes no compile cache to its temporary folder", async (t) => {
+  const out = mkdtempSync(join(tmpdir(), "runner-temporary-"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const source = `const fs = require('node:fs'); const path = require('node:path'); const os = require('node:os');
+    require('node:module').enableCompileCache();
+    fs.writeFileSync(path.join(process.env.OUT, 'seen'), JSON.stringify({ root: process.env.SOKSAK_CONFIG_ROOT, temporary: os.tmpdir() }));`;
+  const { results } = await run([node("cache", source, { env: { OUT: out } })], { concurrency: 1 });
+  assert.equal(results.get("cache").status, "pass", results.get("cache").detail);
+  const seen = JSON.parse(readFileSync(join(out, "seen"), "utf8"));
+  assert.equal(seen.root, process.env.SOKSAK_CONFIG_ROOT ?? tmpdir());
+  assert.notEqual(seen.temporary, tmpdir(), "the process wrote to the temporary folder of the runner");
 });

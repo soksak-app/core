@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyInstalledState, endpointOf, parseOptions, releaseKey, withCore } from "../check-app-update.mjs";
@@ -33,8 +33,9 @@ test("the index lists one newer core release for the key and keeps the rest", ()
   });
 });
 
-test("the endpoint file is absent until written, and a file that is not JSON is an error that names the path", () => {
+test("the endpoint file is absent until written, and a file that is not JSON is an error that names the path", (t) => {
   const config = mkdtempSync(join(tmpdir(), "endpoint-"));
+  t.after(() => rmSync(config, { recursive: true, force: true }));
   assert.equal(endpointOf(config), null, "a missing endpoint file is not yet written");
   writeFileSync(join(config, "endpoint.json"), "{not json");
   assert.throws(() => endpointOf(config), (error) => error.message.includes(join(config, "endpoint.json")));

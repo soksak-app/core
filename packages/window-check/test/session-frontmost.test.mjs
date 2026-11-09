@@ -65,8 +65,10 @@ mock.module("@soksak/client", {
 });
 const { open } = await import("../app.mjs");
 
-test("a frontmost change to another application during a check does not reject the check result", async (t) => {
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+// The folder of the file is removed when the file ends, also when a selection runs none of its tests.
+test.after(() => rmSync(root, { recursive: true, force: true }));
+
+test("a frontmost change to another application during a check does not reject the check result", async () => {
   const afters = [];
   const check = { name: "probe check", passed: true, diagnostic() {}, after: (fn) => afters.push(fn) };
   await open(check, { name: "wailsv3", binary, configDir: join(root, "config") });

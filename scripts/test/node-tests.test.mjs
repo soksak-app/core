@@ -87,8 +87,9 @@ test("a word of a test script keeps the spaces of its quoted parts and loses its
   assert.throws(() => parseTestScript("node --test 'test/", "p"), /^Error: p: the test script "node --test 'test\/" has invalid syntax: Expected .* but end of input found/);
 });
 
-test("each path of a test script names a file, and a path or a glob that names none is an error that names the path and the package folder", () => {
+test("each path of a test script names a file, and a path or a glob that names none is an error that names the path and the package folder", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: 'node --test --test-name-pattern="a quit with a browser tab" test/browser.test.mjs' } }));
   put(root, "a/test/browser.test.mjs", "");
   const { tests } = discoverNodeTests({ root, packages: ["a"] });
@@ -187,8 +188,9 @@ test("declared Node selection rejects every missing path even beside a valid fil
   }
 });
 
-test("each test file of a package is a test with the folder and the flags of its package", () => {
+test("each test file of a package is a test with the folder and the flags of its package", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test --experimental-test-module-mocks test/" } }));
   put(root, "a/test/one.test.mjs", "");
   put(root, "a/test/nested/two.test.mjs", "");
@@ -207,8 +209,9 @@ test("each test file of a package is a test with the folder and the flags of its
   assert.deepEqual(before, [{ name: "b: pnpm build", command: "pnpm", args: ["build"], cwd: join(root, "b") }]);
 });
 
-test("each test file runs with a limit for each of its tests and ends when its tests end, and the file has no limit of its own", () => {
+test("each test file runs with a limit for each of its tests and ends when its tests end, and the file has no limit of its own", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   put(root, "a/test/one.test.mjs", "");
   const { tests } = discoverNodeTests({ root, packages: ["a"], testTimeoutMs: 1500 });
@@ -259,8 +262,9 @@ test("excluded test scopes reject empty, absolute, and traversing paths", () => 
   }
 });
 
-test("a package whose test script names no file, or whose script cannot be read, is an error that names the package", () => {
+test("a package whose test script names no file, or whose script cannot be read, is an error that names the package", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   mkdirSync(join(root, "a/test"), { recursive: true });
   assert.throws(() => discoverNodeTests({ root, packages: ["a"] }), /a: the test script path test\/ names no file in the package folder a/);
@@ -275,8 +279,9 @@ test("the native process identity package exposes its owning tests through Node 
   assert.deepEqual(before, []);
 });
 
-test("the discovered files run through the runner, each in the folder of its package", async () => {
+test("the discovered files run through the runner, each in the folder of its package", async (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   put(root, "a/test/ok.test.mjs", 'import test from "node:test"; test("ok", () => {});\n');
   put(root, "a/test/bad.test.mjs", 'import test from "node:test"; import assert from "node:assert"; test("bad", () => assert.equal(1, 2));\n');
@@ -296,8 +301,9 @@ test("the discovered files run through the runner, each in the folder of its pac
   assert.ok(lines.some((line) => /^RUN  a\/test\/ok\.test\.mjs/.test(line)) && lines.some((line) => /^PASS a\/test\/ok\.test\.mjs [0-9.]+s/.test(line)));
 });
 
-test("the error of a failed test is kept when its file is killed at its limit before it ends", async () => {
+test("the error of a failed test is kept when its file is killed at its limit before it ends", async (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   put(root, "a/test/slow.test.mjs", 'import test from "node:test"; import assert from "node:assert";\n'
     + 'test("fails first", () => assert.equal("kept-actual", "kept-expected"));\n'
@@ -316,8 +322,9 @@ test("the error of a failed test is kept when its file is killed at its limit be
   assert.match(result.output, /kept-actual/, `the output of the killed file lacks the error of its failed test:\n${result.output}`);
 });
 
-test("the root names its own test files in test:scripts because its test script runs this runner", () => {
+test("the root names its own test files in test:scripts because its test script runs this runner", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs" } }));
   put(root, "scripts/test/x.test.mjs", "");
   put(root, "scripts/test/platform/darwin/bundle-preparation.test.mjs", "");
@@ -328,8 +335,9 @@ test("the root names its own test files in test:scripts because its test script 
   ]);
 });
 
-test("another script of the packages that have it is discovered, and quotes around a glob are not part of the path", () => {
+test("another script of the packages that have it is discovered, and quotes around a glob are not part of the path", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "e2e/package.json", JSON.stringify({ name: "e2e", scripts: { test: "node --test test/*.test.mjs", verify: "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'" } }));
   put(root, "e2e/a.test.mjs", "");
   put(root, "e2e/test/unit.test.mjs", "");
@@ -339,8 +347,9 @@ test("another script of the packages that have it is discovered, and quotes arou
   assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1)]), [["e2e/a.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-concurrency=1", "--test-global-setup=./setup.mjs"]]]);
 });
 
-test("a changed specification file selects the tests of the packages that declare it in specFiles", () => {
+test("a changed specification file selects the tests of the packages that declare it in specFiles", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "package.json", JSON.stringify({ name: "root", scripts: { "test:scripts": "node --test scripts/test/" } }));
   put(root, "scripts/test/x.test.mjs", "");
   put(root, "reader/package.json", JSON.stringify({ name: "reader", specFiles: ["docs/spec/events.json"], scripts: { test: "node --test test/" } }));
@@ -399,8 +408,9 @@ test("the audit of the logs runs after window checks and benchmarks, and not aft
 });
 
 // --changed runs the test files of the packages whose files the revision range changes, and no other package.
-test("a change under a package selects the test files of that package only", () => {
+test("a change under a package selects the test files of that package only", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   put(root, "a/test/one.test.mjs", "");
   put(root, "b/package.json", JSON.stringify({ name: "b", scripts: { test: "node --test test/" } }));
@@ -409,8 +419,9 @@ test("a change under a package selects the test files of that package only", () 
   assert.deepEqual(tests.map((item) => item.name), ["a/test/one.test.mjs"]);
 });
 
-test("a change selects the deepest package that holds it, and a change outside every package selects the root", () => {
+test("a change selects the deepest package that holds it, and a change outside every package selects the root", (t) => {
   const root = workspace();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
   put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs" } }));
   put(root, "scripts/test/s.test.mjs", "");
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));

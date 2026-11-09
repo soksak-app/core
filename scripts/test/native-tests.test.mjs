@@ -2,7 +2,7 @@
 // share the screen, and each one is named when it starts and ends with its elapsed time and has a limit of its own.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -36,9 +36,10 @@ test("the default native suite runs the standalone host test API", () => {
   assert.match(runs[0], /(?:^|\s)host_test_api_test(?:\s|$)/, "the default native run omits the standalone test API");
 });
 
-test("the activation target builds and runs its cases through the native test runner", () => {
+test("the activation target builds and runs its cases through the native test runner", (t) => {
   const darwin = new URL("../../native/darwin/", import.meta.url);
   const temporary = mkdtempSync(join(tmpdir(), "native-activation-contract-"));
+  t.after(() => rmSync(temporary, { recursive: true, force: true }));
   const buildDir = join(temporary, "build");
   mkdirSync(buildDir, { recursive: true });
   const future = new Date(Date.now() + 60 * 60 * 1000);
@@ -91,8 +92,9 @@ test("the activation target builds and runs its cases through the native test ru
   assert.deepEqual(lines.filter((line) => /^\s*@?[^ ]*\/[^ ]+_test(?:\s|$)/.test(line)), [], output);
 });
 
-test("the native tests run one at a time, each with its start and end, and a failure fails the run", async () => {
+test("the native tests run one at a time, each with its start and end, and a failure fails the run", async (t) => {
   const { dir, script } = build();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
   script("ok_test", "echo fine");
   script("bad_test", "echo broken >&2; exit 3");
   const lines = [];
@@ -103,8 +105,9 @@ test("the native tests run one at a time, each with its start and end, and a fai
   assert.ok(lines.includes("  broken"), "the output of the failed test follows its line");
 });
 
-test("a successful native child keeps its stdout in the requested run record", async () => {
+test("a successful native child keeps its stdout in the requested run record", async (t) => {
   const { dir, script } = build();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const runFolder = join(dir, "run");
   script("ok_test", "echo checkpoint=outer-restored source=ABC");
   const lines = [];
@@ -117,8 +120,9 @@ test("a successful native child keeps its stdout in the requested run record", a
   assert.match(readFileSync(join(runFolder, manifest.tests[0].output), "utf8"), /checkpoint=outer-restored source=ABC/);
 });
 
-test("a native test over its limit is killed and fails the run", async () => {
+test("a native test over its limit is killed and fails the run", async (t) => {
   const { dir, script } = build();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
   script("slow_test", "sleep 30");
   const lines = [];
   const code = await runNativeTests({ dir, list: ["slow_test"], timeoutMs: 300, write: (line) => lines.push(line) });

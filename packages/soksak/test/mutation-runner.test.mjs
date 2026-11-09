@@ -16,6 +16,16 @@ const run = (args, options = {}) => new Promise((resolve, reject) => {
   child.once("close", (code, signal) => resolve({ code, signal, stdout, stderr }));
 });
 
+test("the evidence folder of a mutation run lies under target/mutation-runs of the repository unless the run folder names another", async (t) => {
+  const { evidenceFolder } = await import("../scripts/mutation-runner.mjs");
+  const root = await mkdtemp(join(tmpdir(), "soksak-mutation-evidence-root-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const kept = evidenceFolder(root, "soksak-break-evidence-", {});
+  assert.ok(kept.startsWith(`${join(root, "target", "mutation-runs")}/soksak-break-evidence-`), kept);
+  const named = join(root, "named");
+  assert.ok(evidenceFolder(root, "soksak-mutation-evidence-", { SOKSAK_MUTATION_RUN_FOLDER: named }).startsWith(`${named}/soksak-mutation-evidence-`));
+});
+
 test("bounded command preserves both output streams", { timeout: 10000 }, async () => {
   const result = await run([bounded, "5000", process.execPath, "-e", 'console.log("out"); console.error("error");']);
   assert.equal(result.code, 0, result.stderr);
@@ -173,13 +183,16 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
       git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "after");
       args.push("--changed", `${before}..HEAD`);
     }
-    const result = await run(args, { env: { ...process.env, SOKSAK_MUTATION_RUN_FOLDER: root, MUTATION_LIVE_TEST: join(packageRoot, testFile) } });
+    const { SOKSAK_MUTATION_RUN_FOLDER, ...env } = process.env;
+    const result = await run(args, { env: { ...env, MUTATION_LIVE_TEST: join(packageRoot, testFile) } });
     assert.equal(result.code, expectedCode, `${result.stdout}\n${result.stderr}`);
     assert.match(result.stdout, expectedOutput);
     assert.equal(await readFile(join(packageRoot, "dist/soksak.js"), "utf8"), original, "a mutation changed the original package");
     if (name === "snapshot") assert.equal(await readFile(join(packageRoot, "test/case.test.mjs"), "utf8"), changedTest, "the external edit was not exercised");
     const evidence = /^Evidence: (.+)$/m.exec(result.stdout)?.[1];
     assert.ok(evidence, "the command did not identify its retained evidence");
+    // The evidence outlives the run, so it lies under target/mutation-runs of the repository and not in the temporary folder.
+    assert.ok(evidence.startsWith(`${join(root, "target", "mutation-runs")}/soksak-break-evidence-`), evidence);
     const baseline = JSON.parse(await readFile(join(evidence, "baseline", testFile, "result.json"), "utf8"));
     assert.equal(baseline.classification, name.endsWith("baseline") ? "assertion-failure" : "passed");
     assert.ok((await readFile(baseline.stdout, "utf8")).length > 0);

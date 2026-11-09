@@ -5,11 +5,10 @@
  *
  * Exits non-zero if any break survives or no longer applies.
  */
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BREAKS } from "./breaks.mjs";
-import { mutationVerdict, runMutationTest } from "./mutation-runner.mjs";
+import { evidenceFolder, mutationVerdict, runMutationTest } from "./mutation-runner.mjs";
 import { changedMutationFiles, REQUIRED_BREAKS, selectRequiredBreaks } from "./required-breaks.mjs";
 import { copyWorkspace } from "./workspace-copy.mjs";
 
@@ -55,7 +54,7 @@ if (required?.length === 0) {
 // The defects are written into a copy. Writing them into the repository leaves
 // whatever else reads it — a build, an editor, another run — reading a defect
 // nobody wrote, for as long as this takes.
-const EVIDENCE = mkdtempSync(join(process.env.SOKSAK_MUTATION_RUN_FOLDER ?? tmpdir(), "soksak-break-evidence-"));
+const EVIDENCE = evidenceFolder(ROOT, "soksak-break-evidence-");
 console.log(`Evidence: ${EVIDENCE}`);
 const { top: TOP, root: HERE } = copyWorkspace("soksak-breaks-");
 const drop = () => rmSync(TOP, { recursive: true, force: true });
