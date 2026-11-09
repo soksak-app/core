@@ -112,6 +112,8 @@ func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
 	frontend := &Frontend{name: options.Name, framework: f, address: options.URL, frames: host.NewWindowFrames(options.Name)}
 	mygo.RunOnMain(func() {
 		frontend.content = ui.View(func(c *ui.Context) {
+			frontend.building = true
+			defer func() { frontend.building = false }()
 			if view := frontend.view.Load(); view != nil {
 				(*view)(c)
 			}
@@ -155,10 +157,17 @@ func (f *Framework) ObserveLayout() error {
 // waiting on the main thread for a drawable that only the commit returns. A frame of window drawn before the preparation asks
 // for its frame would take the drawable of the transaction and place the native views of window in it, so the frame of the
 // transaction would wait for the commit that waits for it, and the native views would show the frames after it at the commit.
-func (f *Framework) layoutStarted(platform.Window) {
+//
+// A transaction that the frame being built of window opens (OpenLayout) has that frame for its frame: the frame presents in it, and
+// the window holds its frames from the notice of that frame (openedInFrame).
+func (f *Framework) layoutStarted(owner platform.Window) {
 	f.transaction = true
 	for _, frontend := range f.windows() {
 		frontend.window.TransactionOpened()
+		if frontend.opensLayout(owner) {
+			frontend.openedInFrame()
+			continue
+		}
 		frontend.hold()
 	}
 }
@@ -168,6 +177,7 @@ func (f *Framework) layoutEnded(platform.Window) {
 	f.transaction = false
 	for _, frontend := range f.windows() {
 		frontend.window.TransactionCommitted()
+		frontend.opening, frontend.framed = false, false
 		frontend.release()
 	}
 }
