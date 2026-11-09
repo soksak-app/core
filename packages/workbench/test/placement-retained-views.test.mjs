@@ -55,7 +55,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
         mountOrder.push("syncSurfaces");
         return {
         ticket: 1,
-        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, x, y, w, h })),
+        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, scale: 2, x, y, w, h })),
         chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar },
         };
       }
@@ -305,7 +305,7 @@ test("host placement sends start values until the host holds them and again afte
         syncs.push(request);
         if (refuse) throw new Error("surface refused");
         return { ticket: syncs.length,
-          placements: request.surfaces.map(({ id, visible, x, y, w, h }) => ({ id, visible, x, y, w, h })),
+          placements: request.surfaces.map(({ id, visible, x, y, w, h }) => ({ id, visible, ...(visible ? { scale: 2 } : {}), x, y, w, h })),
           chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar } };
       }
       if (name === "presentSurfaces") return request.placements;
@@ -374,7 +374,7 @@ test("host placement preserves call order across the lazy view-module import", {
         for (const surfaceId of declarations) if (!ids.includes(surfaceId)) declarations.delete(surfaceId);
         if (!ids.includes(id)) mounted = { surfaceId: id, disposed: true };
         return { ticket: syncs.length, placements: request.surfaces.map(({ id: surfaceId, x, y, w, h }) =>
-          ({ id: surfaceId, visible: true, x, y, w, h })),
+          ({ id: surfaceId, visible: true, scale: 2, x, y, w, h })),
         chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar } };
       }
       if (name === "presentSurfaces") return request.placements;
@@ -430,7 +430,7 @@ test("an active view that is not in an undrawn record waits for its drawn commit
       if (name === "log") return clockAnswer(name, request);
       if (name === "setTheme") return null;
       if (name === "syncSurfaces") return { ticket: 1,
-        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, x, y, w, h })),
+        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, scale: 2, x, y, w, h })),
         chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar } };
       if (name === "presentSurfaces") return request.placements;
       throw new Error(`unexpected host call ${name}`);
@@ -494,7 +494,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
       if (name === "log") return clockAnswer(name, request);
       if (name === "setTheme") return null;
       if (name === "syncSurfaces") return { ticket: 1,
-        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, x, y, w, h })),
+        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, scale: 2, x, y, w, h })),
         chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar } };
       if (name === "presentSurfaces") return request.placements;
       throw new Error(`unexpected host call ${name}`);
@@ -607,7 +607,7 @@ test("a disabled memory saver mounts a cold hidden view at startup", async (t) =
       if (name === "log") return clockAnswer(name, request);
       if (name === "setTheme") return null;
       if (name === "syncSurfaces") return { ticket: 1,
-        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, x, y, w, h })),
+        placements: request.surfaces.map(({ id, x, y, w, h }) => ({ id, visible: true, scale: 2, x, y, w, h })),
         chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar } };
       if (name === "presentSurfaces") return request.placements;
       throw new Error(`unexpected host call ${name}`);

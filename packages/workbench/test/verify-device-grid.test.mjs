@@ -7,8 +7,8 @@ import { Soksak } from "soksak";
 
 const rect = (x, y, w, h) => ({ x, y, width: w, height: h, left: x, top: y, right: x + w, bottom: y + h });
 
-/** Runs verify over a plane at 7,83 with one card whose surface "probe" was predicted and seated at declared. */
-async function verifyThirds(t, declared, applied) {
+/** Runs verify over a plane at 7,83 with one card whose surface "probe" was predicted at declared and seated by the host at applied on the device pixels of seat, or without a seat scale for null. */
+async function verifyThirds(t, declared, applied, seat = 3) {
   const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"><article class="card" data-card-id="one"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="probe"></div></article></div></div>');
   globalThis.document = dom.window.document;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
@@ -25,7 +25,7 @@ async function verifyThirds(t, declared, applied) {
   card.style.height = "315.666667px";
   document.querySelector(".slot").getBoundingClientRect = () => rect(210, 470.328125, 760, 259.65625);
   const guess = { seq: 40, surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands: null }] };
-  const placed = { seq: 40, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, declared, applied }] };
+  const placed = { seq: 40, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, declared, applied, ...(seat === null ? {} : { scale: seat }) }] };
   t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => null, placementPending: () => false, seated: () => placed } });
   t.mock.module("../plane.js", { exports: {
     currentGrid: () => new Soksak(undefined, { width: 1186, height: 670 }), dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane,
@@ -68,6 +68,23 @@ test("V7b names an applied rectangle one device pixel off its declared one", asy
   const { v7b } = await verifyThirds(t, declared, { x: 203, y: 1662 / 3, w: 1360, h: 413 - 1 / 3 });
   assert.equal(v7b.ok, false);
   assert.match(v7b.note, /차이 0\.33px/);
+});
+
+test("V7b judges an applied rectangle on the grid of the scale that seated it and names a seat of another display", async (t) => {
+  // The host seated the declared rectangle on the device pixels of a display of scale 2, and the window now shows the page at 3:
+  // on its own grid the seat is exact, and it is off the grid of the display that shows it until the next placement.
+  const declared = { x: 203, y: 553.66, w: 1360, h: 413.33 };
+  const top = Math.ceil((83 + declared.y) * 2) / 2;
+  const bottom = Math.floor((83 + declared.y + declared.h) * 2) / 2;
+  const applied = { x: 203, y: top - 83, w: 1360, h: bottom - top };
+  const { v7b } = await verifyThirds(t, declared, applied, 2);
+  assert.equal(v7b.ok, false);
+  assert.match(v7b.note, /차이 0\.00px/);
+  assert.match(v7b.note, /다른 scale 에 놓인 표면 1 \(probe seated at 2, display 3\)/);
+});
+
+test("V7b refuses a seated surface without the scale that seated it", async (t) => {
+  await assert.rejects(verifyThirds(t, thirds, thirds, null), /verify: seated surface probe has no seat scale/);
 });
 
 test("V7c names a surface drawn one device pixel lower than its prediction", async (t) => {

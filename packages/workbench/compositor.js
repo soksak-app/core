@@ -6,6 +6,7 @@
 // This module does not know the structure of the plane. The plane writes the position and content of a surface
 // into data attributes of the slot element, and this module reads those attributes to measure and report.
 import { native, surfaces as app } from "./host.js";
+import { gridScale } from "./device-grid.js";
 import { chromeRow, drawnFrameText } from "./frame-text.js";
 import { onRunEnd, runActive, setRunActive } from "./run-state.js";
 
@@ -298,6 +299,15 @@ function validatePlacementAnswer(record, answer, nativeKinds = app.kinds) {
           || placement.w < 0 || placement.h < 0) {
         throw new Error(`surface placement result has invalid geometry ${placement.id}`);
       }
+      // A visible surface lies on the device pixels of the backing scale that the host fitted it with, which the window can change
+      // before the page reads the answer, so the answer names that scale; a hidden surface is fitted to no grid.
+      if (placement.visible) {
+        if (!Number.isFinite(placement.scale) || placement.scale <= 0) {
+          throw new Error(`surface placement result has invalid scale ${placement.id}: ${placement.scale}`);
+        }
+      } else if (placement.scale !== undefined) {
+        throw new Error(`surface placement result has a scale for hidden ${placement.id}`);
+      }
     }
   }
   const placedIds = new Set(answer.placements.map(({ id }) => id));
@@ -587,7 +597,8 @@ function commit(mine, snapshot, final, titlebar) {
  * Puts the actual position that the host answered into the record.
  *
  * The declared rectangle and the actual seat differ, because the host aligns to display pixels. The verifier
- * must be able to measure that difference, so the answer is recorded as it is.
+ * must be able to measure that difference, so the answer is recorded as it is, with the scale whose device pixels the host
+ * fitted it to. A surface that no host seats lies where the page put it, on the grid of the page.
  */
 function seat(record, placed) {
   const at = new Map(placed.map((p) => [p.id, p]));
@@ -599,6 +610,9 @@ function seat(record, placed) {
       if (![now.x, now.y, now.w, now.h].every(Number.isFinite) || now.w < 0 || now.h < 0)
         throw new Error(`invalid native placement geometry ${s.id}`);
       s.visible = now.visible;
+      s.scale = now.scale;
+    } else {
+      s.scale = gridScale();
     }
     if (now) s.applied = { x: now.x, y: now.y, w: now.w, h: now.h };
   }

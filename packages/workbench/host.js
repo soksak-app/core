@@ -756,7 +756,8 @@ export const surfaces = native ? {
         // before the previous ticket is committed.
         const result = layoutResult;
         return result.then((placed) => ({
-          placements: placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) })),
+          // A visible placement names the backing scale whose device pixels the host fitted it to; a hidden one names none.
+          placements: placed.map((p) => ({ id: p.id, visible: p.visible, ...(p.scale === undefined ? {} : { scale: p.scale }), ...toPlane(p) })),
           deferred: deferredViews,
         })).catch((error) => {
           if (result === layoutResult) { last = ""; lastRequest = null; layoutPresented = false; }

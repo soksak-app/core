@@ -9,6 +9,9 @@ mock.module(new URL("../registry.js", import.meta.url).href, {
   namedExports: { plugin: () => ({ surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) }) },
 });
 
+/** A placement as the host answers it: a visible surface names the backing scale whose device pixels it was fitted to. */
+const seatedAt = (placement) => (placement.visible === true ? { ...placement, scale: 2 } : placement);
+
 async function fixture(name) {
   const dom = new JSDOM('<div id="plane"><div data-card-id="card"><div data-native-surface data-native-surface-id="surface" data-native-plugin="probe" data-native-layer="0"></div></div></div>');
   globalThis.window = dom.window;
@@ -33,7 +36,7 @@ async function fixture(name) {
     const request = requests.shift();
     assert.ok(request, "no pending host placement");
     request.resolve({
-      placements: request.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied, ...placement })),
+      placements: request.record.surfaces.map(surface => seatedAt({ id: surface.id, visible: surface.visible, ...surface.applied, ...placement })),
       deferred: [],
     });
   };
@@ -114,13 +117,13 @@ test("a placement answer that arrives after a newer one does not replace the new
     assert.equal(f.requests.length, 2);
     const [first, second] = f.requests.splice(0);
     second.resolve({
-      placements: second.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })),
+      placements: second.record.surfaces.map(surface => seatedAt({ id: surface.id, visible: surface.visible, ...surface.applied })),
       deferred: [],
     });
     await newer; f.frame();
     const latest = f.clip();
     first.resolve({
-      placements: first.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })),
+      placements: first.record.surfaces.map(surface => seatedAt({ id: surface.id, visible: surface.visible, ...surface.applied })),
       deferred: [],
     });
     await older; f.frame();
