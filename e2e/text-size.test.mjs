@@ -39,7 +39,8 @@ for (const app of Object.values(APPS)) {
     const { tab: probe } = await s.run("core.card.add-tab", { card: start.id, plugin: "layoutprobe2" });
     s.cleanup(() => s.run("core.tab.close", { tab: probe }));
     await s.run("core.tab.select", { tab: probe });
-    const before = await s.until("layoutprobe2.surface", (value) => value?.text?.factor === 1 && value.text.height > 0 ? value.text : null,
+    // until resolves with the status value that satisfies the predicate, so the text is read from that value.
+    const { text: before } = await s.until("layoutprobe2.surface", (value) => value?.text?.factor === 1 && value.text.height > 0,
       "the probe tab did not draw its text at text size 1", { surface: probe });
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === probe));
     await s.presented();
@@ -55,7 +56,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(cardText.frame, 1, "enlarging a card must not change the frame factor");
     await s.presented();
     // The view receives the effective factor of its card and draws its text at 13pt multiplied by it (docs/spec/text-size.md).
-    const after = await s.until("layoutprobe2.surface", (value) => value.text.height !== before.height ? value.text : null,
+    const { text: after } = await s.until("layoutprobe2.surface", (value) => value.text.height !== before.height,
       "the probe text height did not change with the card factor", { surface: probe });
     assert.equal(after.factor, 1.1, "the view did not receive the effective factor of its card");
     assert.ok(grew(before.height, after.height, 1.1),
