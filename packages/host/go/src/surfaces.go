@@ -511,6 +511,9 @@ type Surfaces struct {
 	// settled is the channel that waits for the continuous update to end. It is closed when run-ended is published.
 	settled         []chan struct{}
 	lastPreparation uint64
+	// opened is the layout transaction that a frame of a window without a main page opened (OpenLayout) and that no preparation has
+	// taken over yet, and 0 without one.
+	opened atomic.Uint64
 	// Tells whether the page committed. page-ready is published only once.
 	first sync.Once
 	// A modal is a web view inside the main window. It is created for each display and removed when it closes. The instance number
@@ -1028,6 +1031,35 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 //
 // It is an AppKit call and service calls arrive in their own goroutines, so the work runs on the main thread.
 func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
+	// The preparation takes over the layout that a frame opened for it: a preparation that begins its layout joins the open
+	// transaction, and one that fails cancels it, so the transaction does not hold the frames of the window after the preparation
+	// ends (docs/spec/hosts.md#native-views). A cancel of a layout that a begun preparation joined changes nothing.
+	opened := s.opened.Swap(0)
+	prepared, err := s.syncSurfaces(req)
+	if err != nil && opened != 0 {
+		err = s.cancelOpenedLayout(opened, err)
+	}
+	return prepared, err
+}
+
+// cancelOpenedLayout cancels the opened layout ticket of a preparation that failed with failure, and returns failure with the failure
+// of the cancel.
+func (s *Surfaces) cancelOpenedLayout(ticket uint64, failure error) error {
+	win := s.window
+	if win == nil {
+		return failure
+	}
+	done := make(chan error, 1)
+	if err := system.EnqueueUI(func() { done <- s.cancelLayoutPresentation(win.NativeWindow(), ticket) }); err != nil {
+		return fmt.Errorf("%w; cancelling the opened layout: %v", failure, err)
+	}
+	if err := <-done; err != nil {
+		return fmt.Errorf("%w; cancelling the opened layout: %v", failure, err)
+	}
+	return failure
+}
+
+func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	win, ok := s.window, s.window != nil
 	if !ok {
 		return PreparedSurfaces{}, errNoWindow
