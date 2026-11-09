@@ -457,25 +457,24 @@ func (f *Frontend) opensLayout(owner platform.Window) bool {
 }
 
 // openedInFrame has the frame being built, which opened the layout transaction, be the frame of the transaction: the frame presents in
-// it, and the notice of the frame holds the frames of the window (openingPresented). A window that takes no notice holds them at once.
+// it, and the report of the frame holds the frames of the window (frameEnded). The frame asks for no notice, which would ask for
+// another frame: the window would draw it after the commit with nothing changed, and the report of the opening frame would tell that
+// the window asks for a frame, so the window would not be settled.
 func (f *Frontend) openedInFrame() {
 	f.opening = true
-	if err := f.window.AfterPresent(f.openingPresented); err != nil {
-		f.opening = false
-		f.hold()
-	}
 }
 
-// openingPresented is the notice of the frame that opened the layout transaction. Once that frame presented in the transaction it is
-// the frame of the transaction, so the window holds its frames until the transaction ends, and the preparation that takes the
-// transaction over hears that frame (AfterPresentation). A frame that presented nothing for want of a drawable leaves the preparation
-// to ask for its own. A notice after the end of the transaction changes nothing.
-func (f *Frontend) openingPresented(presentation mygo.Presentation, _ error) {
-	if !f.opening {
+// frameEnded reads the report of each frame of the window (FrameRecorder), on the main thread that drew it. The report of the frame
+// that opened the layout transaction tells whether it presented in the transaction: then it is the frame of the transaction, the
+// window holds its frames until the transaction ends, and the preparation that takes the transaction over hears that frame
+// (AfterPresentation). A frame that waits for a drawable or found none leaves the preparation to ask for its own, and a frame built
+// for a capture leaves the transaction to the next frame of the surface. A report after the end of the transaction changes nothing.
+func (f *Frontend) frameEnded(outcome ui.FrameOutcome) {
+	if !f.opening || outcome == ui.FrameHeld {
 		return
 	}
 	f.opening = false
-	f.framed = presentation == mygo.Presented || presentation == mygo.PresentNoDamage
+	f.framed = outcome == ui.FrameTransaction || outcome == ui.FrameImmediate || outcome == ui.FrameUndamaged
 	f.hold()
 }
 

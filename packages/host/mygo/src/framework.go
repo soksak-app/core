@@ -119,7 +119,13 @@ func (f *Framework) NewWindow(options host.WindowOptions) host.Frontend {
 			}
 			frontend.drawn()
 		})
-		frontend.content.RecordFrames(FrameRecorder(frontend.frames))
+		recorder := FrameRecorder(frontend.frames)
+		report := recorder.Frame
+		recorder.Frame = func(r *ui.FrameRecord) {
+			report(r)
+			frontend.frameEnded(r.Outcome)
+		}
+		frontend.content.RecordFrames(recorder)
 		frontend.window = mygo.NewWindow(mygo.WindowOptions{
 			Title: options.Title, Width: Pixels(options.Width), Height: Pixels(options.Height), Hidden: true,
 			TitleBarStyle: mygo.TitleBarHidden, BackgroundColor: "#101117", DrawWhileOccluded: true,
@@ -159,7 +165,7 @@ func (f *Framework) ObserveLayout() error {
 // transaction would wait for the commit that waits for it, and the native views would show the frames after it at the commit.
 //
 // A transaction that the frame being built of window opens (OpenLayout) has that frame for its frame: the frame presents in it, and
-// the window holds its frames from the notice of that frame (openedInFrame).
+// the window holds its frames from the report of that frame (openedInFrame).
 func (f *Framework) layoutStarted(owner platform.Window) {
 	f.transaction = true
 	for _, frontend := range f.windows() {

@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -107,27 +108,49 @@ func TestAPreparationThatTakesOverTheLayoutOfAPresentedFrameHearsThatFrame(t *te
 }
 
 // The frame that opened the layout of its window is the frame of the transaction once it presented in it, as when its scene changed
-// nothing; a frame that found no drawable, or that the window held, leaves the preparation to ask for its own. The window of the check
-// holds its frames already, so the notice asks the window for nothing.
+// nothing; a frame that waits for a drawable or found none leaves the preparation to ask for its own. The report of the frame tells
+// it, so the window holds its frames from that report. The window of the check holds its frames already, so the report asks the
+// window for nothing.
 func TestTheFrameThatOpensTheLayoutIsItsFrameOnceItPresented(t *testing.T) {
-	for presentation, framed := range map[mygo.Presentation]bool{
-		mygo.Presented: true, mygo.PresentNoDamage: true, mygo.PresentNoDrawable: false, mygo.PresentHeld: false,
+	for outcome, framed := range map[ui.FrameOutcome]bool{
+		ui.FrameTransaction: true, ui.FrameImmediate: true, ui.FrameUndamaged: true, ui.FrameStashed: false, ui.FrameSkipped: false,
 	} {
 		f := &Frontend{framework: &Framework{transaction: true}, held: true, opening: true}
-		f.openingPresented(presentation, nil)
+		f.frameEnded(outcome)
 		if f.framed != framed || f.opening {
-			t.Fatalf("after %v the window is framed %v and opening %v", presentation, f.framed, f.opening)
+			t.Fatalf("after the outcome %v the window is framed %v and opening %v", outcome, f.framed, f.opening)
 		}
 	}
 }
 
-// The notice of a frame that opened a layout that ended before it presented changes nothing: no transaction holds the window, and
-// the next one has a frame of its own. The window of the check is none, so a hold fails the check.
-func TestTheNoticeOfAnOpeningFrameAfterItsLayoutChangesNothing(t *testing.T) {
+// A frame built for a capture leaves its presentation to the next frame of the surface, so the layout waits for the report of
+// that frame. The window of the check is none, so a hold fails the check.
+func TestTheOpeningFrameOfACaptureLeavesTheLayoutToTheNextFrame(t *testing.T) {
+	f := &Frontend{framework: &Framework{transaction: true}, opening: true}
+	f.frameEnded(ui.FrameHeld)
+	if !f.opening || f.framed || f.held {
+		t.Fatalf("after a frame of a capture the window is opening %v, framed %v and held %v", f.opening, f.framed, f.held)
+	}
+}
+
+// The frame that opens the layout asks the window for no notice: a notice asks for a frame, which the window would draw after the
+// commit with nothing changed, and which the report of the opening frame would announce, so the window would not be settled. The
+// window of the check is none, so a call to it fails the check.
+func TestTheFrameThatOpensTheLayoutAsksForNoFrame(t *testing.T) {
+	f := &Frontend{framework: &Framework{transaction: true}}
+	f.openedInFrame()
+	if !f.opening || f.held {
+		t.Fatalf("the frame that opened the layout left the window opening %v and held %v", f.opening, f.held)
+	}
+}
+
+// The report of a frame after the end of the layout that it opened changes nothing: no transaction holds the window, and the next
+// one has a frame of its own. The window of the check is none, so a hold fails the check.
+func TestTheReportOfAFrameAfterItsLayoutChangesNothing(t *testing.T) {
 	f := &Frontend{framework: &Framework{}}
-	f.openingPresented(mygo.Presented, nil)
+	f.frameEnded(ui.FrameTransaction)
 	if f.framed || f.held {
-		t.Fatalf("a notice after the transaction made the window framed %v and held %v", f.framed, f.held)
+		t.Fatalf("a report after the transaction made the window framed %v and held %v", f.framed, f.held)
 	}
 }
 
