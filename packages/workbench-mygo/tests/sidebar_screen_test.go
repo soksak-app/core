@@ -368,6 +368,22 @@ func TestAFoldedSidebarKeepsItsSectionsWithoutAPlace(t *testing.T) {
 	}
 }
 
+// The section of an unselected tab stays an element without a place, as the page keeps it under display:none.
+func TestTheSectionOfAnUnselectedTabStaysWithoutAPlace(t *testing.T) {
+	frame := listFrame()
+	frame.Layout, frame.Tab = "tabs", "fieldprobe.tree"
+	binder := recorder(t, new([]call), sidebarCommands...)
+	tt := ui.NewTester(func(c *ui.Context) {
+		workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
+	}, 240, 400)
+	if shown := element(t, tt, "core.sidebar.section", "left/fieldprobe.tree").Bounds; shown.W == 0 || shown.H == 0 {
+		t.Fatalf("the selected section has no place: %+v", shown)
+	}
+	if unselected := element(t, tt, "core.sidebar.section", "left/git.log").Bounds; unselected.W != 0 || unselected.H != 0 {
+		t.Fatalf("the unselected section has the place %+v", unselected)
+	}
+}
+
 // bandColor is the color of a band with share of the text color over body.
 func bandColor(body color.RGBA, text ui.Color, share float32) color.RGBA {
 	mix := func(from, to uint8) uint8 { return uint8(float32(from)*(1-share) + float32(to)*share + 0.5) }
