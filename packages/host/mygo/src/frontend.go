@@ -40,9 +40,11 @@ type Frontend struct {
 	// revealing belongs to the main thread: the next frame of the window draws the first screen of its workbench, and the window goes
 	// on the screen once that frame returns.
 	revealing bool
-	// held and released belong to the main thread: whether the adapter holds the frames of the window, and what waits for its release.
+	// held, released and closed belong to the main thread: whether the adapter holds the frames of the window, what waits for its
+	// release, and whether the window closed, which no release follows.
 	held     bool
 	released []func()
+	closed   bool
 	// starting belongs to the main thread: the window holds its frames from the start of its workbench until that workbench shows its
 	// first screen.
 	starting bool
@@ -170,6 +172,7 @@ func (f *Frontend) started() {
 		f.Emit("files-dropped", text)
 	})
 	f.window.OnClosed(func() {
+		f.windowClosed()
 		f.framework.workbench.Close(f)
 		f.framework.closed(f)
 	})
@@ -472,13 +475,25 @@ func (f *Frontend) release() {
 	}
 }
 
-// whenReleased runs run after the release of the window. Call it on the main thread.
+// whenReleased runs run after the release of the window, or at once when the window is not held or closed. Call it on the main
+// thread.
 func (f *Frontend) whenReleased(run func()) {
-	if !f.held {
+	if !f.held || f.closed {
 		run()
 		return
 	}
 	f.released = append(f.released, run)
+}
+
+// windowClosed runs what waits for the release of a window that closed: the window left the open windows, so the end of a layout
+// transaction does not release it, and each wait asks again and hears that the window closed. Call it on the main thread.
+func (f *Frontend) windowClosed() {
+	f.closed = true
+	waiting := f.released
+	f.released = nil
+	for _, run := range waiting {
+		run()
+	}
 }
 
 // Address returns the address of the window: the URL that the host opened it with, or the last that the workbench set.
