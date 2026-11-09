@@ -874,3 +874,13 @@ func (s *Shell) afterPlacement(answer func(err error)) {
 	s.surfaces.commits = append(s.surfaces.commits, answer)
 	s.options.Invalidate()
 }
+
+// registerPlacementLast answers workbench.placement.last, which the host asks before it waits for the presentation of the window
+// (docs/spec/host-contract.md, exposure.window-presented.waits-for-the-last-placement). It answers after the host replied to the
+// placement that holds every change made before the request. A placement that runs meanwhile holds none of the later changes, so
+// it does not count, and a window with nothing to place answers at its next frame. It answers the failure of that placement.
+func (s *Shell) registerPlacementLast() {
+	s.registry.Method("workbench.placement.last", func(_ json.RawMessage, answer func(any, error)) {
+		s.afterPlacement(func(err error) { answer(nil, err) })
+	})
+}

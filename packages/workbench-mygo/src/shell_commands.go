@@ -112,6 +112,7 @@ func (s *Shell) register() {
 	})
 	s.registerProjectOpen()
 	s.registerFixture()
+	s.registerPlacementLast()
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	s.registerProjectClose()
 	s.registry.CommandLater("core.window.new", func(_ json.RawMessage, answer func(any, error)) {
