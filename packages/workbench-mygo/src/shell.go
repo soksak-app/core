@@ -570,12 +570,26 @@ func (s *Shell) Registry() *Registry { return s.registry }
 func (s *Shell) Start() {
 	s.surfaces.holdDetaching(s.options.Detaching())
 	s.events.Begin(func() {
+		// The window shows the title bar of the frame that it holds: the last frame of the workbench before this one, or, in a new
+		// window, the row of the common settings, which the host set before the start. The first screen places its own row when
+		// it differs (docs/spec/native-surfaces.md#title-bar-height).
+		var chrome windowChrome
+		var chromeErr error
+		s.calls.CallInOrder("workspace", "windowControls", nil, func(value any, err error) {
+			if err == nil {
+				chrome, err = decode[windowChrome](value)
+			}
+			chromeErr = err
+		})
 		s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
+			if err == nil {
+				err = chromeErr
+			}
 			if err != nil {
 				s.StartFailed(err)
 				return
 			}
-			if err := s.adopt(value); err != nil {
+			if err := s.adopt(value, chrome); err != nil {
 				s.StartFailed(err)
 				return
 			}
@@ -632,8 +646,15 @@ func (s *Shell) showRequested(done func()) {
 	})
 }
 
-// adopt takes the projects of a workspace snapshot.
-func (s *Shell) adopt(value any) error {
+// windowChrome is the answer of windowControls: the area of the window buttons and the height of the title bar, 0 while the window
+// shows no title bar, as in full screen.
+type windowChrome struct {
+	Controls layout.Rect `json:"controls"`
+	Row      float32     `json:"row"`
+}
+
+// adopt takes the projects of a workspace snapshot, and chrome, the title bar of the window when the workbench starts.
+func (s *Shell) adopt(value any, chrome windowChrome) error {
 	snapshot, err := decode[struct {
 		Projects      []json.RawMessage `json:"projects"`
 		Open          []string          `json:"open"`
@@ -664,9 +685,7 @@ func (s *Shell) adopt(value any) error {
 	if err := s.beginSettings(snapshot.Common); err != nil {
 		return err
 	}
-	// The window shows the first row of the common settings: the host gives a new window the row of factor 1, and the workbench
-	// before a reload placed the row of the common settings, which the new workbench reads.
-	s.surfaces.titlebar = s.chromeHeight()
+	s.surfaces.titlebar, s.surfaces.controls = chrome.Row, &chrome.Controls
 	return nil
 }
 

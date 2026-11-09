@@ -1906,6 +1906,29 @@ func TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew(t *testing.T) {
 	}
 }
 
+// A restarted workbench shows its first screen over the last frame of the workbench before it, which the window holds until then, and
+// the title bar keeps the row of that frame: the row of its settings goes to the window with the layout of its first screen, also on
+// the library, which places no surface. A window whose title bar already has that row, as a new window, places nothing for it.
+func TestTheFirstScreenGivesItsRowToAWindowWithAnotherTitleBar(t *testing.T) {
+	for _, held := range []struct {
+		titlebar float64
+		places   bool
+	}{{40, true}, {72, false}} {
+		stored := &surfaceHost{storedHost: storedHost{common: map[string]any{"textSize": 2.0}, titlebar: held.titlebar}}
+		surfaceShellOn(t, installedDocument, stored)
+		if len(stored.requests) == 0 {
+			t.Fatalf("the workbench over the title bar %v placed nothing", held.titlebar)
+		}
+		first := stored.requests[0]
+		surfaces, _ := first["surfaces"].([]any)
+		library := len(surfaces) == 0
+		if library != held.places || first["titlebar"] != 72.0 {
+			t.Fatalf("over the title bar %v the first placement gives the first row %v for the library %t, want the row 72 placed for the library %t",
+				held.titlebar, first["titlebar"], library, held.places)
+		}
+	}
+}
+
 // callsSince returns the host calls made after the first count calls.
 func (h *surfaceHost) callsSince(count int) []string {
 	h.orderMu.Lock()

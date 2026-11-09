@@ -113,6 +113,9 @@ type storedHost struct {
 	settings []map[string]any
 	// theme and language hold the last theme and menu language that the shell sent.
 	theme, language json.RawMessage
+	// titlebar is the title bar height of the window when the workbench starts, which windowControls answers. A test that does not
+	// set it has the title bar of a new window, 40.
+	titlebar float64
 }
 
 // log answers the host call log and keeps the events of its batches.
@@ -284,6 +287,13 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		}),
 		"projectOpen": answer("projectOpen", h.projectOpen),
 		"windowState": answer("windowState", func(json.RawMessage) (any, error) { return h.geometry, nil }),
+		"windowControls": answer("windowControls", func(json.RawMessage) (any, error) {
+			row := h.titlebar
+			if row == 0 {
+				row = 40
+			}
+			return map[string]any{"controls": map[string]any{"x": 7, "y": 13, "w": 52, "h": 14}, "row": row}, nil
+		}),
 		"projectShown": answer("projectShown", func(argument json.RawMessage) (any, error) {
 			var shown any
 			if err := json.Unmarshal(argument, &shown); err != nil {
@@ -830,7 +840,7 @@ func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
 
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if strings.Join(startCalls(f.host.calls), " ") != "workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
+	if strings.Join(startCalls(f.host.calls), " ") != "windowControls workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
 		t.Fatalf("the start called %v", f.host.calls)
 	}
 }

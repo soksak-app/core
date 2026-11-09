@@ -203,9 +203,9 @@ type surfaceState struct {
 	drawnLibrary bool
 	// dataWrites counts the writes of project data of each project that the store has not answered.
 	dataWrites map[string]int
-	// placed is the lines of the last request, titlebar the height of the first row of the window, which the last request gave or
-	// the start took (adopt), and running tells that a placement has not finished. Before the start took the common settings,
-	// titlebar is 0 and no frame places for the first row.
+	// placed is the lines of the last request, titlebar the title bar height of the window, which the last request gave or the
+	// start read (adopt), and running tells that a placement has not finished. Before the start, and while the window showed no
+	// title bar at the start, titlebar is 0 and no frame places for the first row alone.
 	placed   []surfaceLine
 	titlebar float32
 	// row is the height of the first row that the current frame draws. A placement gives it, also one that the answer of a running
