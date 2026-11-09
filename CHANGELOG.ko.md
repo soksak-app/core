@@ -4,6 +4,9 @@
 
 ## 미배포
 
+
+
+- F714-13: `core.settings-modal`이 두 workbench에서 `card` 옆에 설정 창이 굴러가는 상자 `pane`을 보고하고, native modal 루트 안 요소의 `element.rect`가 굴러가지 않는 메인 문서 사본의 사각형 대신 모달 문서가 보고한 사각형(사본의 스크롤을 따르는)을 답하며, 모달 문서가 내용이 굴러갈 때도 자기 상태를 보고한다. 카드의 고정 head가 스크롤이 잘라 낸 내용을 덮으므로, 창 컨트롤은 pane 안에서만 눌러 닿을 수 있다.
 - F714-1: 명세가 변 `left`, `right`, `top`, `bottom` 각각에 고정 창 사이드바 하나를 두고, 설정 `sidebarOrder`의 순서로 dock하고, 위·아래 사이드바의 `{height}`를 저장하며, 위·아래 사이드바의 chrome 스위치와 설정 창의 순서 줄을 더한다.
 - F714-2: 창 연결과 플러그인 선언이 변 `top`과 `bottom`을 받는다. plugin API, Go workbench, 두 manifest reader가 일반 연결 `top`, `bottom`, 플러그인 연결 `window-top`, `window-bottom`, 네 변의 `sidebars.window` 매핑을 받고, 두 workbench의 `core.settings.link` exposure가 그것을 나열한다.
 - F714-3: 창 사이드바가 자기 축의 크기를 저장한다. `windowSidebars`는 `left`, `right`에 `{width}`, `top`, `bottom`에 `{height}`를 담고, 다른 축의 레코드는 `window sidebar <edge> saves <member>, not <member>`로 거부하며, 새 사이드바는 자기 축으로 `sidebarWidth`에서 시작하고, `environment.json` `workspace.grid`의 변 이름은 tabs가 없고 `top`, `bottom`에서 `height`를 선언하는 창 사이드바 카드를 가리킨다.

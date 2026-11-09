@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -35,6 +36,9 @@ type modalStatus struct {
 	Card struct {
 		X, Y, W, H float64
 	} `json:"card"`
+	Pane struct {
+		X, Y, W, H float64
+	} `json:"pane"`
 	Controls []struct {
 		Name    string   `json:"name"`
 		Index   int      `json:"index"`
@@ -1467,6 +1471,50 @@ func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
 
 // TestScrollingTheSettingsCardRedrawsTheCardAlone checks that the wheel over the open card changes the pixels of the card,
 // not those of the blurred workbench below it, which nothing changed.
+// The status reports the pane that scrolls: the box under the fixed head of the card and beside its section nav, the only box a
+// control of the shown content is reachable in, because the head covers the content that the scroll clips (docs/spec/settings.md).
+func TestTheSettingsStatusReportsThePaneOfTheCard(t *testing.T) {
+	f := openedShell(t)
+	f.click("core.chrome.settings", "")
+	status := f.modal()
+	card, pane := status.Card, status.Pane
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	headH, ok := declared.Metric("set-card-head-h")
+	if !ok {
+		t.Fatal("no metric set-card-head-h")
+	}
+	navW, ok := declared.Metric("set-nav-w")
+	if !ok {
+		t.Fatal("no metric set-nav-w")
+	}
+	palette, err := declared.DefaultPalette()
+	if err != nil {
+		t.Fatal(err)
+	}
+	border := float64(2 * palette.BorderWidth)
+	near := func(have, want float64) bool { return math.Abs(have-want) <= 0.01 }
+	for _, check := range []struct {
+		name string
+		have float64
+		want float64
+	}{
+		{"the pane does not start at the nav", pane.X, card.X + float64(palette.BorderWidth) + navW},
+		{"the pane does not start under the head", pane.Y, card.Y + float64(palette.BorderWidth) + headH},
+		{"the pane is not as wide as the card beside the nav", pane.W, card.W - border - navW},
+		{"the pane is not as tall as the card under the head", pane.H, card.H - border - headH},
+	} {
+		if !near(check.have, check.want) {
+			t.Errorf("%s: pane %+v of card %+v is %.2f, want %.2f", check.name, pane, card, check.have, check.want)
+		}
+	}
+	if pane.X < card.X || pane.Y < card.Y || pane.X+pane.W > card.X+card.W || pane.Y+pane.H > card.Y+card.H {
+		t.Errorf("the pane %+v does not lie inside the card %+v", pane, card)
+	}
+}
+
 func TestScrollingTheSettingsCardRedrawsTheCardAlone(t *testing.T) {
 	f := openedShell(t)
 	f.click("core.chrome.settings", "")

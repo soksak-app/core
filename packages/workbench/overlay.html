@@ -141,10 +141,16 @@
   const send = (key, value) => page.modal.answer(id, instance, key, value);
 
   /* Reports the scroll position of the visible content (data-scroll-key) to the page that owns the content (docs/spec/settings.md). Content
-     without that element (a menu) is not reported. */
+     without that element (a menu) is not reported. The scroll moves the elements of the copy, so the reported document follows it within a
+     frame: element.rect of the copy stays the place a press reaches (docs/spec/exposure.md). */
+  let reporting = false;
   function reportScroll() {
     const keyed = root?.querySelector("[data-scroll-key]");
     if (keyed) send("scroll", String(keyed.scrollTop));
+    if (!reporting) {
+      reporting = true;
+      requestAnimationFrame(() => { reporting = false; report(); });
+    }
   }
   document.addEventListener("scroll", (event) => {
     if (event.target instanceof Element && event.target.matches("[data-scroll-key]")) reportScroll();

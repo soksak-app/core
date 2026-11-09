@@ -745,6 +745,7 @@ type settingsModalStatus struct {
 	Editing  *string            `json:"editing"`
 	Scroll   float64            `json:"scroll"`
 	Card     map[string]float64 `json:"card"`
+	Pane     map[string]float64 `json:"pane"`
 }
 
 type settingsRowValue struct {
@@ -784,6 +785,16 @@ func (s *Shell) settingsStatus() (any, error) {
 	status.Editing = optional(w.editing)
 	x, y, width, height := s.settingsCard()
 	status.Card = map[string]float64{"x": x, "y": y, "w": width, "h": height}
+	// The pane is the box that scrolls, under the fixed head of the card and beside its section nav: a control is reachable only
+	// inside it (docs/spec/settings.md). The card draws its children inside its border, so the pane starts one border width in.
+	pane := s.readSettingsPane()
+	border := float64(2 * s.palette.BorderWidth)
+	status.Pane = map[string]float64{
+		"x": x + float64(s.palette.BorderWidth) + float64(pane.navW),
+		"y": y + float64(s.palette.BorderWidth) + float64(pane.headH),
+		"w": width - border - float64(pane.navW),
+		"h": height - border - float64(pane.headH),
+	}
 	return status, nil
 }
 

@@ -94,3 +94,34 @@ test("every setting form is drawn with its one control", async (t) => {
     dom.window.close();
   }
 });
+
+// The modal status reports the pane that scrolls beside the card: the head of the card covers the content that the scroll clips, so
+// a control is reachable only inside the pane (docs/spec/settings.md).
+test("the settings modal reports the pane that scrolls beside the card", async (t) => {
+  const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  globalThis.window = dom.window;
+  globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
+  globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
+  t.mock.module("../compositor.js", { exports: {
+    ...await import("../compositor.js"), standIn: () => {},
+  } });
+  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
+  const ui = await import("../settings-ui.js?pane");
+  try {
+    ui.openSettings();
+    ui.showSection("general");
+    const card = document.getElementById("settings");
+    const pane = card.querySelector(".set-card__pane");
+    const boxes = new Map([[card, { left: 320, top: 72, width: 560, height: 540 }], [pane, { left: 468, top: 118, width: 404, height: 486 }]]);
+    for (const [el, box] of boxes) el.getBoundingClientRect = () => ({ ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top });
+    const { card: reportedCard, pane: reportedPane } = ui.settingsModalState();
+    assert.deepEqual(reportedCard, { x: 320, y: 72, w: 560, h: 540 }, "the card is not the rectangle of the settings card");
+    assert.deepEqual(reportedPane, { x: 468, y: 118, w: 404, h: 486 }, "the pane is not the rectangle of the scrolling box");
+    assert.ok(reportedPane.y > reportedCard.y && reportedPane.y + reportedPane.h < reportedCard.y + reportedCard.h,
+      "the pane does not lie under the head inside the card");
+  } finally {
+    ui.closeSettings();
+    dom.window.close();
+  }
+});

@@ -24,7 +24,7 @@ In the project scope a caption below the scope tabs, `core.settings-modal.folder
 
 `core.settings-modal.nav {section}` shows a section. The window keeps the section, the plugin search, the selected plugin, and the edited set while it is closed and reopened.
 
-A change redraws the window and keeps the scroll position of the shown content; showing another section, scope, plugin page or edited set starts at the top. The window reports the scroll position of the shown content as `scroll` (points from the top) in `core.settings-modal`; the position is negative while the content is pulled past its start, and a reported value that is not a number is refused.
+A change redraws the window and keeps the scroll position of the shown content; showing another section, scope, plugin page or edited set starts at the top. The window reports the scroll position of the shown content as `scroll` (points from the top) in `core.settings-modal`; the position is negative while the content is pulled past its start, and a reported value that is not a number is refused. The status also reports `card`, the rectangle of the window, and `pane`, the rectangle of the box that scrolls: the pane lies under the fixed head of the card and beside its section nav, and a control of the shown content is reachable by a press only inside it, because the head covers the content that the scroll clips.
 
 ### 일반
 

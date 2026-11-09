@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+
+
+- F714-13: `core.settings-modal` reports `pane`, the box of the settings window that scrolls, beside `card` in both workbenches; `element.rect` of an element inside the root of a native modal answers the rectangle that the modal document reported, which follows the scroll of the copy, instead of the rectangle of the unscrolled main-document copy; and the modal document reports its state also as its content scrolls. A control of the window is reachable by a press only inside the pane, because the fixed head of the card covers the content that the scroll clips.
 - F714-1: The specification places one fixed window sidebar on each of the edges `left`, `right`, `top` and `bottom`, docks them in the order of the setting `sidebarOrder`, saves `{height}` for the top and bottom sidebars, adds the chrome switches of the top and bottom sidebars and the order rows of the settings window.
 - F714-2: The window links and plugin declarations take the edges `top` and `bottom`: the plugin API, the Go workbench and both manifest readers accept the general links `top` and `bottom`, the plugin links `window-top` and `window-bottom` and a `sidebars.window` mapping of the four edges, and the `core.settings.link` exposure of both workbenches lists them.
 - F714-3: The window sidebars save the size of their axis: `windowSidebars` holds `{width}` for `left` and `right` and `{height}` for `top` and `bottom`, a record of the other axis is refused as `window sidebar <edge> saves <member>, not <member>`, a new sidebar starts with `sidebarWidth` on its axis, and an edge name in `environment.json` `workspace.grid` names a window sidebar card without tabs that declares `height` for `top` and `bottom`.

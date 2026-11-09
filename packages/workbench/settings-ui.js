@@ -644,10 +644,12 @@ export function settingsModalState() {
     description: card.querySelector(`[data-describes="${CSS.escape(el.dataset.row)}"]`)?.textContent ?? null,
   }));
   const r = card.getBoundingClientRect();
+  // The pane is the box that scrolls, under the fixed head of the card: a control is reachable only inside it (docs/spec/settings.md).
+  const p = body.getBoundingClientRect();
   const listed = [...card.querySelectorAll("[data-listed]")].map((el) => el.dataset.listed);
   return { open: true, rows, query, listed, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
     scroll: native ? paneScroll : body.scrollTop,
-    card: { x: r.left, y: r.top, w: r.width, h: r.height }, controls };
+    card: { x: r.left, y: r.top, w: r.width, h: r.height }, pane: { x: p.left, y: p.top, w: p.width, h: p.height }, controls };
 }
 
 /** Changes the section of the modal. */
