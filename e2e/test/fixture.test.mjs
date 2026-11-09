@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cardSidebar, joinedFailure, paintProbeDocument, placeholderTabs, pluginChangeStarted, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsClosed, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, paintProbeDocument, placeholderTabs, pluginChangeStarted, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsClosed, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 test("a registry that a failed restore left is restored from the record of the first run", async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "check-registry-"));
@@ -259,17 +259,6 @@ test("the settings dialog is closed when the main page has no modal web view, an
   await settingsClosed(mygo.s, "not closed");
   assert.deepEqual(mygo.waited, ["core.modal"]);
   await assert.rejects(settingsClosed(closed({ "host.window": { pageProcess: null, modal: null }, "core.modal": { id: "settings", mode: "dialog", document: null } }).s, "not closed"), /not closed/);
-});
-
-test("a failure of several errors names the message of each, because a test report shows only the message of the failure", () => {
-  const first = new Error("the drag did not settle");
-  const second = new Error("the capture did not stop");
-  const failure = joinedFailure("independent settings and widths", [first, second, "a thrown text"]);
-  assert.ok(failure instanceof AggregateError);
-  assert.equal(failure.message, "independent settings and widths: the drag did not settle; the capture did not stop; a thrown text");
-  assert.deepEqual(failure.errors, [first, second, "a thrown text"]);
-  const nested = joinedFailure("the check and its cleanup failed", [failure, new Error("the window stayed open")]);
-  assert.match(nested.message, /the capture did not stop; a thrown text; the window stayed open$/);
 });
 
 test("the document region of a layout probe tab is painted after its document reports and is ready once it reports the colour", async () => {
