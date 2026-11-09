@@ -157,6 +157,41 @@ func TestStatusOfTheShellReportsItsSidebars(t *testing.T) {
 	}
 }
 
+// core.grid reports the status line of a window sidebar card as the status of that card, as the page reports the text of the status
+// line of each card.
+func TestTheGridReportsTheStatusLineOfAWindowSidebar(t *testing.T) {
+	f := sidebarShell(t)
+	value, err := f.shell.Registry().Read("core.grid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var grid struct {
+		Cards []struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"cards"`
+	}
+	if err := json.Unmarshal(encoded, &grid); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"left": "왼쪽 창 사이드바", "right": "오른쪽 창 사이드바"}
+	for _, card := range grid.Cards {
+		if label, ok := want[card.ID]; ok {
+			if line := element(t, f.tester, "core.sidebar.status", card.ID).Label; card.Status != label || card.Status != line {
+				t.Fatalf("core.grid reports the status %q of the sidebar %s, whose status line says %q", card.Status, card.ID, line)
+			}
+			delete(want, card.ID)
+		}
+	}
+	if len(want) > 0 {
+		t.Fatalf("core.grid has no card of the sidebars %v: %s", want, encoded)
+	}
+}
+
 // The library draws no sidebar, so the sections of the fixed sidebars leave the placement while it is shown, and the return seats them
 // again. The page empties the plane for the library, and its placement holds the tabs alone, hidden (TestLibraryHidesTheViews).
 func TestTheLibraryLeavesTheSectionsOfTheSidebars(t *testing.T) {
