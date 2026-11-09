@@ -36,6 +36,17 @@ const fitted = (r, scale) => {
 };
 
 /**
+ * The rectangle r as the page paints it on the device pixels of scale: the layout measures an edge in fractions of a point
+ * finer than a device pixel and paints it at the nearest device pixel.
+ */
+const painted = (r, scale) => {
+  const edge = (value) => Math.round(value * scale) / scale;
+  const left = edge(r.x);
+  const top = edge(r.y);
+  return { x: left, y: top, w: edge(r.x + r.w) - left, h: edge(r.y + r.h) - top };
+};
+
+/**
  * Runs the verification once and returns the result.
  *
  * It does not draw on the screen. The value is read by a developer and arises on every render, so the caller
@@ -167,7 +178,8 @@ export function verify(controls = null) {
   const predicted = (id) => onPlane.get(id).dataset.nativeSurface !== "view";
   // The ids of a list, so a failure names the surfaces that it counts.
   const named = (ids) => (ids.length ? ` [${ids.join(", ")}]` : "");
-  const compare = (surfaces, onlyPredicted = false, placed = () => true) => {
+  // default: a comparison measures the difference of the drawn and the declared rectangle as they are.
+  const compare = (surfaces, onlyPredicted = false, placed = () => true, apart = maxDelta) => {
     const told = new Set(surfaces.map((s) => s.id));
     let worst = 0;
     // The surface that is off the most and its two places. A failure states the measured values with which the cause can be found.
@@ -179,7 +191,7 @@ export function verify(controls = null) {
       if (s.dim !== (slot.dataset.nativeDim === "true")) dim++;
       if (!placed(s)) continue;
       const drawn = drawnFrame(slot);
-      const delta = maxDelta(drawn, s.declared);
+      const delta = apart(drawn, s.declared);
       if (delta > worst) {
         worst = delta;
         at = ` · ${s.id} drawn ${frameText(drawn)} declared ${frameText(s.declared)}`;
@@ -227,11 +239,17 @@ export function verify(controls = null) {
   // V7c — is the place published in advance before drawing the same as the drawn place. The margin is measured against the drawn
   // rectangle, so there is no place for an error to remain. The check runs only when the prediction holds exactly the card surfaces; a
   // section surface is measured by the commit that follows, which V7a checks.
+  // The plane lies on the device pixel grid (device-grid.js), so the plane coordinates of both rectangles share its lines.
+  // The host seats the predicted rectangle fitted inward to the device pixels, and the page paints the drawn slot at the
+  // device pixels nearest to its edges, so V7c compares the two in device pixels of the one grid scale.
+  const scale = gridScale();
+  if (!(scale > 0)) throw new Error(`verify: the device pixel ratio ${scale} is not a positive number`);
   const guess = ahead();
   if (!guess) skip("V7c 미리 게시한 자리 == 그려진 자리", "이번 렌더는 미리 게시하지 않았다");
   else if (pendingPlacement) skip("V7c 미리 게시한 자리 == 그려진 자리", "host placement pending");
   else {
-    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(guess.surfaces, true);
+    const onScreen = (drawn, declared) => maxDelta(painted(drawn, scale), fitted(declared, scale));
+    const { worst, at, dim, gone, missed, goneIds, missedIds } = compare(guess.surfaces, true, undefined, onScreen);
     add("V7c 미리 게시한 자리 == 그려진 자리",
         gone === 0 && missed === 0 && worst === 0 && dim === 0,
         `최대 ${worst.toFixed(2)}px · 없음 ${gone}${goneIds} · 누락 ${missed}${missedIds} · 흐림이 다른 표면 ${dim} ` +
@@ -242,8 +260,6 @@ export function verify(controls = null) {
   // the declared rectangle inward to the device pixels (docs/spec/native-surfaces.md), so the applied rectangle is compared
   // with the declared one fitted the same way: a display of one device pixel per point cannot show half a point.
   // The alignment between frames on screen is checked separately by outside.test.mjs.
-  const scale = gridScale();
-  if (!(scale > 0)) throw new Error(`verify: the device pixel ratio ${scale} is not a positive number`);
   const placed = seated();
   let land = 0, landed = 0, escaped = 0;
   // The surface that is off the most and its two places. A failure states the measured values with which the cause can be found (F36).
