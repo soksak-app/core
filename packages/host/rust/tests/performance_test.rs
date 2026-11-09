@@ -292,7 +292,11 @@ fn surface_lifecycle_events_hold_the_geometry() {
         let writer = records::start_writer(std::path::Path::new(&config));
         performance::command(json!({"action": "on"})).unwrap();
         performance::surface("created", "s1", None);
-        performance::surface("placed", "s1", Some(([1.0, 2.0, 30.0, 40.0], true)));
+        performance::surface(
+            "placed",
+            "s1",
+            Some(([1.0, 2.0, 30.0, 40.0], true, Some(2.0))),
+        );
         performance::surface("destroyed", "s1", None);
         performance::command(json!({"action": "off"})).unwrap();
         writer.flush(Duration::from_secs(5)).unwrap();
@@ -313,14 +317,16 @@ fn surface_lifecycle_events_hold_the_geometry() {
             &placed["y"],
             &placed["w"],
             &placed["h"],
-            &placed["visible"]
+            &placed["visible"],
+            &placed["scale"]
         ],
         [
             &json!(1.0),
             &json!(2.0),
             &json!(30.0),
             &json!(40.0),
-            &json!(true)
+            &json!(true),
+            &json!(2.0)
         ]
     );
 }
