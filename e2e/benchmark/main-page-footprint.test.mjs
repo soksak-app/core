@@ -5,7 +5,7 @@ import { loadavg } from "node:os";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "../fixture.mjs";
+import { fresh, joinedFailure } from "../fixture.mjs";
 import { tailOf } from "@soksak/window-check/chains.mjs";
 import { closeAddedMainPageWindows, mainPageProcess, readMainPageFootprint } from "./cases/main-page-footprint.mjs";
 
@@ -77,8 +77,7 @@ for (const app of Object.values(APPS)) {
     }
     if (operationErrors.length === 1) throw operationErrors[0];
     if (operationErrors.length > 1) {
-      throw new AggregateError(operationErrors, `${app.name}: main-page footprint measurement and cleanup failed`,
-        { cause: operationErrors[0] });
+      throw joinedFailure(`${app.name}: main-page footprint measurement and cleanup failed`, operationErrors);
     }
   });
 }

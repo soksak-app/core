@@ -1,4 +1,5 @@
 import { allRows } from "@soksak/window-check/chains.mjs";
+import { joinedFailure } from "../../fixture.mjs";
 
 const newer = (candidate, current) => candidate.mono_ns > current.mono_ns ||
   candidate.mono_ns === current.mono_ns && candidate.seq > current.seq;
@@ -164,7 +165,7 @@ export async function closeAddedMainPageWindows(session, baselineWindows) {
       errors.push(new Error(`main-page footprint could not close added window ${row.window}: ${error.message}`, { cause: error }));
     }
   }
-  if (errors.length > 0) throw new AggregateError(errors, "main-page footprint could not close every added window");
+  if (errors.length > 0) throw joinedFailure("main-page footprint could not close every added window", errors);
 
   await session.windows(baseline.length, "added main-page footprint windows remained open");
   const restored = (await session.get("host.windows")).map((row) => row.window);
