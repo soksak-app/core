@@ -59,7 +59,8 @@ func (s *Shell) followCommand(answer func(value any, err error)) func(value any,
 				answer(value, err)
 				return
 			}
-			s.afterPlacement(func(error) { answer(value, nil) })
+			// The answer follows the statuses of that frame, so a request after it reads what the frame showed.
+			s.afterPlacement(func(error) { s.afterStatuses(func() { answer(value, nil) }) })
 		})
 	}
 }

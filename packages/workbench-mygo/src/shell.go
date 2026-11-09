@@ -397,6 +397,10 @@ type Shell struct {
 	verification  *Verification
 	// verifying tells that the step that gives a watcher the verification waits to run, and building that a frame builds.
 	verifying, building bool
+	// framed tells that the step after a frame, which gives the watchers the statuses of that frame, waits to run, and afterFramed
+	// holds what runs after it (statusesAfterFrame).
+	framed      bool
+	afterFramed []func()
 	// A View build shares one native window observation, including its error.
 	// The fields are cleared at both boundaries and never serve outside View.
 	frameWindowRead    bool
@@ -826,6 +830,8 @@ func (s *Shell) View(c *ui.Context) {
 		s.frameWindow = WindowView{}
 		s.frameWindowFailure = nil
 	}()
+	// The step after the frame gives the statuses of the frame, and an answer that the frame releases (a placement commit) waits for it.
+	s.statusesAfterFrame()
 	s.exposedFocus.Frame(c)
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
@@ -834,6 +840,7 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.heads)
 	clear(s.surfaces.seated)
 	s.surfaces.drawnPlane, s.surfaces.drawnLibrary = nil, false
+	s.library.drawnPreviews = nil
 	width, height := c.Size()
 	s.followSize(width, height)
 	theme := *c.Theme()
@@ -877,6 +884,4 @@ func (s *Shell) View(c *ui.Context) {
 	s.followKeyboard(false)
 	s.clearVisibleNotices()
 	s.drawn = true
-	s.pushStatuses()
-	s.verifyLater()
 }

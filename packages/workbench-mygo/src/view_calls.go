@@ -1111,6 +1111,38 @@ func (s *Shell) observeForView(call viewCallEvent, view *viewState, name string,
 	return nil
 }
 
+// statusesAfterFrame gives the watchers the statuses of the frame that just ended in the step after it, where the element tree of
+// that frame can be read: a status says what the frame showed, as the page reads its layout after it rendered. One step serves the
+// frames that end before it runs, and it reads the last of them.
+func (s *Shell) statusesAfterFrame() {
+	if s.framed {
+		return
+	}
+	s.framed = true
+	s.options.Post(func() {
+		s.framed = false
+		if err := s.readPreviews(); err != nil {
+			s.failWindowRead(err)
+		}
+		s.pushStatuses()
+		waiting := s.afterFramed
+		s.afterFramed = nil
+		for _, then := range waiting {
+			then()
+		}
+	})
+}
+
+// afterStatuses runs then after the watchers received the statuses of the last frame: at once when they did, or after the step that
+// gives them.
+func (s *Shell) afterStatuses(then func()) {
+	if !s.framed {
+		then()
+		return
+	}
+	s.afterFramed = append(s.afterFramed, then)
+}
+
 // pushStatuses sends each watched status of a view and of the endpoint whose value changed.
 func (s *Shell) pushStatuses() {
 	if err := s.registry.Changed(); err != nil {

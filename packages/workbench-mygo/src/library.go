@@ -28,8 +28,10 @@ type libraryState struct {
 	checks       map[string]int
 	checkCount   int
 	foldersFor   string
-	// previews holds the panes of the preview of each shown project, as they stood in the last frame, and previewErrors the reason of each
+	// drawnPreviews holds the panes of each preview that the last frame drew at their offsets in the open control of the card, previews
+	// the panes where that frame drew them, which the step after the frame reads (readPreviews), and previewErrors the reason of each
 	// project whose stored layout cannot be opened.
+	drawnPreviews map[string][]previewPane
 	previews      map[string][]previewPane
 	previewErrors map[string]string
 }
