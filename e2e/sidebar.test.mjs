@@ -69,7 +69,7 @@ for (const app of Object.values(APPS)) {
     const origin = grid.plane.x + card.x + 1;
     const surfaceAt = async (inside) => s.until("core.surfaces", (surfaces) => {
       const surface = surfaces.find((item) => item.surface === card.active);
-      return surface && Math.abs(surface.applied.x - (origin + inside)) <= 1;
+      return surface !== undefined && Math.abs(surface.applied.x - (origin + inside)) <= 1;
     }, `the surface did not start ${inside} pt into the card`);
     await surfaceAt(190 + GRIP);
     const before = await surfaceOf();
@@ -145,7 +145,7 @@ for (const app of Object.values(APPS)) {
     const inset = `${own}:left`;
     const [first, second] = CARD_SECTIONS;
     const of = (sidebars, id) => sidebars.find((item) => item.sidebar === id);
-    const mounted = (item, ids) => item && ids.every((id) => item.sections.find((value) => value.id === id)?.mounted);
+    const mounted = (item, ids) => item !== undefined && ids.every((id) => item.sections.find((value) => value.id === id)?.mounted);
 
     // list: the set of the card sidebar of the start card mounts both sections.
     let sidebars = await s.until("core.sidebars", (value) => mounted(of(value, inset), CARD_SECTIONS),
@@ -419,7 +419,7 @@ for (const app of Object.values(APPS)) {
     const sidebar = "right";
     // The right sidebar of the focused start card shows the probe section that follows core.sidebars and core.surfaces.
     await linkSet(s, { id: "check-follow", sections: [FOLLOW], place: "window-right", plugin });
-    const mounted = (value) => value.find((item) => item.sidebar === sidebar)?.sections.find((item) => item.id === FOLLOW)?.mounted;
+    const mounted = (value) => value.find((item) => item.sidebar === sidebar)?.sections.find((item) => item.id === FOLLOW)?.mounted === true;
     await s.until("core.sidebars", mounted, `the right sidebar did not mount ${FOLLOW}`);
     const offsets = currentEventOffsets(s.app.configDir);
     // Sections are mounted asynchronously after the first screen. The core state that they follow must already be registered at that time (docs/spec/plugins.md#sections).

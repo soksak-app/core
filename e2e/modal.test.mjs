@@ -81,7 +81,7 @@ for (const app of Object.values(APPS)) {
     const successor = await readyRaster(s, "the successor did not restore a ready raster probe tab");
     const after = await s.until("host.window", (host) => {
       const image = host.regions.find((region) => region.surface === successor && region.name === "raster");
-      return image?.visible && image.presented && image.presented.generation !== original.presented.generation &&
+      return image?.visible === true && image.presented !== null && image.presented.generation !== original.presented.generation &&
         host.regions.filter((region) => region.visible).every((region) => region.blurred === false) &&
         host.documents.every((document) => document.blurred === false);
     }, "the successor's newly attached raster image or documents inherited the ended dialog blur");
@@ -270,7 +270,7 @@ for (const app of MAIN_PAGE_APPS) {
     const old = new Set(before.surfaces.map((x) => x.id));
     await s.run("core.card.split", { card, side: "right", plugin: SECOND });
     const after = await s.until("host.window",
-      (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown,
+      (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown === true,
       "the split did not display a new native surface");
     assert.ok(after.surfaces.some((x) => !old.has(x.id)), "the split must create a new native surface");
     await s.presented();

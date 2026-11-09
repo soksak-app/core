@@ -391,7 +391,7 @@ for (const app of Object.values(APPS)) {
         await window.until("core.surface.document",
           (value) => value?.readyState === "complete" && value.themed,
           `${phase}: the active probe view document ${surface} did not become ready`, { surface });
-        await window.until("host.window", (state) => state.surfaces.find((item) =>
+        await window.until("host.window", (state) => state.surfaces.some((item) =>
           item.id === surface && item.visible && item.frame.width > 0 && item.frame.height > 0),
         `${phase}: the active probe native surface ${surface} was not placed`);
       }

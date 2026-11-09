@@ -47,7 +47,7 @@ async function rasterProcessSnapshot(s, message) {
   const tabs = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === RASTER);
   const sessions = [];
   for (const tab of tabs) {
-    sessions.push(await s.until("rasterprobe.session", (value) => value?.connected && typeof value.session === "string" ? value : null,
+    sessions.push(await s.until("rasterprobe.session", (value) => value?.connected === true && typeof value.session === "string",
       `${message}: ${tab.id} has no session`, { surface: tab.id }));
   }
   const services = new Set(sessions.map((session) => session.service?.pid));
@@ -318,7 +318,7 @@ for (const app of Object.values(APPS)) {
     const order = (await child.get("core.library")).shown;
     assert.ok(order.includes(created.id), "the library must list the created project");
     await child.run("core.library.pin", { id: created.id, pinned: true });
-    await child.until("core.projects", (list) => list.find((p) => p.id === created.id)?.pinned, "pin was not saved");
+    await child.until("core.projects", (list) => list.find((p) => p.id === created.id)?.pinned === true, "pin was not saved");
     await child.run("core.library.search", { query: "created" });
     await shown(child, 1, "search did not filter the library");
     await child.run("core.project.activate", { id: created.id });

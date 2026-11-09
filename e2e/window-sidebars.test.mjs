@@ -133,7 +133,7 @@ for (const app of Object.values(APPS))
               "core.grid",
               (grid) =>
                 grid.cards.find((item) => item.id === card.id)?.active === tab.id &&
-                grid.cards.find((item) => item.id === card.id)?.focused,
+                grid.cards.find((item) => item.id === card.id)?.focused === true,
               "tab selection did not settle",
             );
             ({ displayed } = await s.presented());
@@ -197,7 +197,7 @@ for (const app of Object.values(APPS))
             (bars) => {
               const found = bars.find((item) => item.sidebar === side);
               return (
-                found &&
+                found !== undefined &&
                 found.plugin === (override ? tab.plugin : null) &&
                 found.card === (override ? focused.id : null) &&
                 found.surface === (override ? tab.id : null) &&

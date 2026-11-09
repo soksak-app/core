@@ -32,7 +32,7 @@ for (const app of Object.values(APPS)) {
     const root = realpathSync(project.root);
 
     const view = await addTab(s, surface, plugin);
-    const started = await s.until("layoutprobe.view", (value) => (value?.surface === view ? value : null),
+    const started = await s.until("layoutprobe.view", (value) => value?.surface === view,
       "the new view reported no start values", { surface: view });
     assert.equal(started.origin.directory, null, `the new view has an origin directory: ${JSON.stringify(started.origin)}`);
     assert.equal(started.project?.id, project.id, `the new view was given another project: ${JSON.stringify(started.project)}`);

@@ -73,7 +73,7 @@ for (const app of Object.values(APPS)) {
       return s.on(added(await s.windows(2, `${label}: the saved project window did not open`), known));
     };
     const activePlacement = async (window, label) => {
-      const grid = await window.until("core.grid", (value) => probeCard(value)?.active,
+      const grid = await window.until("core.grid", (value) => typeof probeCard(value)?.active === "string",
         `${label}: the probe card did not become available`);
       const active = probeCard(grid)?.active;
       assert.ok(active, `${label}: the probe card has no active tab`);

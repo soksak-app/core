@@ -44,7 +44,7 @@ for (const app of Object.values(APPS)) {
       const opened = await project.run("core.file.open", { path });
       assert.equal(typeof opened.tab, "string", `core.file.open returned no tab for ${path}`);
       const surface = await project.until("core.surfaces", (all) =>
-        all.find((item) => item.surface === opened.tab && item.plugin === START_PLUGIN && item.exposes.includes("status core.surface.document")),
+        all.some((item) => item.surface === opened.tab && item.plugin === START_PLUGIN && item.exposes.includes("status core.surface.document")),
       `the opened tab of ${path} did not register its surface`);
       assert.ok(surface, `the opened tab of ${path} has no surface`);
       const start = await project.until("core.surface.document", (value) => value?.params?.path === path,

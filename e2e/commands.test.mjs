@@ -93,7 +93,7 @@ for (const app of Object.values(APPS)) {
     };
     for (const side of ["left", "right", "top", "bottom"]) {
       const result = await s.run("core.card.split", { card: own, side, plugin: ADDED });
-      const split = await s.until("core.grid", (grid) => cardOf(grid, result.card), `core.card.split ${side} did not add a card`);
+      const split = await s.until("core.grid", (grid) => cardOf(grid, result.card) !== undefined, `core.card.split ${side} did not add a card`);
       const born = cardOf(split, result.card);
       assert.equal(born.tabs[0].plugin, ADDED);
       assert.ok(beside[side](born, cardOf(split, own)), `the ${side} split put the new card at ${JSON.stringify(born)}`);

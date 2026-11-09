@@ -303,7 +303,7 @@ if (requiresAll(process.env)) test("every host serves the declared application m
     // and the check waits structurally until the declared number of items is filled.
     const settled = await s.until("host.menu", (value) => {
       const view = value?.menus?.find((menu) => menu.title === "보기" || menu.title === "View");
-      return view && view.items.length >= declaredCounts[contract.menus.findIndex(([id]) => id === "view")]
+      return view !== undefined && view.items.length >= declaredCounts[contract.menus.findIndex(([id]) => id === "view")]
         && view.items[view.items.length - 1].title.length > 0;
     }, "the declared View menu items did not all arrive", { timeout: 5000 });
     const report = settled;

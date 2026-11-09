@@ -21,7 +21,7 @@ for (const app of Object.values(APPS)) {
     const b = (await s.run("core.card.split", { card: a, side: "right", plugin })).card;
     const c = (await s.run("core.card.split", { card: b, side: "bottom", plugin })).card;
     await s.run("core.card.add-tab", { card: b, plugin });
-    const grid = await s.until("core.grid", (value) => card(value, b)?.tabs.length === 2 && card(value, c),
+    const grid = await s.until("core.grid", (value) => card(value, b)?.tabs.length === 2 && card(value, c) !== undefined,
       "the arrangement A | (B / C) did not appear");
 
     await s.run("core.card.fullscreen", { card: a });

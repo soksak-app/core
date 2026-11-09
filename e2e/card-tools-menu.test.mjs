@@ -15,7 +15,7 @@ for (const app of Object.values(APPS)) {
     const { surface, plugin } = await fresh(s);
     const own = cardOf(await s.get("core.grid"), surface);
     const born = (await s.run("core.card.split", { card: own, side: "right", plugin })).card;
-    await s.until("core.grid", (grid) => card(grid, born), "the split did not add a card");
+    await s.until("core.grid", (grid) => card(grid, born) !== undefined, "the split did not add a card");
     const layout = await s.get("core.layout");
     const lines = layout.state.cards.find((item) => item.id === own);
     const grid = await s.get("core.grid");
