@@ -35,12 +35,15 @@ char *sp_input_source_current(void);
 
 // Selects the enabled input source and calls adopted once on the main thread. A key-view text client completes only after
 // its context reports the source following the selection notification. With no active text client, completion follows the
-// global selection. A client whose context is not the current context fails explicitly. Call it on the main thread.
+// global selection. A client whose context is not the current context of the application fails explicitly. Call it on the main thread.
 void sp_input_source_select_and_await(const char *identifier, void (^adopted)(const char *error));
 
-// Returns the live selection driver for `responder` in `window`. The responder is an active text client only when it
-// conforms to NSTextInputClient and has an input context; a responder without a context takes the global selection path.
-id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, id responder);
+// Returns the live selection driver for `responder` in `window`, which reads the current input context of the application
+// from `current` (NSTextInputContext.currentInputContext for the live selection). The responder is an active text client only
+// when it conforms to NSTextInputClient and has an input context and the application has a current input context; otherwise,
+// as in an application that the system does not hold active, the selection takes the global path.
+id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, id responder,
+    NSTextInputContext *(^current)(void));
 
 // Runs the production selection coordinator with controlled source, notification, and timeout operations for its owner test.
 void sp_input_source_select_and_await_with_driver(const char *identifier, id<SPInputSourceSelectionDriver> driver,

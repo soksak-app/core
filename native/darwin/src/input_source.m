@@ -44,14 +44,16 @@ char *sp_input_source_current(void) {
 @property(assign) NSWindow *window;
 @property(assign) id responder;
 @property(retain) NSTextInputContext *context;
-- (instancetype)initWithWindow:(NSWindow *)window responder:(id)responder;
+@property(copy) NSTextInputContext *(^current)(void);
+- (instancetype)initWithWindow:(NSWindow *)window responder:(id)responder current:(NSTextInputContext *(^)(void))current;
 @end
 
 @implementation SPLiveInputSourceSelectionDriver
-- (instancetype)initWithWindow:(NSWindow *)window responder:(id)responder {
+- (instancetype)initWithWindow:(NSWindow *)window responder:(id)responder current:(NSTextInputContext *(^)(void))current {
     if ((self = [super init])) {
         self.window = window;
         self.responder = responder;
+        self.current = current;
         if ([responder conformsToProtocol:@protocol(NSTextInputClient)]
             && [responder respondsToSelector:@selector(inputContext)]) {
             self.context = [responder inputContext];
@@ -66,20 +68,22 @@ char *sp_input_source_current(void) {
     CFRelease(current);
     return [identifier autorelease];
 }
-// A responder that conforms to NSTextInputClient but has no input context accepts no text now (a web view without an
-// editable focus), so only a responder with a context is an active text client.
+// The system delivers keyboard input, and the input source with it, only to the current input context. A responder without an
+// input context accepts no text now (a web view without an editable focus), and an application that the system does not hold
+// active has no current context, even for its virtual key window, so no context adopts the selection: either is no active text
+// client, and the selection is global.
 - (BOOL)hasActiveTextClient {
-    return self.context != nil;
+    return self.context != nil && self.current() != nil;
 }
 - (BOOL)targetContextIsCurrent {
     return self.window && self.window == NSApp.keyWindow && self.window.firstResponder == self.responder
-        && self.context && NSTextInputContext.currentInputContext == self.context
+        && self.context && self.current() == self.context
         && self.context.client == self.responder;
 }
 - (NSString *)targetContextFailureDetails {
     NSWindow *currentWindow = NSApp.keyWindow;
     id currentResponder = self.window.firstResponder;
-    NSTextInputContext *currentContext = NSTextInputContext.currentInputContext;
+    NSTextInputContext *currentContext = self.current();
     id contextClient = self.context.client;
     NSString *capturedResponderClass = self.responder ? NSStringFromClass([self.responder class]) : @"<nil>";
     NSString *currentResponderClass = currentResponder ? NSStringFromClass([currentResponder class]) : @"<nil>";
@@ -130,6 +134,7 @@ char *sp_input_source_current(void) {
 }
 - (void)dealloc {
     [_context release];
+    [_current release];
     [super dealloc];
 }
 @end
@@ -255,12 +260,15 @@ void sp_input_source_select_and_await_with_driver(const char *identifier, id<SPI
     [selection start];
 }
 
-id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, id responder) {
-    return [[[SPLiveInputSourceSelectionDriver alloc] initWithWindow:window responder:responder] autorelease];
+id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, id responder,
+    NSTextInputContext *(^current)(void)) {
+    return [[[SPLiveInputSourceSelectionDriver alloc] initWithWindow:window responder:responder current:current] autorelease];
 }
 
 void sp_input_source_select_and_await(const char *identifier, void (^adopted)(const char *error)) {
     NSCAssert(NSThread.isMainThread, @"input sources are selected on the main thread");
     NSWindow *window = NSApp.keyWindow;
-    sp_input_source_select_and_await_with_driver(identifier, sp_input_source_live_driver(window, window.firstResponder), adopted);
+    id<SPInputSourceSelectionDriver> driver = sp_input_source_live_driver(window, window.firstResponder,
+        ^NSTextInputContext *{ return NSTextInputContext.currentInputContext; });
+    sp_input_source_select_and_await_with_driver(identifier, driver, adopted);
 }
