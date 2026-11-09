@@ -68,6 +68,7 @@ import {
 /* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
    know this module. */
 import { verify } from "./verify.js";
+import { chromeSwitches } from "./window-sidebars.js";
 /* Wiring of the error display and the layout queue. This document passes the document, the host, the plane and the compositor. */
 import { createErrorDisplay, createErrorWithdrawal, createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
@@ -489,40 +490,42 @@ function drawBars() {
   // The library screen has no layout, so the project list and auto-arrange buttons are left out there.
   const updates = pluginOperations.status().updates.length + (appUpdate.status().available ? 1 : 0);
   if (updates > 0 && updatesButton.textContent !== `업데이트 ${updates}`) updatesButton.textContent = `업데이트 ${updates}`;
-  const base = browsing ? chromeButtons.slice(2) : chromeButtons;
+  // The library has no layout and no window sidebars, so it leaves out the layout buttons and the sidebar switches, as mygo does.
+  const base = browsing ? [modeButton, settingsButton]
+    : [...layoutButtons, ...sidebarSwitches.map(({ button }) => button), modeButton, settingsButton];
   const wanted = updates > 0 ? [updatesButton, ...base] : base;
   if (wanted.length !== chromeActs.children.length || wanted.some((button, index) => chromeActs.children[index] !== button)) {
     chromeActs.replaceChildren(...wanted);
   }
-  chromeButtons[2].dataset.on = String(value("left"));
-  chromeButtons[3].dataset.on = String(value("right"));
+  for (const { edge, button } of sidebarSwitches) button.dataset.on = String(value(edge));
   const mode = modeName() === "dark" ? "sun" : "moon";
-  if (chromeButtons[4].dataset.icon !== mode) {
-    chromeButtons[4].innerHTML = icon(mode);
-    chromeButtons[4].dataset.icon = mode;
+  if (modeButton.dataset.icon !== mode) {
+    modeButton.innerHTML = icon(mode);
+    modeButton.dataset.icon = mode;
   }
 }
 
 /* The logo is one declaration for both workbenches. */
 installBrandLogo(document.querySelector(".brand__logo"));
 
-/* Chrome buttons: project list, card auto-arrange, left and right sidebar position, light/dark, settings. The command arguments are computed from
-   the values at the time of the press. */
-const chromeButtons = [
+/* Chrome buttons: project list, card auto-arrange, a switch for the sidebar of each window edge, light/dark, settings. The command arguments
+   are computed from the values at the time of the press. Each button has a name, so a new button moves no other. */
+const layoutButtons = [
   act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"),
   // Keeps the layout and gives the cards a fair share (packages/soksak/docs/layout.md#balancing).
   act("columns-3", "카드 자동 정렬", false, "core.layout.balance", {}, "core.chrome.balance"),
-  act("panel-left", "좌측 사이드바 위치", value("left"), "core.settings.set", () => ({ patch: { left: !value("left") } }), "core.chrome.left"),
-  act("panel-right", "우측 사이드바 위치", value("right"), "core.settings.set", () => ({ patch: { right: !value("right") } }), "core.chrome.right"),
-  // The same path as the mode segment of the modal. The theme command also applies the shape values of the theme
-  // again, so calling it would revert the passage and corners that the user set.
-  act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
-      "core.settings.set", () => ({ patch: { mode: modeName() === "dark" ? "light" : "dark" } }), "core.chrome.mode"),
-  // While the modal is open, the overlay covers this button, so it cannot be pressed again. The on
-  // state is not shown either. This is the same as settings-toggle of the former project.
-  act("settings", "설정", false, "core.settings.open", {}, "core.chrome.settings"),
 ];
-chromeButtons[4].dataset.icon = modeName() === "dark" ? "sun" : "moon";
+// The switch of each edge shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls).
+const sidebarSwitches = chromeSwitches().map(({ edge, icon: name, title, expose }) =>
+  ({ edge, button: act(name, title, value(edge), "core.settings.set", () => ({ patch: { [edge]: !value(edge) } }), expose) }));
+// The same path as the mode segment of the modal. The theme command also applies the shape values of the theme
+// again, so calling it would revert the passage and corners that the user set.
+const modeButton = act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
+  "core.settings.set", () => ({ patch: { mode: modeName() === "dark" ? "light" : "dark" } }), "core.chrome.mode");
+modeButton.dataset.icon = modeName() === "dark" ? "sun" : "moon";
+// While the modal is open, the overlay covers this button, so it cannot be pressed again. The on
+// state is not shown either. This is the same as settings-toggle of the former project.
+const settingsButton = act("settings", "설정", false, "core.settings.open", {}, "core.chrome.settings");
 
 /* The update control with the count N is in the bar only while the registry lists an update (docs/spec/installation.md). */
 const updatesButton = document.createElement("button");

@@ -883,7 +883,7 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 			Values map[string]any `json:"values"`
 		}](t, f, "core.settings").Values
 	}
-	order := []string{"core.chrome.projects", "core.chrome.balance", "core.chrome.left", "core.chrome.right", "core.chrome.mode", "core.chrome.settings"}
+	order := []string{"core.chrome.projects", "core.chrome.balance", "core.chrome.left", "core.chrome.right", "core.chrome.top", "core.chrome.bottom", "core.chrome.mode", "core.chrome.settings"}
 	last := float32(0)
 	for _, name := range order {
 		box := f.box(name, "")

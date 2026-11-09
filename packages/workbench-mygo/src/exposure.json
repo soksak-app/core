@@ -3991,11 +3991,19 @@
       },
       {
         "name": "core.chrome.left",
-        "description": "The left sidebar switch."
+        "description": "The switch of the left window sidebar, the first of the four edge switches; it runs core.settings.set with the negated left setting and is pressed while that setting is true."
       },
       {
         "name": "core.chrome.right",
-        "description": "The right sidebar switch."
+        "description": "The switch of the right window sidebar, after the left one; it runs core.settings.set with the negated right setting and is pressed while that setting is true."
+      },
+      {
+        "name": "core.chrome.top",
+        "description": "The switch of the top window sidebar, after the right one; it runs core.settings.set with the negated top setting and is pressed while that setting is true."
+      },
+      {
+        "name": "core.chrome.bottom",
+        "description": "The switch of the bottom window sidebar, after the top one; it runs core.settings.set with the negated bottom setting and is pressed while that setting is true."
       },
       {
         "name": "core.chrome.mode",

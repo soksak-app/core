@@ -1241,7 +1241,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F714-6 — plane 검사 `P 자리는 카드다`가 순서에서 각 창 사이드바의 기대 자리를 계산한다.
   - [o] F714-7 — 위·아래 창 사이드바의 섹션은 가로 방향을 쓰고, `core.sidebars`, `core.sidebar.status`, `core.rail`이 네 변을 설명한다.
   - [o] F714-8 — 설정 창: 일반의 표시 스위치 넷, 일반 세트 선택 넷, 순서 줄, 플러그인 페이지의 창 선택 넷, 고친 묶음 설명. 두 workbench 모두.
-  - [ ] F714-9 — chrome 스위치 `core.chrome.top`, `core.chrome.bottom`, 보이기 tooltip, 고정 index 없는 버튼 순서, chrome 컨트롤 폭, 모든 변의 접기 컨트롤. 두 workbench 모두.
+  - [o] F714-9 — chrome 스위치 `core.chrome.top`, `core.chrome.bottom`, 보이기 tooltip, 고정 index 없는 버튼 순서, chrome 컨트롤 폭, 모든 변의 접기 컨트롤. 두 workbench 모두.
   - [ ] F714-10 — 다시 빌드한 Tauri, Wails, mygo 앱에서 네 변과 그 순서를 확인한다.
   - [ ] F714-11 — kit의 용어 목록이 창 사이드바의 변과 사이드바 순서를 이름 짓고, `sidebar instance` 정의가 `top`과 `bottom`을 나열한다. 이 변경은 이 저장소가 pin하는 kit release로 들어온다.
 

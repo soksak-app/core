@@ -19,6 +19,19 @@ export const EDGE_NAMES = Object.freeze({ left: "왼쪽", right: "오른쪽", to
 /** The fold chevron of the status line of the sidebar of each edge, pointing toward the edge. */
 export const FOLD_ICONS = Object.freeze({ left: "chevron-left", right: "chevron-right", top: "chevron-up", bottom: "chevron-down" });
 
+/**
+ * The switches of the window sidebars in the window chrome, one per edge in the fixed order left, right, top, bottom: the edge, the icon,
+ * the tooltip and the exposure element of each (docs/spec/external-sidebars.md#window-controls).
+ */
+export function chromeSwitches() {
+  return [
+    { edge: "left", icon: "panel-left", title: "왼쪽 사이드바 보이기", expose: "core.chrome.left" },
+    { edge: "right", icon: "panel-right", title: "오른쪽 사이드바 보이기", expose: "core.chrome.right" },
+    { edge: "top", icon: "panel-top", title: "위 사이드바 보이기", expose: "core.chrome.top" },
+    { edge: "bottom", icon: "panel-bottom", title: "아래 사이드바 보이기", expose: "core.chrome.bottom" },
+  ];
+}
+
 /** The orientation of the sections of the sidebar of an edge: vertical at left and right, horizontal at top and bottom. */
 export function windowOrientation(edge) {
   return windowAxis(edge) === "x" ? "vertical" : "horizontal";
