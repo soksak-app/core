@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { fresh, uncoverFromCheckWindows } from "./fixture.mjs";
+import { fresh, joinedFailure, uncoverFromCheckWindows } from "./fixture.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { recordedEdges } from "./sidebar-gesture-recording.mjs";
 import { missingPoses } from "./card-panel-checks.mjs";
@@ -169,8 +169,7 @@ for (const app of Object.values(APPS)) {
               }
             }
             if (gestureErrors.length)
-              throw new AggregateError(gestureErrors,
-                `${side}: pointer input or capture failed: ${gestureErrors.map((error) => error.message).join("; ")}`);
+              throw joinedFailure(`${side}: pointer input or capture failed`, gestureErrors);
             const captured = frames(directory).map(readFrame);
             captured.forEach((frame, index) => {
               // On failure it reports the buffer size, the window rectangle, and the scale of that frame.
@@ -262,8 +261,7 @@ for (const app of Object.values(APPS)) {
         }
       }
       if (failures.length) {
-        throw new AggregateError(failures,
-          `sidebar gesture measurement failed: ${failures.map((error) => error.message).join("; ")}`);
+        throw joinedFailure("sidebar gesture measurement failed", failures);
       }
     },
   );
