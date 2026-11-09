@@ -391,6 +391,11 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 			return
 		}
 		mainThreadStep(func() {
+			// A window that closed still reports a resize or a show, as one that leaves full screen while a quit closes it does. Its
+			// main web view has left the window, and a placement would fail and end the process before the quit finishes.
+			if s.closed {
+				return
+			}
 			if err := system.SetMainWebview(win.NativeWindow()); err != nil {
 				fatalError("main webview identity", err)
 			}
