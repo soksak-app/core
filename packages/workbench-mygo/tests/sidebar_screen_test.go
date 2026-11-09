@@ -351,7 +351,7 @@ func TestAFoldedSidebarKeepsItsSectionsWithoutAPlace(t *testing.T) {
 		binder := recorder(t, new([]call), sidebarCommands...)
 		seats := map[string]bool{}
 		tt := ui.NewTester(func(c *ui.Context) {
-			workbench.HideSidebar(c, binder, frame, sidebarMetrics, 240, 400, func(_ *ui.Context, seat workbench.SidebarSeat) {
+			workbench.HideSidebar(c, binder, frame, func(_ *ui.Context, seat workbench.SidebarSeat) {
 				seats[seat.SurfaceID] = seat.Visible
 			})
 		}, 240, 400)

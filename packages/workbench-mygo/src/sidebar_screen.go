@@ -257,6 +257,12 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 	// The group of the sidebar is its set, as the page names its container when it draws a set, and the set holds no status line. A
 	// sidebar without a set is a group as a whole and has no element.
 	named := frame.Set != ""
+	// A seat names the place of its body, which the insets of the set move.
+	body := func(c *ui.Context, place SidebarSeat) {
+		place.Box.X += float64(inset.Left)
+		place.Box.Y += float64(inset.Top)
+		seat(c, place)
+	}
 	whole := ui.Column(c).Size(width, height).Clip()
 	if !named {
 		whole.Role(ui.RoleGroup).Label(frame.Sidebar)
@@ -273,11 +279,11 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 		set.Children(func() {
 			switch {
 			case frame.Layout == "tabs":
-				drawSectionTabs(c, binder, frame, metrics, setWidth, setRoom, seat)
+				drawSectionTabs(c, binder, frame, metrics, setWidth, setRoom, body)
 			case frame.Orientation == "horizontal":
-				drawHorizontalList(c, binder, frame, metrics, setWidth, setRoom, seat)
+				drawHorizontalList(c, binder, frame, metrics, setWidth, setRoom, body)
 			default:
-				drawVerticalList(c, binder, drag, frame, metrics, setWidth, setRoom, seat)
+				drawVerticalList(c, binder, drag, frame, metrics, setWidth, setRoom, body)
 			}
 		})
 		drawSidebarStatus(c, binder, frame, metrics)
@@ -287,6 +293,50 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 			seat(c, place)
 		}
 	}
+}
+
+// HideSidebar draws the sidebar of a folded side as the page keeps it under display:none: every element of its set and its status
+// line stays without a place, so the elements of each name follow the order of the sidebars, and every section keeps its seat
+// without a body.
+func HideSidebar(c *ui.Context, binder *Binder, frame SidebarFrame, seat seatDrawer) {
+	if frame.Set != "" {
+		ui.Box(binder.Name(c, "core.sidebar", frame.Sidebar)).Size(0, 0).Role(ui.RoleGroup).Label(frame.Sidebar).Children(func() {
+			if frame.Layout == "tabs" {
+				ui.Box(binder.Name(c, "core.sidebar.tabs", frame.Sidebar)).Size(0, 0).Role(ui.RoleTabList).Children(func() {
+					for _, section := range frame.Sections {
+						binder.Absent(c, "core.sidebar.section.tab", "core.sidebar.section.select", sectionItem(frame, section),
+							sectionParam{frame.Sidebar, section.ID}).Role(ui.RoleTab).Label(section.Name)
+					}
+				})
+			}
+			for i, section := range frame.Sections {
+				item := sectionItem(frame, section)
+				if frame.Layout != "tabs" && i > 0 {
+					binder.Control(c, "core.sidebar.section.divider", "core.sidebar.section.size", item)
+					ui.Box(c).Size(0, 0).Role(ui.RoleSplitter).Label(section.Name)
+				}
+				absentSection(c, binder, frame, section).Children(func() {
+					if frame.Layout == "tabs" {
+						return
+					}
+					binder.Absent(c, "core.sidebar.section.header", "core.sidebar.section.fold", item, sectionParam{frame.Sidebar, section.ID}).
+						Role(ui.RoleListItem).Label(section.Name).Children(func() {
+						ui.Box(binder.Name(c, "core.sidebar.section.name", item)).Size(0, 0).Role(ui.RoleText).Label(section.Name)
+					})
+				})
+			}
+		})
+	}
+	ui.Box(binder.Name(c, statusName(frame), frame.Sidebar)).Size(0, 0).Role(ui.RoleStatus).Label(frame.Status)
+	for _, place := range SidebarSeats(frame) {
+		place.Visible = false
+		seat(c, place)
+	}
+}
+
+// absentSection is the element of a section that the window holds without a place, as the page holds a section under display:none.
+func absentSection(c *ui.Context, binder *Binder, frame SidebarFrame, section SidebarSection) ui.Element {
+	return ui.Box(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).Size(0, 0).Role(ui.RoleGroup).Label(section.Name)
 }
 
 func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, section SidebarSection, metrics SidebarMetrics) {
@@ -418,10 +468,12 @@ func drawSectionTabs(c *ui.Context, binder *Binder, frame SidebarFrame, metrics 
 			if !section.fills() {
 				height = min(height, section.points())
 			}
-			ui.Column(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).Hidden(section.ID != frame.Tab).Role(ui.RoleGroup).Label(section.Name).Children(func() {
-				if section.ID == frame.Tab {
-					drawSeat(c, frame, section, layout.Rect{Y: float64(metrics.HeadH), W: float64(width), H: float64(height)}, seat)
-				}
+			if section.ID != frame.Tab {
+				absentSection(c, binder, frame, section)
+				continue
+			}
+			ui.Column(binder.Name(c, "core.sidebar.section", sectionItem(frame, section))).Role(ui.RoleGroup).Label(section.Name).Children(func() {
+				drawSeat(c, frame, section, layout.Rect{Y: float64(metrics.HeadH), W: float64(width), H: float64(height)}, seat)
 			})
 		}
 	})
@@ -449,13 +501,17 @@ func drawSectionTab(c *ui.Context, binder *Binder, frame SidebarFrame, section S
 	})
 }
 
+// statusName is the element name of the status line of the frame: that of a window sidebar or that of a card sidebar.
+func statusName(frame SidebarFrame) string {
+	if frame.Side != "" {
+		return "core.sidebar.status"
+	}
+	return "core.card.sidebar.status"
+}
+
 func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics) {
 	theme := c.Theme()
-	name := "core.card.sidebar.status"
-	if frame.Side != "" {
-		name = "core.sidebar.status"
-	}
-	ui.Row(binder.Name(c, name, frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
+	ui.Row(binder.Name(c, statusName(frame), frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
 		BorderWidth(metrics.BorderWidth, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
 		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(theme.TextMuted)
 		if frame.Side == "" {
