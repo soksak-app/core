@@ -62,6 +62,9 @@ type surfaceHost struct {
 	opened      []uint64
 	openedAt    []int
 	cancelled   []uint64
+	// pending is the opened layout that no preparation took over and no cancel ended, which holds the frames of the window as the
+	// host does: while it stands, no other frame opens a layout.
+	pending uint64
 	// presentGate, when set, holds each presentSurfaces until it closes, so a frame draws while a placement runs.
 	presentGate    chan struct{}
 	declareFailure error
@@ -154,6 +157,9 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		}
 		h.orderMu.Lock()
 		h.cancelled = append(h.cancelled, request.Ticket)
+		if h.pending == request.Ticket {
+			h.pending = 0
+		}
 		h.orderMu.Unlock()
 		h.called("cancelSurfaces")
 		return nil, nil
@@ -257,10 +263,19 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		for _, surface := range request.Surfaces {
 			held = append(held, surface.ID)
 		}
+		// The preparation takes the opened layout over, and the host cancels it when the preparation fails.
 		h.orderMu.Lock()
 		h.held = held
+		taken := h.pending
+		h.pending = 0
 		h.orderMu.Unlock()
-		return sync(ctx, argument)
+		value, err := sync(ctx, argument)
+		if err != nil && taken != 0 {
+			h.orderMu.Lock()
+			h.cancelled = append(h.cancelled, taken)
+			h.orderMu.Unlock()
+		}
+		return value, err
 	}
 	return table
 }
@@ -272,7 +287,11 @@ func (h *surfaceHost) openLayout() (uint64, error) {
 	}
 	h.orderMu.Lock()
 	defer h.orderMu.Unlock()
+	if h.pending != 0 {
+		return 0, fmt.Errorf("the window holds its frames for the layout %d that no preparation took over", h.pending)
+	}
 	ticket := uint64(1000 + len(h.opened))
+	h.pending = ticket
 	h.opened = append(h.opened, ticket)
 	h.openedAt = append(h.openedAt, len(h.order))
 	return ticket, nil
@@ -1921,8 +1940,8 @@ func TestAFrameThatMovesASurfaceDuringAPlacementIsPlacedAtItsAnswer(t *testing.T
 	}
 }
 
-// A placement whose preparation fails leaves the layout that its frame opened to no preparation, so it cancels that layout, which
-// commits it and releases the frames of the window.
+// A placement whose preparation fails leaves the layout that its frame opened to no preparation, so the host cancels that layout,
+// which commits it and releases the frames of the window, and the next frame that moves a surface opens and places again.
 func TestAPlacementThatFailsBeforeItsPreparationCancelsTheOpenedLayout(t *testing.T) {
 	f, stored := surfaceShell(t)
 	stored.syncFailure = errors.New("refused")
@@ -1934,5 +1953,38 @@ func TestAPlacementThatFailsBeforeItsPreparationCancelsTheOpenedLayout(t *testin
 	stored.orderMu.Unlock()
 	if len(opened) == 0 || !slices.Equal(cancelled, opened[len(opened)-1:]) {
 		t.Fatalf("a failed preparation cancelled the layouts %v after the frame opened %v", cancelled, opened)
+	}
+	stored.syncFailure = nil
+	requests := len(stored.requests)
+	f.tester.SetSize(1000, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	if len(stored.requests) != requests+1 || stored.pending != 0 {
+		t.Fatalf("after the failure the next frame made %d placements and left the layout %d open", len(stored.requests)-requests, stored.pending)
+	}
+}
+
+// A frame that opens the layout of its window and makes no preparation, as a frame whose placement fails by a layout fault, cancels
+// the layout before it ends, so the layout does not hold the next frame, which opens and places again (docs/spec/hosts.md#native-views).
+func TestAFrameThatOpensTheLayoutWithoutAPreparationDoesNotHoldTheNext(t *testing.T) {
+	f, stored := surfaceShell(t)
+	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
+	f.settle()
+	opened := stored.openings()
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	stored.orderMu.Lock()
+	ended, cancelled, pending := slices.Clone(stored.opened[opened:]), slices.Clone(stored.cancelled), stored.pending
+	stored.orderMu.Unlock()
+	if len(ended) == 0 || !slices.Contains(cancelled, ended[0]) || pending != 0 {
+		t.Fatalf("the faulted frame opened %v and cancelled %v, leaving %d open", ended, cancelled, pending)
+	}
+	requests := len(stored.requests)
+	f.tester.SetSize(1000, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	if len(stored.requests) != requests+1 || stored.pending != 0 {
+		t.Fatalf("the frame after the fault made %d placements, leaving %d open", len(stored.requests)-requests, stored.pending)
 	}
 }

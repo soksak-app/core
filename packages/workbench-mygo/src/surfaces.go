@@ -639,17 +639,20 @@ func (s *Shell) placeSurfaces() {
 	// The first row is part of the placement: the host sets the title bar, and so the window buttons, with the frame that draws the row
 	// (frameLayout of packages/workbench/frame-text.js), also when no surface moved.
 	same := slices.Equal(lines, s.surfaces.placed) && (s.surfaces.titlebar == 0 || s.chromeHeight() == s.surfaces.titlebar)
+	if !same {
+		s.openLayout()
+	}
 	if s.surfaces.running {
-		if !same {
-			s.openLayout()
-		}
+		// The answer of the running placement decides about the opened layout (placeOpened).
 		s.surfaces.moved = s.surfaces.moved || !same
 		return
 	}
+	// The opened layout holds the frames of the window, so no later frame ends it: the placement that this call decides hands it to
+	// its preparation, and a call that makes no preparation cancels it here, whichever way it returns.
+	defer s.cancelOpened()
 	// The host ends a run on a settled placement, so the end of a run places also when its last move placed these lines.
 	runEnds := s.surfaces.going && s.held == nil
 	if same && !runEnds {
-		s.cancelOpened()
 		s.afterKeyboard(s.surfaces.commits)
 		s.surfaces.commits = nil
 		return
@@ -658,7 +661,6 @@ func (s *Shell) placeSurfaces() {
 		// The placement fails without a change, so the next frame places the lines again, also when the window came back to
 		// the lines of the last placement.
 		s.surfaces.layoutFault = false
-		s.cancelOpened()
 		s.surfaces.placing, s.surfaces.commits = s.surfaces.commits, nil
 		s.surfaces.placed = nil
 		s.placed(errors.New(layoutFaultText))
@@ -667,15 +669,10 @@ func (s *Shell) placeSurfaces() {
 	}
 	request, err := s.surfaceRequest()
 	if err != nil {
-		s.cancelOpened()
 		s.fail(err)
 		return
 	}
-	if !same {
-		s.openLayout()
-	}
-	// The preparation of these lines takes the opened layout over, and a preparation that fails cancels it.
-	opened := s.surfaces.opened
+	// The preparation of these lines takes the opened layout over, and the host cancels it when the preparation fails.
 	s.surfaces.opened = 0
 	s.surfaces.placed, s.surfaces.titlebar = lines, s.chromeHeight()
 	s.surfaces.running = true
@@ -703,8 +700,8 @@ func (s *Shell) placeSurfaces() {
 	requested := slices.Clone(s.surfaces.order)
 	s.calls.CallInOrder(surfaceOrder, "syncSurfaces", request, func(value any, err error) {
 		if err != nil {
-			s.cancelLayout(opened)
 			s.placed(err)
+			s.placeOpened()
 			return
 		}
 		prepared, err := decode[struct {
@@ -717,6 +714,7 @@ func (s *Shell) placeSurfaces() {
 		}
 		if err != nil {
 			s.placed(err)
+			s.placeOpened()
 			return
 		}
 		s.calls.CallInOrder(surfaceOrder, "presentSurfaces", map[string]any{"ticket": prepared.Ticket, "placements": prepared.Placements, "settled": settled},
@@ -737,6 +735,7 @@ func (s *Shell) placeSurfaces() {
 					}
 				}
 				s.placed(err)
+				s.placeOpened()
 				s.options.Invalidate()
 			})
 	})
@@ -759,16 +758,11 @@ func (s *Shell) openLayout() {
 	s.surfaces.opened = ticket
 }
 
-// cancelOpened cancels the opened layout for a placement that ends without a preparation.
+// cancelOpened cancels the opened layout for a placement that ends without a preparation, which commits it and releases the frames
+// of the window; a layout that a preparation took over is no longer the open one, and its cancel changes nothing.
 func (s *Shell) cancelOpened() {
 	ticket := s.surfaces.opened
 	s.surfaces.opened = 0
-	s.cancelLayout(ticket)
-}
-
-// cancelLayout cancels the layout transaction ticket, which commits it and releases the frames of the window; a ticket that a later
-// preparation took over is no longer the open one, and its cancel changes nothing. Ticket 0 names no layout.
-func (s *Shell) cancelLayout(ticket uint64) {
 	if ticket == 0 {
 		return
 	}
@@ -814,13 +808,11 @@ func (s *Shell) placed(err error) {
 	s.surfaces.placing = nil
 	if err != nil {
 		s.answerCommits(placing, err)
-		s.placeOpened()
 		return
 	}
 	s.afterKeyboard(placing)
 	s.followKeyboard(false)
 	s.endRestores()
-	s.placeOpened()
 }
 
 // placeOpened places the lines of a frame that drew them while a placement ran and opened the layout: the layout holds the frames
