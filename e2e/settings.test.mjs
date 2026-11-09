@@ -178,7 +178,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     // A set line names the sections of the set that are shown: the sets of the configuration take the sections of the loaded probe.
-    // Nothing keeps a long line on one line (docs/spec/settings.md#사이드바), and the line of three probe sections is longer than
+    // Nothing keeps a long line on one line (docs/spec/settings.md#sections, the sidebar section), and the line of three probe sections is longer than
     // the width beside the buttons, so each set names the two sections of CARD_SECTIONS: a line wider than the 124 px name column
     // that the set line once stood in, and narrower than the width that the buttons leave.
     const stored = await probeSidebarSets(s);

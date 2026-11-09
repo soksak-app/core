@@ -320,6 +320,8 @@ func (e *Events) Traced() bool { return e.tracing }
 // that passes.
 func (e *Events) Trace(event string, fields func() map[string]any) {
 	name := "workbench.trace." + event
+	// silent: a name that the catalog does not declare has no class, so it is not of the class frame and passes only while the trace
+	// is on, as every other trace event; the writer then stores it with the marker undeclared (docs/spec/logging.md#principles).
 	if class, _ := sok.EventClassOf(name); !e.tracing && class != sok.ClassFrame {
 		return
 	}
