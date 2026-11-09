@@ -38,13 +38,15 @@ type VerifySkipped struct {
 	Note string `json:"note"`
 }
 
-// VerifySurface is a surface of a layout record: where the workbench declared it, where the host applied it, and its state.
+// VerifySurface is a surface of a layout record: where the workbench declared it, where the host applied it, and its state. Scale is
+// the backing scale whose device pixels the host fitted an applied surface to.
 type VerifySurface struct {
 	ID       string
 	Declared layout.Rect
 	Applied  layout.Rect
 	Visible  bool
 	Dim      bool
+	Scale    float64
 }
 
 // VerifyRecord is a layout record of the compositor.
@@ -112,12 +114,27 @@ func maxDelta(a, b layout.Rect) float64 {
 	return max(math.Abs(a.X-b.X), math.Abs(a.Y-b.Y), math.Abs(a.W-b.W), math.Abs(a.H-b.H))
 }
 
-// beyond is how far a goes beyond b at the farthest point: 0 when a is inside b.
-func beyond(a, b layout.Rect) float64 {
+// pixelEdges are the edges of r, a rectangle on the device pixels of scale, as whole device pixels. Two rectangles on one grid are
+// compared by these numbers and not by their points, which carry the remainders of the coordinates in which each side computed them.
+func pixelEdges(r layout.Rect, scale float64) (left, top, right, bottom float64) {
+	return math.Round(r.X * scale), math.Round(r.Y * scale), math.Round((r.X + r.W) * scale), math.Round((r.Y + r.H) * scale)
+}
+
+// gridDelta is the largest difference of the edges of two rectangles on the device pixels of scale, in points.
+func gridDelta(a, b layout.Rect, scale float64) float64 {
+	al, at, ar, ab := pixelEdges(a, scale)
+	bl, bt, br, bb := pixelEdges(b, scale)
+	return max(math.Abs(al-bl), math.Abs(at-bt), math.Abs(ar-br), math.Abs(ab-bb)) / scale
+}
+
+// gridBeyond is how far a goes beyond b, both on the device pixels of scale, in points: 0 when a is inside b.
+func gridBeyond(a, b layout.Rect, scale float64) float64 {
 	if a.W <= 0 || a.H <= 0 {
 		return 0
 	}
-	return max(0, b.X-a.X, b.Y-a.Y, a.X+a.W-(b.X+b.W), a.Y+a.H-(b.Y+b.H))
+	al, at, ar, ab := pixelEdges(a, scale)
+	bl, bt, br, bb := pixelEdges(b, scale)
+	return max(0, bl-al, bt-at, ar-br, ab-bb) / scale
 }
 
 // DevicePixels returns where a window stands the view of a surface whose slot is r: each edge at the nearest device pixel, where the
@@ -422,20 +439,34 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 	skip("V7c 미리 게시한 자리 == 그려진 자리", "이 창은 자리를 미리 게시하지 않는다")
 
 	// V7b: the window stands a surface on the device pixels nearest its declared rectangle, so the applied rectangle is compared with
-	// exactly those.
+	// exactly those. The host answers the backing scale whose device pixels it seated each surface on, and the window can change
+	// display between the placement and this check, so each rectangle is judged on the grid of its seat scale, in whole device
+	// pixels, and a seat of a scale other than that of the window is named: it is off the device pixels of the window until the next
+	// placement.
 	land, escaped, landed, landedAt := 0.0, 0.0, 0, ""
+	var elsewhere, unseated []string
 	if in.Seated != nil {
 		for _, surface := range in.Seated.Surfaces {
 			if !surface.Visible || surface.Declared.W < 1 || surface.Declared.H < 1 {
 				continue
 			}
-			standing := DevicePixels(surface.Declared, in.Scale)
-			delta := maxDelta(standing, surface.Applied)
+			// A surface that the answer of the host did not name has no seat and stands on no grid.
+			seat := surface.Scale
+			if !(seat > 0) {
+				unseated = append(unseated, surface.ID)
+				landed++
+				continue
+			}
+			standing := DevicePixels(surface.Declared, seat)
+			delta := gridDelta(standing, surface.Applied, seat)
 			if delta > land {
 				landedAt = fmt.Sprintf(" · %s declared %s applied %s", surface.ID, frameText(surface.Declared), frameText(surface.Applied))
 			}
 			land = max(land, delta)
-			escaped = max(escaped, beyond(surface.Applied, standing))
+			escaped = max(escaped, gridBeyond(surface.Applied, standing, seat))
+			if seat != in.Scale {
+				elsewhere = append(elsewhere, fmt.Sprintf("%s seated at %v", surface.ID, seat))
+			}
 			landed++
 		}
 	}
@@ -446,8 +477,12 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 		if in.Seated.Settled {
 			state = "정지"
 		}
-		add("V7b applied == declared", escaped == 0 && land == 0,
-			fmt.Sprintf("밖으로 %.2fpx · 차이 %.2fpx · %s (seq %d)%s", escaped, land, state, in.Seated.Seq, landedAt))
+		seats := ""
+		if len(elsewhere) > 0 {
+			seats = fmt.Sprintf(" (%s, display %v)", strings.Join(elsewhere, ", "), in.Scale)
+		}
+		add("V7b applied == declared", escaped == 0 && land == 0 && len(elsewhere) == 0 && len(unseated) == 0,
+			fmt.Sprintf("밖으로 %.2fpx · 차이 %.2fpx · 다른 scale 에 놓인 표면 %d%s · 답 없는 표면 %d%s · %s (seq %d)%s", escaped, land, len(elsewhere), seats, len(unseated), named(unseated), state, in.Seated.Seq, landedAt))
 	}
 
 	skip("V8 뷰가 transform 을 안 쓴다", "이 창의 카드에는 transform 이 없다")

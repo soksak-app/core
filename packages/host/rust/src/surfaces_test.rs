@@ -3,6 +3,7 @@
 // A visible surface lies on the device pixels of the backing scale that the host fitted it to, and the window can change display
 // before the page reads the answer, so the placement and its trace name that scale; a hidden surface is fitted to no grid and names
 // none (docs/spec/native-surfaces.md).
+// contract: surface-layout.placement-names-its-scale
 #[test]
 fn a_seated_placement_names_the_backing_scale_of_a_visible_surface() {
     let frame = [203.0, 553.0 + 2.0 / 3.0, 1360.0, 413.0];
@@ -36,6 +37,7 @@ fn a_seated_placement_names_the_backing_scale_of_a_visible_surface() {
 
 // A window without a backing scale has no device pixels to fit a surface to, so the layout fails instead of seating the surface on a
 // grid that no display has.
+// contract: surface-layout.placement-names-its-scale
 #[test]
 fn a_layout_in_a_window_without_a_backing_scale_fails() {
     assert_eq!(super::backing_scale(2.0), Ok(2.0));

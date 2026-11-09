@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -204,6 +205,7 @@ func (s *Shell) seatRecord(record *VerifyRecord, answer any, declared bool) erro
 		W       float64 `json:"w"`
 		H       float64 `json:"h"`
 		Visible bool    `json:"visible"`
+		Scale   float64 `json:"scale"`
 	}](answer)
 	if err != nil {
 		return err
@@ -219,11 +221,16 @@ func (s *Shell) seatRecord(record *VerifyRecord, answer any, declared bool) erro
 			}
 			continue
 		}
+		// A visible surface lies on the device pixels of the backing scale that the host seated it on, which the answer names.
+		if !(placement.Scale > 0) {
+			return fmt.Errorf("surface placement %s has invalid scale %v", placement.ID, placement.Scale)
+		}
 		box := layout.Rect{X: placement.X, Y: placement.Y, W: placement.W, H: placement.H}
 		s.surfaces.applied[placement.ID] = box
 		for index := range record.Surfaces {
 			if record.Surfaces[index].ID == placement.ID {
 				record.Surfaces[index].Applied = inPlane(box, origin)
+				record.Surfaces[index].Scale = placement.Scale
 			}
 		}
 	}

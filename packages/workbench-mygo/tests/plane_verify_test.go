@@ -48,8 +48,13 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 				scale := stored.window.Scale
 				left, top := math.Round(x*scale)/scale, math.Round(y*scale)/scale
 				right, bottom := math.Round((x+surface["w"].(float64))*scale)/scale, math.Round((y+surface["h"].(float64))*scale)/scale
-				placements = append(placements, map[string]any{"id": surface["id"], "visible": surface["visible"],
-					"x": left + stored.moved, "y": top, "w": max(right-left, 0), "h": max(bottom-top, 0)})
+				placement := map[string]any{"id": surface["id"], "visible": surface["visible"],
+					"x": left + stored.moved, "y": top, "w": max(right-left, 0), "h": max(bottom-top, 0)}
+				// A visible placement names the backing scale whose device pixels the host seated the surface on.
+				if surface["visible"] == true {
+					placement["scale"] = scale
+				}
+				placements = append(placements, placement)
 			}
 			return map[string]any{"ticket": 1, "placements": placements,
 				"chrome": map[string]any{"controls": map[string]any{"x": 12, "y": 12, "w": 52, "h": 16}, "row": 40}}, nil
@@ -279,6 +284,39 @@ func TestARefusedPlacementIsNotUnanswered(t *testing.T) {
 	}
 	if got := verifyRow(t, verify, "Surface presentation"); got.OK || got.Note != "the host refused" {
 		t.Fatalf("the refusal is %+v", got)
+	}
+}
+
+// A visible placement that the host answers without the backing scale that seated it stands on no grid, so the presentation of the
+// placement fails and names it.
+func TestAPlacementWithoutItsScaleFailsThePresentation(t *testing.T) {
+	f, stored := placingShell(t)
+	resized(f, 1000)
+	var placements []map[string]any
+	if err := json.Unmarshal(stored.answered, &placements); err != nil {
+		t.Fatal(err)
+	}
+	unscaled := ""
+	for _, placement := range placements {
+		if placement["visible"] == true {
+			delete(placement, "scale")
+			unscaled = placement["id"].(string)
+			break
+		}
+	}
+	if unscaled == "" {
+		t.Fatalf("the answer %s has no visible placement", stored.answered)
+	}
+	presented, err := json.Marshal(placements)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.presented = presented
+	resized(f, 900)
+	verify := status[workbench.VerifyStatus](t, f, "core.verify")
+	want := "surface placement " + unscaled + " has invalid scale 0"
+	if got := verifyRow(t, verify, "Surface presentation"); got.OK || got.Note != want {
+		t.Fatalf("the presentation of a placement without its scale is %+v", got)
 	}
 }
 
