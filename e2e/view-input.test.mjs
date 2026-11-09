@@ -75,11 +75,16 @@ for (const app of Object.values(APPS)) {
     await s.until("probeinput.field", value => value.value === "xz",
       "native input did not return to the retained view", { surface: probe.surface });
     await s.run("core.card.menu", { card: card.id, menu: "add" });
-    await s.until("host.window", window => window.modal?.id === "picker" && window.modal.shown,
-      "the picker did not appear over the view");
+    await s.until("core.picker", picker => picker.open, "the picker did not open over the view");
+    // A host with a main page (`pageProcess` of `host.window`) shows the picker in a modal web view; a host without one draws
+    // the picker in the window itself and has no modal web view.
+    if ((await s.get("host.window")).pageProcess !== null) {
+      await s.until("host.window", window => window.modal?.id === "picker" && window.modal.shown,
+        "the picker did not appear over the view");
+    }
     await s.press("Escape");
-    await s.until("host.window", window => window.modal === null, "native Escape did not close the picker");
-    assert.equal((await s.get("core.picker")).open, false);
+    await s.until("core.picker", picker => !picker.open, "native Escape did not close the picker");
+    await s.until("host.window", window => window.modal === null, "the picker modal stayed after native Escape");
     const { displayed } = await s.presented();
     const stopped = await recording.stop({ after: displayed + 100 });
     const windows = await activity.stop();
