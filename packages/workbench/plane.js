@@ -8,6 +8,7 @@ import { Soksak, SoksakView, outline, sliceTree } from "soksak";
 import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
+import { alignPlane, gridScale } from "./device-grid.js";
 import { CHROME, placeFocusMark } from "./chrome-metrics.js";
 import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
@@ -1054,7 +1055,7 @@ function drawCardSidebars(el, card, rect) {
     setText(body.querySelector(".card-sidebar__status"), `${name} 사이드바 · ${set.title}`);
     handle.title = state.autoCollapsed ? `공간 부족으로 ${name} 사이드바 자동 접힘` : state.collapsed ? `눌러 ${name} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${name} 사이드바 접기`;
     el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
-    el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${deviceGridSize(state.shownSize, devicePixelRatio)}px`);
+    el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${deviceGridSize(state.shownSize, gridScale())}px`);
     // default: a sidebar section of a card with no tabs has no surface context (null) — it is the same context as the left window sidebar.
     const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
     drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, space: heldSpace, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical" });
@@ -1425,7 +1426,7 @@ function seats(rects) {
       const effective = presentation ?? {};
       bands = Object.fromEntries(SIDEBAR_SIDES.map(side => {
         const state = effective[side];
-        return [side, state ? (state.collapsed ? folded : deviceGridSize(state.shownSize, devicePixelRatio)) : 0];
+        return [side, state ? (state.collapsed ? folded : deviceGridSize(state.shownSize, gridScale())) : 0];
       }));
       inset = targetCardInsets(el, slot, bands);
     }
@@ -1482,11 +1483,13 @@ function build(kept) {
       const factor = value("textSize");
       if (!layouter) {
         applyFrameText(factor);
+        alignPlane(plane);
         return draw();
       }
       const seated = seats(made);
       return layouter(made, () => {
         applyFrameText(factor);
+        alignPlane(plane);
         transactionSeats = seated;
         try {
           draw();
@@ -1590,7 +1593,13 @@ export function setGap(half) {
   // The gap is also the inner margin of the stage, so the plane size changes when the gap changes. If the code waited for the
   // observer, a render in the meantime would draw with the previous size and pass that value to the surface too.
   // The frame scale is written into the document by the next drawing, so the plane size is measured at that scale (frame-text.js).
-  const [width, height] = measureAt(value("textSize"), () => [plane.clientWidth, plane.clientHeight]);
+  // The scale changes the rows above the plane, so the plane is aligned to the device pixel grid at that scale before it is read,
+  // and again at the drawn scale after the measurement restores it.
+  const [width, height] = measureAt(value("textSize"), () => {
+    alignPlane(plane);
+    return [plane.clientWidth, plane.clientHeight];
+  });
+  alignPlane(plane);
   grid.resize(width, height);
 }
 

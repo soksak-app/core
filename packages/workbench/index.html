@@ -62,8 +62,9 @@ import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTab
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
-  activeTab, currentGrid, onLayout, onRender, setGap, settle, settleModifiedTabsToClose, tabsOf,
+  activeTab, currentGrid, onLayout, onRender, plane, setGap, settle, settleModifiedTabsToClose, tabsOf,
 } from "./plane.js";
+import { observePlaneGrid } from "./device-grid.js";
 
 /* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
    know this module. */
@@ -546,6 +547,9 @@ holdImageDetachSurfaces(start.pendingSurfaces);
 onImageDetachEnded((event) => {
   if (imageDetachEnded(event)) settle();
 });
+// The plane is kept on the device pixel grid from before its view exists, so the stage is aligned before the view reads the
+// plane size in the same observation round (device-grid.js).
+observePlaneGrid(plane);
 projects.begin(start.workspace);
 // The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
 applyFrameText(value("textSize"));
