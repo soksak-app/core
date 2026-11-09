@@ -62,6 +62,7 @@ func TestAWorkbenchWhoseStartFailsIsNotShown(t *testing.T) {
 
 // A quit closes the last window while the start of its workbench runs. The start then names no window, which has no screen to show a
 // failure on and no workbench to tell, so the start ends without a failure.
+// contract: mygo.framework.closed-window-start-ends-without-a-failure
 func TestAStartWhoseWindowClosedEndsWithoutAFailure(t *testing.T) {
 	workbench := &startRecord{}
 	framework := NewFramework(workbench)

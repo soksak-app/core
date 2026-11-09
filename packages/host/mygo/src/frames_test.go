@@ -65,6 +65,7 @@ func TestAStepWithoutAFocusedWindowBelongsToTheOnlyOpenWindow(t *testing.T) {
 }
 
 // A frame that a layout transaction holds draws inside it, so it opens no layout of its own and reaches no host.
+// contract: mygo.framework.frame-opens-the-layout
 func TestAFrameInsideALayoutTransactionOpensNoLayout(t *testing.T) {
 	f := &Frontend{framework: &Framework{transaction: true}}
 	ticket, err := f.OpenLayout()
@@ -88,6 +89,7 @@ func (p *tracePlatform) LayoutTraceRequested() func() {
 // A preparation that took over the layout that a frame of its window opened has that frame for its frame once it presented in the
 // transaction: the notice comes at once, the window keeps its hold, and no second frame waits for the commit that waits for the
 // notice (docs/spec/hosts.md#native-views). The window of the check is none, so a frame that the notice asked for fails the check.
+// contract: mygo.framework.preparation-hears-the-presented-frame
 func TestAPreparationThatTakesOverTheLayoutOfAPresentedFrameHearsThatFrame(t *testing.T) {
 	trace := &tracePlatform{}
 	t.Cleanup(platform.Substitute(trace))
@@ -111,6 +113,7 @@ func TestAPreparationThatTakesOverTheLayoutOfAPresentedFrameHearsThatFrame(t *te
 // the window has held its frames since that frame, so it drew the lines that the newer preparation places, and another frame would
 // wait for the commit that waits for the notice. The trace records that frame, and the window keeps its hold; the window of the
 // check is none, so a frame that the notice asked for fails the check.
+// contract: mygo.framework.preparation-hears-the-presented-frame
 func TestAPreparationAfterTheFrameOfItsTransactionHearsThatFrame(t *testing.T) {
 	trace := &tracePlatform{}
 	t.Cleanup(platform.Substitute(trace))
@@ -131,6 +134,7 @@ func TestAPreparationAfterTheFrameOfItsTransactionHearsThatFrame(t *testing.T) {
 // nothing; a frame that waits for a drawable or found none leaves the preparation to ask for its own. The report of the frame tells
 // it, so the window holds its frames from that report. The window of the check holds its frames already, so the report asks the
 // window for nothing.
+// contract: mygo.framework.frame-opens-the-layout
 func TestTheFrameThatOpensTheLayoutIsItsFrameOnceItPresented(t *testing.T) {
 	for outcome, framed := range map[ui.FrameOutcome]bool{
 		ui.FrameTransaction: true, ui.FrameImmediate: true, ui.FrameUndamaged: true, ui.FrameStashed: false, ui.FrameSkipped: false,
@@ -145,6 +149,7 @@ func TestTheFrameThatOpensTheLayoutIsItsFrameOnceItPresented(t *testing.T) {
 
 // A frame built for a capture leaves its presentation to the next frame of the surface, so the layout waits for the report of
 // that frame. The window of the check is none, so a hold fails the check.
+// contract: mygo.framework.frame-opens-the-layout
 func TestTheOpeningFrameOfACaptureLeavesTheLayoutToTheNextFrame(t *testing.T) {
 	f := &Frontend{framework: &Framework{transaction: true}, opening: true}
 	f.frameEnded(ui.FrameHeld)
@@ -156,6 +161,7 @@ func TestTheOpeningFrameOfACaptureLeavesTheLayoutToTheNextFrame(t *testing.T) {
 // The frame that opens the layout asks the window for no notice: a notice asks for a frame, which the window would draw after the
 // commit with nothing changed, and which the report of the opening frame would announce, so the window would not be settled. The
 // window of the check is none, so a call to it fails the check.
+// contract: mygo.framework.frame-opens-the-layout
 func TestTheFrameThatOpensTheLayoutAsksForNoFrame(t *testing.T) {
 	f := &Frontend{framework: &Framework{transaction: true}}
 	f.openedInFrame()
@@ -166,6 +172,7 @@ func TestTheFrameThatOpensTheLayoutAsksForNoFrame(t *testing.T) {
 
 // The report of a frame after the end of the layout that it opened changes nothing: no transaction holds the window, and the next
 // one has a frame of its own. The window of the check is none, so a hold fails the check.
+// contract: mygo.framework.frame-opens-the-layout
 func TestTheReportOfAFrameAfterItsLayoutChangesNothing(t *testing.T) {
 	f := &Frontend{framework: &Framework{}}
 	f.frameEnded(ui.FrameTransaction)
@@ -175,6 +182,7 @@ func TestTheReportOfAFrameAfterItsLayoutChangesNothing(t *testing.T) {
 }
 
 // A layout that starts while nothing builds a frame of the window, or while the window holds its frames, has no frame that opened it.
+// contract: mygo.framework.frame-opens-the-layout
 func TestALayoutOutsideTheFrameOfItsWindowHasNoOpeningFrame(t *testing.T) {
 	for _, f := range []*Frontend{{}, {building: true, held: true}} {
 		if f.opensLayout(0) {

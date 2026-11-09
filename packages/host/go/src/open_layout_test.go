@@ -26,6 +26,7 @@ func (p *openPlatform) BeginLayout(_ platform.Window, ticket uint64, _ func(bool
 // A frame that opened the layout of its window holds the frames of the window until a preparation takes the layout over, so a
 // preparation that fails before its layout begins cancels the opened layout, and the frame after it is not held
 // (docs/spec/hosts.md#native-views).
+// contract: surface-layout.frame-opened-layout-ends-with-a-preparation
 func TestAPreparationThatFailsCancelsTheLayoutThatAFrameOpened(t *testing.T) {
 	fake := &openPlatform{layoutPlatform: layoutPlatform{commits: make(chan uint64, 1), cancels: make(chan uint64, 2)}}
 	saved, savedFramework := system, framework
@@ -76,6 +77,7 @@ func (p *refusingPlatform) BeginLayout(window platform.Window, ticket uint64, re
 // The close of a window cancels the layouts that it began, and its workbench commits none after the close, so a preparation that
 // reaches the main thread after the close begins no layout: that layout would stay open and hold the layouts and the frames of every
 // other window (docs/spec/hosts.md#native-views).
+// contract: surface-layout.closed-window-begins-no-layout
 func TestAPreparationOfAClosedWindowBeginsNoLayout(t *testing.T) {
 	fake := &refusingPlatform{openPlatform{layoutPlatform: layoutPlatform{commits: make(chan uint64, 1), cancels: make(chan uint64, 2)}}}
 	saved, savedFramework := system, framework

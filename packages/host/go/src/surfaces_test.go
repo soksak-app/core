@@ -1753,6 +1753,7 @@ func (p *scalePlatform) AlignRect(_ platform.Window, at platform.Rect) (platform
 // A visible surface lies on the device pixels of the backing scale that the host fitted it to, and the window can change display
 // before the page reads the answer, so the placement names that scale; a hidden surface is fitted to no grid and names none
 // (docs/spec/native-surfaces.md).
+// contract: surface-layout.placement-names-its-scale
 func TestAnAlignedSurfaceNamesTheBackingScaleItWasFittedTo(t *testing.T) {
 	saved := system
 	system = &scalePlatform{scale: 3}
@@ -1773,6 +1774,7 @@ func TestAnAlignedSurfaceNamesTheBackingScaleItWasFittedTo(t *testing.T) {
 
 // The trace of a placement names the scale of a visible view with its frame, so a trace shows on which device pixels the host seated
 // it (docs/spec/performance-trace.md).
+// contract: surface-layout.placement-names-its-scale
 func TestTheTraceOfAPlacementNamesTheScaleOfAVisibleView(t *testing.T) {
 	visible := seatedPlacement("probe", Rect{X: 203, Y: 553 + 2.0/3, W: 1360, H: 413}, true, 3)
 	if got := surfaceRecord("placed", "probe", &visible); got["scale"] != 3.0 || got["visible"] != true {
@@ -1789,6 +1791,7 @@ func TestTheTraceOfAPlacementNamesTheScaleOfAVisibleView(t *testing.T) {
 
 // A window without a backing scale has no device pixels to fit a surface to, so the alignment fails instead of seating the surface
 // on a grid that no display has.
+// contract: surface-layout.placement-names-its-scale
 func TestASurfaceAlignedInAWindowWithoutABackingScaleFails(t *testing.T) {
 	saved := system
 	system = &scalePlatform{scale: 0}
