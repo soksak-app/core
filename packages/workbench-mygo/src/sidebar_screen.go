@@ -312,8 +312,7 @@ func HideSidebar(c *ui.Context, binder *Binder, frame SidebarFrame, seat seatDra
 			for i, section := range frame.Sections {
 				item := sectionItem(frame, section)
 				if frame.Layout != "tabs" && i > 0 {
-					binder.Control(c, "core.sidebar.section.divider", "core.sidebar.section.size", item)
-					ui.Box(c).Size(0, 0).Role(ui.RoleSplitter).Label(section.Name)
+					absentDivider(c, binder, frame, section)
 				}
 				absentSection(c, binder, frame, section).Children(func() {
 					if frame.Layout == "tabs" {
@@ -332,6 +331,12 @@ func HideSidebar(c *ui.Context, binder *Binder, frame SidebarFrame, seat seatDra
 		place.Visible = false
 		seat(c, place)
 	}
+}
+
+// absentDivider is the divider above section that the window holds without a place, as the page holds a hidden divider.
+func absentDivider(c *ui.Context, binder *Binder, frame SidebarFrame, section SidebarSection) {
+	binder.Control(c, "core.sidebar.section.divider", "core.sidebar.section.size", sectionItem(frame, section))
+	ui.Box(c).Size(0, 0).Role(ui.RoleSplitter).Label(section.Name)
 }
 
 // absentSection is the element of a section that the window holds without a place, as the page holds a section under display:none.
@@ -384,9 +389,12 @@ func drawVerticalList(c *ui.Context, binder *Binder, drag *SectionDrag, frame Si
 				y += metrics.HeadH + heights[i]
 			}
 			// A divider lies over the top of the head below it, which the page draws, so a view never covers it.
+			// The page hides the divider next to a folded section, which keeps it without a place.
 			for i := 1; i < len(frame.Sections); i++ {
 				if !frame.Sections[i-1].Folded && !frame.Sections[i].Folded {
 					drawDivider(c, binder, drag, frame, i, heights, starts[i], width, metrics)
+				} else {
+					absentDivider(c, binder, frame, frame.Sections[i])
 				}
 			}
 		})
@@ -435,7 +443,11 @@ func drawHorizontalList(c *ui.Context, binder *Binder, frame SidebarFrame, metri
 		share = (width - float32(len(frame.Sections)-open)*metrics.HeadH) / float32(open)
 	}
 	ui.Row(c).Size(width, room).Children(func() {
-		for _, section := range frame.Sections {
+		for i, section := range frame.Sections {
+			// The page hides every divider of a horizontal list, which keeps it without a place.
+			if i > 0 {
+				absentDivider(c, binder, frame, section)
+			}
 			wide := metrics.HeadH
 			if !section.Folded {
 				wide = share
