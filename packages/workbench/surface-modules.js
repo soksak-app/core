@@ -493,7 +493,6 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       plugin: surface.pluginId,
       generation,
       post: (message) => scoped.native.call("viewRequest", message),
-      timeoutOf: (name) => registry.commandTimeout(name),
       report: callReporter(surface.pluginId),
     });
     viewCommands = commands;

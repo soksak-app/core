@@ -1796,7 +1796,7 @@
       },
       {
         "name": "core.plugin.losses",
-        "description": "The counts of each plugin's losses kept until the application ends: `{plugin, abandoned, lateReplies, timeouts, peerLost}`, one count per kind of loss in the plugin process design.",
+        "description": "The counts of each plugin's losses kept until the application ends: `{plugin, abandoned, lateReplies, peerLost}`, one count per kind of loss in the plugin process design.",
         "schema": {
           "type": "array",
           "items": {
@@ -1809,9 +1809,6 @@
                 "type": "number"
               },
               "lateReplies": {
-                "type": "number"
-              },
-              "timeouts": {
                 "type": "number"
               },
               "peerLost": {
@@ -2048,8 +2045,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 120000
+        }
       },
       {
         "name": "core.debug.close",
@@ -2083,8 +2079,7 @@
               ]
             }
           }
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.debug.timeline.save",
@@ -2100,8 +2095,7 @@
               "type": ["string", "null"]
             }
           }
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.debug.save-all",
@@ -2120,8 +2114,7 @@
               ]
             }
           }
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.debug.view",
@@ -2136,8 +2129,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.debug.list",
@@ -2163,8 +2155,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.debug.state.compare",
@@ -2179,8 +2170,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.debug.timeline",
@@ -2191,8 +2181,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.debug.timeline.follow",
@@ -2207,8 +2196,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.debug.timeline.older",
@@ -2219,8 +2207,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.debug.timeline.select",
@@ -2253,8 +2240,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.debug.timeline.filter",
@@ -2380,8 +2366,7 @@
               "type": "boolean"
             }
           }
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.project.rename",
@@ -2544,8 +2529,7 @@
               "type": "boolean"
             }
           }
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.grid.size",
@@ -2857,8 +2841,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.plugins.update",
@@ -2873,8 +2856,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.plugins.remove",
@@ -2889,8 +2871,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.plugins.enable",
@@ -2905,8 +2886,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 120000
+        }
       },
       {
         "name": "core.plugins.disable",
@@ -2921,8 +2901,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 120000
+        }
       },
       {
         "name": "core.plugins.apply",
@@ -2938,8 +2917,7 @@
               "type": "boolean"
             }
           }
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.plugins.show-updates",
@@ -2961,8 +2939,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.app.release",
@@ -2984,8 +2961,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.plugins.replace",
@@ -3000,8 +2976,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 60000
+        }
       },
       {
         "name": "core.plugins.registry",
@@ -3016,8 +2991,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 180000
+        }
       },
       {
         "name": "core.plugins.browse",
@@ -3378,8 +3352,7 @@
               "type": ["string", "null"]
             }
           }
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.file.open",
@@ -3765,8 +3738,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.library.window",
@@ -3860,8 +3832,7 @@
         },
         "result": {
           "type": "null"
-        },
-        "timeout": 600000
+        }
       },
       {
         "name": "core.rename.begin",

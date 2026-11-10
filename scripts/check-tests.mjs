@@ -2847,13 +2847,13 @@ const FEATURE_LINKS = [
     id: "F535-2",
     implementation: [
       { file: "packages/sok/rust/src/event_log.rs", symbol: "while let Some(request) = drain(&mut out, true) {" },
-      { file: "packages/sok/rust/src/event_log.rs", symbol: "RecvTimeoutError::Disconnected => {" },
+      { file: "packages/sok/rust/src/event_log.rs", symbol: "the event writer ended before it answered the flush" },
       { file: "packages/sok/go/src/event_log.go", symbol: "for behind := drain(); behind != nil; behind = drain() {" },
       { file: "packages/sok/go/src/event_log.go", symbol: "the event writer ended before it answered the flush" },
     ],
     tests: [
       { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_flush_that_a_stop_finds_behind_it_is_answered" },
-      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "a_writer_that_ended_is_not_reported_as_a_deadline" },
+      { file: "packages/sok/rust/src/event_log_flush_test.rs", id: "the_end_of_the_writer_fails_a_flush" },
       { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushThatAStopFindsBehindItIsAnswered" },
       { file: "packages/sok/go/src/event_log_idle_test.go", id: "TestAFlushOfAWriterThatEndedSaysSo" },
     ],
@@ -3718,7 +3718,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-hosts-same.mjs", symbol: "function callerGraph(language, sources, scope) {" },
       { file: "scripts/check-hosts-same.mjs", symbol: "export function withoutRustTestItems(source) {" },
       { file: "scripts/check-hosts-same.mjs", symbol: "export function libraryCrate(manifest, file) {" },
-      { file: "packages/host/rust/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str, read_timeout: Duration) -> Connection {" },
+      { file: "packages/host/rust/tests/support/platform/darwin/endpoint_client.rs", symbol: "pub fn connect(address: &str) -> Connection {" },
     ],
     tests: [
       { file: "scripts/test/check-hosts-same.test.mjs", id: "every platform method with a caller passes" },
@@ -7187,7 +7187,7 @@ const FEATURE_LINKS = [
     id: "F145.12",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "endpoint timeout" },
-      { file: "packages/host/rust/src/endpoint.rs", symbol: "endpoint timeout" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "endpoint no result" },
     ],
     tests: [
       { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsARequestThatEndedWithoutItsResult" },
@@ -8277,7 +8277,7 @@ const FEATURE_LINKS = [
     id: "F208",
     implementation: [{ file: "packages/workbench/exposure.json", symbol: "\"name\": \"core.library.choose-folder\"" }],
     tests: [{ file: "packages/workbench/test/dialog-command-timeout.test.mjs", id: "every declared command that shows a dialog is listed with its host call" }],
-    expected: "Each declared command that shows a system dialog or save panel has a timeout of 600000 ms.",
+    expected: "Each declared command that shows a system dialog or save panel declares no time limit: the answer of the dialog ends it.",
     levels: ["unit"],
   },
   {
@@ -8405,7 +8405,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/plugin-api/log-batch.js", symbol: "createEventBatcher requires the writer {layer, member, identity} of the document" },
       { file: "packages/host/go/src/running_calls.go", symbol: "func ReloadTimeoutText" },
-      { file: "packages/host/rust/src/running_calls.rs", symbol: "pub fn reload_timeout_text" },
+      { file: "packages/host/rust/src/running_calls.rs", symbol: "pub fn reload_end_text" },
     ],
     tests: [
       { file: "packages/log-contract/test/audit.test.mjs", id: "an event of the layer page or plugin names the page that wrote it, and an event of another layer names none" },
@@ -8413,7 +8413,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/tests/running_calls_test.go", id: "TestAReloadThatEndsBeforeReadyNamesTheHostCallsOfItsWindowThatStillRun" },
       { file: "packages/host/rust/tests/running_calls_test.rs", id: "a_reload_that_ends_before_ready_names_its_end_and_the_host_calls_of_its_window_that_still_run" },
     ],
-    expected: "Every page and plugin event names the page that wrote it, and a reload that times out names the host calls it waited for.",
+    expected: "Every page and plugin event names the page that wrote it, and a reload that ends before ready names its end and the host calls it waited for.",
     levels: ["unit"],
   },
   {
@@ -9468,7 +9468,7 @@ const FEATURE_LINKS = [
     id: "F79",
     implementation: [
       { file: "packages/host/go/src/exposure.go", symbol: "relayExpiredLimit" },
-      { file: "packages/host/rust/src/exposure.rs", symbol: "EXPIRED_LIMIT" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "const ENDED_LIMIT: usize = 256;" },
     ],
     tests: [
       { file: "packages/host/go/tests/exposure_test.go", id: "TestTheEndOfItsConnectionEndsARelayRequestAndItsReplyIsAnObservation" },
@@ -10981,7 +10981,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F298-4",
-    implementation: [{ file: "packages/window-check/app.mjs", symbol: "request(method, params = {}, { timeout = REQUEST } = {})" }],
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "request(method, params = {}, ...rest)" }],
     tests: [
       { file: "packages/window-check/test/display.test.mjs", id: "the harness exports no options that skip a check in a run without a display or a person" },
       { file: "packages/window-check/test/display.test.mjs", id: "a recording request is sent whatever the environment of the run holds" },
@@ -11568,7 +11568,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
       { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
-      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn request_of(" },
     ],
     tests: [
       { file: "packages/workbench/test/exposure.test.mjs", id: "a watched surface status receives the values that the surface sends, and no forward waits for a change" },
@@ -11582,7 +11582,7 @@ const FEATURE_LINKS = [
     id: "F342-2",
     implementation: [
       { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
-      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn forward_timeout(timeout: &Value)" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn request_of(" },
     ],
     tests: [
       { file: "packages/host/go/tests/exposure_test.go", id: "TestAForwardedRequestCarriesNoTimeLimit" },

@@ -25,7 +25,7 @@ export { CLIPBOARD_TYPES, ClipboardError, base64Of, bytesFrom, createClipboardBr
 export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
 export { createOperationCids } from "./operation.js";
-export { causeCids, createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
+export { causeCids, createCalls, ENDED_CALLS_KEPT, PEER_LOST_REASONS } from "./calls.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";
@@ -1178,7 +1178,7 @@ export const EXPOSURE_ERRORS = Object.freeze({
   unregistered: 1002,
   gone: 1003,
   unavailable: 1004,
-  timeout: 1005,
+  noResult: 1005,
   inactive: 1006,
   noControl: 1009,
   inert: 1010,
@@ -1241,16 +1241,13 @@ export function matchesSchema(schema, value) {
  *
  *     owner   first part of the name: core, host or a plugin id
  *   status  {name, description, schema}
- *     commands {name, description, params, result, timeout?}. params is a schema of type object.
- *                     timeout is the time (ms, 1–600000) that the host waits for the answer of the surface
+ *     commands {name, description, params, result}. params is a schema of type object. A command has no time limit: its
+ *                     reply or the end of its peer ends it, so a declaration with timeout is refused.
  *   element {name, description, many?}
  *
  * A name is `<owner>.<name>` and consists of lowercase letters, digits, dots and hyphens. A name is declared
  * only once within one kind. The same name can be used in different kinds.
  */
-/** The upper bound of the timeout of a command declaration (ms). */
-export const COMMAND_TIMEOUT_MAX = 600000;
-
 export function validateExposes(owner, exposes) {
   if (typeof owner !== "string" || !OWNER.test(owner)) throw new Error(`exposes: invalid owner ${owner}`);
   const where = `${owner} exposes`;
@@ -1269,8 +1266,10 @@ export function validateExposes(owner, exposes) {
       if (seen.has(`${key} ${name}`)) throw new Error(`${where}: duplicate ${key} ${name}`);
       seen.add(`${key} ${name}`);
       const at = `${where} ${name}`;
-      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : []),
-        ...(key === "commands" ? ["timeout"] : [])]);
+      // A command ends by its reply or by the end of its peer (docs/spec/exposure.md, command timeout), so the former member is
+      // refused by its own name.
+      if (key === "commands" && Object.hasOwn(entry, "timeout")) throw new Error(`${at}: timeout is not a member of a command declaration`);
+      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : [])]);
       if (!isText(entry.description)) throw new Error(`${at}: description is required`);
       for (const field of fields[key]) {
         if (entry[field] === undefined) throw new Error(`${at}: ${field} is required`);
@@ -1278,10 +1277,6 @@ export function validateExposes(owner, exposes) {
       }
       if (key === "commands" && entry.params.type !== "object") throw new Error(`${at}: params must be an object schema`);
       if (entry.many !== undefined && typeof entry.many !== "boolean") throw new Error(`${at}: many must be a boolean`);
-      if (entry.timeout !== undefined
-        && !(Number.isInteger(entry.timeout) && entry.timeout >= 1 && entry.timeout <= COMMAND_TIMEOUT_MAX)) {
-        throw new Error(`${at}: timeout must be an integer from 1 to ${COMMAND_TIMEOUT_MAX} milliseconds`);
-      }
     }
   }
   return exposes;

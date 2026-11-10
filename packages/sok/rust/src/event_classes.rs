@@ -63,7 +63,6 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.binding.call" => Some(Class::Call),
         "host.buffer.dropped" => Some(Class::Lifecycle),
         "host.call.peer-lost" => Some(Class::Call),
-        "host.call.timeout" => Some(Class::Call),
         "host.crash.found" => Some(Class::Lifecycle),
         "host.endpoint.call" => Some(Class::Call),
         "host.frame.commit" => Some(Class::Frame),

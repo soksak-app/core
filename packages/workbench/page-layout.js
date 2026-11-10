@@ -43,9 +43,6 @@ export function createErrorDisplay({ document, changed }) {
 /** The source of the error of a layout that failed, which the presentation of every surface after a later render withdraws. */
 const LAYOUT_SOURCE = "layout";
 
-/** The milliseconds before the wait for the surfaces asks again after an answer that they have not presented. */
-const PRESENTED_RETRY = 1000;
-
 /**
  * Creates the function that withdraws the error of the banner when source showed it. An error that another source showed since then
  * stays. The record of the error stays in the log.
@@ -162,8 +159,8 @@ export function createPageLayout({
       failureShown = false;
       withdrawError(LAYOUT_SOURCE);
     }, () => {
+      // A wait that ends without the presentation asks nothing again: the next presented render asks again (clearFailure).
       withdrawing = false;
-      if (failure === null) setTimeout(withdrawWhenPresented, PRESENTED_RETRY);
     });
   }
 

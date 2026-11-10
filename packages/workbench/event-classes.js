@@ -8,7 +8,6 @@ const EXACT = new Map([
   ["host.binding.call", "call"],
   ["host.buffer.dropped", "lifecycle"],
   ["host.call.peer-lost", "call"],
-  ["host.call.timeout", "call"],
   ["host.crash.found", "lifecycle"],
   ["host.endpoint.call", "call"],
   ["host.frame.commit", "frame"],

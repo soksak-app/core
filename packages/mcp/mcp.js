@@ -119,14 +119,13 @@ function buildTools(window, exposure) {
       name: "status_watch_once",
       description:
         "Waits for a status value. With equals, returns when the value equals it, including the current value. " +
-        "Without equals, returns the next changed value. Fails after timeout milliseconds (default 10000).",
+        "Without equals, returns the next changed value. The wait has no time limit: the value or the end of the connection to the application ends it.",
       inputSchema: object(
         {
           window: windowProperty,
           name: nameProperty(status, "Status name."),
           surface: surfaceProperty,
           equals: { description: "Value to wait for." },
-          timeout: { type: "number", description: "Timeout in milliseconds." },
         },
         ["name"],
       ),
@@ -223,6 +222,10 @@ async function callTool(params) {
   const args = params?.arguments ?? {};
   if (typeof name !== "string") throw new RpcError(-32602, "tools/call requires name");
   if (typeof args !== "object" || Array.isArray(args)) throw new RpcError(-32602, "arguments must be an object");
+  // The wait of status_watch_once has no time limit (status.watch in docs/spec/exposure.md), so the former argument is refused.
+  if (name === "status_watch_once" && Object.hasOwn(args, "timeout")) {
+    throw new RpcError(-32602, "status_watch_once takes no timeout: the value or the end of the connection ends the wait");
+  }
   const known = ["windows_list", "status_get", "status_watch_once", "element_rect", "element_act", "input_pointer", "input_key"];
   if (!known.includes(name) && !(name.startsWith(COMMAND_PREFIX) && /^[a-z0-9_-]+$/.test(name.slice(COMMAND_PREFIX.length)))) {
     throw new RpcError(-32602, `unknown tool: ${name}`);
@@ -272,11 +275,9 @@ async function callTool(params) {
 
 async function watchOnce(c, window, args) {
   if (typeof args.name !== "string") throw new Error("name is required");
-  // default: the default wait time of 10000 ms that the watch tool description states.
-  const timeout = args.timeout ?? 10000;
   const surface = args.surface;
   if ("equals" in args) {
-    return c.watch(window, args.name, (value) => isDeepStrictEqual(value, args.equals), { timeout, surface });
+    return c.watch(window, args.name, (value) => isDeepStrictEqual(value, args.equals), { surface });
   }
   // Skips the current value and returns the value of the next change notification.
   let changed;
@@ -288,7 +289,7 @@ async function watchOnce(c, window, args) {
   try {
     // This listener was registered before the listener of watch, so changed already exists when the predicate is called with a notification value.
     // When it is called with the current value of status.get, it is not satisfied unless a notification arrived.
-    await c.watch(window, args.name, () => changed !== undefined, { timeout, surface });
+    await c.watch(window, args.name, () => changed !== undefined, { surface });
     return changed.value;
   } finally {
     off();

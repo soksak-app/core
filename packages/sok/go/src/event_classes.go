@@ -21,7 +21,6 @@ var eventClasses = map[string]Class{
 	"host.binding.call":                      ClassCall,
 	"host.buffer.dropped":                    ClassLifecycle,
 	"host.call.peer-lost":                    ClassCall,
-	"host.call.timeout":                      ClassCall,
 	"host.crash.found":                       ClassLifecycle,
 	"host.endpoint.call":                     ClassCall,
 	"host.frame.commit":                      ClassFrame,
