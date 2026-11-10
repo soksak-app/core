@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -1028,10 +1027,10 @@ func TestPersistentRetainSkipsAServiceWithoutEndpoint(t *testing.T) {
 	}
 }
 
-// TestPersistentRetainTimeoutNamesHowFarTheRequestWent verifies that a retain that the service reads and does not answer fails
-// after the retain timeout with the stage of its request line: written, and the time since the last line from the service.
-// contract: sidecars.retain.timeout-names-the-request-stage
-func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
+// TestAnUnansweredRetainEndsWithItsConnection verifies that a retain that the service reads and does not answer waits past any time
+// limit and fails when its connection ends, and leaves no waiter (docs/spec/persistent-services.md#service-transport).
+// contract: sidecars.retain.ends-by-its-answer-or-its-connection
+func TestAnUnansweredRetainEndsWithItsConnection(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory := support.SocketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
@@ -1043,11 +1042,15 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 	writeHarnessEndpoint(t, root, socket)
 
 	read := make(chan struct{}, 1)
+	// The test sends on end when the service ends the connection that carried the retain.
+	end := make(chan struct{})
 	go func() {
 		connection, err := listener.Accept()
 		if err != nil {
 			return
 		}
+		// A connection that the host opens again finds no service.
+		listener.Close()
 		defer connection.Close()
 		reader := bufio.NewReader(connection)
 		for {
@@ -1059,23 +1062,17 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 			if json.Unmarshal(line, &request) != nil {
 				return
 			}
-			var reply map[string]any
 			switch request["operation"] {
 			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
-			case "close-owner":
-				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
-			case "shutdown":
-				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
-			case "retain":
-				// The service reads the retain and does not answer it.
-				read <- struct{}{}
-			}
-			if reply != nil {
-				encoded, _ := json.Marshal(reply)
+				encoded, _ := json.Marshal(map[string]any{"operation": "hello", "protocol": 1, "ok": true})
 				if _, err := connection.Write(append(encoded, '\n')); err != nil {
 					return
 				}
+			case "retain":
+				// The service reads the retain, does not answer it and ends the connection when the test says so.
+				read <- struct{}{}
+				<-end
+				return
 			}
 		}
 	}()
@@ -1085,18 +1082,28 @@ func TestPersistentRetainTimeoutNamesHowFarTheRequestWent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	_, err = sidecars.Retain([]host.RetainedSurface{})
+	ended := make(chan error, 1)
+	go func() {
+		_, err := sidecars.Retain([]host.RetainedSurface{})
+		ended <- err
+	}()
 	select {
 	case <-read:
-	default:
-		t.Fatal("the service did not read the retain")
+	case err := <-ended:
+		t.Fatalf("the retain ended with %v before the service read it", err)
 	}
+	select {
+	case err := <-ended:
+		t.Fatalf("the retain ended with %v while its connection was open", err)
+	default:
+	}
+	close(end)
+	err = <-ended
 	if err == nil {
 		t.Fatal("a retain that the service did not answer succeeded")
 	}
-	pattern := regexp.MustCompile(`^sidecar fixture-service: retain was not answered within 10s: the request line was written \d+ ms ago, and the last line from the service arrived \d+ ms ago$`)
-	if !pattern.MatchString(err.Error()) {
-		t.Fatalf("retain error = %q, want it to match %s", err, pattern)
+	if want := "sidecar fixture-service: retain: the service connection ended before the answer"; err.Error() != want {
+		t.Fatalf("retain error = %q, want %q when its connection ends", err, want)
 	}
 }
 

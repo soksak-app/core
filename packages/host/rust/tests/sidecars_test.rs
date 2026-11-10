@@ -2582,21 +2582,6 @@ fn a_disconnect_record_names_how_the_connection_ended() {
 /// whose end does not come.
 const PROCESS_END: Duration = Duration::from_secs(20);
 
-/// Declares @fixture/sidecar-echo as the script `script`, in which DIR is the folder of the sidecar.
-fn script_sidecars(script: &str) -> (Sidecars<FakeOwner>, folder::Folder) {
-    let directory = folder::Folder::new();
-    let program = directory.path().join("fake");
-    let text = script.replace("DIR", &directory.path().display().to_string());
-    std::fs::write(&program, text).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let sidecars = create(
-        &files(r#"{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}"#),
-        directory.path(),
-    )
-    .unwrap();
-    (sidecars, directory)
-}
-
 /// The process id that a script wrote to DIR/name; it waits until the script wrote it.
 fn recorded_pid(directory: &Path, name: &str) -> i32 {
     let deadline = std::time::Instant::now() + PROCESS_END;
@@ -2700,7 +2685,7 @@ fn a_stop_ends_by_the_sidecar_exit_and_ends_its_process_group() {
     let (stopped, ended) = channel();
     std::thread::spawn(move || {
         sidecars.stop();
-        let _ = stopped.send(());
+        stopped.send(()).expect("the test holds the receiver");
     });
     ended
         .recv_timeout(PROCESS_END)

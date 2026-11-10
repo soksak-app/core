@@ -3,7 +3,6 @@ package host
 import (
 	"context"
 	"net"
-	"strings"
 	"testing"
 	"time"
 )
@@ -45,38 +44,35 @@ func TestAStopOfAPersistentServiceWaitsForNoRoomInItsQueue(t *testing.T) {
 	}
 }
 
-// A retain that the service does not answer within its limit removes its request (docs/spec/persistent-services.md#service-transport).
-// contract: sidecars-transport.retain.limit-removes-the-request
-func TestARetainPastItsLimitRemovesItsRequest(t *testing.T) {
-	s := sidecarSessionSurfaces(t)
-	c := s.sidecars
-	c.stopped = false
-	c.persistent["fixture-persistent"] = true
-	c.declared["fixture-persistent"] = "build/worker"
-	installedVersion := ""
-	service := &sidecar{name: "fixture-persistent", version: &installedVersion, persistent: true, outbox: make(chan queuedLine, 4),
-		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{"tab-kept": true}}
-	c.running[service.name] = service
-	c.owners["tab-kept"] = s
-	c.roots["tab-kept"] = "/fixture/root"
-	done := make(chan error, 1)
-	go func() {
-		_, err := c.Retain([]RetainedSurface{{Surface: "tab-kept", Root: "/fixture/root", Plugin: "probe"}})
-		done <- err
-	}()
-	<-service.outbox
-	select {
-	case err := <-done:
-		if err == nil || !strings.Contains(err.Error(), "retain was not answered") {
-			t.Fatalf("an unanswered retain ended with %v", err)
-		}
-	case <-time.After(30 * time.Second):
-		t.Fatal("the unanswered retain did not end at its limit")
+// A present that waits for the main thread ends when the sidecars stop, a presentation that the main thread runs later does not
+// wait, and a present after the stop is refused without a step (docs/spec/sidecars.md#declaration-and-startup).
+// contract: images.presentation.ends-with-the-sidecar-stop
+func TestAPresentThatWaitsForTheMainThreadEndsWithTheStop(t *testing.T) {
+	c, err := NewSidecars(nil, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
 	}
-	c.mu.Lock()
-	waiting := len(service.closeWaiters)
-	c.mu.Unlock()
-	if waiting != 0 {
-		t.Fatalf("the retain ended at its limit and left %d waiters of its request", waiting)
+	// The main thread holds each step and does not run it, as the main thread that runs the stop at exit does.
+	held := make(chan func(), 1)
+	step := func(task func()) { held <- task }
+	answered := make(chan error, 1)
+	go func() { answered <- c.presents.present(func() error { return nil }, step) }()
+	task := <-held
+	c.Stop()
+	select {
+	case err := <-answered:
+		if err == nil || err.Error() != presentsRefused {
+			t.Fatalf("the present ended with %v, want %q", err, presentsRefused)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the present still waits for the main thread after the stop")
+	}
+	task()
+	refused := c.presents.present(func() error {
+		t.Error("a present after the stop ran")
+		return nil
+	}, func(func()) { t.Error("a present after the stop took a step") })
+	if refused == nil || refused.Error() != presentsRefused {
+		t.Fatalf("a present after the stop ended with %v, want %q", refused, presentsRefused)
 	}
 }

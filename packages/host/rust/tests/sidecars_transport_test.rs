@@ -1296,11 +1296,11 @@ fn persistent_retain_sends_only_layout_surfaces() {
     service.join().unwrap();
 }
 
-// A retain that the service reads and does not answer fails after the retain timeout with the stage of its request line:
-// written, and the time since the last line from the service.
-// contract: sidecars.retain.timeout-names-the-request-stage
+// A retain that the service reads and does not answer waits past any time limit and fails when its connection ends
+// (docs/spec/persistent-services.md#service-transport).
+// contract: sidecars.retain.ends-by-its-answer-or-its-connection
 #[test]
-fn a_retain_timeout_names_how_far_the_request_went() {
+fn an_unanswered_retain_ends_with_its_connection() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
@@ -1320,8 +1320,12 @@ fn a_retain_timeout_names_how_far_the_request_went() {
     .unwrap();
 
     let (read, retain_read) = channel::<()>();
+    // The test sends on end when the service ends the connection that carried the retain.
+    let (end, ended_by_test) = channel::<()>();
     let service = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
+        // A connection that the host opens again finds no service.
+        drop(listener);
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         loop {
             let mut line = String::new();
@@ -1333,10 +1337,11 @@ fn a_retain_timeout_names_how_far_the_request_went() {
                 Some("hello") => {
                     serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
                 }
-                // The service reads the retain and does not answer it.
+                // The service reads the retain, does not answer it and ends the connection when the test says so.
                 Some("retain") => {
                     read.send(()).unwrap();
-                    continue;
+                    ended_by_test.recv().unwrap();
+                    return;
                 }
                 Some("close-owner") => {
                     serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
@@ -1360,23 +1365,29 @@ fn a_retain_timeout_names_how_far_the_request_went() {
         config_directory.path().to_path_buf(),
     )
     .unwrap();
-    let error = sidecars.retain_sessions(&[]).unwrap_err();
-    assert!(
-        retain_read.try_recv().is_ok(),
-        "the service did not read the retain"
-    );
-    let prefix = format!(
-        "sidecar {ECHO}: retain was not answered within 10s: the request line was written "
-    );
-    let stage = error.strip_prefix(prefix.as_str()).and_then(|rest| {
-        let (written, rest) =
-            rest.split_once(" ms ago, and the last line from the service arrived ")?;
-        let arrived = rest.strip_suffix(" ms ago")?;
-        Some((written.parse::<u64>().ok()?, arrived.parse::<u64>().ok()?))
+    let sidecars = Arc::new(sidecars);
+    let retaining = Arc::clone(&sidecars);
+    let (result, retain_ended) = channel();
+    std::thread::spawn(move || {
+        result
+            .send(retaining.retain_sessions(&[]))
+            .expect("the test holds the receiver");
     });
-    assert!(
-        stage.is_some(),
-        "retain error {error:?} does not name the stage of its request line after {prefix:?}"
+    retain_read
+        .recv()
+        .expect("the service did not read the retain");
+    if let Ok(early) = retain_ended.try_recv() {
+        panic!("the retain ended with {early:?} while its connection was open");
+    }
+    end.send(()).unwrap();
+    let error = retain_ended
+        .recv()
+        .expect("the retain thread ended without a result")
+        .expect_err("a retain that the service did not answer succeeded");
+    assert_eq!(
+        error,
+        format!("sidecar {ECHO}: retain: the service connection ended before the answer"),
+        "the retain did not end with the end of its connection"
     );
     sidecars.stop();
     service.join().unwrap();
