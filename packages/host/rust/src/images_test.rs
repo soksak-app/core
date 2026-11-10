@@ -356,6 +356,49 @@ mod wait_boundary {
     use super::super::*;
     use std::sync::mpsc;
 
+    // The end of the connection of a sidecar ends the raster wait of its regions in that turn, because no raster of the ended
+    // connection comes (docs/spec/native-surfaces.md#layout-transaction).
+    // contract: images.wait.sidecar-end-ends-wait
+    #[test]
+    fn the_end_of_a_sidecar_ends_the_raster_wait_of_its_regions() {
+        let images = Images::default();
+        let key = ("surface".into(), "view".into());
+        images
+            .reserve(&key, "owner", "sidecar")
+            .expect("reserve image");
+        assert!(images.set(&key, 100));
+        images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .expect("configure raster")
+            .expect("new raster");
+        images
+            .lock()
+            .states
+            .get_mut(&key)
+            .expect("image state")
+            .last_sequence = 1;
+        let waiter = images.clone();
+        let (started, waiting) = mpsc::sync_channel(1);
+        let (ended, result) = mpsc::channel();
+        std::thread::spawn(move || {
+            let outcome = waiter.wait_current_observed(Duration::from_secs(60), || {
+                started.send(()).expect("signal initialized wait")
+            });
+            let _ = ended.send(outcome);
+        });
+        waiting
+            .recv_timeout(Duration::from_secs(2))
+            .expect("wait begins");
+        assert_eq!(images.invalidate_sidecar("sidecar"), 1);
+        let outcome = result
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the end of the sidecar did not end the raster wait");
+        assert!(
+            outcome.as_ref().is_err_and(|error| error.contains("sidecar")),
+            "the raster wait ended without the end of its sidecar: {outcome:?}"
+        );
+    }
+
     // contract: images.wait.newer-sequence-rearms-wait
     #[test]
     fn a_pending_newer_frame_is_required_after_the_wait_begins() {

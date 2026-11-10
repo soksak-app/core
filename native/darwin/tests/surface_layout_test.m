@@ -29,13 +29,12 @@ static void cleanupCompositionRecording(void) {
     [compositionDirectory release]; compositionDirectory = nil;
 }
 
+// Runs the main run loop until the awaited event has arrived. It has no time limit of its own: each call waits for an event that
+// the check has already started, and a check whose start failed does not wait (docs/spec/native-surfaces.md#layout-transaction).
 static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
-                               beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    while (!done()) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
     }
-    if (!done()) { fprintf(stderr, "FAIL: WebKit did not answer within 10 seconds\n"); exit(1); }
 }
 
 // Returns the same empty document for every requested address. The host of the address sets the origin.
@@ -250,8 +249,6 @@ static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
     until(^BOOL { return initialSnapshotFinished; });
     check(initialPixels, @"the initial root snapshot contains the marker at its original right edge");
 
-    int otherOwner = 0;
-    __block BOOL otherStarted = NO;
     __block BOOL presented = NO;
     __block BOOL blockedAtPresentation = NO;
     __block BOOL blockedDuringSnapshot = NO;
@@ -261,7 +258,7 @@ static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
     resizedFrame.size.width = 320;
     view.frame = resizedFrame;
     check(surfaceLayoutJoinView(window, 309, view, ^{
-        blockedAtPresentation = !otherStarted;
+        blockedAtPresentation = surfaceLayoutIsPreparing(window);
         __block BOOL snapshotFinished = NO;
         WKSnapshotConfiguration *snapshotConfiguration = [[[WKSnapshotConfiguration alloc] init] autorelease];
         snapshotConfiguration.afterScreenUpdates = NO;
@@ -269,27 +266,27 @@ static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
             completionHandler:^(NSImage *image, NSError *error) {
                 check(error == nil && image != nil,
                     [NSString stringWithFormat:@"the joined root snapshot completes before commit (%@)", error]);
-                blockedDuringSnapshot = !otherStarted;
+                blockedDuringSnapshot = surfaceLayoutIsPreparing(window);
                 resizedPixels = error == nil && image != nil && snapshotShowsMarkerAtX(image, 316);
                 snapshotFinished = YES;
             }];
         until(^BOOL { return snapshotFinished; });
         presented = YES;
     }), @"the resized root view joins its open layout transaction");
-    check(surfaceLayoutCommit(window, 309), @"the root resize commit defers until its presentation callback");
-    surfaceLayoutBegin(&otherOwner, 310, ^(int allowed) { otherStarted = allowed; });
-    check(!otherStarted, @"the next layout request waits for resized root pixels");
-    until(^BOOL { return presented && otherStarted; });
-    check(blockedAtPresentation, @"the resized root pixels arrive before transaction commit and next request start");
-    check(blockedDuringSnapshot, @"the next request remains blocked while the resized snapshot completes");
+    BOOL deferred = surfaceLayoutCommit(window, 309);
+    check(deferred, @"the root resize commit defers until its presentation callback");
+    check(surfaceLayoutIsPreparing(window), @"the root resize transaction stays open for resized root pixels");
+    if (deferred) until(^BOOL { return presented && !surfaceLayoutIsPreparing(window); });
+    surfaceLayoutCancel(window);
+    check(blockedAtPresentation, @"the resized root pixels arrive before the transaction commits");
+    check(blockedDuringSnapshot, @"the transaction stays open while the resized snapshot completes");
     check(resizedPixels, @"the joined snapshot contains the marker at the resized right edge");
-    check(surfaceLayoutCommit(&otherOwner, 310), @"the layout after the root resize commits");
     [window close];
     [window release];
 }
 
 // A layout transaction that joins a view waits for the view's presentation before it commits. The transaction of another
-// owner starts only after that commit. An end without presentation (surfaceLayoutAbandonView) releases the deferred
+// owner does not wait for that commit. An end without presentation (surfaceLayoutAbandonView) releases the deferred
 // commit, and a presentation that comes after the abandon is not reported.
 static void checkViewJoin(WKWebViewConfiguration *configuration) {
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 520, 400, 200)
@@ -306,21 +303,20 @@ static void checkViewJoin(WKWebViewConfiguration *configuration) {
     check(surfaceLayoutJoinView(window, 301, view, ^{ presented++; }), @"a view joins the open transaction");
     check(surfaceLayoutViewJoinCount(window) == 1, @"the transaction counts the joined view");
     surfaceLayoutBegin(&otherOwner, 302, ^(int allowed) { otherStarted = allowed; });
-    check(surfaceLayoutCommit(window, 301), @"the transaction with a joined view commits");
-    check(!otherStarted, @"the next transaction waits for the joined view to present or end");
-    until(^BOOL { return presented != 0; });
+    check(otherStarted, @"a transaction of another window starts while the transaction of the window is open");
+    BOOL committed = surfaceLayoutCommit(window, 301);
+    check(committed, @"the transaction with a joined view commits");
+    if (committed) until(^BOOL { return presented != 0; });
     check(presented == 1, @"the joined view reports its presentation once");
-    check(otherStarted, @"the next transaction starts after the joined view presents");
-    check(surfaceLayoutCommit(&otherOwner, 302), @"the next transaction commits");
+    check(surfaceLayoutCommit(&otherOwner, 302), @"the transaction of the other window commits");
 
     otherStarted = NO;
     surfaceLayoutBegin(window, 303, ^(int allowed) {});
     check(surfaceLayoutJoinView(window, 303, view, ^{ presented++; }), @"the view joins the next transaction");
     check(surfaceLayoutCommit(window, 303), @"the transaction joined to the view commits");
     surfaceLayoutBegin(&otherOwner, 304, ^(int allowed) { otherStarted = allowed; });
-    check(!otherStarted, @"the next transaction waits for the view before the abandon");
+    check(otherStarted, @"a transaction of another window starts while the commit waits for a joined view");
     check(surfaceLayoutAbandonView(window, view), @"the abandon ends the view wait");
-    check(otherStarted, @"the next transaction starts after the abandon");
     check(!surfaceLayoutAbandonView(window, view), @"a second abandon of the view has no join to end");
     waitFrames(window.screen, 3);
     check(presented == 1, @"a presentation after the abandon is not reported");
@@ -349,34 +345,55 @@ static void checkViewJoin(WKWebViewConfiguration *configuration) {
         @"the active ticket cancellation fixture joins its view");
     check(surfaceLayoutCommit(window, 309), @"the active ticket cancellation fixture defers its commit");
     surfaceLayoutBegin(&otherOwner, 310, ^(int allowed) { afterActiveCancelStarted = allowed; });
-    check(!afterActiveCancelStarted, @"the next owner waits for the active ticket join");
+    check(afterActiveCancelStarted, @"another owner does not wait for the joined view of the ticket");
     surfaceLayoutCancelTicket(window, 309);
-    check(afterActiveCancelStarted, @"canceling the exact active ticket releases its joined wait");
+    check(surfaceLayoutViewJoinCount(window) == 0, @"canceling the exact open ticket releases its joined wait");
     check(surfaceLayoutCommit(&otherOwner, 310), @"the owner after the canceled active ticket commits");
     waitFrames(window.screen, 3);
     check(canceledJoinPresented == 0, @"the canceled active ticket does not report a later presentation");
 
+    // The check leaves no transaction of its owners behind for the next check, whatever its outcome.
+    surfaceLayoutCancel(window);
+    surfaceLayoutCancel(&otherOwner);
     [window close];
     [window release];
 }
 
-static void checkQueuedTicketCancel(void) {
-    int activeOwner = 0, targetOwner = 0, otherOwner = 0;
+// Each window owns its transaction: a cancel of one ticket of a window refuses only that waiting request of the window, and no
+// owner waits for another (docs/spec/native-surfaces.md#layout-transaction).
+static void checkQueuedTicketCancel(WKWebViewConfiguration *configuration) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 520, 400, 200)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    WKWebView *view = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/ticket-cancel");
+    [window orderFrontRegardless];
+    int activeOwner = 0, otherOwner = 0;
     __block int canceledAllowed = -1;
     __block BOOL targetTicketStarted = NO;
     __block BOOL otherOwnerStarted = NO;
-    surfaceLayoutBegin(&activeOwner, 401, ^(int allowed) { check(allowed, @"the queued cancellation fixture starts its blocker"); });
-    surfaceLayoutBegin(&targetOwner, 402, ^(int allowed) { canceledAllowed = allowed; });
-    surfaceLayoutBegin(&targetOwner, 403, ^(int allowed) { targetTicketStarted = allowed; });
+    surfaceLayoutBegin(&activeOwner, 401, ^(int allowed) { check(allowed, @"the cancellation fixture starts the other owner"); });
+    surfaceLayoutBegin(window, 400, ^(int allowed) { check(allowed, @"the cancellation fixture starts its window"); });
+    check(surfaceLayoutJoinView(window, 400, view, ^{}), @"the cancellation fixture joins its view");
+    check(surfaceLayoutCommit(window, 400), @"the cancellation fixture waits for its joined view");
+    surfaceLayoutBegin(window, 402, ^(int allowed) { canceledAllowed = allowed; });
+    surfaceLayoutBegin(window, 403, ^(int allowed) { targetTicketStarted = allowed; });
     surfaceLayoutBegin(&otherOwner, 404, ^(int allowed) { otherOwnerStarted = allowed; });
-    surfaceLayoutCancelTicket(&targetOwner, 402);
-    check(canceledAllowed == 0, @"canceling a queued exact ticket resolves that request as denied");
-    check(surfaceLayoutCommit(&activeOwner, 401), @"the queued cancellation fixture releases its blocker");
-    check(targetTicketStarted && !otherOwnerStarted,
-        @"canceling one queued ticket preserves the other ticket of its owner and the next owner");
-    check(surfaceLayoutCommit(&targetOwner, 403), @"the preserved ticket of the canceled owner commits");
-    check(otherOwnerStarted, @"the preserved other owner starts after the target ticket commits");
-    check(surfaceLayoutCommit(&otherOwner, 404), @"the preserved other owner commits");
+    check(otherOwnerStarted, @"an owner starts at once while other owners hold transactions");
+    surfaceLayoutCancelTicket(window, 402);
+    check(canceledAllowed == 0, @"canceling a waiting exact ticket resolves that request as denied");
+    check(!targetTicketStarted, @"the other waiting ticket of the window waits for the deferred commit of its window");
+    check(surfaceLayoutAbandonView(window, view), @"the abandon ends the deferred commit of the window");
+    check(targetTicketStarted, @"the preserved ticket of the window starts when its deferred commit ends");
+    check(surfaceLayoutCommit(window, 403), @"the preserved ticket of the canceled owner commits");
+    check(surfaceLayoutCommit(&activeOwner, 401), @"the other owner commits");
+    check(surfaceLayoutCommit(&otherOwner, 404), @"the third owner commits");
+    // The check leaves no transaction of its owners behind for the next check, whatever its outcome.
+    surfaceLayoutAbandonView(window, view);
+    surfaceLayoutCancel(window);
+    surfaceLayoutCancel(&activeOwner);
+    surfaceLayoutCancel(&otherOwner);
+    [window close];
+    [window release];
 }
 
 // The composition of the real DOM bounds and the native region must keep both bounds during preparation. Controls the
@@ -723,7 +740,7 @@ int main(void) { @autoreleasepool {
     checkSettledWaitsForLayout(window, main);
     checkSettledWaitsForModal(window, main, [[configuration copy] autorelease]);
     checkViewJoin([[configuration copy] autorelease]);
-    checkQueuedTicketCancel();
+    checkQueuedTicketCancel([[configuration copy] autorelease]);
     checkRootViewResizeJoin([[configuration copy] autorelease]);
 
     // In an open transaction, the new layout confirmation of the web process must also complete before the wait can

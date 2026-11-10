@@ -5,6 +5,8 @@
 #import <WebKit/WebKit.h>
 #import "private/webkit.h"
 #import "surface_layout.h"
+#import "host_api_webview.h"
+#import "main_thread.h"
 
 static int failures;
 
@@ -13,12 +15,11 @@ static void check(BOOL ok, NSString *message) {
     if (!ok) failures++;
 }
 
+// Runs the main run loop until the awaited event has arrived, with no time limit of its own; a check whose start failed does
+// not wait.
 static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [NSRunLoop.mainRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    check(done(), [NSString stringWithFormat:@"%@ within 10 s", what]);
+    while (!done()) [NSRunLoop.mainRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    check(done(), what);
 }
 
 // A web view that holds the completion of its next presentation until the check releases it.
@@ -34,9 +35,10 @@ static NSString *const transactionMarker = @"soksak.layout-observe";
 static NSMutableArray<NSString *> *events;
 static void *firstWindow;
 static void *secondWindow;
+static void *thirdWindow;
 static BOOL endedInOpenTransaction;
 
-static NSString *nameOf(void *window) { return window == firstWindow ? @"first" : window == secondWindow ? @"second" : @"other"; }
+static NSString *nameOf(void *window) { return window == firstWindow ? @"first" : window == secondWindow ? @"second" : window == thirdWindow ? @"third" : @"other"; }
 static void record(NSString *event, void *window) { [events addObject:[NSString stringWithFormat:@"%@ %@", event, nameOf(window)]]; }
 
 static NSString *recorded(void) {
@@ -73,19 +75,21 @@ static void checkDeferredCommit(SPHeldPresentation *view) {
     check(surfaceLayoutJoinView(firstWindow, 3, view, ^{ presented = YES; }), @"the view joins the transaction");
     check(surfaceLayoutCommit(firstWindow, 3), @"the commit waits for the joined view");
     NSString *order = recorded();
-    check([order isEqualToString:@"started first, ready first"],
-        [NSString stringWithFormat:@"a commit that waits for a joined view has not ended the transaction (%@)", order]);
+    check([order isEqualToString:@"started first, ready first, started second, ready second"],
+        [NSString stringWithFormat:@"a transaction of another window starts while a commit waits for its joined view (%@)", order]);
     check(view.held != nil, @"the join waits for the presentation of the view");
     if (view.held) view.held();
     view.held = nil;
     check(presented, @"the joined view presented");
     order = recorded();
-    check([order isEqualToString:@"ended first, started second, ready second"],
-        [NSString stringWithFormat:@"ended of a deferred commit follows the joined view and precedes the next waiting transaction of another window (%@)", order]);
-    check(!endedInOpenTransaction, @"ended of a deferred commit runs after the Core Animation transaction commits");
-    check(surfaceLayoutCommit(secondWindow, 4), @"the waiting transaction of the other window commits");
+    check([order isEqualToString:@"ended first"],
+        [NSString stringWithFormat:@"ended of a deferred commit follows the joined view (%@)", order]);
+    check(endedInOpenTransaction, @"the end of one transaction leaves the hold open while another window has one open");
+    endedInOpenTransaction = NO;
+    check(surfaceLayoutCommit(secondWindow, 4), @"the open transaction of the other window commits");
     order = recorded();
     check([order isEqualToString:@"ended second"], [NSString stringWithFormat:@"the second transaction ends (%@)", order]);
+    check(!endedInOpenTransaction, @"ended of the last open transaction runs after the Core Animation hold commits");
 }
 
 static void checkCancel(void) {
@@ -93,18 +97,19 @@ static void checkCancel(void) {
     surfaceLayoutBegin(secondWindow, 6, readyRecorder(secondWindow));
     surfaceLayoutCancel(firstWindow);
     NSString *order = recorded();
-    check([order isEqualToString:@"started first, ready first, ended first, started second, ready second"],
-        [NSString stringWithFormat:@"ended of a cancel precedes the next waiting transaction (%@)", order]);
-    check(!endedInOpenTransaction, @"ended of a cancel runs after the Core Animation transaction commits");
+    check([order isEqualToString:@"started first, ready first, started second, ready second, ended first"],
+        [NSString stringWithFormat:@"a cancel ends only the transaction of its window (%@)", order]);
+    endedInOpenTransaction = NO;
     surfaceLayoutCancelTicket(secondWindow, 6);
     order = recorded();
     check([order isEqualToString:@"ended second"], [NSString stringWithFormat:@"a cancel of a ticket ends its transaction (%@)", order]);
+    check(!endedInOpenTransaction, @"ended of the last cancel runs after the Core Animation hold commits");
     surfaceLayoutBegin(firstWindow, 7, readyRecorder(firstWindow));
     surfaceLayoutBegin(secondWindow, 8, readyRecorder(secondWindow));
     surfaceLayoutCancel(secondWindow);
     order = recorded();
-    check([order isEqualToString:@"started first, ready first, ready refused second"],
-        [NSString stringWithFormat:@"a preparation that never started reports neither started nor ended (%@)", order]);
+    check([order isEqualToString:@"started first, ready first, started second, ready second, ended second"],
+        [NSString stringWithFormat:@"a cancel of the other window ends its own transaction and leaves the open one (%@)", order]);
     check(surfaceLayoutCommit(firstWindow, 7), @"the open transaction commits");
     [events removeAllObjects];
 }
@@ -126,37 +131,44 @@ static void checkSettledWithBlock(NSWindow *window) {
     });
     check(presentations == 1 && !settled, @"the wait asks the block and does not end before the block calls back");
     double called = CACurrentMediaTime() * 1000;
-    presented(NULL);
+    check(presented != nil, @"the wait asked the block before the check presents it");
+    if (presented) presented(NULL);
     check(!settled, @"the callback of the block does not end the wait before the next display refresh");
     until(@"the wait ends after the next display refresh", ^BOOL { return settled; });
     check(displayed >= called, [NSString stringWithFormat:@"the wait reports the display refresh after the block called back (%f, called %f)", displayed, called]);
     [presented release];
     presented = nil;
 
-    // An open transaction and a waiting transaction of the window both hold the wait.
+    // The open transaction of the window and the Core Animation hold that another window keeps open both hold the wait, because
+    // no change of the window reaches the screen before the hold commits.
     presentations = 0;
     settled = NO;
     surfaceLayoutBegin(firstWindow, 9, readyRecorder(firstWindow));
     surfaceLayoutBegin(window, 10, readyRecorder(window));
     surfaceLayoutAfterSettled(window, present, ^(double at, const char *error) { settled = YES; });
-    check(presentations == 0, @"the wait does not ask the block while a transaction of the window waits");
-    check(surfaceLayoutCommit(firstWindow, 9), @"the transaction of the other window commits");
     check(presentations == 0, @"the wait does not ask the block while a transaction of the window is open");
-    check(surfaceLayoutCommit(window, 10), @"the transaction of the window commits");
-    check(presentations == 1, @"the wait asks the block when no transaction of the window remains");
+    check(surfaceLayoutCommit(window, 10), @"the transaction of the window commits while another window holds the hold");
+    check(presentations == 0, @"the wait does not ask the block while the hold of another window is open");
+    check(surfaceLayoutCommit(firstWindow, 9), @"the transaction of the other window commits");
+    check(presentations == 1, @"the wait asks the block when the hold commits");
 
     // A transaction that opens while the block presents starts the wait again.
     surfaceLayoutBegin(window, 11, readyRecorder(window));
-    presented(NULL);
+    check(presented != nil, @"the wait asked the block before the check presents it");
+    if (presented) presented(NULL);
     [presented release];
     presented = nil;
     check(presentations == 1 && !settled, @"the wait does not end while a newer transaction of the window is open");
     check(surfaceLayoutCommit(window, 11), @"the newer transaction commits");
     check(presentations == 2, @"the end of the newer transaction asks the block again");
-    presented(NULL);
+    BOOL askedAgain = presented != nil;
+    check(askedAgain, @"the wait asked the block before the check presents it");
+    if (presented) presented(NULL);
     [presented release];
     presented = nil;
-    until(@"the wait ends after the block presents the newer transaction", ^BOOL { return settled; });
+    if (askedAgain) until(@"the wait ends after the block presents the newer transaction", ^BOOL { return settled; });
+    surfaceLayoutCancel(firstWindow);
+    surfaceLayoutCancel(window);
 
     __block const char *failure = NULL;
     surfaceLayoutAfterSettled(window, ^(void (^callback)(const char *)) { callback("the frame failed"); },
@@ -175,7 +187,159 @@ static void checkSettledWithBlock(NSWindow *window) {
     [events removeAllObjects];
 }
 
+
+// The close of a window ends its open transaction and refuses its waiting preparation in the turn of the close, so a window that
+// closes leaves no transaction behind (docs/spec/native-surfaces.md#layout-transaction).
+static void checkWindowCloseEnds(NSWindow *third, SPHeldPresentation *view) {
+    surfaceLayoutBegin(thirdWindow, 31, readyRecorder(thirdWindow));
+    check(surfaceLayoutJoinView(thirdWindow, 31, view, ^{}), @"the view of the closing window joins its transaction");
+    check(surfaceLayoutCommit(thirdWindow, 31), @"the commit of the closing window waits for its joined view");
+    surfaceLayoutBegin(thirdWindow, 32, readyRecorder(thirdWindow));
+    surfaceLayoutBegin(firstWindow, 33, readyRecorder(firstWindow));
+    [events removeAllObjects];
+    [third close];
+    NSString *order = recorded();
+    check([order isEqualToString:@"ready refused third, ended third"],
+        [NSString stringWithFormat:@"the close of a window refuses its waiting preparation and ends its transaction (%@)", order]);
+    check(surfaceLayoutViewJoinCount(thirdWindow) == 0, @"the close of a window leaves no joined view of it");
+    check(!surfaceLayoutIsPreparing(thirdWindow), @"a closed window has no open preparation");
+    check(surfaceLayoutCommit(firstWindow, 33), @"the transaction of the other window commits after the close");
+    [events removeAllObjects];
+}
+
+// The native close of a joined view ends its join in the turn of the close, so the deferred commit finishes.
+static void checkViewCloseEndsJoin(SPHeldPresentation *view) {
+    __block BOOL presented = NO;
+    surfaceLayoutBegin(firstWindow, 41, readyRecorder(firstWindow));
+    check(surfaceLayoutJoinView(firstWindow, 41, view, ^{ presented = YES; }), @"the closing view joins the transaction");
+    check(surfaceLayoutCommit(firstWindow, 41), @"the commit waits for the closing view");
+    [events removeAllObjects];
+    [view retain];
+    nativeWebviewClose(view);
+    NSString *order = recorded();
+    check([order isEqualToString:@"ended first"],
+        [NSString stringWithFormat:@"the native close of a joined view ends the deferred commit (%@)", order]);
+    check(surfaceLayoutViewJoinCount(firstWindow) == 0, @"the closed view leaves no join");
+    check(!presented, @"a closed view reports no presentation");
+    [events removeAllObjects];
+}
+
+// A view whose hit test gives no target while its window prepares, as a surface host does.
+@interface SPGateView : NSView
+@end
+@implementation SPGateView
+- (NSView *)hitTest:(NSPoint)point {
+    if (surfaceLayoutIsPreparing(self.window)) return nil;
+    return [super hitTest:point];
+}
+@end
+
+// Runs the event queue until a marker event posted at its end comes back, so every event queued before the marker has run.
+static void runQueue(void) {
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil subtype:0x7f18 data1:0 data2:0] atStart:NO];
+    for (;;) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantFuture] inMode:NSDefaultRunLoopMode
+            dequeue:YES];
+        if (event.type == NSEventTypeApplicationDefined && event.subtype == 0x7f18) return;
+        [NSApp sendEvent:event];
+    }
+}
+
+// The input that the transaction holds keeps only the content of its window: the title bar and a key with the Command modifier
+// pass at once. The input that the end gives back returns without a turn that must arrive: a call whose turn the queue discards
+// runs once, and the window takes input again (docs/spec/native-surfaces.md#placement-sequence).
+static void checkHeldInputEnds(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 300, 200, 100) styleMask:NSWindowStyleMaskTitled
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    SPGateView *gate = [[[SPGateView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    [window.contentView addSubview:gate];
+    NSPoint inside = NSMakePoint(50, 50);
+    __block int first = 0, second = 0, later = 0;
+    surfaceLayoutBegin(window, 51, ^(int allowed) {});
+    check(surfaceLayoutHoldCall(window, true, inside.x, inside.y, ^{ first++; }), @"a press without a target waits for the transaction");
+    __block int seen = 0;
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskKeyDown
+        handler:^NSEvent *(NSEvent *event) { seen++; return nil; }];
+    NSPoint titlebar = NSMakePoint(50, window.contentView.frame.size.height + 8);
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:titlebar modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1]];
+    check(seen == 1, @"a press on the title bar passes the input that the transaction holds");
+    [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
+        timestamp:0 windowNumber:window.windowNumber context:nil characters:@"w" charactersIgnoringModifiers:@"w" isARepeat:NO
+        keyCode:13]];
+    check(seen == 2, @"a key with the Command modifier passes the input that the transaction holds");
+    [NSEvent removeMonitor:monitor];
+    check(surfaceLayoutHoldCall(window, false, 0, 0, ^{ second++; }), @"a call waits behind the held press");
+    check(surfaceLayoutCommit(window, 51), @"the transaction of the held input commits");
+    [NSApp discardEventsMatchingMask:NSEventMaskAny beforeEvent:nil];
+    runQueue();
+    check(first == 1 && second == 1,
+        [NSString stringWithFormat:@"each held call runs once when the queue discards its turn (%d, %d)", first, second]);
+    check(!surfaceLayoutHoldCall(window, false, 0, 0, ^{ later++; }) && later == 1,
+        @"the window takes input at once after its held input came back");
+    surfaceLayoutCancel(window);
+    [window close];
+    [window release];
+}
+
+// A view that counts the presses it receives.
+@interface SPPressView : NSView
+@property(nonatomic) int presses;
+@end
+@implementation SPPressView
+- (void)mouseDown:(NSEvent *)event { self.presses++; }
+@end
+
+// A joined peer that never presents holds the commit until the next press of the user: the press ends the hold at once, the
+// commit carries what was presented, and the press reaches its view. A drag ends nothing, and no end waits for time
+// (docs/spec/native-surfaces.md#layout-transaction).
+static void checkPressEndsHold(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 500, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    SPPressView *target = [[[SPPressView alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    [window.contentView addSubview:target];
+    SPHeldPresentation *stalled = [[[SPHeldPresentation alloc] initWithFrame:NSMakeRect(100, 0, 100, 100)] autorelease];
+    [window.contentView addSubview:stalled];
+    __block BOOL presented = NO;
+    surfaceLayoutBegin(window, 61, ^(int allowed) {});
+    check(surfaceLayoutJoinView(window, 61, stalled, ^{ presented = YES; }), @"the stalled peer joins the transaction");
+    check(surfaceLayoutCommit(window, 61), @"the commit waits for the stalled peer");
+    [events removeAllObjects];
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:NSMakePoint(50, 50) modifierFlags:0
+        timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1]];
+    check(surfaceLayoutIsPreparing(window) && events.count == 0, @"a drag of the pointer leaves the hold standing");
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:NSMakePoint(50, 50) modifierFlags:0
+        timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1]];
+    NSString *order = recorded();
+    check([order isEqualToString:@"ended other"], [NSString stringWithFormat:@"a press ends the hold of a stalled peer at once (%@)", order]);
+    check(!surfaceLayoutIsPreparing(window), @"the window has no open transaction after the press");
+    check(surfaceLayoutViewJoinCount(window) == 0, @"the press abandons the join of the stalled peer");
+    check(!presented, @"the stalled peer reports no presentation");
+    check(!endedInOpenTransaction, @"the press commits the Core Animation hold");
+    check(target.presses == 1, [NSString stringWithFormat:@"the press reaches its view (%d)", target.presses]);
+    stalled.held = nil;
+    surfaceLayoutAbandonView(window, stalled);
+    surfaceLayoutCancel(window);
+    [window close];
+    [window release];
+}
+
+static void runInline(void (^call)(void)) { call(); }
+
+// Ends every transaction that a check left open, whatever its outcome, so each check starts with no open transaction.
+static void resetOwners(void) {
+    if (firstWindow) surfaceLayoutCancel(firstWindow);
+    if (secondWindow) surfaceLayoutCancel(secondWindow);
+    if (thirdWindow) surfaceLayoutCancel(thirdWindow);
+    [events removeAllObjects];
+    endedInOpenTransaction = NO;
+}
+
 int main(void) { @autoreleasepool {
+    hostInstallMainThread(runInline, runInline);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     events = [[NSMutableArray alloc] init];
@@ -194,10 +358,31 @@ int main(void) { @autoreleasepool {
     checkStartedPrecedesReady();
     SPHeldPresentation *view = [[[SPHeldPresentation alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
     [first.contentView addSubview:view];
+    resetOwners();
     checkDeferredCommit(view);
+    resetOwners();
     checkCancel();
     [view removeFromSuperview];
+    resetOwners();
     checkSettledWithBlock(second);
+    NSWindow *third = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    third.releasedWhenClosed = NO;
+    thirdWindow = third;
+    SPHeldPresentation *thirdView = [[[SPHeldPresentation alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    [third.contentView addSubview:thirdView];
+    resetOwners();
+    checkWindowCloseEnds(third, thirdView);
+    SPHeldPresentation *closing = [[SPHeldPresentation alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)];
+    [first.contentView addSubview:closing];
+    resetOwners();
+    checkViewCloseEndsJoin(closing);
+    [closing release];
+    resetOwners();
+    checkHeldInputEnds();
+    resetOwners();
+    checkPressEndsHold();
+    [third release];
     [first release];
     [second release];
     return failures == 0 ? 0 : 1;

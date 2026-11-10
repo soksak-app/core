@@ -54,7 +54,7 @@ use std::thread;
 use std::time::Duration;
 
 use super::{
-    Running, SurfaceComposition, SurfaceDispatchMode, abandon_waits_then_cancel_layout,
+    Running, SurfaceComposition, end_run, set_run, when_settled, SurfaceDispatchMode, abandon_waits_then_cancel_layout,
     cancel_layout_after_setup_error, clear_page_compositions, close_registered_surface,
     commit_layout_after_root_joins, committed_view_updates, complete_layout_presentation,
     create_in_open_window, create_registered_surface, mark_first_commit,
@@ -1334,4 +1334,29 @@ fn a_presentation_whose_ticket_was_cancelled_is_no_longer_current() {
         answer,
         "surface preparation 9 is no longer current; window data is gone"
     );
+}
+
+// A run ends with the transaction of its ticket: a cancel, a failed presentation, a page start or the close of the window ends it
+// in that turn, and each wait for the presented state that waited for the run ends then
+// (docs/spec/native-surfaces.md#layout-transaction).
+// contract: surface-layout.run-ends-with-its-transaction
+#[test]
+fn the_end_of_a_run_without_a_settled_presentation_ends_the_waits_for_it() {
+    let running = Running::default();
+    assert!(set_run(&running, true), "the start of a run changed no state");
+    let settled = when_settled(&running).expect("wait for the run");
+    assert!(
+        settled.try_recv().is_err(),
+        "the wait for a run that goes ended before the run"
+    );
+    assert!(end_run(&running), "the end of the run changed no state");
+    assert!(
+        settled.try_recv().is_ok(),
+        "the end of the run did not end the wait for it"
+    );
+    assert!(
+        when_settled(&running).expect("wait after the run").try_recv().is_ok(),
+        "a wait after the end of the run waits"
+    );
+    assert!(!end_run(&running), "a second end of the run changed the state");
 }
