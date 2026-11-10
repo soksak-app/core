@@ -164,7 +164,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go", "packages/host/mygo/src/frontend_test.go", "packages/host/mygo/src/workbench_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/platform/darwin/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
-  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go", "packages/sok/go/src/event_log_idle_test.go"]),
+  lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/identity_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go", "packages/sok/go/src/event_log_idle_test.go"]),
   lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/event_log_flush_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html", "e2e/fixtures/sidecars/*/sidecar.json", "e2e/fixtures/sidecars/*/build.rs", "e2e/fixtures/sidecars/*/src/*.rs"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
   lane("mygo application bootstrap", "go", ["apps/mygo/src/main.go"], ["packages/host/mygo/tests/framework_test.go"], { sharedTests: true }),
@@ -496,6 +496,17 @@ const FEATURE_LINKS = [
     ],
     expected: "A Go window check of the mygo adapter judges a shown window by a state that windows of other applications do not change, a check whose subject is an occlusion event fails with the cover as its reason when the screen shows none of its window, and a view session makes host calls only after its workbench reported ready.",
     levels: ["application"],
+  },
+  {
+    id: "F717",
+    implementation: [
+      { file: "packages/sok/go/src/identity.go", symbol: "func IdentityOf(application string) (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/src/identity_test.go", id: "TestEachGoHostHasTheIdentifierOfItsApplication" },
+    ],
+    expected: "A Go host takes the identifier of its configuration folder from the application name of its framework adapter, and the build tag mygo names only the host of the sok command.",
+    levels: ["unit"],
   },
   {
     id: "F716",

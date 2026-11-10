@@ -2,5 +2,5 @@
 
 package sok
 
-// ReleaseIdentifier is the identifier of the release build of the mygo host and is its bundle identifier.
-const ReleaseIdentifier = "app.soksak.mygo"
+// Application is the application name of the mygo host, the host of this sok command.
+const Application = "mygo"

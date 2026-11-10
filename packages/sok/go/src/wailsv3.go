@@ -2,5 +2,5 @@
 
 package sok
 
-// ReleaseIdentifier is the identifier of the release build of the Wails host and is its bundle identifier.
-const ReleaseIdentifier = "app.soksak.wails"
+// Application is the application name of the Wails host, the host of this sok command.
+const Application = "wailsv3"

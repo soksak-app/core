@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F717: Go host 는 설정 폴더의 식별자를 framework adapter 의 application 이름에서 가져오므로, mygo application 은 Wails application 의 폴더가 아니라 `app.soksak.mygo` 를 쓴다.
 - F716: 두 host 는 writer 가 첫 policy 를 적용한 뒤 native 활동 observer 를 설치하므로, class `lifecycle` 을 `info` 로 저장하는 policy 는 host 시작부터 각 활동 observer 의 `native.observe.registered` 기록을 저장한다.
 - F715-6: `@soksak/window-check` 의 `soksak-test-app` 은 build 된 registry index 의 `--index <file URL or path>` 를 받는다: 그 run 은 check registry 를 build 하지 않고 plugin 을 설치하지 않으며, 각 bundle 의 sok 이 그 index 로 registry use 를 실행하고, 각 앱의 첫 실행이 내장 environment.json 이 정한 starter pack 을 설치한다. 없거나 읽을 수 없는 index 는 그것을 정한 단계를 실패시키고, `--index` 는 `--pack` 과 `--real` 을 받지 않으며, check 는 `SOKSAK_REGISTRY_INDEX` 를 받는다.
 - F715-4: `@soksak/window-check` 는 core 의 범용 창 검사 module(view content, view frame geometry, view process footprint, view metrics collection, marker view, drag measurement, operation chain, project resource, process table, region raster, HID 입력 도구)을 내보내고, 그 시작 상태는 시작 plugin 과 따로 placeholder plugin 을 정하므로 새 space layout 이 정한 plugin 은 자기 검사의 시작 plugin 이다.

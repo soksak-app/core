@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F717: A Go host takes the identifier of its configuration folder from the application name of its framework adapter, so the mygo application uses `app.soksak.mygo` and no longer the folder of the Wails application.
 - F716: Both hosts install the native activity observers after their writer applied the first policy, so a policy that stores the class `lifecycle` at `info` stores the `native.observe.registered` record of each activity observer from the start of the host.
 - F715-6: `soksak-test-app` of `@soksak/window-check` takes `--index <file URL or path>` of a built registry index: the run builds no check registry and installs no plugin, the sok of each bundle runs registry use of that index, and the first run of each application installs the starter pack that its embedded environment.json names. A missing or unreadable index fails the step that names it, `--index` takes no `--pack` and no `--real`, and the checks get `SOKSAK_REGISTRY_INDEX`.
 - F715-4: `@soksak/window-check` exports the generic window-check modules of core (view content, view frame geometry, view process footprints, view metrics collection, the marker view, drag measurement, operation chains, project resources, the process table, the region raster and the HID input tool), and its start state names a placeholder plugin apart from the start plugin, so a plugin that the new-space layout names is the start plugin of its own checks.

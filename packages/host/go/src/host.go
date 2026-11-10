@@ -110,7 +110,11 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 		return nil, fmt.Errorf("view channel script: %w", err)
 	}
 	viewChannelScript = string(viewChannel)
-	identifier := sok.Identity()
+	// The identifier is that of the application of the framework adapter, not that of a build tag (docs/spec/projects.md#persistence).
+	identifier, err := sok.IdentityOf(framework.ApplicationName())
+	if err != nil {
+		return nil, err
+	}
 	configDirectory := options.ConfigDir
 	if configDirectory == "" {
 		config, err := os.UserConfigDir()

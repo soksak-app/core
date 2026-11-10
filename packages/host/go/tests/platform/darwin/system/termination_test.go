@@ -150,13 +150,14 @@ func quitAfterTheStart(directory string) {
 }
 
 // quitFramework is the framework of the start of the host without an application. A step of the main thread is a native call that
-// needs the application, so it does not run.
+// needs the application, so it does not run. It names the application of the Wails host, because the start takes the identifier
+// of the application of its framework (docs/spec/projects.md#persistence).
 type quitFramework struct {
 	host.Framework
 	quit chan struct{}
 }
 
-func (quitFramework) ApplicationName() string { return "termination-test" }
+func (quitFramework) ApplicationName() string { return "wailsv3" }
 func (quitFramework) MainPage() bool          { return true }
 func (quitFramework) DisplayName() string     { return "Test" }
 func (quitFramework) Step(func())             {}
