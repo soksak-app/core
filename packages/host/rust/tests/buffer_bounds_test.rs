@@ -83,14 +83,18 @@ struct Blocked {
 
 impl Blocked {
     fn new(root: &str, surfaces: usize) -> (Blocked, FakeOwner) {
-        Blocked::clocked(root, surfaces, Instant::now)
+        Blocked::clocked(root, surfaces, Instant::now, false)
     }
 
-    /// A blocked sidecar whose sidecars read the clock `clock`.
+    /// A blocked sidecar whose sidecars read the clock `clock`. The terminate signal of the stop ends the sidecar, unless
+    /// `input_end_stops` makes it ignore that signal and take the end of its input as its stop
+    /// (docs/spec/sidecars.md#declaration-and-startup): it then reads every line that the writer writes before it closes the
+    /// input.
     fn clocked(
         root: &str,
         surfaces: usize,
         clock: impl Fn() -> Instant + Send + Sync + 'static,
+        input_end_stops: bool,
     ) -> (Blocked, FakeOwner) {
         let directory = folder::Folder::new();
         let fifo = directory.path().join("go");
@@ -100,8 +104,14 @@ impl Blocked {
             .expect("mkfifo failed");
         assert!(made.status.success());
         let received = directory.path().join("received");
+        // An ignored signal stays ignored across exec, so cat ignores it too.
+        let stop = if input_end_stops {
+            "trap '' TERM\n"
+        } else {
+            ""
+        };
         let script = format!(
-            "#!/bin/sh\nread _ < {}\nexec cat > {}\n",
+            "#!/bin/sh\n{stop}read _ < {}\nexec cat > {}\n",
             fifo.display(),
             received.display()
         );
@@ -419,15 +429,22 @@ fn a_line_that_waits_in_the_write_queue_of_a_sidecar_is_recorded() {
     let config = folder::Folder::new();
     let log = roomy_writer(config.path());
     // The clock of the sidecars moves only when the check moves it: the writer is inside the write of the blocker and the
-    // lines behind it are queued, the clock moves by one second, and the release lets the writer go on.
+    // lines behind it are queued, the clock moves by one second, and the release lets the writer go on. The sidecar takes
+    // the end of its input as its stop, so the terminate signal of the stop does not end it inside the write of the
+    // blocker: it reads every line, and the stop returns after its exit, which follows the record of each write.
     let base = Instant::now();
     let moved = Arc::new(Mutex::new(Duration::ZERO));
     let clock_moved = Arc::clone(&moved);
-    let (mut blocked, _owner) = Blocked::clocked("/p", 1, move || {
-        base + *clock_moved
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner())
-    });
+    let (mut blocked, _owner) = Blocked::clocked(
+        "/p",
+        1,
+        move || {
+            base + *clock_moved
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner())
+        },
+        true,
+    );
     *moved.lock().unwrap_or_else(|poison| poison.into_inner()) = Duration::from_secs(1);
     blocked.release();
     let waits = write_waits(&log, config.path());
