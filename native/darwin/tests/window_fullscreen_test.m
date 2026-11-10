@@ -22,6 +22,13 @@ static BOOL fullscreen(NSWindow *window) {
     return (window.styleMask & NSWindowStyleMaskFullScreen) != 0;
 }
 
+// The delegate of the window that the framework owns. It does not implement the failure methods of a full screen transition,
+// which AppKit sends only to the delegate of the window.
+@interface SPFrameworkDelegate : NSObject <NSWindowDelegate>
+@end
+@implementation SPFrameworkDelegate
+@end
+
 // tests/support/no_activation.m: this check activates the app in make test-app-activation.
 void sp_test_declare_activation(void);
 
@@ -35,6 +42,8 @@ int main(void) { @autoreleasepool {
         backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+    SPFrameworkDelegate *frameworkDelegate = [[SPFrameworkDelegate alloc] init];
+    window.delegate = frameworkDelegate;
     [window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 
@@ -81,6 +90,28 @@ int main(void) { @autoreleasepool {
     check([refusal isEqualToString:@"the window is not shown"],
         [NSString stringWithFormat:@"the refusal names its cause (got %@)", refusal]);
 
+    // A started transition that fails is reported to the delegate of the window, and that failure answers the request once.
+    __block int failedAnswers = 0;
+    __block int failed = 0;
+    __block NSString *failure = nil;
+    sp_window_fullscreen(window, true, ^(int result, const char *message) {
+        failedAnswers++;
+        if (result == SP_FULLSCREEN_FAILED) failed++;
+        failure = message ? [@(message) copy] : nil;
+    });
+    BOOL heard = [window.delegate respondsToSelector:@selector(windowDidFailToEnterFullScreen:)];
+    check(heard, @"the host hears the failure of a full screen transition at the delegate of the window");
+    if (heard) [(id<NSWindowDelegate>)window.delegate windowDidFailToEnterFullScreen:window];
+    until(^BOOL { return failedAnswers > 0; });
+    check(failedAnswers == 1 && failed == 1 && [failure isEqualToString:@"macOS failed the full screen transition"],
+        [NSString stringWithFormat:@"the failure of a started transition answers once (%d answers, %d failures, %@)",
+            failedAnswers, failed, failure]);
+    until(^BOOL { return fullscreen(window); });
+    __block BOOL left = NO;
+    sp_window_fullscreen(window, false, ^(int result, const char *message) { left = result == SP_FULLSCREEN_DONE; });
+    until(^BOOL { return left; });
+    check(failedAnswers == 1 && !fullscreen(window), @"the end of the transition after its failure answers nothing again");
+
     // A window that closes during a transition answers its request with the close.
     __block int closed = 0;
     __block int answered = 0;
@@ -95,5 +126,6 @@ int main(void) { @autoreleasepool {
     [hidden close];
     [hidden release];
     [window release];
+    [frameworkDelegate release];
     return failures ? 1 : 0;
 }}

@@ -148,7 +148,7 @@ fn a_failed_attach_takes_back_its_name() {
     );
 }
 
-// contract: images.detach.timeout-keeps-waiting
+// contract: images.detach.ends-by-its-events
 #[test]
 fn a_reload_sends_no_second_detach_for_a_pending_image() {
     let surface = "surface-retry";

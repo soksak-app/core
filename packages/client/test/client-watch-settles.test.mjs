@@ -42,4 +42,8 @@ test("a refused unwatch does not change the result of the satisfied caller", asy
   const outcome = await within(client.watch("main", "core.screen", (value) => value === "home"), 500);
   assert.ok(!(outcome.error instanceof EndpointError) && !outcome.error, `the unwatch refusal reached the caller: ${outcome.error?.message}`);
   assert.equal(outcome.value, "home");
+  // The refusal ended the watch on the host, so the connection stays open and answers the next request.
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(client.closed, false, "a refused unwatch closed the connection");
+  assert.equal(await client.request("status.get", { window: "main", name: "core.screen" }), "home");
 });

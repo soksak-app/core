@@ -12,7 +12,9 @@ import (
 // pendingSettledPlatform is the platform of a settled wait whose screen never presents: its settled wait answers nothing.
 type pendingSettledPlatform struct{ platform.Platform }
 
-func (pendingSettledPlatform) AfterSettled(platform.Window, unsafe.Pointer, func(float64, error)) error { return nil }
+func (pendingSettledPlatform) AfterSettled(platform.Window, unsafe.Pointer, func(float64, error)) error {
+	return nil
+}
 
 // presentedResult runs host.window.presented of s and returns the channel of its result.
 func presentedResult(s *Surfaces) <-chan error {
@@ -106,7 +108,7 @@ func TestTheFullScreenChangeAnswersWithItsNativeResult(t *testing.T) {
 		{platform.FullscreenRefused, "the window is minimized", codeInactive},
 		{platform.FullscreenRefused, "macOS did not start the full screen transition", codeInactive},
 		{platform.FullscreenClosed, "the window closed during the full screen transition", codeNoWindow},
-		{platform.FullscreenUnended, "the full screen transition did not end within 10s", codeTimeout},
+		{platform.FullscreenFailed, "macOS failed the full screen transition", codeTimeout},
 	}
 	for _, c := range cases {
 		t.Run(c.message, func(t *testing.T) {

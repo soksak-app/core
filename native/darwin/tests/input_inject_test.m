@@ -201,10 +201,10 @@ static void timed(void *context, sp_input_result result, const sp_input_held *he
     state->done = YES;
 }
 
-static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase, double timeout) {
+static SPReceipt pointerThen(NSWindow *window, WKWebView *view, double x, double y, int phase) {
     SPReceipt receipt = {NO, SP_INPUT_REJECTED, 0, view, NO};
     SPReceipt *state = &receipt;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, timeout, received, state);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, received, state);
     until(^BOOL { return state->done; });
     return receipt;
 }
@@ -223,9 +223,9 @@ static void checkReceipts(void) {
     [window orderBack:nil];
 
     // An unregistered web view does not report receipt, so the completion is immediate on delivery.
-    SPReceipt unregistered = pointerThen(window, view, 50, 50, 1, 5);
+    SPReceipt unregistered = pointerThen(window, view, 50, 50, 1);
     check(unregistered.result == SP_INPUT_DELIVERED, @"a press into an unregistered webview completes when it is delivered");
-    pointerThen(window, view, 50, 50, 3, 5);
+    pointerThen(window, view, 50, 50, 3);
     drain(view);
 
     check(webviewInputRegister(view), @"the webview registers for pointer input");
@@ -233,11 +233,11 @@ static void checkReceipts(void) {
         @"the page cannot see the input receipt handler");
     evaluate(view, @"probe.events.length=0; null");
     pointerOutside(window);
-    SPReceipt down = pointerThen(window, view, 50, 50, 1, 5);
+    SPReceipt down = pointerThen(window, view, 50, 50, 1);
     check(down.result == SP_INPUT_DELIVERED && down.seen == 1 && !down.held,
         [NSString stringWithFormat:@"a press completes after the document received it without a held-button report (%d, %lu events, held %d)",
             down.result, (unsigned long)down.seen, down.held]);
-    SPReceipt up = pointerThen(window, view, 50, 50, 3, 5);
+    SPReceipt up = pointerThen(window, view, 50, 50, 3);
     check(up.result == SP_INPUT_DELIVERED && up.seen == 2,
         [NSString stringWithFormat:@"a release completes after the document received it (%d, %lu events)", up.result, (unsigned long)up.seen]);
 
@@ -245,34 +245,23 @@ static void checkReceipts(void) {
     [view evaluateJavaScript:@"{const end=Date.now()+1000; while(Date.now()<end){}} null" completionHandler:nil];
     SPTimed late = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *lateState = &late;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 5, timed, lateState);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, timed, lateState);
     until(^BOOL { return lateState->done; });
     check(late.result == SP_INPUT_DELIVERED && late.took >= 0.9,
         [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
-    pointerThen(window, view, 50, 50, 3, 5);
+    pointerThen(window, view, 50, 50, 3);
 
-    // Without a text field in focus, a press waits for the end of the handling of WebKit and no limit: a document that is busy
-    // longer than the limit of the request still receives the press and the request answers then.
-    [view evaluateJavaScript:@"{const end=Date.now()+1500; while(Date.now()<end){}} null" completionHandler:nil];
-    SPTimed busy = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
-    SPTimed *busyState = &busy;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 0.5, timed, busyState);
-    until(^BOOL { return busyState->done; });
-    check(busy.result == SP_INPUT_DELIVERED && busy.took >= 1.4,
-        [NSString stringWithFormat:@"a press that a busy document receives after the limit of the request is delivered (%d after %.3fs)",
-            busy.result, busy.took]);
-    pointerThen(window, view, 50, 50, 3, 5);
     // A scroll into a window that is not shown is refused in its turn, because that window presents nothing until it shows.
     [window orderOut:nil];
     SPTimed hiddenScroll = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *hiddenScrollState = &hiddenScroll;
-    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 4, 0, 0, 40, 1, 3, timed, hiddenScrollState);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 4, 0, 0, 40, 1, timed, hiddenScrollState);
     until(^BOOL { return hiddenScrollState->done; });
     check(hiddenScroll.result == SP_INPUT_UNRECEIVED && hiddenScroll.took < 1,
         [NSString stringWithFormat:@"a scroll into a window that is not shown is refused at once (%d after %.3fs)",
             hiddenScroll.result, hiddenScroll.took]);
     [window orderBack:nil];
-    pointerThen(window, view, 50, 50, 3, 5);
+    pointerThen(window, view, 50, 50, 3);
     webviewInputUnregister(view);
     [window close];
 }
@@ -824,8 +813,8 @@ int main(void) { @autoreleasepool {
 
     // Focused input can leave WebKit work in the queue. The next native click must
     // still deliver down before up and synthesize exactly one DOM click.
-    SPReceipt buttonDown = pointerThen(window, view, 50, 50, 1, 5);
-    SPReceipt buttonUp = pointerThen(window, view, 50, 50, 3, 5);
+    SPReceipt buttonDown = pointerThen(window, view, 50, 50, 1);
+    SPReceipt buttonUp = pointerThen(window, view, 50, 50, 3);
     check(buttonDown.result == SP_INPUT_DELIVERED && buttonUp.result == SP_INPUT_DELIVERED,
         @"a click after keyboard input receives both pointer phases");
     drain(view);
