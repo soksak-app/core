@@ -143,7 +143,8 @@ func (s *Shell) registerLibrary() {
 		}
 		s.browsing = false
 		s.options.Invalidate()
-		return nil
+		// The project shows its settings again (beginSettings).
+		return s.beginSettings(s.settings.Common())
 	})
 	act(s, "core.library.window", func(struct{}) error {
 		s.performLibrary(s.newWindow, func() {})

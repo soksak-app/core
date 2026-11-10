@@ -373,15 +373,25 @@ func (s *Shell) takeStored(project *projectRecord, read projectRecord) (projectR
 	}
 	// The window keeps the spaces of a project that it holds, which it writes itself; every other project takes its stored record,
 	// which another window or another environment may have changed, as readProjects of the page does.
+	// The plugin data and the settings file of the folder are the store's, which the window does not write into the record, so a project
+	// that it holds takes them too: a return from the library shows the stored overrides (beginSettings).
 	if !s.windowProjects[read.ID] {
 		*project = read
-	} else if stored, ok := read.Rest["plugins"]; ok {
-		if project.Rest == nil {
-			project.Rest = map[string]json.RawMessage{}
-		}
-		project.Rest["plugins"] = stored
 	} else {
-		delete(project.Rest, "plugins")
+		for _, key := range []string{"plugins", "settings", "settingsError"} {
+			if stored, ok := read.Rest[key]; ok {
+				if project.Rest == nil {
+					project.Rest = map[string]json.RawMessage{}
+				}
+				project.Rest[key] = stored
+			} else {
+				delete(project.Rest, key)
+			}
+		}
+		project.Settings = nil
+		if err := member(project.Rest, "settings", &project.Settings); err != nil {
+			return *project, err
+		}
 	}
 	for _, changed := range changedKeys(before, now) {
 		s.dataChanged(project.ID, changed[0], changed[1])

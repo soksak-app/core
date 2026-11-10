@@ -539,9 +539,14 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 
 // Draw draws the frame at box, in window coordinates.
 func (s *Sidebars) Draw(c *ui.Context, frame SidebarFrame, box layout.Rect) {
+	// The status names the rect of the set, as the page reports the box of `.set`: the set stands inside the insets of the frame and
+	// above the status line of the sidebar (DrawSidebar).
+	inset, foot := frame.SetInsets, float64(s.metrics.FootH)
+	set := layout.Rect{X: box.X + float64(inset.Left), Y: box.Y + float64(inset.Top),
+		W: max(0, box.W-float64(inset.Left+inset.Right)), H: max(0, box.H-foot-float64(inset.Top+inset.Bottom))}
 	for _, drawn := range s.drawn {
 		if drawn.frame.Sidebar == frame.Sidebar {
-			drawn.rect = box
+			drawn.rect = set
 		}
 	}
 	drag := s.drags[frame.Sidebar]

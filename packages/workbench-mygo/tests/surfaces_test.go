@@ -1693,6 +1693,33 @@ func TestTheErrorOfTheActiveTabIsRecordedWhenItAppears(t *testing.T) {
 	}
 }
 
+// A stopped view of the active tab shows its error in the status row of its card through the error display, which records
+// `surface status <card> <tab>: 표면 오류 · <reason>` once when it appears, as setSurfaceStatus of packages/workbench/surface-status.js.
+func TestTheStatusRowShowsTheErrorOfAStoppedView(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	card := ""
+	for _, entry := range status[struct {
+		Cards []struct{ ID, Active string }
+	}](t, f, "core.grid").Cards {
+		if entry.Active == surface {
+			card = entry.ID
+		}
+	}
+	f.shownRecords()
+	f.shell.Event("view-stopped", []any{map[string]any{"surface": surface, "reason": "the view stopped"}})
+	want := []shownRecord{{"surface status " + card + " " + surface, "표면 오류 · the view stopped"}}
+	if got := f.shownRecords(); !slices.Equal(got, want) {
+		t.Fatalf("the records of the stopped view are %q, want %q", got, want)
+	}
+	if got := f.shownRecords(); len(got) != 0 {
+		t.Fatalf("a later frame recorded the shown error again: %q", got)
+	}
+	if !labelled(f.tester.ElementTree(), "표면 오류 · the view stopped") {
+		t.Fatal("the status row does not show the error")
+	}
+}
+
 // The declaration names the native frame, whose edges share the device grid
 // with the painted card chrome; the stored plane may remain fractional.
 func TestSurfaceDeclarationsUseTheFrameBackingPixelEdges(t *testing.T) {

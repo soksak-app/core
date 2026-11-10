@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -631,10 +632,68 @@ func faded(color ui.Color, share float32) ui.Color {
 	return color
 }
 
+// drawSurfaceStatus draws the state of the surface of the active tab at the start of the status row of the card, as setSurfaceStatus of
+// packages/workbench/surface-status.js: a turning ring and 불러오는 중 while its view loads, a dot and the error through the error display
+// once its view stopped, which records `surface status <card> <tab>: 표면 오류 · <reason>` when it appears, and nothing once it is ready.
+// A tab without a surface, the placeholder of a plugin that is not loaded, is ready.
+func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
+	where := "surface status " + card + " " + tab
+	phase := "ready"
+	reason, stopped := s.surfaces.stopped(tab)
+	switch {
+	case stopped:
+		phase = "error"
+	case s.surfaces.held[tab] != nil && s.surfaces.views[tab] == nil:
+		phase = "loading"
+	}
+	if phase != "error" {
+		s.errors.Hide(where)
+	}
+	if phase == "ready" {
+		return
+	}
+	m := s.metrics
+	color, text := s.palette.Muted, "불러오는 중"
+	if phase == "error" {
+		color, text = s.palette.No, "표면 오류 · "+reason
+		s.errors.Show(where, text, "")
+	}
+	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap).Margin(0, m.surfaceStatusMargin, 0, 0).Children(func() {
+		size, border, turn := m.spinner, m.spinnerBorder, m.spinnerTurn
+		ui.Box(c).Size(size, size).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+			cx, cy, radius := r.X+r.W/2, r.Y+r.H/2, r.W/2
+			if phase == "error" {
+				var dot ui.Path
+				p.FillPath(dot.Circle(cx, cy, radius), color)
+				return
+			}
+			// The ring has its top quarter clear (border-top-color: transparent) and turns once in spinner-turn.
+			at := float64(p.Now().UnixNano()%int64(turn)) / float64(turn) * 2 * math.Pi
+			p.After(time.Second / 60)
+			var ring ui.Path
+			const steps = 24
+			for i := 0; i <= steps; i++ {
+				angle := at + math.Pi/4 + float64(i)/steps*1.5*math.Pi - math.Pi/2
+				x, y := cx+float32(math.Cos(angle))*(radius-border/2), cy+float32(math.Sin(angle))*(radius-border/2)
+				if i == 0 {
+					ring.MoveTo(x, y)
+				} else {
+					ring.LineTo(x, y)
+				}
+			}
+			p.StrokePath(&ring, border, color)
+		})
+		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text)
+	})
+}
+
 // drawStatus draws the status line of a card at height, with the text of the sides folded for lack of space when there is one.
 func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold string, height float32) {
 	ui.Row(s.binder.Name(c, "core.card.status", id)).FillWidth().Height(height).Clip().PaddingX(s.metrics.chromeGap).AlignItems(ui.Center).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.cardLine()).
 		Role(ui.RoleStatus).Label("core.card.status").Children(func() {
+		if active := data.ActiveTab(); active != nil {
+			s.drawSurfaceStatus(c, id, active.ID)
+		}
 		text := s.cardStatusText(data)
 		if fold != "" {
 			text = fold

@@ -1296,12 +1296,13 @@ func (s *Shell) registerSettingsWindow() {
 	})
 }
 
-// beginSettings takes the common settings and the stored settings of the project of the window.
+// beginSettings takes the common settings and the stored settings of the project of the window. The library selects no project, so it
+// shows the common settings (browse of packages/workbench/projects.js selects the project null).
 func (s *Shell) beginSettings(common map[string]any) error {
 	var overrides map[string]any
 	project := s.opened()
 	id := ""
-	if project != nil {
+	if project != nil && !s.browsing {
 		id = project.ID
 		if err := member(project.Rest, "settings", &overrides); err != nil {
 			return err

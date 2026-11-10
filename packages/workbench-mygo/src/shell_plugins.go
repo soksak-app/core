@@ -151,7 +151,9 @@ func (s *Shell) showLibraryPage(page string) error {
 // browsePlugins closes the settings window and shows the plugin page of the library.
 func (s *Shell) browsePlugins() error {
 	s.settingsWindow.open = false
-	s.browse()
+	if err := s.browse(); err != nil {
+		return err
+	}
 	return s.showLibraryPage(pluginsPage)
 }
 
