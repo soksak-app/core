@@ -5,8 +5,8 @@
 
 static BOOL faultApplied;
 static BOOL faultPending;
-static int stopWithError(double after) {
-    int frames = sp_capture_stop(after, 0);
+static int stopWithError(double after, uint64_t token) {
+    int frames = sp_capture_stop(after, token);
     if (frames > 0 && !faultApplied) {
         faultApplied = YES;
         faultPending = YES;

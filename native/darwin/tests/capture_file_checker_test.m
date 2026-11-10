@@ -10,8 +10,8 @@ static bool startWithDirectory(const char *directory, bool frameIdentity, char *
     if (started) recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
     return started;
 }
-static int stopWithTruncatedFrame(double after) {
-    int count = sp_capture_stop(after, 0);
+static int stopWithTruncatedFrame(double after, uint64_t token) {
+    int count = sp_capture_stop(after, token);
     if (count > 0) {
         NSString *file = [recordingDirectory stringByAppendingPathComponent:@"frame-0001.bgra"];
         faultApplied = truncate(file.UTF8String, 3 * sizeof(uint32_t)) == 0;
