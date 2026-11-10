@@ -1118,6 +1118,37 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
   await waitForCompositionEntry(entry);
 }
 
+/**
+ * Waits until the composition of a surface that a drawn layout names is answered for a core command (docs/spec/exposure.md#registration):
+ * a view that has declared is answered, and so is a view that has not declared, whose place the drawn layout leaves empty
+ * (docs/spec/native-surfaces.md#view-surfaces); a declaration in flight waits for the host answer, whose refusal is the error. A
+ * surface of another composition declares in its module mount, so it waits for that declaration. A failed mount throws its failure, and
+ * a surface that is not mounted throws.
+ */
+export async function waitSurfaceCompositionAnswered(surfaceId) {
+  let entry = mounted.get(surfaceId);
+  if (!entry || entry.disposed || !entry.ready) {
+    const pending = mounting.get(surfaceId);
+    if (pending?.registered) {
+      const outcome = await pending.registered;
+      if (!outcome.ok) throw outcome.error;
+    }
+    if (placeholders.has(surfaceId)) return;
+    entry = mounted.get(surfaceId);
+    if (!entry || entry.disposed) {
+      const failed = mounting.get(surfaceId);
+      if (failed?.state === "failed") throw mountFailureError(surfaceId, failed);
+      throw new Error(`surface ${surfaceId} is not mounted`);
+    }
+  }
+  if (entry.mountRegistration?.state === "failed") throw mountFailureError(surfaceId, entry.mountRegistration);
+  if (entry.descriptor?.composition?.kind !== "view") {
+    await waitForCompositionEntry(entry);
+    return;
+  }
+  if (entry.compositionDeclaring) await entry.compositionDeclaring;
+}
+
 async function waitForCompositionEntry(entry) {
   const result = await Promise.race([
     entry.composition,

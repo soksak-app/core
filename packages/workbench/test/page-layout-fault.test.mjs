@@ -12,7 +12,7 @@ test("an armed layout fault fails the next draw once and the next layout draws",
     document: null, showError: (text) => shown.push(text), setVerify: (rows) => verified.push(rows), log: () => {},
     surfaces: { waitPresented: () => Promise.resolve() }, plane: { clear: () => {} },
     compositor: { publishAhead: () => Promise.resolve(), publish: () => {}, cancelPrepared: () => { cancelled.push("cancel"); return Promise.resolve(); } }, textSize: () => 1, rendered: () => Promise.resolve(),
-    waitSurfaceCompositionDeclared: () => Promise.resolve(),
+    waitSurfaceCompositionAnswered: () => Promise.resolve(),
   });
   const drawn = [];
   armLayoutFault();
@@ -26,14 +26,14 @@ test("an armed layout fault fails the next draw once and the next layout draws",
   assert.deepEqual(drawn, ["second"]);
 });
 
-test("a command waits for the declaration of each mounted surface and not for the slot of an unloaded hidden section", async () => {
+test("a command waits for the composition answer of each mounted surface and not for the slot of an unloaded hidden section", async () => {
   const waited = [];
   const page = createPageLayout({
     document: { querySelectorAll: () => [{ dataset: { nativeSurfaceId: "shown" } }, { dataset: { nativeSurfaceId: "hidden" } }] },
     showError: () => {}, setVerify: () => {}, log: () => {},
     surfaces: { waitPresented: () => Promise.resolve() }, plane: { clear: () => {} },
     compositor: { publishAhead: () => Promise.resolve(), publish: () => {}, cancelPrepared: () => {} },
-    waitSurfaceCompositionDeclared: (id) => {
+    waitSurfaceCompositionAnswered: (id) => {
       waited.push(id);
       return id === "hidden" ? Promise.reject(new Error(`surface ${id} is not mounted`)) : Promise.resolve();
     },
@@ -51,7 +51,7 @@ test("a layout whose seats no longer hold hands its preparation to the next layo
     document: null, showError: assert.fail, setVerify: () => {}, log: () => {},
     surfaces: { waitPresented: () => Promise.resolve() }, plane: { clear: () => {} },
     compositor: { publishAhead: () => Promise.resolve(), publish: () => {}, cancelPrepared: (options) => { cancelled.push(options); return Promise.resolve(); } },
-    textSize: () => 1, rendered: () => Promise.resolve(), waitSurfaceCompositionDeclared: () => Promise.resolve(),
+    textSize: () => 1, rendered: () => Promise.resolve(), waitSurfaceCompositionAnswered: () => Promise.resolve(),
   });
   const drawn = [];
   let holds = true;

@@ -50,7 +50,7 @@ import {
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
 import { cancelPrepared, latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onMountedChange, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onMountedChange, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionAnswered } from "./surface-modules.js";
 import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
 import { memoryPlacement } from "./memory-placement.js";
 import { keyboardOwed, keyboardPlaced } from "./keyboard.js";
@@ -395,7 +395,7 @@ const pageLayout = createPageLayout({
   compositor: { publishAhead, publish, cancelPrepared },
   textSize: () => value("textSize"),
   rendered: () => presented,
-  waitSurfaceCompositionDeclared,
+  waitSurfaceCompositionAnswered,
   surfaceUnloaded: (surface) => memorySaver.unloaded(surface),
 });
 // The tab selection and collapse of a sidebar are stored in the space (docs/spec/projects.md#persistence).

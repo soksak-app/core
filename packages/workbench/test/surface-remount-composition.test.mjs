@@ -594,9 +594,9 @@ test("a drawn wait records a listener failure before the native view is declared
   };
   const page = createPageLayout({
     document, showError: () => {}, setVerify: () => {}, log: () => {}, surfaces: {}, plane: {}, compositor: {},
-    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionDeclared: async (surfaceId) => {
-      const { waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-attributed-failure");
-      return waitSurfaceCompositionDeclared(surfaceId);
+    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered: async (surfaceId) => {
+      const { waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-attributed-failure");
+      return waitSurfaceCompositionAnswered(surfaceId);
     },
   });
 
@@ -670,9 +670,9 @@ test("removing a pre-readiness listener failure from the desired plane clears it
   };
   const page = createPageLayout({
     document, showError: () => {}, setVerify: () => {}, log: () => {}, surfaces: {}, plane: {}, compositor: {},
-    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionDeclared: async (surfaceId) => {
-      const { waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-failure-plane-cleanup");
-      return waitSurfaceCompositionDeclared(surfaceId);
+    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered: async (surfaceId) => {
+      const { waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-failure-plane-cleanup");
+      return waitSurfaceCompositionAnswered(surfaceId);
     },
   });
   try {
@@ -742,9 +742,9 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
   };
   const page = createPageLayout({
     document, showError: () => {}, setVerify: () => {}, log: () => {}, surfaces: {}, plane: {}, compositor: {},
-    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionDeclared: async (surfaceId) => {
-      const { waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-old-failure");
-      return waitSurfaceCompositionDeclared(surfaceId);
+    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered: async (surfaceId) => {
+      const { waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-old-failure");
+      return waitSurfaceCompositionAnswered(surfaceId);
     },
   });
   try {

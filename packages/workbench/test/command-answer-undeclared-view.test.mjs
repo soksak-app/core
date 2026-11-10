@@ -47,7 +47,7 @@ test("the drawn wait of a command answers while a view of the layout has not dec
   const page = createPageLayout({
     document, showError: () => {}, setVerify: () => {}, log: () => {}, surfaces: {}, plane: {}, compositor: {},
     textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false,
-    waitSurfaceCompositionDeclared: modules.waitSurfaceCompositionDeclared,
+    waitSurfaceCompositionAnswered: modules.waitSurfaceCompositionAnswered,
   });
   try {
     modules.authorizeSurface(declaredView.surface.surfaceId);
