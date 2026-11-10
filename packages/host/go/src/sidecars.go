@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -109,9 +110,11 @@ type sidecar struct {
 	readyRecorded bool
 	outbox        chan queuedLine
 	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
-	writing       atomic.Int64
-	exited        chan struct{}
-	muClosed      sync.Mutex
+	writing  atomic.Int64
+	exited   chan struct{}
+	muClosed sync.Mutex
+	// held is the number of the held returns and closes. A sender raises it before it orders a held message.
+	held          atomic.Int64
 	pendingCloses pendingLines // The pending closed messages, in the order of sending
 	// pendingReplies buffers the immutable image acks when the channel is full.
 	// Each item is kept so that a reply with a different sequence does not overwrite another.
@@ -873,15 +876,17 @@ func (c *Sidecars) sendResponse(source *sidecar, name, surface, image string, bo
 // queueResponse writes a response without blocking, or buffers the immutable line when the outbox is full. It is called
 // with c.mu held so stop cannot retire the process between validation and enqueue.
 func (c *Sidecars) queueResponse(process *sidecar, name, surface, image string, body json.RawMessage, line []byte) error {
-	// Sends to the channel without blocking. When the channel is full, it buffers.
+	// Sends to the channel without blocking. When the channel is full, it buffers. The send and the hold are one step under
+	// muClosed, so the writer that finds the channel empty finds the held reply.
+	process.muClosed.Lock()
 	select {
 	case process.outbox <- queue(line):
+		process.muClosed.Unlock()
 		return nil
 	default:
 		// The channel is full, so the immutable replies are kept in order.
 		responseKey := surface + ":" + image + ":" + string(body)
-		process.muClosed.Lock()
-		limit := process.pendingReplies.add(line)
+		limit := process.pendingReplies.add(line, &process.held)
 		process.muClosed.Unlock()
 		if limit != "" {
 			recordBufferDrop("sidecar "+name+" pending replies", len(line), limit)
@@ -966,13 +971,15 @@ func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
 			c.closing[process.name] = map[string]int{}
 		}
 		c.closing[process.name][surface]++
-		// Sends to the channel without blocking. When the channel is full, it stores it in pendingCloses.
+		// Sends to the channel without blocking. When the channel is full, it stores it in pendingCloses. The send and the hold
+		// are one step under muClosed, so the writer that finds the channel empty finds the held close.
+		process.muClosed.Lock()
 		select {
 		case process.outbox <- queue(line):
+			process.muClosed.Unlock()
 		default:
 			// The channel is full, so the closed messages are kept in the order of sending.
-			process.muClosed.Lock()
-			limit := process.pendingCloses.add(line)
+			limit := process.pendingCloses.add(line, &process.held)
 			process.muClosed.Unlock()
 			if limit != "" {
 				// The close is not sent, so no reply to it comes: the surface is not waited for. The sidecar keeps its session
@@ -2038,84 +2045,11 @@ func (c *Sidecars) write(process *sidecar) {
 			LogError("sidecar "+process.name, fmt.Sprintf("close stdin: %v", err))
 		}
 	}()
-	for {
-		// 1. Writes all messages in the channel without blocking (a select with default).
-		for drained := false; !drained; {
-			select {
-			case line, ok := <-process.outbox:
-				if !ok {
-					// The channel closed. Ends after writing all held messages.
-					c.writePending(process)
-					return
-				}
-				if !c.writeLine(process, line) {
-					return
-				}
-			default:
-				drained = true
-			}
-		}
-
-		// 2. When the queue is empty, writes all held messages, or first the line that entered the queue since.
-		line, queued, held, ended := process.afterQueue()
-		if queued {
-			if !c.writeLine(process, line) {
-				return
-			}
-			continue
-		}
-		if !c.writeLines(process, held) || ended {
-			return
-		}
-
-		// 3. Now waits for the next item from the channel (blocking).
-		line, ok := <-process.outbox
-		if !ok {
-			// The channel closed. Ends after writing all held messages.
-			c.writePending(process)
-			return
-		}
-		if !c.writeLine(process, line) {
-			return
-		}
-	}
+	process.writeInOrder(func(line queuedLine) bool { return c.writeLine(process, line) })
 }
 
 func (c *Sidecars) writePersistent(process *sidecar) {
-	for {
-		for drained := false; !drained; {
-			select {
-			case line, ok := <-process.outbox:
-				if !ok {
-					c.writePersistentPending(process)
-					return
-				}
-				if !c.writePersistentLine(process, line) {
-					return
-				}
-			default:
-				drained = true
-			}
-		}
-		line, queued, held, ended := process.afterQueue()
-		if queued {
-			if !c.writePersistentLine(process, line) {
-				return
-			}
-			continue
-		}
-		if !c.writePersistentLines(process, held) || ended {
-			return
-		}
-		line, ok := <-process.outbox
-		if !ok {
-			c.writePersistentPending(process)
-			return
-		}
-		if !c.writePersistentLine(process, line) {
-			return
-		}
-	}
+	process.writeInOrder(func(line queuedLine) bool { return c.writePersistentLine(process, line) })
 }
 
 func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
@@ -2131,22 +2065,6 @@ func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 	return true
 }
 
-func (c *Sidecars) writePersistentPending(process *sidecar) bool {
-	process.muClosed.Lock()
-	held := process.takeHeld()
-	process.muClosed.Unlock()
-	return c.writePersistentLines(process, held)
-}
-
-func (c *Sidecars) writePersistentLines(process *sidecar, lines []queuedLine) bool {
-	for _, line := range lines {
-		if !c.writePersistentLine(process, line) {
-			return false
-		}
-	}
-	return true
-}
-
 func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
 	started := monotonicNanos()
 	process.writing.Store(int64(len(line.bytes)))
@@ -2159,26 +2077,98 @@ func (c *Sidecars) writeLine(process *sidecar, line queuedLine) bool {
 	return true
 }
 
-// writePending takes the held messages at once and writes the returns first and the closes last. A writer calls it when its
-// outbox closed; while the outbox is open, afterQueue takes the held messages.
-func (c *Sidecars) writePending(process *sidecar) bool {
-	process.muClosed.Lock()
-	held := process.takeHeld()
-	process.muClosed.Unlock()
-	return c.writeLines(process, held)
+// writeInOrder writes the lines of the sidecar with write in the order that the host accepted them, until the outbox closes
+// or a write fails (docs/spec/host-contract.md, flush.buffer.written-in-the-order-of-sending). A line of the outbox goes out
+// after the held messages accepted before it; when the outbox is empty, the held messages go out before the writer waits for
+// the outbox; when the outbox closes, the held messages are the last lines.
+func (s *sidecar) writeInOrder(write func(queuedLine) bool) {
+	writeAll := func(lines []queuedLine) bool {
+		for _, line := range lines {
+			if !write(line) {
+				return false
+			}
+		}
+		return true
+	}
+	writeQueued := func(line queuedLine) bool {
+		return writeAll(s.heldBefore(line.order)) && write(line)
+	}
+	for {
+		// 1. Writes the lines of the outbox without blocking.
+		select {
+		case line, ok := <-s.outbox:
+			if !ok {
+				writeAll(s.takeAllHeld())
+				return
+			}
+			if !writeQueued(line) {
+				return
+			}
+			continue
+		default:
+		}
+		// 2. When the outbox is empty, writes the held messages, or first the line that entered the outbox since.
+		line, queued, held, ended := s.afterQueue()
+		if queued {
+			if !writeQueued(line) {
+				return
+			}
+			continue
+		}
+		if !writeAll(held) || ended {
+			return
+		}
+		// 3. Waits for the next line of the outbox.
+		line, ok := <-s.outbox
+		if !ok {
+			writeAll(s.takeAllHeld())
+			return
+		}
+		if !writeQueued(line) {
+			return
+		}
+	}
 }
 
-// takeHeld takes the held messages in the order of writing, the returns first and the closes last. It is called with
-// muClosed held.
-func (s *sidecar) takeHeld() []queuedLine {
-	return append(s.pendingReplies.take(), s.pendingCloses.take()...)
+// heldBefore takes the held messages that the host accepted before the line of order. A sender counts a held message before
+// it orders it, so a line ordered after a held message finds the count above zero and the message in the lists.
+func (s *sidecar) heldBefore(order uint64) []queuedLine {
+	if s.held.Load() == 0 {
+		return nil
+	}
+	s.muClosed.Lock()
+	defer s.muClosed.Unlock()
+	return s.takeHeld(order)
+}
+
+// takeAllHeld takes every held message in the order that the host accepted them.
+func (s *sidecar) takeAllHeld() []queuedLine {
+	s.muClosed.Lock()
+	defer s.muClosed.Unlock()
+	return s.takeHeld(math.MaxUint64)
+}
+
+// takeHeld takes the held returns and closes that the host accepted before the line of order, in the order of acceptance. It
+// is called with muClosed held.
+func (s *sidecar) takeHeld(order uint64) []queuedLine {
+	replies, closes := s.pendingReplies.takeBefore(order), s.pendingCloses.takeBefore(order)
+	s.held.Add(-int64(len(replies) + len(closes)))
+	lines := make([]queuedLine, 0, len(replies)+len(closes))
+	for len(replies) > 0 && len(closes) > 0 {
+		if replies[0].order < closes[0].order {
+			lines, replies = append(lines, replies[0]), replies[1:]
+		} else {
+			lines, closes = append(lines, closes[0]), closes[1:]
+		}
+	}
+	return append(append(lines, replies...), closes...)
 }
 
 // afterQueue is what a writer writes after it found its outbox empty. It takes the held messages only while the outbox holds
-// no line, under muClosed. A sender queues a line or holds a message under c.mu, and holds it under muClosed too, so every
-// line queued before a held message is either written or still in the outbox when the writer takes the message: a line still
-// in the outbox comes back with queued true and goes out first, and the held messages go out after every line queued before
-// them. ended reports that the outbox closed, so the held messages are the last lines of the writer.
+// no line, under muClosed. A sender queues or holds a return or a close under muClosed, so a message held because the outbox
+// was full is in the lists whenever the writer finds the outbox empty: a line still in the outbox comes back with queued true,
+// and the held messages go out before the writer waits for the outbox. ended reports that the outbox closed, so the held
+// messages are the last lines of the writer.
 func (s *sidecar) afterQueue() (line queuedLine, queued bool, held []queuedLine, ended bool) {
 	s.muClosed.Lock()
 	defer s.muClosed.Unlock()
@@ -2187,19 +2177,10 @@ func (s *sidecar) afterQueue() (line queuedLine, queued bool, held []queuedLine,
 		if ok {
 			return next, true, nil, false
 		}
-		return queuedLine{}, false, s.takeHeld(), true
+		return queuedLine{}, false, s.takeHeld(math.MaxUint64), true
 	default:
-		return queuedLine{}, false, s.takeHeld(), false
+		return queuedLine{}, false, s.takeHeld(math.MaxUint64), false
 	}
-}
-
-func (c *Sidecars) writeLines(process *sidecar, lines []queuedLine) bool {
-	for _, line := range lines {
-		if !c.writeLine(process, line) {
-			return false
-		}
-	}
-	return true
 }
 
 // read passes the output of the sidecar to the window that owns the surface. When the output ends or the protocol is violated, and the process is not ending,
@@ -2947,6 +2928,8 @@ func (c *Sidecars) traceMessage(event, sidecar, surface string, body json.RawMes
 type queuedLine struct {
 	bytes  []byte
 	queued uint64
+	// order is the place of the line in the order that the host accepted the lines of its sidecars.
+	order uint64
 }
 
 // presentsRefused is the refusal of an image present that the stop of the sidecars ended
@@ -3018,9 +3001,12 @@ func (p *imagePresents) refuse() {
 // errServiceDisconnected fails each request that waits for an answer of a persistent service when its connection ends.
 var errServiceDisconnected = errors.New("persistent service disconnected before close-owner ack")
 
-// queue stamps line with the moment it enters the write queue of a sidecar.
+// lineOrder orders the lines that the host accepts for its sidecars.
+var lineOrder atomic.Uint64
+
+// queue stamps line with the moment it enters the write queue of a sidecar and with its place in the order of acceptance.
 func queue(line []byte) queuedLine {
-	return queuedLine{bytes: line, queued: monotonicNanos()}
+	return queuedLine{bytes: line, queued: monotonicNanos(), order: lineOrder.Add(1)}
 }
 
 // The waits of a line for a sidecar that the writer records (docs/spec/logging.md#entrances): a second in the queue
