@@ -7,12 +7,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
-
-const imageDetachTimeout = 10 * time.Second
 
 type imageDetachWaiter struct {
 	target imageDetachTarget
@@ -106,12 +103,11 @@ func parseImageDetachAck(detached json.RawMessage) (imageDetachAck, error) {
 type imageDetachKey struct{ Sidecar, Surface, Name string }
 
 // pendingImageDetach is a detach that a page start sent and whose acknowledgement has not arrived.
-// timedOut is closed when the deadline error is recorded, and ended when the wait ends.
+// ended is closed when the wait ends.
 type pendingImageDetach struct {
-	target   imageDetachTarget
-	id       string
-	timedOut chan struct{}
-	ended    chan struct{}
+	target imageDetachTarget
+	id     string
+	ended  chan struct{}
 }
 
 func (c *Sidecars) beginImageDetach(target imageDetachTarget) (string, <-chan imageDetachResult, error) {
@@ -203,31 +199,18 @@ func (s *Surfaces) beginImageDetaches(targets []imageDetachTarget) error {
 		if s.imageDetaches == nil {
 			s.imageDetaches = map[imageDetachKey]*pendingImageDetach{}
 		}
-		entry := &pendingImageDetach{target: target, id: id, timedOut: make(chan struct{}), ended: make(chan struct{})}
+		entry := &pendingImageDetach{target: target, id: id, ended: make(chan struct{})}
 		s.imageDetaches[key] = entry
 		routine.Go("image-detach-wait", func() { s.waitImageDetach(key, entry, result) })
 	}
 	return nil
 }
 
-// waitImageDetach waits for the end of one pending detach. The deadline is a timer because a supplier that does not answer
-// sends no event; it records that failure and does not end the wait.
+// waitImageDetach waits for the end of one pending detach: the acknowledgement of the supplier, the end of the supplier
+// connection or the end of the surface session. It has no limit and writes no record while it waits.
 func (s *Surfaces) waitImageDetach(key imageDetachKey, entry *pendingImageDetach, result <-chan imageDetachResult) {
-	timeout := s.sidecars.imageDetachTimeout
-	if timeout <= 0 {
-		timeout = imageDetachTimeout
-	}
 	defer close(entry.ended)
-	timer := time.NewTimer(timeout)
-	var outcome imageDetachResult
-	select {
-	case outcome = <-result:
-		timer.Stop()
-	case <-timer.C:
-		LogError("image detach", imageDetachTimeoutError(entry.target, entry.id))
-		close(entry.timedOut)
-		outcome = <-result
-	}
+	outcome := <-result
 	target := entry.target
 	failure := ""
 	switch {
@@ -351,11 +334,6 @@ func (s *Surfaces) imageDetachPageReady() {
 	for _, event := range ended {
 		s.windowEvent("image-detach-ended", event)
 	}
-}
-
-func imageDetachTimeoutError(target imageDetachTarget, request string) error {
-	return fmt.Errorf("image detach sidecar %s surface %s image %s generation %d request %s timed out",
-		target.Sidecar, target.Surface, target.Name, target.Generation, request)
 }
 
 // releaseImageDetachesLocked ends the pending detaches whose target match accepts. The caller holds c.mu; each result

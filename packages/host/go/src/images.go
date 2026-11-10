@@ -497,10 +497,16 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 		if !ok {
 			continue
 		}
+		// A region that the presentation wait waits for has no supplier to present its raster until the new connection
+		// configures it again, so the wait ends with the failure that names the supplier. A new configuration clears it.
+		waited := i.drawingLocked(key, state) && state.Raster > 0
 		state.Configured = false
 		state.LastSequence = 0
 		state.PresentedSequence = 0
 		state.PresentationError = ""
+		if waited {
+			state.PresentationError = fmt.Sprintf("the supplier %s of the image region %s/%s ended", sidecar, key.Surface, key.Name)
+		}
 		// The service of the new connection has no drawing state either.
 		state.DrawingSent = false
 		invalidated++
@@ -707,14 +713,11 @@ func (i *Images) CurrentPresented() bool {
 	return i.currentPresentedLocked()
 }
 
-// WaitCurrent waits until every visible image region displays the current raster or the time limit ends.
-func (i *Images) WaitCurrent(timeout time.Duration) bool {
-	return i.WaitCurrentError(timeout) == nil
-}
-
-// WaitCurrentError waits for the current raster or returns its exact failure.
-func (i *Images) WaitCurrentError(timeout time.Duration) error {
-	return i.waitCurrentObserved(timeout, nil)
+// WaitCurrentError waits until every drawing image region displays its current raster and returns nil, or returns the exact
+// failure of a region. It has no time limit: the presentation of the raster ends it, and so does a failure, such as the end of
+// the supplier connection of a region (InvalidateSidecar).
+func (i *Images) WaitCurrentError() error {
+	return i.waitCurrentObserved(nil)
 }
 
 // WaitLayoutRasters waits for the completion boundary selected by the layout request. With noWaitLimit it ends only by the
@@ -722,7 +725,7 @@ func (i *Images) WaitCurrentError(timeout time.Duration) error {
 // the end of the layout transaction (errLayoutWaitEnded).
 func (i *Images) WaitLayoutRasters(timeout time.Duration, settled bool) error {
 	if settled {
-		return i.WaitCurrentError(timeout)
+		return i.waitObserved(timeout, nil, i.currentPresentedLocked)
 	}
 	return i.waitRasterSnapshotObserved(timeout, nil)
 }
@@ -734,9 +737,29 @@ func (i *Images) waitRasterSnapshotObserved(timeout time.Duration, waiting func(
 	return i.waitObserved(timeout, waiting, i.currentRasterSnapshotInstalledLocked)
 }
 
-// waitCurrentObserved signals the first pending check under the owner lock so tests can order the next frame before wakeup.
-func (i *Images) waitCurrentObserved(timeout time.Duration, waiting func()) error {
-	return i.waitObserved(timeout, waiting, i.currentPresentedLocked)
+// waitCurrentObserved is WaitCurrentError that calls waiting under the owner lock at each check that finds the raster pending, so
+// tests can order the next frame before the wakeup.
+func (i *Images) waitCurrentObserved(waiting func()) error {
+	for {
+		i.mu.Lock()
+		for _, state := range i.states {
+			if state.PresentationError != "" {
+				err := errors.New(state.PresentationError)
+				i.mu.Unlock()
+				return err
+			}
+		}
+		if i.currentPresentedLocked() {
+			i.mu.Unlock()
+			return nil
+		}
+		changed := i.changed
+		if waiting != nil {
+			waiting()
+		}
+		i.mu.Unlock()
+		<-changed
+	}
 }
 
 func (i *Images) waitObserved(timeout time.Duration, waiting func(), complete func() bool) error {

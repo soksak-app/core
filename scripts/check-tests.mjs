@@ -7186,7 +7186,7 @@ const FEATURE_LINKS = [
   {
     id: "F145.12",
     implementation: [
-      { file: "packages/host/go/src/endpoint.go", symbol: "endpoint timeout" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "endpoint no result" },
       { file: "packages/host/rust/src/endpoint.rs", symbol: "endpoint no result" },
     ],
     tests: [
@@ -8404,7 +8404,7 @@ const FEATURE_LINKS = [
     id: "F184",
     implementation: [
       { file: "packages/plugin-api/log-batch.js", symbol: "createEventBatcher requires the writer {layer, member, identity} of the document" },
-      { file: "packages/host/go/src/running_calls.go", symbol: "func ReloadTimeoutText" },
+      { file: "packages/host/go/src/running_calls.go", symbol: "func ReloadEndText(end, running string) string" },
       { file: "packages/host/rust/src/running_calls.rs", symbol: "pub fn reload_end_text" },
     ],
     tests: [
@@ -9467,7 +9467,7 @@ const FEATURE_LINKS = [
   {
     id: "F79",
     implementation: [
-      { file: "packages/host/go/src/exposure.go", symbol: "relayExpiredLimit" },
+      { file: "packages/host/go/src/exposure.go", symbol: "const relayEndedLimit = 256" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "const ENDED_LIMIT: usize = 256;" },
     ],
     tests: [
@@ -11567,7 +11567,7 @@ const FEATURE_LINKS = [
     id: "F342",
     implementation: [
       { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
-      { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func (r *Relay[T]) RequestOf(" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn request_of(" },
     ],
     tests: [
@@ -11581,7 +11581,7 @@ const FEATURE_LINKS = [
   {
     id: "F342-2",
     implementation: [
-      { file: "packages/host/go/src/exposure.go", symbol: "func ForwardTimeout(timeout json.RawMessage)" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func (r *Relay[T]) RequestOf(" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn request_of(" },
     ],
     tests: [

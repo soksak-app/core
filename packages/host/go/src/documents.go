@@ -913,12 +913,13 @@ func (s *Surfaces) detachDocument(viewID uint64, req DocumentRequest) error {
 
 // surfaceTerminated removes the subscriptions of a surface whose WebContent process ended and turns off the element streams that lose their last
 // subscriber. The regions stay attached until the framework reloads the page, which commits a new document, so they keep their request collection
-// and their request logs.
+// and their request logs. The requests to the documents of the surface end with 1003, because no reply comes from an ended process.
 func (s *Surfaces) surfaceTerminated(viewID uint64) {
 	surface := s.surfaceOf(viewID)
 	if surface == "" {
 		return
 	}
+	s.host.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == surface })
 	mainThreadStep(func() {
 		for _, effect := range s.streams.RemovePage(surface) {
 			if err := s.applyStreamEffects([]StreamEffect{effect}); err != nil {
@@ -930,8 +931,9 @@ func (s *Surfaces) surfaceTerminated(viewID uint64) {
 
 // closeSurfaceDocuments closes all document regions of a surface. Call it on the UI thread.
 func (s *Surfaces) closeSurfaceDocuments(surface string) {
-	// The view of the surface closes with its documents (docs/spec/logging.md#principles).
+	// The view of the surface closes with its documents (docs/spec/logging.md#principles), so no presentation can end its wait.
 	s.viewRecords().recordEnd(surface)
+	s.endPresentationWait(surface, "closed")
 	if channel, ok := s.documents.view(surface); ok && s.sourceOriginState().retire(surface, channel.generation) {
 		s.windowEvent("view-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": channel.generation})
 	}

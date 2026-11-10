@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -224,20 +223,16 @@ type ExposureResult struct {
 }
 
 // Relay connects a request sent to a document with its reply. T identifies the document that received the request, and the reply must come from the same document.
+// A request has no time limit: it ends by the reply of its document, by the end of that document (Abandon), by the end of the
+// endpoint connection that sent it (End or the end of its context), or by the end of its origin request.
 type Relay[T comparable] struct {
 	mu      sync.Mutex
 	next    uint64
 	waiting map[uint64]*relayWaiter[T]
-	// expired are the recent requests that timed out. To state the delay of a late reply in the error, it remembers up to relayExpiredLimit
-	// of them and discards the oldest (docs/spec/exposure.md#errors).
-	expired []relayExpired[T]
-	// ended are the recent requests whose document ended before its reply. A reply to one of them comes from a document that has
-	// ended, so it is an observation; it remembers up to relayEndedLimit of them and discards the oldest.
+	// ended are the recent requests that ended without the reply of their document. A reply to one of them comes after its
+	// request ended, so it is an observation; it remembers up to relayEndedLimit of them and discards the oldest.
 	ended []relayEnded[T]
 }
-
-// relayExpiredLimit is the number of timed-out requests remembered for late replies.
-const relayExpiredLimit = 256
 
 // relayEndedLimit is the number of ended requests remembered, so that a reply to one of them is an observation.
 const relayEndedLimit = 256
@@ -247,22 +242,11 @@ type relayEnded[T comparable] struct {
 	target T
 }
 
-type relayExpired[T comparable] struct {
-	id      uint64
-	target  T
-	sent    time.Time
-	timeout time.Duration
-	call    RelayCall
-}
-
-// RelayCall is the plugin command that a request carries. A request whose Command is empty writes no call event.
-type RelayCall struct {
-	Plugin  string
-	Command string
-}
-
 type relayWaiter[T comparable] struct {
 	target T
+	// origin is the id of the request that the forward of this request serves, 0 for a request without origin. The end of the
+	// origin request ends this request.
+	origin uint64
 	reply  chan ExposureResult
 }
 
@@ -272,77 +256,68 @@ func NewRelay[T comparable]() *Relay[T] {
 }
 
 // Request creates a request id to send to target, sends it with send, and waits for the reply. When send fails, it does not wait and
-// returns a 1003 error. When the time limit passes, it deletes the request and returns a 1005 error. When timeout is 0, it waits for a reply or
-// Abandon.
-func (r *Relay[T]) Request(target T, timeout time.Duration, send func(id uint64) error) ExposureResult {
-	return r.RequestCall(target, RelayCall{}, timeout, send)
+// returns a 1003 error. It waits for the reply, for Abandon of its document or for End of its id, with no time limit.
+func (r *Relay[T]) Request(target T, send func(id uint64) error) ExposureResult {
+	return r.request(context.Background(), target, 0, send)
 }
 
-// RequestCall is Request for a request that carries call. A time limit that passes writes the event host.call.timeout, and a late
-// reply to it writes host.trace.call.late-reply (docs/spec/exposure.md#errors).
-func (r *Relay[T]) RequestCall(target T, call RelayCall, timeout time.Duration, send func(id uint64) error) ExposureResult {
+// RequestOf is Request for a forward that serves the request origin: it lives only while origin waits. A forward whose origin
+// does not wait is not sent and is refused at once with 1003; the end of origin ends a waiting forward with no result.
+func (r *Relay[T]) RequestOf(origin uint64, target T, send func(id uint64) error) ExposureResult {
+	return r.request(context.Background(), target, origin, send)
+}
+
+// request is Request of the endpoint connection ctx: the end of ctx ends the request as End does, and a ctx that already
+// ended sends nothing. origin is the request that the request serves, 0 for none.
+func (r *Relay[T]) request(ctx context.Context, target T, origin uint64, send func(id uint64) error) ExposureResult {
+	if ctx.Err() != nil {
+		return ExposureResult{Error: connectionEnded()}
+	}
 	r.mu.Lock()
+	if origin != 0 && r.waiting[origin] == nil {
+		r.mu.Unlock()
+		return ExposureResult{Error: originEnded(origin)}
+	}
 	r.next++
 	id := r.next
-	w := &relayWaiter[T]{target: target, reply: make(chan ExposureResult, 1)}
+	w := &relayWaiter[T]{target: target, origin: origin, reply: make(chan ExposureResult, 1)}
 	r.waiting[id] = w
 	r.mu.Unlock()
-	sent := time.Now()
 	if err := send(id); err != nil {
 		r.mu.Lock()
-		delete(r.waiting, id)
+		if r.waiting[id] == w {
+			delete(r.waiting, id)
+			r.endForwardsOf(id)
+		}
 		r.mu.Unlock()
 		return ExposureResult{Error: rpcError(codeNoWindow, "send request %d: %v", id, err)}
 	}
-	if timeout == 0 {
-		return <-w.reply
-	}
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
 	select {
 	case reply := <-w.reply:
 		return reply
-	case <-timer.C:
-		r.mu.Lock()
-		delete(r.waiting, id)
-		select {
-		case reply := <-w.reply:
-			r.mu.Unlock()
-			return reply
-		default:
-		}
-		if len(r.expired) == relayExpiredLimit {
-			// The oldest entry is forgotten: a late reply to it has no matching request. The loss is counted.
-			r.expired = r.expired[1:]
-			recordBufferDrop("relay expired requests", 0, fmt.Sprintf("%d requests", relayExpiredLimit))
-		}
-		r.expired = append(r.expired, relayExpired[T]{id: id, target: target, sent: sent, timeout: timeout, call: call})
-		r.mu.Unlock()
-		if call.Command != "" {
-			EmitHost(LevelError, "host.call.timeout", map[string]any{"plugin": call.Plugin, "command": call.Command})
-		}
-		return ExposureResult{Error: rpcError(codeTimeout, "the document did not reply within %d ms", timeout.Milliseconds())}
+	case <-ctx.Done():
+		r.End(id)
+		return <-w.reply
 	}
 }
 
-// Resolve delivers the reply of a request id. A reply from a document other than the one that received the request and a reply to a request that already ended are errors.
+// connectionEnded is the error of a request whose endpoint connection ended. The connection receives no answer.
+func connectionEnded() *RPCError {
+	return rpcError(codeHandler, "the endpoint connection of the request ended")
+}
+
+// originEnded is the error of a forward whose origin request does not wait.
+func originEnded(origin uint64) *RPCError {
+	return rpcError(codeNoWindow, "the origin request %d has ended", origin)
+}
+
+// Resolve delivers the reply of a request id. A reply from a document other than the one that received the request and a reply
+// to a request that the relay does not know are errors; a reply to a request that ended without it is an observation.
 func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 	r.mu.Lock()
 	w := r.waiting[id]
 	if w == nil || w.target != from {
 		defer r.mu.Unlock()
-		for i, expired := range r.expired {
-			if expired.id == id && expired.target == from {
-				r.expired = append(r.expired[:i], r.expired[i+1:]...)
-				delay := time.Since(expired.sent).Milliseconds()
-				if expired.call.Command != "" {
-					EmitHost(LevelDebug, "host.trace.call.late-reply", map[string]any{
-						"plugin": expired.call.Plugin, "command": expired.call.Command, "delay": delay})
-				}
-				return fmt.Errorf("exposure reply %d arrived %d ms after it was sent; its request timed out after %d ms",
-					id, delay, expired.timeout.Milliseconds())
-			}
-		}
 		for i, ended := range r.ended {
 			if ended.id == id && ended.target == from {
 				r.ended = append(r.ended[:i], r.ended[i+1:]...)
@@ -354,21 +329,17 @@ func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 		return fmt.Errorf("exposure reply %d has no matching request", id)
 	}
 	delete(r.waiting, id)
+	r.endForwardsOf(id)
 	r.mu.Unlock()
 	w.reply <- reply
 	return nil
 }
 
 // heldState says where the relay keeps the id of a reply from document from that matches no waiting request: under another
-// document, as an expired or an ended request, or nowhere (host.trace.exposure.unmatched). The caller holds r.mu.
+// document, as an ended request, or nowhere (host.trace.exposure.unmatched). The caller holds r.mu.
 func (r *Relay[T]) heldState(id uint64, from T) string {
 	if w := r.waiting[id]; w != nil && w.target != from {
 		return "other-target"
-	}
-	for _, expired := range r.expired {
-		if expired.id == id && expired.target == from {
-			return "expired"
-		}
 	}
 	for _, ended := range r.ended {
 		if ended.id == id && ended.target == from {
@@ -383,16 +354,43 @@ func (r *Relay[T]) Abandon(match func(T) bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for id, w := range r.waiting {
-		if !match(w.target) {
-			continue
+		if match(w.target) {
+			r.endLocked(id, rpcError(codeNoWindow, "the document closed before it replied"))
 		}
-		delete(r.waiting, id)
-		if len(r.ended) == relayEndedLimit {
-			r.ended = r.ended[1:]
-			recordBufferDrop("relay ended requests", 0, fmt.Sprintf("%d requests", relayEndedLimit))
+	}
+}
+
+// End ends the request id, whose endpoint connection ended, on the host. The connection receives no answer, and a later reply of
+// the document is an observation. A request that already ended is left as it is.
+func (r *Relay[T]) End(id uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.waiting[id] != nil {
+		r.endLocked(id, connectionEnded())
+	}
+}
+
+// endLocked ends the waiting request id without the reply of its document: it answers failure, remembers the request for its
+// late reply and ends the forwards of the request. The caller holds r.mu.
+func (r *Relay[T]) endLocked(id uint64, failure *RPCError) {
+	w := r.waiting[id]
+	delete(r.waiting, id)
+	if len(r.ended) == relayEndedLimit {
+		// The oldest entry is forgotten: a late reply to it has no matching request. The loss is counted.
+		r.ended = r.ended[1:]
+		recordBufferDrop("relay ended requests", 0, fmt.Sprintf("%d requests", relayEndedLimit))
+	}
+	r.ended = append(r.ended, relayEnded[T]{id: id, target: w.target})
+	w.reply <- ExposureResult{Error: failure}
+	r.endForwardsOf(id)
+}
+
+// endForwardsOf ends each waiting forward whose origin is the request id, which ended. The caller holds r.mu.
+func (r *Relay[T]) endForwardsOf(id uint64) {
+	for forward, w := range r.waiting {
+		if w.origin == id {
+			r.endLocked(forward, originEnded(id))
 		}
-		r.ended = append(r.ended, relayEnded[T]{id: id, target: w.target})
-		w.reply <- ExposureResult{Error: rpcError(codeNoWindow, "the document closed before it replied")}
 	}
 }
 
@@ -402,11 +400,12 @@ type relayTarget struct {
 	surface string
 }
 
-// ask sends a request to the main page of window s and waits for the reply. When timeout is 0, it waits for a reply or for the page to
-// end. A page that is not ready cannot receive the request, so it returns 1003. It checks readiness after it registers the request, so
-// the request of a page that was read again in between is rejected here or ends through Abandon.
-func (h *Host) ask(s *Surfaces, method string, params any, timeout time.Duration) (json.RawMessage, error) {
-	reply := h.relay.Request(relayTarget{owner: s}, timeout, func(id uint64) error {
+// ask sends a request of the endpoint connection ctx to the main page of window s and waits for the reply, with no time limit: the
+// reply, the end of the page or the end of ctx ends it. A page that is not ready cannot receive the request, so it returns 1003. It
+// checks readiness after it registers the request, so the request of a page that was read again in between is rejected here or ends
+// through Abandon.
+func (h *Host) ask(ctx context.Context, s *Surfaces, method string, params any) (json.RawMessage, error) {
+	reply := h.relay.request(ctx, relayTarget{owner: s}, 0, func(id uint64) error {
 		h.mu.Lock()
 		ready := s.ready
 		h.mu.Unlock()
@@ -527,31 +526,17 @@ func (h *Host) ExposureChanged(ctx context.Context, changeJSON json.RawMessage) 
 
 // ExposureForwardRequest is the request that the main page forwards to a surface page.
 type ExposureForwardRequest struct {
+	// Origin is the id of the exposure-request that the main page handles when it forwards, absent for a forward that the main
+	// page starts itself. A forward with origin lives only while its origin request waits on the host.
+	Origin  *uint64         `json:"origin"`
 	Surface string          `json:"surface"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
-	// Timeout is the time limit (ms) of this request. Without it, the limit is 10 seconds. The page forwards the timeout of the declaration.
-	Timeout json.RawMessage `json:"timeout,omitempty"`
 }
 
-// maxForwardTimeout is the longest time limit that a forwarded request can specify.
-const maxForwardTimeout = 600000
-
-// ForwardTimeout decides the time limit of a forwarded request: 10 s, or timeout, an integer in ms from 1 to 600000.
-// Every forwarded request has a time limit, whatever its method, so a page that does not answer ends the request with 1005.
-func ForwardTimeout(timeout json.RawMessage) (time.Duration, *RPCError) {
-	if len(timeout) == 0 || string(timeout) == "null" {
-		return pageTimeout, nil
-	}
-	var ms float64
-	if err := json.Unmarshal(timeout, &ms); err != nil || ms != math.Trunc(ms) || ms < 1 || ms > maxForwardTimeout {
-		return 0, &RPCError{Code: codeInvalidParams, Message: fmt.Sprintf("timeout must be an integer from 1 to %d milliseconds", maxForwardTimeout)}
-	}
-	return time.Duration(ms) * time.Millisecond, nil
-}
-
-// ExposureForward forwards a request to a surface page and returns its reply {result} or {error}.
-// When the surface does not exist or does not reply, it returns a reply that carries an error.
+// ExposureForward forwards a request to a surface page and returns its reply {result} or {error}. The request has no time limit:
+// the reply of the surface document, the end of that document, the reload of the page or the end of its origin request ends it.
+// When the surface does not exist or the origin request does not wait, it returns a reply that carries an error.
 func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (ExposureResult, error) {
 	req, err := argument[ExposureForwardRequest]("request", reqJSON)
 	if err != nil {
@@ -561,19 +546,15 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 	if err != nil {
 		return ExposureResult{}, err
 	}
-	timeout, invalid := ForwardTimeout(req.Timeout)
-	if invalid != nil {
-		return ExposureResult{Error: invalid}, nil
+	var origin uint64
+	if req.Origin != nil {
+		// The relay numbers its requests from 1, so the origin 0 names no request.
+		if *req.Origin == 0 {
+			return ExposureResult{Error: originEnded(0)}, nil
+		}
+		origin = *req.Origin
 	}
-	// A surface that declared its composition has its plugin (sync checks it), so the call names that plugin.
-	s.mu.Lock()
-	plugin, declared := s.surfacePlugins[req.Surface]
-	s.mu.Unlock()
-	call := RelayCall{}
-	if declared {
-		call = RelayCall{Plugin: plugin, Command: req.Method}
-	}
-	reply := s.requestSurface(req.Surface, call, timeout, func(id uint64) error {
+	reply := s.requestSurfaceOf(origin, req.Surface, func(id uint64) error {
 		var sent bool
 		mainThreadStep(func() {
 			if s.views[req.Surface] != nil {
@@ -598,8 +579,13 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 // requestSurface sends a request to the document of a surface and waits for its reply. A request of a page that the host asked
 // to reload is refused, because that page no longer answers the calls that the document needs to reply. The check runs after the
 // relay holds the request, so askPageToReload ends the request when it runs before the check.
-func (s *Surfaces) requestSurface(surface string, call RelayCall, timeout time.Duration, send func(id uint64) error) ExposureResult {
-	return s.host.relay.RequestCall(relayTarget{owner: s, surface: surface}, call, timeout, func(id uint64) error {
+func (s *Surfaces) requestSurface(surface string, send func(id uint64) error) ExposureResult {
+	return s.requestSurfaceOf(0, surface, send)
+}
+
+// requestSurfaceOf is requestSurface for a forward that serves the request origin, 0 for none.
+func (s *Surfaces) requestSurfaceOf(origin uint64, surface string, send func(id uint64) error) ExposureResult {
+	return s.host.relay.RequestOf(origin, relayTarget{owner: s, surface: surface}, func(id uint64) error {
 		if s.pageReloading.Load() {
 			return fmt.Errorf("the page of the window is reloading")
 		}
@@ -620,6 +606,7 @@ func (s *Surfaces) askPageToReload(emit func()) {
 // pageStarted records that a new main page started, which accepts requests to surface documents again.
 func (s *Surfaces) pageStarted() {
 	s.pageReloading.Store(false)
+	s.pageProcessStarted()
 }
 
 // SurfaceRegistration is an entry that a surface page registered.
@@ -755,9 +742,16 @@ func (s *Surfaces) reloadPage() error {
 	s.host.mu.Unlock()
 	if pageReady {
 		flush := map[string]any{"name": "core.projects.flush", "params": map[string]any{}}
-		if _, err := s.host.ask(s, "command.run", flush, pageTimeout); err != nil {
+		if _, err := s.host.ask(context.Background(), s, "command.run", flush); err != nil {
 			return err
 		}
+	}
+	// The reload has no time limit: the ready report of the new page ends it, and so do the close of the window and the end of
+	// its page process, after which no ready report comes (docs/spec/native-host.md#page-reload). A page process that ended before
+	// the reload does not end it, because the reload starts a new page.
+	ends, ended := s.waitEnd()
+	if ended == windowClosedEnd {
+		return rpcError(codeNoWindow, "%s", ReloadEndText(ended, runningCalls.Of(s.window.Name(), time.Now())))
 	}
 	ready := make(chan struct{})
 	s.host.mu.Lock()
@@ -773,8 +767,8 @@ func (s *Surfaces) reloadPage() error {
 	select {
 	case <-ready:
 		return nil
-	case <-time.After(pageTimeout):
-		return rpcError(codeTimeout, "%s", ReloadTimeoutText(pageTimeout, runningCalls.Of(s.window.Name(), time.Now())))
+	case <-ends:
+		return rpcError(codeNoWindow, "%s", ReloadEndText(s.lastWaitEnd(), runningCalls.Of(s.window.Name(), time.Now())))
 	}
 }
 
@@ -852,17 +846,14 @@ func (b hostBackend) window(name string) (*Surfaces, error) {
 	return s, nil
 }
 
-func (b hostBackend) PageRequest(window, method string, params json.RawMessage) (json.RawMessage, error) {
+// PageRequest sends the request of the endpoint connection ctx to the main page of window. It has no time limit: the reply,
+// the end of the page or the end of ctx ends it.
+func (b hostBackend) PageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {
 	s, err := b.window(window)
 	if err != nil {
 		return nil, err
 	}
-	// The main page finishes a command forwarded to a surface within the time limit of the declaration, so command.run has no limit.
-	timeout := pageTimeout
-	if method == "command.run" {
-		timeout = 0
-	}
-	return b.h.ask(s, method, params, timeout)
+	return b.h.ask(ctx, s, method, params)
 }
 
 func (b hostBackend) HostStatus(window, name string) (any, error) {
@@ -975,7 +966,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 	case "host.window.reload":
 		return nil, s.reloadPage()
 	case "host.window.presented":
-		displayed, err := windowPresented(b.h, s)
+		displayed, err := windowPresented(reply.Context(), b.h, s)
 		if err != nil {
 			return nil, err
 		}
@@ -1676,19 +1667,34 @@ func (s *Surfaces) hit(x, y float64) (map[string]any, error) {
 	}
 }
 
-// fullscreen switches the window to full screen or back and returns after the transition ends. macOS ignores a request during a
-// transition, so the native code continues the handling after that transition ends.
+// fullscreen switches the window to full screen or back and returns after the transition ends, with the native result: a refusal
+// is 1006, the close of the window is 1003 and a started transition that did not end is 1005, each with the native message. macOS
+// ignores a request during a transition, so the native code continues the handling after that transition ends.
 func (s *Surfaces) fullscreen(on bool) error {
-	done := make(chan struct{}, 1)
+	type ended struct {
+		result  platform.FullscreenResult
+		message string
+	}
+	done := make(chan ended, 1)
 	err := s.useWindow(func(window platform.Window) error {
-		return system.Fullscreen(window, on, func() { done <- struct{}{} })
+		return system.Fullscreen(window, on, func(result platform.FullscreenResult, message string) { done <- ended{result, message} })
 	})
 	if err != nil {
 		return err
 	}
+	// The native change does not report every refusal yet, so the limit stays until it does.
 	select {
-	case <-done:
-		return nil
+	case got := <-done:
+		switch got.result {
+		case platform.FullscreenDone:
+			return nil
+		case platform.FullscreenRefused:
+			return rpcError(codeInactive, "%s", got.message)
+		case platform.FullscreenClosed:
+			return rpcError(codeNoWindow, "%s", got.message)
+		default:
+			return rpcError(codeTimeout, "%s", got.message)
+		}
 	case <-time.After(pageTimeout):
 		return rpcError(codeTimeout, "the window did not change full screen within %s", pageTimeout)
 	}
@@ -1700,39 +1706,66 @@ const placementLast = "workbench.placement.last"
 
 // windowPresented waits until the window presented its current layout and returns the display time of that screen. A placement
 // that waits behind a running one is known only to the workbench of the window, so the wait asks the workbench for its last
-// placement first; a workbench that has not started holds none. host.window.presented and diagnostics.drag wait with it.
-func windowPresented(h *Host, s *Surfaces) (float64, error) {
-	return lastPlacementPresented(func(limit time.Duration) error {
+// placement first; a workbench that has not started holds none. host.window.presented and diagnostics.drag wait with it. The wait
+// has no time limit: its events end it, and so do the close of the window, the end of its page process and the end of ctx, the
+// endpoint connection of the request.
+func windowPresented(ctx context.Context, h *Host, s *Surfaces) (float64, error) {
+	ends, ended := s.waitEnd()
+	if ended != "" {
+		return 0, waitEndError(ended)
+	}
+	return lastPlacementPresented(func() error {
 		h.mu.Lock()
 		ready := s.ready
 		h.mu.Unlock()
 		if !ready {
 			return nil
 		}
-		_, err := h.ask(s, placementLast, nil, limit)
+		_, err := h.ask(ctx, s, placementLast, nil)
 		return err
-	}, s.whenSettled, s.presented, pageTimeout)
+	}, func() <-chan struct{} {
+		return firstEnd(ctx, ends, s.whenSettled())
+	}, func() (float64, error) {
+		return s.presented(ctx)
+	})
 }
 
-// lastPlacementPresented waits for placed, then for settled, the end of a continuous update, and then for presented. Each wait
-// of the window ends at limit, so a workbench that does not answer fails the wait.
-func lastPlacementPresented(placed func(limit time.Duration) error, settled func() <-chan struct{}, presented func() (float64, error),
-	limit time.Duration) (float64, error) {
-	if err := placed(limit); err != nil {
+// firstEnd returns a channel that closes when settled closes, when the waits of the window end or when ctx ends.
+func firstEnd(ctx context.Context, ends <-chan struct{}, settled <-chan struct{}) <-chan struct{} {
+	done := make(chan struct{})
+	routine.Go("presented-settled", func() {
+		select {
+		case <-settled:
+		case <-ends:
+		case <-ctx.Done():
+		}
+		close(done)
+	})
+	return done
+}
+
+// lastPlacementPresented waits for placed, then for settled, the end of a continuous update, and then for presented. It has no
+// time limit: placed ends by the answer of the workbench or the end of its window, and settled and presented by their events.
+func lastPlacementPresented(placed func() error, settled func() <-chan struct{}, presented func() (float64, error)) (float64, error) {
+	if err := placed(); err != nil {
 		return 0, fmt.Errorf("the last placement of the window: %w", err)
 	}
-	select {
-	case <-settled():
-	case <-time.After(limit):
-		return 0, rpcError(codeTimeout, "the continuous update of the window did not end within %s", limit)
-	}
+	<-settled()
 	return presented()
 }
 
 // presented waits until the surface layout transaction of the window and the current picture raster are fixed and the main page and the visible app document
-// display that layout, and returns the time (ms, mach absolute time) at which that screen is displayed.
-func (s *Surfaces) presented() (float64, error) {
-	deadline := time.Now().Add(pageTimeout)
+// display that layout, and returns the time (ms, mach absolute time) at which that screen is displayed. It has no time limit: the
+// close of the window and the end of its page process end it with 1003, and the end of ctx, the endpoint connection of the request,
+// ends it with an error.
+func (s *Surfaces) presented(ctx context.Context) (float64, error) {
+	ends, ended := s.waitEnd()
+	if ended != "" {
+		return 0, waitEndError(ended)
+	}
+	if ctx.Err() != nil {
+		return 0, connectionEnded()
+	}
 	waitFrame := func() (float64, error) {
 		done := make(chan struct {
 			displayed float64
@@ -1754,51 +1787,49 @@ func (s *Surfaces) presented() (float64, error) {
 		if err != nil {
 			return 0, err
 		}
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
-		}
 		select {
 		case result := <-done:
 			if result.err != nil {
 				return 0, result.err
 			}
 			return result.displayed, nil
-		case <-time.After(remaining):
-			return 0, rpcError(codeTimeout, "the window did not present within %s", pageTimeout)
+		case <-ends:
+			return 0, waitEndError(s.lastWaitEnd())
+		case <-ctx.Done():
+			return 0, connectionEnded()
 		}
 	}
 
 	// An open modal is on the screen at the time this reports only after its revealed web view presented its first frame, so
-	// the wait ends at the paint of the modal, at a change of the modal state, or at the limit (modals.go). It runs before the
-	// settled wait, so the display time that the settled wait reports is at or after the paint of the modal.
-	if waiting := s.waitForModalPaint(time.Until(deadline)); waiting {
-		return 0, rpcError(codeTimeout, "the open modal did not present within %s", pageTimeout)
+	// the wait ends at the paint of the modal, at a change of the modal state or at an end of the window (modals.go). It runs before
+	// the settled wait, so the display time that the settled wait reports is at or after the paint of the modal.
+	if err := s.waitForModalPaint(ctx); err != nil {
+		return 0, err
 	}
 	if _, err := waitFrame(); err != nil {
 		return 0, err
 	}
 	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return 0, rpcError(codeTimeout, "the current image raster did not present within %s; pending %s",
-				pageTimeout, s.images.PendingRasters())
-		}
-		// Instrument of the display barrier wait (V5-104): when this wait hits the timeout, the screen is stopped.
+		// Instrument of the display barrier wait (V5-104).
 		barrierStarted := time.Now()
-		barrierErr := s.images.WaitCurrentError(remaining)
+		barrier := make(chan error, 1)
+		routine.Go("presented-raster", func() { barrier <- s.images.WaitCurrentError() })
+		var barrierErr error
+		select {
+		case barrierErr = <-barrier:
+		case <-ends:
+			return 0, waitEndError(s.lastWaitEnd())
+		case <-ctx.Done():
+			return 0, connectionEnded()
+		}
 		PerformanceObserve("host", func() map[string]any {
 			return map[string]any{
 				"event": "barrier", "wait_us": time.Since(barrierStarted).Microseconds(),
 				"ok": barrierErr == nil,
 			}
 		})
-		if err := barrierErr; err != nil {
-			if err.Error() == "presentationTimeout" {
-				return 0, rpcError(codeTimeout, "the current image raster did not present within %s; pending %s",
-					pageTimeout, s.images.PendingRasters())
-			}
-			return 0, rpcError(codeHandler, "the current image raster failed to present: %v", err)
+		if barrierErr != nil {
+			return 0, rpcError(codeHandler, "the current image raster failed to present: %v", barrierErr)
 		}
 		displayed, err := waitFrame()
 		if err != nil {
@@ -1908,13 +1939,13 @@ func (s *Surfaces) rewatch() {
 		switch {
 		case diagnostic:
 			method, params := request(true)
-			_, err = s.host.ask(s, method, params, pageTimeout)
+			_, err = s.host.ask(context.Background(), s, method, params)
 		case !isHostName(t.name):
 			params := map[string]any{}
 			for key, value := range t.watchParams() {
 				params[key] = value
 			}
-			_, err = s.host.ask(s, "status.watch", params, pageTimeout)
+			_, err = s.host.ask(context.Background(), s, "status.watch", params)
 		}
 		if err != nil {
 			s.fail("rewatch "+t.name, err)
@@ -1939,4 +1970,63 @@ func (s *Surfaces) log(line string) {
 	if transcribe != nil && s.host != nil && s.host.endpoint != nil {
 		transcribe(s.host.endpoint, s.name, line)
 	}
+}
+
+// The ends of the waits of a window for its page (Surfaces.waitEnd).
+const (
+	windowClosedEnd = "the window closed"
+	pageEndedEnd    = "the page process ended"
+)
+
+// waitEnd returns the channel that the next end of the waits of the window closes, and the end that already holds, empty when
+// none does. A wait reads both before it waits, so an end before the wait reaches its event ends it the same way.
+func (s *Surfaces) waitEnd() (<-chan struct{}, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.waitEnds == nil {
+		s.waitEnds = make(chan struct{})
+	}
+	return s.waitEnds, s.waitsEnded
+}
+
+// lastWaitEnd is the end that last ended the waits of the window.
+func (s *Surfaces) lastWaitEnd() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastEnd
+}
+
+// waitEndError is the 1003 error of a wait that the end end of the window or of its page ended.
+func waitEndError(end string) *RPCError {
+	return rpcError(codeNoWindow, "%s", end)
+}
+
+// endWaits ends the waits of the window for its page with end and records end for the waits that begin after it.
+func (s *Surfaces) endWaits(end string) {
+	s.mu.Lock()
+	if s.waitsEnded != windowClosedEnd {
+		s.waitsEnded = end
+	}
+	s.lastEnd = end
+	if s.waitEnds != nil {
+		close(s.waitEnds)
+	}
+	s.waitEnds = make(chan struct{})
+	s.mu.Unlock()
+}
+
+// endWindow ends the waits of a window that closed: no page of it reports or presents again.
+func (s *Surfaces) endWindow() { s.endWaits(windowClosedEnd) }
+
+// pageProcessEnded ends the waits of a window whose main page process ended: that page reports and presents nothing more, and
+// the waits that begin before a new page starts end too.
+func (s *Surfaces) pageProcessEnded() { s.endWaits(pageEndedEnd) }
+
+// pageProcessStarted clears the end of the page process when a new main page starts, so the waits of the new page wait for it.
+func (s *Surfaces) pageProcessStarted() {
+	s.mu.Lock()
+	if s.waitsEnded == pageEndedEnd {
+		s.waitsEnded = ""
+	}
+	s.mu.Unlock()
 }
