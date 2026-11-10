@@ -430,6 +430,33 @@ func TestAWindowTakesALinkThatTheSettingsKeep(t *testing.T) {
 	}
 }
 
+// The library shows the common settings: leaving a project for the library selects no project, and a return to the project selects
+// it again with its overrides, as browse and back of packages/workbench/projects.js select the project of the settings.
+func TestTheLibraryShowsTheCommonSettings(t *testing.T) {
+	f := viewShell(t)
+	type settings struct {
+		Values     map[string]any `json:"values"`
+		Project    *string        `json:"project"`
+		Overridden []string       `json:"overridden"`
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "dark"}, "scope": "common"})
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "light"}, "scope": "project"})
+	// The store tells the window of the write, and the record of the project takes the stored overrides.
+	f.shell.Event("workspace-changed", nil)
+	f.settle()
+	if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "light" || shown.Project == nil {
+		t.Fatalf("the project shows %+v", shown)
+	}
+	f.run("core.projects.browse", nil)
+	if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "dark" || shown.Project != nil || len(shown.Overridden) != 0 {
+		t.Fatalf("the library shows %+v, not the common settings", shown)
+	}
+	f.run("core.library.return", nil)
+	if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "light" || shown.Project == nil || !slices.Equal(shown.Overridden, []string{"mode"}) {
+		t.Fatalf("the project shows %+v after the return", shown)
+	}
+}
+
 // core.settings declares overridden as an array in exposure.json, including
 // an empty array before overrides exist and after the last reset.
 func TestCoreSettingsOverriddenIsAnArrayAcrossEmptyAndReset(t *testing.T) {
