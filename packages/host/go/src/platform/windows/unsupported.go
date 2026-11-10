@@ -552,6 +552,18 @@ func (implementation) NewSession(*exec.Cmd) error {
 	return unsupported("new process session")
 }
 
+func (implementation) NewProcessGroup(*exec.Cmd) error {
+	return unsupported("new process group")
+}
+
+func (implementation) EndProcessGroup(int) error {
+	return unsupported("process group end")
+}
+
+func (implementation) ReadAvailable(*os.File, []byte) (int, error) {
+	return 0, unsupported("available pipe read")
+}
+
 func (implementation) ExitStatus(*os.ProcessState) (string, error) {
 	return "", unsupported("process exit status")
 }

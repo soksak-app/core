@@ -641,6 +641,14 @@ type Platform interface {
 	// so it does not receive the signals of the process group and the terminal of the application. Call it before starting
 	// command.
 	NewSession(command *exec.Cmd) error
+	// NewProcessGroup makes command start as the leader of a new process group, so the processes that it starts belong to that
+	// group unless they leave it (docs/spec/sidecars.md#declaration-and-startup). Call it before starting command.
+	NewProcessGroup(command *exec.Cmd) error
+	// EndProcessGroup sends the force-kill signal to the process group whose leader is pid. A group without a process has ended.
+	EndProcessGroup(pid int) error
+	// ReadAvailable reads into buffer what the pipe file holds now, without waiting: it returns io.EOF when the pipe holds
+	// nothing or its writers closed it. Clear the read deadline of file before calling it.
+	ReadAvailable(file *os.File, buffer []byte) (int, error)
 	// ExitStatus writes the exit of an ended process as `exit status <code>` or `signal <number>`. Both hosts write the exit of a
 	// sidecar to the log with the same text (docs/spec/sidecars.md#declaration-and-startup).
 	ExitStatus(state *os.ProcessState) (string, error)

@@ -151,6 +151,8 @@ func (h *Host) pageStarting(s *Surfaces) error {
 	h.mu.Unlock()
 	s.imageDetachPageStarting()
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
+	// The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
+	h.removals.Abandon(s.name)
 	s.pageStarted()
 	// Dialog claims belong to the ended workbench, even if its surface reload fails.
 	s.discardOverlay()

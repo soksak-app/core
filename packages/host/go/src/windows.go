@@ -511,6 +511,8 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		}
 		// The workbench ended with the process of its page, so the keys that wait for its decision go.
 		s.mainPageEnded()
+		// The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
+		h.removals.Abandon(s.name)
 	})
 	win.OnWindowEvent(WindowWorkbenchCommitted, func() {
 		RecordWindowEvent(s.name, "navigation_committed")

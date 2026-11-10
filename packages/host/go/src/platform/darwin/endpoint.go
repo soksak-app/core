@@ -5,6 +5,7 @@ package darwin
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -169,6 +170,44 @@ func (implementation) WaitServiceProcessEnd(pid int, timeout time.Duration) (boo
 func (implementation) NewSession(command *exec.Cmd) error {
 	command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return nil
+}
+
+// NewProcessGroup makes command the leader of a new process group with setpgid.
+func (implementation) NewProcessGroup(command *exec.Cmd) error {
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return nil
+}
+
+// EndProcessGroup sends SIGKILL to the process group pid; ESRCH means that no process of the group remains.
+func (implementation) EndProcessGroup(pid int) error {
+	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return fmt.Errorf("end process group %d: %w", pid, err)
+	}
+	return nil
+}
+
+// ReadAvailable reads once from the non-blocking descriptor of file: EAGAIN and a read of 0 bytes are the end of what it
+// holds.
+func (implementation) ReadAvailable(file *os.File, buffer []byte) (int, error) {
+	raw, err := file.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	var readErr error
+	if err := raw.Read(func(descriptor uintptr) bool {
+		n, readErr = syscall.Read(int(descriptor), buffer)
+		return true
+	}); err != nil {
+		return 0, err
+	}
+	switch {
+	case errors.Is(readErr, syscall.EAGAIN), readErr == nil && n == 0:
+		return 0, io.EOF
+	case readErr != nil:
+		return 0, readErr
+	}
+	return n, nil
 }
 
 // ExitStatus reads the exit of an ended process from the wait status and writes it as `exit status <code>` or `signal <number>`.

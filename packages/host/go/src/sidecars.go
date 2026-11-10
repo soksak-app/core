@@ -109,9 +109,7 @@ type sidecar struct {
 	readyRecorded bool
 	outbox        chan queuedLine
 	// writing is the size in bytes of the line that the writer is writing, and 0 between lines.
-	writing atomic.Int64
-	// lastRead is the monotonic time at which the host read the last line from a persistent service, 0 before the first.
-	lastRead      atomic.Uint64
+	writing       atomic.Int64
 	exited        chan struct{}
 	muClosed      sync.Mutex
 	pendingCloses pendingLines // The pending closed messages, in the order of sending
@@ -134,10 +132,16 @@ type sidecar struct {
 	// stopClosing is a close of this process that Stop removed from the closing list. A sidecar on standard input and output replies to this close while it ends,
 	// so that reply is not a failure (docs/spec/sidecars.md#messages). c.mu protects it.
 	stopClosing map[string]int
-	// read records violated and waitErr while stopping and closes exited. Stop reads them after exited.
-	// violated means that reading stopped because of a protocol violation, and waitErr is the result of waiting for the process.
+	// read records violated while stopping and closes exited. Stop reads it after exited. violated means that reading stopped
+	// because of a protocol violation.
 	violated bool
-	waitErr  error
+	// waited closes when the process of a sidecar on standard input and output exited; state and waitErr are the result of the
+	// wait, and read only after waited (docs/spec/sidecars.md#declaration-and-startup).
+	waited  chan struct{}
+	state   *os.ProcessState
+	waitErr error
+	// stderrEnded closes when the copy of the standard error ended and wrote its last text.
+	stderrEnded chan struct{}
 	// begin starts the write and read goroutines of a registered process.
 	begin func()
 }
@@ -153,7 +157,9 @@ type SidecarOwner interface {
 
 // Sidecars manages the sidecar processes of one application and the windows that own surfaces.
 type Sidecars struct {
-	mu                  sync.Mutex
+	mu sync.Mutex
+	// presents are the image presents of the sidecars that wait for the main thread, which the stop refuses.
+	presents            imagePresents
 	imageDetachRequests map[string]*imageDetachWaiter
 	imageDetachTimeout  time.Duration
 	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
@@ -1241,6 +1247,9 @@ func (c *Sidecars) Detach() { c.stop(true) }
 
 // stop stops the sidecars; with detach a persistent service only loses its connection.
 func (c *Sidecars) stop(detach bool) {
+	// The stop refuses each image present that waits for the main thread, which may be the thread that runs this stop, so no
+	// read goroutine of a sidecar waits for it (docs/spec/sidecars.md#declaration-and-startup).
+	c.presents.refuse()
 	c.mu.Lock()
 	c.stopped = true
 	// A sidecar that is starting is registered when it ends, so the running list is read after waiting for that start.
@@ -1328,10 +1337,10 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
 			select {
 			case <-p.exited:
 			case <-ctx.Done():
-				// The deadline passed. Forces termination.
-				err := p.cmd.Process.Kill()
+				// The deadline passed: a sidecar that runs on gives no event. The stop ends its process group.
+				err := endProcessGroup(p.cmd.Process.Pid)
 				killed = err == nil
-				if err != nil && !errors.Is(err, os.ErrProcessDone) {
+				if err != nil {
 					LogError("sidecar "+p.name, fmt.Sprintf("kill: %v", err))
 				}
 				// Waits until the read() goroutine ends.
@@ -1342,8 +1351,8 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
 			case killed:
 				LogError("sidecar "+p.name, "did not end within the stop timeout and was killed")
 			case p.violated:
-			case p.waitErr != nil:
-				LogError("sidecar "+p.name, "exited while stopping: "+exitStatus(p.cmd, p.waitErr))
+			case p.waitErr != nil || !p.state.Success():
+				LogError("sidecar "+p.name, "exited while stopping: "+exitStatus(p.state, p.waitErr))
 			}
 		})
 	}
@@ -1388,9 +1397,6 @@ func (c *Sidecars) retainLayoutOwners(listed map[string]string) bool {
 	}
 	return changed
 }
-
-// retainTimeout is the time to wait for the service to answer retain. It includes the time to close the sessions.
-const retainTimeout = 10 * time.Second
 
 // Retain closes, in each persistent service, the sessions of this application that are not in surfaces, and returns the number of closed sessions.
 // It removes previously known omitted layout surfaces before starting the service; a session newly accepted while preparing the retain request is
@@ -1492,26 +1498,21 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		}
 		line = append(line, '\n')
 		process.closeWaiters[request] = waiter
-		queued := queue(line)
-		queued.progress = &lineProgress{}
 		select {
-		case process.outbox <- queued:
+		case process.outbox <- queue(line):
 		default:
 			delete(process.closeWaiters, request)
 			c.mu.Unlock()
 			return total, fmt.Errorf("sidecar %s is not keeping up", name)
 		}
 		c.mu.Unlock()
-		timer := time.NewTimer(retainTimeout)
-		select {
-		case err := <-waiter:
-			timer.Stop()
-			if err != nil {
-				return total, fmt.Errorf("sidecar %s: retain: %w", name, err)
+		// The retain ends by its answer or by the end of its connection, which fails each waiting request; no time limit ends it
+		// (docs/spec/persistent-services.md#service-transport).
+		if err := <-waiter; err != nil {
+			if errors.Is(err, errServiceDisconnected) {
+				return total, fmt.Errorf("sidecar %s: retain: the service connection ended before the answer", name)
 			}
-		case <-timer.C:
-			return total, fmt.Errorf("sidecar %s: retain was not answered within %s: %s", name, retainTimeout,
-				queued.progress.describe(monotonicNanos(), process.lastRead.Load()))
+			return total, fmt.Errorf("sidecar %s: retain: %w", name, err)
 		}
 		c.mu.Lock()
 		total += process.retained[request]
@@ -1533,8 +1534,8 @@ func (c *Sidecars) closePersistentOwner(process *sidecar, ctx context.Context) e
 	return c.closeOwnerAndShutdown(process, ctx)
 }
 
-// closeOwnerAndShutdown sends close-owner and shutdown, waits for each answer and closes the transport. It is called
-// with process.ownerMutex held.
+// closeOwnerAndShutdown sends close-owner and shutdown, waits for each answer and closes the transport. It waits for no room
+// in the queue of the connection. It is called with process.ownerMutex held.
 func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) error {
 	request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
 	waiter := make(chan error, 1)
@@ -1551,10 +1552,13 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 		return err
 	}
 	line = append(line, '\n')
+	// The stop waits for no room in the queue: a full queue ends the connection, which the service takes as a lost connection
+	// (docs/spec/persistent-services.md#closing-and-recovery).
 	select {
 	case process.outbox <- queue(line):
-	case <-ctx.Done():
-		return ctx.Err()
+	default:
+		process.closeTransport()
+		return fmt.Errorf("sidecar %s: close-owner: the queue of the connection is full", process.name)
 	}
 	select {
 	case err := <-waiter:
@@ -1574,8 +1578,9 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 		shutdownLine = append(shutdownLine, '\n')
 		select {
 		case process.outbox <- queue(shutdownLine):
-		case <-ctx.Done():
-			return ctx.Err()
+		default:
+			process.closeTransport()
+			return fmt.Errorf("sidecar %s: shutdown: the queue of the connection is full", process.name)
 		}
 		select {
 		case shutdownErr := <-shutdownWaiter:
@@ -1665,23 +1670,45 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 	if c.configDir != "" {
 		arguments = append(arguments, "--log-dir", filepath.Join(c.configDir, "logs"))
 	}
+	current, err := platform.Current()
+	if err != nil {
+		return nil, fmt.Errorf("sidecar %s: %w", name, err)
+	}
 	cmd := exec.Command(program, arguments...)
-	// The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
-	cmd.Stderr = &recordWriter{layer: "sidecar", where: name}
+	// The sidecar leads a process group of its own, which the host ends when the sidecar exits
+	// (docs/spec/sidecars.md#declaration-and-startup).
+	if err := current.NewProcessGroup(cmd); err != nil {
+		return nil, fmt.Errorf("sidecar %s: %w", name, err)
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
 	}
-	stdout, err := cmd.StdoutPipe()
+	// The host holds the read ends of the outputs, so the exit of the sidecar ends their reads although another process keeps
+	// their write ends open.
+	stdout, stdoutWrite, err := os.Pipe()
 	if err != nil {
 		stdin.Close()
 		return nil, err
 	}
-	spawnedAt := time.Now()
-	if err := cmd.Start(); err != nil {
+	stderr, stderrWrite, err := os.Pipe()
+	if err != nil {
 		stdin.Close()
 		stdout.Close()
-		return nil, fmt.Errorf("sidecar %s: %w", name, err)
+		stdoutWrite.Close()
+		return nil, err
+	}
+	cmd.Stdout, cmd.Stderr = stdoutWrite, stderrWrite
+	spawnedAt := time.Now()
+	started := cmd.Start()
+	// The sidecar holds the write ends now; the host keeps none.
+	stdoutWrite.Close()
+	stderrWrite.Close()
+	if started != nil {
+		stdin.Close()
+		stdout.Close()
+		stderr.Close()
+		return nil, fmt.Errorf("sidecar %s: %w", name, started)
 	}
 	EmitHost(LevelInfo, "host.sidecar.start", map[string]any{"name": name, "pid": cmd.Process.Pid})
 	PerformanceProcessAdd("sidecar", name, cmd.Process.Pid)
@@ -1689,14 +1716,69 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		name: name, cmd: cmd, stdin: stdin, spawnedAt: spawnedAt,
 		outbox:       make(chan queuedLine, 256),
 		exited:       make(chan struct{}),
+		waited:       make(chan struct{}),
+		stderrEnded:  make(chan struct{}),
 		closeWaiters: make(map[string]chan error),
 		surfaces:     make(map[string]bool),
 	}
+	// The end of the sidecar is the exit of its process, which the wait reports: the host then ends its process group and the
+	// reads of both outputs (docs/spec/sidecars.md#declaration-and-startup).
+	routine.Go("sidecar-wait", func() {
+		process.state, process.waitErr = cmd.Process.Wait()
+		close(process.waited)
+		if err := current.EndProcessGroup(cmd.Process.Pid); err != nil {
+			LogError("sidecar "+name, err)
+		}
+		for _, output := range []*os.File{stdout, stderr} {
+			if err := output.SetReadDeadline(time.Now()); err != nil && !errors.Is(err, os.ErrClosed) {
+				LogError("sidecar "+name, fmt.Sprintf("end output: %v", err))
+			}
+		}
+	})
+	// The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
+	routine.Go("sidecar-stderr", func() {
+		defer close(process.stderrEnded)
+		records := &recordWriter{layer: "sidecar", where: name}
+		if _, err := io.Copy(records, exitOutput{file: stderr, platform: current}); err != nil {
+			LogError("sidecar "+name, fmt.Sprintf("read error output: %v", err))
+		}
+		records.Flush()
+		if err := stderr.Close(); err != nil {
+			LogError("sidecar "+name, fmt.Sprintf("close error output: %v", err))
+		}
+	})
 	process.begin = func() {
-		routine.Go("sidecar-write", func() { c.write(process) })       // write goroutine: reads from the outbox channel and writes to stdin.
-		routine.Go("sidecar-read", func() { c.read(process, stdout) }) // read goroutine: reads from stdout and passes events.
+		routine.Go("sidecar-write", func() { c.write(process) }) // write goroutine: reads from the outbox channel and writes to stdin.
+		// read goroutine: reads from stdout and passes events.
+		routine.Go("sidecar-read", func() { c.read(process, exitOutput{file: stdout, platform: current}, stdout) })
 	}
 	return process, nil
+}
+
+// exitOutput reads an output pipe of a sidecar until the exit of the sidecar ends it: the wait sets a past read deadline, and the
+// read then takes what the pipe holds at that moment and ends (docs/spec/sidecars.md#declaration-and-startup).
+type exitOutput struct {
+	file     *os.File
+	platform platform.Platform
+}
+
+func (o exitOutput) Read(buffer []byte) (int, error) {
+	n, err := o.file.Read(buffer)
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		return n, err
+	}
+	if n > 0 {
+		return n, nil
+	}
+	if err := o.file.SetReadDeadline(time.Time{}); err != nil {
+		return 0, err
+	}
+	// The exit is set again so that each later read also takes only what the pipe holds.
+	n, err = o.platform.ReadAvailable(o.file, buffer)
+	if deadline := o.file.SetReadDeadline(time.Now()); deadline != nil {
+		return n, deadline
+	}
+	return n, err
 }
 
 type persistentEndpoint struct {
@@ -1870,7 +1952,6 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
 	}
 	responseLine, err := reader.ReadBytes('\n')
-	helloRead := monotonicNanos()
 	if errors.Is(err, os.ErrDeadlineExceeded) {
 		conn.Close()
 		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service did not answer hello within %v", name, c.HelloTimeout)}
@@ -1912,7 +1993,6 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		outbox: make(chan queuedLine, 256), exited: make(chan struct{}),
 		closeWaiters: make(map[string]chan error), surfaces: make(map[string]bool),
 	}
-	process.lastRead.Store(helloRead)
 	process.begin = func() {
 		routine.Go("sidecar-write-persistent", func() { c.writePersistent(process) })
 		routine.Go("sidecar-read-persistent", func() { c.readPersistent(process, reader) })
@@ -1997,9 +2077,6 @@ func (c *Sidecars) writePersistent(process *sidecar) {
 
 func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 	started := monotonicNanos()
-	if line.progress != nil {
-		line.progress.started.Store(started)
-	}
 	process.writing.Store(int64(len(line.bytes)))
 	defer process.writing.Store(0)
 	if _, err := process.conn.Write(line.bytes); err != nil {
@@ -2007,9 +2084,6 @@ func (c *Sidecars) writePersistentLine(process *sidecar, line queuedLine) bool {
 		return false
 	}
 	ended := monotonicNanos()
-	if line.progress != nil {
-		line.progress.ended.Store(ended)
-	}
 	recordWriteWait(process.name, line, started, ended)
 	return true
 }
@@ -2069,8 +2143,8 @@ type ownedSurface struct {
 	owner   SidecarOwner
 }
 
-func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
-	violation := c.relay(process, stdout)
+func (c *Sidecars) read(process *sidecar, output io.Reader, stdout io.Closer) {
+	violation := c.relay(process, output)
 	// Closes the read end so that a process that is still writing is not blocked in a write. If it blocks, it does not end until the forced termination after the deadline of Stop.
 	if err := stdout.Close(); err != nil {
 		LogError("sidecar "+process.name, fmt.Sprintf("close output: %v", err))
@@ -2109,21 +2183,22 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 			LogError("sidecar "+process.name, "failed: "+violation)
 		}
 		process.violated = violation != ""
-		process.waitErr = process.cmd.Wait()
-		flushStderr(process.cmd)
+		<-process.waited
+		<-process.stderrEnded
 		EmitHost(LevelInfo, "host.sidecar.exit", map[string]any{"name": process.name, "pid": process.cmd.Process.Pid,
-			"status": exitStatus(process.cmd, process.waitErr), "stopping": true})
+			"status": exitStatus(process.state, process.waitErr), "stopping": true})
 		PerformanceProcessRemove(process.cmd.Process.Pid)
 		close(process.exited)
 		return
 	}
-	// The protocol state after a failure is undefined, so the process is ended.
+	// The protocol state after a failure is undefined, so the process group is ended.
 	reason := violation
-	if err := process.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+	if err := endProcessGroup(process.cmd.Process.Pid); err != nil {
 		reason = fmt.Sprintf("%s; kill: %v", reason, err)
 	}
-	exit := exitStatus(process.cmd, process.cmd.Wait())
-	flushStderr(process.cmd)
+	<-process.waited
+	<-process.stderrEnded
+	exit := exitStatus(process.state, process.waitErr)
 	if violation == "" {
 		reason = "output closed: " + exit
 	}
@@ -2142,22 +2217,30 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 }
 
 // exitStatus writes the exit of the ended process cmd as `exit status <code>` or `signal <number>`
-// (docs/spec/sidecars.md#declaration-and-startup). waitErr is the result of cmd.Wait. For an error of waiting that is not an exit status,
-// it writes that error.
-func exitStatus(cmd *exec.Cmd, waitErr error) string {
-	var exit *exec.ExitError
-	if waitErr != nil && !errors.As(waitErr, &exit) {
+// (docs/spec/sidecars.md#declaration-and-startup). state and waitErr are the result of the wait for the process; for an error of
+// waiting, it writes that error.
+func exitStatus(state *os.ProcessState, waitErr error) string {
+	if waitErr != nil {
 		return fmt.Sprintf("wait: %v", waitErr)
 	}
 	current, err := platform.Current()
 	if err != nil {
-		return fmt.Sprintf("exit status of process %d: %v", cmd.ProcessState.Pid(), err)
+		return fmt.Sprintf("exit status of process %d: %v", state.Pid(), err)
 	}
-	text, err := current.ExitStatus(cmd.ProcessState)
+	text, err := current.ExitStatus(state)
 	if err != nil {
-		return fmt.Sprintf("exit status of process %d: %v", cmd.ProcessState.Pid(), err)
+		return fmt.Sprintf("exit status of process %d: %v", state.Pid(), err)
 	}
 	return text
+}
+
+// endProcessGroup ends the process group of a sidecar with the force-kill signal (docs/spec/sidecars.md#declaration-and-startup).
+func endProcessGroup(pid int) error {
+	current, err := platform.Current()
+	if err != nil {
+		return err
+	}
+	return current.EndProcessGroup(pid)
 }
 
 // relay passes the messages of the output to the owner window. It returns an empty string when the output ends, and the reason when the protocol is violated or the read
@@ -2250,7 +2333,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		c.closingInvalidated()
 	}
 	for _, waiter := range waiters {
-		waiter <- errors.New("persistent service disconnected before close-owner ack")
+		waiter <- errServiceDisconnected
 	}
 	close(process.exited)
 	EmitHost(LevelInfo, "host.sidecar.disconnect", disconnectFields(process.name, process.servicePID, stopping, violation, end, waiting))
@@ -2339,7 +2422,6 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	unfinished := 0
 	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
-		process.lastRead.Store(monotonicNanos())
 		recordReady(process)
 		line := scanner.Bytes()
 		var value map[string]json.RawMessage
@@ -2751,13 +2833,6 @@ func (s *sidecar) closeTransport() {
 	close(s.outbox)
 }
 
-// flushStderr writes the last text of the standard error that ended without a line break, after the process ended, to the record.
-func flushStderr(cmd *exec.Cmd) {
-	if w, ok := cmd.Stderr.(*recordWriter); ok {
-		w.Flush()
-	}
-}
-
 // recordWriter reads the standard error of a non-persistent sidecar line by line and writes it as text records of level info
 // (docs/spec/sidecars.md#log). Text before a line break arrives is held until Flush.
 type recordWriter struct {
@@ -2806,31 +2881,76 @@ func (c *Sidecars) traceMessage(event, sidecar, surface string, body json.RawMes
 type queuedLine struct {
 	bytes  []byte
 	queued uint64
-	// progress is the write progress of a request line whose timeout names it, and nil for other lines.
-	progress *lineProgress
 }
 
-// lineProgress is the write progress of a request line: the monotonic times at which its write started and ended, 0 before.
-type lineProgress struct {
-	started atomic.Uint64
-	ended   atomic.Uint64
+// presentsRefused is the refusal of an image present that the stop of the sidecars ended
+// (docs/spec/sidecars.md#declaration-and-startup).
+const presentsRefused = "the host is stopping its sidecars"
+
+// imagePresents are the image presents of the sidecars that wait for the main thread. The zero value is used.
+type imagePresents struct {
+	mu      sync.Mutex
+	refused bool
+	next    uint64
+	waiting map[uint64]chan error
 }
 
-// describe states how far the request line went at now, given the monotonic time of the last line that the host read from the
-// service, 0 when none arrived.
-func (p *lineProgress) describe(now, lastRead uint64) string {
-	if ended := p.ended.Load(); ended != 0 {
-		read := "no line from the service arrived"
-		if lastRead != 0 {
-			read = fmt.Sprintf("the last line from the service arrived %d ms ago", (now-lastRead)/uint64(time.Millisecond))
+// present runs work in a main-thread step that step gives and returns its result, or the refusal of the presents when the stop
+// of the sidecars comes first. The step runs on a goroutine of its own, so the present ends by whichever answer comes first.
+func (p *imagePresents) present(work func() error, step func(func())) error {
+	answer := make(chan error, 1)
+	p.mu.Lock()
+	if p.refused {
+		p.mu.Unlock()
+		return errors.New(presentsRefused)
+	}
+	p.next++
+	id := p.next
+	if p.waiting == nil {
+		p.waiting = map[uint64]chan error{}
+	}
+	p.waiting[id] = answer
+	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		delete(p.waiting, id)
+		p.mu.Unlock()
+	}()
+	routine.Go("image-present", func() {
+		step(func() {
+			err := work()
+			select {
+			case answer <- err:
+			default:
+				// The refusal answered the present first.
+				if err != nil {
+					LogError("image present", err)
+				} else {
+					LogInfo("image present", "native result arrived after its request ended")
+				}
+			}
+		})
+	})
+	return <-answer
+}
+
+// refuse refuses each waiting present and each later one. A present whose answer already arrived keeps that answer.
+func (p *imagePresents) refuse() {
+	p.mu.Lock()
+	p.refused = true
+	waiting := p.waiting
+	p.waiting = nil
+	p.mu.Unlock()
+	for _, answer := range waiting {
+		select {
+		case answer <- errors.New(presentsRefused):
+		default:
 		}
-		return fmt.Sprintf("the request line was written %d ms ago, and %s", (now-ended)/uint64(time.Millisecond), read)
 	}
-	if p.started.Load() != 0 {
-		return "the request line is being written"
-	}
-	return "the request line is queued"
 }
+
+// errServiceDisconnected fails each request that waits for an answer of a persistent service when its connection ends.
+var errServiceDisconnected = errors.New("persistent service disconnected before close-owner ack")
 
 // queue stamps line with the moment it enters the write queue of a sidecar.
 func queue(line []byte) queuedLine {

@@ -804,11 +804,7 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 	sidecars := s.sidecars
 	return HandleEnvelope(body, sidecarName, surface, s.images,
 		func(work func() error) error {
-			var err error
-			mainThreadStep(func() {
-				err = work()
-			})
-			return err
+			return sidecars.presents.present(work, mainThreadStep)
 		},
 		func(image string, response map[string]interface{}) error {
 			// Every answer to a frame, consumed or refused with its reason, is an image.frame event of the performance
