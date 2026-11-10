@@ -1,10 +1,11 @@
 //! Checks the readiness rules of the open modal record: a ready request shows a modal once, the visible flag is set before
 //! the request is answered, and a ready request for a modal that is not open is stale and changes nothing. Checks the
-//! wait of the input for a modal: it opens at the show and ends when the modal took the keyboard, closed or failed.
+//! wait of the input for a modal: it opens at the show and ends when the modal took the keyboard, closed or failed. Checks the
+//! close of a modal web view: its input registration ends before the web view is closed.
 
 use super::{
-    Modal, Overlay, ReadyStep, close_holding, is_modal_of, mark_visible, ready_step, show_holding,
-    take_keyboard,
+    Modal, Overlay, ReadyStep, close_holding, close_view, is_modal_of, mark_visible, ready_step,
+    show_holding, take_keyboard,
 };
 
 fn open(overlay: &Overlay, id: &str, instance: u64) {
@@ -185,6 +186,35 @@ fn a_modal_that_closes_or_fails_before_it_took_the_keyboard_ends_the_wait() {
         vec!["focus"],
         "a modal that did not take the keyboard keeps the wait for the next ready request"
     );
+}
+
+// contract: modal.close.ends-the-input-registration
+#[test]
+fn a_modal_close_ends_the_input_registration_before_it_closes_the_webview() {
+    let steps = Steps::new("");
+    close_view(|| steps.step("end input"), || steps.step("close")).unwrap();
+    assert_eq!(
+        steps.taken(),
+        vec!["end input", "close"],
+        "the input registration of the modal web view ends in the close, not when the framework releases the web view"
+    );
+
+    let unended = Steps::new("end input");
+    let error = close_view(|| unended.step("end input"), || unended.step("close")).unwrap_err();
+    assert_eq!(
+        unended.taken(),
+        vec!["end input", "close"],
+        "a modal whose input registration did not end is still closed"
+    );
+    assert_eq!(
+        error,
+        "ending the input registration of the modal web view failed: end input failed"
+    );
+
+    let unclosed = Steps::new("close");
+    let error = close_view(|| unclosed.step("end input"), || unclosed.step("close")).unwrap_err();
+    assert_eq!(unclosed.taken(), vec!["end input", "close"]);
+    assert_eq!(error, "close failed");
 }
 
 // contract: modal.keyboard-hold

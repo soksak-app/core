@@ -604,6 +604,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F730",
+    implementation: [
+      { file: "packages/host/rust/src/modals.rs", symbol: "fn close_view(" },
+      { file: "packages/host/rust/src/modals.rs", symbol: "exposure::with_view(view, move |native| platform.unregister_input(native))" },
+      { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "pub fn unregister(view: &PlatformWebview) {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/modals_readiness_test.rs", id: "a_modal_close_ends_the_input_registration_before_it_closes_the_webview" },
+    ],
+    expected: "The close of a Tauri modal web view ends its input registration on the main thread before it closes the web view, closes the web view also when the end fails and answers each failure, so the objects attached to the registration are released in the close and not when the framework releases the web view.",
+    levels: ["unit"],
+  },
+  {
     id: "F727",
     implementation: [
       { file: "native/darwin/tests/input_virtual_test.m", symbol: "static BOOL stayedBehind(void) {" },

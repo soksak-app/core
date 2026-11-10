@@ -480,6 +480,9 @@ impl Platform for Windows {
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
         webview::register(view)
     }
+    fn unregister_input(&self, view: &PlatformWebview) -> Result<(), String> {
+        unsupported::unregister_input(view)
+    }
     fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String> {
         unsupported::ignore_page_focus(view)
     }

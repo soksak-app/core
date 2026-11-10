@@ -300,6 +300,15 @@ pub fn register(view: &PlatformWebview) -> bool {
     unsafe { webviewInputRegister(view.inner().cast()).as_bool() }
 }
 
+/// Ends the input registration of an application webview: the pointer routing forgets it, and the registration and the
+/// receipt handler that it added to the user content controller of the webview are released in this turn.
+pub fn unregister(view: &PlatformWebview) {
+    unsafe extern "C" {
+        fn webviewInputUnregister(view: *const c_void);
+    }
+    unsafe { webviewInputUnregister(view.inner().cast()) }
+}
+
 /// Makes the page of a webview not move the keyboard focus of the window when it focuses an element, and returns
 /// whether it succeeded.
 pub fn ignore_page_focus(view: &PlatformWebview) -> bool {
