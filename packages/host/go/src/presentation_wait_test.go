@@ -22,7 +22,7 @@ func TestAViewJoinsThePresentationWaitOncePerChange(t *testing.T) {
 // Each end without presentation writes host.trace.view.presentation-abandoned with the surface and the reason, and each end ends the
 // wait once: an end of a view that does not wait writes nothing.
 func TestEachEndWithoutPresentationWritesTheAbandonedEvent(t *testing.T) {
-	for _, reason := range []string{"process-ended", "hidden", "unresponsive", "timeout"} {
+	for _, reason := range []string{"process-ended", "hidden", "unresponsive", "input", "closed"} {
 		isolateTraceRecords(t)
 		var w presentationWait
 		w.begin("probe-surface", nil)
@@ -175,5 +175,51 @@ func TestAnInvisiblePlacementAtPresentEndsNoWaitUntilItsSync(t *testing.T) {
 	}
 	if fake.joins[0].abandons != 1 {
 		t.Fatalf("the sync abandoned the native join %d times, want 1", fake.joins[0].abandons)
+	}
+}
+
+// runFrontend records the events that the window publishes.
+type runFrontend struct {
+	frontendRecord
+	events []string
+}
+
+func (f *runFrontend) Emit(name string, _ ...any) { f.events = append(f.events, name) }
+
+// The cancel of a ticket or of the window ends the run with its transaction: the settled waits of the run are released and
+// run-ended is published once (docs/spec/native-surfaces.md#layout-transaction).
+// contract: surface-layout.run-ends-with-its-transaction
+func TestTheCancelOfALayoutEndsTheRun(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cancel func(*Surfaces) error
+	}{
+		{"ticket", func(s *Surfaces) error { return s.cancelLayoutPresentation(platform.Window(1), 41) }},
+		{"window", func(s *Surfaces) error { return s.cancelAllLayoutPresentations(platform.Window(1)) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
+			frontend := &runFrontend{}
+			s.window = frontend
+			s.run(true)
+			settled := make(chan struct{})
+			s.settled = append(s.settled, settled)
+			select {
+			case <-settled:
+				t.Fatal("the settled wait ended while the run goes on")
+			default:
+			}
+			if err := tc.cancel(s); err != nil {
+				t.Fatalf("cancel the layout: %v", err)
+			}
+			select {
+			case <-settled:
+			default:
+				t.Fatal("the cancel of the layout left the settled wait of the run")
+			}
+			if s.running || len(frontend.events) != 2 || frontend.events[1] != "run-ended" {
+				t.Fatalf("after the cancel: running %v, events %v, want run-began then run-ended", s.running, frontend.events)
+			}
+		})
 	}
 }

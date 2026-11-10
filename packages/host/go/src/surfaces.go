@@ -18,7 +18,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -560,6 +559,35 @@ type Surfaces struct {
 
 	// The theme that the main page set last. The page calls Theme after it loads.
 	theme Theme
+
+	// layoutEnds is closed and replaced each time a layout transaction of the window ends by itself, by a press or key event, by
+	// its cancel or by the end of the page, so the app DOM wait of a presentation request ends with the transaction it belongs to
+	// (docs/spec/native-surfaces.md#layout-transaction).
+	layoutEndsMu sync.Mutex
+	layoutEnds   chan struct{}
+}
+
+// layoutEnd returns the channel that the next end of a layout transaction of the window closes.
+func (s *Surfaces) layoutEnd() <-chan struct{} {
+	s.layoutEndsMu.Lock()
+	defer s.layoutEndsMu.Unlock()
+	if s.layoutEnds == nil {
+		s.layoutEnds = make(chan struct{})
+	}
+	return s.layoutEnds
+}
+
+// layoutEnded ends the waits inside the presentation request of the window: its app DOM wait and its raster wait.
+func (s *Surfaces) layoutEnded() {
+	s.layoutEndsMu.Lock()
+	if s.layoutEnds != nil {
+		close(s.layoutEnds)
+	}
+	s.layoutEnds = make(chan struct{})
+	s.layoutEndsMu.Unlock()
+	if s.images != nil {
+		s.images.EndWaits()
+	}
 }
 
 func NewSurfaces(win Frontend, sidecars *Sidecars) *Surfaces {
@@ -1446,6 +1474,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			return prepareErr
 		}, func() error {
 			domReady := make(chan error, 1)
+			ended := s.layoutEnd()
 			var waiting error
 			waiting = runSurfaceDispatch(mainThreadStep, win.Name(), &req.Ticket, "present", "present-dom-register-ui", func() error {
 				queued, trace := surfaceDispatchClock()
@@ -1457,24 +1486,24 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			if waiting != nil {
 				return waiting
 			}
-			timer := time.NewTimer(pageTimeout)
-			defer timer.Stop()
+			// The wait ends by the presentation update, or by the end of the transaction: a press or key event, a cancel or the end
+			// of the page. No wait ends by time (docs/spec/native-surfaces.md#layout-transaction).
 			select {
 			case failure := <-domReady:
 				return failure
-			case <-timer.C:
-				return fmt.Errorf("application documents did not present within %s", pageTimeout)
+			case <-ended:
+				return nil
 			}
 		}, func() error {
 			// A continuous frame also waits for each visible image region to display a raster of the prepared size.
 			// Without waiting, a surface resize would show the previous raster while the region is enlarged
 			// (docs/spec/surface-composition.md).
 			return waitSurfaceRasters(win.Name(), &req.Ticket, s.refreshImageRasters, func() error {
-				if err := s.images.WaitLayoutRasters(pageTimeout, req.Settled); err != nil {
-					if err.Error() == "presentationTimeout" {
-						return fmt.Errorf("the current image raster did not present within %s; pending %s",
-							pageTimeout, s.images.PendingRasters())
-					}
+				err := s.images.WaitLayoutRasters(noWaitLimit, req.Settled)
+				if errors.Is(err, errLayoutWaitEnded) {
+					return nil
+				}
+				if err != nil {
 					return fmt.Errorf("the current image raster failed to present: %w", err)
 				}
 				return nil
@@ -1627,15 +1656,22 @@ func (h *Host) endReloads(s *Surfaces, err error) {
 }
 
 // mainPageEnded gives the keys of the window that waited for the decision of its workbench, which ended with its page or its
-// process (docs/spec/native-surfaces.md#keyboard-of-a-surface). It does not wait for the UI thread.
+// process (docs/spec/native-surfaces.md#keyboard-of-a-surface), and cancels every layout transaction of the window, because the
+// page that holds their tickets ended (docs/spec/native-surfaces.md#layout-transaction). It does not wait for the UI thread.
 func (s *Surfaces) mainPageEnded() {
 	if s.window == nil {
 		return
 	}
 	window := s.window.NativeWindow()
-	if err := system.EnqueueUI(func() { system.KeysPageEnded(window) }); err != nil {
+	if err := system.EnqueueUI(func() {
+		system.KeysPageEnded(window)
+		if err := s.cancelAllLayoutPresentations(window); err != nil {
+			LogError("surface layout cancel", err)
+		}
+	}); err != nil {
 		LogError("key wait", err)
 	}
+	s.layoutEnded()
 }
 
 // finishLayoutPresentation reads the actual surface frames and commits an accepted presentation on the UI thread.

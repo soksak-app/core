@@ -55,22 +55,43 @@
 - (void)dealloc { [_keys release]; [super dealloc]; }
 @end
 
-// SPViewJoin is a view that the open layout transaction waits for. It ends once: by its presentation or by an abandon.
+// SPViewJoin is a view that the open layout transaction of its owner waits for. It ends once: by its presentation, by an
+// abandon, by the close of the view or by a press or key event that ends the hold. ended answers each end that the host did not
+// ask for, with its reason.
 @interface SPViewJoin : NSObject
+@property(nonatomic, assign) void *owner;
 @property(nonatomic, retain) WKWebView *view;
 @property(nonatomic, assign) BOOL resolved;
+@property(nonatomic, copy) void (^ended)(const char *reason);
 @end
 @implementation SPViewJoin
-- (void)dealloc { [_view release]; [super dealloc]; }
+- (void)dealloc { [_view release]; [_ended release]; [super dealloc]; }
 @end
 
+// SPWindowLayout is the open layout transaction of one window (docs/spec/native-surfaces.md#layout-transaction): its
+// preparation, whether its commit waits for its joined views, those views, and the preparations of the window that wait for that
+// commit. No transaction waits for the transaction of another window.
+@interface SPWindowLayout : NSObject
+@property(nonatomic, assign) void *owner;
+@property(nonatomic, assign) uint64_t preparation;
+@property(nonatomic, assign) BOOL committing;
+@property(nonatomic, retain) NSMutableArray<SPViewJoin *> *joins;
+@property(nonatomic, retain) NSMutableArray<SPLayoutRequest *> *waiting;
+@end
+@implementation SPWindowLayout
+- (void)dealloc { [_joins release]; [_waiting release]; [super dealloc]; }
+@end
+
+// The preparation that started last, which the diagnostic trace names.
 static uint64_t preparation;
-// The views that the open transaction waits for. Joins are added only while the transaction of activeOwner is open.
-static NSMutableArray<SPViewJoin *> *viewJoins;
-// YES while the open transaction waits for its joined views before the CATransaction commit.
-static BOOL committing;
-static void *activeOwner;
-static NSMutableArray<SPLayoutRequest *> *waiting;
+// The open layout transaction of each window.
+static NSMutableDictionary<NSValue *, SPWindowLayout *> *layouts;
+// YES while the Core Animation transaction that holds the changes of every window is open: from the start of the first open
+// layout transaction to the end of the last one.
+static BOOL holdOpen;
+// The preparation of each window whose transaction a press or key event ended before the host asked for its commit; that commit
+// then reports the commit that the input made.
+static NSMutableDictionary<NSValue *, NSNumber *> *inputEnded;
 static NSMutableArray<SPSettleRequest *> *settling;
 static bool injectSettledFailure;
 static void (^layoutStarted)(void *);
@@ -186,6 +207,39 @@ static void keepInput(SPHeldInput *input) {
     [heldInput addObject:input];
 }
 
+static SPWindowLayout *layoutOf(void *owner) {
+    return owner ? layouts[[NSValue valueWithPointer:owner]] : nil;
+}
+
+// Whether event passes the input that a transaction holds at once: the hold keeps only the content of its window, so a pointer
+// event outside the content view (the window buttons and the title bar of the frame) and a key that the menu answers, one with
+// the Command modifier, go on, and the hold never keeps the close of its window.
+static BOOL passesHold(NSEvent *event) {
+    NSWindow *window = event.window;
+    if (!window) return YES;
+    NSEventType type = event.type;
+    if (type == NSEventTypeKeyDown || type == NSEventTypeKeyUp) return (event.modifierFlags & NSEventModifierFlagCommand) != 0;
+    // silent: the predicate answers NO for a modifier change or a scroll, which belongs to the content and waits in the hold.
+    if (type == NSEventTypeFlagsChanged || type == NSEventTypeScrollWheel) return NO;
+    NSView *content = window.contentView;
+    if (!content) return YES;
+    NSRect frame = [content convertRect:content.bounds toView:nil];
+    return !NSPointInRect(event.locationInWindow, frame);
+}
+
+// Whether event ends the hold: a press of any button or a key event (docs/spec/native-surfaces.md#layout-transaction). Moves and
+// drags of the pointer end nothing, so the frames of a drag keep their hold.
+static BOOL endsHold(NSEvent *event) {
+    switch (event.type) {
+        case NSEventTypeLeftMouseDown: case NSEventTypeRightMouseDown: case NSEventTypeOtherMouseDown:
+        case NSEventTypeKeyDown: case NSEventTypeKeyUp: case NSEventTypeFlagsChanged:
+            return YES;
+        default:
+            // silent: the predicate answers NO for a move or a drag of the pointer, which ends no hold.
+            return NO;
+    }
+}
+
 static BOOL holdInput(NSEvent *event) {
     const NSEventMask presses = NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown;
     const NSEventMask later = presses | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp | NSEventMaskRightMouseDragged
@@ -193,6 +247,8 @@ static BOOL holdInput(NSEvent *event) {
         | NSEventMaskMouseMoved | NSEventMaskScrollWheel | NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged;
     NSEventMask type = NSEventMaskFromType(event.type);
     NSWindow *window = event.window;
+    // silent: the predicate answers NO for an event that no hold keeps, and the caller sends it on.
+    if (!(type & later) || passesHold(event)) return NO;
     // A release puts its events at the start of the queue, so while it returns every event of the window is in its turn.
     BOOL waits = window && (type & later) && ![returning containsObject:[NSValue valueWithPointer:window]]
         && (inputHeld(window) || ((type & presses) && surfaceLayoutPressWaits(window, event.locationInWindow.x, event.locationInWindow.y)));
@@ -205,9 +261,9 @@ static void (*applicationSendEvent)(id, SEL, NSEvent *);
 static void releaseInput(void *owner);
 static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces);
 
-// Gives the input of owner back when its open transaction does not hold it.
+// Gives the input of owner back when no open transaction of owner holds it.
 static void releaseWhenFree(void *owner) {
-    if (activeOwner != owner) releaseInput(owner);
+    if (!layoutOf(owner)) releaseInput(owner);
 }
 
 static SPKeyWait *keyWait(void *owner) {
@@ -252,15 +308,20 @@ static BOOL keyWaitTakes(void *owner, SPHeldInput *piece) {
     return piece.press && wait.decision && endDecision(owner, piece);
 }
 
+static void forgetReturnedActions(void *owner);
+
 // Runs one turn of a release: an injected call, or the end of the release, which sends on what arrived while it returned. A key
 // call that comes back while the keys of its window wait waits again, in its order, and a press call ends the decision.
 static void runHeldTurn(long turn) {
     SPHeldInput *input = [[heldTurns[@(turn)] retain] autorelease];
+    // A turn that a discard already ran comes back with no piece.
+    if (!input) return;
     [heldTurns removeObjectForKey:@(turn)];
     if (input.call) {
         if (!keyWaitTakes(input.owner, input)) input.call();
     } else {
         [returning removeObject:[NSValue valueWithPointer:input.owner]];
+        if (![returning containsObject:[NSValue valueWithPointer:input.owner]]) forgetReturnedActions(input.owner);
         releaseWhenFree(input.owner);
     }
 }
@@ -278,10 +339,70 @@ static BOOL keyWaitTakesEvent(NSEvent *event) {
     return keyWaitTakes(window, heldPiece(window, event, nil, key, press));
 }
 
+static void endHoldByInput(void);
+
+// The observers of the actions of the user, which surfaceInputActionObserve adds.
+static NSMutableArray *actionObservers;
+
+// The told press and key events that a release gave back to the queue, each as its owner and its content. -[NSApplication
+// postEvent:atStart:] hands the event back as another object with the same content, so the content names it. The end of the
+// release of owner comes after its events in the queue, so it forgets what of owner did not come back, as an event that a
+// tracking loop discarded.
+static NSMutableArray<NSArray *> *returnedActions;
+
+static NSString *actionContent(NSEvent *event) {
+    BOOL key = event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp || event.type == NSEventTypeFlagsChanged;
+    return [NSString stringWithFormat:@"%lu %.9f %ld %lu %ld %.3f %.3f", (unsigned long)event.type, event.timestamp,
+        (long)event.windowNumber, (unsigned long)event.modifierFlags, key ? (long)event.keyCode : (long)event.buttonNumber,
+        event.locationInWindow.x, event.locationInWindow.y];
+}
+
+static void markReturnedAction(void *owner, NSEvent *event) {
+    if (!returnedActions) returnedActions = [[NSMutableArray alloc] init];
+    [returnedActions addObject:@[ [NSValue valueWithPointer:owner], actionContent(event) ]];
+}
+
+// Whether event is a told action that comes back; it takes its mark.
+static BOOL takeReturnedAction(NSEvent *event) {
+    // silent: the predicate answers NO while no told action waits to come back.
+    if (returnedActions.count == 0) return NO;
+    NSString *content = actionContent(event);
+    for (NSUInteger index = 0; index < returnedActions.count; index++) {
+        if (![returnedActions[index][1] isEqualToString:content]) continue;
+        [returnedActions removeObjectAtIndex:index];
+        return YES;
+    }
+    // silent: the predicate answers NO for an event that no told action marks.
+    return NO;
+}
+
+static void forgetReturnedActions(void *owner) {
+    NSValue *key = [NSValue valueWithPointer:owner];
+    NSIndexSet *gone = [returnedActions indexesOfObjectsPassingTest:^BOOL(NSArray *mark, NSUInteger index, BOOL *stop) {
+        return [mark[0] isEqual:key];
+    }];
+    [returnedActions removeObjectsAtIndexes:gone];
+}
+
 static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
     if (event.type == NSEventTypeApplicationDefined && event.subtype == kHeldTurnSubtype) {
         runHeldTurn(event.data1);
-    } else if (!holdInput(event) && !keyWaitTakesEvent(event)) {
+        return;
+    }
+    // Every press and key event that reaches the application, a synthetic one sent through -[NSApplication sendEvent:] included,
+    // is told to each observer of the actions of the user before any monitor, gate or view sees it.
+    // The end of the layout hold is one of these observers. When input of the window of the event waits for the hold, the event
+    // takes its place behind that input, which the end of the hold gives back in its order.
+    // An event that a release gave back comes through this method again; its action was already told, so it is told once.
+    BOOL action = endsHold(event) && !takeReturnedAction(event);
+    if (action) {
+        NSWindow *window = event.window;
+        BOOL behind = holdOpen && window && !passesHold(event) && inputHeld(window);
+        if (behind) keepInput(heldPiece(window, event, nil, NO, NO));
+        for (void (^observer)(NSEvent *) in [[actionObservers copy] autorelease]) observer(event);
+        if (behind) return;
+    }
+    if (!holdInput(event) && !keyWaitTakesEvent(event)) {
         if (event.window && (event.type == NSEventTypeLeftMouseDown || event.type == NSEventTypeLeftMouseUp)) {
             surfaceLayoutPointerPassing(event.window, event.type == NSEventTypeLeftMouseDown, event.locationInWindow.x,
                 event.locationInWindow.y);
@@ -294,12 +415,39 @@ static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
 // framework's application class can override the method, read the event before super and send a key past super. The hold stands
 // in front of the method of the class of the application, so no monitor or override of the library, a host or a framework sees
 // an event that waits, and each sees the event once when it comes back.
+static void (*applicationDiscard)(id, SEL, NSEventMask, NSEvent *);
+
+// A tracking loop that discards events before its release takes the turns of held input from the queue with them. Each turn that
+// a discard of application events took runs in the discarding turn, in its order, so each injected call runs once and the end of
+// each release lets its window take input again.
+static void discardAfterLayout(id application, SEL selector, NSEventMask mask, NSEvent *before) {
+    applicationDiscard(application, selector, mask, before);
+    if (!(mask & NSEventMaskApplicationDefined) || heldTurns.count == 0) return;
+    for (NSNumber *turn in [heldTurns.allKeys sortedArrayUsingSelector:@selector(compare:)]) runHeldTurn(turn.longValue);
+}
+
+static void watchInput(void);
+
+void surfaceInputActionObserve(void (^observer)(NSEvent *event)) {
+    NSCAssert(NSThread.isMainThread, @"the actions of the user belong to the UI thread");
+    watchInput();
+    if (!actionObservers) actionObservers = [[NSMutableArray alloc] init];
+    [actionObservers addObject:[[observer copy] autorelease]];
+}
+
 static void watchInput(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        Method method = class_getInstanceMethod(object_getClass([NSApplication sharedApplication]), @selector(sendEvent:));
+        Class application = object_getClass([NSApplication sharedApplication]);
+        Method method = class_getInstanceMethod(application, @selector(sendEvent:));
         applicationSendEvent = (void (*)(id, SEL, NSEvent *))method_getImplementation(method);
         method_setImplementation(method, (IMP)sendEventAfterLayout);
+        Method discard = class_getInstanceMethod(application, @selector(discardEventsMatchingMask:beforeEvent:));
+        applicationDiscard = (void (*)(id, SEL, NSEventMask, NSEvent *))method_getImplementation(discard);
+        method_setImplementation(discard, (IMP)discardAfterLayout);
+        // A press or key event ends the layout hold at once (docs/spec/native-surfaces.md#layout-transaction).
+        if (!actionObservers) actionObservers = [[NSMutableArray alloc] init];
+        [actionObservers addObject:[[^(NSEvent *event) { endHoldByInput(); } copy] autorelease]];
     });
 }
 
@@ -324,8 +472,13 @@ static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces) {
     end.owner = owner;
     postHeldTurn(end);
     for (SPHeldInput *input in pieces.reverseObjectEnumerator) {
-        if (input.event) [NSApp postEvent:input.event atStart:YES];
-        else postHeldTurn(input);
+        if (input.event) {
+            // Each press and key event was told when it first reached the application; its return is not told again.
+            if (endsHold(input.event)) markReturnedAction(owner, input.event);
+            [NSApp postEvent:input.event atStart:YES];
+        } else {
+            postHeldTurn(input);
+        }
     }
 }
 
@@ -341,29 +494,36 @@ static void releaseInput(void *owner) {
     returnInput(owner, pieces);
 }
 
+static void observeWindowClose(void);
+
 static void startLayout(SPLayoutRequest *request) {
     watchInput();
-    if (!activeOwner) {
+    observeWindowClose();
+    if (!holdOpen) {
         surfaceTransactionBegin();
         [CATransaction setDisableActions:YES];
-        activeOwner = request.owner;
+        holdOpen = YES;
     }
+    NSValue *key = [NSValue valueWithPointer:request.owner];
+    SPWindowLayout *layout = layouts[key];
+    if (!layout) {
+        layout = [[[SPWindowLayout alloc] init] autorelease];
+        layout.owner = request.owner;
+        layout.joins = [NSMutableArray array];
+        layout.waiting = [NSMutableArray array];
+        if (!layouts) layouts = [[NSMutableDictionary alloc] init];
+        layouts[key] = layout;
+    }
+    [inputEnded removeObjectForKey:key];
+    layout.preparation = request.ticket;
     preparation = request.ticket;
     traceMark(request.ticket, 1);
     if (layoutStarted) layoutStarted(request.owner);
     request.ready(true);
 }
 
-static void nextLayout(void) {
-    while (waiting.count && (!activeOwner || (waiting.firstObject.owner == activeOwner && !committing))) {
-        SPLayoutRequest *request = [waiting.firstObject retain];
-        [waiting removeObjectAtIndex:0];
-        startLayout(request);
-        [request release];
-    }
-}
-
-// CATransaction is per UI thread, so the preparation and presentation of several windows are serialized.
+// Each window owns its transaction, so the transactions of several windows are open at once. Core Animation commits the changes
+// of every window of the UI thread together, so they share one hold.
 void surfaceLayoutObserve(void (^started)(void *), void (^ended)(void *)) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
     [layoutStarted release];
@@ -378,58 +538,95 @@ void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int)) {
     request.owner = owner;
     request.ticket = ticket;
     request.ready = ready;
-    if (!activeOwner || (activeOwner == owner && !committing)) { startLayout(request); return; }
-    if (!waiting) waiting = [[NSMutableArray alloc] init];
-    [waiting addObject:request];
+    SPWindowLayout *layout = layoutOf(owner);
+    // A preparation that arrives while the commit of its window waits for joined views starts when that commit ends, because it
+    // would otherwise commit with the views of the earlier ticket.
+    if (!layout || !layout.committing) {
+        startLayout(request);
+        return;
+    }
+    [layout.waiting addObject:request];
 }
 
-// Ends the open transaction through path (SURFACE_LAYOUT_COMMIT_*): the CATransaction commits, and the next waiting layout
-// starts. The record of the transaction names the path and the other pairs of this code that were open at the commit.
-static void finishTransaction(int path) {
-    uint64_t ticket = preparation;
-    void *owner = activeOwner;
-    committing = NO;
-    activeOwner = NULL;
+// Ends the open transaction of owner through path (SURFACE_LAYOUT_COMMIT_*). The hold commits when no other transaction is open,
+// and the preparations of the window that waited for this commit start. The record of the transaction names the path and the
+// other pairs of this code that were open at the commit.
+static void finishTransaction(void *owner, int path) {
+    SPWindowLayout *layout = [[layoutOf(owner) retain] autorelease];
+    if (!layout) return;
+    uint64_t ticket = layout.preparation;
+    [layouts removeObjectForKey:[NSValue valueWithPointer:owner]];
     traceValue(ticket, 5, path);
-    traceValue(ticket, 6, openTransactions - 1);
-    surfaceTransactionCommit();
+    traceValue(ticket, 6, openTransactions - (holdOpen ? 1 : 0));
+    if (holdOpen && layouts.count == 0) {
+        holdOpen = NO;
+        surfaceTransactionCommit();
+    }
     traceMark(ticket, 3);
     if (layoutEnded) layoutEnded(owner);
     releaseWhenFree(owner);
-    nextLayout();
+    NSArray<SPLayoutRequest *> *next = [[layout.waiting copy] autorelease];
+    for (SPLayoutRequest *request in next) surfaceLayoutBegin(request.owner, request.ticket, request.ready);
     releaseSettled();
 }
 
-// Detaches a join from the open transaction. It returns false when the join already ended, so each join ends once.
+// Detaches a join from the transaction of its owner. It returns false when the join already ended, so each join ends once.
 static bool detachViewJoin(SPViewJoin *join) {
     if (join.resolved) return false;
     join.resolved = YES;
-    [viewJoins removeObjectIdenticalTo:join];
+    [layoutOf(join.owner).joins removeObjectIdenticalTo:join];
     return true;
 }
 
-// Finishes a deferred commit through path once the last joined view has ended.
-static void finishDeferredCommit(int path) {
-    if (committing && viewJoins.count == 0) finishTransaction(path);
+// Finishes the deferred commit of owner through path once its last joined view has ended.
+static void finishDeferredCommit(void *owner, int path) {
+    SPWindowLayout *layout = layoutOf(owner);
+    if (layout.committing && layout.joins.count == 0) finishTransaction(owner, path);
 }
 
-// Ends every view wait of the open transaction without a presentation.
-static void dropViewJoins(void) {
-    for (SPViewJoin *join in [[viewJoins copy] autorelease]) detachViewJoin(join);
+// Ends every view wait of the transaction of layout without a presentation; a reason tells each join why.
+static void endViewJoins(SPWindowLayout *layout, const char *reason) {
+    for (SPViewJoin *join in [[layout.joins copy] autorelease]) {
+        if (detachViewJoin(join) && reason && join.ended) join.ended(reason);
+    }
 }
 
-// Commits the open transaction of owner when ticket is its preparation, through path, or defers the commit to the last joined view.
+// Commits the open transaction of owner when ticket is its preparation, through path, or defers the commit to the last joined
+// view. A preparation whose transaction a press or key event ended reports that commit once.
 static bool commitLayout(void *owner, uint64_t ticket, int path) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (activeOwner != owner || ticket != preparation || committing) {
+    NSValue *key = [NSValue valueWithPointer:owner];
+    SPWindowLayout *layout = layouts[key];
+    if (!layout) {
+        if (inputEnded[key] && inputEnded[key].unsignedLongLongValue == ticket) {
+            [inputEnded removeObjectForKey:key];
+            return true;
+        }
         return false;
     }
-    if (viewJoins.count) {
-        committing = YES;
+    if (ticket != layout.preparation || layout.committing) return false;
+    if (layout.joins.count) {
+        layout.committing = YES;
         return true;
     }
-    finishTransaction(path);
+    finishTransaction(owner, path);
     return true;
+}
+
+// A press or key event ends the hold at once: each open transaction commits what its joined peers presented, and each join that
+// has not presented ends with the reason input (docs/spec/native-surfaces.md#layout-transaction).
+static void endHoldByInput(void) {
+    if (!holdOpen) return;
+    for (SPWindowLayout *layout in [[layouts.allValues copy] autorelease]) {
+        void *owner = layout.owner;
+        if (layoutOf(owner) != layout) continue;
+        endViewJoins(layout, "input");
+        if (!layout.committing) {
+            if (!inputEnded) inputEnded = [[NSMutableDictionary alloc] init];
+            inputEnded[[NSValue valueWithPointer:owner]] = @(layout.preparation);
+        }
+        finishTransaction(owner, SURFACE_LAYOUT_COMMIT_INPUT);
+    }
 }
 
 bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
@@ -438,12 +635,12 @@ bool surfaceLayoutCommit(void *owner, uint64_t ticket) {
 
 bool surfaceLayoutIsPreparing(void *owner) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    return !pastPreparation && owner != NULL && activeOwner == owner;
+    return !pastPreparation && layoutOf(owner) != nil;
 }
 
 bool surfaceLayoutPressWaits(void *owner, double x, double y) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (!owner || activeOwner != owner) return false;
+    if (!layoutOf(owner)) return false;
     NSView *content = ((NSWindow *)owner).contentView;
     NSPoint point = [content.superview convertPoint:NSMakePoint(x, y) fromView:nil];
     NSView *now = [content hitTest:point];
@@ -554,34 +751,50 @@ void surfaceLayoutPointerPassing(void *owner, bool down, double x, double y) {
     }
 }
 
-void surfaceLayoutCancel(void *owner) {
-    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    for (SPLayoutRequest *request in [[waiting copy] autorelease]) {
-        if (request.owner != owner) continue;
-        [waiting removeObjectIdenticalTo:request];
+// Refuses the preparations of owner that wait for its deferred commit; with a ticket, only that one.
+static void refuseWaiting(SPWindowLayout *layout, bool exact, uint64_t ticket) {
+    for (SPLayoutRequest *request in [[layout.waiting copy] autorelease]) {
+        if (exact && request.ticket != ticket) continue;
+        [layout.waiting removeObjectIdenticalTo:request];
         request.ready(false);
     }
-    if (activeOwner == owner) {
-        dropViewJoins();
-        if (committing) finishTransaction(SURFACE_LAYOUT_COMMIT_CANCEL);
-        else commitLayout(owner, preparation, SURFACE_LAYOUT_COMMIT_CANCEL);
+}
+
+void surfaceLayoutCancel(void *owner) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    [inputEnded removeObjectForKey:[NSValue valueWithPointer:owner]];
+    SPWindowLayout *layout = layoutOf(owner);
+    if (layout) {
+        refuseWaiting(layout, false, 0);
+        endViewJoins(layout, NULL);
+        finishTransaction(owner, SURFACE_LAYOUT_COMMIT_CANCEL);
     }
     releaseSettled();
 }
 
 void surfaceLayoutCancelTicket(void *owner, uint64_t ticket) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    for (SPLayoutRequest *request in [[waiting copy] autorelease]) {
-        if (request.owner != owner || request.ticket != ticket) continue;
-        [waiting removeObjectIdenticalTo:request];
-        request.ready(false);
-    }
-    if (activeOwner == owner && preparation == ticket) {
-        dropViewJoins();
-        if (committing) finishTransaction(SURFACE_LAYOUT_COMMIT_CANCEL);
-        else commitLayout(owner, ticket, SURFACE_LAYOUT_COMMIT_CANCEL);
+    NSValue *key = [NSValue valueWithPointer:owner];
+    if (inputEnded[key] && inputEnded[key].unsignedLongLongValue == ticket) [inputEnded removeObjectForKey:key];
+    SPWindowLayout *layout = layoutOf(owner);
+    if (layout) {
+        refuseWaiting(layout, true, ticket);
+        if (layout.preparation == ticket) {
+            endViewJoins(layout, NULL);
+            finishTransaction(owner, SURFACE_LAYOUT_COMMIT_CANCEL);
+        }
     }
     releaseSettled();
+}
+
+// The will-close of a window cancels its transactions in that turn, so a window that closes leaves no transaction and no
+// waiting preparation behind.
+static void observeWindowClose(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        sp_observe_notification("surface_layout.window_close", SP_OBSERVE_RECORD, NSWindowWillCloseNotification, nil, nil,
+            ^(NSNotification *note) { surfaceLayoutCancel(note.object); });
+    });
 }
 
 // SPDisplayedFrame reads the target time of the next display refresh once. Content committed after a presentation
@@ -660,14 +873,10 @@ void surfaceLayoutAfterPresentation(void *handle, void (^done)(void)) {
     }];
 }
 
-// Returns whether the window owner has a layout transaction that is open or waiting to open. While a transaction is open,
-// no change of the window reaches the screen.
+// Returns whether a change of the window owner can reach the screen only later: while the hold is open, no change of any window
+// reaches the screen, and the waiting preparations of a window lie inside its open transaction.
 static bool layoutOpen(void *owner) {
-    if (activeOwner == owner) return true;
-    for (SPLayoutRequest *request in waiting) {
-        if (request.owner == owner) return true;
-    }
-    return false;
+    return holdOpen || layoutOf(owner) != nil;
 }
 
 // Runs done after every shown modal has presented. A modal is the only web view placed directly in the content view
@@ -863,38 +1072,58 @@ void surfaceLayoutStartPage(void *owner, uint64_t ticket, double height, void (^
     });
 }
 
-// Joins the view webview to the open layout transaction of owner. The commit waits until the view presents or is abandoned.
-bool surfaceLayoutJoinView(void *owner, uint64_t ticket, void *handle, void (^presented)(void)) {
+// Joins the view webview to the open layout transaction of owner. The commit waits until the view presents or its join ends.
+bool surfaceLayoutJoinViewEnds(void *owner, uint64_t ticket, void *handle, void (^presented)(void), void (^ended)(const char *reason)) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
     WKWebView *view = (WKWebView *)handle;
-    if (!view || activeOwner != owner || ticket != preparation || committing) return false;
+    SPWindowLayout *layout = layoutOf(owner);
+    if (!view || !layout || ticket != layout.preparation || layout.committing) return false;
     SPViewJoin *join = [[[SPViewJoin alloc] init] autorelease];
+    join.owner = owner;
     join.view = view;
-    if (!viewJoins) viewJoins = [[NSMutableArray alloc] init];
-    [viewJoins addObject:join];
+    join.ended = ended;
+    [layout.joins addObject:join];
     void (^finish)(void) = [[presented copy] autorelease];
     [view _doAfterNextPresentationUpdate:^{
         if (!detachViewJoin(join)) return;
-        finish();
-        finishDeferredCommit(SURFACE_LAYOUT_COMMIT_VIEW_JOIN);
+        if (finish) finish();
+        finishDeferredCommit(owner, SURFACE_LAYOUT_COMMIT_VIEW_JOIN);
     }];
     return true;
+}
+
+bool surfaceLayoutJoinView(void *owner, uint64_t ticket, void *handle, void (^presented)(void)) {
+    return surfaceLayoutJoinViewEnds(owner, ticket, handle, presented, nil);
 }
 
 // Ends the view wait of the open transaction of owner without a presentation.
 bool surfaceLayoutAbandonView(void *owner, void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    if (activeOwner != owner) return false;
+    SPWindowLayout *layout = layoutOf(owner);
     SPViewJoin *found = nil;
-    for (SPViewJoin *join in viewJoins) {
+    for (SPViewJoin *join in layout.joins) {
         if ((void *)join.view == handle) { found = join; break; }
     }
     if (!found) return false;
     detachViewJoin(found);
-    finishDeferredCommit(SURFACE_LAYOUT_COMMIT_VIEW_ABANDON);
+    finishDeferredCommit(owner, SURFACE_LAYOUT_COMMIT_VIEW_ABANDON);
     return true;
 }
 
+void surfaceLayoutViewClosed(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
+    if (!handle) return;
+    for (SPWindowLayout *layout in [[layouts.allValues copy] autorelease]) {
+        BOOL ended = NO;
+        for (SPViewJoin *join in [[layout.joins copy] autorelease]) {
+            if ((void *)join.view != handle || !detachViewJoin(join)) continue;
+            ended = YES;
+            if (join.ended) join.ended("closed");
+        }
+        if (ended) finishDeferredCommit(layout.owner, SURFACE_LAYOUT_COMMIT_VIEW_ABANDON);
+    }
+}
+
 size_t surfaceLayoutViewJoinCount(void *owner) {
-    return activeOwner == owner ? viewJoins.count : 0;
+    return layoutOf(owner).joins.count;
 }

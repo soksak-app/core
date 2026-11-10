@@ -45,6 +45,7 @@ int sp_test_callback_run(void) {
     sp_host_callback_native_start_page_ready(token, text);
     sp_host_callback_native_layout_ready(token, true);
     sp_host_callback_native_presentation_done(token);
+    sp_host_callback_native_join_ended(token, text);
     // This ABI fixture checks opaque pointer identity; completion ownership has its native owner test.
     sp_host_callback_native_settled_present(token, &context);
     sp_host_callback_native_settled_present_ended(token);

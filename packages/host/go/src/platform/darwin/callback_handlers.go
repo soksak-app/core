@@ -17,6 +17,7 @@ func callbackHandlers() abi.Callbacks {
 		NativeStartPageReady:      goHost_native_start_page_ready,
 		NativeLayoutReady:         goHost_native_layout_ready,
 		NativePresentationDone:    goHost_native_presentation_done,
+		NativeJoinEnded:           goHost_native_join_ended,
 		NativeSettledPresent:      goHost_native_settled_present,
 		NativeSettledPresentEnded: goHost_native_settled_present_ended,
 		NativeLayoutStarted:       goHost_native_layout_started,

@@ -58,13 +58,15 @@ type presentationWait struct {
 	waiting   map[string]presentationJoin
 	committed map[string]presentationPlacement
 	pending   map[uint64]*pendingPresentation
-	// timedOut holds, for each surface, the view generation whose wait ended at the presentation limit. That generation joins no
-	// later wait, so a view that does not present holds no later transaction for the limit again.
-	timedOut map[string]uint64
 }
 
 // presentationEnds are reasons that end a presentation wait. Cancellation is separate because it aborts its layout transaction.
-var presentationEnds = map[string]bool{"presented": true, "process-ended": true, "hidden": true, "unresponsive": true, "timeout": true}
+// input is a press or key event that ended the hold, and closed is the native close of the view; no wait ends by time
+// (docs/spec/native-surfaces.md#layout-transaction).
+var presentationEnds = map[string]bool{"presented": true, "process-ended": true, "hidden": true, "unresponsive": true, "input": true, "closed": true}
+
+// nativeEnds are the ends that the native join reports of itself.
+var nativeEnds = map[string]bool{"input": true, "closed": true}
 
 // prepare records the placements and returns the visible root views whose placement or generation changed.
 func (w *presentationWait) prepare(ticket uint64, placements []Placement, generations map[string]uint64) []Placement {
@@ -112,18 +114,6 @@ func (w *presentationWait) beginFor(surface string, ticket, generation uint64, p
 	}
 	w.waiting[surface] = presentationJoin{ticket: ticket, generation: generation, presented: presented, abandon: abandon}
 	return true
-}
-
-// waitsFor reports whether the current wait of surface is the join that ticket and generation identify.
-func (w *presentationWait) waitsFor(surface string, ticket, generation uint64) bool {
-	join, ok := w.waiting[surface]
-	return ok && join.ticket == ticket && join.generation == generation
-}
-
-// endedAtLimit reports whether the wait of generation of surface ended at the presentation limit.
-func (w *presentationWait) endedAtLimit(surface string, generation uint64) bool {
-	ended, ok := w.timedOut[surface]
-	return ok && ended == generation
 }
 
 // waits reports whether the view of surface waits for its presentation.
@@ -179,15 +169,10 @@ func (w *presentationWait) endFor(surface string, ticket, generation uint64, rea
 	if join.presented.completed() {
 		return false, nil
 	}
-	if reason == "timeout" {
-		if w.timedOut == nil {
-			w.timedOut = map[string]uint64{}
-		}
-		w.timedOut[surface] = join.generation
-	}
 	tracePresentationJoin("abandoned", surface, join.generation, join.ticket, false, reason)
 	EmitHost(LevelDebug, "host.trace.view.presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
-	if join.abandon != nil {
+	// An end of the native join itself, an input that ended the hold or the close of the view, leaves no native join to abandon.
+	if join.abandon != nil && !nativeEnds[reason] {
 		if err := join.abandon(); err != nil {
 			return true, fmt.Errorf("ending the native join of view %s: %w", surface, err)
 		}
@@ -298,9 +283,6 @@ func (s *Surfaces) joinShownViews(window platform.Window, ticket uint64, placeme
 		if !p.Visible || s.presentation.waits(p.ID) || s.viewRecords().specs[p.ID] == nil {
 			continue
 		}
-		if channel, ok := s.documents.view(p.ID); ok && s.presentation.endedAtLimit(p.ID, channel.generation) {
-			continue
-		}
 		if _, _, err := s.joinViewForPresentation(window, ticket, p); err != nil {
 			return err
 		}
@@ -326,6 +308,12 @@ func (s *Surfaces) joinViewForPresentation(window platform.Window, ticket uint64
 		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, "presented") }); err != nil {
 			LogError("view channel", err)
 		}
+	}, func(reason string) {
+		// The native join ended by itself, by a press or key event that ended the hold or by the close of the view, so the end
+		// abandons no native join.
+		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, reason) }); err != nil {
+			LogError("view channel", err)
+		}
 	})
 	tracePresentationJoin("result", surface, generation, ticket, err == nil && joined, "")
 	if err != nil {
@@ -343,11 +331,9 @@ func (s *Surfaces) joinViewForPresentation(window platform.Window, ticket uint64
 	if state := s.presentation.pending[ticket]; state != nil {
 		state.joined[surface] = generation
 	}
-	// WebKit reports a page process unresponsive only after input or a load, so a visible view whose process stops before it presents
-	// sends no end; the limit ends its wait (docs/spec/native-surfaces.md#view-surfaces).
-	if err := system.EnqueueUIAfter(pageTimeout, func() { s.endPresentationWaitAtLimit(surface, ticket, generation) }); err != nil {
-		return generation, true, fmt.Errorf("arming the presentation limit of view %s: %w", surface, err)
-	}
+	// WebKit reports a page process unresponsive only after input or a load, so a visible view whose process stops before it
+	// presents sends no end; the next press or key event of the user ends the hold and the join with it, and no wait ends by time
+	// (docs/spec/native-surfaces.md#layout-transaction).
 	return generation, true, nil
 }
 
@@ -362,23 +348,18 @@ func (s *Surfaces) endPresentationWaitFor(surface string, ticket, generation uin
 		LogError("view channel", err)
 	}
 	if abandoned {
-		if reason == "timeout" {
-			LogError("view presentation", fmt.Errorf("surface %s did not present within %s", surface, pageTimeout))
+		if reason == "input" {
+			LogError("view presentation", fmt.Errorf("surface %s had not presented when input ended the hold", surface))
 		}
 		s.emitToSurface(surface, "view-presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
 	}
 }
 
-// endPresentationWaitAtLimit ends the wait of the join that ticket and generation identify at the presentation limit. A limit
-// whose join already ended changes nothing, because its end would invalidate a placement of a later state.
-func (s *Surfaces) endPresentationWaitAtLimit(surface string, ticket, generation uint64) {
-	if s.presentation.waitsFor(surface, ticket, generation) {
-		s.endPresentationWaitFor(surface, ticket, generation, "timeout")
-	}
-}
-
 // cancelLayoutPresentation abandons the ticket's joins before native cancellation, which does not invoke presentation callbacks.
 func (s *Surfaces) cancelLayoutPresentation(window platform.Window, ticket uint64) error {
+	// The cancel of a ticket, a failed presentation among them, ends the run with its transaction
+	// (docs/spec/native-surfaces.md#layout-transaction).
+	s.run(false)
 	var joinErr error
 	if err := s.presentation.cancelTicket(ticket); err != nil {
 		joinErr = err
@@ -394,6 +375,7 @@ func (s *Surfaces) cancelLayoutPresentation(window platform.Window, ticket uint6
 
 // cancelAllLayoutPresentations abandons host waits before native cancellation of the window's open layout.
 func (s *Surfaces) cancelAllLayoutPresentations(window platform.Window) error {
+	s.run(false)
 	joinErr := s.presentation.cancelAll()
 	if err := system.CancelLayout(window); err != nil {
 		if joinErr != nil {

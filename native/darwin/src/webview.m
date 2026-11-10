@@ -82,9 +82,18 @@ static bool nativeWindowAfterPresentationOnMain(void *handle, uintptr_t callback
     return true;
 }
 
-// nativeWindowJoinView joins the view webview to the layout transaction of window. callback runs when the view presents.
+// nativeWindowJoinView joins the view webview to the layout transaction of window. callback runs once: with no reason when the
+// view presents, or with the reason of an end that the host did not ask for (docs/spec/native-surfaces.md#layout-transaction).
 static bool nativeWindowJoinViewOnMain(void *window, uint64_t ticket, void *view, uintptr_t callback) {
-    return surfaceLayoutJoinView(window, ticket, view, ^{ hostRunOnWorker(^{ sp_host_callback_native_presentation_done(callback); }); });
+    return surfaceLayoutJoinViewEnds(window, ticket, view,
+        ^{ hostRunOnWorker(^{ sp_host_callback_native_join_ended(callback, NULL); }); },
+        ^(const char *reason) {
+            char *copied = strdup(reason);
+            hostRunOnWorker(^{
+                sp_host_callback_native_join_ended(callback, copied);
+                free(copied);
+            });
+        });
 }
 
 // The block crosses main-thread steps in the hands of Go, so it is a copy that nativeWindowAfterSettled releases.
@@ -236,6 +245,8 @@ static void nativeWebviewEvalOnMain(void *handle, const char *script) {
 }
 static void nativeWebviewCloseOnMain(void *handle) {
     WKWebView *view = (WKWebView *)handle;
+    // A view out of its window never presents, so its close ends each join of it in this turn.
+    surfaceLayoutViewClosed(view);
     webviewInputUnregister(view);
     [view stopLoading];
     [view.configuration.userContentController removeScriptMessageHandlerForName:@"soksak"];

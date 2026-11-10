@@ -51,6 +51,9 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 	if callbacks.NativePresentationDone == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_presentation_done")
 	}
+	if callbacks.NativeJoinEnded == nil {
+		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_join_ended")
+	}
 	if callbacks.NativeSettledPresent == nil {
 		return abi.CallbackTable{}, fmt.Errorf("native callback is missing: native_settled_present")
 	}
@@ -140,6 +143,7 @@ func Bind(callbacks abi.Callbacks) (abi.CallbackTable, error) {
 		purego.NewCallback(callbacks.NativeStartPageReady),
 		purego.NewCallback(callbacks.NativeLayoutReady),
 		purego.NewCallback(callbacks.NativePresentationDone),
+		purego.NewCallback(callbacks.NativeJoinEnded),
 		purego.NewCallback(callbacks.NativeSettledPresent),
 		purego.NewCallback(callbacks.NativeSettledPresentEnded),
 		purego.NewCallback(callbacks.NativeLayoutStarted),

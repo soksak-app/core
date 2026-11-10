@@ -547,8 +547,13 @@ impl Platform for Darwin {
         ticket: u64,
         view: Handle,
         presented: Box<dyn FnOnce() + Send>,
+        ended: Box<dyn FnOnce(&str) + Send>,
     ) -> Result<Option<crate::platform::ViewAbandon>, String> {
-        layout::join_view(window, ticket, view, presented)
+        layout::join_view(window, ticket, view, presented, ended)
+    }
+    fn watch_layout_ends(&self, ended: Box<dyn Fn(Handle) + Send + Sync>) -> Result<(), String> {
+        layout::watch_ends(ended);
+        Ok(())
     }
     fn start_page_titlebar(
         &self,

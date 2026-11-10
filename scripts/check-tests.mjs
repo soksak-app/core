@@ -294,6 +294,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/endpoint_ended_test.go", id: "TestTheCloseOfAWindowEndsEveryWatchOfIt" },
       { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_close_of_a_connection_releases_its_presses" },
       { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_release_refused_while_a_button_is_held_waits_for_mask_zero" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_release_refused_for_another_pointer_is_delivered_at_the_end_of_a_press" },
       { file: "packages/host/rust/tests/endpoint_ended_test.rs", id: "a_watch_ends_with_its_producer" },
       { file: "packages/sok/go/tests/sok_test.go", id: "TestAWatchEndsWhenItsProducerEnds" },
       { file: "packages/sok/go/tests/sok_test.go", id: "TestAGestureSendsItsStepsOnOneConnection" },
@@ -553,6 +554,18 @@ const FEATURE_LINKS = [
     ],
     expected: "A Go window check of the mygo adapter judges a shown window by a state that windows of other applications do not change, a check whose subject is an occlusion event fails with the cover as its reason when the screen shows none of its window, and a view session makes host calls only after its workbench reported ready.",
     levels: ["application"],
+  },
+  {
+    id: "F727",
+    implementation: [
+      { file: "native/darwin/tests/input_virtual_test.m", symbol: "static BOOL stayedBehind(void) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_virtual_test.m", id: "the application has not taken the front at the end" },
+      { file: "native/darwin/tests/capture_covered_test.m", id: "the capture does not bring the application to the front" },
+    ],
+    expected: "A native check judges only this process at the front: the application is not the frontmost application and the system does not hold it as active; which other application is in front judges nothing.",
+    levels: ["unit"],
   },
   {
     id: "F718-4",
@@ -2359,7 +2372,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-host-callbacks.mjs", symbol: "export function createHostCallbacks(" },
     ],
     tests: [
-      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 36 base and 7 diagnostic callbacks" },
+      { file: "native/darwin/tests/host_callbacks_test.m", id: "the native ABI declares 37 base and 7 diagnostic callbacks" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the native owner copies the table and passes the owner and pointer arguments" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "the diagnostic owner copies its table and dispatches the registered callback" },
       { file: "native/darwin/tests/host_callbacks_test.m", id: "a rejected diagnostic replacement preserves its installed callback" },
@@ -2757,7 +2770,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutHoldCall" }],
     tests: [
       { file: "native/darwin/tests/webview_geometry_test.m", id: "an injected press reaches the view before the injected key behind it" },
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "a person's press reaches the view before the injected keys behind it" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "a person's press reaches the view before the injected key after it" },
     ],
     expected: "Injected input waits in the one hold with the events of the window system and reaches the view in the order it arrived.",
     levels: ["unit"],
@@ -2766,20 +2779,19 @@ const FEATURE_LINKS = [
     id: "F593",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "object_getClass([NSApplication sharedApplication])" }],
     tests: [
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "an override of the application sees no input that waits" },
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "held input comes back to the override once each and in order" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "the press ends the hold and the override sees each event once and in order" },
     ],
-    expected: "No override of sendEvent: on the class of the application sees input that waits, and every later pointer and key event of the window comes back once and in order.",
+    expected: "The hold stands in front of an override of sendEvent: on the class of the application: the press that ends the hold reaches it first (F718-2), and every later pointer and key event of the window reaches it once and in order.",
     levels: ["unit"],
   },
   {
     id: "F589",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "sendEventAfterLayout" }],
     tests: [
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "every monitor sees a held press and release once each" },
-      { file: "native/darwin/tests/webview_geometry_test.m", id: "a release that waits past the receipt wait reports no lost release" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "every monitor sees the press and its release once each" },
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "no monitor sees a press or a release while the transaction it ended is open" },
     ],
-    expected: "No local monitor sees a press or a release that waits for a layout, each sees it once when it comes back, and a release that waits longer than its receipt wait reports nothing.",
+    expected: "A press ends the layout transaction of its window before any local monitor sees it (F718-2), so no monitor sees a press or a release while that transaction is open, and each sees them once.",
     levels: ["unit"],
   },
   {
@@ -3769,8 +3781,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/surface_container_test.m", id: "the web view of a surface host takes the backing scale of the window of the container" },
       { file: "native/darwin/tests/surface_container_test.m", id: "a cursorUpdate: of a web view of a surface host reaches the tracking area owner of that web view as a pointer move at the current position" },
       { file: "native/darwin/tests/surface_layout_observe_test.m", id: "started precedes ready of each preparation, a newer preparation of the same window included" },
-      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "ended of a deferred commit follows the joined view and precedes the next waiting transaction of another window" },
-      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the wait does not ask the block while a transaction of the window waits" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "ended of a deferred commit follows the joined view" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the wait does not ask the block while a transaction of the window is open" },
       { file: "native/darwin/tests/surface_host_test.m", id: "the registration returns the window composition around the main web view" },
     ],
     expected: "The native library places surface hosts in any NSView that holds their container, and window facts and window hits take that view; the registration of a main web view returns its window composition; the layout observer reports the start and the end of a transaction; and a settled wait takes the block that presents the content of the window.",
@@ -5333,12 +5345,19 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/document_throttle_test.m", symbol: "[window release]" },
       { file: "native/darwin/tests/document_throttle_test.m", symbol: "if (fflush(stdout) != 0)" },
     ],
+    tests: [{ file: "native/darwin/tests/document_throttle_test.m", id: "PASS: document_throttle_test" }],
+    expected: "The document throttle owner judges a shown, a hidden and a covered region without activating the application, reports output flush failures, and explicitly closes and releases its owned window before the autorelease pool drains.",
+    levels: ["native"],
+  },
+  {
+    id: "F726",
+    implementation: [{ file: "native/darwin/tests/document_throttle_test.m", symbol: "static void judgeHidden(NSString *name, NSDictionary *hidden, NSDictionary *visible) {" }],
     tests: [
-      { file: "native/darwin/tests/document_throttle_test.m", id: "a hidden region runs at most 10%% of the shown animation frame rate" },
-      { file: "native/darwin/tests/document_throttle_test.m", id: "a covered region runs at most 10%% of the shown animation frame rate" },
-      { file: "native/darwin/tests/document_throttle_test.m", id: "PASS: document_throttle_test" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "region receives visibilitychange with hidden" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "region runs no animation frame between its hidden and its visible state" },
+      { file: "native/darwin/tests/document_throttle_test.m", id: "the shown document runs animation frames" },
     ],
-    expected: "The document throttle owner measures shown, hidden, and covered animation and timer rates without activating the application, reports output flush failures, and explicitly closes and releases its owned window before the autorelease pool drains.",
+    expected: "A region placed as not visible and a region of a covered window receive visibilitychange with hidden and run no animation frame until the visibilitychange with visible, which the check judges by the changes that the page reports and not by rates over a fixed time; every wait of the check ends by its event.",
     levels: ["native"],
   },
   {
@@ -6238,14 +6257,14 @@ const FEATURE_LINKS = [
   {
     id: "F0.5.7-1",
     implementation: [
-      { file: "packages/workbench/page-layout.js", symbol: "waitSurfaceCompositionDeclared" },
-      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionDeclared" },
+      { file: "packages/workbench/page-layout.js", symbol: "waitSurfaceCompositionAnswered" },
+      { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionAnswered" },
     ],
     tests: [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
-    expected: "Command settling waits for the composition declaration of a view without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
+    expected: "Command settling waits for the answer of the composition declaration of a view without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
     levels: ["unit", "application"],
   },
   {
@@ -10711,8 +10730,8 @@ const FEATURE_LINKS = [
   {
     id: "F239-66",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
-    tests: [{ file: "packages/workbench/test/host-chrome.test.mjs", id: "native view placement waits for current-page composition readiness" }],
-    expected: "Native view placement waits for the current page composition before presenting a view.",
+    tests: [{ file: "packages/workbench/test/host-chrome.test.mjs", id: "native view placement waits for the answer of a composition declaration in flight" }],
+    expected: "Native view placement waits for the answer of the composition declaration of the current page before presenting a view.",
     levels: ["unit"],
   },
   {
@@ -12070,8 +12089,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/webview_geometry.m", symbol: "sp_window_focus_workbench" },
       { file: "native/darwin/src/window_reveal.m", symbol: "sp_window_after_reveal" },
       { file: "packages/window-check/app.mjs", symbol: "writeFileSync(join(frames, \"stop.json\"), JSON.stringify(result));" },
-      { file: "native/darwin/src/surface_layout.m", symbol: "traceValue(ticket, 6, openTransactions - 1);" },
-      { file: "native/darwin/src/surface_layout.m", symbol: "finishDeferredCommit(SURFACE_LAYOUT_COMMIT_VIEW_JOIN);" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "traceValue(ticket, 6, openTransactions - (holdOpen ? 1 : 0));" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "finishDeferredCommit(owner, SURFACE_LAYOUT_COMMIT_VIEW_JOIN);" },
       { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "func layoutRecords(values []float64, count int) ([]platform.LayoutRecord, error) {" },
       { file: "packages/host/rust/src/platform/darwin/capture.rs", symbol: "fn layout_records(values: &[f64], count: usize) -> Result<Vec<LayoutRecord>, String> {" },
       { file: "packages/workbench-mygo/src/sidebars.go", symbol: "func (s *Sidebars) Draw(c *ui.Context, frame SidebarFrame, box layout.Rect) {" },
@@ -13621,7 +13640,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered event listener errors are reported without blocking later subscribers or messages" },
       { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered listener failures fail explicitly when the page error path is unavailable" },
-      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "a drawn view fails when its required composition wait is missing" },
+      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "a drawn view fails when its required composition state is missing" },
       { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "an undrawn view fails when its required mount lookup is missing" },
     ],
     expected: "Required runtime behavior and error-reporting paths fail explicitly instead of being replaced by no-op or discarded-error fallbacks.",
@@ -13889,9 +13908,9 @@ const FEATURE_LINKS = [
     id: "F239-272",
     implementation: [
       { file: "packages/host/go/src/images.go", symbol: "func (i *Images) WaitLayoutRasters" },
-      { file: "packages/host/go/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(pageTimeout, req.Settled)" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "s.images.WaitLayoutRasters(noWaitLimit, req.Settled)" },
       { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn wait_layout_rasters" },
-      { file: "packages/host/rust/src/surfaces.rs", symbol: ".wait_layout_rasters(exposure::TIMEOUT, presentation_settled)" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: ".wait_layout_rasters(images::NO_WAIT_LIMIT, presentation_settled)" },
     ],
     tests: [
       { file: "packages/host/go/src/images_test.go", id: "TestContinuousImageWaitUsesInstalledSnapshotAndBlocksAfterGenerationOrRasterChange" },

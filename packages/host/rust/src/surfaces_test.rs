@@ -51,16 +51,15 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread;
-use std::time::Duration;
 
 use super::{
     Running, SurfaceComposition, SurfaceDispatchMode, abandon_waits_then_cancel_layout,
     cancel_layout_after_setup_error, clear_page_compositions, close_registered_surface,
     commit_layout_after_root_joins, committed_view_updates, complete_layout_presentation,
-    create_in_open_window, create_registered_surface, mark_first_commit,
+    create_in_open_window, create_registered_surface, end_page_layout, end_run, mark_first_commit,
     prepare_surface_visibility, pressed_surface, read_press_then_deliver, removed_surfaces,
-    surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
-    surface_dispatch_result_with, surface_raster_wait_with, uncommitted_presentation,
+    set_run, surface_dispatch_clock_from, surface_dispatch_context_with, surface_dispatch_fields,
+    surface_dispatch_result_with, surface_raster_wait_with, uncommitted_presentation, when_settled,
     with_registered_surface,
 };
 
@@ -513,14 +512,14 @@ fn root_view_join_is_registered_before_dom_presentation_wait() {
         }
     });
     let first = phase_rx
-        .recv_timeout(Duration::from_secs(1))
+        .recv()
         .expect("layout did not register its first presentation stage");
     dom_release.send(()).unwrap();
     let mut phases = vec![first];
     while phases.last() != Some(&"commit") {
         phases.push(
             phase_rx
-                .recv_timeout(Duration::from_secs(1))
+                .recv()
                 .expect("layout did not finish its presentation stages"),
         );
     }
@@ -1148,26 +1147,31 @@ fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
     let window = application().window_of(frontend.clone());
     let (ready_tx, ready_rx) = mpsc::channel();
     let (commit_tx, commit_rx) = mpsc::channel();
+    let past_notice = Arc::new(AtomicBool::new(false));
+    let past = Arc::clone(&past_notice);
     let worker = thread::spawn(move || {
         commit_tx
             .send(complete_layout_presentation(
-                || ask_presentation_notice(&window, 7, ready_tx),
+                || ask_presentation_notice(&window, 7, ready_tx, crate::images::Images::default()),
                 || await_presentation_notice(&ready_rx),
-                || Ok(()),
+                || {
+                    past.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
                 || Ok("prepared"),
             ))
             .unwrap();
     });
+    // The Frontend holds the notice once the layout asked for it; the layout is then checked before the notice calls back, and
+    // its result is read after, so no check depends on time.
     let notice = frontend.notice();
     assert!(
-        commit_rx.recv_timeout(Duration::from_millis(50)).is_err(),
-        "the layout reached its commit before the presentation notice"
+        !past_notice.load(Ordering::SeqCst),
+        "the layout went past the presentation notice before it called back"
     );
     notice(Ok(()));
-    assert_eq!(
-        commit_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
-        Ok("prepared")
-    );
+    assert_eq!(commit_rx.recv().unwrap(), Ok("prepared"));
+    assert!(past_notice.load(Ordering::SeqCst));
     worker.join().unwrap();
 }
 
@@ -1183,7 +1187,7 @@ fn a_failed_presentation_notice_ends_the_present_with_its_error() {
     let notice = frontend.clone();
     let worker = thread::spawn(move || {
         complete_layout_presentation(
-            || ask_presentation_notice(&window, 8, ready_tx),
+            || ask_presentation_notice(&window, 8, ready_tx, crate::images::Images::default()),
             || await_presentation_notice(&ready_rx),
             || panic!("a failed notice reached the raster"),
             || Ok(()),
@@ -1333,5 +1337,82 @@ fn a_presentation_whose_ticket_was_cancelled_is_no_longer_current() {
     assert_eq!(
         answer,
         "surface preparation 9 is no longer current; window data is gone"
+    );
+}
+
+// A run ends with the transaction of its ticket: a cancel, a failed presentation, a page start or the close of the window ends it
+// in that turn, and each wait for the presented state that waited for the run ends then
+// (docs/spec/native-surfaces.md#layout-transaction).
+// contract: surface-layout.run-ends-with-its-transaction
+#[test]
+fn the_end_of_a_run_without_a_settled_presentation_ends_the_waits_for_it() {
+    let running = Running::default();
+    assert!(
+        set_run(&running, true),
+        "the start of a run changed no state"
+    );
+    let settled = when_settled(&running).expect("wait for the run");
+    assert!(
+        settled.try_recv().is_err(),
+        "the wait for a run that goes ended before the run"
+    );
+    assert!(end_run(&running), "the end of the run changed no state");
+    assert!(
+        settled.try_recv().is_ok(),
+        "the end of the run did not end the wait for it"
+    );
+    assert!(
+        when_settled(&running)
+            .expect("wait after the run")
+            .try_recv()
+            .is_ok(),
+        "a wait after the end of the run waits"
+    );
+    assert!(
+        !end_run(&running),
+        "a second end of the run changed the state"
+    );
+}
+
+// The end of the web content process of the main page ends the page that holds the layout tickets of the window: the run ends in
+// that turn and the cancel of every layout transaction of the window is queued for the UI thread
+// (docs/spec/native-surfaces.md#layout-transaction).
+// contract: application.window.page-end-cancels-layout
+#[test]
+fn the_end_of_the_page_process_cancels_the_layout_of_its_window() {
+    let running = Running::default();
+    assert!(
+        set_run(&running, true),
+        "the start of a run changed no state"
+    );
+    let settled = when_settled(&running).expect("wait for the run");
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let mut queued = None;
+    let cancel = {
+        let cancelled = Arc::clone(&cancelled);
+        move || cancelled.store(true, Ordering::SeqCst)
+    };
+    end_page_layout(
+        &running,
+        |work| {
+            queued = Some(work);
+            Ok(())
+        },
+        cancel,
+    )
+    .expect("end the page layout");
+    assert!(
+        settled.try_recv().is_ok(),
+        "the end of the page left the run"
+    );
+    let work = queued.expect("the end of the page queued no cancel of the layout");
+    assert!(
+        !cancelled.load(Ordering::SeqCst),
+        "the cancel of the layout ran before the UI thread"
+    );
+    work();
+    assert!(
+        cancelled.load(Ordering::SeqCst),
+        "the queued work of the end of the page cancelled no layout"
     );
 }

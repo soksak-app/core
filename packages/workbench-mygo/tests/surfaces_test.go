@@ -1696,8 +1696,8 @@ func TestTheErrorOfTheActiveTabIsRecordedWhenItAppears(t *testing.T) {
 }
 
 // A stopped view of the active tab shows its error in the status row of its card through the error display, which records
-// `surface status <card> <tab>: ` with the surface error text and its reason once when it appears, as setSurfaceStatus of
-// packages/workbench/surface-status.js.
+// `surface status <card> <tab>: ` with the error text and the reason once when it appears, as setSurfaceStatus of
+// packages/workbench/surface-status.js records it.
 func TestTheStatusRowShowsTheErrorOfAStoppedView(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)

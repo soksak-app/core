@@ -416,8 +416,12 @@ impl Platform for Windows {
         ticket: u64,
         view: Handle,
         presented: Box<dyn FnOnce() + Send>,
+        ended: Box<dyn FnOnce(&str) + Send>,
     ) -> Result<Option<crate::platform::ViewAbandon>, String> {
-        unsupported::join_view(window, ticket, view, presented)
+        unsupported::join_view(window, ticket, view, presented, ended)
+    }
+    fn watch_layout_ends(&self, _ended: Box<dyn Fn(Handle) + Send + Sync>) -> Result<(), String> {
+        unsupported::watch_layout_ends()
     }
     fn start_page_titlebar(
         &self,

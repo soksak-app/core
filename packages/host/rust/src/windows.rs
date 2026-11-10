@@ -844,6 +844,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     window.on_window_event(move |event| match event {
         WindowEvent::Destroyed => {
             context.documents.views().forget_all();
+            // The close of the window ends its run with its transactions (docs/spec/native-surfaces.md#layout-transaction).
+            crate::surfaces::end_run(&context.running);
             // A window that ends keeps no tab, so a removal that asked it is allowed.
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
@@ -1496,6 +1498,9 @@ pub fn window_state(window: &Window) -> Result<Option<Geometry>, String> {
 /// modals of the previous page.
 pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
+    // The start of a new page ends the run of the earlier page with its transactions
+    // (docs/spec/native-surfaces.md#layout-transaction).
+    crate::surfaces::end_run(&data.running);
     let cleanup = (|| {
         data.ready.store(false, Ordering::Relaxed);
         // No page shows the failures of the cleared ends, so the host writes them.

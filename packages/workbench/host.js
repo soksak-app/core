@@ -463,6 +463,8 @@ let lastRequest = null;
 // The serialized start values that the host holds for each view surface of this page, by surface id. A refused request empties it.
 let heldStarts = new Map();
 let themeReply = null;
+// The view surfaces that the last placement deferred because they had not declared their composition.
+const waitingDeclaration = new Set();
 // Layout preparation and display form one transaction. The native compositor has only one active ticket per window,
 // so no next preparation is sent to the host between the two calls.
 let layoutTurn = Promise.resolve();
@@ -649,7 +651,6 @@ export const surfaces = native ? {
         const viewRecords = record.surfaces.filter(({ surface }) => surface?.composition?.kind === "view");
         const surfaceModules = viewRecords.length ? await import("./surface-modules.js") : null;
         const mountedSurface = surfaceModules?.mountedSurface;
-        const waitSurfaceCompositionDeclared = surfaceModules?.waitSurfaceCompositionDeclared;
         const surfaces = record.surfaces.map((s) => ({
           id: s.id,
           dim: s.dim,
@@ -664,13 +665,31 @@ export const surfaces = native ? {
 
         // A preparation precedes the plane draw, which creates a new view's mount. Keep an unmounted view out of this native
         // request; the drawn commit sends it after mountSurface has registered the view and its listener setup can complete.
-        const deferredViews = record.drawn === false
-          ? record.surfaces.filter(({ id, surface }) => {
-            if (surface?.composition?.kind !== "view") return false;
+        const unmountedViews = new Set(record.drawn === false
+          ? viewRecords.filter(({ id }) => {
             const mounted = mountedSurface(id);
             return !mounted || mounted.disposed; // default: an absent or disposed view mount stays deferred until it is ready.
           }).map(({ id }) => id)
-          : [];
+          : []);
+        // No placement waits for a view to declare its composition (docs/spec/native-surfaces.md#view-surfaces, placement): a view
+        // that has not declared is kept out of this request and deferred, so only its place stays empty, and the page lays out again
+        // at its declaration (waitsForDeclaration). A declaration in flight is a host call that the host answers in its own step, so
+        // this placement waits for that answer and sends the view.
+        const declaringViews = viewRecords.filter(({ id }) => !unmountedViews.has(id)).map(({ id }) => id);
+        let declarations;
+        for (;;) {
+          declarations = new Map(declaringViews.map((id) => [id, surfaceModules.compositionState(id)]));
+          const answers = [...declarations.values()].filter(({ state }) => state === "declaring").map(({ answered }) => answered);
+          if (!answers.length) break;
+          await Promise.all(answers);
+        }
+        const undeclaredViews = new Set(declaringViews.filter((id) => declarations.get(id).state !== "declared"));
+        for (const { id } of viewRecords) {
+          if (undeclaredViews.has(id)) waitingDeclaration.add(id);
+          else waitingDeclaration.delete(id);
+        }
+        const isDeferred = (id) => unmountedViews.has(id) || undeclaredViews.has(id);
+        const deferredViews = viewRecords.map(({ id }) => id).filter(isDeferred);
         const deferredIds = new Set(deferredViews);
         const requestedSurfaces = surfaces.filter(({ id }) => !deferredIds.has(id));
 
@@ -712,10 +731,6 @@ export const surfaces = native ? {
           handedTicket = null;
           const scheduled = layoutTurn.then(async () => {
             if (hasView) {
-              await Promise.all(record.surfaces
-                .filter(({ id, surface }) => surface?.composition?.kind === "view"
-                  && !deferredIds.has(id))
-                .map(({ id }) => waitSurfaceCompositionDeclared(id)));
               let reply;
               do {
                 reply = themeReply;
@@ -802,6 +817,8 @@ export const surfaces = native ? {
     forget() {
       last = ""; lastRequest = null;
     },
+    /** Whether the last placement deferred the view surface because it had not declared its composition; its declaration then calls for a new layout. */
+    waitsForDeclaration: (surface) => waitingDeclaration.has(surface),
 } : {
   kinds: [],
   // A failure of a document without a host is written to the error level of the console (docs/spec/plugins.md).
@@ -814,6 +831,7 @@ export const surfaces = native ? {
   cancelPrepared: async () => {},
   waitPresented: async () => null,
   forget: () => {},
+  waitsForDeclaration: () => false,
 };
 
 let pick = null;

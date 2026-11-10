@@ -104,6 +104,23 @@ type Images struct {
 	detachedRasters map[ImageKey][2]uint64
 	nextGeneration  uint64
 	changed         chan struct{}
+	// waitEnds counts the ends of the layout transactions of the window, and endedSidecars the ends of the connections of the
+	// sidecars of its regions, each with the name of the last one, so a raster wait ends with the event that ends it
+	// (docs/spec/native-surfaces.md#layout-transaction).
+	waitEnds      uint64
+	endedSidecars uint64
+	endedSidecar  string
+}
+
+// errLayoutWaitEnded is the end of a raster wait by the end of the layout transaction that it belongs to.
+var errLayoutWaitEnded = errors.New("the layout transaction of the window ended")
+
+// EndWaits ends each raster wait of the window, because the layout transaction that it belongs to ended.
+func (i *Images) EndWaits() {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.waitEnds++
+	i.changedLocked()
 }
 
 // ImageRasterState is the current send generation that the host allowed and the exact native raster.
@@ -489,6 +506,9 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 		invalidated++
 	}
 	if invalidated > 0 {
+		// No raster of the ended connection comes, so the end ends the raster wait of its regions.
+		i.endedSidecars++
+		i.endedSidecar = sidecar
 		i.changedLocked()
 	}
 	return invalidated
@@ -697,13 +717,18 @@ func (i *Images) WaitCurrentError(timeout time.Duration) error {
 	return i.waitCurrentObserved(timeout, nil)
 }
 
-// WaitLayoutRasters waits for the completion boundary selected by the layout request.
+// WaitLayoutRasters waits for the completion boundary selected by the layout request. With noWaitLimit it ends only by the
+// presentation of each required raster, by a presentation failure, by the end of the connection of a sidecar of the regions, or by
+// the end of the layout transaction (errLayoutWaitEnded).
 func (i *Images) WaitLayoutRasters(timeout time.Duration, settled bool) error {
 	if settled {
 		return i.WaitCurrentError(timeout)
 	}
 	return i.waitRasterSnapshotObserved(timeout, nil)
 }
+
+// noWaitLimit is the time limit of a raster wait that ends only by its events (docs/spec/native-surfaces.md#layout-transaction).
+const noWaitLimit time.Duration = -1
 
 func (i *Images) waitRasterSnapshotObserved(timeout time.Duration, waiting func()) error {
 	return i.waitObserved(timeout, waiting, i.currentRasterSnapshotInstalledLocked)
@@ -716,8 +741,20 @@ func (i *Images) waitCurrentObserved(timeout time.Duration, waiting func()) erro
 
 func (i *Images) waitObserved(timeout time.Duration, waiting func(), complete func() bool) error {
 	deadline := time.Now().Add(timeout)
+	i.mu.Lock()
+	ends, sidecars := i.waitEnds, i.endedSidecars
+	i.mu.Unlock()
 	for {
 		i.mu.Lock()
+		if i.endedSidecars != sidecars {
+			err := fmt.Errorf("the sidecar %s of an image region ended", i.endedSidecar)
+			i.mu.Unlock()
+			return err
+		}
+		if i.waitEnds != ends {
+			i.mu.Unlock()
+			return errLayoutWaitEnded
+		}
 		for _, state := range i.states {
 			if state.PresentationError != "" {
 				err := errors.New(state.PresentationError)
@@ -736,6 +773,10 @@ func (i *Images) waitObserved(timeout time.Duration, waiting func(), complete fu
 		}
 		i.mu.Unlock()
 
+		if timeout < 0 {
+			<-changed
+			continue
+		}
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
 			return errors.New("presentationTimeout")

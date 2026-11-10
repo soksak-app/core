@@ -290,3 +290,44 @@ func TestTheFirstResponderOutsideTheWebViewsFollowsTheMainPage(t *testing.T) {
 		t.Fatalf("responder of a window with a main page %+v, want %+v", view, want)
 	}
 }
+
+// pageLayoutEndPlatform records each cancel of the layout transactions of a window and each give of its keys, and runs each
+// step of the UI queue at once.
+type pageLayoutEndPlatform struct {
+	pagelessPlatform
+	cancelled []platform.Window
+	keys      []platform.Window
+}
+
+func (p *pageLayoutEndPlatform) KeysPageEnded(window platform.Window) {
+	p.keys = append(p.keys, window)
+}
+
+func (p *pageLayoutEndPlatform) EnqueueUI(work func()) error {
+	work()
+	return nil
+}
+
+func (p *pageLayoutEndPlatform) CancelLayout(window platform.Window) error {
+	p.cancelled = append(p.cancelled, window)
+	return nil
+}
+
+// The end of the web content process of the main page ends the page that holds the layout tickets of the window, so the host cancels
+// every layout transaction of the window in the turn in which it learns of that end (docs/spec/native-surfaces.md#layout-transaction).
+// contract: application.window.page-end-cancels-layout
+func TestTheEndOfThePageProcessCancelsTheLayoutOfItsWindow(t *testing.T) {
+	window := &eventWindow{pagelessWindow: pagelessWindow{native: platform.Window(7)}, listeners: map[WindowEvent][]func(){}}
+	previousFramework, previousSystem := framework, system
+	fake := &pageLayoutEndPlatform{}
+	framework, system = pagelessFramework{window: window}, fake
+	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, quit: &Quit{}}
+	host.newWindow("main", "")
+	for _, listener := range window.listeners[WindowWorkbenchEnded] {
+		listener()
+	}
+	if len(fake.cancelled) != 1 || fake.cancelled[0] != platform.Window(7) {
+		t.Fatalf("the end of the page process cancelled the layouts of %v, want window 7 once", fake.cancelled)
+	}
+}

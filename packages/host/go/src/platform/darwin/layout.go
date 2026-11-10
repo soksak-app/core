@@ -33,15 +33,20 @@ func (implementation) CancelLayoutTicket(window platform.Window, ticket uint64) 
 }
 
 // JoinView joins the view webview to the layout transaction of window with ticket. The native join ends by the presentation of the
-// view or by abandon, whichever comes first. The native side calls the presentation callback only for a join that did not end by
-// abandon, and abandon does nothing after the presentation, so the callback handle is released exactly once. The presentation callback
-// (_doAfterNextPresentationUpdate) and abandon both run in main-thread steps, whose native calls surfaceLayoutJoinView and
-// surfaceLayoutAbandonView assert the main thread, and main-thread steps do not overlap, so ended needs no lock.
-func (implementation) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func()) (func() error, bool, error) {
+// view, by an end of its own (a press or key event that ends the hold, or the close of the view) or by abandon, whichever comes
+// first. The native side calls the join callback only for a join that did not end by abandon or cancel, and abandon does nothing
+// after an end, so the callback handle is released exactly once. The join callback and abandon both run in main-thread steps,
+// whose native calls surfaceLayoutJoinViewEnds and surfaceLayoutAbandonView assert the main thread, and main-thread steps do not
+// overlap, so ended needs no lock.
+func (implementation) JoinView(window platform.Window, ticket uint64, view unsafe.Pointer, presented func(), endedBy func(reason string)) (func() error, bool, error) {
 	ended := false
-	handle := handles.NewHandle(func() {
+	handle := handles.NewHandle(func(reason string) {
 		ended = true
-		presented()
+		if reason == "" {
+			presented()
+			return
+		}
+		endedBy(reason)
 	})
 	if !bool(native.NativeWindowJoinView(uintptr(window), uint64(ticket), view, uintptr(handle))) {
 		handle.Delete()
@@ -59,6 +64,18 @@ func (implementation) JoinView(window platform.Window, ticket uint64, view unsaf
 		return nil
 	}
 	return abandon, true, nil
+}
+
+// goHost_native_join_ended answers the end of a join: no reason for its presentation, or the reason of an end of its own.
+func goHost_native_join_ended(value uintptr, reason *byte) {
+	handle := handles.Handle(value)
+	ended := handle.Value().(func(string))
+	handle.Delete()
+	text := ""
+	if reason != nil {
+		text = native.GoString(reason)
+	}
+	ended(text)
 }
 
 // AfterViewPresentation calls presented after the view presented its next frame. The wait of the presentation callback runs in
@@ -150,18 +167,50 @@ func goHost_native_settled_present(value uintptr, presented unsafe.Pointer) {
 
 func goHost_native_settled_present_ended(value uintptr) { handles.Handle(value).Delete() }
 
-// layoutStarted and layoutEnded are the functions of the observer that ObserveLayout registered.
-var layoutStarted, layoutEnded func(window platform.Window)
+// layoutStarted and layoutEnded are the functions of the observer that ObserveLayout registered, and layoutEndWatchers the
+// functions that WatchLayoutEnds registered. Both register on the UI thread, before the native observer can call them.
+var (
+	layoutStarted, layoutEnded func(window platform.Window)
+	layoutEndWatchers          []func(window platform.Window)
+	layoutWatchers             sync.Mutex
+)
 
 func (implementation) ObserveLayout(started, ended func(platform.Window)) error {
+	layoutWatchers.Lock()
 	layoutStarted, layoutEnded = started, ended
+	layoutWatchers.Unlock()
 	native.NativeLayoutObserve()
 	return nil
 }
 
-func goHost_native_layout_started(window uintptr) { layoutStarted(platform.Window(window)) }
+func (implementation) WatchLayoutEnds(ended func(platform.Window)) error {
+	layoutWatchers.Lock()
+	layoutEndWatchers = append(layoutEndWatchers, ended)
+	layoutWatchers.Unlock()
+	native.NativeLayoutObserve()
+	return nil
+}
 
-func goHost_native_layout_ended(window uintptr) { layoutEnded(platform.Window(window)) }
+func goHost_native_layout_started(window uintptr) {
+	layoutWatchers.Lock()
+	started := layoutStarted
+	layoutWatchers.Unlock()
+	if started != nil {
+		started(platform.Window(window))
+	}
+}
+
+func goHost_native_layout_ended(window uintptr) {
+	layoutWatchers.Lock()
+	ended, watchers := layoutEnded, append([]func(platform.Window){}, layoutEndWatchers...)
+	layoutWatchers.Unlock()
+	if ended != nil {
+		ended(platform.Window(window))
+	}
+	for _, watch := range watchers {
+		watch(platform.Window(window))
+	}
+}
 
 func (implementation) InjectSettledFailure(platform.Window) error {
 	native.MainSurfaceLayoutInjectSettledFailure()

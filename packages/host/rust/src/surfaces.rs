@@ -1185,6 +1185,11 @@ pub fn cancel(window: &Window, request: CancelRequest) -> Result<(), String> {
 }
 
 fn cancel_layout_with_waits(window: &Window, ticket: u64) -> Result<(), String> {
+    // The cancel of the ticket, a failed presentation among them, ends the run with its transaction
+    // (docs/spec/native-surfaces.md#layout-transaction).
+    if let Ok(data) = window_data(window) {
+        end_run(&data.running);
+    }
     abandon_waits_then_cancel_layout(
         || documents::abandon_layout_presentation_waits(window, ticket),
         || cancel_window_layout_ticket(window, ticket),
@@ -1920,17 +1925,110 @@ fn surface_handle_placement(
     Ok(placement)
 }
 
-/// Asks the presentation notice of window in a step of the main thread. ready receives the end of the notice.
+/// A presentation request whose waits the end of the layout transaction of its window ends: its app DOM wait, by a value on
+/// its sender, and its raster wait, by the images of the window (docs/spec/native-surfaces.md#layout-transaction).
+struct LayoutWaits {
+    owner: Handle,
+    ticket: u64,
+    dom: mpsc::Sender<Result<(), String>>,
+    images: images::Images,
+}
+
+/// The presentation requests whose waits are open.
+static LAYOUT_WAITS: Mutex<Vec<LayoutWaits>> = Mutex::new(Vec::new());
+
+fn layout_waits() -> std::sync::MutexGuard<'static, Vec<LayoutWaits>> {
+    // default: a lock that a panicking thread poisoned still holds the open waits, which each change keeps whole; the panic
+    // hook records the panic.
+    LAYOUT_WAITS.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Ends the waits of every presentation request of the window owner, because its layout transaction ended: by a press or key
+/// event, by a cancel or by the end of its page. The native observer calls it on the main thread.
+pub(crate) fn layout_ended(owner: Handle) {
+    let ended: Vec<LayoutWaits> = {
+        let mut waits = layout_waits();
+        let (ended, open) = std::mem::take(&mut *waits)
+            .into_iter()
+            .partition(|wait| wait.owner == owner);
+        *waits = open;
+        ended
+    };
+    for wait in ended {
+        if wait.dom.send(Ok(())).is_err() {
+            crate::application_log::log_info(
+                "surface layout",
+                "the layout ended after its request had ended its app DOM wait",
+            );
+        }
+        wait.images.end_waits();
+    }
+}
+
+/// Cancels every layout transaction of window and ends its run, because the page that holds their tickets ended: its web
+/// content process ended (docs/spec/native-surfaces.md#layout-transaction). It does not wait for the UI thread.
+pub(crate) fn page_layout_ended(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let target = window.clone();
+    end_page_layout(
+        &data.running,
+        |work| platform::current()?.enqueue_ui(work),
+        move || {
+            if let Ok(data) = window_data(&target) {
+                log_failure(
+                    "surface layout cancel",
+                    data.documents.presentation().abandon_all(),
+                );
+            }
+            match crate::windows::native_owner(&target) {
+                Ok(owner) => log_failure(
+                    "surface layout cancel",
+                    platform::current().and_then(|platform| platform.cancel_layout(owner)),
+                ),
+                Err(error) => log_error("surface layout cancel", error),
+            }
+        },
+    )
+}
+
+/// Ends the run of the page that ended and queues the cancel of every layout transaction of its window in the turn in which the
+/// host learns of that end (docs/spec/native-surfaces.md#layout-transaction).
+fn end_page_layout(
+    running: &Running,
+    enqueue: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), String>,
+    cancel: impl FnOnce() + Send + 'static,
+) -> Result<(), String> {
+    end_run(running);
+    enqueue(Box::new(cancel))
+}
+
+/// Forgets the waits of the request of ticket, which ended.
+fn forget_layout_waits(ticket: u64) {
+    layout_waits().retain(|wait| wait.ticket != ticket);
+}
+
+/// Asks the presentation notice of window in a step of the main thread. ready receives the end of the notice, or the end of
+/// the layout transaction of the window.
 fn ask_presentation_notice(
     window: &Window,
     ticket: u64,
     ready: mpsc::Sender<Result<(), String>>,
+    images: images::Images,
 ) -> Result<(), String> {
     let dispatch = surface_dispatch(window, Some(ticket), "present", "present-dom-register-ui");
     let target = window.clone();
     window
         .post(move || {
             surface_dispatch_result(dispatch, || {
+                match crate::windows::native_owner(&target) {
+                    Ok(owner) => layout_waits().push(LayoutWaits {
+                        owner,
+                        ticket,
+                        dom: ready.clone(),
+                        images,
+                    }),
+                    Err(error) => log_error("DOM presentation", error),
+                }
                 let failed = ready.clone();
                 let callback_dispatch =
                     surface_dispatch(&target, Some(ticket), "present", "present-dom-callback");
@@ -1960,10 +2058,11 @@ fn ask_presentation_notice(
         .map_err(|error| error.to_string())
 }
 
-/// Waits for the end of the presentation notice that [`ask_presentation_notice`] asked for.
+/// Waits for the end of the presentation notice that [`ask_presentation_notice`] asked for, or for the end of the layout
+/// transaction of the window. No wait ends by time (docs/spec/native-surfaces.md#layout-transaction).
 fn await_presentation_notice(ready: &mpsc::Receiver<Result<(), String>>) -> Result<(), String> {
     ready
-        .recv_timeout(exposure::TIMEOUT)
+        .recv()
         .map_err(|error| format!("application documents did not present: {error}"))?
 }
 
@@ -1974,6 +2073,7 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
     let finished = window.clone();
     let context = window_data(&window)?;
     let images = context.images.clone();
+    let notice_images = context.images.clone();
     let presentation_window = finished.clone();
     let commit_window = presentation_window.clone();
     let presentation_work_window = presentation_window.clone();
@@ -1988,7 +2088,14 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
     let ready = blocking
         .spawn_blocking(move || -> Result<Vec<(String, u64)>, String> {
             complete_layout_presentation(
-                || ask_presentation_notice(&presentation_work_window, ticket, dom_tx),
+                || {
+                    ask_presentation_notice(
+                        &presentation_work_window,
+                        ticket,
+                        dom_tx,
+                        notice_images,
+                    )
+                },
                 || await_presentation_notice(&dom_rx),
                 || {
                     surface_raster_wait_with(
@@ -2001,22 +2108,14 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                         surface_dispatch_timestamp,
                         record_surface_dispatch,
                         || crate::composition::refresh_image_rasters(&raster_window),
-                        || {
-                            images
-                                .wait_layout_rasters(exposure::TIMEOUT, presentation_settled)
-                                .map_err(|reason| {
-                                    if reason == "presentationTimeout" {
-                                        format!(
-                                            "the current image raster did not present within {:?}; pending {}",
-                                            exposure::TIMEOUT,
-                                            images.pending_rasters()
-                                        )
-                                    } else {
-                                        format!(
-                                            "the current image raster failed to present: {reason}"
-                                        )
-                                    }
-                                })
+                        || match images
+                            .wait_layout_rasters(images::NO_WAIT_LIMIT, presentation_settled)
+                        {
+                            Err(reason) if reason == images::LAYOUT_WAIT_ENDED => Ok(()),
+                            Err(reason) => Err(format!(
+                                "the current image raster failed to present: {reason}"
+                            )),
+                            Ok(()) => Ok(()),
                         },
                     )
                 },
@@ -2058,7 +2157,12 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                                         )?;
                                         // The frame was fitted by the preparation of this ticket, so it keeps the scale that the preparation answered.
                                         let frame = platform.surface_frame(handle)?;
-                                        Ok(seated_placement(&placement.id, frame, placement.visible, placement.scale))
+                                        Ok(seated_placement(
+                                            &placement.id,
+                                            frame,
+                                            placement.visible,
+                                            placement.scale,
+                                        ))
                                     })
                                     .collect::<Result<Vec<_>, String>>()?;
                                 documents::join_shown_views(&target, platform, ticket, &placed)
@@ -2076,16 +2180,17 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
                             }
                         });
                     }))?;
-                    prepared_rx
-                        .recv_timeout(exposure::TIMEOUT)
-                        .map_err(|error| {
-                            format!("root-view presentation setup did not complete: {error}")
-                        })?
+                    // The step ends when the UI queue runs it; a queue that drops it drops its sender.
+                    prepared_rx.recv().map_err(|error| {
+                        format!("root-view presentation setup did not complete: {error}")
+                    })?
                 },
             )
         })
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string());
+    forget_layout_waits(ticket);
+    let ready = ready?;
     let mut joined_generations = match ready {
         Ok(joined) => joined,
         Err(error) => {
@@ -2223,34 +2328,48 @@ pub async fn present(window: Window, request: PresentRequest) -> Result<Vec<Plac
         .ok_or("the main webview closed before presenting")?
 }
 
+/// Sets whether a run goes and returns whether that changed it. The end of a run ends each wait for the presented state that
+/// waited for it.
+pub(crate) fn set_run(running: &Running, going: bool) -> bool {
+    // default: a lock that a panicking thread poisoned still holds the run flag, which this call sets; the panic hook records
+    // the panic.
+    let mut held = running.going.lock().unwrap_or_else(PoisonError::into_inner);
+    if *held == going {
+        return false;
+    }
+    *held = going;
+    if !going {
+        for done in running
+            .settled
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the settled senders, which the end of the run
+            // drains; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .drain(..)
+        {
+            if done.send(()).is_err() {
+                crate::application_log::log_info(
+                    "surface",
+                    "surface settled notification arrived after its request ended",
+                );
+            }
+        }
+    }
+    true
+}
+
+/// Ends the run of a window with the transaction of its ticket: a cancel, the start of a new page and the close of the window end
+/// it in their turn, so no wait for the presented state waits for a run that nothing ends
+/// (docs/spec/native-surfaces.md#layout-transaction). Returns whether a run went.
+pub(crate) fn end_run(running: &Running) -> bool {
+    set_run(running, false)
+}
+
 /// Raises run-began and run-ended. The page reports whether a later update follows, and this function raises an event
 /// only when that value changes.
 fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), String> {
-    {
-        // default: a lock that a panicking thread poisoned still holds the run flag, which this call sets; the panic
-        // hook records the panic.
-        let mut held = running.going.lock().unwrap_or_else(PoisonError::into_inner);
-        if *held == going {
-            return Ok(());
-        }
-        *held = going;
-        if !going {
-            for done in running
-                .settled
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the settled senders, which the end of the run
-                // drains; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .drain(..)
-            {
-                if done.send(()).is_err() {
-                    crate::application_log::log_info(
-                        "surface",
-                        "surface settled notification arrived after its request ended",
-                    );
-                }
-            }
-        }
+    if !set_run(running, going) {
+        return Ok(());
     }
     let name = if going { "run-began" } else { "run-ended" };
     emit_window(window, name, ()).map_err(|e| e.to_string())

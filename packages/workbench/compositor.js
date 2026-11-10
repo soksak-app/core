@@ -275,7 +275,8 @@ function validatePlacementAnswer(record, answer, nativeKinds = app.kinds) {
     throw new TypeError("surface placement result has an invalid deferred id");
   }
   if (deferred.size !== answer.deferred.length) throw new TypeError("surface placement result repeats a deferred id");
-  if (deferred.size && record.drawn) throw new Error("a drawn surface placement cannot defer a surface");
+  // A drawn placement defers a view whose composition is not declared yet, and a preparation also defers an unmounted view
+  // (docs/spec/native-surfaces.md#view-surfaces); each deferred id is a view of a native plugin in the request.
   const expectedIds = new Set(record.surfaces.map(({ id }) => id));
   if (expectedIds.size !== record.surfaces.length) throw new Error("surface placement request repeats an id");
   for (const id of deferred) {

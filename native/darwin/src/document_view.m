@@ -2337,6 +2337,8 @@ void sp_document_appearance(void *handle, bool dark) {
 void sp_document_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;
+    // A view out of its window never presents, so its close ends each join of it in this turn.
+    surfaceLayoutViewClosed(view);
     frameIdentityClose(view);
     [view restoreViewportMarker];
     // The web content process of the view lives as long as AppKit keeps the view, so the keyboard leaves it at the close.
