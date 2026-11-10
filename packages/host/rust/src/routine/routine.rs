@@ -19,13 +19,23 @@ use crate::event_record::{emit_host, flush_records};
 /// The exit status of the process after a panic; it is the status of an unwinding Rust panic of the main thread.
 pub const PANIC_STATUS: i32 = 101;
 
-/// How long the thread that ends the process waits for the writer when the panic happened before the writer opened. The wait
-/// ends at the attach of the writer, which wakes it. The bound applies only to a writer that never opens, which is a start that
-/// fails before the writer exists; then the record goes to the standard error instead of the event log.
-pub(crate) const WRITER_DEADLINE: Duration = Duration::from_secs(5);
+/// The state that the thread that ends the process waits on after a panic before the writer opened.
+struct WriterState {
+    /// The writer of the host is attached.
+    attached: bool,
+    /// The start of the host ended, with or without the writer.
+    start_ended: bool,
+}
 
-/// Whether the writer of the host is attached, and the wake of the thread that waits for it.
-static WRITER: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+/// The writer state and the wake of the thread that waits for it. The wait ends at the attach of the writer or at the end of
+/// the start, which both wake it; a start that ended without the writer sends the record to the standard error.
+static WRITER: (Mutex<WriterState>, Condvar) = (
+    Mutex::new(WriterState {
+        attached: false,
+        start_ended: false,
+    }),
+    Condvar::new(),
+);
 
 /// The thread that waits for the writer after a panic and ends the process; the hook wakes it with the record of the panic.
 static ENDER: OnceLock<Mutex<Sender<String>>> = OnceLock::new();
@@ -65,22 +75,16 @@ pub fn async_runtime() -> std::io::Result<tokio::runtime::Runtime> {
 /// Starts the thread that ends the process after a panic. Call it before the panic hook is installed; calling it again does
 /// nothing.
 pub fn start_panic_ender() {
-    start_panic_ender_with(WRITER_DEADLINE);
-}
-
-/// Starts the thread that ends the process after a panic, and gives that thread the writer deadline `writer_deadline`.
-/// The first call sets the deadline; later calls do nothing.
-pub fn start_panic_ender_with(writer_deadline: Duration) {
     ENDER.get_or_init(|| {
         let (wake, woken) = channel::<String>();
         spawn_named("panic-ender", move || {
             let Ok(record) = woken.recv() else {
                 return;
             };
-            if !wait_for_writer(writer_deadline) {
+            if !wait_for_writer() {
                 // No writer exists to store the record, so the record is written to the standard error in full.
                 eprintln!(
-                    "event writer: the record of the panic is not stored: no writer opened within {writer_deadline:?}\n{record}"
+                    "event writer: the record of the panic is not stored: the start of the host ended without a writer\n{record}"
                 );
                 std::process::exit(PANIC_STATUS);
             }
@@ -99,22 +103,34 @@ pub fn start_panic_ender_with(writer_deadline: Duration) {
 
 /// Records that the writer of the host is attached, so the thread that ends the process after a panic can store the record.
 pub fn notify_writer_attached() {
-    let (attached, woken) = &WRITER;
-    // default: a lock that a panicking thread poisoned still holds the attached flag, which is only written as a whole; the panic hook records the panic.
-    *attached.lock().unwrap_or_else(PoisonError::into_inner) = true;
+    let (state, woken) = &WRITER;
+    // default: a lock that a panicking thread poisoned still holds the flags, which are only written as a whole; the panic hook records the panic.
+    let mut flags = state.lock().unwrap_or_else(PoisonError::into_inner);
+    flags.attached = true;
+    drop(flags);
     woken.notify_all();
 }
 
-/// Waits at most `deadline` until the writer is attached, and reports whether it is.
-fn wait_for_writer(deadline: Duration) -> bool {
-    let (attached, woken) = &WRITER;
-    let guard = attached.lock();
-    // default: a lock that a panicking thread poisoned still holds the attached flag, which is only read; the panic hook records the panic.
-    let guard = guard.unwrap_or_else(PoisonError::into_inner);
-    let waited = woken.wait_timeout_while(guard, deadline, |attached| !*attached);
-    // default: a wait that a poisoned lock ends still returns the guard and the flag, which is only read; the panic hook records the panic.
-    let (guard, _) = waited.unwrap_or_else(PoisonError::into_inner);
-    *guard
+/// Records that the start of the host ended. A start that succeeded attached the writer before it; a start that failed before
+/// the writer exists never attaches it, so the thread that ends the process after a panic writes the record to the standard
+/// error.
+pub fn notify_start_ended() {
+    let (state, woken) = &WRITER;
+    // default: a lock that a panicking thread poisoned still holds the flags, which are only written as a whole; the panic hook records the panic.
+    let mut flags = state.lock().unwrap_or_else(PoisonError::into_inner);
+    flags.start_ended = true;
+    drop(flags);
+    woken.notify_all();
+}
+
+/// Waits until the writer is attached or the start of the host ended, and reports whether the writer is attached.
+fn wait_for_writer() -> bool {
+    let (state, woken) = &WRITER;
+    // default: a lock that a panicking thread poisoned still holds the flags, which are only read; the panic hook records the panic.
+    let guard = state.lock().unwrap_or_else(PoisonError::into_inner);
+    let waited = woken.wait_while(guard, |state| !state.attached && !state.start_ended);
+    // default: a wait that a poisoned lock ends still returns the guard and the flags, which are only read; the panic hook records the panic.
+    waited.unwrap_or_else(PoisonError::into_inner).attached
 }
 
 /// Stores the panic of a thread as the event `host.panic` and wakes the thread that ends the process. It does not wait for

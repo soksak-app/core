@@ -182,15 +182,10 @@ pub fn start_standard_error(config: &Path, identifier: &str) -> Result<(), Strin
 /// Stores each panic of the host as the event `host.panic` before the previous hook prints its message, and starts the
 /// thread that ends the process once the event is stored (`routine::record_panic`). The hook never waits for the writer. A
 /// panic before the writer exists stays in the start buffer until the writer opens, and the thread that ends the process
-/// waits for the writer for a bounded time. The standard error is the stderr file once [`start_standard_error`] ran.
+/// waits until the writer attaches or the start of the host ends without it (`routine::notify_start_ended`). The standard
+/// error is the stderr file once [`start_standard_error`] ran.
 pub fn install_panic_hook() {
-    install_panic_hook_with_writer_deadline(crate::routine::WRITER_DEADLINE);
-}
-
-/// Installs the panic hook as [`install_panic_hook`] does, and gives the thread that ends the process the writer deadline
-/// `writer_deadline`. The host uses the default; a test gives a short deadline.
-pub fn install_panic_hook_with_writer_deadline(writer_deadline: std::time::Duration) {
-    crate::routine::start_panic_ender_with(writer_deadline);
+    crate::routine::start_panic_ender();
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let message = match info.payload().downcast_ref::<&str>() {

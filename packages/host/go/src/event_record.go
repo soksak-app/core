@@ -17,27 +17,35 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
-// PanicWriterDeadline is how long the entrance of the goroutines waits for the writer when the panic happened before the writer
-// was attached. The writer attaches during the start of the host; the bound ends a process whose start never attaches it.
-// The value is 5 seconds; a test injects a shorter one.
-var PanicWriterDeadline = 5 * time.Second
-
 // writerAttached is closed when the writer of the host is attached for the first time.
 var writerAttached = make(chan struct{})
 
 var writerAttachedOnce sync.Once
 
+// startEnded is closed when the start of the host ended (NotifyStartEnded), with or without the writer.
+var startEnded = make(chan struct{})
+
+var startEndedOnce sync.Once
+
 func init() {
 	routine.Record = recordPanic
 }
 
+// NotifyStartEnded records that the start of the host ended. A start that succeeded attached the writer before it; a start
+// that failed before the writer exists never attaches it, so a panic that waits for the writer writes its record to the
+// standard error.
+func NotifyStartEnded() {
+	startEndedOnce.Do(func() { close(startEnded) })
+}
+
 // recordPanic stores the panic of a goroutine as the event `host.panic` and waits until it is in the event log. A panic before
-// the writer is attached waits for the writer, at most panicWriterDeadline, so the event enters the writer and not only the start
-// buffer that the process end would drop. A flush that fails is reported on the standard error, which holds the stack as well.
+// the writer is attached waits for the writer, so the event enters the writer and not only the start buffer that the process
+// end would drop. A start that ended without the writer ends that wait, and the record goes to the standard error in full. A
+// flush that fails is reported on the standard error, which holds the stack as well.
 func recordPanic(name, text, stack string) {
-	if !waitForWriter(PanicWriterDeadline) {
+	if !waitForWriter() {
 		// No writer exists to store the record, so the record is written to the standard error in full.
-		fmt.Fprintf(os.Stderr, "event writer: the record of the panic is not stored: no writer opened within %s\nhost.panic name=%s text=%s\n%s", PanicWriterDeadline, name, text, stack)
+		fmt.Fprintf(os.Stderr, "event writer: the record of the panic is not stored: the start of the host ended without a writer\nhost.panic name=%s text=%s\n%s", name, text, stack)
 		return
 	}
 	EmitHost(LevelError, "host.panic", map[string]any{"name": name, "text": text, "stack": stack})
@@ -48,19 +56,17 @@ func recordPanic(name, text, stack string) {
 	}
 }
 
-// waitForWriter waits at most deadline until the writer is attached, and reports whether it is.
-func waitForWriter(deadline time.Duration) bool {
+// waitForWriter waits until the writer is attached or the start of the host ended, and reports whether the writer is attached.
+// The start attaches the writer before it ends, so a writer attached before the end is found after either event.
+func waitForWriter() bool {
+	select {
+	case <-writerAttached:
+	case <-startEnded:
+	}
 	select {
 	case <-writerAttached:
 		return true
 	default:
-	}
-	timer := time.NewTimer(deadline)
-	defer timer.Stop()
-	select {
-	case <-writerAttached:
-		return true
-	case <-timer.C:
 		return false
 	}
 }

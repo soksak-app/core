@@ -227,8 +227,16 @@ pub fn manage_start_state(app: &AppHandle) {
 }
 
 /// Opens the endpoint, the event log and the stderr file. The framework adapter calls it before the window of the settings
-/// file is created.
+/// file is created. Its return ends the start of the host, with the writer attached or, after a failure before the writer
+/// exists, without it; a panic that waits for the writer ends its wait there (docs/spec/hosts.md#process-lifecycle).
 pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let started = open_endpoint(app);
+    crate::routine::notify_start_ended();
+    started
+}
+
+/// The steps of [`start_endpoint`].
+fn open_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     // Termination signals are received from before the endpoint opens. The first one requests the normal quit
     // that host.quit requests; the event loop runs it and ends after the ready windows saved and the sidecars
     // stopped. When a save stalls, the next signal ends the process with the default action (docs/spec/hosts.md).
