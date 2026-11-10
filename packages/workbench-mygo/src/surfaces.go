@@ -610,12 +610,10 @@ func rawOrNull(value json.RawMessage) json.RawMessage {
 // placement withdraws.
 const placementSource = "placement"
 
-// presentedRetry is the time before the wait for the surfaces asks again after an answer that they have not presented.
-const presentedRetry = time.Second
-
 // withdrawWhenPresented withdraws the error of a failed placement once every surface has presented. The failure names a surface that
 // did not present, which the placement of another change does not end. A placement that fails during the wait keeps its failure, and
-// the placement after it asks again. The record of the failure stays in the log.
+// the placement after it asks again. A wait that ends without the presentation asks nothing again: the next placement that succeeds
+// asks again. The record of the failure stays in the log.
 func (s *Shell) withdrawWhenPresented() {
 	if s.surfaces.withdrawing || s.surfaces.closed || !s.errors.ShownFrom(workbenchErrorPlace, placementSource) {
 		return
@@ -623,11 +621,7 @@ func (s *Shell) withdrawWhenPresented() {
 	s.surfaces.withdrawing = true
 	s.calls.Call("waitPresented", nil, func(_ any, err error) {
 		s.surfaces.withdrawing = false
-		if s.surfaces.failure != nil {
-			return
-		}
-		if err != nil {
-			time.AfterFunc(presentedRetry, func() { s.options.Post(s.withdrawWhenPresented) })
+		if s.surfaces.failure != nil || err != nil {
 			return
 		}
 		if s.errors.HideFrom(workbenchErrorPlace, placementSource) {
