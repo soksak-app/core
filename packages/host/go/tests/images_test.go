@@ -434,9 +434,9 @@ func TestPresentationWaitEndsByTheEndOfItsSupplierAndWritesNoLogLine(t *testing.
 		}
 		configureImage(t, images, key, 800, 600, 2.0)
 		result := make(chan error, 1)
-		go func() { result <- images.WaitCurrentError() }()
+		go func() { result <- images.WaitCurrentError(nil) }()
 		images.InvalidateSidecar("sidecar-a")
-		if err := <-result; err == nil || err.Error() == "presentationTimeout" || !strings.Contains(err.Error(), "sidecar-a") {
+		if err := <-result; err == nil || !strings.Contains(err.Error(), "sidecar-a") {
 			t.Fatalf("the presentation wait ended with %v, want the failure of the supplier sidecar-a", err)
 		}
 		if err := log.Flush(); err != nil {
@@ -966,7 +966,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	if seqVal != 1 {
 		t.Fatalf("expected sequence 1, got %v", seqVal)
 	}
-	if err := images.WaitCurrentError(); err == nil || err.Error() != "presentFailed" {
+	if err := images.WaitCurrentError(nil); err == nil || err.Error() != "presentFailed" {
 		t.Fatalf("expected native presentation failure, got %v", err)
 	}
 }

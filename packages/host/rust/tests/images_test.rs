@@ -426,13 +426,12 @@ fn presentation_wait_ends_by_the_end_of_its_supplier_and_writes_no_log_line() {
             .unwrap()
             .unwrap();
         let waiter = images.clone();
-        let wait = std::thread::spawn(move || waiter.wait_current());
+        let wait = std::thread::spawn(move || waiter.wait_current(&|| None));
         images.invalidate_sidecar("sidecar-a");
         let error = wait
             .join()
             .unwrap()
             .expect_err("a raster whose supplier connection ended cannot present");
-        assert_ne!(error, "presentationTimeout");
         assert!(
             error.contains("sidecar-a"),
             "the failure names the supplier whose connection ended: {error}"
@@ -878,7 +877,7 @@ fn presentation_failure_is_reported() {
     assert_eq!(response["image"]["name"], "view");
     assert_eq!(response["image"]["sequence"], 1);
     assert_eq!(
-        images.wait_current(),
+        images.wait_current(&|| None),
         Err("presentFailed".to_string()),
         "native presentation failure must unblock the current-raster wait"
     );
