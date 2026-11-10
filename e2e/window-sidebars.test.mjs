@@ -279,10 +279,10 @@ for (const app of Object.values(APPS))
     assert.ok(card(hidden, "bottom"), "hiding the top sidebar closed the bottom one");
   });
 
-// The sidebar settings of the section 일반 of the settings window keep the workbench answering (F714-13). Input: the order of the
-// window sidebars or the general sets of the sides change through the commands of the settings window. Expected: after each change
-// the workbench answers the next request, core.sidebars shows the window sidebars that the switches and the links give, and the
-// window sidebars stand where the order places them.
+// The sidebar settings of the section `general` of the settings window (the sections of packages/workbench/settings-ui.js) keep
+// the workbench answering (F714-13). Input: the order of the window sidebars or the general sets of the sides change through the
+// commands of the settings window. Expected: after each change the workbench answers the next request, core.sidebars shows the
+// window sidebars that the switches and the links give, and the window sidebars stand where the order places them.
 for (const app of Object.values(APPS))
   test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
@@ -318,7 +318,7 @@ for (const app of Object.values(APPS))
       t.diagnostic(`${label}: sidebars ${bars.filter((bar) => bar.placement === "window").map((bar) => `${bar.sidebar}:${bar.set}`).join(", ")}; cards ${placed.map((card) => card.id).join(", ")}`);
     }
     await answers("fixture");
-    // The settings window stays open on its section 일반 while the controls change the settings, as a person uses it.
+    // The settings window stays open on its section `general` while the controls change the settings, as a person uses it.
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
     const general = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");

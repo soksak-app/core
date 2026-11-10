@@ -263,10 +263,10 @@ impl ReplyScope {
 
     /// The end of the connection of this request.
     pub fn connection_end(&self) -> ConnectionEnd {
-        // default: a lock that a panicking thread poisoned still holds the state of the reply, from which the
-        // connection end is read; the panic hook records the panic.
         self.0
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the state of the reply, from which the
+            // connection end is read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .connection
             .clone()

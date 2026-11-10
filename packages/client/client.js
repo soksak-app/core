@@ -275,7 +275,10 @@ class Client {
     }
     if (typeof message?.method === "string") {
       if (message.method === "status.ended") {
-        const { window, name, surface } = message.params ?? {};
+        // status.ended carries {window, name, surface?, reason} (docs/spec/exposure.md#methods), so a notification without
+        // params is an invalid frame.
+        const { window, name, surface } = message.params;
+        // default: a watch of the page status has no surface, and the surface part of its key is null.
         this.#watches.delete(JSON.stringify([window, name, surface ?? null]));
       }
       // default: a notification without a registered listener has nowhere to be delivered.
