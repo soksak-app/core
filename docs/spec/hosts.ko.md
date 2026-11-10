@@ -308,7 +308,6 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H42 | `src/event_log_wake_test.go` | `tests/event_native_wake_test.rs` | native ring의 pipe는 한 process에 reader가 하나다. Rust integration test는 자기 process이므로 platform의 pipe를 읽는다. 한 package의 Go test는 모두 한 process를 쓰므로 Go test는 비공개 `nativeWake`에 자기 pipe를 준다. pipe 쓰기는 `native/darwin/tests/event_ring_test.m`이 양쪽을 위해 확인한다 |
 | H43 | 없음 | `src/installed_reads_test.rs` | `installed.rs`의 이 자식은 module의 비공개 serving이 읽는 횟수를 `sok`의 read hook으로 센다. `tests/installed_test.go`가 같은 경우를 Go language host library의 공개 함수로 확인한다 |
 | H44 | 없음 | `src/routine/async_runtime_test.rs` | 이 test는 framework 비동기 runtime의 worker와 blocking thread를 확인한다(행 P2). goroutine에는 이런 runtime이 필요 없다 |
-| H45 | 없음 | `src/sidecars_read_deadline_test.rs` | `sidecars.rs`의 이 자식은 비공개 `end_hello_deadline`과 deadline을 기록하는 stream에 닿는다. `tests/sidecars_transport_test.go`의 `TestAPersistentConnectionHasNoDeadlineAfterItsHello`가 같은 침묵을 공개 `Sidecars`로 확인한다 |
 | H47 | `src/diagnostics_gc_loop_test.go` | 없음 | row E2 의 endpoint method 를 시험한다. 그 method 는 Go language host library 에만 있다 |
 | H48 | `src/step_records.go`, `src/step_records_test.go` | 없음 | row P10 의 step 기록이다. main thread 의 callback 을 worker 에 넘기는 것은 Go framework 뿐이다 |
 | H50 | 없음 | `tests/support/platform/native_event.rs`, `tests/support/platform/darwin/native_event.rs`, `tests/support/platform/windows/native_event.rs` | 행 H42 의 integration test 는 자기 crate 이므로 운영체제마다 이 파일로 native ring 에 기록한다. Go test 는 library package 안에 있어 그 binding 을 쓴다 |

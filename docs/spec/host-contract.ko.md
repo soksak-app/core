@@ -807,7 +807,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.close.process-end-clears-closing` | 사이드카 process가 답하지 않고 끝나면 그 표면은 `host.sidecars`에서 빠진다. | all |
 | `sidecars.stop.graceful-on-stdin-eof` | 입력 끝에서 종료하는 사이드카는 그 종료로 중지를 끝낸다. | all |
 | `sidecars.stop.terminates-the-process-group` | 중지는 표준 입출력 사이드카의 입력을 닫고 그 process group에 SIGTERM을 보낸다. 입력 끝을 무시하고 마지막 쓰기 뒤 SIGTERM에서 끝나는 사이드카는 그 종료로 중지를 끝내고, 그 group의 process도 함께 끝나며, 호스트는 그 signal로 인한 종료에 오류 줄도 "exited while stopping" 줄도 쓰지 않는다. | all |
-| `sidecars.stop.closes-unread-output` | 멈추는 동안 표준 입출력 사이드카의 프로토콜 실패는 오류 줄 "error host sidecar <name>: failed: <reason>"을 쓰고 실패 이벤트를 전달하지 않으며, 호스트는 파이프의 자기 쪽 끝을 닫으므로, 그 뒤 파이프가 담는 것보다 많이 쓰는 사이드카는 쓰기 오류를 받고 "exited while stopping" 줄 없이 중지 제한 시간 전에 끝난다. | all |
+| `sidecars.stop.closes-unread-output` | 멈추는 동안 표준 입출력 사이드카의 프로토콜 실패는 오류 줄 "error host sidecar <name>: failed: <reason>"을 쓰고 실패 이벤트를 전달하지 않으며, 호스트는 파이프의 자기 쪽 끝을 닫으므로, 그 뒤 파이프가 담는 것보다 많이 쓰는 사이드카는 쓰기 오류를 받고, 중지는 그 오류가 일으킨 종료로 "exited while stopping" 줄 없이 끝난다. | all |
 | `sidecars.stop.reads-output-to-end` | 멈추는 동안 호스트는 표준 입출력 사이드카의 출력을 사이드카가 종료할 때까지 읽는다. 중지 전에 보낸 닫기에 입력이 끝난 뒤에야 답하고 그다음 파이프가 담는 것보다 많이 쓰는 사이드카는 모든 쓰기를 마치고 끝나며, 호스트는 오류 줄을 쓰지 않는다. | all |
 | `sidecars.stop.reports-exit-status` | 멈추는 동안 종료 상태 3이나 신호 1로 끝난 표준 입출력 사이드카는 오류 줄 "error host sidecar <name>: exited while stopping: exit status 3"이나 "error host sidecar <name>: exited while stopping: signal 1"을 쓴다. 중지 자체의 종료 신호는 그런 끝이 아니다. | all |
 | `sidecars.stop.returns-at-once-outside-the-quit` | 실행 중인 사이드카를 없애는 선언처럼 quit이 아닌 중지는 process가 종료하기 전에 반환한다. 호스트는 그 process를 종료 때 회수하고 그때 종료 줄을 쓰며, 그사이 같은 사이드카의 시작은 멈추는 process의 출력을 받지 않는 새 process를 실행한다. | all |
