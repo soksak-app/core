@@ -267,6 +267,8 @@ func TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange(t *testing.T) {
 
 // contract: exposure.relay.surface-process-end-ends-its-requests
 func TestTheEndOfTheProcessOfASurfacePageEndsTheRequestsToThatSurface(t *testing.T) {
+	// The end of the process of a surface page steps on the main thread (surfaceTerminated).
+	useStepFramework(t)
 	s, other := reloadFixture()
 	s.streams = NewDocumentStreams()
 	handle := unsafe.Pointer(new(int))

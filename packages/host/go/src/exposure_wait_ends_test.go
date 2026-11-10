@@ -199,9 +199,7 @@ func (w *reloadingWindow) StartWorkbench() { close(w.started) }
 func TestAReloadEndsAtTheCloseOfItsWindowOrTheEndOfItsPageProcess(t *testing.T) {
 	for _, end := range []string{"the window closed", "the page process ended"} {
 		t.Run(end, func(t *testing.T) {
-			savedFramework := framework
-			framework = stepFramework{}
-			t.Cleanup(func() { framework = savedFramework })
+			useStepFramework(t)
 			window := &reloadingWindow{started: make(chan struct{})}
 			s := &Surfaces{host: &Host{relay: NewRelay[relayTarget]()}, window: window}
 			result := make(chan error, 1)
@@ -229,9 +227,7 @@ func TestAReloadEndsAtTheCloseOfItsWindowOrTheEndOfItsPageProcess(t *testing.T) 
 // which is how that window recovers, so it waits for the ready of that page and ends at a later end of the window.
 // contract: reload.ends-by-ready-close-or-process-end
 func TestAReloadAfterTheEndOfItsPageProcessStartsTheNewPage(t *testing.T) {
-	savedFramework := framework
-	framework = stepFramework{}
-	t.Cleanup(func() { framework = savedFramework })
+	useStepFramework(t)
 	window := &reloadingWindow{started: make(chan struct{})}
 	s := &Surfaces{host: &Host{relay: NewRelay[relayTarget]()}, window: window}
 	s.pageProcessEnded()

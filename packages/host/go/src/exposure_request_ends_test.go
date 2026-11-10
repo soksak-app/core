@@ -131,9 +131,7 @@ func TestACommandRunOfAnEndedConnectionEnds(t *testing.T) {
 // test runs each step at once.
 func forwardFixture(t *testing.T) (*Host, *Surfaces, *askWindow, context.Context) {
 	t.Helper()
-	saved := framework
-	framework = stepFramework{}
-	t.Cleanup(func() { framework = saved })
+	useStepFramework(t)
 	h, s, window := askFixture()
 	h.windows[window.ID()] = s
 	s.views = map[string]*nativeWebview{"tab": {owner: s}}

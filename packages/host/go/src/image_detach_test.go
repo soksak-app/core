@@ -584,9 +584,7 @@ func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
 	if err := surfaces.windowSidecarSend(context.Background(), "fixture-sidecar", "surface-b", json.RawMessage(`{"open":{}}`), nil); err != nil {
 		t.Fatalf("send of another surface: %v", err)
 	}
-	savedFramework := framework
-	framework = stepFramework{}
-	t.Cleanup(func() { framework = savedFramework })
+	useStepFramework(t)
 	err = surfaces.attachCheckedImage(ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"})
 	if err == nil || !strings.HasPrefix(err.Error(), "image detach sidecar fixture-sidecar surface surface-a image view generation 7") ||
 		!strings.HasSuffix(err.Error(), "is pending") {

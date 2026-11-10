@@ -1510,6 +1510,14 @@ func (f *noticeFrontend) AfterPresentation(done func(error)) error {
 	return nil
 }
 
+// useStepFramework makes framework a stepFramework for the test t and restores the framework of the package at its end.
+func useStepFramework(t *testing.T) {
+	t.Helper()
+	saved := framework
+	framework = stepFramework{}
+	t.Cleanup(func() { framework = saved })
+}
+
 // stepFramework is the framework of a layout test: it runs each step at once.
 type stepFramework struct{ frameworkRecord }
 
