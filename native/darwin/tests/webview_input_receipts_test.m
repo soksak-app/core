@@ -230,6 +230,20 @@ int main(void) { @autoreleasepool {
     check(completed == 1 && !received, @"the next key event that the application receives ends a wait through the input method once");
     check([nextInput containsString:@" error native webview input: wait for pointerdown ended: the application received another press or key event"],
         [NSString stringWithFormat:@"the next input is recorded as the end of the wait (got %@)", nextInput]);
+    // A wait that ends without its receipt records whether the document holds the receipt listener, and a receipt that comes
+    // after that end records its delay: a document without the listener, a document that never received the press, and a late
+    // document are then told apart at the error level alone. The listener answer and the late receipt each take one round trip
+    // to the web process; one second holds both.
+    NSString *late = capturedRecords(^{
+        postReceipt(view);
+        within(1, ^BOOL { return NO; });
+    });
+    NSString *both = [nextInput stringByAppendingString:late];
+    check([both containsString:@" error native webview input: the receipt listener of the document at the end of the wait for pointerdown: present"],
+        [NSString stringWithFormat:@"a missed receipt records the receipt listener of the document (got %@)", both]);
+    check([late containsString:@" error native webview input: receipt of pointerdown arrived "]
+        && [late containsString:@" ms after its wait ended"] && ![late containsString:@"at the limit"],
+        [NSString stringWithFormat:@"a receipt after the end of its wait records its delay (got %@)", late]);
     // A receipt through the input method ends its wait as received.
     completed=0; received=NO;
     webviewInputSendThen(view, @"pointerdown", ^SPInputSend { postReceipt(view); return SPInputSendDelivered; },

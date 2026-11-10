@@ -261,9 +261,31 @@ static void checkReceipts(void) {
         [NSString stringWithFormat:@"a scroll into a window that is not shown is refused at once (%d after %.3fs)",
             hiddenScroll.result, hiddenScroll.took]);
     [window orderBack:nil];
-    pointerThen(window, view, 50, 50, 3);
+
+    // A press that a busy document has not received when its window closes ends with the close and is reported as not
+    // received. The record names, at the level error, the web view whose receipt it awaited and the view the press reached, so
+    // a press that reached another page is told from a page that did not answer.
+    [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
+    SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
+    SPTimed *busyState = &busy;
+    NSString *unreceived = capturedRecords(^{
+        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, timed, busyState);
+        [window performSelector:@selector(close) withObject:nil afterDelay:0.3];
+        until(^BOOL { return busyState->done; });
+    });
+    check(busy.result == SP_INPUT_UNRECEIVED && busy.took < 2,
+        [NSString stringWithFormat:@"a press that the close of its window ends is reported as not received (%d after %.3fs)",
+            busy.result, busy.took]);
+    NSString *awaited = [NSString stringWithFormat:@"\"target\":{\"class\":\"WKWebView\",\"frame\":[0,0,300,200],\"hidden\":false,\"inWindow\":true,"
+        "\"loading\":false,\"url\":\"about:blank\",\"view\":\"%p\"}", view];
+    BOOL named = NO;
+    for (NSString *line in [unreceived componentsSeparatedByString:@"\n"]) {
+        if ([line containsString:@" error native input inject: {"] && [line containsString:@"\"kind\":\"unreceived\""]
+            && [line containsString:awaited]
+            && [line containsString:@"\"samePage\":true"] && [line containsString:@"\"type\":\"pointerdown\""]) named = YES;
+    }
+    check(named, [NSString stringWithFormat:@"a press the document did not receive names the awaited and the reached view (got %@)", unreceived]);
     webviewInputUnregister(view);
-    [window close];
 }
 
 // A drag and a release must be delivered to the view that received the press, not to another view under the coordinates.
