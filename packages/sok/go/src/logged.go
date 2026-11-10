@@ -179,7 +179,7 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 	}
 	interrupt := func(status int, errorText string) {
 		finish(status, errorText)
-		if err := log.Flush(eventFlushDeadline); err != nil {
+		if err := log.Flush(); err != nil {
 			fmt.Fprintf(stderr, "sok: event log: %v\n", err)
 		}
 		log.Close()
