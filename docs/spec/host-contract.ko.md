@@ -775,7 +775,6 @@ fn invalid_json_closes_connection() {
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | all |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | 선언된 사이드카가 없으면 생성은 성공하고 모든 보내기는 "not declared by any plugin"으로 실패한다. | all |
 | `sidecars.start.fails-on-missing-executable` | 디스크에 없는 선언된 실행 파일은 첫 보내기를 사이드카 이름과 함께 실패시킨다. | all |
-| `sidecars.start.refuses-zero-hello-timeout` | 영값 `Sidecars`로 영속 서비스를 시작하면 서비스 생성 전에 거부하며 `HelloTimeout`을 이름 붙인 오류를 낸다. | wailsv3, mygo only: Go는 영값 `Sidecars`를 허용하지만 Tauri는 공개 영값 구조체가 아니라 builder로 사이드카 core를 만든다 |
 | `sidecars.start.passes-log-directory` | 표준 입출력 sidecar는 인자 `--log-dir <config-dir>/logs`만 받아 시작한다. | all |
 | `sidecars.declaration.refuses-missing-sidecar-json` | sidecar.json이 없는 설치 sidecar 폴더나 installed.json에 version이 없는 sidecar는 선언되지 않고, 그 sidecar에 대한 요청은 없는 파일이나 그 sidecar를 나열한 plugin.json을 밝히는 `sidecar <name>: <path>: <reason>`으로 실패한다. | all |
 | `installed.sidecars.unreadable-installation-starts-without-sidecars` | `installed.json`이 이전 형식이거나 사용 중인 plugin의 `plugin.json`이 parse되지 않으면, host 시작의 sidecar channel은 선언 없이 만들어지고, host는 `installed plugins: <error>`를 기록하며, 설치된 sidecar에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패한다. | all |
@@ -805,12 +804,13 @@ fn invalid_json_closes_connection() {
 | `sidecars.close.repeated-close-awaits-each-answer` | 사이드카가 앞 닫기에 답하기 전에 다시 닫은 표면은 사이드카가 닫기마다 답할 때까지 닫는 중으로 남고, 어느 답도 사이드카를 실패시키지 않는다. | all |
 | `sidecars.close.unexpected-answer-fails` | host가 닫고 있지 않은 표면의 닫기 응답은 "unexpected close answer for <surface>"로 사이드카를 실패시킨다. | all |
 | `sidecars.close.process-end-clears-closing` | 사이드카 process가 답하지 않고 끝나면 그 표면은 `host.sidecars`에서 빠진다. | all |
-| `sidecars.stop.honors-stop-timeout` | 입력을 비우지 않는 사이드카의 중지는 중지 제한 시간의 두 배 안에 반환된다. | all |
-| `sidecars.stop.graceful-on-stdin-eof` | 입력 끝에서 종료하는 사이드카는 제한 시간을 기다리지 않고 멈춘다. | all |
-| `sidecars.stop.kills-after-timeout` | 입력 끝을 무시하는 사이드카는 중지 제한 시간 뒤에 강제 종료되고, 호스트는 오류 줄 "error host sidecar <name>: did not end within the stop timeout and was killed"를 쓰며 "exited while stopping" 줄은 쓰지 않는다. | all |
+| `sidecars.stop.graceful-on-stdin-eof` | 입력 끝에서 종료하는 사이드카는 그 종료로 중지를 끝낸다. | all |
+| `sidecars.stop.terminates-the-process-group` | 중지는 표준 입출력 사이드카의 입력을 닫고 그 process group에 SIGTERM을 보낸다. 입력 끝을 무시하고 마지막 쓰기 뒤 SIGTERM에서 끝나는 사이드카는 그 종료로 중지를 끝내고, 그 group의 process도 함께 끝나며, 호스트는 그 signal로 인한 종료에 오류 줄도 "exited while stopping" 줄도 쓰지 않는다. | all |
 | `sidecars.stop.closes-unread-output` | 멈추는 동안 표준 입출력 사이드카의 프로토콜 실패는 오류 줄 "error host sidecar <name>: failed: <reason>"을 쓰고 실패 이벤트를 전달하지 않으며, 호스트는 파이프의 자기 쪽 끝을 닫으므로, 그 뒤 파이프가 담는 것보다 많이 쓰는 사이드카는 쓰기 오류를 받고 "exited while stopping" 줄 없이 중지 제한 시간 전에 끝난다. | all |
-| `sidecars.stop.reads-output-to-end` | 멈추는 동안 호스트는 표준 입출력 사이드카의 출력을 끝날 때까지 읽는다. 중지 전에 보낸 닫기에 입력이 끝난 뒤에야 답하고 그다음 파이프가 담는 것보다 많이 쓰는 사이드카는 모든 쓰기를 마치고 중지 제한 시간 전에 끝나며, 호스트는 오류 줄을 쓰지 않는다. | all |
+| `sidecars.stop.reads-output-to-end` | 멈추는 동안 호스트는 표준 입출력 사이드카의 출력을 사이드카가 종료할 때까지 읽는다. 중지 전에 보낸 닫기에 입력이 끝난 뒤에야 답하고 그다음 파이프가 담는 것보다 많이 쓰는 사이드카는 모든 쓰기를 마치고 끝나며, 호스트는 오류 줄을 쓰지 않는다. | all |
 | `sidecars.stop.reports-exit-status` | 멈추는 동안 종료 상태 3이나 신호 15로 끝난 표준 입출력 사이드카는 오류 줄 "error host sidecar <name>: exited while stopping: exit status 3"이나 "error host sidecar <name>: exited while stopping: signal 15"를 쓴다. | all |
+| `sidecars.stop.returns-at-once-outside-the-quit` | 실행 중인 사이드카를 없애는 선언처럼 quit이 아닌 중지는 process가 종료하기 전에 반환한다. 호스트는 그 process를 종료 때 회수하고 그때 종료 줄을 쓰며, 그사이 같은 사이드카의 시작은 멈추는 process의 출력을 받지 않는 새 process를 실행한다. | all |
+| `sidecars.stop.records-what-the-quit-waits-for` | quit의 중지는 기다리는 각 process에 대해 "info host sidecar <name>: the quit waits for the exit of process <pid>"를 쓴다. | all |
 | `sidecars.stop.records-open-requests` | host가 sidecar를 멈추거나 떼어낼 때 응답을 기다리는 식별자 있는 요청은 `host.sidecar.reply` 오류 기록을 얻는다. 기록은 그 surface, sidecar, 식별자를 밝히며, 이유는 `the host stopped before the sidecar replied`다. surface는 이 요청에 대해 `sidecar-failure` event를 받지 않는다. | all |
 | `sidecars.reply.error-text-cut-is-marked` | 1,024바이트 한도에서 잘린 오류 글을 가진 `host.sidecar.reply`는 `truncated: true`를 가지며, 잘리지 않은 오류 글은 `truncated` member가 없다. | all |
 | `debug.rows.out-of-range-number-is-refused` | float64 범위 밖의 수를 가진 debug 로그 줄은 파일, 줄, 원문과 함께 `not JSON`으로 거부되며, 어떤 행도 그 수에 `undefined`를 보이지 않는다. | all |
@@ -839,9 +839,9 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.hello.client-is-the-configuration-directory` | host가 상주 service에 보내는 `hello` 메시지는 애플리케이션의 설정 폴더를 `client`로 싣는다. | all |
 | `sidecars-transport.hello.rejects-auth-failure` | 실패한 hello 응답은 보내기를 "authentication handshake failed"로 실패시킨다. | all |
 | `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | 다른 프로토콜의 hello 응답은 보내기를 실패시키고 endpoint.json을 바꾸지 않는다. | all |
-| `sidecars-transport.hello.times-out` | hello를 받고 답하지 않는 service는 5초 뒤 "the service did not answer hello within 5s"로 보내기를 실패시킨다. | all |
-| `sidecars-transport.hello.deadline-ends-with-its-answer` | hello 의 deadline 은 그 답과 함께 끝난다. persistent service 가 더 오래 조용해도 그 뒤에 보낸 내용은 owner 에게 도착한다. | all |
-| `sidecars-transport.startup.times-out` | 준비 상한 안에 endpoint를 출력하지 않는 시작한 service는 "the service did not print its endpoint within <bound>"로 보내기를 실패시키고, host는 그 service를 끝내고 회수한다. | all |
+| `sidecars-transport.hello.ends-by-its-reply-its-connection-or-the-stop` | hello를 받고 답하지 않는 service는 시작을 기다리게 둔다. 그 연결의 끝은 보내기를 "the service connection ended before the hello answer"로 실패시키고, 중지는 그것을 "sidecars are stopped"로 실패시키며 시작을 기다리지 않고 반환한다. | all |
+| `sidecars-transport.hello.silence-keeps-the-connection` | 호스트는 연결을 deadline 없이 읽는다. persistent service 가 hello 답 뒤에 조용해도 그 뒤에 보낸 내용은 owner 에게 도착한다. | all |
+| `sidecars-transport.startup.ends-by-the-line-the-exit-or-the-stop` | endpoint를 출력하지 않는 시작한 service는 중지까지 시작을 기다리게 두고, 중지는 그 service를 끝내고 회수하며 보내기를 "sidecars are stopped"로 실패시킨다. | all |
 | `sidecars-transport.startup.exits-before-endpoint` | endpoint 전에 끝난 시작한 service는 "service exited before endpoint"로 보내기를 실패시킨다. | all |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | 죽은 서비스가 남긴 엔드포인트는 새 서비스 엔드포인트로 바뀐다. | all |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | 살아 있지만 연결할 수 없는 서비스의 엔드포인트는 보내기를 실패시키고 바뀌지 않는다. | all |
@@ -873,7 +873,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | 좀비 서비스 pid 는 존재하는 서비스로 치지 않아 낡은 endpoint 를 교체한다. | all |
 | `sidecars-transport.endpoint.foreign-service-process-exists` | 다른 사용자가 소유한 프로세스의 service pid 는 존재하는 service 다. 거부된 signal 확인이 그 프로세스가 있음을 보이기 때문이다. | all |
 | `sidecars-transport.endpoint.waits-for-the-end-of-a-service-process` | service process의 종료를 기다리면 시간 안에 process가 끝났을 때와 process가 없을 때 true를, 시간이 지나도 실행 중이면 false를 답한다. | all |
-| `sidecars-transport.replace.waits-for-the-end-of-the-service-process` | 교체한 상주 service는 endpoint의 process가 끝난 뒤에만 설치된 service를 시작하고, 중지 기한 안에 끝나지 않는 process는 sidecar를 밝히는 오류 줄과 함께 교체를 실패시켜 sidecar를 오래된 채로 둔다. | all |
+| `sidecars-transport.replace.waits-for-the-end-of-the-service-process` | 교체한 상주 service는 endpoint의 process가 종료한 뒤에만 설치된 service를 시작하고, 호스트는 그 종료를 종료 event로 안다. 그 기다림 중의 중지는 교체를 "sidecars are stopped"로 실패시키고 sidecar를 오래된 채로 둔다. | all |
 | `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | all |
 | `sidecars-transport.persistent.oversize-line-fails-the-connection` | 64 MiB 메시지 한도보다 긴 service 줄은 줄의 나머지를 읽지 않고 연결을 닫으며, 보낸 surface에 `message exceeds 67108864 bytes`와 함께 `sidecar-failure`를 보낸다. | all |
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | JSON 객체가 아닌 service 줄이나 문자열 `surface`가 없는 surface event는 연결을 닫고 보낸 surface에 `invalid message: ...`와 함께 `sidecar-failure`를 보낸다. 다음 전송은 다시 연결한다. | all |
