@@ -409,7 +409,8 @@ test("a forwarded request carries no timeout", async () => {
   await made.handle({ method: "status.get", params: { name: "probe.lines" } });
   const forwarded = host.calls.filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
   assert.equal(forwarded.length, 3);
-  for (const request of forwarded) assert.deepEqual(Object.keys(request).sort(), ["id", "method", "params", "surface"]);
+  // The members are those of exposureForward; origin is present only for a forward made for an exposure-request with an id.
+  for (const request of forwarded) assert.deepEqual(Object.keys(request).filter((key) => key !== "origin").sort(), ["id", "method", "params", "surface"]);
 });
 
 // A forward that the main page makes while it handles an exposure-request carries origin, the id of that request, so the end of
