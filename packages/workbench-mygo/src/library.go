@@ -130,12 +130,12 @@ func (s *Shell) registerLibrary() {
 	later(s, "core.library.pin", func(value pinParam, answer func(any, error)) {
 		s.performLibrary(func(done func(error)) { s.pinProject(value.ID, value.Pinned, done) }, func() { answer(nil, nil) })
 	})
-	// The removal is the one of a project tab: it removes the record and its spaces and leaves the folder.
-	act(s, "core.library.remove", func(value idParam) error {
+	// The removal is the one of a project tab: it removes the record and its spaces and leaves the folder. The command answers when
+	// the removal ended, as remove of packages/workbench/library.js awaits projects.close.
+	later(s, "core.library.remove", func(value idParam, answer func(any, error)) {
 		s.performLibrary(func(done func(error)) {
 			s.removeProjectThen(value.ID, func(_ bool, err error) { done(err) })
-		}, func() {})
-		return nil
+		}, func() { answer(nil, nil) })
 	})
 	act(s, "core.library.return", func(struct{}) error {
 		if s.opened() == nil {

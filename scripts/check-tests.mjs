@@ -586,7 +586,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/surfaces.go", symbol: "if !joined {\n\t\t\tcontinue\n\t\t}" },
       { file: "packages/workbench/compositor.js", symbol: "held(validated.placements.map(({ id }) => id));" },
       { file: "packages/workbench/index.html", symbol: "held: (surfaceIds) => { hostHeld = surfaceIds; }," },
-      { file: "packages/workbench-mygo/src/shell_project.go", symbol: "s.retainSessionsThen(ended)" },
+      { file: "packages/workbench-mygo/src/sidecar_sessions.go", symbol: "func (s *Shell) afterRetains(then func()) {" },
+      { file: "packages/workbench-mygo/src/library.go", symbol: "later(s, \"core.library.remove\"" },
       { file: "e2e/view-surfaces.test.mjs", symbol: "the layout probe views ${probeViews.join(\", \")} did not all attach their document region" },
     ],
     tests: [
