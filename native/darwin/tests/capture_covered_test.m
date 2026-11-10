@@ -13,6 +13,7 @@
 #import "capture.h"
 #import "window_facts.h"
 #import "private/webkit.h"
+#import "support/run_until.h"
 
 @interface WKWebView (Presentation)
 - (void)_doAfterNextPresentationUpdate:(void (^)(void))update;
@@ -25,11 +26,9 @@ static void check(BOOL condition, NSString *message) {
     fprintf(stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-// Runs the run loop until done holds; each turn waits for a source of the run loop, and every condition it judges changes in a
-// callback delivered on the main queue. what names the wait in the record of a run that the runner ends.
+// Runs the run loop until done holds (support/run_until.h).
 static void until(NSString *what, BOOL (^done)(void)) {
-    while (!done()) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
-    fprintf(stderr, "reached: %s\n", what.UTF8String);
+    sp_run_until(what.UTF8String, done);
 }
 
 // The system paths are observed, and one failure is injected at a time. The general content query is never forwarded:
@@ -164,14 +163,11 @@ static void paintMetal(CAMetalLayer *layer, id<MTLCommandQueue> queue, uint8_t r
         sourceSize:MTLSizeMake(width, height, 1) toTexture:drawable.texture destinationSlice:0 destinationLevel:0
         destinationOrigin:MTLOriginMake(0, 0, 0)];
     [blit endEncoding];
-    __block BOOL presented = NO;
-    [drawable addPresentedHandler:^(id<MTLDrawable> shown) {
-        (void)shown;
-        dispatch_async(dispatch_get_main_queue(), ^{ presented = YES; });
-    }];
     [command presentDrawable:drawable];
     [command commit];
-    until(@"the Metal frame is presented", ^BOOL { return presented; });
+    // The window is behind other windows, and the compositor may not present a drawable of an occluded window, so the frame is
+    // judged by the completion of its commands; the web view presentation update that follows commits the window's layers.
+    [command waitUntilCompleted];
     check(command.status == MTLCommandBufferStatusCompleted, @"the Metal frame completes");
 }
 static IOSurfaceRef surfaceOf(size_t width, size_t height, uint8_t blue) {

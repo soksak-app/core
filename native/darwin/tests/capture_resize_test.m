@@ -2,6 +2,7 @@
 // The stream output size is fixed at start; if it is not followed, the enlarged window is recorded scaled down.
 // Does not activate the application.
 #import "../src/capture.m"
+#import "support/run_until.h"
 
 static int failures;
 static double resizeRequestedAtMilliseconds;
@@ -22,12 +23,9 @@ static void check(BOOL condition, NSString *message) {
 }
 @end
 
-// Runs the run loop until done holds; each turn waits for a source of the run loop, and every condition it judges changes in a
-// display link callback, a block on the main queue or a notification on the main thread. what names the wait in the record of a
-// run that the runner ends.
+// Runs the run loop until done holds (support/run_until.h).
 static void until(NSString *what, BOOL (^done)(void)) {
-    while (!done()) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
-    fprintf(stderr, "reached: %s\n", what.UTF8String);
+    sp_run_until(what.UTF8String, done);
 }
 
 int main(void) { @autoreleasepool {

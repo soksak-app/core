@@ -4,6 +4,7 @@
 // delegate callbacks. It does not activate the application.
 #import "../src/capture.m"
 #import <objc/runtime.h>
+#import "support/run_until.h"
 
 static const int CYCLES = 24;
 static IMP originalStart, originalStop, originalDelegate;
@@ -72,8 +73,7 @@ int main(void) { @autoreleasepool {
     };
     // As in the acceptance check, do not change the window until the window server has composited its first frame: its
     // occlusion state becomes visible then, in a notification on the main thread.
-    while ((window.occlusionState & NSWindowOcclusionStateVisible) == 0)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    sp_run_until("the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(onScreen(), @"the window server shows the capture window");
 
     NSArray<NSColor *> *colors = @[NSColor.redColor, NSColor.blueColor, NSColor.greenColor];

@@ -3,6 +3,7 @@
 #import "../src/capture.m"
 #import "../src/capture_frame_identity.h"
 #import "support/records.h"
+#import "support/run_until.h"
 #import <CommonCrypto/CommonDigest.h>
 #import "event_ring.h"
 #include <sys/stat.h>
@@ -754,8 +755,7 @@ int main(void) { @autoreleasepool {
         [windowReleaseFixture stopDisplayLinkObservation];
     });
     // The background stop queues the release of the window on the main queue, which sets displayLinkInvalidated.
-    while (!windowReleaseFixture.displayLinkInvalidated)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    sp_run_until("the window release on the main queue", ^BOOL { return windowReleaseFixture.displayLinkInvalidated; });
     trackDisplayWindowReleases = 0;
     check(windowReleaseFixture.displayLinkInvalidated
         && __atomic_load_n(&displayWindowLastReleaseThread, __ATOMIC_RELAXED) == 1,
@@ -778,8 +778,7 @@ int main(void) { @autoreleasepool {
     [queuedInvalidationFixture stopDisplayLinkObservation];
     check(!queuedInvalidationFixture.displayLinkInvalidated && queuedLink.invalidationCount == 0,
         @"a second resource-free stop does not complete or duplicate a queued invalidation");
-    while (!queuedInvalidationFixture.displayLinkInvalidated)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    sp_run_until("the queued invalidation on the main queue", ^BOOL { return queuedInvalidationFixture.displayLinkInvalidated; });
     check(queuedInvalidationFixture.displayLinkInvalidated && queuedLink.invalidationCount == 1,
         @"the original queued invalidation completes once on the main run loop");
     [queuedLink release];
@@ -806,8 +805,9 @@ int main(void) { @autoreleasepool {
             __atomic_store_n(&displayLinkLookupRaceStopReturned, 1, __ATOMIC_RELAXED);
         });
     });
-    while (__atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) == 0)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    sp_run_until("the window lookup race returns", ^BOOL {
+        return __atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) != 0;
+    });
     captureDisplayLinkAfterWindowLookup = NULL;
     check(__atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) == 1
         && displayLinkWindowLookupHookWaitResult == 0

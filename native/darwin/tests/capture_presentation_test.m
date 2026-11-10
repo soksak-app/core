@@ -7,6 +7,7 @@
 #import <mach/mach_time.h>
 #include <math.h>
 #include <limits.h>
+#import "support/run_until.h"
 
 static const NSUInteger frameCount = 7;
 static int failures;
@@ -14,12 +15,9 @@ static void check(BOOL ok, NSString *label) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
     if (!ok) failures++;
 }
-// Runs the run loop until done holds; each turn waits for a source of the run loop, and every condition it judges changes in a
-// callback delivered on the main queue or in a notification posted on the main thread. what names the wait in the record of a
-// run that the runner ends.
+// Runs the run loop until done holds (support/run_until.h).
 static void until(NSString *what, BOOL (^done)(void)) {
-    while (!done()) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
-    fprintf(stdout, "reached: %s\n", what.UTF8String);
+    sp_run_until(what.UTF8String, done);
 }
 
 static const MTLClearColor colors[] = {

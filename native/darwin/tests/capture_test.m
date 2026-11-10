@@ -3,6 +3,7 @@
 #import <IOSurface/IOSurface.h>
 #import <WebKit/WebKit.h>
 #import "support/layer_contents.h"
+#import "support/run_until.h"
 #import "capture.h"
 #import "image_capture_match.h"
 #import "image_region.h"
@@ -94,8 +95,7 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    while ((window.occlusionState & NSWindowOcclusionStateVisible) == 0)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    sp_run_until("the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(onScreen(), @"the window server shows the capture window");
     bool stillWritten = sp_capture_still((long[]){window.windowNumber}, 1, still.UTF8String, 0, &stillError);
     check(stillWritten, [NSString stringWithFormat:@"a still capture of an inactive window is written (%@)",

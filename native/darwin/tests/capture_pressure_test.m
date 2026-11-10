@@ -2,6 +2,7 @@
 #import "../src/capture.m"
 #import "../src/host_api_capture.m"
 #import <objc/runtime.h>
+#import "support/run_until.h"
 
 static int failures;
 static void check(BOOL ok, NSString *label) {
@@ -221,9 +222,7 @@ int main(void) { @autoreleasepool {
     }];
     scheduleCaptureWait(20, 41);
     dispatch_async(dispatch_get_main_queue(), ^{ [closing close]; });
-    while (!captureAnswerArrived) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
-    }
+    sp_run_until("the capture wait answers", ^BOOL { return captureAnswerArrived; });
     check(closedOnMain, @"the main thread closes a window while a scheduled capture wait waits");
     check(captureAnswerContext == 41 && captureAnswerResult == 0 && captureAnswerFailure != NULL
         && strcmp(captureAnswerFailure, "no capture frame arrived before the window closed") == 0,
