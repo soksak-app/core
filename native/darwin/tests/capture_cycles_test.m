@@ -70,17 +70,11 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!onScreen() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
+    // As in the acceptance check, do not change the window until the window server has composited its first frame: its
+    // occlusion state becomes visible then, in a notification on the main thread.
+    while ((window.occlusionState & NSWindowOcclusionStateVisible) == 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
     check(onScreen(), @"the window server shows the capture window");
-    // As in the acceptance check, do not change the window until the first composited frame is stable.
-    NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
-    while (settled.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
-    }
 
     NSArray<NSColor *> *colors = @[NSColor.redColor, NSColor.blueColor, NSColor.greenColor];
     int completed = 0;
