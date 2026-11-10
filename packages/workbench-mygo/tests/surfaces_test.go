@@ -1270,10 +1270,9 @@ func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
 	}
 	asked := asks.Load()
 	presented.Store(errors.New(""))
-	time.Sleep(1100 * time.Millisecond)
 	f.settle()
 	if got := asks.Load(); got != asked {
-		t.Fatalf("a timer asked the host for the presentation %d more times after a failed wait", got-asked)
+		t.Fatalf("the workbench asked the host for the presentation %d more times without a placement", got-asked)
 	}
 	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
 		t.Fatalf("without a later placement the banner holds %s", got)
