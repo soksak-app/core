@@ -139,7 +139,14 @@ fn a_poisoned_state_lock_still_answers_the_sidecar_queries() {
             cids: vec!["cid-1".to_string()],
         },
     );
-    fail(&sidecars.core.state, "missing", 1, None);
+    // A reader of the standard error whose output already ended.
+    fail(
+        &sidecars.core.state,
+        "missing",
+        1,
+        None,
+        std::thread::spawn(|| {}),
+    );
     notify_connection(&sidecars.core, "missing", Ok(()));
     await_replaced_service(&sidecars.core, "missing");
     #[cfg(feature = "diagnostics")]

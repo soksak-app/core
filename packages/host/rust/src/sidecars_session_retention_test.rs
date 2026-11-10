@@ -48,6 +48,7 @@ fn native_view_removal_still_closes_a_standard_io_session() {
             "fixture-standard".into(),
             Process {
                 child: None,
+                exit: None,
                 outbox: sender,
                 writing: Arc::new(AtomicUsize::new(0)),
                 persistent: None,
@@ -643,6 +644,7 @@ pub(crate) fn mounted_project_probe_wire<O: Owner>(
         SIDECAR.into(),
         Process {
             child: None,
+            exit: None,
             outbox: sender,
             writing: Arc::new(AtomicUsize::new(0)),
             persistent: None,
@@ -711,6 +713,7 @@ pub(crate) fn background_race_sidecars<O: Owner>(
         "fixture-ready".into(),
         Process {
             child: None,
+            exit: None,
             outbox: sender,
             writing: Arc::new(AtomicUsize::new(0)),
             persistent: None,
