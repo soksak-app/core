@@ -688,9 +688,9 @@ fn invalid_json_closes_connection() {
 | `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | all |
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
 | `images.wait.hidden-surface-does-not-block` | 숨긴 표면은 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
-| `images.wait.sidecar-end-ends-wait` | sidecar 연결의 끝은 그 sidecar 이름으로 그 region들의 raster wait를 끝낸다. 끝난 연결의 raster는 오지 않기 때문이다. layout transaction의 끝은 window의 모든 raster wait를 끝낸다. layout 요청의 raster wait는 시간으로 끝나지 않는다. | all |
+| `images.wait.sidecar-end-ends-wait` | sidecar 연결의 끝은 그 sidecar 이름으로 그 region들의 raster wait를 끝낸다. 끝난 연결의 raster는 오지 않기 때문이다. window의 layout transaction의 끝은 그 안의 각 presentation 요청의 raster wait를 끝낸다. 어떤 raster wait도 시간으로 끝나지 않는다. | all |
 | `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | all |
-| `images.wait.ends-by-its-events` | 현재 raster의 presentation 대기에는 시간 제한이 없다. 필요한 각 raster의 presentation, 그 영역이나 표면의 제거, 그 supplier 연결의 끝, 그 창의 끝으로 끝나며, 실패는 호출자에게 돌아가고 application log에 줄을 쓰지 않는다. 기다린 요청이 실패를 알리기 때문이다. | all |
+| `images.wait.ends-by-its-events` | 현재 raster의 presentation 대기에는 시간 제한이 없다. 필요한 각 raster의 presentation, 그 영역이나 표면의 제거, 그 supplier 연결의 끝, 기다리는 요청의 끝으로 끝난다. 요청의 끝은 presentation 요청에서는 ticket의 cancel이나 layout transaction의 끝이고, `host.window.presented`에서는 창의 close, main page process의 끝, endpoint 연결의 끝이다. layout transaction의 끝은 `host.window.presented`의 대기를 끝내지 않는다. 그 요청은 다음 layout이 보이는 raster를 기다린다. 실패는 호출자에게 돌아가고 application log에 줄을 쓰지 않는다. 기다린 요청이 실패를 알리기 때문이다. | all |
 | `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | all |
 | `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | all |
 | `images.visibility.shown-surface-reconfigures-its-raster` | 숨겼다가 다시 보인 표면은 같은 크기라도 새 raster revision을 설정하므로, 표시 장벽은 숨긴 동안의 frame을 기다리지 않는다. | all |
