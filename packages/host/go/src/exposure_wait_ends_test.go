@@ -3,16 +3,20 @@ package host
 import (
 	"errors"
 	"testing"
-	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-// pendingSettledPlatform is the platform of a settled wait whose screen never presents: its settled wait answers nothing.
-type pendingSettledPlatform struct{ platform.Platform }
+// pendingSettledPlatform is the platform of a settled wait whose screen never presents: its settled wait answers nothing,
+// and settled receives one signal each time a wait reaches the settled step.
+type pendingSettledPlatform struct {
+	platform.Platform
+	settled chan struct{}
+}
 
-func (pendingSettledPlatform) AfterSettled(platform.Window, unsafe.Pointer, func(float64, error)) error {
+func (p pendingSettledPlatform) AfterSettled(platform.Window, unsafe.Pointer, func(float64, error)) error {
+	p.settled <- struct{}{}
 	return nil
 }
 
@@ -26,20 +30,16 @@ func presentedResult(s *Surfaces) <-chan error {
 	return result
 }
 
-// expectRPCCode waits for err on result and checks its endpoint code.
+// expectRPCCode receives err from result and checks its endpoint code. A wait that does not end is reported by the limit
+// of the test run.
 func expectRPCCode(t *testing.T, result <-chan error, code int, what string) *RPCError {
 	t.Helper()
-	select {
-	case err := <-result:
-		var rpc *RPCError
-		if !errors.As(err, &rpc) || rpc.Code != code {
-			t.Fatalf("%s ended with %v, want the code %d", what, err, code)
-		}
-		return rpc
-	case <-time.After(2 * time.Second):
-		t.Fatalf("%s is still waiting", what)
+	err := <-result
+	var rpc *RPCError
+	if !errors.As(err, &rpc) || rpc.Code != code {
+		t.Fatalf("%s ended with %v, want the code %d", what, err, code)
 	}
-	return nil
+	return rpc
 }
 
 // A window that closes while host.window.presented waits for its settled screen ends the wait with 1003; the wait has no
@@ -49,20 +49,23 @@ func TestTheCloseOfTheWindowEndsAPresentedWait(t *testing.T) {
 	native := platform.Window(1)
 	s := settledSurfaces(t, &settledFrontend{window: native, present: func() {}}, nil)
 	saved := system
-	system = pendingSettledPlatform{}
+	fake := pendingSettledPlatform{settled: make(chan struct{}, 1)}
+	system = fake
 	t.Cleanup(func() { system = saved })
 	result := presentedResult(s)
+	<-fake.settled
 	select {
 	case err := <-result:
-		t.Fatalf("the presented wait ended before its screen presented: %v", err)
-	case <-time.After(50 * time.Millisecond):
+		t.Fatalf("the presented wait ended at its settled step before its screen presented: %v", err)
+	default:
 	}
 	s.endWindow()
 	expectRPCCode(t, result, codeNoWindow, "the presented wait of a closed window")
 }
 
 // The end of the WebContent process of an open modal that has not painted ends the paint wait of host.window.presented
-// with a failure.
+// with a failure. The paint wait calls nothing that marks its start, so the end is order-insensitive: an end recorded before
+// the wait reaches the modal ends it the same way, and the test sends the end right after it starts the wait.
 // contract: exposure.window-presented.ends-by-events
 func TestTheEndOfTheProcessOfAnOpenModalEndsItsPaintWait(t *testing.T) {
 	native := platform.Window(1)
@@ -75,11 +78,6 @@ func TestTheEndOfTheProcessOfAnOpenModalEndsItsPaintWait(t *testing.T) {
 	t.Cleanup(func() { delete(nativeViews, viewID) })
 	s.modal = &modal{id: "modal-a", instance: 3, shown: true, visible: true, view: view}
 	result := presentedResult(s)
-	select {
-	case err := <-result:
-		t.Fatalf("the presented wait ended before the modal painted or ended: %v", err)
-	case <-time.After(50 * time.Millisecond):
-	}
 	terminatedNative(viewID)
 	expectRPCCode(t, result, codeHandler, "the presented wait of a modal whose process ended")
 }
@@ -157,15 +155,11 @@ func TestAReloadEndsAtTheCloseOfItsWindowOrTheEndOfItsPageProcess(t *testing.T) 
 			s := &Surfaces{host: &Host{relay: NewRelay[relayTarget]()}, window: window}
 			result := make(chan error, 1)
 			go func() { result <- s.reloadPage() }()
-			select {
-			case <-window.started:
-			case <-time.After(2 * time.Second):
-				t.Fatal("the reload did not start the workbench")
-			}
+			<-window.started
 			select {
 			case err := <-result:
-				t.Fatalf("the reload ended before its page reported ready or ended: %v", err)
-			case <-time.After(50 * time.Millisecond):
+				t.Fatalf("the reload ended when it started the workbench, before its page reported ready or ended: %v", err)
+			default:
 			}
 			if end == "the window closed" {
 				s.endWindow()

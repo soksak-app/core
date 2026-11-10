@@ -14,14 +14,19 @@ import (
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
+// A relayed request has no time limit, so the relay keeps no expired requests; the requests that the end of their document
+// ended are the ones it remembers for their late replies, at most 256 of them.
 // contract: buffers.relay-expired.bounded-and-counted
-func TestTheRelayRemembersAtMost256ExpiredRequestsAndCountsTheOnesItForgets(t *testing.T) {
+func TestTheRelayRemembersAtMost256EndedRequestsAndCountsTheOnesItForgets(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
 	relay := host.NewRelay[string]()
 	for i := 0; i < 256+5; i++ {
-		result := relay.Request("doc", time.Millisecond, func(uint64) error { return nil })
-		if result.Error == nil {
-			t.Fatal("a request without a reply did not time out")
+		result := relay.Request("doc", func(uint64) error {
+			relay.Abandon(func(target string) bool { return target == "doc" })
+			return nil
+		})
+		if result.Error == nil || result.Error.Code != 1003 {
+			t.Fatalf("a request whose document closed answered %+v, want 1003", result)
 		}
 	}
 	drops := support.BufferDrops(t, log)
@@ -29,16 +34,17 @@ func TestTheRelayRemembersAtMost256ExpiredRequestsAndCountsTheOnesItForgets(t *t
 		t.Fatalf("%d events host.buffer.dropped, want 5: %v", len(drops), drops)
 	}
 	for _, drop := range drops {
-		if drop["buffer"] != "relay expired requests" || drop["count"] != float64(1) || drop["bytes"] != float64(0) || drop["reason"] != "the buffer holds 256 requests" {
+		if drop["buffer"] != "relay ended requests" || drop["count"] != float64(1) || drop["bytes"] != float64(0) || drop["reason"] != "the buffer holds 256 requests" {
 			t.Fatalf("drop %v", drop)
 		}
 	}
-	// The five oldest are forgotten, so a late reply to the first request has no matching request; the newest is still remembered.
+	// The five oldest are forgotten, so a late reply to the first request has no matching request; the newest is still
+	// remembered, and its late reply is an observation.
 	if err := relay.Resolve(1, "doc", host.ExposureResult{}); err == nil || err.Error() != "exposure reply 1 has no matching request" {
 		t.Fatalf("late reply to a forgotten request: %v", err)
 	}
-	if err := relay.Resolve(261, "doc", host.ExposureResult{}); err == nil || !strings.Contains(err.Error(), "its request timed out after 1 ms") {
-		t.Fatalf("late reply to a remembered request: %v", err)
+	if err := relay.Resolve(261, "doc", host.ExposureResult{}); err != nil {
+		t.Fatalf("late reply to a remembered request: %v, want it accepted as an observation", err)
 	}
 }
 

@@ -90,12 +90,7 @@ func TestReloadSurfaceImagesRetainsOldDetachTargetThroughGenerationAdvance(t *te
 // sentImageDetachRequest reads the detach request that the supplier service received and returns its request id.
 func sentImageDetachRequest(t *testing.T, service *sidecar) string {
 	t.Helper()
-	var line queuedLine
-	select {
-	case line = <-service.outbox:
-	case <-time.After(5 * time.Second):
-		t.Fatalf("supplier %s received no image detach request", service.name)
-	}
+	line := <-service.outbox
 	var sent sidecarRequest
 	if err := json.Unmarshal(line.bytes, &sent); err != nil {
 		t.Fatalf("decode detach request: %v", err)
@@ -186,8 +181,8 @@ func imageDetachFixture(t *testing.T, names ...string) (*Surfaces, map[string]*s
 }
 
 // A supplier that does not answer sends no event, so the detach waits for its acknowledgement, the end of the supplier
-// connection or the end of the surface session, with no limit and no record; the run outlasts the limit of 10 seconds that
-// the detach had.
+// connection or the end of the surface session, with no limit and no record. The supplier received the detach request, the
+// event at which the test checks that the detach is pending without an end or a record; the acknowledgement then ends it.
 // contract: images.detach.ends-by-its-events
 func TestAnImageDetachHasNoLimitAndWritesNoRecordWhileItWaits(t *testing.T) {
 	isolateTraceRecords(t)
@@ -202,7 +197,7 @@ func TestAnImageDetachHasNoLimitAndWritesNoRecordWhileItWaits(t *testing.T) {
 	select {
 	case data := <-ends:
 		t.Fatalf("a detach without its acknowledgement ended: %v", data)
-	case <-time.After(10500 * time.Millisecond):
+	default:
 	}
 	if err := surfaces.pendingImageDetachError("surface-a"); err == nil {
 		t.Fatal("the surface stopped waiting for its detach")
@@ -219,13 +214,11 @@ func TestAnImageDetachHasNoLimitAndWritesNoRecordWhileItWaits(t *testing.T) {
 	default:
 	}
 	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": true, "result": "detached"})
-	select {
-	case data := <-ends:
-		if fmt.Sprint(data) != endedEvent("surface-a", nil) {
-			t.Fatalf("ended event data %v, want surface-a without error", data)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("the acknowledgement sent no ended event")
+	if data := <-ends; fmt.Sprint(data) != endedEvent("surface-a", nil) {
+		t.Fatalf("ended event data %v, want surface-a without error", data)
+	}
+	if errors := bufferedTraces(t, "host.record.error"); len(errors) != 0 {
+		t.Fatalf("error records %v, want none after the acknowledgement", errors)
 	}
 }
 

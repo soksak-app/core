@@ -357,8 +357,10 @@ mod wait_boundary {
     use std::sync::mpsc;
 
     // The end of the connection of a sidecar ends the raster wait of its regions in that turn, because no raster of the ended
-    // connection comes (docs/spec/native-surfaces.md#layout-transaction).
-    // contract: images.wait.sidecar-end-ends-wait
+    // connection comes (docs/spec/native-surfaces.md#layout-transaction). The wait of the current raster has no time limit; it
+    // calls waiting at each check that finds a raster pending, under the owner lock, which marks the points where the wait is
+    // still open.
+    // contract: images.wait.sidecar-end-ends-wait, images.wait.ends-by-its-events
     #[test]
     fn the_end_of_a_sidecar_ends_the_raster_wait_of_its_regions() {
         let images = Images::default();
@@ -378,21 +380,30 @@ mod wait_boundary {
             .expect("image state")
             .last_sequence = 1;
         let waiter = images.clone();
-        let (started, waiting) = mpsc::sync_channel(1);
-        let (ended, result) = mpsc::channel();
+        let (checked, checks) = mpsc::channel();
+        let (answer, answered) = mpsc::channel();
         std::thread::spawn(move || {
-            let outcome = waiter.wait_current_observed(NO_WAIT_LIMIT, || {
-                started.send(()).expect("signal initialized wait")
+            let outcome = waiter.wait_current_observed(|| {
+                checked
+                    .send(())
+                    .expect("signal a pending check of the wait")
             });
-            ended.send(outcome).expect("the check reads the outcome");
+            answer
+                .send(outcome)
+                .expect("hand over the result of the raster wait");
         });
         // The wait has begun when it reports its first pending check; the end of the sidecar is sent after that, and the result
         // is read after the end, so no check of this test depends on time.
-        waiting.recv().expect("wait begins");
+        checks.recv().expect("the wait checks its pending raster");
+        assert!(
+            answered.try_recv().is_err(),
+            "the raster wait ended before its supplier connection ended"
+        );
         assert_eq!(images.invalidate_sidecar("sidecar"), 1);
-        let outcome = result
+        let outcome = answered
             .recv()
             .expect("the end of the sidecar did not end the raster wait");
+        assert_ne!(outcome.as_deref(), Err("presentationTimeout"));
         assert!(
             outcome
                 .as_ref()
@@ -401,7 +412,7 @@ mod wait_boundary {
         );
     }
 
-    // contract: images.wait.newer-sequence-rearms-wait
+    // contract: images.wait.newer-sequence-rearms-wait, images.wait.ends-by-its-events
     #[test]
     fn a_pending_newer_frame_is_required_after_the_wait_begins() {
         let images = Images::default();
@@ -420,46 +431,56 @@ mod wait_boundary {
             .get_mut(&key)
             .expect("image state")
             .last_sequence = 1;
-        let began = Instant::now();
-        let timeout = Duration::from_millis(500);
-        let waiter = images.clone();
-        let (started, waiting) = mpsc::sync_channel(1);
-        let worker = std::thread::spawn(move || {
-            waiter.wait_current_observed(timeout, || {
-                started.send(()).expect("signal initialized wait")
+        let (checked, checks) = mpsc::channel();
+        let wait = || {
+            let waiter = images.clone();
+            let checked = checked.clone();
+            std::thread::spawn(move || {
+                waiter.wait_current_observed(|| {
+                    checked
+                        .send(())
+                        .expect("signal a pending check of the wait")
+                })
             })
-        });
-        waiting
-            .recv_timeout(Duration::from_secs(2))
-            .expect("wait begins");
-        let arrival_elapsed = {
+        };
+        // The presented sequence and the newest accepted one change under one hold of the owner lock, so the wait checks
+        // after both.
+        let present = |sequence: i32, last: i32| {
             let mut inner = images.lock();
             let state = inner.states.get_mut(&key).expect("image state");
             state.presented_raster = config.raster;
-            state.presented_sequence = 1;
-            state.last_sequence = 2;
+            state.presented_sequence = sequence;
+            state.last_sequence = last;
             images.changed();
-            began.elapsed()
         };
-        let result = worker.join().expect("join image wait");
+        let worker = wait();
+        checks.recv().expect("the wait checks its pending raster");
+        present(1, 2);
+        checks
+            .recv()
+            .expect("the wait checks again after the change");
         assert!(
-            arrival_elapsed < timeout,
-            "controlled arrival missed the active wait deadline: {arrival_elapsed:?}"
-        );
-        assert_eq!(
-            result,
-            Err("presentationTimeout".into()),
+            !worker.is_finished(),
             "the newer accepted frame remains pending after the earlier frame completed"
         );
         assert!(
             !images.current_presented(),
             "instantaneous status still reports the pending newer frame"
         );
-        assert_eq!(
-            images.wait_current(Duration::ZERO),
-            Err("presentationTimeout".into()),
-            "a new wait must require the already accepted second frame"
+        present(2, 2);
+        assert_eq!(worker.join().expect("join image wait"), Ok(()));
+        // A new wait requires the frame that was accepted before it began.
+        present(2, 3);
+        let worker = wait();
+        checks
+            .recv()
+            .expect("the new wait checks its pending raster");
+        assert!(
+            !worker.is_finished(),
+            "a new wait must require the already accepted frame"
         );
+        present(3, 3);
+        assert_eq!(worker.join().expect("join image wait"), Ok(()));
     }
 
     #[test]

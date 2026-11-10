@@ -349,7 +349,7 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	}
 
 	first := configureImage(t, images, key, 800, 600, 2.0)
-	if images.WaitCurrent(0) {
+	if images.CurrentPresented() {
 		t.Fatal("visible raster passed before a frame was presented")
 	}
 	// Handles the envelope with onMain, which replies that the main thread display succeeded.
@@ -368,13 +368,13 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	if _, ok := response["image"].(map[string]interface{})["consumed"].(map[string]interface{}); !ok {
 		t.Fatalf("successful presentation did not reply consumed: %v", response)
 	}
-	if !images.WaitCurrent(0) {
+	if !images.CurrentPresented() {
 		t.Fatal("presented current raster did not release the wait")
 	}
 	if _, ok := host.Decide(configuredEnvelope(t, first, 2), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("newer sequence on the current raster was rejected")
 	}
-	if images.WaitCurrent(0) {
+	if images.CurrentPresented() {
 		t.Fatal("a newer sequence on the same raster did not rearm the wait")
 	}
 
@@ -385,31 +385,34 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	if err := images.SetVisible(key, false); err != nil {
 		t.Fatal(err)
 	}
-	if !images.WaitCurrent(0) {
+	if !images.CurrentPresented() {
 		t.Fatal("hidden image blocked presentation")
 	}
 	if err := images.SetVisible(key, true); err != nil {
 		t.Fatal(err)
 	}
-	if images.WaitCurrent(0) {
+	if images.CurrentPresented() {
 		t.Fatalf("visible raster %d passed without a current frame", second.Raster)
 	}
 	images.SetSurfaceVisible(key.Surface, false)
-	if !images.WaitCurrent(0) {
+	if !images.CurrentPresented() {
 		t.Fatal("an image in a hidden surface blocked presentation")
 	}
 	images.SetSurfaceVisible(key.Surface, true)
-	if images.WaitCurrent(0) {
+	if images.CurrentPresented() {
 		t.Fatal("showing the surface did not restore the pending raster")
 	}
 	images.EndGeneration(key.Surface)
-	if !images.WaitCurrent(0) {
+	if !images.CurrentPresented() {
 		t.Fatal("an ended surface generation blocked presentation")
 	}
 }
 
-// contract: images.wait.timeout-writes-no-log-line
-func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T) {
+// A presentation wait of the current raster has no time limit: the end of the supplier connection of its region ends it
+// with a failure that names the supplier, and the failure returns to its caller and writes no line. The end is
+// order-insensitive, so the test ends the connection right after it starts the wait.
+// contract: images.wait.ends-by-its-events
+func TestPresentationWaitEndsByTheEndOfItsSupplierAndWritesNoLogLine(t *testing.T) {
 	if config := os.Getenv(standardErrorChild); config != "" {
 		log, err := host.StartHostEventLog(config)
 		if err != nil {
@@ -430,9 +433,11 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 			t.Fatalf("attach image: %v", err)
 		}
 		configureImage(t, images, key, 800, 600, 2.0)
-		// With a time limit of 0 it ends before waiting, so a short time is given so that the path in which the wait ends at the time limit is exercised.
-		if err := images.WaitCurrentError(20 * time.Millisecond); err == nil || err.Error() != "presentationTimeout" {
-			t.Fatalf("the presentation wait ended with %v", err)
+		result := make(chan error, 1)
+		go func() { result <- images.WaitCurrentError() }()
+		images.InvalidateSidecar("sidecar-a")
+		if err := <-result; err == nil || err.Error() == "presentationTimeout" || !strings.Contains(err.Error(), "sidecar-a") {
+			t.Fatalf("the presentation wait ended with %v, want the failure of the supplier sidecar-a", err)
 		}
 		if err := log.Flush(5 * time.Second); err != nil {
 			t.Fatal(err)
@@ -440,7 +445,7 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 		return
 	}
 	config := t.TempDir()
-	command := exec.Command(os.Args[0], "-test.run=^TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine$")
+	command := exec.Command(os.Args[0], "-test.run=^TestPresentationWaitEndsByTheEndOfItsSupplierAndWritesNoLogLine$")
 	command.Env = append(os.Environ(), standardErrorChild+"="+config)
 	if output, err := command.Output(); err != nil {
 		t.Fatalf("child ended with %v, output %q", err, output)
@@ -448,7 +453,7 @@ func TestPresentationWaitTimeoutReturnsItsFailureAndWritesNoLogLine(t *testing.T
 	// The wait ended with its own failure, so the event log holds log.open, the policy that the test set and the run record and nothing else.
 	events := readHostEventLog(t, config)
 	if len(events) != 3 || events[2]["fields"].(map[string]any)["where"] != "run" {
-		t.Fatalf("a presentation timeout wrote events: %v", events)
+		t.Fatalf("a failed presentation wait wrote events: %v", events)
 	}
 }
 
@@ -961,7 +966,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	if seqVal != 1 {
 		t.Fatalf("expected sequence 1, got %v", seqVal)
 	}
-	if err := images.WaitCurrentError(0); err == nil || err.Error() != "presentFailed" {
+	if err := images.WaitCurrentError(); err == nil || err.Error() != "presentFailed" {
 		t.Fatalf("expected native presentation failure, got %v", err)
 	}
 }

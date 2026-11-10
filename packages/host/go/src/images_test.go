@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 )
 
@@ -371,7 +370,9 @@ func TestContinuousImageWaitIgnoresHiddenRegionsAndFailsOnPresentationError(t *t
 	}
 }
 
-// contract: images.wait.newer-sequence-rearms-wait
+// The wait of the current raster has no time limit and checks again at each change of the images; it calls waiting at each
+// check that finds a raster pending, under the owner lock, which marks the points where the wait is still open.
+// contract: images.wait.newer-sequence-rearms-wait, images.wait.ends-by-its-events
 func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	images := NewImages()
 	key := ImageKey{Surface: "surface", Name: "view"}
@@ -389,42 +390,49 @@ func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
 	images.mu.Lock()
 	images.states[key].LastSequence = 1
 	images.mu.Unlock()
-	began := time.Now()
-	timeout := 500 * time.Millisecond
-	started := make(chan struct{})
+	checks := make(chan struct{}, 4)
 	done := make(chan error, 1)
-	go func() { done <- images.waitCurrentObserved(timeout, func() { close(started) }) }()
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("image wait did not begin")
+	wait := func() {
+		go func() { done <- images.waitCurrentObserved(func() { checks <- struct{}{} }) }()
 	}
-	// Hold the owner lock across presentation and the next arrival so the waiter wakes after both.
-	images.mu.Lock()
-	state := images.states[key]
-	state.PresentedRaster = config.Raster
-	state.PresentedSequence = 1
-	state.LastSequence = 2
-	images.changedLocked()
-	elapsed := time.Since(began)
-	images.mu.Unlock()
-	var outcome error
-	select {
-	case outcome = <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("image wait did not end")
+	expectOpen := func(what string) {
+		t.Helper()
+		select {
+		case outcome := <-done:
+			t.Fatalf("%s ended with %v", what, outcome)
+		default:
+		}
 	}
-	if elapsed >= timeout {
-		t.Fatalf("controlled arrival missed the active wait deadline: %v", elapsed)
+	present := func(sequence, last int) {
+		images.mu.Lock()
+		state := images.states[key]
+		state.PresentedRaster = config.Raster
+		state.PresentedSequence = sequence
+		state.LastSequence = last
+		images.changedLocked()
+		images.mu.Unlock()
 	}
-	if outcome == nil || outcome.Error() != "presentationTimeout" {
-		t.Fatalf("pending newer frame did not remain required: %v", outcome)
-	}
+	wait()
+	<-checks
+	// Present the first frame and accept a newer one under one hold of the owner lock, so the wait checks after both.
+	present(1, 2)
+	<-checks
+	expectOpen("the wait of a pending newer frame")
 	if images.CurrentPresented() {
 		t.Fatal("instantaneous status omitted the pending newer frame")
 	}
-	if images.WaitCurrent(0) {
-		t.Fatal("new wait omitted the already accepted second frame")
+	present(2, 2)
+	if outcome := <-done; outcome != nil {
+		t.Fatalf("the wait ended with %v after the newer frame presented", outcome)
+	}
+	// A new wait requires a frame that was accepted before it began.
+	present(2, 3)
+	wait()
+	<-checks
+	expectOpen("a new wait of the already accepted frame")
+	present(3, 3)
+	if outcome := <-done; outcome != nil {
+		t.Fatalf("the new wait ended with %v after its frame presented", outcome)
 	}
 }
 

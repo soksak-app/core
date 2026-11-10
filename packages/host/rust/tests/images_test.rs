@@ -353,7 +353,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
         .configure_raster(&key, 800, 600, 2.0, true)
         .unwrap()
         .unwrap();
-    assert!(images.wait_current(Duration::ZERO).is_err());
+    assert!(!images.current_presented());
 
     let response = Arc::new(Mutex::new(None));
     let received = Arc::clone(&response);
@@ -369,7 +369,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
         },
     ));
     assert!(response.lock().unwrap().as_ref().unwrap()["image"]["consumed"].is_object());
-    assert!(images.wait_current(Duration::ZERO).is_ok());
+    assert!(images.current_presented());
 
     assert!(matches!(
         decide(
@@ -381,7 +381,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
         Decision::Present { .. }
     ));
     assert!(
-        images.wait_current(Duration::ZERO).is_err(),
+        !images.current_presented(),
         "a newer sequence on the same raster must be awaited"
     );
 
@@ -392,23 +392,26 @@ fn presentation_wait_tracks_the_visible_current_raster() {
     assert!(second.raster > first.raster);
     assert!(!images.current_presented());
     images.set_visible(&key, false).unwrap();
-    assert!(images.wait_current(Duration::ZERO).is_ok());
+    assert!(images.current_presented());
     images.set_visible(&key, true).unwrap();
-    assert!(images.wait_current(Duration::ZERO).is_err());
+    assert!(!images.current_presented());
     images.set_surface_visible(&key.0, false);
-    assert!(images.wait_current(Duration::ZERO).is_ok());
+    assert!(images.current_presented());
     images.set_surface_visible(&key.0, true);
-    assert!(images.wait_current(Duration::ZERO).is_err());
+    assert!(!images.current_presented());
     images.end_generation(&key.0);
-    assert!(images.wait_current(Duration::ZERO).is_ok());
+    assert!(images.current_presented());
 }
 
 /// The environment variable that tells the child process the configuration directory.
 const APPLICATION_LOG_CHILD: &str = "SOKSAK_APPLICATION_LOG_CHILD";
 
-// contract: images.wait.timeout-writes-no-log-line
+// A presentation wait of the current raster has no time limit: the end of the supplier connection of its region ends it with
+// a failure that names the supplier, and the failure returns to its caller and writes no line. The end is order-insensitive,
+// so the test ends the connection right after it starts the wait.
+// contract: images.wait.ends-by-its-events
 #[test]
-fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
+fn presentation_wait_ends_by_the_end_of_its_supplier_and_writes_no_log_line() {
     if let Some(config) = std::env::var_os(APPLICATION_LOG_CHILD) {
         if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
@@ -423,11 +426,17 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
             .configure_raster(&key, 800, 600, 2.0, true)
             .unwrap()
             .unwrap();
-        // With a time limit of 0, the wait ends before it waits, so a short time is given so that the path where the
-        // wait ends at the time limit is exercised.
-        assert_eq!(
-            images.wait_current(Duration::from_millis(20)),
-            Err("presentationTimeout".to_string())
+        let waiter = images.clone();
+        let wait = std::thread::spawn(move || waiter.wait_current());
+        images.invalidate_sidecar("sidecar-a");
+        let error = wait
+            .join()
+            .unwrap()
+            .expect_err("a raster whose supplier connection ended cannot present");
+        assert_ne!(error, "presentationTimeout");
+        assert!(
+            error.contains("sidecar-a"),
+            "the failure names the supplier whose connection ended: {error}"
         );
         writer.flush(Duration::from_secs(5)).unwrap();
         return;
@@ -436,7 +445,7 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "presentation_wait_timeout_returns_its_failure_and_writes_no_log_line",
+            "presentation_wait_ends_by_the_end_of_its_supplier_and_writes_no_log_line",
             "--nocapture",
             "--test-threads=1",
         ])
@@ -457,7 +466,7 @@ fn presentation_wait_timeout_returns_its_failure_and_writes_no_log_line() {
         .collect();
     assert!(
         events.len() == 3 && events[2]["fields"]["where"] == "run",
-        "a presentation timeout wrote events: {events:?}"
+        "a failed presentation wait wrote events: {events:?}"
     );
 }
 
@@ -870,7 +879,7 @@ fn presentation_failure_is_reported() {
     assert_eq!(response["image"]["name"], "view");
     assert_eq!(response["image"]["sequence"], 1);
     assert_eq!(
-        images.wait_current(Duration::ZERO),
+        images.wait_current(),
         Err("presentFailed".to_string()),
         "native presentation failure must unblock the current-raster wait"
     );
@@ -1288,7 +1297,7 @@ fn presented_frame_identity_is_reported() {
             Ok(())
         },
     ));
-    assert!(images.wait_current(Duration::ZERO).is_ok());
+    assert!(images.current_presented());
     let frame = images.presented_frame(&key).expect("a presented frame");
     assert_eq!(frame.generation, raster.generation);
     assert_eq!(frame.raster, raster.raster);

@@ -150,16 +150,12 @@ func pendingSurface(t *testing.T, s *Surfaces, surface string) <-chan ExposureRe
 	reply := make(chan ExposureResult, 1)
 	sent := make(chan struct{})
 	go func() {
-		reply <- s.requestSurface(surface, RelayCall{}, 0, func(uint64) error {
+		reply <- s.requestSurface(surface, func(uint64) error {
 			close(sent)
 			return nil
 		})
 	}()
-	select {
-	case <-sent:
-	case <-time.After(5 * time.Second):
-		t.Fatalf("the request to surface %q was not sent", surface)
-	}
+	<-sent
 	return reply
 }
 
@@ -202,7 +198,7 @@ func TestARequestAfterTheReloadIsRefusedUntilTheNewPageStarts(t *testing.T) {
 	s, _ := reloadFixture()
 	s.askPageToReload(func() {})
 	sent := false
-	reply := s.requestSurface("tab", RelayCall{}, time.Second, func(uint64) error {
+	reply := s.requestSurface("tab", func(uint64) error {
 		sent = true
 		return nil
 	})
@@ -213,7 +209,7 @@ func TestARequestAfterTheReloadIsRefusedUntilTheNewPageStarts(t *testing.T) {
 		t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
 	}
 	s.pageStarted()
-	if reply := s.requestSurface("tab", RelayCall{}, time.Second, func(id uint64) error {
+	if reply := s.requestSurface("tab", func(id uint64) error {
 		sent = true
 		return s.host.relay.Resolve(id, relayTarget{owner: s, surface: "tab"}, ExposureResult{})
 	}); !sent || reply.Error != nil {
@@ -282,13 +278,8 @@ func TestTheEndOfTheProcessOfASurfacePageEndsTheRequestsToThatSurface(t *testing
 	sibling := pendingSurface(t, s, "other-tab")
 	theirs := pendingSurface(t, other, "tab")
 	s.surfaceTerminated(viewID)
-	select {
-	case reply := <-mine:
-		if reply.Error == nil || reply.Error.Code != codeNoWindow {
-			t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("the request to the surface whose page process ended is still waiting")
+	if reply := <-mine; reply.Error == nil || reply.Error.Code != codeNoWindow {
+		t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
 	}
 	for name, reply := range map[string]<-chan ExposureResult{"another surface": sibling, "another window": theirs} {
 		select {

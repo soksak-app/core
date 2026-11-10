@@ -112,7 +112,7 @@ fn a_poisoned_pending_lock_still_answers_a_request() {
             .reply("main", &RawValue::from_string(payload).unwrap())
             .expect("the reply failed while the pending lock was poisoned");
     });
-    let answer = relay.request_call("main", None, None, move |id| {
+    let answer = relay.request("main", move |id| {
         started.send(id).unwrap();
         Ok(())
     });
@@ -182,32 +182,24 @@ fn pending_surface(
     let (sent, wait) = mpsc::channel();
     let (relay, reloading) = (relay.clone(), reloading.clone());
     std::thread::spawn(move || {
-        let reply = request_surface(&relay, &reloading, label, None, None, |_| {
+        let reply = request_surface(&relay, &reloading, label, |_| {
             sent.send(()).map_err(|error| error.to_string())
         });
         outcome.send(reply).expect("the test holds the receiver");
     });
-    wait.recv_timeout(Duration::from_secs(5))
+    wait.recv()
         .expect("the request to the surface was not sent");
     received
 }
 
 /// Sends a request to a surface whose document answers it at once.
 fn relay_answers_surface(relay: &Relay, reloading: &AtomicBool) -> Result<Box<RawValue>, Failure> {
-    request_surface(
-        relay,
-        reloading,
-        "surface-main-tab",
-        None,
-        Some(Duration::from_secs(1)),
-        |id| {
-            let value =
-                RawValue::from_string("1".to_string()).map_err(|error| error.to_string())?;
-            let pending = relay.pending.lock().map_err(|error| error.to_string())?;
-            let (_, reply) = pending.get(&id).ok_or("the relay holds no request")?;
-            reply.send(Ok(value)).map_err(|error| error.to_string())
-        },
-    )
+    request_surface(relay, reloading, "surface-main-tab", |id| {
+        let value = RawValue::from_string("1".to_string()).map_err(|error| error.to_string())?;
+        let pending = relay.pending.lock().map_err(|error| error.to_string())?;
+        let (_, reply) = pending.get(&id).ok_or("the relay holds no request")?;
+        reply.send(Ok(value)).map_err(|error| error.to_string())
+    })
 }
 
 // contract: exposure.relay.page-reload-ends-surface-requests
@@ -227,8 +219,8 @@ fn a_reload_asked_of_a_page_ends_the_requests_to_its_surfaces() {
     })
     .expect("the reload request is sent");
     let ended = mine
-        .recv_timeout(Duration::from_secs(2))
-        .expect("the request to a surface of the reloading page is still waiting");
+        .recv()
+        .expect("the request to a surface of the reloading page answers");
     assert!(
         matches!(ended, Err(failure) if failure.code == MISSING_DOCUMENT),
         "the request to a surface of the reloading page did not end with the closed-document code"
@@ -254,17 +246,10 @@ fn a_request_after_the_reload_is_refused_until_the_new_page_starts() {
     let reloading = AtomicBool::new(false);
     ask_page_to_reload(&relay, &reloading, "main", || Ok(())).expect("the reload request is sent");
     let mut sent = false;
-    let refused = request_surface(
-        &relay,
-        &reloading,
-        "surface-main-tab",
-        None,
-        Some(Duration::from_secs(1)),
-        |_| {
-            sent = true;
-            Ok(())
-        },
-    );
+    let refused = request_surface(&relay, &reloading, "surface-main-tab", |_| {
+        sent = true;
+        Ok(())
+    });
     assert!(
         !sent,
         "a request sent after the reload request reached the document"

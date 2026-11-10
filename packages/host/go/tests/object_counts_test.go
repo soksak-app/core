@@ -174,7 +174,7 @@ func TestRelayPendingCountFollowsTheWaitingRequests(t *testing.T) {
 	done := make(chan host.ExposureResult, 1)
 	sent := make(chan struct{})
 	go func() {
-		done <- relay.Request("main", 10*time.Second, func(uint64) error { close(sent); return nil })
+		done <- relay.Request("main", func(uint64) error { close(sent); return nil })
 	}()
 	// The request is registered before it is sent, so the send marks the count as changed.
 	<-sent

@@ -4,7 +4,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 use soksak_sok::appupdate::{
@@ -216,6 +215,17 @@ fn sleeping() -> std::process::Child {
     Command::new("sleep").arg("60").spawn().expect("run sleep")
 }
 
+/// Whether the process pid still runs. The test ends the process it controls, and the application starts only after that
+/// exit, so a start that sees the process running started before the exit.
+fn running(pid: i32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .expect("run kill")
+        .success()
+}
+
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended
 #[test]
 fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
@@ -239,6 +249,10 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
                     arguments: vec!["--config-dir".into(), "/config".into()],
                 },
                 &|opened: &Path, arguments: &[String]| {
+                    assert!(
+                        !running(pid as i32),
+                        "the application started before the process ended"
+                    );
                     assert_eq!(plist_text(opened), "new", "the started bundle");
                     started.lock().unwrap().push(format!(
                         "{} {}",
@@ -249,11 +263,6 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
                 },
             )
         });
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(
-            !handle.is_finished(),
-            "the replacement finished while the process ran"
-        );
         process.kill().unwrap();
         process.wait().unwrap();
         handle.join().unwrap()
@@ -366,14 +375,15 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
                     target: target.clone(),
                     arguments: vec![],
                 },
-                &|_: &Path, _: &[String]| Ok(()),
+                &|_: &Path, _: &[String]| {
+                    assert!(
+                        !running(pid),
+                        "the application started before the process ended"
+                    );
+                    Ok(())
+                },
             )
         });
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(
-            !handle.is_finished(),
-            "the replacement ended while the process ran"
-        );
         process.kill().unwrap();
         process.wait().unwrap();
         handle.join().unwrap()
@@ -402,6 +412,10 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
                     arguments: vec!["--config-dir".into(), "/config".into()],
                 },
                 &|opened: &Path, arguments: &[String], activate: bool| {
+                    assert!(
+                        !running(pid as i32),
+                        "the application started before the process ended"
+                    );
                     started.lock().unwrap().push(format!(
                         "{} {} activate={activate}",
                         opened.display(),
@@ -411,11 +425,6 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
                 },
             )
         });
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(
-            !handle.is_finished(),
-            "the relaunch finished while the process ran"
-        );
         process.kill().unwrap();
         process.wait().unwrap();
         handle.join().unwrap()
@@ -466,14 +475,15 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
                     target: target.clone(),
                     arguments: vec![],
                 },
-                &|_: &Path, _: &[String], _: bool| Ok(()),
+                &|_: &Path, _: &[String], _: bool| {
+                    assert!(
+                        !running(pid),
+                        "the application started before the process ended"
+                    );
+                    Ok(())
+                },
             )
         });
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(
-            !handle.is_finished(),
-            "the relaunch ended while the process ran"
-        );
         process.kill().unwrap();
         process.wait().unwrap();
         handle.join().unwrap()

@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"io"
@@ -16,7 +17,7 @@ func (diagnosticsClockBackend) Windows() []WindowEntry {
 	return []WindowEntry{{Window: "main"}}
 }
 func (diagnosticsClockBackend) HasWindow(window string) bool { return window == "main" }
-func (diagnosticsClockBackend) PageRequest(string, string, json.RawMessage) (json.RawMessage, error) {
+func (diagnosticsClockBackend) PageRequest(context.Context, string, string, json.RawMessage) (json.RawMessage, error) {
 	return json.RawMessage(`null`), nil
 }
 func (diagnosticsClockBackend) HostStatus(string, string) (any, error) { return nil, nil }

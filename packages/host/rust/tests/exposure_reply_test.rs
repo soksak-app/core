@@ -1,11 +1,8 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
 use soksak_host::exposure::{Relay, reply_target};
-
-const WAIT: Duration = Duration::from_secs(5);
 
 /// The response text that a document sends.
 fn raw(value: &Value) -> Box<RawValue> {
@@ -47,7 +44,7 @@ fn main_and_scoped_reply_payloads_reach_their_requests() {
     let relay = Arc::new(Relay::default());
 
     let replying = relay.clone();
-    let main = relay.request("main", Some(WAIT), move |id| {
+    let main = relay.request("main", move |id| {
         let payload = decode(json!({"id": id, "result": null}));
         assert_eq!(payload.get("surface"), None);
         let target = reply_target("main", &payload).unwrap();
@@ -59,7 +56,7 @@ fn main_and_scoped_reply_payloads_reach_their_requests() {
     assert_eq!(main.unwrap().get(), "null");
 
     let replying = relay.clone();
-    let scoped = relay.request("surface-main-tab-1", Some(WAIT), move |id| {
+    let scoped = relay.request("surface-main-tab-1", move |id| {
         let payload = decode(json!({"id": id, "surface": "tab-1", "result": {"ok": true}}));
         assert_eq!(payload["surface"], "tab-1");
         let target = reply_target("main", &payload).unwrap();

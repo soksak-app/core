@@ -179,7 +179,7 @@ fn relay_pending_count_follows_the_waiting_requests() {
     let (sent_tx, sent_rx) = mpsc::channel();
     std::thread::scope(|scope| {
         let waiting = scope.spawn(|| {
-            relay.request("main", Some(Duration::from_secs(10)), |_id| {
+            relay.request("main", |_id| {
                 sent_tx.send(()).unwrap();
                 Ok(())
             })
