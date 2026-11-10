@@ -174,12 +174,12 @@ export async function prepareRasterSession(client, request, { startupLimit = 15_
 
 /**
  * The processes of the persistent raster probe service of the configuration `configDir`: the one service process that the host
- * started with `--service-dir <configDir>/services/rasterprobe-service` (docs/spec/persistent-services.md), whose PID its endpoint
+ * started with `--service-dir <configDir>/services/sok-rasterprobe` (docs/spec/persistent-services.md), whose PID its endpoint
  * publishes, and the child processes of its sessions, one per open session. Processes of other configurations are not counted.
  * Returns `{service, children}` with the child PIDs sorted.
  */
 export function rasterServiceSnapshot(configDir) {
-  const serviceDir = join(realpathSync(configDir), "services", "rasterprobe-service");
+  const serviceDir = join(realpathSync(configDir), "services", "sok-rasterprobe");
   const endpoint = JSON.parse(readFileSync(join(serviceDir, "endpoint.json"), "utf8"));
   assert.equal(endpoint.protocol, 1, "the raster probe service protocol does not match");
   assert.ok(Number.isInteger(endpoint.pid) && endpoint.pid > 0, "the raster probe service PID is missing");

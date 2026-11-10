@@ -2,7 +2,7 @@
 // layout that environment.json of the application declares (workspace.grid); its tabs that name a plugin that the configuration
 // does not load open as placeholders. The preparation replaces each such placeholder by a tab of the start plugin of the check in
 // the same card and returns the ready tab of the focused card. The start plugin is the start probe that the package ships
-// (fixtures/start-probe, START_PROBE), which `soksak-test-app` installs in every run, unless a check names another fixture plugin
+// (fixtures/start-probe, START_PROBE), which `sok-test-app` installs in every run, unless a check names another fixture plugin
 // that its run installs, with the entries that its tab registers when it is ready. A check of a plugin whose start state holds a
 // tab of that plugin names it in `addPluginTab`.
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";

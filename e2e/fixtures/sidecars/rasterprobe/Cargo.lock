@@ -39,7 +39,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rasterprobe-service"
+name = "sok-rasterprobe"
 version = "0.0.40"
 dependencies = [
  "libc",

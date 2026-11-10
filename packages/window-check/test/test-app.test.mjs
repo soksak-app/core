@@ -252,7 +252,7 @@ test("the remaining processes are those whose command line names a path of the r
 });
 
 test("the run modules name no real plugin", () => {
-  for (const file of ["../test-app.mjs", "../soksak-test-app.mjs", "../catalog.mjs"]) {
+  for (const file of ["../test-app.mjs", "../sok-test-app.mjs", "../catalog.mjs"]) {
     assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), "utf8"), /["'](layoutprobe|terminal|term|browser|files|editor|hwp)["'.]/);
   }
 });

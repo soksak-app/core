@@ -336,7 +336,7 @@ test("a raster probe waits for its first frame while its window draws its image 
 test("a session that a respawned service opens is a new session, also when the new service names it as the dead one did", { timeout: 1000 }, () => {
   // A service numbers its sessions from s1, so the session that a respawned service opens for the surface can have the name of
   // the session that died with the old service; the service that holds it tells the two apart (docs/spec/persistent-services.md).
-  const service = (pid) => ({ pid, directory: "/config/services/rasterprobe-service", version: "0.0.40" });
+  const service = (pid) => ({ pid, directory: "/config/services/sok-rasterprobe", version: "0.0.40" });
   const before = { event: "session", session: "s1", created: true, connected: true, child: 21, service: service(20), rows: 2, error: null };
   const reopened = reopenedSession(before);
   assert.equal(reopened({ ...before, rows: 0, child: 31, service: service(30) }), true, "the session of the respawned service");
