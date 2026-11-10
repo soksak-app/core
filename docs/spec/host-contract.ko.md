@@ -1216,8 +1216,8 @@ fn invalid_json_closes_connection() {
 | `log.writer.error-wakes-the-writer` | level이 `error`인 event는 배치 간격을 기다리지 않고 기록된다. | all |
 | `log.writer.files-are-private` | 로그 폴더는 mode 0700, 로그 파일은 mode 0600이다. | all |
 | `log.writer.output-follows-the-contract` | writer의 파일은 자신의 event를 선언한 catalog에 대해 `@soksak/log-contract` 감사를 통과한다. | all |
-| `log.writer.flush-at-exit` | `flush`는 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, 기한이 지나면 그 기한을 밝히는 오류로 실패한다. | all |
-| `log.writer.flush-behind-a-flush-or-a-stop-is-answered` | writer가 다른 flush 요청이나 stop 뒤에서 찾은 flush 요청은 답을 받고 그 뒤의 event는 저장되며, 끝난 writer의 flush는 deadline이 아닌 오류로 바로 실패한다. | all |
+| `log.writer.flush-at-exit` | `flush`에는 시간 제한이 없다. 받아들인 모든 event가 디스크에 기록된 뒤 돌아오며, writer의 끝은 그것을 `the event writer ended before it answered the flush`로 실패시킨다. | all |
+| `log.writer.flush-behind-a-flush-or-a-stop-is-answered` | writer가 다른 flush 요청이나 stop 뒤에서 찾은 flush 요청은 답을 받고 그 뒤의 event는 저장되며, 끝난 writer의 flush는 writer의 끝으로 바로 실패한다. | all |
 | `log.writer.relays-events-with-their-layer-and-time` | host의 writer는 프로세스의 다른 계층이 중계한 event를 그 event의 `layer`, `ts_us`, `mono_ns`, `cids`와 writer의 `seq`로 저장하고, 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, 0인 `mono_ns`, 유효하지 않은 식별자는 오류로 거부한다. | all |
 | `log.writer.names-the-writing-document` | 중계된 event는 자신을 쓴 문서를 layer `workbench`이면 `start`에, layer `page`이면 `page`에, layer `plugin`이면 둘 중 정확히 하나에 이름한다. writer는 이름한 member를 저장하고, member가 없는 event(`the event <name> of the layer <layer> names its writer in start`, `… in page or start`), layer `plugin`의 event에 두 member가 모두 있는 경우(`… names its writer in one of page and start, not both`), layer가 허용하지 않는 member(`the event <name> of the layer <layer> names page, which only an event of the layer page or plugin names`, `start`이면 `workbench or plugin`)를 거부한다. | all |
 | `log.writer.rotates-at-the-bound-and-keeps-generations` | writer는 파일을 `rotate_bytes`를 넘게 될 줄 앞에서 닫고, 닫은 파일을 하나도 지우지 않고 세대 `.1`부터 `.N`으로 보관하고, 새 파일을 `log.open`과 `log.rotated`로 시작하되 `seq`를 이어 가고, 모든 세대가 계약의 파일이다. | all |
