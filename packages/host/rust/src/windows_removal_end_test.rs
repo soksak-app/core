@@ -19,6 +19,8 @@ fn asked_window() -> (AppHandle, Webview) {
     let windows = Windows::default();
     register_records(&windows, "fixture", records);
     app.manage(windows);
+    // The host manages the exposure records of every window, which the end of a page reaches.
+    app.manage(crate::exposure::Exposure::default());
     (app, webview)
 }
 

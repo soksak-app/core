@@ -52,6 +52,8 @@ fn a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page() {
 // contract: view.presentation-wait.surface-close-ends-it
 #[test]
 fn the_close_of_a_surface_ends_the_presentation_wait_of_its_view_with_the_reason_closed() {
+    // The abandoned record is an event of the performance trace, which stores nothing while the trace is off.
+    let _trace = crate::performance::test_trace();
     let surface = "tab-close-ends-presentation";
     let (data, generation) = records_with_view(surface, "probe");
     assert!(data.documents.presentation().begin(surface, generation, 41));
