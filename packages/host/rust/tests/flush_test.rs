@@ -110,7 +110,7 @@ fn a_buffered_close_is_recorded() {
             .unwrap();
         let writer = records::start_writer(Path::new(&config));
         every_pending_reply_scenario();
-        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -147,7 +147,7 @@ fn a_close_that_finds_room_writes_no_buffered_record() {
             .unwrap();
         let writer = records::start_writer(Path::new(&config));
         close_with_room_scenario();
-        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

@@ -17,10 +17,6 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
-// panicFlushDeadline is how long the entrance of the goroutines waits for the event of a panic to reach the file before the
-// process ends.
-const panicFlushDeadline = 2 * time.Second
-
 // PanicWriterDeadline is how long the entrance of the goroutines waits for the writer when the panic happened before the writer
 // was attached. The writer attaches during the start of the host; the bound ends a process whose start never attaches it.
 // The value is 5 seconds; a test injects a shorter one.
@@ -47,7 +43,7 @@ func recordPanic(name, text, stack string) {
 	EmitHost(LevelError, "host.panic", map[string]any{"name": name, "text": text, "stack": stack})
 	// The process ends after this record without its shutdown, so the record of its end names the exit code.
 	EmitClosed("exit", map[string]any{"code": routine.PanicStatus})
-	if err := FlushRecords(panicFlushDeadline); err != nil {
+	if err := FlushRecords(); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record of the panic of %s is not stored: %v\n", name, err)
 	}
 }
@@ -115,7 +111,9 @@ func EmitClosed(cause string, fields map[string]any) {
 type QuitSource map[string]any
 
 // HostQuitSource is a quit that the host asked for itself: request is `quit-command`, `last-window-closed` or `update`.
-func HostQuitSource(request string) QuitSource { return QuitSource{"source": "host", "request": request} }
+func HostQuitSource(request string) QuitSource {
+	return QuitSource{"source": "host", "request": request}
+}
 
 // AppleEventQuitSource is a quit Apple event and the process that sent it, 0 when the event names none, with the bundle
 // identifier or name of that process while it runs, empty otherwise.
@@ -389,23 +387,24 @@ func RecordInputRelay(surface, name, event string) error {
 	return nil
 }
 
-// FlushRecords waits until the records written so far are in the event log, at most deadline. The paths that end the process
+// FlushRecords waits until the records written so far are in the event log; the answer of the writer or its end ends the
+// wait (docs/spec/logging.md#writers). The paths that end the process
 // call it, so the record of the failure is stored before the process ends. Without an attached writer there is nothing to
 // wait for: the records wait in the start buffer, and the standard error holds the failure.
-func FlushRecords(deadline time.Duration) error {
+func FlushRecords() error {
 	records.Lock()
 	log := records.log
 	records.Unlock()
 	if log == nil {
 		return nil
 	}
-	return log.Flush(deadline)
+	return log.Flush()
 }
 
 // EmitHostPlaced stores an event of the layer `host` like EmitHost, waits until it is in the event log, and returns the boot
 // identifier of the log and the seq of the line, which together name the line. Without an attached writer the event has no
 // position, so it is an error.
-func EmitHostPlaced(level Level, event string, fields map[string]any, deadline time.Duration) (string, uint64, error) {
+func EmitHostPlaced(level Level, event string, fields map[string]any) (string, uint64, error) {
 	if !strings.HasPrefix(event, "host.") {
 		return "", 0, fmt.Errorf("the event %q does not start with host.", event)
 	}
@@ -419,7 +418,7 @@ func EmitHostPlaced(level Level, event string, fields map[string]any, deadline t
 	if log == nil {
 		return "", 0, fmt.Errorf("the event log of the host is not attached")
 	}
-	seq, err := log.EmitPlacedBounded(level, event, text, produced, deadline)
+	seq, err := log.EmitPlacedBounded(level, event, text, produced)
 	if err != nil {
 		return "", 0, err
 	}

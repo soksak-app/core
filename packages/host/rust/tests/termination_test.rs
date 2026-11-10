@@ -11,7 +11,6 @@ use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, mpsc};
-use std::time::Duration;
 
 use signal_hook::consts::SIGTERM;
 use signal_hook::low_level::raise;
@@ -124,7 +123,7 @@ fn a_quit_stores_its_cause_before_it_runs() {
             "quit-command",
             soksak_host::event_record::host_quit_source("quit-command"),
             || {
-                log.flush(Duration::from_secs(5)).unwrap();
+                log.flush().unwrap();
                 let events = records::read_events(&records::event_log_path(&directory));
                 match events.iter().find(|event| event["event"] == "log.closed") {
                     Some(event) => println!("log.closed: {}", event["fields"]),
@@ -175,7 +174,7 @@ fn record_closed_on_signal() {
     .unwrap();
     raise(SIGTERM).unwrap();
     quitted.recv().unwrap();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events = records::read_events(&records::event_log_path(&directory));
     match events.iter().find(|event| event["event"] == "log.closed") {
@@ -318,6 +317,6 @@ fn record_quit_sources() {
     quitted.recv().unwrap();
     emit_exit_request(|| 10);
     emit_exit_request(|| -1);
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
 }

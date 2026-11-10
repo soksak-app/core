@@ -2,8 +2,6 @@
 //! event log of the application, so a test is a range of positions `(boot, seq)` of the log. They exist only in diagnostic
 //! builds.
 
-use std::time::Duration;
-
 use serde_json::{Map, Value, json};
 
 use crate::endpoint::Failure;
@@ -57,7 +55,7 @@ pub fn parse_test_mark(params: &Map<String, Value>) -> Result<TestMark, Failure>
 
 /// Stores the mark as the event `host.test.start` or `host.test.end`, waits until it is in the log, and returns the boot
 /// identifier of the log and the `seq` of the line.
-pub fn emit_test_mark(mark: &TestMark, deadline: Duration) -> Result<(String, u64), String> {
+pub fn emit_test_mark(mark: &TestMark) -> Result<(String, u64), String> {
     let (event, fields) = if mark.kind == "end" {
         (
             "host.test.end",
@@ -70,5 +68,5 @@ pub fn emit_test_mark(mark: &TestMark, deadline: Duration) -> Result<(String, u6
         )
     };
     // events: host.test.start, host.test.end
-    emit_host_placed(Level::Info, event, fields, deadline)
+    emit_host_placed(Level::Info, event, fields)
 }

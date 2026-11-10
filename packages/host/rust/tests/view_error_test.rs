@@ -8,7 +8,6 @@ mod folder;
 mod records;
 
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use soksak_host::documents::ViewChannels;
 
@@ -32,7 +31,7 @@ fn a_view_error_message_is_written_on_the_error_display_path_with_its_view() {
             ),
             Ok(false)
         );
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

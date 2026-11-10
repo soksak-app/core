@@ -16,9 +16,6 @@ use crate::replay::set_run_log;
 use crate::routine::{PANIC_STATUS, Panic, guard, set_interrupt_recorder, set_recorder};
 use crate::{Error, Options, command, config_dir_of};
 
-/// How long a run waits for the writer to put its last events on disk.
-const FLUSH_DEADLINE: Duration = Duration::from_secs(2);
-
 /// The bound of the arguments and of the error text of a command event (docs/spec/logging.md#bounds).
 const CALL_TEXT_BYTES: usize = 1024;
 
@@ -207,7 +204,7 @@ pub fn logged(
         set_recorder(Some(Arc::new(move |panic: &Panic| {
             record.panicked(panic);
             record.finish(PANIC_STATUS, &format!("sok: panic: {}", panic.text));
-            if let Err(error) = record.log.flush(FLUSH_DEADLINE) {
+            if let Err(error) = record.log.flush() {
                 eprintln!("sok: event log: {error}");
             }
         })));
@@ -241,7 +238,7 @@ pub fn logged(
         }
     };
     record.finish(status, &String::from_utf8_lossy(&captured.text));
-    if let Err(error) = record.log.flush(FLUSH_DEADLINE)
+    if let Err(error) = record.log.flush()
         && writeln!(captured.stream, "sok: event log: {error}").is_err()
     {
         status = 3;

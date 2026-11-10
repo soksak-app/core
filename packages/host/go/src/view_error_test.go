@@ -5,7 +5,6 @@ package host
 import (
 	"os"
 	"testing"
-	"time"
 )
 
 // contract: view.error.display
@@ -18,7 +17,7 @@ func TestViewErrorMessageIsWrittenOnTheErrorDisplayPathWithItsView(t *testing.T)
 		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.error","plugin":"probe","reason":"uncaught error: boom"}}`); err != nil {
 			t.Fatalf("view.error message: %v, want the message accepted and written as a record", err)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		return

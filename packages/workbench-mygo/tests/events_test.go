@@ -823,7 +823,7 @@ func TestTheWriterOfTheHostStoresTheEvents(t *testing.T) {
 	events.Command("core.test", time.Millisecond, nil)
 	events.Flush(func() { ended = true })
 	f.queue.until(t, func() bool { return ended })
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var lines []string

@@ -1337,7 +1337,7 @@ func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage, _ 
 	if _, err := e.window(params); err != nil {
 		return nil, err
 	}
-	return nil, FlushRecords(10 * time.Second)
+	return nil, FlushRecords()
 }
 
 // diagnosticHostRelaunch quits the application as host.quit does and starts it again with the same executable and
@@ -1372,7 +1372,7 @@ func diagnosticTestMark(e *Endpoint, _ *endpointConn, params json.RawMessage, _ 
 	if err != nil {
 		return nil, err
 	}
-	boot, seq, err := EmitTestMark(mark, 10*time.Second)
+	boot, seq, err := EmitTestMark(mark)
 	if err != nil {
 		return nil, err
 	}
@@ -1388,7 +1388,7 @@ func diagnosticStallDump(e *Endpoint, _ *endpointConn, params json.RawMessage, _
 	if err != nil {
 		return nil, err
 	}
-	boot, seq, err := EmitStallDump(path, 10*time.Second)
+	boot, seq, err := EmitStallDump(path)
 	if err != nil {
 		return nil, err
 	}

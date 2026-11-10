@@ -836,7 +836,7 @@ fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
     );
     assert!(!folder.exists(), "folder remained after start panicked");
     assert_eq!(recording.running(), None);
-    writer.flush(std::time::Duration::from_secs(5)).unwrap();
+    writer.flush().unwrap();
     use_host_event_log(None);
     let errors: Vec<String> = records::read_events(&records::event_log_path(config.path()))
         .into_iter()
@@ -870,7 +870,7 @@ fn a_panicking_start_releases_retired_capture_after_stop_error() {
     assert!(!capture.active.get(), "native stream was not retired");
     assert!(!folder.exists(), "retired folder was retained");
     assert_eq!(recording.running(), None);
-    writer.flush(std::time::Duration::from_secs(5)).unwrap();
+    writer.flush().unwrap();
     use_host_event_log(None);
     let errors: Vec<String> = records::read_events(&records::event_log_path(config.path()))
         .into_iter()
@@ -933,7 +933,7 @@ fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
     assert!(!capture.active.get());
     assert!(!folder.exists());
     assert_eq!(recording.running(), None);
-    writer.flush(std::time::Duration::from_secs(5)).unwrap();
+    writer.flush().unwrap();
     use_host_event_log(None);
     let errors: Vec<String> = records::read_events(&records::event_log_path(config.path()))
         .into_iter()

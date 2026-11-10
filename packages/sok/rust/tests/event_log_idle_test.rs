@@ -189,7 +189,7 @@ fn the_events_after_the_first_wait_for_the_batch() {
     assert!(idle.log.emit(Level::Info, "writer.idle.second", &json!({})));
     std::thread::sleep(Duration::from_millis(50));
     assert!(!idle.stores("writer.idle.second"));
-    idle.log.flush(Duration::from_secs(5)).unwrap();
+    idle.log.flush().unwrap();
     assert!(idle.stores("writer.idle.second"));
 }
 
@@ -267,7 +267,7 @@ fn close_stores_what_waits_and_what_the_source_holds() {
 fn a_writer_that_sleeps_takes_the_source_when_it_flushes_and_closes() {
     let idle = idle(HOUR);
     idle.source.hold("native.idle.flushed");
-    idle.log.flush(Duration::from_secs(5)).unwrap();
+    idle.log.flush().unwrap();
     assert!(idle.stores("native.idle.flushed"));
     idle.source.hold("native.idle.closed");
     idle.log.close();

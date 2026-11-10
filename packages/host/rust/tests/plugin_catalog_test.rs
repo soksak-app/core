@@ -73,7 +73,7 @@ fn the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_cat
     .unwrap();
     apply_plugin_event_classes(&log, &config);
     log.emit(Level::Info, "plugin.probe.frame", &json!({"sequence": 1}));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events: Vec<Value> = fs::read_to_string(log.path())
         .unwrap()
@@ -136,7 +136,7 @@ fn the_host_keeps_the_classes_of_a_plugin_that_a_change_removed() {
     fs::write(&installed, r#"{"format":3,"plugins":{},"sidecars":{}}"#).unwrap();
     apply_plugin_event_classes(&log, &config);
     log.emit(Level::Info, "plugin.probe.frame", &json!({"sequence": 1}));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events: Vec<Value> = fs::read_to_string(log.path())
         .unwrap()
         .lines()
@@ -189,7 +189,7 @@ fn the_writer_records_the_plugin_catalogs_it_holds_at_each_apply() {
     apply_plugin_event_classes(&log, &config);
     fs::write(config.join("plugins/installed.json"), installed("false")).unwrap();
     apply_plugin_event_classes(&log, &config);
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events: Vec<Value> = fs::read_to_string(log.path())
         .unwrap()

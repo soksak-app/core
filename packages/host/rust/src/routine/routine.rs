@@ -19,9 +19,6 @@ use crate::event_record::{emit_host, flush_records};
 /// The exit status of the process after a panic; it is the status of an unwinding Rust panic of the main thread.
 pub const PANIC_STATUS: i32 = 101;
 
-/// How long the thread that ends the process waits for the event of a panic to reach the file.
-const FLUSH_DEADLINE: Duration = Duration::from_secs(2);
-
 /// How long the thread that ends the process waits for the writer when the panic happened before the writer opened. The wait
 /// ends at the attach of the writer, which wakes it. The bound applies only to a writer that never opens, which is a start that
 /// fails before the writer exists; then the record goes to the standard error instead of the event log.
@@ -91,7 +88,7 @@ pub fn start_panic_ender_with(writer_deadline: Duration) {
             let mut code = serde_json::Map::new();
             code.insert("code".into(), serde_json::json!(PANIC_STATUS));
             crate::event_record::emit_closed("exit", code);
-            if let Err(error) = flush_records(FLUSH_DEADLINE) {
+            if let Err(error) = flush_records() {
                 eprintln!("event writer: the record of the panic is not stored: {error}");
             }
             std::process::exit(PANIC_STATUS);

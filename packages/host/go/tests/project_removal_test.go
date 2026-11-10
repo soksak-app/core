@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -21,7 +20,7 @@ func TestTheEndOfAWindowRecordsEachRemovalItAllows(t *testing.T) {
 		}
 	}
 	removals.Abandon("project-one")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var allowed []string

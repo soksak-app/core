@@ -60,7 +60,7 @@ fn a_line_of_a_file_that_cannot_be_opened_is_reported_as_dropped() {
     std::fs::create_dir(log.debug_path()).unwrap();
     assert!(log.emit(Level::Debug, "host.probe.debug", &json!({"n": 1})));
     assert!(log.emit(Level::Info, "host.probe.after", &json!({"n": 2})));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let lines = stored_lines(log.path());
     let dropped = lines
         .iter()

@@ -20,9 +20,6 @@ import (
 // of the executable.
 type Command func(args []string, stdout, stderr io.Writer, options Options) int
 
-// eventFlushDeadline is how long a run waits for the writer to put its last events on disk.
-const eventFlushDeadline = 2 * time.Second
-
 // callTextBytes is the bound of the arguments and of the error text of a command event (docs/spec/logging.md#bounds).
 const callTextBytes = 1024
 
@@ -176,7 +173,7 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 	record := func(p Panic) {
 		log.Emit(LevelError, "sok.panic", map[string]any{"name": p.Name, "text": p.Text, "stack": p.Stack})
 		finish(PanicStatus, "sok: panic: "+p.Text)
-		if err := log.Flush(eventFlushDeadline); err != nil {
+		if err := log.Flush(); err != nil {
 			fmt.Fprintf(stderr, "sok: event log: %v\n", err)
 		}
 	}
@@ -201,7 +198,7 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 		log.Emit(LevelError, "sok.panic", map[string]any{"name": panicked.Name, "text": panicked.Text, "stack": panicked.Stack})
 	}
 	finish(status, string(captured.text))
-	if err := log.Flush(eventFlushDeadline); err != nil {
+	if err := log.Flush(); err != nil {
 		if _, writeErr := fmt.Fprintf(stderr, "sok: event log: %v\n", err); writeErr != nil {
 			status = 3
 		}

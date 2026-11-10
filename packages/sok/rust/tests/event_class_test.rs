@@ -1,8 +1,6 @@
 //! Checks the class of the lines of the event file of the tool and the class table of the catalog
 //! (docs/spec/logging.md#event, docs/spec/logging.md#classes-and-policy).
 
-use std::time::Duration;
-
 use serde_json::{Value, json};
 use soksak_sok::event_classes::{Class, class_of};
 use soksak_sok::event_log::Level;
@@ -28,7 +26,7 @@ fn every_line_of_the_tool_stores_the_class_of_its_catalog_entry() {
         &json!({"name": "main", "text": "t", "stack": "s"}),
     );
     log.emit(Level::Info, "sok.surprise", &json!({}));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let text = std::fs::read_to_string(log.path()).unwrap();
     let lines: Vec<Value> = text

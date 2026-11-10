@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use soksak_sok::event_classes::Class;
@@ -37,7 +36,7 @@ fn a_plugin_event_has_the_class_that_the_catalog_of_its_plugin_declares() {
     }]);
     log.emit(Level::Info, "plugin.probe.frame", &json!({"sequence": 1}));
     log.emit(Level::Info, "plugin.probe.other", &json!({}));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines: Vec<Value> = std::fs::read_to_string(log.path())
         .unwrap()

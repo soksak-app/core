@@ -48,7 +48,7 @@ pub fn read_events(path: &Path) -> Vec<Value> {
 pub fn wait_for_first_sample(config: &Path, log: &EventLog) {
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     loop {
-        log.flush(Duration::from_secs(5)).unwrap();
+        log.flush().unwrap();
         if read_events(&event_log_path(config))
             .iter()
             .any(|event| event["event"] == "host.sampler.memory")
@@ -107,7 +107,7 @@ pub fn text_of(events: &[Value]) -> String {
 
 /// The records of the host written to the event log of `config`, as lines of the text form, after the writer flushed.
 pub fn records_text(config: &Path, log: &EventLog) -> String {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     text_of(&read_events(&event_log_path(config)))
 }
 
@@ -142,7 +142,7 @@ pub fn standard_error_text(config: &Path) -> String {
 /// interval.
 pub fn store_every_level(log: &EventLog) {
     set_every_level(log);
-    log.flush(std::time::Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
 }
 
 /// Queues the policy of `store_every_level` for a writer that a test keeps from taking it.

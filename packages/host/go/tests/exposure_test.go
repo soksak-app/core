@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -435,7 +434,7 @@ func TestPageStatusChangeRefusesHostName(t *testing.T) {
 // callEvents flushes the writer and returns the fields of the events named event that it stored.
 func callEvents(t *testing.T, log *host.EventLog, event string) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var fields []map[string]any

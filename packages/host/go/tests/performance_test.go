@@ -18,7 +18,7 @@ import (
 
 func traceEvents(t *testing.T, config string, log *host.EventLog) []string {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var names []string
@@ -171,7 +171,7 @@ func TestTheSamplerEndsWhenTheTraceTurnsOff(t *testing.T) {
 // traceFields returns the fields of the stored events named name, in order.
 func traceFields(t *testing.T, config string, log *host.EventLog, name string) []map[string]any {
 	t.Helper()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var found []map[string]any

@@ -247,7 +247,7 @@ fn page_clock_anchor_passes_the_default_lifecycle_policy() {
         "ordinary lifecycle info remains gated by the default policy"
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines: Vec<Value> = std::fs::read_to_string(path)
         .unwrap()
@@ -294,7 +294,7 @@ fn workbench_fixture_step_passes_the_default_lifecycle_policy() {
         "a fixture step is stored under the default policy"
     );
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines: Vec<Value> = std::fs::read_to_string(path)
         .unwrap()

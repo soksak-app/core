@@ -67,7 +67,7 @@ func TestTheFirstLineOfAnEventLogIsLogOpenAndSeqIsConsecutive(t *testing.T) {
 			t.Fatalf("event %d was refused", index)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -113,7 +113,7 @@ func TestEveryLineCarriesTheWallClockAndTheMonotonicClockOfTheCall(t *testing.T)
 			t.Fatalf("event %d was refused", index)
 		}
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	wallEnd := time.Now().UnixMicro()
@@ -170,7 +170,7 @@ func TestAnEventWithCorrelationIdentifiersStoresThemAndAnInvalidIdentifierIsRefu
 			t.Fatalf("the identifiers %q were accepted", bad)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -292,7 +292,7 @@ func TestAFullEventQueueReturnsFalseAndTheWriterRecordsTheRangeAsDropped(t *test
 	if accepted != 4 || refused != 16 {
 		t.Fatalf("accepted %d, refused %d", accepted, refused)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -322,14 +322,14 @@ func TestARecordOfTheLossBetweenTwoRefusalsSplitsThemIntoTwoDroppedRanges(t *tes
 	support.StoreEveryLevel(t, log)
 	hold := holdWriter(log)
 	firstAccepted, firstRefused := refuseWhileHeld(t, log, hold, 0)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	secondAccepted, secondRefused := refuseWhileHeld(t, log, hold, 20)
 	if firstAccepted != 4 || firstRefused != 16 || secondAccepted != 4 || secondRefused != 16 {
 		t.Fatalf("accepted %d and %d, refused %d and %d", firstAccepted, secondAccepted, firstRefused, secondRefused)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -394,7 +394,7 @@ func TestTheEventLogFolderIs0700AndTheFileIs0600(t *testing.T) {
 		t.Fatal(err)
 	}
 	support.StoreEveryLevel(t, log)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.Stat(log.Path())
@@ -421,7 +421,7 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 	for index := 0; index < 20; index++ {
 		log.Emit(host.LevelInfo, "host.app.event", map[string]any{"kind": "started"})
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	catalog := filepath.Join(directory, "catalog.json")
@@ -461,7 +461,7 @@ func TestEventLogFlushWritesEveryAcceptedEventBeforeItReturns(t *testing.T) {
 			t.Fatalf("event %d was refused", index)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	stored := 0
@@ -511,7 +511,7 @@ func TestARelayedEventKeepsItsLayerAndTimeAndGetsTheSeqOfTheWriter(t *testing.T)
 			t.Fatalf("the identifier %q: %v", bad, err)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -560,7 +560,7 @@ func TestARelayedEventNamesTheDocumentThatWroteItInTheMemberOfItsLayer(t *testin
 			t.Errorf("%+v: error %v, want %q", c.event, err, c.want)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -593,7 +593,7 @@ func TestTheEventLogRotatesAtTheBoundAndKeepsEveryGeneration(t *testing.T) {
 			t.Fatalf("event %d was refused", index)
 		}
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	// The generations are numbered in the order of the rotations and none is removed.
@@ -674,7 +674,7 @@ func TestTheWriterAnnouncesEachWriteToItsObserver(t *testing.T) {
 	if !log.Emit(host.LevelInfo, "host.test.event", map[string]any{"index": 1}) {
 		t.Fatal("the event was refused")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -718,7 +718,7 @@ func TestASteadyStreamOfEventsIsWrittenAtEachBatchInterval(t *testing.T) {
 	if written := strings.Count(string(data), "\n"); written <= 1 {
 		t.Fatalf("after 400 ms of events every 5 ms (%d emitted) the file holds %d line(s); the writer waits for a quiet interval", index, written)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 }

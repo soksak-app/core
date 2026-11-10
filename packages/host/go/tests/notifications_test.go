@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -25,7 +24,7 @@ func TestEachNotificationEventAndFailureIsRecorded(t *testing.T) {
 	} {
 		host.HandleNotificationEvent(h, raw)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var seen, failures []string

@@ -260,7 +260,7 @@ fn the_end_of_its_connection_ends_a_relay_request_and_its_reply_is_an_observatio
         Ok(()),
         "the reply after the end of the connection is an observation"
     );
-    log.flush(WAIT).unwrap();
+    log.flush().unwrap();
     let text = records::text_of(&records::read_events(&records::event_log_path(
         config.path(),
     )));
@@ -346,7 +346,7 @@ fn expect_late_reply_observed(relay: &Relay, log: &EventLog, config: &Path, id: 
         Ok(()),
         "the reply after the end of the origin is an observation"
     );
-    log.flush(WAIT).unwrap();
+    log.flush().unwrap();
     let text = records::text_of(&records::read_events(&records::event_log_path(config)));
     let want = format!(" info host exposure: exposure reply {id} arrived after its request ended");
     assert!(text.contains(&want), "no {want:?} in {text}");
@@ -1089,7 +1089,7 @@ static RECORDS: Mutex<()> = Mutex::new(());
 
 /// The fields of the events named event that the writer stored.
 fn call_events(log: &EventLog, config: &Path, event: &str) -> Vec<Value> {
-    log.flush(WAIT).unwrap();
+    log.flush().unwrap();
     records::read_events(&records::event_log_path(config))
         .into_iter()
         .filter(|record| record["event"] == event)

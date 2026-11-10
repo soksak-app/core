@@ -28,7 +28,7 @@ func TestARelayedBatchIsStoredInOrderInTheLayerWorkbench(t *testing.T) {
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -83,7 +83,7 @@ func TestAnInvalidRelayedBatchWritesNothingAndNamesTheEvent(t *testing.T) {
 			t.Errorf("%s: error %v, want %q", name, err, c.message)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	if events := readEventLog(t, log.Path()); len(events) != 2 {
@@ -151,7 +151,7 @@ func TestATranscriptRequestStoresTheCutRecordAndAnswersTheWholeLine(t *testing.T
 			t.Errorf("error %v, want %q", err, c.message)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var stored []map[string]any
@@ -184,7 +184,7 @@ func TestARelayedBatchStoresTheMonotonicClockAndTheIdentifiersThatTheWorkbenchGa
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -237,7 +237,7 @@ func TestTheClockRequestAnswersTheClocksOfTheHostAndStoresNoEvent(t *testing.T) 
 	if second.Clock.TsMicros < first.Clock.TsMicros || second.Clock.MonoNs < first.Clock.MonoNs {
 		t.Fatalf("the second answer %+v is smaller than the first %+v", second.Clock, first.Clock)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	if events := readEventLog(t, log.Path()); len(events) != 2 {
@@ -256,7 +256,7 @@ func TestARelayedBatchStoresAPluginEventInTheLayerPlugin(t *testing.T) {
 	if _, err := host.LogCommand(log, request); err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())

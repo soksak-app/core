@@ -81,7 +81,7 @@ func TestTheHostWriterStartsWithThePullOfThePlatform(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -109,7 +109,7 @@ func TestTheShutdownFlushesTheNativeObserversBeforeTheWriterFlush(t *testing.T) 
 		// The flush of the observers stores the tail of a counted source; the writer flush that follows writes it.
 		log.Emit(host.LevelInfo, "host.test.observer_tail", map[string]any{"count": 3})
 		return nil
-	}, 5*time.Second)
+	})
 	if err != nil || !flushed {
 		t.Fatalf("the shutdown flush returned %v, observers flushed %v", err, flushed)
 	}
@@ -130,7 +130,7 @@ func TestTheShutdownReportsAFailedObserverFlushAndStillFlushesTheWriter(t *testi
 	}
 	t.Cleanup(log.Close)
 	log.Emit(host.LevelInfo, "host.test.before_failure", map[string]any{})
-	err = host.FlushEventLog(log, func() error { return fmt.Errorf("refused by the platform") }, 5*time.Second)
+	err = host.FlushEventLog(log, func() error { return fmt.Errorf("refused by the platform") })
 	if err == nil || !strings.Contains(err.Error(), "native observers") || !strings.Contains(err.Error(), "refused by the platform") {
 		t.Fatalf("the failed flush of the observers returned %v", err)
 	}

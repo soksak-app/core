@@ -31,7 +31,7 @@ func (element) MarshalJSON() ([]byte, error) {
 // storedEvent returns the only event `name` that the writer stored.
 func storedEvent(t *testing.T, log *host.EventLog, name string) map[string]any {
 	t.Helper()
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var found []map[string]any
@@ -130,7 +130,7 @@ func TestTheStartBufferHoldsAtMostFourMebibytesAndTheWriterCountsTheRest(t *test
 	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
 	t.Cleanup(func() { host.UseHostEventLog(nil) })
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	stored, dropped, droppedBytes := 0, float64(0), float64(0)
@@ -191,7 +191,7 @@ func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounte
 			t.Fatalf("reply %d of %d: %+v (%v), want a success", index, 1+pending, got, err)
 		}
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	drops := 0
@@ -287,7 +287,7 @@ func TestTheOutputQueueOfAConnectionHoldsAtMostSixteenMebibytesAndTheRefusalIsCo
 	for index := 0; index < 80; index++ {
 		endpoint.StatusChanged("main", "core.layout", "", big)
 	}
-	if err := log.Flush(10 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	for _, event := range readEventLog(t, log.Path()) {

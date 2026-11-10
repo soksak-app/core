@@ -61,7 +61,7 @@ func TestAnEventOverTheSizeBoundIsStoredCutWithItsOriginalSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	host.EmitHost(host.LevelInfo, "host.test.small", map[string]any{"text": "kept"})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())

@@ -8,7 +8,6 @@ mod folder;
 mod records;
 
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use soksak_host::documents::ViewChannels;
 
@@ -42,7 +41,7 @@ fn a_view_call_and_its_reply_are_recorded_at_debug_with_their_identifier() {
                 .unwrap()
                 .is_some()
         );
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

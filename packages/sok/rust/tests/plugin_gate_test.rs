@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use soksak_sok::event_bounds::Fields;
@@ -58,7 +57,7 @@ fn an_undeclared_plugin_event_is_stored_with_the_class_lifecycle_and_marked_unde
         log.emit_relayed(relay("plugin.probe.other", Level::Info)),
         Ok(true)
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     let stored: Vec<&Value> = lines
@@ -81,7 +80,7 @@ fn an_undeclared_plugin_event_under_a_policy_that_turns_lifecycle_off_is_refused
         log.emit_relayed(relay("plugin.probe.other", Level::Info)),
         Ok(false)
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     assert!(
@@ -122,7 +121,7 @@ fn a_plugin_event_below_the_level_of_its_class_is_refused_by_the_writer_and_coun
         log.emit_relayed(relay("plugin.probe.frame", Level::Info)),
         Ok(false)
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     assert!(
@@ -154,7 +153,7 @@ fn the_view_end_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
         ),
         "host.view.killed was refused"
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     let stored: Vec<&Value> = lines
@@ -181,7 +180,7 @@ fn the_crash_record_is_stored_under_a_policy_that_turns_lifecycle_off() {
         ),
         "host.crash.found was refused"
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let lines = stored_lines(log.path());
     let stored: Vec<&Value> = lines

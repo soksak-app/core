@@ -62,7 +62,7 @@ fn the_end_of_a_window_records_each_removal_it_allows() {
         .map(|(id, owner)| removals.begin(id, owner).unwrap())
         .collect();
         removals.abandon("project-one");
-        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

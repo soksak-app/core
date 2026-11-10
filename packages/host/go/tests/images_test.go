@@ -439,7 +439,7 @@ func TestPresentationWaitEndsByTheEndOfItsSupplierAndWritesNoLogLine(t *testing.
 		if err := <-result; err == nil || err.Error() == "presentationTimeout" || !strings.Contains(err.Error(), "sidecar-a") {
 			t.Fatalf("the presentation wait ended with %v, want the failure of the supplier sidecar-a", err)
 		}
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		return

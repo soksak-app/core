@@ -414,7 +414,7 @@ fn each_settings_change_is_recorded_with_its_keys() {
         ] {
             apply(&store, request);
         }
-        writer.flush(std::time::Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();

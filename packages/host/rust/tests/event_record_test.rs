@@ -85,7 +85,7 @@ fn an_error_and_an_observation_are_events_with_where_and_text() {
     log_error("surface input", "the window has no content view");
     log_info("webkit children", "pid 7: gone");
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events = read(&path);
     let want = [
@@ -128,7 +128,7 @@ fn a_record_of_a_helper_names_the_file_and_line_of_its_call() {
     let failure_line = line!() + 1;
     log_failure("view channel", Err("project window is closed".to_string()));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events = read(&path);
     let sites: Vec<&Value> = events[2..]
@@ -160,7 +160,7 @@ fn records_written_before_the_writer_exists_are_stored_in_order_with_their_own_t
     let log = start(directory.path(), 64);
     use_host_event_log(Some(Arc::clone(&log)));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events = read(&path);
     assert_eq!(events.len(), 4, "{events:?}");
@@ -193,7 +193,7 @@ fn the_start_buffer_refuses_records_beyond_its_bound_and_the_writer_counts_them(
     let log = start(directory.path(), 4 * START_BUFFER_RECORDS);
     use_host_event_log(Some(Arc::clone(&log)));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events = read(&path);
     let stored = events
@@ -224,7 +224,7 @@ fn the_start_buffer_refuses_records_beyond_its_bound_and_the_writer_counts_them(
 fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch_interval() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     use_host_event_log(None);
-    assert_eq!(flush_records(Duration::from_secs(1)), Ok(()));
+    assert_eq!(flush_records(), Ok(()));
     let directory = folder::Folder::new();
     let log = Arc::new(
         records::start_every_level(Options {
@@ -245,7 +245,7 @@ fn flush_records_stores_the_records_written_so_far_without_waiting_for_the_batch
     );
     use_host_event_log(Some(Arc::clone(&log)));
     log_info("flush", "stored before the interval");
-    flush_records(Duration::from_secs(5)).unwrap();
+    flush_records().unwrap();
     let events = read(log.path());
     use_host_event_log(None);
     assert_eq!(events.len(), 3, "{events:?}");
@@ -268,7 +268,7 @@ fn a_host_observation_of_the_trace_is_an_event() {
     performance::observe("sampler", || json!({"event": "memory", "rss_host_kb": 42}));
     performance::observe("host", || json!({"surface": "tab-1"}));
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     performance::command(json!({"action": "off"})).unwrap();
     use_host_event_log(None);
     let events = read(&path);
@@ -320,7 +320,7 @@ fn a_region_event_with_cids_is_recorded_as_the_relay_of_an_input() {
     record_input_relay("tab-1", "view", r#"{"type":"key","cids":["b1.\"8"]}"#);
     record_input_relay("tab-1", "view", "{broken");
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events = read(&path);
     let relays: Vec<&Value> = events
@@ -364,7 +364,7 @@ fn an_unrecorded_end_is_stored_as_an_error_event_with_its_fields() {
         previous: None,
     });
     let path = log.path().to_path_buf();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     use_host_event_log(None);
     let events: Vec<Value> = read(&path)
         .into_iter()

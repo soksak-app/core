@@ -35,7 +35,7 @@ func TestEveryLineStoresTheClassOfItsCatalogEntry(t *testing.T) {
 	if accepted, err := log.EmitRelayed(family); err != nil || !accepted {
 		t.Fatalf("workbench.console.info: %v %v", accepted, err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]string{
@@ -76,7 +76,7 @@ func TestAnEventTheCatalogDoesNotDeclareIsMarkedUndeclaredAndHasNoClass(t *testi
 	if accepted, err := log.EmitRelayed(relayed); err != nil || !accepted {
 		t.Fatalf("plugin.editor.opened: %v %v", accepted, err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	marked := 0
@@ -116,7 +116,7 @@ func TestTheEventsOfTheWriterItselfStoreTheirClass(t *testing.T) {
 	for index := 0; index < 40; index++ {
 		log.Emit(host.LevelInfo, "host.app.event", map[string]any{"kind": "started"})
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var names []string

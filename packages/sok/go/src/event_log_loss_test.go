@@ -63,7 +63,7 @@ func TestAnUnserializableLineIsReportedAsDropped(t *testing.T) {
 	t.Cleanup(log.Close)
 	log.Emit(LevelInfo, "probe.unserializable", map[string]any{"n": 1})
 	log.Emit(LevelInfo, "probe.after", map[string]any{"n": 2})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(log.Path())
@@ -119,7 +119,7 @@ func TestAnUnwritableLineIsReportedAsDropped(t *testing.T) {
 	}
 	log.Emit(LevelDebug, "probe.debug", map[string]any{"n": 1})
 	log.Emit(LevelInfo, "probe.after", map[string]any{"n": 2})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(log.Path())

@@ -185,7 +185,7 @@ fn response(name: &str, padding: usize) -> Box<RawValue> {
 
 /// The fields of the events `host.buffer.dropped` that the writer stored.
 fn drops(log: &EventLog, config: &Path) -> Vec<Value> {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     records::read_events(&records::event_log_path(config))
         .into_iter()
         .filter(|event| event["event"] == "host.buffer.dropped")
@@ -372,7 +372,7 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
         "host.test.small",
         serde_json::json!({"text": "kept"}),
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     let find = |name: &str| {
         events
@@ -399,7 +399,7 @@ fn an_event_over_the_size_bound_is_stored_cut_with_its_original_size() {
 
 /// The fields of the events `host.sidecar.write_wait` that the writer stored.
 fn write_waits(log: &EventLog, config: &Path) -> Vec<Value> {
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     records::read_events(&records::event_log_path(config))
         .into_iter()
         .filter(|event| event["event"] == "host.sidecar.write_wait")

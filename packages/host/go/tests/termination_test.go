@@ -4,7 +4,6 @@ package host_test
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -15,7 +14,7 @@ func TestAQuitStoresItsCauseBeforeItRuns(t *testing.T) {
 	log := support.UseEventLog(t)
 	var fields any
 	host.QuitWithCause("quit-command", host.HostQuitSource("quit-command"), func() {
-		if err := log.Flush(5 * time.Second); err != nil {
+		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		for _, event := range readEventLog(t, log.Path()) {
@@ -47,7 +46,7 @@ func TestTheExitRequestNamesTheSourceOfItsQuit(t *testing.T) {
 	// A quit that no part of the host asked for is the menu or a key equivalent of the framework, named by the current event.
 	host.EmitExitRequest(func() int { return 10 })
 	host.EmitExitRequest(func() int { return -1 })
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var got []map[string]any

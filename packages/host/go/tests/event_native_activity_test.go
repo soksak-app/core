@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
@@ -43,7 +42,7 @@ func TestTheActivityObserversRegisterUnderThePolicyOfTheHostStart(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Cleanup(stop)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	registered := map[string]bool{}

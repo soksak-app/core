@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use serde::de::{Deserializer, IgnoredAny, MapAccess, Visitor};
 use serde_json::{Value, json};
@@ -62,7 +61,7 @@ fn write_events(label: &str, emit: impl FnOnce(&EventLog)) -> Vec<String> {
     support::store_every_level(dir.path());
     let log = soksak_sok::start_tool_event_log(dir.path()).unwrap();
     emit(&log);
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     std::fs::read_to_string(log.path())
         .unwrap()

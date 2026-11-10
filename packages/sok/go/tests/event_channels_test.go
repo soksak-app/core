@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
 )
@@ -38,7 +37,7 @@ func TestTheToolStoresDebugAndTraceEventsInTheDebugFile(t *testing.T) {
 			t.Fatalf("the event of the level %s was refused", level)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -86,7 +85,7 @@ func TestARunOfTheToolWithoutADebugEventLeavesNoDebugFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	log.Emit(sok.LevelInfo, "sok.command", map[string]any{"name": "x"})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()

@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
 )
@@ -59,7 +58,7 @@ func writeEvents(t *testing.T, emit func(*sok.EventLog)) []string {
 		t.Fatal(err)
 	}
 	emit(log)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()

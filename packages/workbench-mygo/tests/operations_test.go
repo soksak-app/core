@@ -276,7 +276,7 @@ func TestAHostCallIsAnEventOfTheHostWithItsIdentifiers(t *testing.T) {
 	}, queue.post)
 	calls.Caused([]string{"pfixture.1"}).Call("pluginsRun", map[string]string{"plugin": "beta"}, func(any, error) {})
 	queue.run()
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(strings.TrimSuffix(log.Path(), ".jsonl") + ".debug.jsonl")

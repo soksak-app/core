@@ -74,7 +74,7 @@ fn write_mixed_events(config: &Path) -> BTreeMap<&'static str, usize> {
             *counts.entry(*label).or_default() += 1;
         }
     }
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     counts
 }
 

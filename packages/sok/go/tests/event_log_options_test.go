@@ -65,7 +65,7 @@ func TestAWriterWithoutRotationStoresTheLayerTheClockAndTheCidsOfItsOptions(t *t
 	if log.EmitCids(sok.LevelInfo, "host.probe.bad", []string{`a"b`}, nil) {
 		t.Error("a cid with a quote was accepted")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -94,7 +94,7 @@ func refusedLoss(t *testing.T, boot string, refuse func(log *sok.EventLog) bool)
 	if refuse(log) {
 		t.Fatal("the event was accepted")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -161,7 +161,7 @@ func TestAWriterRotatesAtItsBoundAndTheNewFileStartsWithLogOpenAndLogRotated(t *
 	for index := 0; index < 20; index++ {
 		log.Emit(sok.LevelInfo, "host.probe.event", map[string]string{"text": strings.Repeat("x", 100)})
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -191,7 +191,7 @@ func TestAWriterStoresTheEventsAndTheLossOfItsPullSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -237,18 +237,18 @@ func TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent(t *testi
 		t.Fatal(err)
 	}
 	log.SetPolicy(policy, "file")
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	hold.Store(true)
 	flushed := make(chan error, 1)
-	go func() { flushed <- log.Flush(5 * time.Second) }()
+	go func() { flushed <- log.Flush() }()
 	<-entered
 	if !log.Emit(sok.LevelWarn, "host.stall.dump", map[string]any{"path": "/first"}) || !log.Emit(sok.LevelWarn, "host.stall.dump", map[string]any{"path": "/second"}) {
 		t.Fatal("the queue refused an event before it was full")
 	}
 	for range 2 {
-		_, err := log.EmitPlaced(sok.LevelWarn, "host.stall.dump", json.RawMessage(`{"path":"/refused"}`), 5*time.Second)
+		_, err := log.EmitPlaced(sok.LevelWarn, "host.stall.dump", json.RawMessage(`{"path":"/refused"}`))
 		if err == nil || err.Error() != "the event writer refused host.stall.dump because its queue was full" {
 			t.Fatalf("a placed event on a full queue returned %v", err)
 		}
@@ -260,7 +260,7 @@ func TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent(t *testi
 	if !log.Emit(sok.LevelInfo, "sok.command", map[string]any{"name": "after"}) {
 		t.Fatal("the queue refused an event after the writer took its batch")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -298,11 +298,11 @@ func TestAPlacedEventRefusedByThePolicyNamesThePolicy(t *testing.T) {
 	}
 	// The default policy stores only errors, so a warning of a lifecycle class that passes no gate exception is refused by the
 	// gate and not by the queue.
-	_, err = log.EmitPlaced(sok.LevelWarn, "host.buffer.dropped", json.RawMessage(`{"path":"/probe"}`), 5*time.Second)
+	_, err = log.EmitPlaced(sok.LevelWarn, "host.buffer.dropped", json.RawMessage(`{"path":"/probe"}`))
 	if err == nil || err.Error() != "the event writer refused host.buffer.dropped because the policy does not store it" {
 		t.Fatalf("a placed event refused by the policy returned %v", err)
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	log.Close()
@@ -335,7 +335,7 @@ func TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 	if !log.RecordClosed("signal", map[string]any{"signal": 15}) {
 		t.Fatal("the record was refused")
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var closed []map[string]any
@@ -370,7 +370,7 @@ func TestTheStallRecordsAreStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T)
 			t.Fatalf("%s was refused", name)
 		}
 	}
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := storedLines(t, log.Path())

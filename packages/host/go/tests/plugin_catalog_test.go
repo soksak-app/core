@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -41,7 +40,7 @@ func TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogIt
 	}
 	host.ApplyPluginEventClasses(log, config)
 	log.Emit(host.LevelInfo, "plugin.probe.frame", map[string]any{"sequence": 1})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	events := readEventLog(t, log.Path())
@@ -79,7 +78,7 @@ func TestTheHostKeepsTheClassesOfAPluginThatAChangeRemoved(t *testing.T) {
 	}
 	host.ApplyPluginEventClasses(log, config)
 	log.Emit(host.LevelInfo, "plugin.probe.frame", map[string]any{"sequence": 1})
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var frame map[string]any
@@ -112,7 +111,7 @@ func TestTheWriterRecordsThePluginCatalogsItHoldsAtEachApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	host.ApplyPluginEventClasses(log, config)
-	if err := log.Flush(5 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		t.Fatal(err)
 	}
 	var applies []map[string]any

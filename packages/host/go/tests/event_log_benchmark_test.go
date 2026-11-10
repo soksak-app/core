@@ -66,7 +66,7 @@ func BenchmarkEventLogEmit(b *testing.B) {
 		}
 		b.Log(summary(fmt.Sprintf("emit, %d producer(s) (lost %d)", producers, total), all))
 	}
-	if err := log.Flush(30 * time.Second); err != nil {
+	if err := log.Flush(); err != nil {
 		b.Fatal(err)
 	}
 }

@@ -12,7 +12,6 @@ use soksak_host::images::{
     handle_envelope_with_recovery, leased_reply, released_reply,
 };
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 #[path = "support/records.rs"]
 mod records;
@@ -438,7 +437,7 @@ fn presentation_wait_ends_by_the_end_of_its_supplier_and_writes_no_log_line() {
             error.contains("sidecar-a"),
             "the failure names the supplier whose connection ended: {error}"
         );
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1235,7 +1234,7 @@ fn image_frame_refusals_are_recorded() {
             on_main,
             send,
         ));
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1444,7 +1443,7 @@ fn image_frame_nonce_cause_is_recorded() {
                 on_main,
                 send,
             );
-            writer.flush(Duration::from_secs(5)).unwrap();
+            writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             let line = format!(
                 "error host image frame: surface=tab-1 name=view sender=sidecar-a {frame} sequence={sequence} {want}"

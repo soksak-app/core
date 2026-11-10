@@ -4,7 +4,6 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use soksak_sok::event_log::{EventLog, Level};
@@ -48,7 +47,7 @@ fn the_tool_stores_debug_and_trace_events_in_the_debug_file() {
     ] {
         assert!(log.emit(level, "sok.command", &json!({"name": "x"})));
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let levels = |events: &[Value]| -> String {
         events
@@ -79,7 +78,7 @@ fn a_run_of_the_tool_without_a_debug_event_leaves_no_debug_file() {
     let config = Folder::new("channels-nodebug");
     let log = soksak_sok::start_tool_event_log(config.path()).unwrap();
     log.emit(Level::Info, "sok.command", &json!({"name": "x"}));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     assert!(!debug_path_of(&log).exists());
 }
@@ -102,7 +101,7 @@ fn a_loss_of_the_tool_names_the_channel_of_the_refused_events() {
     log.emit(Level::Debug, "sok.command", &json!({"name": "first"}));
     assert!(!log.emit(Level::Debug, "sok.command", &Unserializable));
     assert!(!log.emit(Level::Info, "sok.command", &Unserializable));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     log.close();
     let mut channels: BTreeMap<String, u64> = BTreeMap::new();
     for path in [log.path().to_path_buf(), debug_path_of(&log)] {

@@ -30,9 +30,7 @@ pub fn exit_on_failure(result: Result<(), Failure>) -> Result<(), Failure> {
         },
         |status| {
             // The record of the failure is stored before the process ends.
-            if let Err(error) =
-                crate::event_record::flush_records(std::time::Duration::from_secs(2))
-            {
+            if let Err(error) = crate::event_record::flush_records() {
                 eprintln!(
                     "event writer: the record of the startup failure was not stored: {error}"
                 );
