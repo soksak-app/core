@@ -156,11 +156,11 @@ func Functions() abi.NativeFunctions {
 		MainSpWindowHit: func(a0 uintptr, a1 float64, a2 float64) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_window_hit(C.uintptr_t(a0), C.double(a1), C.double(a2))))
 		},
-		MainSpWindowKeyboardDecided: func(a0 uintptr) { C.main_sp_window_keyboard_decided(C.uintptr_t(a0)) },
-		MainSpWindowKeyboardHold:    func(a0 uintptr) { C.main_sp_window_keyboard_hold(C.uintptr_t(a0)) },
-		MainSpWindowMainWebview:     func(a0 uintptr) unsafe.Pointer { return C.main_sp_window_main_webview(C.uintptr_t(a0)) },
-		MainSpWindowModalHold:       func(a0 uintptr) { C.main_sp_window_modal_hold(C.uintptr_t(a0)) },
-		MainSpWindowModalHoldEnd:    func(a0 uintptr) { C.main_sp_window_modal_hold_end(C.uintptr_t(a0)) },
+		MainSpWindowKeysDecided:   func(a0 uintptr) { C.main_sp_window_keys_decided(C.uintptr_t(a0)) },
+		MainSpWindowKeysPageEnded: func(a0 uintptr) { C.main_sp_window_keys_page_ended(C.uintptr_t(a0)) },
+		MainSpWindowMainWebview:   func(a0 uintptr) unsafe.Pointer { return C.main_sp_window_main_webview(C.uintptr_t(a0)) },
+		MainSpWindowModalHold:     func(a0 uintptr) { C.main_sp_window_modal_hold(C.uintptr_t(a0)) },
+		MainSpWindowModalHoldEnd:  func(a0 uintptr) { C.main_sp_window_modal_hold_end(C.uintptr_t(a0)) },
 		MainSpWindowMove: func(a0 uintptr, a1 float64, a2 float64) bool {
 			return bool(C.main_sp_window_move(C.uintptr_t(a0), C.double(a1), C.double(a2)))
 		},

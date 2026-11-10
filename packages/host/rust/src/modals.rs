@@ -237,6 +237,24 @@ fn modal_hold(window: &Window, open: bool) -> Result<(), String> {
     })
 }
 
+/// Tells whether label names a modal webview of the window labelled window: `modal-{window}-{instance}`, with a decimal
+/// instance.
+pub(crate) fn is_modal_of(label: &str, window: &str) -> bool {
+    label
+        .strip_prefix("modal-")
+        .and_then(|rest| rest.strip_prefix(window))
+        .and_then(|rest| rest.strip_prefix('-'))
+        .is_some_and(|instance| {
+            !instance.is_empty() && instance.bytes().all(|byte| byte.is_ascii_digit())
+        })
+}
+
+/// Ends the wait of the keys of window for its modal when the process of the modal document ended, because that document
+/// no longer takes the keyboard (docs/spec/native-modals.md#keyboard).
+pub(crate) fn modal_process_ended(window: &Window) -> Result<(), String> {
+    modal_hold(window, false)
+}
+
 /// Shows a modal while the input of the window waits for it. The wait opens before the previous modal is removed, so no
 /// input reaches the view behind the modals between them; a show that fails removes its modal and ends the wait.
 fn show_holding<T>(
@@ -255,7 +273,7 @@ fn show_holding<T>(
         failures.push(format!("modal discard failed: {error}"));
     }
     if let Err(error) = end() {
-        failures.push(format!("ending the modal keyboard hold failed: {error}"));
+        failures.push(format!("ending the modal key wait failed: {error}"));
     }
     Err(failures.join("; "))
 }
@@ -278,7 +296,7 @@ fn close_holding(
 ) -> Result<(), String> {
     let failures: Vec<String> = [
         discard(),
-        end().map_err(|error| format!("ending the modal keyboard hold failed: {error}")),
+        end().map_err(|error| format!("ending the modal key wait failed: {error}")),
     ]
     .into_iter()
     .filter_map(Result::err)
@@ -647,7 +665,8 @@ pub fn ready(window: &Window, id: String, instance: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Closes the modal of id if it is open and returns the focus to the main webview.
+/// Closes the modal of id if it is open and returns the keyboard to the last surface or workbench that a keyboard call of
+/// the window named (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
 pub fn hide(window: &Window, id: String) -> Result<(), String> {
     let context = window_data(window)?;
     let state = &context.overlay;
@@ -667,7 +686,7 @@ pub fn hide(window: &Window, id: String) -> Result<(), String> {
     // keyboard gives the input that waited for it back where the keyboard is.
     discard(window, state)?;
     exposure::window_changed(window);
-    // An image region reports `resignFirstResponder` synchronously. Calling `set_focus` here re-enters the
+    // An image region reports `resignFirstResponder` synchronously. Moving the keyboard here re-enters the
     // main WebView while the current Tauri invoke still owns the WebKit dispatch lock, so the focus callback can
     // deadlock the event loop. The focus is restored in the next AppKit turn after the hide command returns. A
     // replacement modal may have opened before that turn. In that case the earlier restoration must not take the focus
@@ -683,9 +702,11 @@ pub fn hide(window: &Window, id: String) -> Result<(), String> {
             if has_modal {
                 return;
             }
-            if let Some(main) = root_view(&host)
-                && let Err(error) = main.set_focus()
-            {
+            let restored = platform::current().and_then(|platform| {
+                let handle = host.native_window().map_err(|error| error.to_string())? as Handle;
+                platform.keyboard_after_modal(handle)
+            });
+            if let Err(error) = restored {
                 log_error("modal focus restoration", error);
             }
         }))

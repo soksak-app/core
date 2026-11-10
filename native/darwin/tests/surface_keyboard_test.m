@@ -20,6 +20,15 @@ static void runDirectly(void (^work)(void)) { work(); }
 @implementation SPKeyView
 - (BOOL)acceptsFirstResponder { return YES; }
 @end
+// A web view that records the characters of the key downs that reach it, as a modal web view that takes the keyboard does.
+@interface SPKeyWebView : WKWebView
+@property(nonatomic, retain) NSMutableString *typed;
+@end
+@implementation SPKeyWebView
+- (void)keyDown:(NSEvent *)event { [self.typed appendString:event.characters ?: @""]; }
+- (void)keyUp:(NSEvent *)event { (void)event; }
+- (void)dealloc { [_typed release]; [super dealloc]; }
+@end
 static void check(BOOL ok, const char *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message);
     if (!ok) failures++;
@@ -45,6 +54,21 @@ static void typeKeys(NSWindow *window, const char *text) {
         check(sp_input_key(window, key, key, 0, true) == SP_INPUT_DELIVERED, "a key press is delivered");
         check(sp_input_key(window, key, key, 0, false) == SP_INPUT_DELIVERED, "a key release is delivered");
     }
+}
+
+// Types the keys of text without a stated text, so each key reaches the first responder as a key event.
+static void typePlain(NSWindow *window, const char *text) {
+    for (const char *at = text; *at; at++) {
+        char key[2] = {*at, 0};
+        check(sp_input_key(window, key, NULL, 0, true) == SP_INPUT_DELIVERED, "a key press is delivered");
+        check(sp_input_key(window, key, NULL, 0, false) == SP_INPUT_DELIVERED, "a key release is delivered");
+    }
+}
+
+// A left press and its release on the workbench of window, the left half of its content.
+static void releaseOnWorkbench(NSWindow *window) {
+    check(sp_input_pointer(window, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the workbench is delivered");
+    check(sp_input_pointer(window, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "its release is delivered");
 }
 
 // Runs the event queue of the application until it holds no event. The input that a hold gives back takes its turns there: the
@@ -434,7 +458,7 @@ int main(void) { @autoreleasepool {
     sp_region_close(ownedRegion);
     sp_window_end_responder_observation(closingObservation);
 
-    // The input of a window waits for the decision of the workbench from the release of a press on the workbench
+    // The keys of a window wait for the decision of the workbench from the release of a press on the workbench
     // (docs/spec/native-surfaces.md#keyboard-of-a-surface). The workbench of this window is the left half, its surface the right.
     NSWindow *holding = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -453,7 +477,7 @@ int main(void) { @autoreleasepool {
     sp_window_focus_workbench(holding);
     check(holding.firstResponder == holdingMain, "the workbench of the holding window holds the keyboard");
 
-    // A press on a surface holds nothing: the key that follows its release reaches the region at once.
+    // A press on a surface lets no key wait: the key that follows its release reaches the region at once.
     NSString *unheld = regionKeys(^{
         sp_input_pointer(holding, 600, 250, 1, 0, 0, 0);
         sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
@@ -463,7 +487,7 @@ int main(void) { @autoreleasepool {
     check([unheld isEqual:@"x"], "a key after the release of a press on a surface reaches the region at once");
     sp_window_focus_workbench(holding);
 
-    // A press on a modal web view holds nothing either: the modal takes the keyboard itself, and its document owes no decision of
+    // A press on a modal web view lets no key wait either: the modal takes the keyboard itself, and its document owes no decision of
     // the workbench (docs/spec/native-modals.md#keyboard). The modal stands over the workbench half, above the main web view.
     WKWebView *modal = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
     [holding.contentView addSubview:modal positioned:NSWindowAbove relativeTo:nil];
@@ -477,9 +501,9 @@ int main(void) { @autoreleasepool {
     check([unheldModal isEqual:@"m"],
         [NSString stringWithFormat:@"a key after the release of a press on a modal web view reaches the region at once, got \"%@\"", unheldModal].UTF8String);
     [modal removeFromSuperview];
-    // A press on a child web view of the application that no surface holds, a modal document, holds nothing either: the document
-    // of the child answers no keyboard decision of the workbench, so the release of that press must not open the decision hold
-    // (webview_geometry.m pressOnWorkbench). Without this, every later input of the window waits for a decision that never comes.
+    // A press on a child web view of the application that no surface holds, a modal document, lets no key wait either: the
+    // document of the child answers no keyboard decision of the workbench, so the release of that press asks for none
+    // (webview_geometry.m pressOnWorkbench). Without this, every later key of the window waits for a decision that never comes.
     [holdingMain loadHTMLString:@"<html></html>" baseURL:[NSURL URLWithString:@"http://localhost/"]];
     runEvents(0.2);
     void *child = nativeWebviewCreate((uintptr_t)holding, 77, "modal:test", "", 0, 0, 400, 500, false, false);
@@ -500,15 +524,14 @@ int main(void) { @autoreleasepool {
 
     // R1: the keys after the release of a press on the workbench wait for the decided call and reach its target in order.
     NSString *waiting = regionKeys(^{
-        check(sp_input_pointer(holding, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the workbench is delivered");
-        check(sp_input_pointer(holding, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "its release is delivered");
+        releaseOnWorkbench(holding);
         typeKeys(holding, "abcdefghijklm");
         runQueuedEvents();
     });
     check([waiting isEqual:@""], [NSString stringWithFormat:@"no key reaches the region before the decision, got \"%@\"", waiting].UTF8String);
     NSString *decided = regionKeys(^{
         sp_surface_focus(heldHost);
-        sp_window_keyboard_decided(holding);
+        sp_window_keys_decided(holding);
         runQueuedEvents();
     });
     check([decided isEqual:@"abcdefghijklm"],
@@ -516,14 +539,13 @@ int main(void) { @autoreleasepool {
     NSString *after = regionKeys(^{ typeKeys(holding, "y"); });
     check([after isEqual:@"y"], "a key after the decision reaches the region at once");
 
-    // R3: a call without the decision moves the keyboard and the keys keep waiting. R2: time does not end a hold: the keys still
+    // R3: a call without the decision moves the keyboard and the keys keep waiting. R2: time does not end a wait: the keys still
     // wait more than a second later, nothing is recorded for the wait, and the decided call gives them to its target in order.
     sp_window_focus_workbench(holding);
     __block NSString *undecided = nil;
     NSArray<NSDictionary *> *heldEvents = capturedEvents(^{
         undecided = [regionKeys(^{
-            sp_input_pointer(holding, 200, 250, 1, 0, 0, 0);
-            sp_input_pointer(holding, 200, 250, 3, 0, 0, 0);
+            releaseOnWorkbench(holding);
             typeKeys(holding, "abc");
             sp_surface_focus(heldHost);
             runQueuedEvents();
@@ -536,90 +558,219 @@ int main(void) { @autoreleasepool {
     NSMutableString *early = [NSMutableString string];
     for (NSDictionary *event in heldEvents) {
         if ([event[@"name"] isEqual:@"native.input.key_down"]) [early appendString:event[@"fields"][@"characters"]];
-        check(![event[@"name"] hasPrefix:@"native.keyboard.hold_"],
-            [NSString stringWithFormat:@"a hold that waits records nothing, got %@", event[@"name"]].UTF8String);
+        check(![event[@"name"] hasPrefix:@"native.keyboard."],
+            [NSString stringWithFormat:@"a wait records nothing, got %@", event[@"name"]].UTF8String);
     }
-    check([early isEqual:@""], [NSString stringWithFormat:@"no key reaches the region 1.5 s into a hold, got \"%@\"", early].UTF8String);
+    check([early isEqual:@""], [NSString stringWithFormat:@"no key reaches the region 1.5 s into a wait, got \"%@\"", early].UTF8String);
     NSString *late = regionKeys(^{
-        sp_window_keyboard_decided(holding);
+        sp_window_keys_decided(holding);
         runQueuedEvents();
     });
     check([late isEqual:@"abc"], [NSString stringWithFormat:@"the decided call gives the waiting keys in order, got \"%@\"", late].UTF8String);
 
-    // A hold keeps 256 pieces of input and records the rest as dropped.
+    // A refused surface still gives the keys: the decided call follows the move, also when the move finds no view.
+    sp_window_focus_workbench(holding);
+    NSString *refused = regionKeys(^{
+        releaseOnWorkbench(holding);
+        typeKeys(holding, "ef");
+        [holding makeFirstResponder:(NSResponder *)heldRegion];
+        sp_window_keys_decided(holding);
+        runQueuedEvents();
+    });
+    check([refused isEqual:@"ef"], [NSString stringWithFormat:@"a decided call without a move gives the keys where the keyboard is, got \"%@\"", refused].UTF8String);
+
+    // No pointer event waits for the decision: a move and a press after the release on the workbench reach their view at once.
+    sp_window_focus_workbench(holding);
+    releaseOnWorkbench(holding);
+    NSString *moved = capturedRecords(^{ sp_input_pointer(holding, 600, 250, 0, 0, 0, 0); });
+    check([moved containsString:@"\"kind\":\"pointer\""] && [moved containsString:@"\"phase\":0"],
+        [NSString stringWithFormat:@"a move after the release on the workbench is delivered at once, got %@", moved].UTF8String);
+    sp_input_pointer(holding, 600, 250, 1, 0, 0, 0);
+    check(sp_input_press_open(holding, 0), "a press after the release on the workbench reaches its view at once");
+    sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
+    sp_window_keys_decided(holding);
+    runQueuedEvents();
+    check(!sp_input_press_open(holding, 0), "the press of the pointer check is released");
+
+    // A press of the window ends the wait: the keys that waited reach the view that holds the keyboard first, in their order, and
+    // the press and its release follow them.
+    sp_window_focus_workbench(holding);
+    NSString *pressed = regionKeys(^{
+        releaseOnWorkbench(holding);
+        sp_surface_focus(heldHost);
+        typeKeys(holding, "gh");
+        sp_input_pointer(holding, 600, 250, 1, 0, 0, 0);
+        sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
+        runQueuedEvents();
+    });
+    check([pressed isEqual:@"gh"], [NSString stringWithFormat:@"a press gives the waiting keys in order to the view that holds the keyboard, got \"%@\"", pressed].UTF8String);
+    check(!sp_input_press_open(holding, 0), "the press that ended the wait and its release reached the window");
+    [holding makeFirstResponder:(NSResponder *)heldRegion];
+    NSString *afterPress = regionKeys(^{ typeKeys(holding, "i"); });
+    check([afterPress isEqual:@"i"], [NSString stringWithFormat:@"a key after the press reaches the region at once, got \"%@\"", afterPress].UTF8String);
+
+    // The end of the main page ends the wait: the keys go in their order to the view that holds the keyboard.
+    sp_window_focus_workbench(holding);
+    NSString *pageEnded = regionKeys(^{
+        releaseOnWorkbench(holding);
+        sp_surface_focus(heldHost);
+        typeKeys(holding, "jk");
+        runQueuedEvents();
+        sp_window_keys_page_ended(holding);
+        runQueuedEvents();
+    });
+    check([pageEnded isEqual:@"jk"], [NSString stringWithFormat:@"the end of the main page gives the waiting keys in order, got \"%@\"", pageEnded].UTF8String);
+    NSString *noWait = regionKeys(^{
+        sp_window_keys_page_ended(holding);
+        typeKeys(holding, "l");
+    });
+    check([noWait isEqual:@"l"], "the end of a main page without a wait changes nothing");
+
+    // No count ends a wait: 300 keys wait and all reach the decided target in order, and nothing is dropped.
     sp_window_focus_workbench(holding);
     __block NSUInteger delivered = 0;
-    NSArray<NSDictionary *> *overflow = capturedEvents(^{
-        sp_window_keyboard_hold(holding);
-        for (int i = 0; i < 150; i++) {
+    NSArray<NSDictionary *> *many = capturedEvents(^{
+        releaseOnWorkbench(holding);
+        for (int i = 0; i < 300; i++) {
             sp_input_key(holding, "k", "k", 0, true);
             sp_input_key(holding, "k", "k", 0, false);
         }
         sp_surface_focus(heldHost);
-        sp_window_keyboard_decided(holding);
+        sp_window_keys_decided(holding);
         runQueuedEvents();
     });
-    for (NSDictionary *event in overflow) delivered += [event[@"name"] isEqual:@"native.input.key_down"];
-    NSDictionary *droppedFields = eventFields(overflow, @"native.keyboard.hold_dropped");
-    check(delivered == 128 && [droppedFields[@"count"] intValue] == 44 && [droppedFields[@"reason"] isEqual:@"full"],
-        [NSString stringWithFormat:@"a full hold gives back 128 keys and drops 44 events, got %lu and %@", (unsigned long)delivered, droppedFields].UTF8String);
+    BOOL anyDropped = NO;
+    for (NSDictionary *event in many) {
+        delivered += [event[@"name"] isEqual:@"native.input.key_down"];
+        anyDropped = anyDropped || [event[@"name"] hasPrefix:@"native.keyboard."];
+    }
+    check(delivered == 300 && !anyDropped,
+        [NSString stringWithFormat:@"300 keys that waited all reach the region and none is dropped, got %lu", (unsigned long)delivered].UTF8String);
 
-    // M1: the input waits from the show of a modal until the modal takes the keyboard (docs/spec/native-modals.md#keyboard). The
-    // decided call of the workbench does not end the wait; the end of the modal hold gives the keys in order to the view that
-    // took the keyboard, the region here standing for the modal web view.
+    // M1: the keys wait from the show of a modal until the modal takes the keyboard (docs/spec/native-modals.md#keyboard). The
+    // decided call of the workbench does not end the wait and does not take the keyboard from the modal: it records its target.
+    // The end of the modal wait gives the keys in order to the modal that took the keyboard.
+    SPKeyWebView *modalView = [[[SPKeyWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    modalView.typed = [NSMutableString string];
     sp_window_focus_workbench(holding);
     NSString *beforeModal = regionKeys(^{
         sp_window_modal_hold(holding);
-        typeKeys(holding, "pq");
-        sp_window_keyboard_decided(holding);
+        typePlain(holding, "pq");
+        sp_surface_focus(heldHost);
+        sp_window_keys_decided(holding);
         runQueuedEvents();
     });
-    check([beforeModal isEqual:@""],
+    check([beforeModal isEqual:@""] && modalView.typed.length == 0,
         [NSString stringWithFormat:@"no key passes before the modal takes the keyboard, also after a decided call, got \"%@\"", beforeModal].UTF8String);
-    NSString *modalTook = regionKeys(^{
-        [holding makeFirstResponder:(NSResponder *)heldRegion];
+    check(holding.firstResponder == holdingMain, "a decided call while the modal waits leaves the keyboard where it is");
+    [holding.contentView addSubview:modalView positioned:NSWindowAbove relativeTo:nil];
+    check([holding makeFirstResponder:modalView], "the modal web view takes the keyboard");
+    sp_window_modal_hold_end(holding);
+    runQueuedEvents();
+    check([modalView.typed isEqual:@"pq"],
+        [NSString stringWithFormat:@"the end of the modal wait gives the keys to the modal that took the keyboard, got \"%@\"", modalView.typed].UTF8String);
+
+    // M3: while the modal holds the keyboard a call keeps it in the modal, and the close of the modal returns the keyboard to the
+    // target of the last call.
+    sp_window_focus_workbench(holding);
+    sp_surface_focus(heldHost);
+    check(holding.firstResponder == modalView, "a call while the modal holds the keyboard leaves it in the modal");
+    check(sp_window_keyboard_after_modal(holding, modalView), "the close of the modal returns the keyboard");
+    check(holding.firstResponder == (NSResponder *)heldRegion, "the close of the modal gives the keyboard to the target of the last call");
+    [modalView removeFromSuperview];
+
+    // M4: a show that fails ends the modal wait: the keyboard goes to the target of the call that came while the modal waited, and
+    // the keys follow it in their order.
+    sp_window_focus_workbench(holding);
+    NSString *failedShow = regionKeys(^{
+        sp_window_modal_hold(holding);
+        sp_surface_focus(heldHost);
+        typeKeys(holding, "uv");
+        runQueuedEvents();
         sp_window_modal_hold_end(holding);
         runQueuedEvents();
     });
-    check([modalTook isEqual:@"pq"],
-        [NSString stringWithFormat:@"the end of the modal hold gives the keys to the view that took the keyboard, got \"%@\"", modalTook].UTF8String);
+    check(holding.firstResponder == (NSResponder *)heldRegion, "the end of a modal wait without a modal gives the keyboard to the target of the call");
+    check([failedShow isEqual:@"uv"], [NSString stringWithFormat:@"the keys reach that target in order, got \"%@\"", failedShow].UTF8String);
 
-    // M2: a modal hold that ends while the decision of the workbench waits leaves the keys waiting for the decided call.
+    // M2: a modal wait that ends while the decision of the workbench waits leaves the keys waiting for the decided call.
     sp_window_focus_workbench(holding);
     NSString *stillDeciding = regionKeys(^{
-        sp_window_keyboard_hold(holding);
+        releaseOnWorkbench(holding);
         sp_window_modal_hold(holding);
         typeKeys(holding, "rs");
         sp_window_modal_hold_end(holding);
         runQueuedEvents();
     });
     check([stillDeciding isEqual:@""],
-        [NSString stringWithFormat:@"the keys wait for the decision after the modal hold ended, got \"%@\"", stillDeciding].UTF8String);
+        [NSString stringWithFormat:@"the keys wait for the decision after the modal wait ended, got \"%@\"", stillDeciding].UTF8String);
     NSString *bothEnded = regionKeys(^{
         sp_surface_focus(heldHost);
-        sp_window_keyboard_decided(holding);
+        sp_window_keys_decided(holding);
         runQueuedEvents();
     });
     check([bothEnded isEqual:@"rs"],
-        [NSString stringWithFormat:@"the decided call gives the keys in order once the modal hold ended, got \"%@\"", bothEnded].UTF8String);
+        [NSString stringWithFormat:@"the decided call gives the keys in order once the modal wait ended, got \"%@\"", bothEnded].UTF8String);
     NSString *free = regionKeys(^{
         sp_window_modal_hold_end(holding);
         typeKeys(holding, "t");
     });
-    check([free isEqual:@"t"], "the end of a modal hold that a window does not hold changes nothing");
+    check([free isEqual:@"t"], "the end of a modal wait that a window does not have changes nothing");
 
-    // A window that closes with a hold drops what it held.
-    NSArray<NSDictionary *> *closedHold = capturedEvents(^{
-        sp_window_keyboard_hold(holding);
+    // A window that closes with a wait drops the keys, records how many, and answers each injected key that waited with its refusal.
+    NSArray<NSDictionary *> *closedWait = capturedEvents(^{
+        releaseOnWorkbench(holding);
         typeKeys(holding, "z");
         [holding close];
         runQueuedEvents();
     });
-    NSDictionary *closedFields = eventFields(closedHold, @"native.keyboard.hold_dropped");
+    NSDictionary *closedFields = eventFields(closedWait, @"native.keyboard.wait_dropped");
     check([closedFields[@"count"] intValue] == 2 && [closedFields[@"reason"] isEqual:@"closed"],
-        [NSString stringWithFormat:@"a closed window drops the 2 held key events, got %@", closedFields].UTF8String);
+        [NSString stringWithFormat:@"a closed window drops the 2 waiting key events, got %@", closedFields].UTF8String);
+    NSUInteger refusals = 0;
+    for (NSDictionary *event in closedWait) {
+        NSString *text = event[@"fields"][@"text"];
+        if ([event[@"name"] isEqual:@"native.record.info"] && [text containsString:@"\"kind\":\"key\""]
+            && [text containsString:@"\"result\":\"rejected\""]) refusals++;
+    }
+    check(refusals == 2, [NSString stringWithFormat:@"each dropped key answers with its refusal, got %lu", (unsigned long)refusals].UTF8String);
     sp_region_close(heldRegion);
     sp_window_end_responder_observation(holdingObservation);
+
+    // A window without a main web view waits as well: the mygo workbench, a view of the framework, decides in the pass after
+    // the release, so the keys that follow the release wait for its decided call.
+    NSWindow *plain = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    plain.releasedWhenClosed = NO;
+    NSView *plainNative = (NSView *)sp_window_native_view(plain);
+    [plain.contentView addSubview:plainNative];
+    plainNative.frame = plain.contentView.bounds;
+    SPKeyView *plainWorkbench = [[[SPKeyView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    [plain.contentView addSubview:plainWorkbench positioned:NSWindowAbove relativeTo:plainNative];
+    void *plainObservation = sp_window_observe_responder(plain, ^{});
+    void *plainHost = sp_surface_create(plainNative);
+    webviewSetFrame(plainHost, 400, 0, 400, 500);
+    webviewSetSurfaceHidden(plainHost, false);
+    void *plainRegion = sp_region_create(plainHost, "view", regionEvent, NULL);
+    placeRegion(plainRegion);
+    sp_window_focus_workbench(plain);
+    check(plain.firstResponder == plainWorkbench, "the view of the framework holds the keyboard of the window without a main web view");
+    NSString *plainWaiting = regionKeys(^{
+        releaseOnWorkbench(plain);
+        typeKeys(plain, "wx");
+        runQueuedEvents();
+    });
+    check([plainWaiting isEqual:@""], [NSString stringWithFormat:@"the keys of a window without a main web view wait for the decision, got \"%@\"", plainWaiting].UTF8String);
+    NSString *plainDecided = regionKeys(^{
+        sp_surface_focus(plainHost);
+        sp_window_keys_decided(plain);
+        runQueuedEvents();
+    });
+    check([plainDecided isEqual:@"wx"], [NSString stringWithFormat:@"the decided call gives them to the region in order, got \"%@\"", plainDecided].UTF8String);
+    [plain close];
+    sp_region_close(plainRegion);
+    sp_surface_close(plainHost);
+    sp_window_end_responder_observation(plainObservation);
 
     // A framework that draws the workbench removes its view when its window closes, while the window still shows (mygo removes it in
     // windowWillClose:). A move of the keyboard to the workbench that then arrives finds no view, and is no error: the window closes.

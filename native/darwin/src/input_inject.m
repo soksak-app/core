@@ -553,7 +553,7 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
             BOOL throughApplication = sp_input_virtual_through_application(handle);
             if (heldByOther(pointer, window, pageOf(hit), 1, throughApplication, held)) return SP_INPUT_POINTER_HELD;
             sp_input_virtual_set_point(handle, point.x, point.y);
-            // The left press of the window passes its hold of the keyboard once, while any pointer holds it.
+            // The left press of the window is followed for the workbench once, while any pointer holds it.
             BOOL firstLeft = button == 0 && !otherPressIn(pointer, window, 0);
             // A person moves to the point before the press. A window that is not the key window hears no move.
             if (keyForInput(window)) moveTo(window, point);
@@ -561,7 +561,7 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
             // The monitor of the press origin records the press of the application as it records a person's press. A press
             // delivered directly passes no monitor, so the driver records it.
             if (!throughApplication) sp_input_press_origin_set(window, button, point.x, point.y);
-            // A press that passes the application is followed there; this one passes no hold of the keyboard on its way.
+            // A press that passes the application is followed there; this one passes no -[NSApplication sendEvent:] on its way.
             if (!throughApplication && firstLeft) surfaceLayoutPointerPassing(window, true, point.x, point.y);
             // NSApp.currentEvent is not this event, so the explicit context lets click-through native regions classify the
             // synchronous responder change.
@@ -1257,14 +1257,20 @@ static NSString *jsonText(const char *text) {
 }
 
 static sp_input_result keyNow(void *handle, const char *key, const char *text, unsigned modifiers, bool down, bool held);
+static void logKey(NSWindow *window, const char *key, const char *text, unsigned modifiers, bool down, sp_input_result result,
+    const char *why, NSString *responderName, bool equivalent, bool typed, bool held);
 
 // Delivers a key behind the input of its window that waits. Whether the key is kept is the only answer the caller has until its
-// turn, and the record of that turn states the result and that the key waited.
+// turn, and the record of that turn states the result and that the key waited; a key that the close of its window drops is
+// recorded as rejected, so each kept key has one result.
 sp_input_result sp_input_key(void *handle, const char *key, const char *text, unsigned modifiers, bool down) {
     NSWindow *window = (__bridge NSWindow *)handle;
     NSString *keptKey = key ? [NSString stringWithUTF8String:key] : nil, *keptText = text ? [NSString stringWithUTF8String:text] : nil;
-    if (window && NSThread.isMainThread && surfaceLayoutHoldCall(window, false, 0, 0, ^{
+    if (window && NSThread.isMainThread && surfaceLayoutHoldKey(window, ^{
             keyNow(window, keptKey.UTF8String, keptText.UTF8String, modifiers, down, true);
+        }, ^{
+            logKey(window, keptKey.UTF8String, keptText.UTF8String, modifiers, down, SP_INPUT_REJECTED,
+                "the window closed while the key waited", @"none", false, false, true);
         })) {
         return SP_INPUT_DELIVERED;
     }
@@ -1279,11 +1285,17 @@ static sp_input_result keyNow(void *handle, const char *key, const char *text, u
     NSResponder *responder = window.firstResponder;
     NSString *responderName = responder ? NSStringFromClass(responder.class) : @"none";
     sp_input_result result = keyInput(handle, key, text, modifiers, down, &why, &equivalent, &typed);
+    logKey(window, key, text, modifiers, down, result, why, responderName, equivalent, typed, held);
+    return result;
+}
+
+// Records the result of a key: the view that held the keyboard when the key was sent, with the key window.
+static void logKey(NSWindow *window, const char *key, const char *text, unsigned modifiers, bool down, sp_input_result result,
+    const char *why, NSString *responderName, bool equivalent, bool typed, bool held) {
     NSString *record = [NSString stringWithFormat:
         @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\","
         "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s,\"virtualKeyText\":%s,\"held\":%s}",
         jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why, responderName,
         window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false", typed ? "true" : "false", held ? "true" : "false"];
     sp_log_info("input inject", record.UTF8String);
-    return result;
 }

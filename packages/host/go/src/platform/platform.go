@@ -446,11 +446,12 @@ type Platform interface {
 	// FocusSurfaceForRegion gives the keyboard to a surface that declared an image region, which keeps the keys until the region shows.
 	FocusSurfaceForRegion(surface unsafe.Pointer)
 	FocusWorkbench(window Window)
-	// KeyboardHold holds the input of window until KeyboardDecided, the decision of the workbench about the keyboard
-	// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
-	KeyboardHold(window Window)
-	KeyboardDecided(window Window)
-	// ModalHold holds the input of window from the show of a modal web view until ModalHoldEnd, after the modal took the
+	// KeysDecided gives the keys of window that waited for the decision of the workbench, after the keyboard calls before it, and
+	// KeysPageEnded gives them when the workbench of window ended (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them
+	// on the main thread.
+	KeysDecided(window Window)
+	KeysPageEnded(window Window)
+	// ModalHold lets the keys of window wait from the show of a modal web view until ModalHoldEnd, after the modal took the
 	// keyboard or closed before that (docs/spec/native-modals.md#keyboard). Call them on the main thread.
 	ModalHold(window Window)
 	ModalHoldEnd(window Window)

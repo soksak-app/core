@@ -110,7 +110,7 @@ fn a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error() 
 
 // contract: exposure.relay.page-reload-ends-surface-requests
 #[test]
-fn a_page_start_ends_the_waits_the_layout_and_the_keyboard_hold_of_the_earlier_page() {
+fn a_page_start_ends_the_waits_the_layout_and_the_key_wait_of_the_earlier_page() {
     let steps = Mutex::new(Vec::new());
     let result = crate::windows::end_page_layout(
         || {
@@ -122,13 +122,13 @@ fn a_page_start_ends_the_waits_the_layout_and_the_keyboard_hold_of_the_earlier_p
             Ok(())
         },
         || {
-            steps.lock().unwrap().push("decided");
+            steps.lock().unwrap().push("page ended");
             Err("no window".to_string())
         },
     );
-    assert_eq!(*steps.lock().unwrap(), ["abandon", "cancel", "decided"]);
+    assert_eq!(*steps.lock().unwrap(), ["abandon", "cancel", "page ended"]);
     assert_eq!(
         result,
-        Err("abandon failed; ending the keyboard hold: no window".to_string())
+        Err("abandon failed; ending the key wait: no window".to_string())
     );
 }

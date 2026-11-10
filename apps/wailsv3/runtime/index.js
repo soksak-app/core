@@ -57,8 +57,6 @@ const METHOD = {
   presentSurfaces: "PresentSurfaces",
   cancelSurfaces: "CancelSurfaces",
   surfaceFocus: "SurfaceFocus",
-  keyboardHold: "KeyboardHold",
-  keyboardDecided: "KeyboardDecided",
   waitPresented: "WaitPresented",
   setTheme: "SetTheme",
   setMenuLanguage: "SetMenuLanguage",

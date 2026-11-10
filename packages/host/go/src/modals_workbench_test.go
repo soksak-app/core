@@ -41,7 +41,7 @@ func TestAWorkbenchStartingEndsItsPredecessorsDialogBackground(t *testing.T) {
 	s := NewSurfaces(nil, sidecarSessionSurfaces(t).sidecars)
 	s.invoke = func(work func()) { work() }
 	s.reloadCancelLayout = func() error { return nil }
-	s.reloadKeyboardDecided = func() {}
+	s.reloadKeysPageEnded = func() {}
 	s.reloadHideSurface = func(unsafe.Pointer, bool) {}
 	s.reloadCloseImage = func(unsafe.Pointer) {}
 	s.events = func(string, any) {}

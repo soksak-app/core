@@ -1096,8 +1096,8 @@ fn cancel_layout_after_setup_error(
     }
 }
 
-/// Names the surface that takes the keyboard of the window, and null names the workbench. `decided` ends the hold of the input
-/// of the window after the keyboard moved (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+/// Names the surface that takes the keyboard of the window, and null names the workbench. `decided` gives the keys that wait
+/// for the decision of the workbench after the keyboard moved (docs/spec/native-surfaces.md#keyboard-of-a-surface).
 #[derive(Deserialize)]
 pub struct FocusRequest {
     surface: Option<String>,
@@ -1113,9 +1113,9 @@ pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
     let decided = request.decided;
     exposure::on_main(window, move || {
         let focused = focus_on_main(platform, &focus_window, request.surface);
-        // A refused surface still ends the hold: the input waits for no later decision of this call.
+        // A refused surface still gives the keys: they wait for no later decision of this call.
         if decided {
-            platform.keyboard_decided(
+            platform.keys_decided(
                 focus_window
                     .native_window()
                     .map_err(|error| error.to_string())? as Handle,
@@ -1125,27 +1125,14 @@ pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
     })
 }
 
-/// Holds the input of the window until the decision of the workbench about the keyboard, and answers after the hold is open
+/// Gives the keys of the window that waited for the decision of its workbench, which ended with the process of its page
 /// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
-pub fn keyboard_hold(window: &Window) -> Result<(), String> {
+pub(crate) fn keys_page_ended(window: &Window) -> Result<(), String> {
     let platform = platform::current()?;
-    let hold_window = window.clone();
+    let ended_window = window.clone();
     exposure::on_main(window, move || {
-        platform.keyboard_hold(
-            hold_window
-                .native_window()
-                .map_err(|error| error.to_string())? as Handle,
-        )
-    })
-}
-
-/// Ends the hold of the input of the window and leaves the keyboard where it is.
-pub fn keyboard_decided(window: &Window) -> Result<(), String> {
-    let platform = platform::current()?;
-    let decided_window = window.clone();
-    exposure::on_main(window, move || {
-        platform.keyboard_decided(
-            decided_window
+        platform.keys_page_ended(
+            ended_window
                 .native_window()
                 .map_err(|error| error.to_string())? as Handle,
         )

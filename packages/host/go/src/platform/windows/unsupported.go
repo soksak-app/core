@@ -423,11 +423,11 @@ func (implementation) FocusWorkbench(platform.Window) {
 	unreachable("workbench keyboard")
 }
 
-func (implementation) KeyboardHold(platform.Window) {
+func (implementation) KeysDecided(platform.Window) {
 	unreachable("workbench keyboard")
 }
 
-func (implementation) KeyboardDecided(platform.Window) {
+func (implementation) KeysPageEnded(platform.Window) {
 	unreachable("workbench keyboard")
 }
 

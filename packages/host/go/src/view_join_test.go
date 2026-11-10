@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -626,26 +627,24 @@ func TestSurfaceFocusRefusesAWindowlessCallAndAMissingMember(t *testing.T) {
 	}
 }
 
-// keyboardHoldPlatform records the keyboard calls of the host in their order and runs the work of the UI thread at once.
-type keyboardHoldPlatform struct {
+// keysWaitPlatform records the keyboard calls of the host in their order and runs the work of the UI thread at once.
+type keysWaitPlatform struct {
 	platform.Platform
 	calls []string
 }
 
-func (p *keyboardHoldPlatform) EnqueueUI(run func()) error {
+func (p *keysWaitPlatform) EnqueueUI(run func()) error {
 	run()
 	return nil
 }
-func (p *keyboardHoldPlatform) FocusWorkbench(platform.Window) {
+func (p *keysWaitPlatform) FocusWorkbench(platform.Window) {
 	p.calls = append(p.calls, "workbench")
 }
-func (p *keyboardHoldPlatform) KeyboardHold(platform.Window) { p.calls = append(p.calls, "hold") }
-func (p *keyboardHoldPlatform) KeyboardDecided(platform.Window) {
-	p.calls = append(p.calls, "decided")
-}
+func (p *keysWaitPlatform) KeysDecided(platform.Window)   { p.calls = append(p.calls, "decided") }
+func (p *keysWaitPlatform) KeysPageEnded(platform.Window) { p.calls = append(p.calls, "page ended") }
 
-// contract: surface-layout.keyboard-waits-for-the-decision
-func TestADecidedCallEndsTheHoldAndAPlainCallDoesNot(t *testing.T) {
+// contract: surface-layout.keys-wait-for-the-decision
+func TestADecidedCallGivesTheKeysAndAPlainCallDoesNot(t *testing.T) {
 	decided, err := argument[FocusRequest]("request", json.RawMessage(`{"surface":null,"decided":true}`))
 	if err != nil || decided.Surface != nil || !decided.Decided {
 		t.Fatalf("a decided call = %+v, %v; want the workbench and decided", decided, err)
@@ -659,23 +658,17 @@ func TestADecidedCallEndsTheHoldAndAPlainCallDoesNot(t *testing.T) {
 	}
 }
 
-// contract: surface-layout.keyboard-waits-for-the-decision
-func TestTheInputOfTheWindowWaitsForTheDecisionOfTheWorkbench(t *testing.T) {
-	fake := &keyboardHoldPlatform{}
+// contract: surface-layout.keys-wait-for-the-decision
+func TestTheKeysOfTheWindowWaitForTheDecisionOfTheWorkbench(t *testing.T) {
+	fake := &keysWaitPlatform{}
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
 	s := &Surfaces{}
-	if err := s.KeyboardHold(); err != errNoWindow {
-		t.Fatalf("KeyboardHold without a window = %v, want %v", err, errNoWindow)
-	}
-	if err := s.KeyboardDecided(); err != errNoWindow {
-		t.Fatalf("KeyboardDecided without a window = %v, want %v", err, errNoWindow)
+	if err := s.FocusSurface(FocusRequest{Decided: true}); err != errNoWindow {
+		t.Fatalf("a decided call without a window = %v, want %v", err, errNoWindow)
 	}
 	s.window = &noticeFrontend{}
-	if err := s.KeyboardHold(); err != nil {
-		t.Fatalf("KeyboardHold: %v", err)
-	}
 	if err := s.FocusSurface(FocusRequest{}); err != nil {
 		t.Fatalf("a call without the decision: %v", err)
 	}
@@ -686,16 +679,28 @@ func TestTheInputOfTheWindowWaitsForTheDecisionOfTheWorkbench(t *testing.T) {
 	if err := s.FocusSurface(FocusRequest{Surface: &gone, Decided: true}); err == nil {
 		t.Fatalf("a decided call for a surface that is not attached was not refused")
 	}
-	if err := s.KeyboardDecided(); err != nil {
-		t.Fatalf("KeyboardDecided: %v", err)
-	}
-	want := []string{"hold", "workbench", "workbench", "decided", "decided", "decided"}
+	want := []string{"workbench", "workbench", "decided", "decided"}
 	if !slices.Equal(fake.calls, want) {
-		t.Fatalf("the keyboard calls of the host are %v, want %v: a decided call ends the hold after the keyboard moved, also when it is refused", fake.calls, want)
+		t.Fatalf("the keyboard calls of the host are %v, want %v: a decided call gives the keys after the keyboard moved, also when it is refused", fake.calls, want)
 	}
-	request, err := argument[FocusRequest]("request", json.RawMessage(`{"surface":null,"decided":true}`))
-	if err != nil || !request.Decided || request.Surface != nil {
-		t.Fatalf("the decided request reads as %+v, %v", request, err)
+	// No call of the page holds the keys or ends a hold: the keys follow surfaceFocus alone.
+	for _, name := range []string{"KeyboardHold", "KeyboardDecided"} {
+		if _, ok := reflect.TypeOf(&Host{}).MethodByName(name); ok {
+			t.Errorf("the host still binds %s", name)
+		}
+	}
+}
+
+// contract: surface-layout.keys-wait-for-the-decision
+func TestTheEndOfTheMainPageGivesTheKeys(t *testing.T) {
+	fake := &keysWaitPlatform{}
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	s := &Surfaces{window: &noticeFrontend{}}
+	s.mainPageEnded()
+	if want := []string{"page ended"}; !slices.Equal(fake.calls, want) {
+		t.Fatalf("the end of the main page made the calls %v, want %v: the keys that waited go where the keyboard is", fake.calls, want)
 	}
 }
 

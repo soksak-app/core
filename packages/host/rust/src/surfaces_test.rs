@@ -1054,9 +1054,9 @@ fn the_page_names_the_surface_that_takes_the_keyboard() {
     assert!(serde_json::from_str::<super::FocusRequest>(r#"{"surface":5}"#).is_err());
 }
 
-// contract: surface-layout.keyboard-waits-for-the-decision
+// contract: surface-layout.keys-wait-for-the-decision
 #[test]
-fn a_decided_call_ends_the_hold_and_a_plain_call_does_not() {
+fn a_decided_call_gives_the_keys_and_a_plain_call_does_not() {
     let decided: super::FocusRequest =
         serde_json::from_str(r#"{"surface":null,"decided":true}"#).unwrap();
     assert!(decided.decided);

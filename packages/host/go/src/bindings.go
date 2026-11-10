@@ -147,24 +147,6 @@ func (h *Host) SurfaceFocus(ctx context.Context, reqJSON json.RawMessage) error 
 	return s.FocusSurface(req)
 }
 
-// KeyboardHold holds the input of the window until the workbench decided where the keyboard goes.
-func (h *Host) KeyboardHold(ctx context.Context) error {
-	s, err := h.surface(ctx)
-	if err != nil {
-		return err
-	}
-	return s.KeyboardHold()
-}
-
-// KeyboardDecided ends the hold of the input of the window and leaves the keyboard where it is.
-func (h *Host) KeyboardDecided(ctx context.Context) error {
-	s, err := h.surface(ctx)
-	if err != nil {
-		return err
-	}
-	return s.KeyboardDecided()
-}
-
 // CancelSurfaces ends a preparation that the page does not present, so the windows that wait for its transaction continue.
 func (h *Host) CancelSurfaces(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[CancelRequest]("request", reqJSON)
@@ -759,6 +741,7 @@ func terminatedNative(viewID uint64) {
 	})
 	if owner != nil {
 		owner.surfaceTerminated(viewID)
+		owner.modalTerminated(viewID)
 	}
 }
 

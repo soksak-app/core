@@ -513,13 +513,17 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn focus_surface_for_region(&self, surface: Handle) -> Result<(), String>;
     /// Gives the keyboard of window to the workbench. Call it on the main thread.
     fn focus_workbench(&self, window: Handle) -> Result<(), String>;
-    /// Holds the input of window until keyboard_decided, the decision of the workbench about the keyboard
+    /// keys_decided gives the keys of window that waited for the decision of the workbench, after the keyboard calls before
+    /// it, and keys_page_ended gives them when the workbench of window ended
     /// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Call them on the main thread.
-    fn keyboard_hold(&self, window: Handle) -> Result<(), String>;
-    fn keyboard_decided(&self, window: Handle) -> Result<(), String>;
-    /// Holds the input of window from the show of a modal web view until modal_hold_end, which the host calls when the modal
-    /// took the keyboard or closed (docs/spec/native-modals.md#keyboard). The hold stands while this wait or the decision of
-    /// keyboard_hold stands. Call them on the main thread.
+    fn keys_decided(&self, window: Handle) -> Result<(), String>;
+    fn keys_page_ended(&self, window: Handle) -> Result<(), String>;
+    /// Returns the keyboard of window, after its modal closed, to the last surface or workbench that a keyboard call named
+    /// (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring). Call it on the main thread.
+    fn keyboard_after_modal(&self, window: Handle) -> Result<(), String>;
+    /// Lets the keys of window wait from the show of a modal web view until modal_hold_end, which the host calls when the
+    /// modal took the keyboard or closed (docs/spec/native-modals.md#keyboard). The keys wait while this wait or the
+    /// decision of the workbench waits. Call them on the main thread.
     fn modal_hold(&self, window: Handle) -> Result<(), String>;
     fn modal_hold_end(&self, window: Handle) -> Result<(), String>;
     fn set_window_overlays(&self, main: Handle, overlays: &[WindowOverlay]) -> Result<(), String>;

@@ -311,12 +311,16 @@ impl Platform for Darwin {
         webview::focus_workbench(window);
         Ok(())
     }
-    fn keyboard_hold(&self, window: Handle) -> Result<(), String> {
-        webview::keyboard_hold(window);
+    fn keys_decided(&self, window: Handle) -> Result<(), String> {
+        webview::keys_decided(window);
         Ok(())
     }
-    fn keyboard_decided(&self, window: Handle) -> Result<(), String> {
-        webview::keyboard_decided(window);
+    fn keys_page_ended(&self, window: Handle) -> Result<(), String> {
+        webview::keys_page_ended(window);
+        Ok(())
+    }
+    fn keyboard_after_modal(&self, window: Handle) -> Result<(), String> {
+        webview::keyboard_after_modal(window);
         Ok(())
     }
     fn modal_hold(&self, window: Handle) -> Result<(), String> {

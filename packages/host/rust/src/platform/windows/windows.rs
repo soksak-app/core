@@ -169,11 +169,14 @@ impl Platform for Windows {
     fn focus_workbench(&self, window: Handle) -> Result<(), String> {
         unsupported::focus_workbench(window)
     }
-    fn keyboard_hold(&self, window: Handle) -> Result<(), String> {
-        unsupported::keyboard_hold(window)
+    fn keys_decided(&self, window: Handle) -> Result<(), String> {
+        unsupported::keys_decided(window)
     }
-    fn keyboard_decided(&self, window: Handle) -> Result<(), String> {
-        unsupported::keyboard_decided(window)
+    fn keys_page_ended(&self, window: Handle) -> Result<(), String> {
+        unsupported::keys_page_ended(window)
+    }
+    fn keyboard_after_modal(&self, window: Handle) -> Result<(), String> {
+        unsupported::keyboard_after_modal(window)
     }
     fn modal_hold(&self, window: Handle) -> Result<(), String> {
         unsupported::modal_hold(window)

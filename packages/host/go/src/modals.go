@@ -141,7 +141,18 @@ func (s *Surfaces) OverlayShow(req OverlayRequest) (Rect, error) {
 	return at, nil
 }
 
-// endModalHold ends the wait of the input of the window for its modal. It runs on the main thread.
+// modalTerminated ends the wait of the keys for the modal of the native web view viewID, whose WebContent process ended before
+// the modal took the keyboard (docs/spec/native-modals.md#keyboard). It runs outside the UI thread.
+func (s *Surfaces) modalTerminated(viewID uint64) {
+	s.mu.Lock()
+	ended := s.modal != nil && s.modal.view != nil && s.modal.view.id == viewID
+	s.mu.Unlock()
+	if ended {
+		mainThreadStep(s.endModalHold)
+	}
+}
+
+// endModalHold ends the wait of the keys of the window for its modal. It runs on the main thread.
 func (s *Surfaces) endModalHold() {
 	if s.window != nil {
 		system.ModalHoldEnd(s.window.NativeWindow())

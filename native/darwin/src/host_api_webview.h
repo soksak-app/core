@@ -29,8 +29,8 @@ void main_webviewSetFrame(void *view, double x, double y, double width, double h
 void main_sp_surface_focus(void *surface);
 void main_sp_surface_focus_for_region(void *surface);
 void main_sp_window_focus_workbench(uintptr_t window);
-void main_sp_window_keyboard_hold(uintptr_t window);
-void main_sp_window_keyboard_decided(uintptr_t window);
+void main_sp_window_keys_decided(uintptr_t window);
+void main_sp_window_keys_page_ended(uintptr_t window);
 void main_sp_window_modal_hold(uintptr_t window);
 void main_sp_window_modal_hold_end(uintptr_t window);
 void main_webviewSetSurfaceHidden(void *view, bool hidden);

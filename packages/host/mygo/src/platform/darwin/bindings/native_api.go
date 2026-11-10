@@ -842,24 +842,24 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpWindowHit, address)
 	}
 	{
-		address, err := purego.Dlsym(library, "main_sp_window_keyboard_decided")
+		address, err := purego.Dlsym(library, "main_sp_window_keys_decided")
 		if err != nil {
-			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keyboard_decided: %w", err)
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keys_decided: %w", err)
 		}
 		if address == 0 {
-			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keyboard_decided: symbol has a null address")
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keys_decided: symbol has a null address")
 		}
-		purego.RegisterFunc(&functions.MainSpWindowKeyboardDecided, address)
+		purego.RegisterFunc(&functions.MainSpWindowKeysDecided, address)
 	}
 	{
-		address, err := purego.Dlsym(library, "main_sp_window_keyboard_hold")
+		address, err := purego.Dlsym(library, "main_sp_window_keys_page_ended")
 		if err != nil {
-			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keyboard_hold: %w", err)
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keys_page_ended: %w", err)
 		}
 		if address == 0 {
-			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keyboard_hold: symbol has a null address")
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_keys_page_ended: symbol has a null address")
 		}
-		purego.RegisterFunc(&functions.MainSpWindowKeyboardHold, address)
+		purego.RegisterFunc(&functions.MainSpWindowKeysPageEnded, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "main_sp_window_main_webview")

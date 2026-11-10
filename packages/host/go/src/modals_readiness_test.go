@@ -148,6 +148,18 @@ func TestAModalThatClosesOrFailsBeforeItTookTheKeyboardEndsTheWait(t *testing.T)
 }
 
 // contract: modal.keyboard-hold
+func TestTheEndOfTheProcessOfAModalDocumentEndsTheWait(t *testing.T) {
+	s, fake := modalKeyboardSurfaces(t, false)
+	showPicker(t, s, "picker")
+	view := s.modal.view
+	t.Cleanup(func() { delete(nativeViews, view.id) })
+	terminatedNative(view.id)
+	if want := []string{"hold", "end"}; !reflect.DeepEqual(fake.calls, want) {
+		t.Fatalf("the end of the process of a modal document that was not ready made the calls %v, want %v: no key waits for a modal whose document ended", fake.calls, want)
+	}
+}
+
+// contract: modal.keyboard-hold
 func TestAModalThatReplacesAnotherKeepsTheWaitUntilItTakesTheKeyboard(t *testing.T) {
 	s, fake := modalKeyboardSurfaces(t, false)
 	showPicker(t, s, "picker")

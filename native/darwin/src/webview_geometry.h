@@ -65,22 +65,26 @@ void sp_surface_focus_for_region(void *surface);
 // Gives the keyboard of window to the workbench: the registered main web view, or the view of the framework that draws the
 // workbench of a window without a main web view. An open left press delays it as in sp_surface_focus.
 void sp_window_focus_workbench(void *window);
-// Holds the input of window until the workbench decided where the keyboard goes (docs/spec/native-surfaces.md#keyboard-of-a-surface):
-// every later pointer and key event of the window waits in its order. The release of a left press on the workbench of a window
-// that holds a surface opens the same hold. An open hold stays as it is.
-void sp_window_keyboard_hold(void *window);
-// Ends the hold of the input of window and gives the input back in its order, to the view that holds the keyboard after the
-// keyboard calls before it. A window without a hold changes nothing.
-void sp_window_keyboard_decided(void *window);
-// Holds the input of window from the show of a modal web view until that view takes the keyboard
-// (docs/spec/native-modals.md#keyboard): every later pointer and key event of the window waits in its order, in the same hold as
-// the decision of the workbench, so a key pressed as the modal opens reaches the modal and not the view behind it. An open modal
-// hold stays as it is.
+// The workbench decided where the keyboard goes (docs/spec/native-surfaces.md#keyboard-of-a-surface): the keys of window that
+// waited since the release of a left press on its workbench go in their order to the view that holds the keyboard after the
+// keyboard calls before it, once no modal waits to take the keyboard. A window whose keys do not wait changes nothing.
+void sp_window_keys_decided(void *window);
+// The workbench of window ended: the process of its page exited, the page reloads or a new one starts. The keys that waited for its
+// decision go as at sp_window_keys_decided. Harmless when nothing waits.
+void sp_window_keys_page_ended(void *window);
+// Lets the keys of window wait from the show of a modal web view until that view takes the keyboard
+// (docs/spec/native-modals.md#keyboard), so a key pressed as the modal opens reaches the modal and not the view behind it. Only
+// keys wait. While a modal waits or holds the keyboard, sp_surface_focus and sp_window_focus_workbench record their move and leave
+// the keyboard where it is. An open modal wait stays as it is.
 void sp_window_modal_hold(void *window);
-// Ends the modal hold of window, after the modal web view took the keyboard or when the modal closed or failed before that. The
-// input comes back in its order to the view that holds the keyboard, once the decision of the workbench does not hold it either.
-// A window without a modal hold changes nothing.
+// Ends the modal wait of window, after the modal web view took the keyboard or when the modal closed or failed before that. A modal
+// that did not take the keyboard leaves it to the last recorded move. The keys go in their order to the view that holds the
+// keyboard, once the decision of the workbench does not wait either. A window without a modal wait changes nothing.
 void sp_window_modal_hold_end(void *window);
+// Returns the keyboard of window to the last move that sp_surface_focus or sp_window_focus_workbench asked for, or to the workbench
+// without one, when the modal web view closing closes. Returns false and changes nothing while another modal waits or holds the
+// keyboard. closing may be NULL when the modal has left the window.
+bool sp_window_keyboard_after_modal(void *window, void *closing);
 // Records a move of the first responder of a window for the surfaces that it leaves and enters. The observation of the first
 // responder calls it.
 void sp_surface_responder_moved(void *from, void *to);
