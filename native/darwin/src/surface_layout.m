@@ -219,6 +219,7 @@ static BOOL passesHold(NSEvent *event) {
     if (!window) return YES;
     NSEventType type = event.type;
     if (type == NSEventTypeKeyDown || type == NSEventTypeKeyUp) return (event.modifierFlags & NSEventModifierFlagCommand) != 0;
+    // silent: the predicate answers NO for a modifier change or a scroll, which belongs to the content and waits in the hold.
     if (type == NSEventTypeFlagsChanged || type == NSEventTypeScrollWheel) return NO;
     NSView *content = window.contentView;
     if (!content) return YES;
@@ -234,6 +235,7 @@ static BOOL endsHold(NSEvent *event) {
         case NSEventTypeKeyDown: case NSEventTypeKeyUp: case NSEventTypeFlagsChanged:
             return YES;
         default:
+            // silent: the predicate answers NO for a move or a drag of the pointer, which ends no hold.
             return NO;
     }
 }
@@ -245,6 +247,7 @@ static BOOL holdInput(NSEvent *event) {
         | NSEventMaskMouseMoved | NSEventMaskScrollWheel | NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged;
     NSEventMask type = NSEventMaskFromType(event.type);
     NSWindow *window = event.window;
+    // silent: the predicate answers NO for an event that no hold keeps, and the caller sends it on.
     if (!(type & later) || passesHold(event)) return NO;
     // A release puts its events at the start of the queue, so while it returns every event of the window is in its turn.
     BOOL waits = window && (type & later) && ![returning containsObject:[NSValue valueWithPointer:window]]
@@ -361,6 +364,7 @@ static void markReturnedAction(void *owner, NSEvent *event) {
 
 // Whether event is a told action that comes back; it takes its mark.
 static BOOL takeReturnedAction(NSEvent *event) {
+    // silent: the predicate answers NO while no told action waits to come back.
     if (returnedActions.count == 0) return NO;
     NSString *content = actionContent(event);
     for (NSUInteger index = 0; index < returnedActions.count; index++) {
@@ -368,6 +372,7 @@ static BOOL takeReturnedAction(NSEvent *event) {
         [returnedActions removeObjectAtIndex:index];
         return YES;
     }
+    // silent: the predicate answers NO for an event that no told action marks.
     return NO;
 }
 
