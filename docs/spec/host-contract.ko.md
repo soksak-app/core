@@ -379,7 +379,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.transport.non-jsonrpc-object-closes` | JSON-RPC 2.0 요청이 아닌 JSON 프레임은 응답 없이 연결을 닫는다. | all |
 | `endpoint.transport.undeclared-method-closes` | 선언되지 않은 메서드는 응답 없이 연결을 닫고 workbench에 아무것도 전달하지 않는다. | all |
 | `endpoint.transport.close-reason-is-recorded` | 닫히는 연결은 소켓을 닫기 전에 `info host endpoint: connection closed: <reason>`을 쓴다. reason은 한도를 넘은 frame, JSON-RPC 2.0 요청이 아닌 frame(본문 포함), 선언되지 않은 메서드, peer의 종료다. | all |
-| `endpoint.timeout.is-recorded` | 제한 시간 오류 1005로 끝나는 endpoint 요청은 client가 오류를 받기 전에 `error host endpoint timeout: <method>: <message>`를 쓴다. | all |
+| `endpoint.no-result.is-recorded` | 오류 1005로 끝나는 endpoint 요청은 client가 오류를 받기 전에 `error host endpoint no result: <method>: <message>`를 쓴다. | all |
 | `endpoint.diagnostics.methods-exist-only-in-diagnostic-builds` | 릴리스 빌드에서 diagnostics.transcript는 연결을 닫고 workbench에 닿지 않으며, 진단 빌드에서는 응답된다. | all |
 | `endpoint.rpc.round-trip-by-id` | 한 연결의 여러 요청은 각각 같은 id와 결과를 가진 JSON-RPC 2.0 응답을 받는다. | all |
 | `endpoint.rpc.page-params-omit-window` | workbench는 window 필드를 뺀 전달 매개변수를 받는다. | all |
@@ -456,24 +456,21 @@ fn invalid_json_closes_connection() {
 | `exposure.host-window.reads-during-surface-creation` | 네이티브 surface view는 생성하는 같은 단계에서 surface id로 이름이 붙으므로, window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.reads-during-surface-close` | 네이티브 surface view는 닫는 단계가 id를 잊을 때까지 surface id를 유지하므로, view가 열려 있는 동안 window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | all |
-| `exposure.timeout.command-run-default-and-declared` | command.run은 기본 10초를 기다리고 선언된 timeout을 쓴다. | all |
-| `exposure.timeout.every-forward-bounded` | timeout이 없는 forward 요청은 method와 관계없이 10초를 기다리므로, 시간 제한이 없는 forward는 없다. | all |
-| `exposure.timeout.invalid-timeout-rejected` | 0, 600000 초과, 소수, 문자열, 음수인 command.run timeout은 -32602를 반환한다. | all |
+| `exposure.command.ends-by-reply-or-peer-end` | command.run에는 시간 제한이 없다. 그 답, 그것을 실행하는 문서의 끝, 그것을 보낸 endpoint 연결의 끝으로 끝난다. | all |
+| `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 전달된 요청을 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. | all |
+| `exposure.command.declaration-refuses-a-time-limit` | `timeout`을 가진 명령 선언은 manifest 검사와 registry가 `<where>: timeout is not a member of a command declaration`로 거절한다. | all |
 | `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | all |
 | `exposure.relay.keeps-value-text` | workbench 응답은 workbench가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | all |
 | `exposure.relay.missing-result-is-null` | result가 없는 응답은 null로 완료된다. | all |
 | `exposure.relay.error-reply-keeps-code-and-message` | 오류 응답은 같은 코드와 메시지로 요청을 실패시킨다. | all |
-| `exposure.relay.foreign-document-reply-ignored-timeout-1005` | 다른 문서의 응답은 무시되고, 요청은 1005로 시간 초과되며, 늦은 응답도 받지 않는다. | all |
-| `exposure.relay.late-reply-states-its-delay` | 시간이 초과된 요청은 `the document did not reply within <ms> ms`로 실패하고, 그 뒤에 온 답은 요청을 보낸 뒤의 지연과 제한 시간으로 실패하며, 요청이 없는 답은 `has no matching request`로 실패한다. | all |
-| `exposure.relay.timeout-writes-call-event` | 시간이 초과된 command는 `plugin`과 `command`를 가진 `host.call.timeout`을 쓰고, command가 아닌 요청은 call event를 쓰지 않는다. | all |
-| `exposure.relay.late-reply-writes-call-event` | 시간이 초과된 command의 늦은 답은 `plugin`, `command`와 보낸 뒤의 `delay`를 가진 `host.trace.call.late-reply`를 쓴다. | all |
+| `exposure.relay.foreign-document-reply-ignored` | 다른 문서의 답은 무시하고, 요청은 자기 문서의 답이나 상대의 끝을 계속 기다린다. | all |
 | `exposure.relay.send-failure-1003` | 문서로 보내기가 실패하면 요청은 즉시 1003으로 실패한다. | all |
 | `exposure.relay.closed-document-fails-pending-1003` | 문서를 닫으면 대기 중인 요청은 1003으로 실패한다. | all |
 | `exposure.relay.page-reload-ends-surface-requests` | 준비된 workbench에 reload 요청을 보낸 뒤 그 window의 surface document로 보낸 요청은 1003으로 끝나고, 새 workbench가 시작할 때까지 이후 요청은 1003으로 거부된다. 다른 window의 요청은 계속 기다린다. | all |
 | `exposure.settled-wait.presents-through-the-frontend` | settled wait는 `Frontend`의 settled presentation으로 내용을 화면에 올리고, `Frontend`가 만들지 못한 presentation은 platform의 settled wait 전에 그 오류로 wait를 끝내며, block의 실패도 wait를 끝낸다. | all |
 | `exposure.window-presented.waits-for-the-last-placement` | `host.window.presented`와 `diagnostics.drag`는 연속 갱신의 끝과 settled presentation을 기다리기 전에 창의 workbench에 `workbench.placement.last`, 곧 workbench가 만들었거나 들고 있는 마지막 placement를 묻는다. 진행 중인 placement 뒤에서 기다리는 placement는 workbench만 알기 때문이다. 시작하지 않은 workbench는 들고 있는 placement가 없다. 그 placement가 실패하거나 workbench가 시간 제한 안에 답하지 않으면 wait도 실패한다. | all |
 | `exposure.relay.ended-reply-is-observed` | 문서가 1003으로 끝낸 요청에 대한 답은 받아들여 관측 `exposure reply <id> arrived after its request ended`로 쓴다. 릴레이가 보낸 적 없는 요청에 대한 답은 `exposure reply <id> has no matching request`로 실패한다. | all |
-| `exposure.relay.no-timeout-waits-until-close` | timeout이 없는 요청은 문서가 닫힐 때까지 기다린 뒤 1003으로 실패한다. | all |
+| `exposure.relay.waits-until-reply-or-close` | 전달된 요청에는 시간 제한이 없다. 그 답이나 그 문서의 닫기까지 기다리고, 닫히면 1003으로 실패한다. | all |
 | `exposure.relay.surface-process-end-ends-its-requests` | 표면 문서로 전달한 요청은 표면 페이지의 WebContent 프로세스가 끝나는 turn에 1003으로 끝나고, 그 뒤의 답은 아무것도 완료하지 않는다. | all |
 | `exposure.window-presented.ends-by-events` | `host.window.presented`에는 자기 한도가 없다. 표시 중인 modal의 WebContent 프로세스 끝은 그 paint 기다림을 끝내고, 창 닫힘은 기다리는 요청을 1003으로 실패시킨다. | all |
 | `exposure.fullscreen.answers-once-by-its-event` | `host.window.fullscreen`은 한 번 답한다. 전환의 끝에서, 최소화되었거나 보이지 않거나 sheet를 보이거나 macOS가 전환을 시작하지 않는 창에는 곧바로 1006으로, 창 닫힘에는 1003으로, 시작한 전환의 `windowDidFailToEnterFullScreen:`이나 `windowDidFailToExitFullScreen:`에는 1005로 답한다. 요청에는 한도가 없다. | all |
@@ -691,7 +688,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.hidden-surface-does-not-block` | 숨긴 표면은 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
 | `images.wait.sidecar-end-ends-wait` | sidecar 연결의 끝은 그 sidecar 이름으로 그 region들의 raster wait를 끝낸다. 끝난 연결의 raster는 오지 않기 때문이다. layout transaction의 끝은 window의 모든 raster wait를 끝낸다. layout 요청의 raster wait는 시간으로 끝나지 않는다. | all |
 | `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | all |
-| `images.wait.timeout-writes-no-log-line` | 제한 시간에 이른 표시 대기는 호출자에게 `presentationTimeout`을 반환하고 애플리케이션 로그에 줄을 쓰지 않는다. 기다린 요청이 그 실패를 보고하기 때문이다. | all |
+| `images.wait.ends-by-its-events` | 현재 raster의 presentation 대기에는 시간 제한이 없다. 필요한 각 raster의 presentation, 그 영역이나 표면의 제거, 그 supplier 연결의 끝, 그 창의 끝으로 끝나며, 실패는 호출자에게 돌아가고 application log에 줄을 쓰지 않는다. 기다린 요청이 실패를 알리기 때문이다. | all |
 | `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | all |
 | `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | all |
 | `images.visibility.shown-surface-reconfigures-its-raster` | 숨겼다가 다시 보인 표면은 같은 크기라도 새 raster revision을 설정하므로, 표시 장벽은 숨긴 동안의 frame을 기다리지 않는다. | all |

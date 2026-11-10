@@ -39,7 +39,7 @@
 | command | `description` | 한 문장 설명 |
 | command | `params` | 매개변수 스키마 |
 | command | `result` | 결과 스키마 |
-| command | `timeout` | 선택. 명령이 답하는 데 걸릴 수 있는 시간(ms, 1–600000). 없으면 10초다. 호스트는 표면 페이지로 전달한 명령에, 메인 페이지는 plugin의 state module이 메인 페이지에서 실행하는 plugin 명령의 handler에 이를 적용하며, 넘으면 -32000과 `command <name> did not reply within <ms>ms`로 실패한다. plugin handler는 느린 답에 아무 이벤트도 보내지 않는 상대다. 동기든 비동기든 예외를 던진 handler는 자기 오류로 명령을 실패시키며, 시간 제한도 그때 끝난다. core 명령에는 한도가 없다. 그 handler는 workbench에 속하며, 그 결과나 오류가 명령을 끝낸다. core 명령은 그 뒤 배치 표시를 기다리며, 표시 경로의 각 단계는 자기 이벤트로 끝난다([네이티브 호스트](native-host.ko.md)) |
+| command | `timeout` | 명령 선언의 member가 아니다. manifest 검사와 registry는 그것을 가진 선언을 `<where>: timeout is not a member of a command declaration`로 거절한다. 명령에는 시간 제한이 없다. 명령은 그 답, 동기든 비동기든 예외를 던진 handler(자기 오류로), 또는 상대의 끝으로 끝난다. 상대의 끝은 그것을 실행하는 문서의 닫기, 그 페이지 WebContent 프로세스의 끝이나 다시 읽기, 그것이 기다리는 plugin 프로세스나 sidecar의 끝, 그것을 보낸 endpoint 연결의 끝이다([플러그인 프로세스](plugin-processes.ko.md) 규칙 3). 살아 있으면서 답하지 않는 handler는 아무 이벤트도 보내지 않으므로 그 호출은 열린 채 남고, `core.plugin.open-calls`가 그것을 알린다. core 명령은 그 뒤 배치 표시를 기다리며, 표시 경로의 각 단계는 자기 이벤트로 끝난다([네이티브 호스트](native-host.ko.md)) |
 | element | `name` | 항목 이름 |
 | element | `description` | 한 문장 설명 |
 | element | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
@@ -208,7 +208,7 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 메인 페이지는 [plugin process 설계](plugin-processes.ko.md#메시지와-event)의 status 네 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 상태를 메인 페이지에 보고하기 전까지 각 목록은 `[]`이다.
 
 - status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
-- status `core.plugin.losses`: `[{plugin, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
+- status `core.plugin.losses`: `[{plugin, abandoned, lateReplies, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
 - status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
 - status `core.surfaces`: 각 표면 항목은 `kind`를 가진다. `kind`는 탭 표면이면 `tab`, [section 표면](plugins.ko.md#섹션)이면 `section`이며, section 표면 항목은 `sidebar`도 가진다. 각 표면 항목은 선언된 합성의 종류인 `composition`(`view`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다. compositor record가 가지지 않은 mount된 view는 retained view이며([native surfaces](native-surfaces.ko.md)), `visible: false`, `dim`, `declared`와 `applied`가 `null`인 항목으로 나열되고, `exposes`, 자신의 mount의 `status`(`{phase, error}`), `composition`, `state`를 가진다. retained view는 배치가 아니다. mount가 시작되거나, status가 바뀌거나, dispose될 때와 그 표면의 등록이 바뀔 때 알린다.
 
@@ -254,7 +254,7 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 | `log.query` | 질의 매개변수, `window` 없음 | `{rows, next, tail, scanned, rejected}`: 설정 폴더의 event 파일의 event page 하나([endpoint](endpoint.ko.md#log-query), [logging](logging.ko.md#질의)) |
 | `exposure.list` | `{window, owner?}` | `{status, commands, element}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다. `owner`가 `host`이면 호스트 항목만 반환하며, 호스트가 main page 없이 답하므로 page가 시작하지 않은 동안에도 목록이 나온다. 다른 `owner`는 `exposure.list owner must be host`로 거부한다. `sok command`는 `host.` 명령을 호스트 항목으로 검사한다 |
 | `status.get` | `{window, name, surface?}` | 현재 값 |
-| `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나, 연결이 닫히거나, 값의 producer가 끝날 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다. `surface`가 있는 감시의 producer는 그 surface가 닫히거나 그 document가 바뀔 때 끝나고, 창의 모든 감시의 producer는 창이 닫힐 때 끝난다. 그 끝의 차례에 호스트는 감시를 가진 각 연결에 앞서 보낸 `status.changed` 알림 뒤로 종결 알림 `status.ended {window, name, surface?, reason}`를 한 번 보내고(`reason`은 `surface-closed` 또는 `window-closed`), page에 `status.unwatch`를 보내지 않고 감시를 지우므로, 뒤의 같은 이름과 surface의 `status.watch`는 새로 시작한다. `sok status --watch`는 종료 상태 1과 오류 `status <name> ended: <reason>`으로 끝나고, `@soksak/client`의 `watch`는 그 오류와 code `ENDED`로 reject한다. 감시의 값을 기다리는 client는 그것을 결정하는 이벤트(호출자를 만족시키는 값, 종결 알림 `status.ended` 또는 연결 닫힘)의 turn에 호출자를 settle하고, 그 뒤에 끝나지 않은 감시를 `status.unwatch`로 끝낸다. 그래서 어떤 호출자도 unwatch의 답을 기다리지 않는다. 그 `status.unwatch`의 거절도 code가 무엇이든 감시를 끝내므로 client는 다른 것을 닫지 않는다. 그 감시를 거절의 code로 reject하고 연결을 유지하며, 이미 settle된 호출자는 그 결과를 지킨다 |
+| `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나, 연결이 닫히거나, 값의 producer가 끝날 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다. `surface`가 있는 감시의 producer는 그 surface가 닫히거나 그 document가 바뀔 때 끝나고, 창의 모든 감시의 producer는 창이 닫힐 때 끝난다. 그 끝의 차례에 호스트는 감시를 가진 각 연결에 앞서 보낸 `status.changed` 알림 뒤로 종결 알림 `status.ended {window, name, surface?, reason}`를 한 번 보내고(`reason`은 `surface-closed` 또는 `window-closed`), page에 `status.unwatch`를 보내지 않고 감시를 지우므로, 뒤의 같은 이름과 surface의 `status.watch`는 새로 시작한다. `sok status --watch`는 종료 상태 1과 오류 `status <name> ended: <reason>`으로 끝나고, `@soksak/client`의 `watch`는 그 오류와 code `ENDED`로 reject한다. 감시의 값을 기다리는 client는 그것을 결정하는 이벤트(호출자를 만족시키는 값, 종결 알림 `status.ended`, `status.watch`나 `status.get`의 실패한 답, predicate의 오류, 연결 닫힘)의 turn에 호출자를 settle하고, 그 뒤에 끝나지 않은 감시를 `status.unwatch`로 끝낸다. 그래서 어떤 호출자도 unwatch의 답을 기다리지 않는다. 그 기다림에는 시간 제한이 없고, MCP server의 `wait` 도구도 같이 기다린다. 그 `status.unwatch`의 거절도 code가 무엇이든 감시를 끝내므로 client는 다른 것을 닫지 않는다. 그 감시를 거절의 code로 reject하고 연결을 유지하며, 이미 settle된 호출자는 그 결과를 지킨다 |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
 | `command.run` | `{window, name, params, surface?, cids?}` | 명령 결과. `cids`는 실행의 원인인 상관 식별자이며, view의 명령이 받는다([view 표면](native-surfaces.ko.md#view-표면)) |
 | `element.rect` | `{window, name, index?}` | `{x, y, width, height}`: 소유 문서의 CSS 픽셀로 나타낸 요소의 `getBoundingClientRect()`, `zoom`: 요소의 유효 CSS zoom으로, 요소와 flat tree의 각 ancestor의 computed `zoom`을 곱한 값, `role`: 요소의 ARIA role, 그리고 창 좌표로 나타낸 문서 원점 `{document}`. 묶거나 글자만 담는 요소의 `role`은 null이고 모든 host가 null로 답한다. 페이지에서는 `div`, `span`, `role="group"`이고 mygo workbench에서는 element tree의 group과 text이다. 그 밖에는 페이지에서 role 속성의 첫 토큰, 없으면 태그와 input type의 암묵 role, 그것도 없으면 contenteditable 요소의 `textbox`이고, mygo workbench에서는 element tree에 있는 요소 role의 ARIA 이름이다. CSS `zoom` subtree 안에서 WebKit 7624 이후는 CSS Viewport zoom object model이 정의하는 대로 zoom을 적용한 rectangle을 보고하고, 그 이전 WebKit은 `zoom`으로 나눈 rectangle을 보고한다 |
@@ -328,12 +328,12 @@ AppKit과 WebKit은 일부 상태를 pointer마다가 아니라 창, 페이지, 
 
 | 방향 | 메시지 | 내용 |
 | --- | --- | --- |
-| 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `element.*`의 `{id, method, params}`. 호스트는 답을 10초 기다린다. `command.run`은 예외이며, 메인 페이지는 명령을 전달하든 스스로 답하든 그 명령의 제한 시간 안에 답한다. 준비되지 않은 메인 페이지는 1003을 반환하고, 다시 읽히거나 닫히는 메인 페이지에 보낸 요청은 1003으로 끝난다 |
+| 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `element.*`의 `{id, method, params}`. 요청에는 시간 제한이 없다. 메인 페이지가 명령을 전달하든 스스로 답하든 그 답으로 끝난다. 준비되지 않은 메인 페이지는 1003을 반환하고, 메인 페이지의 다시 읽기, 닫기, WebContent 프로세스의 끝은 그 요청을 1003으로 끝내며, 요청을 보낸 endpoint 연결의 끝은 호스트에서 그 요청을 끝내고 호스트는 아무것도 답하지 않는다 |
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
 | 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다. 호스트는 `host.`로 시작하는 이름을 `the page cannot change host status <name>`으로 거부한다. host 상태는 호스트만 바꾼다 |
 | 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}`. `kind`는 `status`, `command`, `element` 중 하나다. view의 페이지는 surface 브리지가 없다. view 채널을 통해 `runtime.native.call`에 `{name: "registered", payload: {kind, name}}`로 호출하고([view surfaces](native-surfaces.ko.md#view-표면)), 메인 페이지가 이 호출로 전달한다. 메인 페이지가 전달한 등록은 view를 가진 surface에만 허용된다 |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}`. 표면은 메인 페이지를 다시 읽어도 남으므로 메인 페이지가 준비를 알린 뒤 호스트가 살아 있는 등록을 모두 다시 보낸다 |
-| 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params, timeout?}`. `timeout`은 명령 선언에서 가져온 1 이상 600000 이하의 정수 밀리초이며, 없으면 호스트는 10초를 기다린다. 올바르지 않은 `timeout`은 -32602를 반환한다. 표면 문서가 닫히거나, 표면 페이지의 WebContent 프로세스가 끝나거나, 창의 페이지가 다시 로드되면 그 뒤에는 답이 올 수 없으므로 요청은 그 이벤트의 turn에 1003으로 끝난다 |
+| 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params}`. 요청에는 시간 제한이 없다. 표면 문서의 답으로 끝나며, 요청을 보낸 endpoint 연결의 끝은 호스트에서 그것을 끝낸다. 표면 문서가 닫히거나, 표면 페이지의 WebContent 프로세스가 끝나거나, 창의 페이지가 다시 로드되면 그 뒤에는 답이 올 수 없으므로 요청은 그 이벤트의 turn에 1003으로 끝난다 |
 | 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}`. view의 경우 이벤트는 `surface`를 담고, 메인 페이지가 view의 `exposure-request` 구독(`runtime.native.on`)을 통해 view에 전달하며, `data`는 `{id, surface, method, params}`다 |
 | 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다. view의 페이지는 `runtime.native.call`에 `{name: "exposureReply", payload: {id, result\|error}}`로 답하며, 메인 페이지가 view의 surface와 함께 이 호출로 보낸다 |
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.watch`, `status.unwatch` | `{name}`. 표면 페이지가 값 추적을 시작하거나 멈춘다. `status.watch` 뒤에는 그 이름을 이미 watch하고 있어도 현재 값을 `changed`로 보내고, `status.unwatch`까지 그 뒤의 다른 값을 각각 보낸다. 이름의 첫 `status.watch`는 첫 읽기가 끝날 때 답한다: 값을 `changed`로 보낸 뒤 `null`로, 또는 읽기의 실패로 답하며, 실패는 같은 차례에 watch를 끝내므로 그 이름의 다음 `status.watch`가 다시 읽고 값을 보낸다. 첫 읽기가 도는 동안의 `status.watch`는 같은 읽기가 끝날 때 같은 결과로 답한다 |
@@ -366,7 +366,7 @@ AppKit과 WebKit은 일부 상태를 pointer마다가 아니라 창, 페이지, 
 | 1002 | 선언되었지만 등록되지 않은 이름 |
 | 1003 | 소유 문서가 더 이상 없음 |
 | 1004 | 이 플랫폼에서 네이티브 입력을 사용할 수 없음 |
-| 1005 | 요청 시간 초과: 소유 문서가 10초 안에 응답하지 않음 |
+| 1005 | 요청이 결과 없이 끝났다: 기다림을 끝낸 이벤트가 결과보다 먼저 왔다. 문서가 입력을 받지 못했거나 macOS가 전체 화면 전환에 실패한 경우다 |
 | 1006 | 창이 활성 상태가 아님: 실제로 활성인 애플리케이션에서 `move`와 키에는 그 키 창이 필요하거나, 시스템이 애플리케이션을 활성화하지 않음 |
 | 1007 | AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` 마스크를 보고해 합성 포인터 `down`이나 `up`을 전달하지 않음. 메시지는 거부 시점의 마스크와 frontmost 애플리케이션을 보고함 |
 | 1008 | pointer의 그 버튼 누름이 아직 열려 있어 포인터 `down`을 전달하지 않음 |
@@ -375,7 +375,7 @@ AppKit과 WebKit은 일부 상태를 pointer마다가 아니라 창, 페이지, 
 | 1011 | 다른 pointer의 열린 누름이 입력이 공유할 상태를 쥐고 있어 입력을 전달하지 않음. 메시지는 그 pointer와 상태를 밝힌다([named pointers](#named-pointers)) |
 | -32000 | 등록된 명령이나 status 처리기가 실패함. `message`는 그 오류 메시지다 |
 
-중계한 요청의 1005 오류 메시지는 `the document did not reply within <ms> ms`다. 두 host는 시간이 초과된 최근 요청 256개를 기억하고 가장 오래된 것을 버린다. 그중 하나에 온 답은 `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`로 실패하고, 기억하지 않는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패하므로, 늦은 답의 지연이 page가 보고하는 오류에 들어간다. 표면 페이지로 전달한 command가 시간 초과되면 `host.call.timeout`을 plugin과 command와 함께 쓰고, 그 늦은 답은 `host.trace.call.late-reply`를 지연과 함께 쓴다.
+중계한 요청은 그 답이나 상대의 끝으로만 끝나므로, 그 문서는 끝난 요청에 답을 보내지 않는다. 예외는 endpoint 연결의 끝이 끝낸 요청이다. 호스트는 끝난 요청에 온 답을 받아 관찰 `exposure reply <id> arrived after its request ended`로 쓰고 아무것도 답하지 않는다. 중계가 보낸 적 없는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패한다.
 
 [로컬 엔드포인트](endpoint.ko.md)는 선언되지 않은 메서드를 받으면 연결을 종료한다.
 
