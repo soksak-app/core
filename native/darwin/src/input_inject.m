@@ -44,7 +44,8 @@
 @implementation SPPointer
 @end
 
-// The open press of one button of a pointer. Its window holds it, so a window that goes away ends the press.
+// The open press of one button of a pointer. Its window holds it, and the close of that window ends the press
+// (docs/spec/exposure.md#methods).
 @interface SPPress : NSObject {
 @public
     SPPointer *pointer; // not retained: pointers live as long as the process
@@ -271,8 +272,11 @@ static NSView *pageOf(NSView *view) {
     return view;
 }
 
+static void observeWindowCloses(void);
+
 // Opens the press of a button of a pointer on view. The window holds the press, and the pages see its button.
 static SPPress *openPress(SPPointer *pointer, int button, NSWindow *window, NSView *view, BOOL throughApplication) {
+    observeWindowCloses();
     showSyntheticButtons();
     SPPress *press = [[SPPress alloc] init];
     press->pointer = pointer;
@@ -839,13 +843,26 @@ static void pointerRequestAnswered(void *context, sp_input_result result, const 
     startPointerRequests();
 }
 
-static void observePointerRequestWindows(void) {
+// The close of a window ends the open presses in it and answers the pointer requests of it that wait for their turn, in the
+// close turn: the pointer presses again in another window, and a later release finds its press ended.
+static void observeWindowCloses(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         pointerRequests = [[NSMutableArray alloc] init];
-        sp_observe_notification("input_inject.pointer_requests", SP_OBSERVE_COUNT, NSWindowWillCloseNotification, nil, nil,
+        sp_observe_notification("input_inject.window_close", SP_OBSERVE_COUNT, NSWindowWillCloseNotification, nil, nil,
             ^(NSNotification *notification) {
                 NSWindow *closed = notification.object;
+                NSMutableArray<SPPress *> *presses = [NSMutableArray array];
+                for (SPPointer *pointer in pointers.objectEnumerator) {
+                    for (int button = 0; button < 2; button++) {
+                        SPPress *press = pointer->presses[button];
+                        if (press && press->window == closed) [presses addObject:press];
+                    }
+                }
+                for (SPPress *press in presses) {
+                    sp_log_info("input inject", "an open press of a window that closed is ended");
+                    endPress(press);
+                }
                 NSMutableArray<SPPointerRequest *> *ended = [NSMutableArray array];
                 for (SPPointerRequest *request in pointerRequests) if (request->window == closed) [ended addObject:request];
                 [pointerRequests removeObjectsInArray:ended];
@@ -863,7 +880,7 @@ void sp_input_pointer_then(void *handle, const char *name, double x, double y, i
         pointerStart(handle, name, x, y, phase, button, deltaX, deltaY, clicks, done, context);
         return;
     }
-    observePointerRequestWindows();
+    observeWindowCloses();
     SPPointerRequest *request = [[[SPPointerRequest alloc] init] autorelease];
     request->window = [(__bridge NSWindow *)handle retain];
     request->name = name ? strdup(name) : NULL;
