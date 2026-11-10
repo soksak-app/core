@@ -2,8 +2,10 @@
 //   sok-test-app [--app <host>] [--real] [--pack <command> | --index <index>] [--check-timeout <seconds>] [<file, folder or glob>...]
 // run from the root of the plugin repository (`pnpm exec sok-test-app`). The core version is the version of this installed
 // @soksak/window-check, the core release that the plugin repository names. For each application of the run (`--app`, or requiredApps
-// of app.mjs, so SOKSAK_APP selects one) the run downloads the published application zip `soksak-<version>-darwin-arm64-<host>.zip`
-// into build/app-cache/<version>/ of the repository once and extracts its bundle there with ditto. Each run makes a new configuration
+// of app.mjs, so SOKSAK_APP selects one) the run downloads the published application zip `soksak-<version>-<platform>-<host>.zip`
+// into build/app-cache/<version>/ of the repository once and extracts its application there. The release platform, the application
+// and its executables, the extraction, the quit keys, the lock wait and the process list are the platform operations of platform.mjs;
+// a platform that does not implement one fails the step that calls it, before any download. Each run makes a new configuration
 // root under build/test-app/ and builds a registry folder in it: the release of the repository that the pack command writes
 // (`make pack OUT={out}` by default; `{out}` is the release folder), the `pnpm pack` release of the start probe that this package
 // ships (fixtures/start-probe) and of each fixture plugin under e2e/fixtures (a folder that holds plugin.json), and the entry of each
@@ -31,10 +33,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { APP_NAMES, requiredApps } from "./app.mjs";
 import { untilFolderState } from "./folder-wait.mjs";
+import { applicationBundle, applicationExecutables, extractApplication, listProcesses, quitKeys, releasePlatform,
+  waitForLockRelease } from "./platform.mjs";
 import { START_PROBE } from "./start.mjs";
 
-/** The platform key of the published application zips that the run uses. */
-export const PLATFORM = "darwin-arm64";
 /** The release files of core. */
 export const RELEASES = "https://github.com/soksak-app/core/releases/download";
 /** The public registry index, which lists the sidecar releases that the plugins of the run name. */
@@ -50,9 +52,6 @@ export const LIMITS = Object.freeze({
   start: 60_000, quit: 60_000, command: 30_000, checks: 3_600_000, test: 600_000,
 });
 
-/** The quit item of the application menu has the key equivalent Command+Q, which host.menu writes as `cmd+q`. */
-const QUIT_MENU_KEY = "cmd+q";
-
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
 const writeJson = (path, value) => {
   mkdirSync(dirname(path), { recursive: true });
@@ -63,16 +62,10 @@ const sha256 = (file) => createHash("sha256").update(readFileSync(file)).digest(
 /** The core version of the run: the version of this installed @soksak/window-check. */
 export const coreVersion = () => readJson(new URL("./package.json", import.meta.url)).version;
 
-/** The published application zip of `host` for `version`, as core names its release files. */
-export function applicationZip(version, host) {
-  const name = `soksak-${version}-${PLATFORM}-${host}.zip`;
+/** The published application zip of `host` for `version` on the release platform of `platform` and `arch`, as core names its release files. */
+export function applicationZip(version, host, { platform = process.platform, arch = process.arch } = {}) {
+  const name = `soksak-${version}-${releasePlatform({ platform, arch })}-${host}.zip`;
   return { name, url: `${RELEASES}/v${version}/${name}` };
-}
-
-/** The application executable and the `sok` of an extracted bundle, both in its Contents/MacOS. */
-export function bundleExecutables(bundle, host) {
-  const folder = join(bundle, "Contents", "MacOS");
-  return { application: join(folder, `sok-${host}`), sok: join(folder, "sok") };
 }
 
 /** The file name of a sidecar release: `scope-name` for `@scope/name` (docs/spec/installation.md#sidecar-release). */
@@ -325,24 +318,27 @@ export async function fetchJson(url, { timeout = LIMITS.index, signal, fetchImpl
 }
 
 /**
- * The bundle of `host` for `version` in the cache folder `cache`: the zip is downloaded and extracted once, with ditto as the
- * application update does. `extract(zip, folder)` and `fetchImpl` replace the extraction and the download in a test.
+ * The application of `host` for `version` in the cache folder `cache`: the zip of the release platform is downloaded and extracted
+ * once by the platform operations of `platform`. `run(file, args)` runs the extraction program, `extract(zip, folder)` replaces the
+ * extraction and `fetchImpl` the download in a test. A platform without an operation of the application rejects before the download.
  */
-export async function cachedBundle(cache, version, host, { signal, fetchImpl, write = () => {},
-  extract = (zip, folder) => run("ditto", ["-x", "-k", zip, folder], { signal, timeout: LIMITS.extract }) } = {}) {
+export async function cachedBundle(cache, version, host, { platform = process.platform, arch = process.arch, signal, fetchImpl,
+  write = () => {}, run: runProgram = (file, args) => run(file, args, { signal, timeout: LIMITS.extract }),
+  extract = (zip, folder) => extractApplication(zip, folder, { platform, run: runProgram }) } = {}) {
   const folder = join(cache, version, host);
-  const bundle = join(folder, "soksak.app");
+  const bundle = await applicationBundle(folder, { platform });
   if (existsSync(bundle)) return bundle;
-  const { name, url } = applicationZip(version, host);
+  const { name, url } = applicationZip(version, host, { platform, arch });
   const zip = join(cache, version, name);
+  const extracting = `${folder}.partial`;
+  const extracted = await applicationBundle(extracting, { platform });
   if (!existsSync(zip)) {
     write(`downloading ${url}`);
     await download(url, zip, { signal, fetchImpl });
   }
-  const extracting = `${folder}.partial`;
   rmSync(extracting, { recursive: true, force: true });
   await extract(zip, extracting);
-  if (!existsSync(join(extracting, "soksak.app"))) throw new Error(`${zip} holds no soksak.app`);
+  if (!existsSync(extracted)) throw new Error(`${zip} holds no ${relative(extracting, extracted)}`);
   renameSync(extracting, folder);
   return bundle;
 }
@@ -449,23 +445,27 @@ async function start(application, configDir, out, root) {
 }
 
 /**
- * Quits the application of `configDir` as a person does, with the `sok` of its bundle: `menu` selects the item of the application
- * menu whose key equivalent is Command+Q, `key` sends Command+Q down and up. Resolves when the process exited with status 0 and the
- * lock of the configuration folder is free.
+ * Quits the application of `configDir` as a person does, with the `sok` of its application: `menu` selects the item of the
+ * application menu whose key equivalent is the quit key of `platform`, `key` sends that key down and up. Resolves when the process
+ * exited with status 0 and the lock of the configuration folder is free.
  */
-async function quit(child, sok, configDir, by, root) {
+async function quit(child, sok, configDir, by, root, platform) {
   const config = ["--config-dir", configDir];
   const command = (args) => run(sok, [...args, ...config], { cwd: root, timeout: LIMITS.command, capture: true });
   const exited = child.exitCode !== null || child.signalCode !== null
     ? Promise.resolve([child.exitCode, child.signalCode]) : once(child, "exit");
+  const keys = await quitKeys({ platform });
   if (by === "menu") {
     const { menus } = JSON.parse(await command(["status", "host.menu"]));
-    const menu = menus.find((entry) => entry.items.some((item) => item.key === QUIT_MENU_KEY));
-    if (menu === undefined) throw new Error(`the application menu has no item with the key equivalent ${QUIT_MENU_KEY}`);
-    const { title } = menu.items.find((item) => item.key === QUIT_MENU_KEY);
+    const menu = menus.find((entry) => entry.items.some((item) => item.key === keys.menu));
+    if (menu === undefined) throw new Error(`the application menu has no item with the key equivalent ${keys.menu}`);
+    const { title } = menu.items.find((item) => item.key === keys.menu);
     await command(["host.menu.select", "--menu", menu.title, "--title", title]);
   } else {
-    for (const phase of ["down", "up"]) await command(["input", "key", "--key", "q", "--text", "q", "--modifiers", "command", "--phase", phase]);
+    const { key, text, modifiers } = keys.key;
+    for (const phase of ["down", "up"]) {
+      await command(["input", "key", "--key", key, "--text", text, "--modifiers", modifiers.join(","), "--phase", phase]);
+    }
   }
   let timer;
   const [code, signal] = await Promise.race([exited, new Promise((_, reject) => {
@@ -473,13 +473,16 @@ async function quit(child, sok, configDir, by, root) {
   })]).finally(() => clearTimeout(timer));
   if (code !== 0) throw new Error(`the application ended with ${describeEnd(code, signal)}`);
   const lock = join(configDir, "process.lock");
-  if (existsSync(lock)) await run("lockf", ["-s", "-t", String(LIMITS.quit / 1000), lock, "true"], { cwd: root, timeout: LIMITS.quit + LIMITS.command });
+  if (existsSync(lock)) {
+    await waitForLockRelease(lock, LIMITS.quit / 1000, { platform,
+      run: (file, args) => run(file, args, { cwd: root, timeout: LIMITS.quit + LIMITS.command }) });
+  }
 }
 
-/** The processes other than this one whose command line names one of the paths, as `<pid> <command>`. */
-export function remainingProcesses(listing, paths, self = process.pid) {
-  return listing.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith(`${self} `)
-    && paths.some((path) => line.includes(path)));
+/** The processes `{pid, command}` other than this one whose command line names one of the paths, as `<pid> <command>`. */
+export function remainingProcesses(processes, paths, self = process.pid) {
+  return processes.filter(({ pid, command }) => pid !== self && paths.some((path) => command.includes(path)))
+    .map(({ pid, command }) => `${pid} ${command}`);
 }
 
 /**
@@ -487,7 +490,7 @@ export function remainingProcesses(listing, paths, self = process.pid) {
  * `<step>: <reason>`; an empty list is a passed run.
  */
 export async function testApp({ root, apps = requiredApps(process.env), pack = DEFAULT_PACK, index, real = false, checks,
-  checkTimeout = LIMITS.checks, signal, write = (line) => process.stdout.write(`test-app: ${line}\n`) }) {
+  checkTimeout = LIMITS.checks, signal, platform = process.platform, write = (line) => process.stdout.write(`test-app: ${line}\n`) }) {
   const version = coreVersion();
   const hosts = apps;
   let selected;
@@ -504,10 +507,16 @@ export async function testApp({ root, apps = requiredApps(process.env), pack = D
   const failures = [];
   const children = new Map();
   const bundles = new Map();
+  const executables = new Map();
   const configDir = (host) => join(configRoot, `soksak-check-${host}`);
   try {
-    for (const host of hosts) bundles.set(host, await step(`application ${host}`, () => cachedBundle(cache, version, host, { signal, write })));
-    const executables = new Map(hosts.map((host) => [host, bundleExecutables(bundles.get(host), host)]));
+    for (const host of hosts) {
+      await step(`application ${host}`, async () => {
+        const bundle = await cachedBundle(cache, version, host, { platform, signal, write });
+        bundles.set(host, bundle);
+        executables.set(host, await applicationExecutables(bundle, host, { platform }));
+      });
+    }
     const registry = await installRegistry({ root, folder: join(configRoot, "registry"), executables, configDir, index, pack, signal });
     for (const host of hosts) {
       write(`starting ${host}`);
@@ -526,16 +535,17 @@ export async function testApp({ root, apps = requiredApps(process.env), pack = D
     const started = [...children.keys()];
     for (const [position, host] of started.entries()) {
       try {
-        await step(`quit ${host}`, () => quit(children.get(host), bundleExecutables(bundles.get(host), host).sok, configDir(host),
-          position === started.length - 1 ? "key" : "menu", root));
+        await step(`quit ${host}`, () => quit(children.get(host), executables.get(host).sok, configDir(host),
+          position === started.length - 1 ? "key" : "menu", root, platform));
       } catch (error) {
         failures.push(error.message);
         children.get(host).kill("SIGKILL");
       }
     }
     try {
-      const listing = await run("ps", ["-axo", "pid=,command="], { cwd: root, timeout: LIMITS.command, capture: true });
-      const left = remainingProcesses(listing, [configRoot, ...bundles.values()]);
+      const processes = await listProcesses({ platform,
+        run: (file, args) => run(file, args, { cwd: root, timeout: LIMITS.command, capture: true }) });
+      const left = remainingProcesses(processes, [configRoot, ...bundles.values()]);
       if (left.length > 0) failures.push(`remaining processes: ${left.length} processes remain: ${left.join("; ")}`);
     } catch (error) {
       failures.push(`remaining processes: ${error.message}`);

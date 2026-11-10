@@ -62,6 +62,8 @@
     "lz4.mjs",
     "order-names.mjs",
     "pasteboard.mjs",
+    "platform.mjs",
+    "platform/",
     "png.mjs",
     "repeat.mjs",
     "session.mjs",
