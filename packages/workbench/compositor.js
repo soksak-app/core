@@ -321,10 +321,14 @@ function validatePlacementAnswer(record, answer, nativeKinds = app.kinds) {
   return { placements: answer.placements, deferred: answer.deferred };
 }
 
-/** Sends the host-owned surfaces and projects the validated result onto one compositor record. */
+/**
+ * Sends the host-owned surfaces and projects the validated result onto one compositor record. held receives every surface that
+ * the host placed for the complete request, the retained views outside the record included, because the host holds each of them
+ * and the keyboard can go to it before the placement that shows it (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+ */
 export async function placeCompositorRecord(record, requestedSurfaces, send, nativeKinds = app.kinds, {
   activeIds = new Set(), mountedSurface = () => null, background = () => false,
-  authorize = () => {}, prepare = async () => {},
+  authorize = () => {}, prepare = async () => {}, held = () => {},
 } = {}) {
   if (!record || typeof record !== "object" || !Array.isArray(record.surfaces)) {
     throw new TypeError("compositor placement record has no surfaces array");
@@ -348,7 +352,7 @@ export async function placeCompositorRecord(record, requestedSurfaces, send, nat
     if (!requestedIds.has(id)) throw new Error(`host placement request omits compositor surface ${id}`);
   }
   if (!(activeIds instanceof Set) || typeof mountedSurface !== "function" || typeof background !== "function"
-      || typeof authorize !== "function" || typeof prepare !== "function") {
+      || typeof authorize !== "function" || typeof prepare !== "function" || typeof held !== "function") {
     throw new TypeError("host placement projection requires active ids and surface lifecycle handlers");
   }
   const hostSurfaces = [];
@@ -394,6 +398,7 @@ export async function placeCompositorRecord(record, requestedSurfaces, send, nat
   const hostRecord = { ...record, surfaces: hostSurfaces };
   const answer = await send(hostRecord);
   const validated = validatePlacementAnswer(hostRecord, answer, nativeKinds);
+  held(validated.placements.map(({ id }) => id));
   return {
     placements: validated.placements.filter(({ id }) => recordIds.has(id)),
     deferred: validated.deferred.filter((id) => recordIds.has(id)),

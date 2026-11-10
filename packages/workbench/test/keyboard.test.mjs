@@ -406,7 +406,8 @@ test("the ring moves in one function of the plane", () => {
 
 test("the page answers each placement and each responder move to the keyboard", () => {
   const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  assert.match(page, /if \(record\.drawn\) await keyboardPlaced\(/);
+  assert.match(page, /held: \(surfaceIds\) => \{ hostHeld = surfaceIds; \}/);
+  assert.match(page, /if \(record\.drawn\) await keyboardPlaced\([^\n]*, hostHeld\);/);
   // The field of a rename leaves the document in this draw, and a removal does not always report the lost focus.
   assert.match(page, /createBarTabs\(\{[^}]*keyboardOwed/);
   const barTabs = readFileSync(new URL("../bar-tabs.js", import.meta.url), "utf8");

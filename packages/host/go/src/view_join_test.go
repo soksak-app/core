@@ -77,6 +77,43 @@ func TestProcessEndedRootIsRejoinedOnItsOpenTicketBeforeCommit(t *testing.T) {
 	}
 }
 
+// A press or key event that ends the transaction while the presentation waits commits what the joined views presented, so a
+// generation that replaced a root view meanwhile joins nothing and the commit of the ticket answers the committed state
+// (docs/spec/native-surfaces.md#layout-transaction).
+func TestAReplacedRootOfATransactionThatInputEndedJoinsNothingAndDoesNotFailTheCommit(t *testing.T) {
+	s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+	window := platform.Window(1)
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := PresentRequest{Ticket: 38, Placements: []Placement{placement}, Settled: false}
+	if err := s.joinViewsForPresentRequest(window, request, request.Placements); err != nil {
+		t.Fatalf("join initial generation: %v", err)
+	}
+	old, ok := s.documents.view(placement.ID)
+	if !ok {
+		t.Fatal("initial root view channel is missing")
+	}
+	if _, err := s.documents.Remove(DocumentKey{Surface: placement.ID, Name: viewRegionName}); err != nil {
+		t.Fatalf("remove ended root document: %v", err)
+	}
+	s.endPresentationWaitFor(placement.ID, request.Ticket, old.generation, "input")
+	replacementRoot := unsafe.Pointer(new(int))
+	s.documents.registerView(placement.ID, "probe", old.generation+1, replacementRoot)
+	key := DocumentKey{Surface: placement.ID, Name: viewRegionName}
+	if err := s.documents.Reserve(key); err != nil {
+		t.Fatalf("reserve replacement root document: %v", err)
+	}
+	if !s.documents.Set(key, replacementRoot) {
+		t.Fatal("replacement root document was not registered")
+	}
+	fake.inputEnded = map[uint64]bool{request.Ticket: true}
+	if err := s.ensureCurrentPresentationJoins(window, request); err != nil {
+		t.Fatalf("a replaced root of a transaction that input ended failed the commit: %v", err)
+	}
+	if len(fake.joins) != 1 {
+		t.Fatalf("joins are %+v; want only the join of the initial generation", fake.joins)
+	}
+}
+
 // contract: surface-layout.joins-root-views-before-awaiting-app-dom
 func TestRestartLimitLeavesNoReplacementGenerationToJoin(t *testing.T) {
 	clock := &fakeClock{}
