@@ -125,11 +125,14 @@ pub fn focus_surface_for_region(_surface: Handle) -> Result<(), String> {
 pub fn focus_workbench(_window: Handle) -> Result<(), String> {
     missing("workbench keyboard")
 }
-pub fn keyboard_hold(_window: Handle) -> Result<(), String> {
+pub fn keys_decided(_window: Handle) -> Result<(), String> {
     missing("workbench keyboard")
 }
-pub fn keyboard_decided(_window: Handle) -> Result<(), String> {
+pub fn keys_page_ended(_window: Handle) -> Result<(), String> {
     missing("workbench keyboard")
+}
+pub fn keyboard_after_modal(_window: Handle) -> Result<(), String> {
+    missing("modal keyboard")
 }
 pub fn modal_hold(_window: Handle) -> Result<(), String> {
     missing("modal keyboard")

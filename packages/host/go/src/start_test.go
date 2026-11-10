@@ -13,7 +13,7 @@ func TestAWorkbenchStartingEndsTheReloadOfItsWindow(t *testing.T) {
 	surfaces := NewSurfaces(nil, c)
 	surfaces.invoke = func(task func()) { task() }
 	surfaces.reloadCancelLayout = func() error { return nil }
-	surfaces.reloadKeyboardDecided = func() {}
+	surfaces.reloadKeysPageEnded = func() {}
 	surfaces.reloadHideSurface = func(unsafe.Pointer, bool) {}
 	surfaces.reloadCloseImage = func(unsafe.Pointer) {}
 	surfaces.events = func(string, any) {}
@@ -22,13 +22,13 @@ func TestAWorkbenchStartingEndsTheReloadOfItsWindow(t *testing.T) {
 	surfaces.host = owner
 	surfaces.ready = true
 	surfaces.pageReloading.Store(true)
-	decided := 0
-	surfaces.reloadKeyboardDecided = func() { decided++ }
+	ended := 0
+	surfaces.reloadKeysPageEnded = func() { ended++ }
 	if err := owner.pageStarting(surfaces); err != nil {
 		t.Fatal(err)
 	}
-	if decided != 1 {
-		t.Fatalf("the start of the page ended the keyboard hold %d times, want once: the earlier workbench owed the decision", decided)
+	if ended != 1 {
+		t.Fatalf("the start of the page ended the key wait %d times, want once: the earlier workbench owed the decision", ended)
 	}
 	if surfaces.pageReloading.Load() {
 		t.Fatal("the window still refuses the requests to its surfaces")
@@ -52,7 +52,7 @@ func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testi
 	surfaces := NewSurfaces(nil, c)
 	surfaces.invoke = func(task func()) { task() }
 	surfaces.reloadCancelLayout = func() error { return nil }
-	surfaces.reloadKeyboardDecided = func() {}
+	surfaces.reloadKeysPageEnded = func() {}
 	surfaces.reloadHideSurface = func(unsafe.Pointer, bool) {}
 	surfaces.reloadCloseImage = func(unsafe.Pointer) {}
 	surfaces.events = func(string, any) {}
@@ -160,7 +160,7 @@ func TestAWorkbenchStartFailsWhenItsWindowCannotCancelItsLayout(t *testing.T) {
 	surfaces.invoke = func(task func()) { task() }
 	cancel := errors.New("the layout of the window is not cancelled")
 	surfaces.reloadCancelLayout = func() error { return cancel }
-	surfaces.reloadKeyboardDecided = func() {}
+	surfaces.reloadKeysPageEnded = func() {}
 	surfaces.events = func(string, any) {}
 	owner := &Host{windows: map[uint]*Surfaces{1: surfaces}, workspace: NewWorkspace(t.TempDir()),
 		relay: &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}}

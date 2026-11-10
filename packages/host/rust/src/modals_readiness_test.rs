@@ -3,7 +3,8 @@
 //! wait of the input for a modal: it opens at the show and ends when the modal took the keyboard, closed or failed.
 
 use super::{
-    Modal, Overlay, ReadyStep, close_holding, mark_visible, ready_step, show_holding, take_keyboard,
+    Modal, Overlay, ReadyStep, close_holding, is_modal_of, mark_visible, ready_step, show_holding,
+    take_keyboard,
 };
 
 fn open(overlay: &Overlay, id: &str, instance: u64) {
@@ -184,4 +185,14 @@ fn a_modal_that_closes_or_fails_before_it_took_the_keyboard_ends_the_wait() {
         vec!["focus"],
         "a modal that did not take the keyboard keeps the wait for the next ready request"
     );
+}
+
+// contract: modal.keyboard-hold
+#[test]
+fn the_end_of_a_modal_document_process_is_told_from_the_end_of_the_main_page() {
+    assert!(is_modal_of("modal-main-3", "main"));
+    assert!(!is_modal_of("main", "main"));
+    assert!(!is_modal_of("modal-other-3", "main"));
+    assert!(!is_modal_of("modal-main-", "main"));
+    assert!(!is_modal_of("modal-main-3x", "main"));
 }

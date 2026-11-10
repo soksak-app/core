@@ -187,8 +187,8 @@ type NativeFunctions struct {
 	MainSpWindowFacts                     func(uintptr) *byte
 	MainSpWindowFocusWorkbench            func(uintptr)
 	MainSpWindowHit                       func(uintptr, float64, float64) *byte
-	MainSpWindowKeyboardDecided           func(uintptr)
-	MainSpWindowKeyboardHold              func(uintptr)
+	MainSpWindowKeysDecided               func(uintptr)
+	MainSpWindowKeysPageEnded             func(uintptr)
 	MainSpWindowMainWebview               func(uintptr) unsafe.Pointer
 	MainSpWindowModalHold                 func(uintptr)
 	MainSpWindowModalHoldEnd              func(uintptr)
@@ -518,11 +518,11 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpWindowHit == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_hit")
 	}
-	if functions.MainSpWindowKeyboardDecided == nil {
-		return fmt.Errorf("native API function is missing: main_sp_window_keyboard_decided")
+	if functions.MainSpWindowKeysDecided == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_keys_decided")
 	}
-	if functions.MainSpWindowKeyboardHold == nil {
-		return fmt.Errorf("native API function is missing: main_sp_window_keyboard_hold")
+	if functions.MainSpWindowKeysPageEnded == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_keys_page_ended")
 	}
 	if functions.MainSpWindowMainWebview == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_main_webview")

@@ -91,18 +91,26 @@ pub fn focus_workbench(window: Handle) {
     unsafe { sp_window_focus_workbench(window as *mut c_void) }
 }
 
-pub fn keyboard_hold(window: Handle) {
+pub fn keys_decided(window: Handle) {
     unsafe extern "C" {
-        fn sp_window_keyboard_hold(window: *mut c_void);
+        fn sp_window_keys_decided(window: *mut c_void);
     }
-    unsafe { sp_window_keyboard_hold(window as *mut c_void) }
+    unsafe { sp_window_keys_decided(window as *mut c_void) }
 }
 
-pub fn keyboard_decided(window: Handle) {
+pub fn keys_page_ended(window: Handle) {
     unsafe extern "C" {
-        fn sp_window_keyboard_decided(window: *mut c_void);
+        fn sp_window_keys_page_ended(window: *mut c_void);
     }
-    unsafe { sp_window_keyboard_decided(window as *mut c_void) }
+    unsafe { sp_window_keys_page_ended(window as *mut c_void) }
+}
+
+pub fn keyboard_after_modal(window: Handle) {
+    unsafe extern "C" {
+        fn sp_window_keyboard_after_modal(window: *mut c_void, closing: *mut c_void) -> bool;
+    }
+    // The modal left the window before this call, so no closing modal is named.
+    unsafe { sp_window_keyboard_after_modal(window as *mut c_void, std::ptr::null_mut()) };
 }
 
 pub fn modal_hold(window: Handle) {

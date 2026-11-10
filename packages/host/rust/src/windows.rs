@@ -181,18 +181,18 @@ pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(
 }
 
 /// Ends what the earlier page left in the layout of its window: the waits of its presentations, its open layout and the
-/// keyboard hold that its workbench owed, because that workbench ended with the page
+/// keys that wait for the decision of its workbench, because that workbench ended with the page
 /// (docs/spec/native-surfaces.md#keyboard-of-a-surface). Every step runs also when an earlier one fails, because each
 /// leaves its own state open.
 pub(crate) fn end_page_layout(
     abandon: impl FnOnce() -> Result<(), String>,
     cancel: impl FnOnce() -> Result<(), String>,
-    decided: impl FnOnce() -> Result<(), String>,
+    keys_page_ended: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     let failures: Vec<String> = [
         abandon(),
         cancel().map_err(|error| format!("cancelling layout: {error}")),
-        decided().map_err(|error| format!("ending the keyboard hold: {error}")),
+        keys_page_ended().map_err(|error| format!("ending the key wait: {error}")),
     ]
     .into_iter()
     .filter_map(Result::err)
@@ -215,7 +215,7 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     end_page_layout(
         || crate::documents::abandon_all_layout_presentation_waits(&window),
         || platform.cancel_layout(owner),
-        || platform.keyboard_decided(owner),
+        || platform.keys_page_ended(owner),
     )?;
     // The new main document registers its own sidecar receivers, and its views subscribe again.
     data.sidecar_routes.clear();

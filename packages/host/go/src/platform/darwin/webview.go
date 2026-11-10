@@ -162,11 +162,11 @@ func (implementation) FocusSurfaceForRegion(surface unsafe.Pointer) {
 func (implementation) FocusWorkbench(window platform.Window) {
 	native.MainSpWindowFocusWorkbench(uintptr(window))
 }
-func (implementation) KeyboardHold(window platform.Window) {
-	native.MainSpWindowKeyboardHold(uintptr(window))
+func (implementation) KeysDecided(window platform.Window) {
+	native.MainSpWindowKeysDecided(uintptr(window))
 }
-func (implementation) KeyboardDecided(window platform.Window) {
-	native.MainSpWindowKeyboardDecided(uintptr(window))
+func (implementation) KeysPageEnded(window platform.Window) {
+	native.MainSpWindowKeysPageEnded(uintptr(window))
 }
 func (implementation) ModalHold(window platform.Window) {
 	native.MainSpWindowModalHold(uintptr(window))

@@ -2,8 +2,8 @@
 // active, so its window takes keys as the virtual key window. A key down with Command is offered as a key equivalent to the
 // main menu and then to the window before the first responder receives it, enforcing the project's native-menu ownership
 // policy for virtual input: Command+C and Command+V run copy: and paste: of the first responder through the items of the Edit menu, a key
-// equivalent of a view of the window runs there and not in the menu, a key that waits behind the held input of the window takes
-// its key equivalent in its turn, and a key that no one takes as an equivalent, and a key without Command, reach the first
+// equivalent of a view of the window runs there and not in the menu, a key that waits in the key wait of the window takes its
+// key equivalent in its turn, and a key that no one takes as an equivalent, and a key without Command, reach the first
 // responder as a key down. The record of each key down states whether the key waited.
 #import <Cocoa/Cocoa.h>
 #import "event_ring.h"
@@ -172,15 +172,16 @@ int main(void) { @autoreleasepool {
     edit.autoenablesItems = YES;
     clipboard.claimsSelectAll = NO;
 
-    // A key that waits behind the held input of the window takes its key equivalent in its turn: Command+A runs selectAll:
-    // through the Select All item and does not reach the view as a key down, and the record of the key down states that it waited.
+    // A key that waits in the key wait of the window takes its key equivalent in its turn: Command+A runs selectAll: through the
+    // Select All item and does not reach the view as a key down, and the record of the key down states that it waited. The
+    // wait for a modal stands for any wait of the keys.
     [clipboard.calls removeAllObjects];
-    sp_window_keyboard_hold(window);
+    sp_window_modal_hold(window);
     records = capturedRecords(^{
         check(sp_input_key(window, "a", NULL, 8, true) == SP_INPUT_DELIVERED && sp_input_key(window, "a", NULL, 8, false) == SP_INPUT_DELIVERED,
             @"the held key Command+A is kept");
         check(clipboard.calls.count == 0, [NSString stringWithFormat:@"a held key waits for its turn (calls %@)", clipboard.calls]);
-        sp_window_keyboard_decided(window);
+        sp_window_modal_hold_end(window);
         NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.2];
         while (until.timeIntervalSinceNow > 0) {
             NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]

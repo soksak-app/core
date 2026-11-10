@@ -40,32 +40,35 @@ size_t surfaceLayoutTraceStop(double *out, size_t capacity);
 uint64_t surfaceLayoutTraceRequested(void);
 // Diagnostics only. Records the time at which the presentation of the transaction of the ticket was confirmed.
 void surfaceLayoutTracePresented(uint64_t ticket);
-// The decision of the workbench about the keyboard (docs/spec/native-surfaces.md#keyboard-of-a-surface). surfaceLayoutKeyboardHold
-// opens the hold of the input of owner: every later pointer and key event of the window waits, with the input that waits for a
-// layout transaction, until surfaceLayoutKeyboardDecided, the end of the workbench or the close of the window ends the hold;
-// time does not end it. A hold keeps up to 256 pieces of input. An open hold leaves the hold as it is. Call on the UI thread.
-void surfaceLayoutKeyboardHold(void *owner);
-void surfaceLayoutKeyboardDecided(void *owner);
-bool surfaceLayoutKeyboardHeld(void *owner);
-// The wait of the input of owner for the modal web view that takes the keyboard joins the same hold: surfaceLayoutModalHold
-// opens it, and surfaceLayoutModalHoldEnd ends that wait. The input comes back in its order once neither the decision of the
-// workbench nor the modal waits. Call on the UI thread.
-void surfaceLayoutModalHold(void *owner);
-void surfaceLayoutModalHoldEnd(void *owner);
+// The key wait of a window (docs/spec/native-surfaces.md#keyboard-of-a-surface). The release of a left press on the workbench of a
+// window opens the wait for the decision of the workbench, and surfaceLayoutKeysWaitForModal opens the wait for a modal web view
+// that takes the keyboard. Only keys wait, in their order, while either waits; a press of the window ends the wait for the
+// decision and gives the keys to the view that holds the keyboard before the press. No pointer event waits, and no time or count
+// ends a wait. The close of the window drops the keys and records native.keyboard.wait_dropped. Call on the UI thread.
+// surfaceLayoutKeysDecided ends the wait for the decision, at a decided call or at the end of the workbench: the keys go in
+// their order to the view that holds the keyboard once the modal does not wait either. A window without a wait changes nothing.
+void surfaceLayoutKeysDecided(void *owner);
+void surfaceLayoutKeysWaitForModal(void *owner);
+// Whether the keys of owner wait for a modal.
+bool surfaceLayoutKeysModalWaits(void *owner);
+// Ends the wait for the modal, after the modal took the keyboard or when it closed or failed before that.
+void surfaceLayoutKeysModalEnded(void *owner);
 // Follows a left press and its release that pass to the views of owner, at the point in window coordinates, before they reach a
-// view. The release of a press that began on the workbench opens the hold of the keyboard. Events that pass
+// view. The release of a press that began on the workbench opens the wait for the decision. Events that pass
 // -[NSApplication sendEvent:] are followed by the library; a driver that delivers a press to a window directly calls it.
 void surfaceLayoutPointerPassing(void *owner, bool down, double x, double y);
-// Returns whether a left press of owner passed to its view and its release did not.
-bool surfaceLayoutLeftPressPassed(void *owner);
 #ifdef __BLOCKS__
 // Registers once the test of a press on the workbench: a press at the point, in window coordinates, outside the surfaces of a
 // window that holds a surface.
 void surfaceLayoutObserveWorkbench(bool (^onWorkbench)(void *window, double x, double y));
 void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
-// Keeps an injected call behind the input of owner that waits and returns true, or returns false when it runs now. A press at the
-// point, in window coordinates, waits as surfaceLayoutPressWaits says. The event loop of the application runs the call in its turn.
+// Keeps an injected pointer call behind the input of owner that waits and returns true, or returns false when it runs now. A press
+// at the point, in window coordinates, waits as surfaceLayoutPressWaits says, and a press ends the wait of the keys for the
+// decision and runs after the keys that waited. The event loop of the application runs the call in its turn.
 bool surfaceLayoutHoldCall(void *owner, bool press, double x, double y, void (^call)(void));
+// Keeps an injected key call behind the input of owner that waits, the keys of the key wait included, and returns true, or
+// returns false when it runs now. dropped runs instead of call when the close of the window drops the key.
+bool surfaceLayoutHoldKey(void *owner, void (^call)(void), void (^dropped)(void));
 // Checks that the single app DOM is ready to present before committing an open layout.
 void surfaceLayoutAfterPresentation(void *mainWebview, void (^done)(void));
 // A block that brings the content of a window to the screen in its current state. It calls presented once on the main thread

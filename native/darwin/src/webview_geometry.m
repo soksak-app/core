@@ -518,6 +518,18 @@ bool sp_window_file_drop(void *mainHandle, sp_file_drop_event event, sp_file_dro
 static void observeKeyboardWindowClose(void);
 static SPSurfaceHost *surfaceHost(NSView *view);
 
+// SPKeyboardMove is the last move of the keyboard of a window that a host asked for: a surface, or the workbench for nil. The
+// close of a modal returns the keyboard to it (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+@interface SPKeyboardMove : NSObject
+@property(nonatomic, retain) NSView *surface;
+@property(nonatomic, assign) BOOL awaitsRegion;
+@end
+@implementation SPKeyboardMove
+- (void)dealloc { [_surface release]; [super dealloc]; }
+@end
+
+static char keyboardMoveKey;
+
 // Whether view holds the view of a surface, outside the web views, whose documents hold no surface.
 static BOOL holdsSurface(NSView *view) {
     for (NSView *child in view.subviews) {
@@ -571,6 +583,9 @@ void sp_surface_close(void *handle) {
     // The first key over the limit recorded itself, so the counts of these events add up to the keys dropped.
     NSUInteger dropped = surface.keptKeys.count + (surface.droppedKeys ? surface.droppedKeys - 1 : 0);
     if (dropped) recordKeys("native.surface.keys_dropped", SP_EVENT_WARN, dropped, "closed");
+    NSWindow *window = surface.window;
+    SPKeyboardMove *move = window ? objc_getAssociatedObject(window, &keyboardMoveKey) : nil;
+    if (move.surface == surface) move.surface = nil;
     sp_view_give_up_keyboard(surface);
     [surface removeFromSuperview];
     [surface release];
@@ -581,15 +596,12 @@ void *sp_surface_native_plane(void *handle) {
 }
 
 // The left press of the window that is open: a physical press that AppKit reports, or a diagnostic press of sp_input_pointer.
-// While the input of the window is held for the decision of the keyboard, only a press that reached a view is open: a press
-// that waits in the hold reaches its view after the keyboard moved.
 static BOOL leftPressOpen(NSWindow *window) {
-    // silent: a press that waits in the hold of the keyboard is not open yet, which is the answer and not a failure.
-    if (surfaceLayoutKeyboardHeld(window) && !surfaceLayoutLeftPressPassed(window)) return NO;
     return (sp_input_person_buttons() & 1) != 0 || sp_input_press_open(window, 0);
 }
 
 static char keyboardPendingKey, keyboardMonitorKey, keyboardClosedKey;
+
 
 // Ends the wait for the release of the press of window and returns the keyboard move that waited.
 static void (^takeKeyboardWait(NSWindow *window))(void) {
@@ -700,6 +712,46 @@ static void giveKeyboardToSurface(NSView *view) {
     else if (target != host.webview) deliverKeptKeys(host, target);
 }
 
+static void focusWorkbenchNow(NSWindow *window);
+
+// Whether a modal web view holds the keyboard of window or the keys wait for one to take it. A modal web view is a web view of the
+// window outside its surfaces other than the main web view; closing is a modal that closes and keeps the keyboard no longer.
+static BOOL modalKeepsKeyboard(NSWindow *window, NSView *closing) {
+    if (surfaceLayoutKeysModalWaits(window)) return YES;
+    NSResponder *first = window.firstResponder;
+    // silent: a first responder that is no view of the window is in no modal, which is the answer and not a failure.
+    if (![first isKindOfClass:NSView.class] || ((NSView *)first).window != window) return NO;
+    NSView *page = (NSView *)first;
+    while (page && ![page isKindOfClass:WKWebView.class]) page = page.superview;
+    if (!page || page == (NSView *)sp_window_main_webview(window) || surfaceHost(page)) return NO;
+    return !(closing && [page isDescendantOf:closing]);
+}
+
+// Runs the move of the keyboard of window that move names, after the release of an open press.
+static void runKeyboardMove(NSWindow *window, SPKeyboardMove *move) {
+    NSView *surface = [[move.surface retain] autorelease];
+    BOOL awaitsRegion = move.awaitsRegion;
+    if (surface && surface.window == window) {
+        giveKeyboardAfterPress(window, ^{
+            surfaceHost(surface).awaitsRegion = awaitsRegion;
+            giveKeyboardToSurface(surface);
+        });
+    } else {
+        // A surface that left the window since the move leaves the keyboard with the workbench.
+        giveKeyboardAfterPress(window, ^{ focusWorkbenchNow(window); });
+    }
+}
+
+// Records the move of the keyboard of window and runs it, unless a modal keeps the keyboard: then the close of the modal runs it.
+static void moveKeyboard(NSWindow *window, NSView *surface, BOOL awaitsRegion) {
+    SPKeyboardMove *move = [[[SPKeyboardMove alloc] init] autorelease];
+    move.surface = surface;
+    move.awaitsRegion = awaitsRegion;
+    objc_setAssociatedObject(window, &keyboardMoveKey, move, OBJC_ASSOCIATION_RETAIN);
+    if (modalKeepsKeyboard(window, nil)) return;
+    runKeyboardMove(window, move);
+}
+
 static void focusSurface(NSView *view, BOOL awaitsRegion) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a surface belongs to the UI thread");
     NSWindow *window = view.window;
@@ -707,10 +759,7 @@ static void focusSurface(NSView *view, BOOL awaitsRegion) {
         sp_log_error("surface keyboard", "the surface that takes the keyboard is not in a window");
         return;
     }
-    giveKeyboardAfterPress(window, ^{
-        surfaceHost(view).awaitsRegion = awaitsRegion;
-        giveKeyboardToSurface(view);
-    });
+    moveKeyboard(window, view, awaitsRegion);
 }
 
 void sp_surface_focus(void *handle) {
@@ -777,42 +826,58 @@ static NSView *frameworkKeyView(NSView *view) {
     return nil;
 }
 
+static void focusWorkbenchNow(NSWindow *window) {
+    NSView *target = (NSView *)sp_window_main_webview(window) ?: frameworkKeyView(window.contentView);
+    // A framework that draws the workbench may remove its view when the window closes, while the window still shows; the
+    // workbench of a closing window takes no keyboard, and that is no error.
+    if (!target && objc_getAssociatedObject(window, &keyboardClosedKey)) return;
+    if (!target) {
+        sp_log_error("surface keyboard", "the window has no view of the workbench that takes the keyboard");
+        return;
+    }
+    if (![window makeFirstResponder:target]) {
+        sp_log_error("surface keyboard", [NSString stringWithFormat:@"%@ refused the keyboard", NSStringFromClass(target.class)].UTF8String);
+    }
+}
+
 void sp_window_focus_workbench(void *handle) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    NSWindow *window = (NSWindow *)handle;
-    giveKeyboardAfterPress(window, ^{
-        NSView *target = (NSView *)sp_window_main_webview(window) ?: frameworkKeyView(window.contentView);
-        // A framework that draws the workbench may remove its view when the window closes, while the window still shows; the
-        // workbench of a closing window takes no keyboard, and that is no error.
-        if (!target && objc_getAssociatedObject(window, &keyboardClosedKey)) return;
-        if (!target) {
-            sp_log_error("surface keyboard", "the window has no view of the workbench that takes the keyboard");
-            return;
-        }
-        if (![window makeFirstResponder:target]) {
-            sp_log_error("surface keyboard", [NSString stringWithFormat:@"%@ refused the keyboard", NSStringFromClass(target.class)].UTF8String);
-        }
-    });
+    moveKeyboard((NSWindow *)handle, nil, NO);
 }
 
-void sp_window_keyboard_hold(void *handle) {
+void sp_window_keys_decided(void *handle) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    surfaceLayoutKeyboardHold(handle);
+    surfaceLayoutKeysDecided(handle);
 }
 
-void sp_window_keyboard_decided(void *handle) {
+void sp_window_keys_page_ended(void *handle) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    surfaceLayoutKeyboardDecided(handle);
+    surfaceLayoutKeysDecided(handle);
 }
 
 void sp_window_modal_hold(void *handle) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    surfaceLayoutModalHold(handle);
+    surfaceLayoutKeysWaitForModal(handle);
 }
 
 void sp_window_modal_hold_end(void *handle) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
-    surfaceLayoutModalHoldEnd(handle);
+    NSWindow *window = (NSWindow *)handle;
+    BOOL waited = surfaceLayoutKeysModalWaits(window);
+    surfaceLayoutKeysModalEnded(window);
+    // A modal that closed or failed before it took the keyboard leaves it to the last move that came while the modal waited.
+    SPKeyboardMove *move = objc_getAssociatedObject(window, &keyboardMoveKey);
+    if (waited && move && !modalKeepsKeyboard(window, nil)) runKeyboardMove(window, move);
+}
+
+bool sp_window_keyboard_after_modal(void *handle, void *closing) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    NSWindow *window = (NSWindow *)handle;
+    if (!window || modalKeepsKeyboard(window, (NSView *)closing)) return false;
+    SPKeyboardMove *move = objc_getAssociatedObject(window, &keyboardMoveKey);
+    if (move) runKeyboardMove(window, move);
+    else giveKeyboardAfterPress(window, ^{ focusWorkbenchNow(window); });
+    return true;
 }
 
 void *sp_surface_main_webview(void *handle) {

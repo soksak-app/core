@@ -24,8 +24,8 @@ void main_webviewSetFrame(void *view, double x, double y, double width, double h
 void main_sp_surface_focus(void *surface) { hostRunOnMain(^{ sp_surface_focus(surface); }); }
 void main_sp_surface_focus_for_region(void *surface) { hostRunOnMain(^{ sp_surface_focus_for_region(surface); }); }
 void main_sp_window_focus_workbench(uintptr_t window) { hostRunOnMain(^{ sp_window_focus_workbench((void *)window); }); }
-void main_sp_window_keyboard_hold(uintptr_t window) { hostRunOnMain(^{ sp_window_keyboard_hold((void *)window); }); }
-void main_sp_window_keyboard_decided(uintptr_t window) { hostRunOnMain(^{ sp_window_keyboard_decided((void *)window); }); }
+void main_sp_window_keys_decided(uintptr_t window) { hostRunOnMain(^{ sp_window_keys_decided((void *)window); }); }
+void main_sp_window_keys_page_ended(uintptr_t window) { hostRunOnMain(^{ sp_window_keys_page_ended((void *)window); }); }
 void main_sp_window_modal_hold(uintptr_t window) { hostRunOnMain(^{ sp_window_modal_hold((void *)window); }); }
 void main_sp_window_modal_hold_end(uintptr_t window) { hostRunOnMain(^{ sp_window_modal_hold_end((void *)window); }); }
 void main_webviewSetSurfaceHidden(void *view, bool hidden) { hostRunOnMain(^{ webviewSetSurfaceHidden(view, hidden); }); }
@@ -68,12 +68,9 @@ static void modalViewFocusOnMain(void* handle, int take) {
         [window makeFirstResponder:view];
         return;
     }
-    for (NSView* candidate in window.contentView.subviews) {
-        if (candidate != view && [candidate isKindOfClass:[WKWebView class]]) {
-            [window makeFirstResponder:candidate];
-            return;
-        }
-    }
+    // The close of the modal returns the keyboard to the last move that the host asked for
+    // (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+    sp_window_keyboard_after_modal(window, view);
 }
 
 // Fits the modal region in page coordinates inward to the display pixel grid. Fitting outward would cover the border of the card,

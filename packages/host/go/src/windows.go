@@ -316,13 +316,13 @@ func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
 		cancelLayout = func() error { return system.CancelLayout(s.window.NativeWindow()) }
 	}
 	cancelErr := cancelLayout()
-	// The workbench that owed the decision about the keyboard ended with its page, so the hold of the window ends here, also
+	// The workbench that owed the decision about the keyboard ended with its page, so the keys that wait for it go here, also
 	// when the cancel failed (docs/spec/native-surfaces.md#keyboard-of-a-surface).
-	keyboardDecided := s.reloadKeyboardDecided
-	if keyboardDecided == nil {
-		keyboardDecided = func() { system.KeyboardDecided(s.window.NativeWindow()) }
+	keysPageEnded := s.reloadKeysPageEnded
+	if keysPageEnded == nil {
+		keysPageEnded = func() { system.KeysPageEnded(s.window.NativeWindow()) }
 	}
-	keyboardDecided()
+	keysPageEnded()
 	if cancelErr != nil {
 		LogError("surface layout cancel", cancelErr)
 		return nil, cancelErr
@@ -509,6 +509,8 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		if place, text, reported := PageProcessEnded(s.name, h.quit.Active()); reported {
 			LogError(place, text)
 		}
+		// The workbench ended with the process of its page, so the keys that wait for its decision go.
+		s.mainPageEnded()
 	})
 	win.OnWindowEvent(WindowWorkbenchCommitted, func() {
 		RecordWindowEvent(s.name, "navigation_committed")
