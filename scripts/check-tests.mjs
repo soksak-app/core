@@ -1684,11 +1684,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "void Backend::release() {" },
       { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "static std::mutex& getSharedWatchersMutex() {" },
+      { file: "patches/@parcel__watcher@2.6.0.patch", symbol: "state->rootRemoved = true;" },
     ],
     tests: [
       { file: "packages/window-check/test/platform/darwin/system/folder-wait-overlap.test.mjs", id: "waits whose watches end while the next watches start leave no stream open and the process continues" },
+      { file: "packages/window-check/test/platform/darwin/system/folder-wait-root-removal.test.mjs", id: "waits whose folder is removed while their watches end leave the process running" },
     ],
-    expected: "The end of a watch that overlaps the start of the next watches leaves no stream open, and the process that runs them ends by no signal.",
+    expected: "The end of a watch that overlaps the start of the next watches leaves no stream open, the end of a watch whose folder is removed meanwhile uses no released stream, and the process that runs them ends by no signal.",
     levels: ["unit"],
   },
   {
