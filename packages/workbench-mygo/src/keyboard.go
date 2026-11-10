@@ -124,8 +124,9 @@ func (s *Shell) followCommand(name string, answer func(value any, err error)) fu
 				answered(value, err)
 				return
 			}
-			// The answer follows the statuses of that frame, so a request after it reads what the frame showed.
-			s.afterPlacement(func(error) { s.afterStatuses(func() { answered(value, nil) }) })
+			// The answer follows the statuses of that frame, so a request after it reads what the frame showed, and the retains
+			// that its placement sent, so a request after it finds the sessions that the placement left ended (afterRetains).
+			s.afterPlacement(func(error) { s.afterRetains(func() { s.afterStatuses(func() { answered(value, nil) }) }) })
 		})
 	}
 }

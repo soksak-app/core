@@ -66,7 +66,7 @@ func TestARemovedProjectLeavesTheRetainedSessions(t *testing.T) {
 	f := newTabShell(t, stored)
 	f.open(t)
 	stored.retains = nil
-	f.shell.Registry().Run("core.library.remove", json.RawMessage(`{"id":"prj-a"}`))
+	f.shell.Registry().RunLater("core.library.remove", json.RawMessage(`{"id":"prj-a"}`), func(any, error) {})
 	f.settle()
 	calls := retained(t, stored)
 	if len(calls) == 0 || strings.Join(calls[len(calls)-1], ",") != "/b tab-cccccc" {
@@ -80,7 +80,7 @@ func TestARemovedProjectRetainsAfterThePlacementWithoutItsViews(t *testing.T) {
 	f := newTabShell(t, stored)
 	f.open(t)
 	stored.calls, stored.retains = nil, nil
-	f.shell.Registry().Run("core.library.remove", json.RawMessage(`{"id":"prj-a"}`))
+	f.shell.Registry().RunLater("core.library.remove", json.RawMessage(`{"id":"prj-a"}`), func(any, error) {})
 	f.settle()
 	retain := slices.Index(stored.calls, "sidecarsRetain")
 	placement := slices.Index(stored.calls, "presentSurfaces")

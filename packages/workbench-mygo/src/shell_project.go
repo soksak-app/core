@@ -692,7 +692,8 @@ func (s *Shell) removeProjectThen(id string, done func(removed bool, err error))
 					done(false, err)
 					return
 				}
-				s.dropProject(id, func() { done(true, nil) })
+				s.dropProject(id)
+				done(true, nil)
 			})
 		})
 	})
@@ -717,10 +718,8 @@ func (s *Shell) removalAsked(data []any) {
 	s.settleModified(closeAnswers, answer)
 }
 
-// dropProject takes the removed project out of the window. The window shows the next project, or the library without one. ended runs
-// after the retain that ends the sessions of the project answered, as projects.close of the page awaits the read that retains, or
-// after a failed placement, which leaves the views and reported its failure.
-func (s *Shell) dropProject(id string, ended func()) {
+// dropProject takes the removed project out of the window. The window shows the next project, or the library without one.
+func (s *Shell) dropProject(id string) {
 	var tabs []string
 	for tab, held := range s.surfaces.held {
 		if held.owner == id {
@@ -751,13 +750,12 @@ func (s *Shell) dropProject(id string, ended func()) {
 		}
 	}
 	// The views of the project send until the placement without them, so its sessions end after that placement. A placement that
-	// failed reported its failure and leaves the views, and the next retain ends their sessions.
+	// failed reported its failure and leaves the views, and the next retain ends their sessions. The command that removed the project
+	// waits for the same placement and then for this retain, so it answers after these sessions ended (followCommand).
 	s.afterPlacement(func(err error) {
-		if err != nil {
-			ended()
-			return
+		if err == nil {
+			s.retainSessions()
 		}
-		s.retainSessionsThen(ended)
 	})
 }
 

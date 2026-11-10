@@ -134,22 +134,34 @@ func (s *Shell) storedSurfaceKept() (func(id string) bool, error) {
 // retainSessions makes the persistent sidecar services close the sessions of surfaces that no layout holds. A layout that does not
 // read sends nothing: a partial list would close the sessions of the tabs it leaves out.
 func (s *Shell) retainSessions() {
-	s.retainSessionsThen(func() {})
-}
-
-// retainSessionsThen retains as retainSessions does and runs done after the host answered the retain, or after the failure that
-// ended it was reported.
-func (s *Shell) retainSessionsThen(done func()) {
 	surfaces, err := s.layoutSurfaces()
 	if err != nil {
 		s.fail(err)
-		done()
 		return
 	}
+	s.retaining++
 	s.calls.CallInOrder("sidecar retain", "sidecarsRetain", map[string]any{"surfaces": surfaces}, func(_ any, err error) {
 		if err != nil {
 			s.fail(err)
 		}
-		done()
+		s.retaining--
+		if s.retaining > 0 {
+			return
+		}
+		waiting := s.afterRetained
+		s.afterRetained = nil
+		for _, then := range waiting {
+			then()
+		}
 	})
+}
+
+// afterRetains runs then once the host answered every retain that was sent before it, at once when none waits for its answer: the
+// sessions that a retain ends have ended when then runs, as projects.close of the page awaits the read that retains.
+func (s *Shell) afterRetains(then func()) {
+	if s.retaining == 0 {
+		then()
+		return
+	}
+	s.afterRetained = append(s.afterRetained, then)
 }

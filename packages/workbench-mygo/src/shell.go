@@ -418,6 +418,10 @@ type Shell struct {
 	// holds what runs after it (statusesAfterFrame).
 	framed      bool
 	afterFramed []func()
+	// retaining counts the session retains that the host has not answered, and afterRetained holds what runs once it answered them
+	// all (afterRetains).
+	retaining     int
+	afterRetained []func()
 	// A View build shares one native window observation, including its error.
 	// The fields are cleared at both boundaries and never serve outside View.
 	frameWindowRead    bool
