@@ -41,6 +41,9 @@ static dispatch_semaphore_t captureStartDone;
 // The stop request time (mach absolute time) and the signal that a frame presented after it has arrived.
 static uint64_t captureStopAfter;
 static dispatch_semaphore_t captureCaughtUp;
+// Whether the current stream failed, after which it delivers no frame: its failure ends the waits for the first frame and for the
+// stop boundary. Read and written under @synchronized([SPCapture class]), as captureCaughtUp is changed.
+static BOOL captureStreamEnded;
 static dispatch_queue_t captureQueue;
 static SCStream* captureStream = nil;
 static BOOL captureAcceptingSamples = NO;
@@ -1228,6 +1231,13 @@ static void reportCaptureStreamFailure(SCStream *stream, NSString *message, NSEr
     bool current = setCaptureErrorForStream(stream, message, &sink, error);
     if (!current) [captureAttemptForStream(stream) recordFailure:message error:error];
     sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
+    if (current) {
+        @synchronized ([SPCapture class]) {
+            captureStreamEnded = YES;
+            if (captureCaughtUp != NULL) dispatch_semaphore_signal(captureCaughtUp);
+            if (captureFirstFrame != NULL) dispatch_semaphore_signal(captureFirstFrame);
+        }
+    }
     [sink stopDisplayLinkObservation];
     [sink release];
 }
@@ -1633,8 +1643,11 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     static int statuses[6];
     memset(statuses, 0, sizeof statuses);
     captureSink.statuses = statuses;
-    if (captureFirstFrame) dispatch_release(captureFirstFrame);
-    captureFirstFrame = dispatch_semaphore_create(0);
+    @synchronized ([SPCapture class]) {
+        if (captureFirstFrame) dispatch_release(captureFirstFrame);
+        captureFirstFrame = dispatch_semaphore_create(0);
+        captureStreamEnded = NO;
+    }
     captureSink.directory = [NSString stringWithUTF8String:directory];
     if (captureSink.directory == nil) {
         setCaptureError(@"capture directory is not valid UTF-8");
@@ -1761,7 +1774,11 @@ bool sp_capture_has_stream(void) {
 
 static void registerCaptureStopBoundary(SPCapture *sink, SPCaptureAttempt *attempt, double after,
     uint64_t targetMachTicks, uint64_t registrationMachTicks, dispatch_semaphore_t caughtUp) {
-    captureCaughtUp = caughtUp;
+    @synchronized ([SPCapture class]) {
+        captureCaughtUp = caughtUp;
+        // A stream that failed delivers no frame at the boundary, and its failure has already been recorded.
+        if (captureStreamEnded) dispatch_semaphore_signal(caughtUp);
+    }
     captureStopAfter = targetMachTicks;
     [attempt recordStopBoundaryAfterMilliseconds:after targetMachTicks:targetMachTicks
         registrationMachTicks:registrationMachTicks];
@@ -1796,8 +1813,9 @@ int sp_capture_stop(double after, uint64_t token) {
         return 0;
     }
     // Stops after a callback delivers a display time at or beyond the later of the call time and requested
-    // presentation time. A pending size change must finish first. The wait has no limit: when sp_capture_end_wait ends it
-    // before a qualifying callback, the stop reports an explicit error and still stops.
+    // presentation time. A pending size change must finish first. The wait has no limit: a failure of the stream, which
+    // delivers no frame after it, ends it; when sp_capture_end_wait ends it before a qualifying callback, the stop reports an
+    // explicit error and still stops.
     mach_timebase_info_data_t base;
     mach_timebase_info(&base);
     uint64_t now = mach_absolute_time();
@@ -1811,7 +1829,7 @@ int sp_capture_stop(double after, uint64_t token) {
         ? @"no frame at the window's device-pixel size arrived at the requested display time"
         : @"no frame arrived at the requested display time");
     dispatch_sync(captureQueue, ^{
-        captureCaughtUp = NULL;
+        @synchronized ([SPCapture class]) { captureCaughtUp = NULL; }
         captureStopAfter = 0;
         // The boundary has been observed (or its wait ended). Seal intake at this sample-queue fence before
         // waiting for start completion or asking ScreenCaptureKit to stop the stream.
