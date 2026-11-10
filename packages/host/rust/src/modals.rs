@@ -79,11 +79,93 @@ pub(crate) struct Overlay {
     open: Mutex<Option<Modal>>,
     next: AtomicU64,
     /// Wakes the waits of host.window.presented for the first paint of the open modal at every change of the modal
-    /// state. The waits and the changes hold `open`.
+    /// state and at every end of the requests that wait. The waits and the changes hold `open`.
     paint_changed: Condvar,
+    /// The instance of the open modal whose WebContent process ended: its first frame cannot come, so its paint wait ends
+    /// with a failure. It is read and written while `open` is held.
+    process_ended: Mutex<Option<u64>>,
 }
 
 impl Overlay {
+    /// Records that the webview of the modal id and instance presented its frame, and wakes the paint waits.
+    pub fn mark_painted(&self, id: &str, instance: u64) {
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this call amends; the panic
+        // hook records the panic.
+        let mut held = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(modal) = held
+            .as_mut()
+            .filter(|m| m.id == id && m.instance == instance)
+        {
+            modal.painted = true;
+        }
+        self.paint_changed.notify_all();
+    }
+
+    /// Wakes the paint waits so that each reads the end of its request again. The caller records the end before it wakes
+    /// the waits; the wake holds `open`, so a wait that reads the end before it waits sees the end or the wake.
+    pub fn wake_paint_waits(&self) {
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this wake only orders; the
+        // panic hook records the panic.
+        let _held = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        self.paint_changed.notify_all();
+    }
+
+    /// Records that the WebContent process of the open modal ended, which ends its paint wait.
+    fn end_modal_process(&self) {
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this call only reads; the
+        // panic hook records the panic.
+        let held = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(modal) = held.as_ref() {
+            // default: a lock that a panicking thread poisoned still holds the ended instance, which this call replaces;
+            // the panic hook records the panic.
+            *self
+                .process_ended
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner) = Some(modal.instance);
+        }
+        self.paint_changed.notify_all();
+    }
+
+    /// Blocks until the open modal presented its first frame, the modal closes or is replaced by one that painted, or no
+    /// modal is open. It has no time limit: `ended`, the end of the request that waits, ends it with its reason, read at
+    /// each wake, and the end of the WebContent process of the modal ends it with a failure. A modal that is still loading
+    /// holds the wait, because the screen that presented reports comes after the paint of the modal it opens.
+    pub fn wait_for_paint(&self, ended: &dyn Fn() -> Option<String>) -> Result<(), String> {
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this call only reads; the
+        // panic hook records the panic.
+        let mut held = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        loop {
+            let Some((id, instance)) = held
+                .as_ref()
+                .filter(|m| !m.painted)
+                .map(|m| (m.id.clone(), m.instance))
+            else {
+                return Ok(());
+            };
+            if let Some(reason) = ended() {
+                return Err(reason);
+            }
+            if *self
+                .process_ended
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the ended instance, which is only read; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                == Some(instance)
+            {
+                return Err(format!(
+                    "the WebContent process of the modal {id} ended before its first frame"
+                ));
+            }
+            // default: a panicking wait leaves the modal record held; the panic hook records the panic and the next lock
+            // takes the record through its poison recovery.
+            held = self
+                .paint_changed
+                .wait(held)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+
     /// Returns the element id, the mode and the visibility of the open modal.
     pub fn open_state(&self) -> Option<(String, String, bool)> {
         // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the panic
@@ -252,6 +334,7 @@ pub(crate) fn is_modal_of(label: &str, window: &str) -> bool {
 /// Ends the wait of the keys of window for its modal when the process of the modal document ended, because that document
 /// no longer takes the keyboard (docs/spec/native-modals.md#keyboard).
 pub(crate) fn modal_process_ended(window: &Window) -> Result<(), String> {
+    window_data(window)?.overlay.end_modal_process();
     modal_hold(window, false)
 }
 
@@ -557,48 +640,9 @@ fn mark_visible(overlay: &Overlay, id: &str, instance: u64) -> Result<(), String
 /// Records that the webview of the modal id and instance presented its frame, and wakes the waits of
 /// host.window.presented.
 fn mark_painted(window: &Window, id: &str, instance: u64) {
-    let Ok(context) = window_data(window) else {
-        return;
-    };
-    let state = &context.overlay;
-    // default: a lock that a panicking thread poisoned still holds the modal record, which this call amends; the panic
-    // hook records the panic.
-    let mut held = state.open.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(modal) = held
-        .as_mut()
-        .filter(|m| m.id == id && m.instance == instance)
-    {
-        modal.painted = true;
+    if let Ok(context) = window_data(window) {
+        context.overlay.mark_painted(id, instance);
     }
-    state.paint_changed.notify_all();
-}
-
-/// Blocks until the open modal presented its first frame, another modal state change wakes the wait for a new look, or
-/// no modal is open. A modal that is still loading holds the wait, because the screen that presented reports comes
-/// after the paint of the modal it opens. It tells whether a modal is on the screen without its paint when the timeout
-/// ends.
-pub fn wait_for_paint(window: &Window, timeout: std::time::Duration) -> bool {
-    let Ok(context) = window_data(window) else {
-        return false;
-    };
-    let state = &context.overlay;
-    // default: a lock that a panicking thread poisoned still holds the modal record, which this call only reads; the
-    // panic hook records the panic.
-    let mut held = state.open.lock().unwrap_or_else(PoisonError::into_inner);
-    let deadline = std::time::Instant::now() + timeout;
-    while held.as_ref().is_some_and(|m| !m.painted) {
-        let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else {
-            return true;
-        };
-        // default: a panicking wait leaves the modal record held; the panic hook records the panic and the next lock
-        // takes the record through its poison recovery.
-        held = state
-            .paint_changed
-            .wait_timeout(held, remaining)
-            .unwrap_or_else(PoisonError::into_inner)
-            .0;
-    }
-    false
 }
 
 /// Shows the modal webview when the document of this display has rendered. The webview is shown, focused and marked

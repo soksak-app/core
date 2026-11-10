@@ -2860,7 +2860,9 @@ pub(crate) fn end_closed_surface(
     surface: &str,
 ) -> SurfaceClose {
     let mut close = SurfaceClose::default();
-    match data.documents.presentation().end_surface(surface, "hidden") {
+    // The close of the documents of the surface ends the presentation wait of its view with the reason closed
+    // (view.presentation-wait.surface-close-ends-it).
+    match data.documents.presentation().end_surface(surface, "closed") {
         Ok(ended) => close.abandoned = ended.len(),
         Err(error) => close.errors.push(error.to_string()),
     }
@@ -2907,7 +2909,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
                 for error in close.errors {
                     log_error("view channel", error);
                 }
-                report_ended_presentation_waits(&host, &surface, "hidden", Ok(close.abandoned));
+                report_ended_presentation_waits(&host, &surface, "closed", Ok(close.abandoned));
                 if let Some((plugin, generation)) = close.ended {
                     emit_source_ended(&host, &plugin, &surface, generation);
                 }

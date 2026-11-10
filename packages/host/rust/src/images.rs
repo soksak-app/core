@@ -298,6 +298,7 @@ impl Images {
             // when the region is shown without a new layout.
             let configure = (drawing && !state.configured && state.width > 0).then(|| {
                 state.configured = true;
+                state.presentation_error = None;
                 Configure {
                     name: key.1.clone(),
                     generation: state.generation,
@@ -728,13 +729,21 @@ impl Images {
             .map(|(key, _)| key.clone())
             .collect();
         for key in keys {
+            // default: a region without a state has nothing to invalidate.
+            let waited = inner
+                .states
+                .get(&key)
+                .is_some_and(|state| state.raster != 0 && inner.drawing(&key, state));
             let Some(state) = inner.states.get_mut(&key) else {
                 continue;
             };
             state.configured = false;
             state.last_sequence = 0;
             state.presented_sequence = 0;
-            state.presentation_error = None;
+            // The raster of a lost connection that a wait waits for never presents, so that wait ends here with the
+            // supplier that ended; the configure of the new connection clears it.
+            state.presentation_error =
+                waited.then(|| format!("the supplier connection of {sidecar} ended"));
             // The service of the new connection has no drawing state either.
             state.drawing_sent = None;
             invalidated += 1;
@@ -804,6 +813,7 @@ impl Images {
         }
         let state = inner.states.get_mut(key).expect("the state was read above");
         state.configured = true;
+        state.presentation_error = None;
         Ok(Some(Configure {
             name: key.1.clone(),
             generation: state.generation,
@@ -1071,9 +1081,10 @@ impl Images {
             .is_some_and(|state| matches!(state.drawing_sent, Some((true, _))))
     }
 
-    /// Waits until all visible image regions present the current raster or the time limit ends.
-    pub fn wait_current(&self, timeout: Duration) -> Result<(), String> {
-        self.wait_current_observed(timeout, || {})
+    /// Waits until all visible image regions present the current raster. The wait has no time limit: a presentation
+    /// failure and the end of the supplier connection of a region end it with their reason.
+    pub fn wait_current(&self) -> Result<(), String> {
+        self.wait_current_observed(|| {})
     }
 
     /// Waits for the image completion boundary selected by the layout request. With [`NO_WAIT_LIMIT`] it ends only by the
@@ -1085,7 +1096,7 @@ impl Images {
         settled: bool,
     ) -> Result<(), String> {
         if settled {
-            self.wait_current(timeout)
+            self.wait_observed(timeout, || {}, Self::current_presented_locked)
         } else {
             self.wait_raster_snapshot_observed(timeout, || {})
         }
@@ -1103,13 +1114,10 @@ impl Images {
         )
     }
 
-    /// Signals the first pending check under the owner lock so tests can order the next frame before wakeup.
-    fn wait_current_observed(
-        &self,
-        timeout: Duration,
-        waiting: impl FnOnce(),
-    ) -> Result<(), String> {
-        self.wait_observed(timeout, waiting, Self::current_presented_locked)
+    /// Signals every pending check under the owner lock so tests can order the next frame before wakeup. The wait has no
+    /// time limit.
+    fn wait_current_observed(&self, waiting: impl FnMut()) -> Result<(), String> {
+        self.wait_until(None, waiting, Self::current_presented_locked)
     }
 
     fn wait_observed(
@@ -1120,7 +1128,26 @@ impl Images {
     ) -> Result<(), String> {
         let mut waiting = Some(waiting);
         // NO_WAIT_LIMIT overflows the clock, so that wait has no deadline.
-        let deadline = Instant::now().checked_add(timeout);
+        self.wait_until(
+            Instant::now().checked_add(timeout),
+            || {
+                if let Some(waiting) = waiting.take() {
+                    waiting();
+                }
+            },
+            complete,
+        )
+    }
+
+    /// The wait of the image regions: it ends at complete, at a presentation failure, at the end of the connection of a
+    /// sidecar of the regions, at the end of the layout transaction and, with a deadline, at that deadline. waiting runs at
+    /// each pending check under the owner lock.
+    fn wait_until(
+        &self,
+        deadline: Option<Instant>,
+        mut waiting: impl FnMut(),
+        complete: fn(&Inner) -> bool,
+    ) -> Result<(), String> {
         let mut inner = self.lock();
         let (ends, sidecars) = (inner.wait_ends, inner.ended_sidecars);
         loop {
@@ -1143,17 +1170,8 @@ impl Images {
             if complete(&inner) {
                 return Ok(());
             }
-            let remaining = match deadline {
-                Some(deadline) => match deadline.checked_duration_since(Instant::now()) {
-                    Some(remaining) => Some(remaining),
-                    None => return Err("presentationTimeout".to_string()),
-                },
-                None => None,
-            };
-            if let Some(waiting) = waiting.take() {
+            let Some(deadline) = deadline else {
                 waiting();
-            }
-            let Some(remaining) = remaining else {
                 inner = self
                     .shared
                     .changed
@@ -1163,6 +1181,10 @@ impl Images {
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
                 continue;
             };
+            let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+                return Err("presentationTimeout".to_string());
+            };
+            waiting();
             let (next, result) = self
                 .shared
                 .changed

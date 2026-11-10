@@ -44,8 +44,11 @@ pub struct WindowData {
     /// The windows that received a close request that was not blocked. These windows disappear from the runtime before
     /// Destroyed, so they are not put in the list.
     pub closing: AtomicBool,
-    /// The requests that wait for the next page to be ready.
-    pub readied: Mutex<Vec<std::sync::mpsc::Sender<()>>>,
+    /// The requests that wait for the next page to be ready. The close of the window and the end of its page process end
+    /// them with the text of that end.
+    pub readied: Mutex<Vec<std::sync::mpsc::Sender<Result<(), String>>>>,
+    /// The ends of the window and of its main page process, which end the requests that wait in the window.
+    pub(crate) ends: WindowEnds,
     /// The items (surface, kind, name) that surface pages registered. When the main page is reloaded, the new page is
     /// notified again.
     pub registrations: Mutex<Vec<(String, String, String)>>,
@@ -77,6 +80,62 @@ pub struct WindowData {
     pub shown: Mutex<String>,
     /// The complete composition revision applied last for each surface.
     pub composition_revisions: Mutex<HashMap<String, u64>>,
+}
+
+/// The ends of a window and of its main page process, counted: a request that waits in the window takes the count when it
+/// begins and reads the end that came after it, so an end that comes before the wait reads it ends the wait the same way.
+#[derive(Default)]
+pub(crate) struct WindowEnds(Mutex<(u64, String)>);
+
+impl WindowEnds {
+    /// The count of the ends so far.
+    pub(crate) fn mark(&self) -> u64 {
+        // default: a lock that a panicking thread poisoned still holds the count, which is only read; the panic hook records
+        // the panic.
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).0
+    }
+
+    /// The text of the last end after the count mark, or None when no end came after it.
+    pub(crate) fn since(&self, mark: u64) -> Option<String> {
+        // default: a lock that a panicking thread poisoned still holds the count and the text, which are only read; the
+        // panic hook records the panic.
+        let ends = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        (ends.0 > mark).then(|| ends.1.clone())
+    }
+
+    fn record(&self, end: &str) {
+        // default: a lock that a panicking thread poisoned still holds the count and the text, which this call replaces; the
+        // panic hook records the panic.
+        let mut ends = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        ends.0 += 1;
+        ends.1 = end.to_string();
+    }
+}
+
+impl WindowData {
+    /// Ends the requests that wait in the window with `end`, the close of the window or the end of its main page process: a
+    /// reload that waits for the ready page, a presented wait for the first frame of the modal and a presented wait for the
+    /// end of the continuous update (docs/spec/native-host.md).
+    pub(crate) fn end_waits(&self, end: &str) {
+        self.ends.record(end);
+        self.overlay.wake_paint_waits();
+        crate::surfaces::end_settled_waits(&self.running);
+        for ready in self
+            .readied
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the readiness senders, which the end drains; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .drain(..)
+        {
+            if ready.send(Err(end.to_string())).is_err() {
+                crate::application_log::log_info(
+                    "window",
+                    "the end of a readiness wait arrived after its request ended",
+                );
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -174,7 +233,6 @@ pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(
         owner,
         images,
         targets,
-        crate::sidecars::image_detach::IMAGE_DETACH_TIMEOUT,
         ended_event,
     )?;
     Ok(())
@@ -842,6 +900,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
     });
     window.on_window_event(move |event| match event {
         WindowEvent::Destroyed => {
+            context.end_waits("the window closed");
             context.documents.views().forget_all();
             // The close of the window ends its run with its transactions (docs/spec/native-surfaces.md#layout-transaction).
             crate::surfaces::end_run(&context.running);
@@ -1569,7 +1628,7 @@ pub fn window_ready(window: &Window) -> Result<(), String> {
         .unwrap_or_else(PoisonError::into_inner)
         .drain(..)
     {
-        if ready.send(()).is_err() {
+        if ready.send(Ok(())).is_err() {
             crate::application_log::log_info(
                 "window",
                 "window readiness arrived after its request ended",
