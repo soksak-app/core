@@ -1607,8 +1607,8 @@ func TestASelectWithALongChoiceKeepsTheWidthOfItsColumn(t *testing.T) {
 }
 
 // An order row shows the name of its value beside its buttons, and the first row shows the name of the setting, as the page draws
-// them (docs/spec/settings.md#controls): the texts that the window draws hold 사이드바 순서 once, and the names of the sides in their
-// order after it.
+// them (docs/spec/settings.md#controls): the texts that the window draws hold the name of the setting sidebarOrder, which orderRows
+// of packages/workbench/settings-ui.js gives, once, and the names of the sides in their order after it.
 func TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting(t *testing.T) {
 	f := opened(t)
 	f.tester.SetSize(1200, 3200)
