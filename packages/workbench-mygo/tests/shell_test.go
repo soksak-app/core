@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -1021,19 +1022,25 @@ func (f *shellFixture) until(done func() bool) {
 	})
 }
 
-// until runs the steps until done reports true.
+// until runs the steps until done reports true, and judges done at each event that can change the state: a step, and the
+// moment a goroutine of a host call stops working, because the state can arrive on it without a step. When no goroutine works,
+// only the next step changes the state, posted by a timer or by a goroutine that a step woke, so until waits for that step. It
+// has no time limit: a state that never arrives holds the test, and the limit of the test runner reports it.
 func (s steps) until(t testing.TB, done func() bool) {
 	t.Helper()
-	limit := time.After(5 * time.Second)
 	for !done() {
-		select {
-		case task := <-s:
+		if task, queued := s.queued(); queued {
 			task()
-		case <-time.After(time.Millisecond):
-			// The state can arrive on the goroutine of a host call, without a step.
-		case <-limit:
-			t.Fatal("the steps ended before the state arrived")
+			continue
 		}
+		if workingGoroutine() != "" {
+			runtime.Gosched()
+			continue
+		}
+		if done() {
+			return
+		}
+		(<-s)()
 	}
 }
 

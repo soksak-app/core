@@ -25,44 +25,38 @@ func (s steps) run() { (<-s)() }
 
 // drain runs the later steps until nothing can post another one: no step waits and every other goroutine waits for
 // something only a goroutine or the test can end. A host call that still runs holds it however long it takes, and one
-// that waits for the test does not. A timer is not waited for; a test that needs one runs until its state arrives.
+// that waits for the test does not. A timer is not waited for; a test that needs one runs until its state arrives. The
+// drain judges no time: a goroutine that keeps working holds it, and the limit of the test runner reports that test.
 func (s steps) drain(t testing.TB) {
 	t.Helper()
-	limit := time.NewTimer(drainLimit)
-	defer limit.Stop()
 	for {
-		select {
-		case task := <-s:
+		if task, queued := s.queued(); queued {
 			task()
-			limit.Reset(drainLimit)
 			continue
-		default:
 		}
-		working := workingGoroutine()
-		if working == "" {
-			// The goroutines waited after every step that they posted, so a step that is not here now never comes.
-			select {
-			case task := <-s:
-				task()
-				limit.Reset(drainLimit)
-				continue
-			default:
-				return
-			}
+		if workingGoroutine() != "" {
+			// A goroutine works: it posts a step, changes a state or waits, and the yield lets it go on.
+			runtime.Gosched()
+			continue
 		}
-		select {
-		case task := <-s:
-			task()
-			limit.Reset(drainLimit)
-		case <-time.After(100 * time.Microsecond):
-		case <-limit.C:
-			t.Fatalf("a goroutine works without a step for %v:\n%s", drainLimit, working)
+		// The goroutines waited after every step that they posted, so a step that is not here now never comes.
+		task, queued := s.queued()
+		if !queued {
+			return
 		}
+		task()
 	}
 }
 
-// drainLimit is the time without a step after which a goroutine that keeps working is a defect of the test.
-const drainLimit = 60 * time.Second
+// queued returns the step that waits, if one does, without waiting for one.
+func (s steps) queued() (func(), bool) {
+	select {
+	case task := <-s:
+		return task, true
+	default:
+		return nil, false
+	}
+}
 
 // waitingStates are the states of a goroutine that only another goroutine can end, as runtime.Stack prints them.
 var waitingStates = []string{"chan receive", "chan send", "select", "sync.Cond.Wait", "sync.WaitGroup.Wait", "IO wait", "finalizer wait"}
