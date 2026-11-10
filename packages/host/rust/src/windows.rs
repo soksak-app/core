@@ -22,6 +22,9 @@ use crate::source_origins::{ViewSourceOrigins, view_source_origin_event};
 use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
+/// A reload that waits for the next page of its window: its number and the sender of its end.
+pub type Readied = (u64, mpsc::Sender<Result<(), String>>);
+
 /// The state of one window.
 #[derive(Default)]
 pub struct WindowData {
@@ -46,7 +49,7 @@ pub struct WindowData {
     pub closing: AtomicBool,
     /// The reloads that wait for the next page, each with its number: the ready of the page sends `Ok`, and the close of the
     /// window and a start of the new page that fails send the error that ends the reload.
-    pub readied: Mutex<Vec<(u64, std::sync::mpsc::Sender<Result<(), String>>)>>,
+    pub readied: Mutex<Vec<Readied>>,
     /// Set when the window asked its page with `project-close-request` and the page has answered neither `windowClose` nor
     /// `windowCloseKept`, so the end of the page answers it (`answer_close_question`).
     pub close_asked: AtomicBool,
