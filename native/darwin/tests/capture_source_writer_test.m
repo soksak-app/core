@@ -21,9 +21,7 @@ int main(void) { @autoreleasepool {
     dispatch_semaphore_t manifestFinished = dispatch_semaphore_create(0);
     dispatch_queue_t manifestQueue = dispatch_queue_create("capture.source-writer-test.manifest", DISPATCH_QUEUE_SERIAL);
     __block BOOL manifestWritten = NO;
-    BOOL sourceWriterStarted = NO;
     BOOL retained = NO;
-    BOOL completedBeforeFrameWriterRelease = NO;
 
     captureWriter = dispatch_queue_create("capture.source-writer-test.frame", DISPATCH_QUEUE_SERIAL);
     capturePending = dispatch_semaphore_create(kCapturePending);
@@ -33,41 +31,34 @@ int main(void) { @autoreleasepool {
     });
 
     @try {
-        sourceWriterStarted = dispatch_semaphore_wait(writerStarted,
-            dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) == 0;
-        check(sourceWriterStarted, @"the production frame writer reaches the controlled hold");
-        if (sourceWriterStarted) {
-            BOOL began = beginCaptureSourceArtifacts(directoryPath, true);
-            check(began, @"the production capture setup selects the source artifact writer");
-            if (began) {
-                const size_t width = 32, height = 32, stride = width * 4;
-                NSMutableData *pixels = [NSMutableData dataWithLength:stride * height];
-                memset(pixels.mutableBytes, 0x7f, pixels.length);
-                sp_image_capture_identity identity = { 1, 1, 1 };
-                retained = sp_image_capture_match_retain(identity, pixels.bytes, width, height, stride,
-                    CGRectMake(20, 30, width, height), 1, "kCGColorSpaceSRGB");
-                check(retained, @"the source snapshot is accepted while the frame writer is held");
+        // The production frame writer reaches the controlled hold.
+        dispatch_semaphore_wait(writerStarted, DISPATCH_TIME_FOREVER);
+        BOOL began = beginCaptureSourceArtifacts(directoryPath, true);
+        check(began, @"the production capture setup selects the source artifact writer");
+        if (began) {
+            const size_t width = 32, height = 32, stride = width * 4;
+            NSMutableData *pixels = [NSMutableData dataWithLength:stride * height];
+            memset(pixels.mutableBytes, 0x7f, pixels.length);
+            sp_image_capture_identity identity = { 1, 1, 1 };
+            retained = sp_image_capture_match_retain(identity, pixels.bytes, width, height, stride,
+                CGRectMake(20, 30, width, height), 1, "kCGColorSpaceSRGB");
+            check(retained, @"the source snapshot is accepted while the frame writer is held");
 
-                dispatch_async(manifestQueue, ^{
-                    @autoreleasepool {
-                        manifestWritten = sp_image_capture_match_write_manifest(directoryPath.fileSystemRepresentation);
-                    }
-                    dispatch_semaphore_signal(manifestFinished);
-                });
-                completedBeforeFrameWriterRelease = dispatch_semaphore_wait(manifestFinished,
-                    dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
-                check(completedBeforeFrameWriterRelease,
-                    @"source artifacts and their manifest finish before the held frame writer is released");
-            }
+            dispatch_async(manifestQueue, ^{
+                @autoreleasepool {
+                    manifestWritten = sp_image_capture_match_write_manifest(directoryPath.fileSystemRepresentation);
+                }
+                dispatch_semaphore_signal(manifestFinished);
+            });
+            // Source artifacts and their manifest finish before the held frame writer is released. A manifest that waited
+            // for the held frame writer would not finish: the runner ends that run, and this record names the wait.
+            fprintf(stderr, "waiting: the manifest finishes while the frame writer is held\n");
+            dispatch_semaphore_wait(manifestFinished, DISPATCH_TIME_FOREVER);
+            fprintf(stderr, "reached: the manifest finishes while the frame writer is held\n");
         }
     } @finally {
         dispatch_semaphore_signal(releaseWriter);
         if (captureWriter != NULL) dispatch_sync(captureWriter, ^{});
-        if (sourceWriterStarted && !completedBeforeFrameWriterRelease) {
-            BOOL drained = dispatch_semaphore_wait(manifestFinished,
-                dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
-            check(drained, @"the manifest worker drains after the frame writer is released");
-        }
         endCaptureSourceArtifacts();
         check(captureSourceWriter == NULL, @"source writer ownership is released after matching ends");
         if (capturePending != NULL) { dispatch_release(capturePending); capturePending = NULL; }
