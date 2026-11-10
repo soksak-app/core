@@ -56,15 +56,6 @@ static void typeKeys(NSWindow *window, const char *text) {
     }
 }
 
-// Types the keys of text without a stated text, so each key reaches the first responder as a key event.
-static void typePlain(NSWindow *window, const char *text) {
-    for (const char *at = text; *at; at++) {
-        char key[2] = {*at, 0};
-        check(sp_input_key(window, key, NULL, 0, true) == SP_INPUT_DELIVERED, "a key press is delivered");
-        check(sp_input_key(window, key, NULL, 0, false) == SP_INPUT_DELIVERED, "a key release is delivered");
-    }
-}
-
 // A left press and its release on the workbench of window, the left half of its content.
 static void releaseOnWorkbench(NSWindow *window) {
     check(sp_input_pointer(window, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the workbench is delivered");
@@ -591,6 +582,11 @@ int main(void) { @autoreleasepool {
     sp_window_keys_decided(holding);
     runQueuedEvents();
     check(!sp_input_press_open(holding, 0), "the press of the pointer check is released");
+    // The press reached the page of the surface, which then holds the keyboard of the surface; the region takes it back.
+    NSResponder *pressedHolder = holding.firstResponder;
+    check([pressedHolder isKindOfClass:NSView.class] && [(NSView *)pressedHolder isDescendantOf:heldPage],
+        "the press after the release on the workbench gives the keyboard to the page it reached");
+    [holding makeFirstResponder:(NSResponder *)heldRegion];
 
     // A press of the window ends the wait: the keys that waited reach the view that holds the keyboard first, in their order, and
     // the press and its release follow them.
@@ -598,6 +594,7 @@ int main(void) { @autoreleasepool {
     NSString *pressed = regionKeys(^{
         releaseOnWorkbench(holding);
         sp_surface_focus(heldHost);
+        check(holding.firstResponder == (NSResponder *)heldRegion, "the call gives the keyboard to the region of the surface");
         typeKeys(holding, "gh");
         sp_input_pointer(holding, 600, 250, 1, 0, 0, 0);
         sp_input_pointer(holding, 600, 250, 3, 0, 0, 0);
@@ -655,7 +652,7 @@ int main(void) { @autoreleasepool {
     sp_window_focus_workbench(holding);
     NSString *beforeModal = regionKeys(^{
         sp_window_modal_hold(holding);
-        typePlain(holding, "pq");
+        typeKeys(holding, "pq");
         sp_surface_focus(heldHost);
         sp_window_keys_decided(holding);
         runQueuedEvents();

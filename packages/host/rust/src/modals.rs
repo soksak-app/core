@@ -557,7 +557,9 @@ fn mark_visible(overlay: &Overlay, id: &str, instance: u64) -> Result<(), String
 /// Records that the webview of the modal id and instance presented its frame, and wakes the waits of
 /// host.window.presented.
 fn mark_painted(window: &Window, id: &str, instance: u64) {
-    let Ok(context) = window_data(window) else { return };
+    let Ok(context) = window_data(window) else {
+        return;
+    };
     let state = &context.overlay;
     // default: a lock that a panicking thread poisoned still holds the modal record, which this call amends; the panic
     // hook records the panic.
@@ -576,7 +578,9 @@ fn mark_painted(window: &Window, id: &str, instance: u64) {
 /// after the paint of the modal it opens. It tells whether a modal is on the screen without its paint when the timeout
 /// ends.
 pub fn wait_for_paint(window: &Window, timeout: std::time::Duration) -> bool {
-    let Ok(context) = window_data(window) else { return false };
+    let Ok(context) = window_data(window) else {
+        return false;
+    };
     let state = &context.overlay;
     // default: a lock that a panicking thread poisoned still holds the modal record, which this call only reads; the
     // panic hook records the panic.
@@ -647,12 +651,11 @@ pub fn ready(window: &Window, id: String, instance: u64) -> Result<(), String> {
     let painted_window = window.clone();
     let painted_id = id.clone();
     let paint = move || mark_painted(&painted_window, &painted_id, instance);
-    let paint_started =
-        exposure::with_view(&view, move |webview| {
-            Ok(platform
-                .after_presentation(webview, Box::new(paint))
-                .is_ok())
-        });
+    let paint_started = exposure::with_view(&view, move |webview| {
+        Ok(platform
+            .after_presentation(webview, Box::new(paint))
+            .is_ok())
+    });
     mark_visible(state, &id, instance)?;
     if paint_started == Ok(false) {
         mark_painted(window, &id, instance);
