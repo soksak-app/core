@@ -159,7 +159,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-document-identity.stop-preserves-captures-without-a-document-source` | 선택된 document identity source가 없는 중지는 source freeze와 제거를 건너뛰고 capture를 한 번 중지하며 `frameIdentity` option의 두 값을 모두 보존한다. | all |
 | `diagnostics.capture-document-identity.stop-orders-freeze-capture-and-cleanup` | 선택된 source가 있으면 중지는 source를 freeze하고 capture를 중지한 뒤 같은 generation을 제거한다. `issuedSlots`는 성공한 freeze reply에서 온다. | all |
 | `diagnostics.capture-document-identity.stop-does-not-credit-unconfirmed-freeze` | source freeze에 실패하면 issued-slot count를 더하지 않지만 capture finalization과 source 제거는 계속 시도하고 오류를 보존한다. | all |
-| `diagnostics.capture-document-identity.stop-drains-late-start-before-cleanup` | 중지는 cleanup 전에 대기 중인 source start가 끝나기를 기다리며, timeout된 start가 확인하지 않은 issued count는 반영하지 않는다. | all |
+| `diagnostics.capture-document-identity.stop-drains-late-start-before-cleanup` | 중지는 cleanup 전에 대기 중인 source start가 끝나기를 기다리며, start가 확인하지 않은 issued count는 반영하지 않는다. | all |
 | `diagnostics.capture-document-identity.start-validates-current-root-generation` | source 시작은 요청된 surface와 generation의 현재 연결된 root document만 찾고, 교체되거나 종료된 generation은 거부한다. | all |
 | `diagnostics.capture-document-identity.start-rejects-invalid-parameters` | source 시작은 document source를 선택하기 전에 없거나 비어 있거나 안전하지 않은 surface와 generation 값을 거부한다. | all |
 | `diagnostics.capture-document-identity.start-validates-native-metadata` | source 시작은 현재 generation과 측정된 유효 ROI를 가리키는 native metadata를 요구하며, 없거나 일치하지 않는 metadata는 거부한다. | all |
