@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -593,14 +594,13 @@ func (s *Surfaces) requestSurfaceOf(origin uint64, surface string, send func(id 
 	})
 }
 
-// askPageToReload sends the reload request to a ready page and ends the requests to its surface documents. Such a request would
-// keep the page from reloading: the page waits for its reply, and the document needs answers from the page, which sends no call
-// after the reload request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page that receives
-// the failure already sends no report of it.
+// askPageToReload sends the reload request to a ready page, which ends the page (endPage). A request to the page or to its surface
+// documents would keep the page from reloading: the page waits for the replies of its calls, and a call that waits for an answer
+// of the page gets none, because the page sends no call after the reload request (docs/spec/native-host.md#page-reload). The
+// requests end after the event, so a page that receives the failure already sends no report of it.
 func (s *Surfaces) askPageToReload(emit func()) {
 	emit()
-	s.pageReloading.Store(true)
-	s.host.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface != "" })
+	s.host.endPage(s)
 }
 
 // pageStarted records that a new main page started, which accepts requests to surface documents again.
@@ -746,14 +746,14 @@ func (s *Surfaces) reloadPage() error {
 			return err
 		}
 	}
-	// The reload has no time limit: the ready report of the new page ends it, and so do the close of the window and the end of
-	// its page process, after which no ready report comes (docs/spec/native-host.md#page-reload). A page process that ended before
-	// the reload does not end it, because the reload starts a new page.
+	// The reload has no time limit: the ready report of the new page ends it, and so do a start of the new page that fails, the
+	// close of the window and the end of its page process, after which no ready report comes (docs/spec/native-host.md#page-reload).
+	// A page process that ended before the reload does not end it, because the reload starts a new page.
 	ends, ended := s.waitEnd()
 	if ended == windowClosedEnd {
 		return rpcError(codeNoWindow, "%s", ReloadEndText(ended, runningCalls.Of(s.window.Name(), time.Now())))
 	}
-	ready := make(chan struct{})
+	ready := make(chan error, 1)
 	s.host.mu.Lock()
 	s.readied = append(s.readied, ready)
 	s.host.mu.Unlock()
@@ -765,9 +765,13 @@ func (s *Surfaces) reloadPage() error {
 		mainThreadStep(func() { s.window.StartWorkbench() })
 	}
 	select {
-	case <-ready:
-		return nil
+	case err := <-ready:
+		return err
 	case <-ends:
+		// The reload ended, so a later ready of the window answers no ended reload.
+		s.host.mu.Lock()
+		s.readied = slices.DeleteFunc(s.readied, func(waiting chan error) bool { return waiting == ready })
+		s.host.mu.Unlock()
 		return rpcError(codeNoWindow, "%s", ReloadEndText(s.lastWaitEnd(), runningCalls.Of(s.window.Name(), time.Now())))
 	}
 }

@@ -5,6 +5,8 @@
 // the NSView that holds that container and lies in a window. The function makes the container when view holds none. On the
 // hosts with a main web view, view is the window composition that sp_window_set_main_webview returns.
 void *sp_surface_create(void *view);
+// Whether view is a surface host that sp_surface_create made. Call it on the main thread.
+bool sp_surface_is_host(void *view);
 // Wraps the main web view in the window composition, which holds the window overlays, the file drop view and, above the web
 // view, the container of the surface hosts. Returns the composition that already exists, or NULL when the web view is not
 // in a window. sp_window_set_main_webview calls it.

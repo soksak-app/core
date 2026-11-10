@@ -27,7 +27,7 @@ test("ordinary focused acceptance owns explicit prebuilt artifacts and unchanged
   const plan = await e2ePlan({ root: "/source", configRoot: "/configuration/fresh", script: "test-app", artifacts, only: "window-end.test.mjs",
     platform: "darwin", fixtures: ["probe"] });
   assert.deepEqual(plan.find((item) => item.name === "fixture registry"), { name: "fixture registry", phase: "prepare", kind: "run",
-    env: { SOKSAK_CONFIG_ROOT: "/configuration/fresh" }, argv: ["make", "fixture-registry", "FIXTURE_SOK=/prebuilt/wailsv3.app/Contents/MacOS/sok",
+    env: { SOKSAK_CONFIG_ROOT: "/configuration/fresh" }, argv: ["make", "build-fixture-registry-from-sok", "FIXTURE_SOK=/prebuilt/wailsv3.app/Contents/MacOS/sok",
       "FIXTURE_REGISTRY=/configuration/fresh/fixture-registry"] });
   for (const host of artifacts.hosts) {
     assert.equal(plan.find((item) => item.name === `start ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok-${host.app}`);
@@ -264,7 +264,7 @@ test("a candidate plan builds the fixture registry of its checkout with its bund
   const plan = await e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app",
     native: "test-app", candidate, runFolder: "/work/target/test-runs/candidate", platform: "darwin", fixtures: ["fixture"] });
   assert.equal(plan.some((step) => step.argv?.includes("install-plugins")), false);
-  assert.deepEqual(plan.find((step) => step.name === "fixture registry").argv, ["make", "fixture-registry",
+  assert.deepEqual(plan.find((step) => step.name === "fixture registry").argv, ["make", "build-fixture-registry-from-sok",
     "FIXTURE_SOK=/candidate/wailsv3.app/Contents/MacOS/sok", "FIXTURE_REGISTRY=/work/target/e2e/run/fixture-registry"]);
   assert.deepEqual(plan.find((step) => step.name === "registry wailsv3").argv,
     ["/candidate/wailsv3.app/Contents/MacOS/sok", "registry", "use", "/work/target/e2e/run/fixture-registry/index.json", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
@@ -526,8 +526,8 @@ test("a failed run keeps the logs and removes the service folders, so the servic
   const root = workspace(t);
   const failed = newConfigRoot(root);
   for (const app of ["soksak-check-wailsv3", "soksak-check-tauriv2"]) {
-    mkdirSync(join(failed, app, "services", "rasterprobe-service"), { recursive: true });
-    writeFileSync(join(failed, app, "services", "rasterprobe-service", "endpoint.json"), "{}");
+    mkdirSync(join(failed, app, "services", "sok-rasterprobe"), { recursive: true });
+    writeFileSync(join(failed, app, "services", "sok-rasterprobe", "endpoint.json"), "{}");
     mkdirSync(join(failed, app, "logs"), { recursive: true });
     writeFileSync(join(failed, app, "logs", "host.jsonl"), "{}\n");
   }
@@ -585,7 +585,7 @@ test("each end-to-end target of the Makefile names prerequisites, a window-check
 });
 
 test("the fixture registry of a prebuilt run builds the fake sidecars and the registry with the sok of the bundle and builds no sok", { timeout: 10000 }, () => {
-  const planned = spawnSync("make", ["--no-print-directory", "-n", "fixture-registry", "FIXTURE_SOK=/candidate/sok", "FIXTURE_REGISTRY=/run/fixture-registry"],
+  const planned = spawnSync("make", ["--no-print-directory", "-n", "build-fixture-registry-from-sok", "FIXTURE_SOK=/candidate/sok", "FIXTURE_REGISTRY=/run/fixture-registry"],
     { encoding: "utf8" });
   assert.equal(planned.status, 0, planned.stderr);
   assert.match(planned.stdout, /node scripts\/fixture-registry\.mjs --sok "\/candidate\/sok" --out "\/run\/fixture-registry"/);
@@ -595,7 +595,7 @@ test("the fixture registry of a prebuilt run builds the fake sidecars and the re
   const debug = spawnSync("make", ["--no-print-directory", "-n", "build-fixture-registry"], { encoding: "utf8" });
   assert.equal(debug.status, 0, debug.stderr);
   assert.match(debug.stdout, /build --locked -p soksak-sok/);
-  assert.match(debug.stdout, /fixture-registry FIXTURE_SOK=target\/debug\/sok FIXTURE_REGISTRY=target\/fixture-registry/);
+  assert.match(debug.stdout, /build-fixture-registry-from-sok FIXTURE_SOK=target\/debug\/sok FIXTURE_REGISTRY=target\/fixture-registry/);
 });
 
 test("the plan installs every fixture plugin of e2e/fixtures by default", { timeout: 5000 }, async () => {

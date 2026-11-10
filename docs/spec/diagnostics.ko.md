@@ -112,6 +112,7 @@ Diagnostic capture는 matching용 image source를 메모리에 보존한다. `fr
 | Wails host에서 modal의 WebContent process가 끝난다 | `error native surface webview: web content process terminated: <address>`. Tauri host는 surface와 modal을 포함한 모든 web view의 종료를 `error host page process: <label>: terminated`로 쓴다 |
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated`. 앱 DOM webview가 등록되어 있으면 native 계층은 WebKit 종료 이유(`reason`과 `code`)를 담은 `native.webview.process_ended` 이벤트도 저장한다 |
 | workbench의 결정이나 modal을 기다리는 키를 page나 modal 문서가 끝난 뒤 내줄 수 없다 | page는 `error host key wait: <reason>`, modal은 `error host modal key wait: <reason>` |
+| Tauri host 에서 main page 의 끝이 page 가 진 것에 답할 수 없다: workbench 의 결정을 기다리는 키, 또는 page 가 close 질문을 남긴 window 의 닫기 ([page end](hosts.md#process-lifecycle)) | `error host page end: <reason>` |
 | page 시작이 이전 page가 받지 못한 실패를 담은 `image-detach-ended` event를 버린다([sidecars](sidecars.ko.md)) | 버린 event의 실패로 `error host image detach: <failure>` |
 | host가 mygo 창의 frame 기록 시계를 읽을 수 없다 | `error host frame record clock: <failure>` |
 | 호스트가 창의 first responder를 읽지 못하거나 `window-responder` event를 전달하지 못한다([exposure](exposure.ko.md#키보드-포커스)) | `error host window responder: <failure>` |

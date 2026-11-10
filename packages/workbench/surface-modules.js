@@ -934,7 +934,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
     const compositionDisposed = new Promise((resolve) => { resolveCompositionDisposed = resolve; });
     entry = { slot, host, shadow, context, closing, lifetime, state, stateListener: onState, lastState: null, exposure: null, composition: compositionReady.promise,
       compositionDisposed, resolveCompositionDisposed,
-      mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false,
+      mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false, compositionDeclaring: null,
       surfaceId: surface.surfaceId, pluginId: surface.pluginId, descriptor: surface, mountRegistration: registration,
       setViewport: (next) => { viewport = next; } };
     if (registration) {
@@ -1029,17 +1029,23 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
             entry.compositionDisposed.then(() => false),
           ]);
           if (!listenersReady || entry.disposed) return null;
-          // A place that left the surface out removes its declaration in the host, so the view declares after that place ends.
-          await declarationHolds.get(surface.surfaceId);
+          // A place that left the surface out removes its declaration in the host, so the view declares after every such place
+          // ends; a place that starts while the hold lasts leaves it out again and adds its own hold.
+          while (declarationHolds.has(surface.surfaceId)) await declarationHolds.get(surface.surfaceId);
           if (entry.disposed) return null;
           // The view declares its composition, which resolves the composition wait of the surface. The surface is ready from that
           // declaration, as a module surface is ready after its module mounts: a view has no module whose mount releases it.
+          // The declaration in flight is marked in the same step that sends it, so a place that starts during it waits for its
+          // answer and sends the view instead of leaving it out (compositionState).
+          entry.compositionDeclaring = page.composition.declare(surface.composition);
           try {
-            await page.composition.declare(surface.composition);
+            await entry.compositionDeclaring;
             traceComposition(entry, "declare", "outcome", "accepted");
           } catch (error) {
             traceComposition(entry, "declare", "outcome", "rejected");
             throw error;
+          } finally {
+            entry.compositionDeclaring = null;
           }
           entry.compositionDeclared = true;
           context.status.report("ready");
@@ -1109,6 +1115,37 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
   }
   if (entry.mountRegistration?.state === "failed") throw mountFailureError(surfaceId, entry.mountRegistration);
   await waitForCompositionEntry(entry);
+}
+
+/**
+ * Waits until the composition of a surface that a drawn layout names is answered for a core command (docs/spec/exposure.md#registration):
+ * a view that has declared is answered, and so is a view that has not declared, whose place the drawn layout leaves empty
+ * (docs/spec/native-surfaces.md#view-surfaces); a declaration in flight waits for the host answer, whose refusal is the error. A
+ * surface of another composition declares in its module mount, so it waits for that declaration. A failed mount throws its failure, and
+ * a surface that is not mounted throws.
+ */
+export async function waitSurfaceCompositionAnswered(surfaceId) {
+  let entry = mounted.get(surfaceId);
+  if (!entry || entry.disposed || !entry.ready) {
+    const pending = mounting.get(surfaceId);
+    if (pending?.registered) {
+      const outcome = await pending.registered;
+      if (!outcome.ok) throw outcome.error;
+    }
+    if (placeholders.has(surfaceId)) return;
+    entry = mounted.get(surfaceId);
+    if (!entry || entry.disposed) {
+      const failed = mounting.get(surfaceId);
+      if (failed?.state === "failed") throw mountFailureError(surfaceId, failed);
+      throw new Error(`surface ${surfaceId} is not mounted`);
+    }
+  }
+  if (entry.mountRegistration?.state === "failed") throw mountFailureError(surfaceId, entry.mountRegistration);
+  if (entry.descriptor?.composition?.kind !== "view") {
+    await waitForCompositionEntry(entry);
+    return;
+  }
+  if (entry.compositionDeclaring) await entry.compositionDeclaring;
 }
 
 async function waitForCompositionEntry(entry) {
@@ -1195,6 +1232,21 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
 
 // default: a surface that is not mounted is null.
 export const mountedSurface = (surfaceId) => mounted.get(surfaceId) ?? null;
+
+/**
+ * The composition declaration of a view surface for a place (docs/spec/native-surfaces.md#view-surfaces): {state: "declared"} once
+ * the host accepted it, {state: "declaring", answered} while it is in flight, where answered ends with the host answer, and
+ * {state: "pending"} before it is sent or after it was refused. A place sends a declared view, waits for the answer of a declaring
+ * one, and leaves a pending one out.
+ */
+export function compositionState(surfaceId) {
+  const entry = mounted.get(surfaceId);
+  if (entry && !entry.disposed && entry.compositionDeclared) return { state: "declared" };
+  if (entry && !entry.disposed && entry.compositionDeclaring) {
+    return { state: "declaring", answered: entry.compositionDeclaring.then(() => undefined, () => undefined) };
+  }
+  return { state: "pending" }; // default: an absent, disposed or undeclared view has no declaration in the host.
+}
 
 /**
  * Holds the composition declaration of each surface until place has its reply. A place that leaves a surface out of the host request

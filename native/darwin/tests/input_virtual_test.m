@@ -1,5 +1,6 @@
 // Checks the virtual key window: with another application in front, a window at the back answers as the key window inside the
-// application, hover, a press and a key reach its page as trusted events, and the system key window and the front application stay.
+// application, hover, a press and a key reach its page as trusted events, the system key window stays, and the application does
+// not take the front.
 //
 // The test process is never active. The value of the real activation is a replacement of isActive and the buttons of a person
 // a replacement of pressedMouseButtons, both set before the virtual state replaces them, so these are what it reads as AppKit.
@@ -14,6 +15,7 @@
 #import "webview_input.h"
 #import "window_facts.h"
 #import "window_reveal.h"
+#include <unistd.h>
 
 // Sets the flag when the object that holds it ends.
 @interface EndWatch : NSObject
@@ -100,7 +102,12 @@ static NSDictionary *facts(NSWindow *window) {
     check(value != nil, @"the window has facts");
     return value;
 }
-static NSString *frontName(void) { return NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier ?: @"none"; }
+// Whether this process stayed behind: it is not the frontmost application and the system does not hold it as active. Which other
+// application is in front belongs to the other processes, so the check judges only this process (docs/spec/exposure.md).
+static BOOL stayedBehind(void) {
+    return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier != getpid()
+        && !NSRunningApplication.currentApplication.isActive;
+}
 // The events native.input.virtual that block writes with the given phase and reason.
 static NSUInteger count(void (^block)(void), NSString *reason) {
     NSUInteger found = 0;
@@ -155,7 +162,6 @@ int main(void) { @autoreleasepool {
     check(factsOf(bare) == nil, @"a window without its composition answers no facts");
     [bare release];
 
-    NSString *front = frontName();
     NSWindow *window = makeWindow(0), *cover = makeWindow(0), *second = makeWindow(440);
     WKWebView *view = makePage(window);
     [window orderBack:nil];
@@ -198,7 +204,8 @@ int main(void) { @autoreleasepool {
     check(fabs([fact[@"pointer"][@"x"] doubleValue] - screen.x) < 1, [NSString stringWithFormat:@"the pointer of host.window is the injected position (%@)", fact[@"pointer"]]);
     check(!sp_input_virtual_real_active() && !sp_input_virtual_real_key(window), @"AppKit keeps its answers");
     check(!sp_application_active(), @"sp_application_active reports the system state");
-    check([frontName() isEqual:front], [NSString stringWithFormat:@"the front application stays (%@, %@)", front, frontName()]);
+    check(stayedBehind(), [NSString stringWithFormat:@"the application does not take the front (frontmost pid %d, this pid %d)",
+        NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier, getpid()]);
 
     // A real move does not reach the page; it passes the application as a person's move does.
     evaluate(view, @"events.length=0;null");
@@ -324,6 +331,6 @@ int main(void) { @autoreleasepool {
     [second close];
     [cover close];
     spin(0.2);
-    check([frontName() isEqual:front], @"the front application is the same at the end");
+    check(stayedBehind(), @"the application has not taken the front at the end");
     return failures ? 1 : 0;
 } }

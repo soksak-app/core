@@ -263,6 +263,8 @@ func (s *Shell) applyPlugins(done func(reloaded bool, err error)) {
 			s.appliedWith(false, nil)
 			return
 		}
+		// The new start is decided here, so it waits for the replies of the requests delivered until now and for none delivered later.
+		delivered := s.requests.Mark()
 		s.keep()
 		s.flushTabs(func() {
 			s.events.Flush(func() {
@@ -273,7 +275,7 @@ func (s *Shell) applyPlugins(done func(reloaded bool, err error)) {
 						return
 					}
 					s.answerApplied(true, nil)
-					s.requests.Answered(s.options.Reload)
+					s.requests.Answered(delivered, s.options.Reload)
 				})
 			})
 		})

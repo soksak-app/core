@@ -159,63 +159,82 @@ pub enum ReplyOutcome {
 }
 
 type ReplyCallback = Box<dyn FnOnce(ReplyOutcome) + Send + 'static>;
-type ConnectionCallback = Box<dyn FnOnce() + Send + 'static>;
+type ConnectionEndCallback = Box<dyn FnOnce() + Send + 'static>;
 #[derive(Default)]
 struct ReplyState {
     outcome: Option<ReplyOutcome>,
     callbacks: Vec<ReplyCallback>,
-    /// Whether the endpoint connection of the request ended.
-    connection_ended: bool,
-    /// The work that the end of the connection ends while the response is not complete.
-    connection_callbacks: Vec<ConnectionCallback>,
-    /// The connection that holds this scope and its key there, removed when the response completes.
-    connection: Option<(ConnectionEnd, u64)>,
+    connection: ConnectionEnd,
+    /// The watches of the connection end that this request holds while its response is not complete
+    /// (ReplyScope::after_connection_end); the completion of the response drops them.
+    connection_watches: Vec<ConnectionWatch>,
 }
 
-/// The requests of one endpoint connection whose response is not complete; the end of the connection ends their work
-/// (ReplyScope::after_connection_end).
+/// The end of one endpoint connection, which a request that waits follows: no answer reaches a closed connection, so the
+/// end of the connection ends such a wait (docs/spec/endpoint.md).
 #[derive(Clone, Default)]
-pub(crate) struct ConnectionEnd(Arc<Mutex<ConnectionScopes>>);
+pub struct ConnectionEnd(Arc<Mutex<ConnectionEndState>>);
 
 #[derive(Default)]
-struct ConnectionScopes {
+struct ConnectionEndState {
     ended: bool,
     next: u64,
-    scopes: HashMap<u64, ReplyScope>,
+    watches: HashMap<u64, ConnectionEndCallback>,
 }
 
 impl ConnectionEnd {
-    /// Marks the connection ended and runs the connection-end work of each request whose response is not complete.
-    pub(crate) fn end(&self) {
-        let scopes: Vec<ReplyScope> = {
-            // default: a lock that a panicking thread poisoned still holds the scopes of the connection, which the end
-            // takes once; the panic hook records the panic.
-            let mut held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            held.ended = true;
-            held.scopes.drain().map(|(_, scope)| scope).collect()
-        };
-        for scope in scopes {
-            let callbacks = {
-                // default: a lock that a panicking thread poisoned still holds the state of the reply, which the end
-                // amends; the panic hook records the panic.
-                let mut state = scope.0.lock().unwrap_or_else(PoisonError::into_inner);
-                state.connection_ended = true;
-                std::mem::take(&mut state.connection_callbacks)
-            };
-            for callback in callbacks {
-                callback();
-            }
+    /// Ends the connection and runs its watches. They run under the lock, so a watch that its request drops returns
+    /// after a run of it: an end of waits that ran late would end the waits of a later request. A watch takes no lock of
+    /// this connection.
+    fn end(&self) {
+        // default: a lock that a panicking thread poisoned still holds the watches of the connection, which the end takes
+        // once; the panic hook records the panic.
+        let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        state.ended = true;
+        for (_, on_end) in std::mem::take(&mut state.watches) {
+            on_end();
         }
     }
 
-    fn forget(&self, key: u64) {
-        // default: a lock that a panicking thread poisoned still holds the scopes of the connection, from which this
-        // removes one; the panic hook records the panic.
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .scopes
-            .remove(&key);
+    /// Runs on_end when the connection ends before the returned watch is dropped; on a connection that already ended it
+    /// runs on_end at once.
+    pub fn watch(&self, on_end: impl FnOnce() + Send + 'static) -> ConnectionWatch {
+        {
+            // default: a lock that a panicking thread poisoned still holds the watches of the connection, which the
+            // registration extends; the panic hook records the panic.
+            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if !state.ended {
+                let id = state.next;
+                state.next += 1;
+                state.watches.insert(id, Box::new(on_end));
+                return ConnectionWatch {
+                    end: self.clone(),
+                    id: Some(id),
+                };
+            }
+        }
+        on_end();
+        ConnectionWatch {
+            end: self.clone(),
+            id: None,
+        }
+    }
+}
+
+/// A watch of ConnectionEnd::watch; dropping it ends the watch.
+pub struct ConnectionWatch {
+    end: ConnectionEnd,
+    id: Option<u64>,
+}
+
+impl Drop for ConnectionWatch {
+    fn drop(&mut self) {
+        if let Some(id) = self.id {
+            // default: a lock that a panicking thread poisoned still holds the watches of the connection, from which
+            // this watch is removed; the panic hook records the panic.
+            let mut state = self.end.0.lock().unwrap_or_else(PoisonError::into_inner);
+            state.watches.remove(&id);
+        }
     }
 }
 
@@ -226,7 +245,15 @@ pub struct ReplyScope(Arc<Mutex<ReplyState>>);
 
 impl ReplyScope {
     pub(crate) fn pending() -> (Self, ReplyCompletion) {
-        let scope = Self(Arc::new(Mutex::new(ReplyState::default())));
+        Self::pending_on(ConnectionEnd::default())
+    }
+
+    /// The scope of a request of the connection whose end is connection.
+    pub(crate) fn pending_on(connection: ConnectionEnd) -> (Self, ReplyCompletion) {
+        let scope = Self(Arc::new(Mutex::new(ReplyState {
+            connection,
+            ..ReplyState::default()
+        })));
         let completion = ReplyCompletion {
             scope: scope.clone(),
             finished: false,
@@ -234,57 +261,42 @@ impl ReplyScope {
         (scope, completion)
     }
 
-    /// The same as pending, for a request of connection: the end of that connection reaches the scope.
-    pub(crate) fn pending_on(connection: &ConnectionEnd) -> (Self, ReplyCompletion) {
-        let (scope, completion) = Self::pending();
-        let ended = {
-            // default: a lock that a panicking thread poisoned still holds the scopes of the connection, to which this
-            // adds one; the panic hook records the panic.
-            let mut held = connection.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if held.ended {
-                true
-            } else {
-                let key = held.next;
-                held.next += 1;
-                held.scopes.insert(key, scope.clone());
-                // default: a lock that a panicking thread poisoned still holds the state of the new reply, which this
-                // fills; the panic hook records the panic.
-                scope
-                    .0
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .connection = Some((connection.clone(), key));
-                false
-            }
-        };
-        if ended {
-            // default: a lock that a panicking thread poisoned still holds the state of the new reply, which this
-            // marks; the panic hook records the panic.
-            scope
-                .0
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .connection_ended = true;
-        }
-        (scope, completion)
+    /// The end of the connection of this request.
+    pub fn connection_end(&self) -> ConnectionEnd {
+        // default: a lock that a panicking thread poisoned still holds the state of the reply, from which the connection
+        // end is read; the panic hook records the panic.
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .connection
+            .clone()
     }
 
     /// Runs callback once when the endpoint connection of the request ends before the response completes. A connection
     /// that already ended runs it at once; a complete response drops it. A scope of no connection never runs it.
     pub fn after_connection_end(&self, callback: impl FnOnce() + Send + 'static) {
-        {
+        let connection = {
             // default: a lock that a panicking thread poisoned still holds the state of the reply, which the
-            // registration reads or extends; the panic hook records the panic.
-            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            // registration reads; the panic hook records the panic.
+            let state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
             if state.outcome.is_some() {
                 return;
             }
-            if !state.connection_ended {
-                state.connection_callbacks.push(Box::new(callback));
-                return;
-            }
+            state.connection.clone()
+        };
+        // The watch runs callback at once on a connection that ended, so it is made outside the lock of the reply.
+        let watch = connection.watch(callback);
+        // default: a lock that a panicking thread poisoned still holds the state of the reply, which the registration
+        // extends; the panic hook records the panic.
+        let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if state.outcome.is_none() {
+            state.connection_watches.push(watch);
+            return;
         }
-        callback();
+        // A response that completed meanwhile drops the watch, outside the lock of the reply, since the end of the
+        // connection runs its watches under its own lock.
+        drop(state);
+        drop(watch);
     }
 
     /// Runs once after response completion, outside the scope and connection writer locks.
@@ -318,20 +330,18 @@ impl ReplyCompletion {
             return false;
         }
         self.finished = true;
-        let forgotten;
+        let watches;
         let callbacks = {
             // default: a lock that a panicking thread poisoned still holds the callbacks of the reply, which the completion
             // takes once; the panic hook records the panic.
             let mut state = self.scope.0.lock().unwrap_or_else(PoisonError::into_inner);
             state.outcome = Some(outcome.clone());
             // The work that the end of the connection would end is over with the response.
-            state.connection_callbacks.clear();
-            forgotten = state.connection.take();
+            watches = std::mem::take(&mut state.connection_watches);
             std::mem::take(&mut state.callbacks)
         };
-        if let Some((connection, key)) = forgotten {
-            connection.forget(key);
-        }
+        // The watches go outside the lock of the reply, since the end of the connection runs them under its own lock.
+        drop(watches);
         for callback in callbacks {
             callback(outcome.clone());
         }
@@ -688,7 +698,7 @@ impl Notifier {
                 let mut watches: Vec<Watch> = state
                     .watches
                     .iter()
-                    .filter(|watch| ends(*watch))
+                    .filter(|watch| ends(watch))
                     .cloned()
                     .collect();
                 if watches.is_empty() {
@@ -1489,8 +1499,8 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             },
         );
     let mut reason = String::from("peer closed");
-    // The requests of this connection whose response is not complete; its end ends their work.
-    let ends = ConnectionEnd::default();
+    // The end of this connection, which ends the work of its requests whose response is not complete.
+    let ended = ConnectionEnd::default();
     loop {
         let body = match read_body(&mut connection) {
             Ok(Some(body)) => body,
@@ -1516,7 +1526,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             reason = format!("method {:?} is not declared", request.method);
             break;
         }
-        let (reply, completion) = ReplyScope::pending_on(&ends);
+        let (reply, completion) = ReplyScope::pending_on(ended.clone());
         let answer = Answer {
             writer: writer.clone(),
             id: request.id,
@@ -1559,7 +1569,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         reason = String::from("the endpoint closed");
     }
     log_info("endpoint", format!("connection closed: {reason}"));
-    ends.end();
+    ended.end();
     if let Err(error) = connection.close() {
         log_error("endpoint connection close", error);
     }

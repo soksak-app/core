@@ -275,8 +275,11 @@ type Capturer interface {
 	CaptureOpen(windowNumber int, display bool) error
 	// CaptureStart starts the frame recording in directory.
 	CaptureStart(directory string, frameIdentity bool) error
-	// CaptureWait returns whether the first frame was recorded.
+	// CaptureWait returns whether the first frame was recorded. It waits for that frame or for the end of the stream.
 	CaptureWait() (bool, error)
+	// CaptureEndWaits ends the waits of the current recording for a frame, because the request that waits ended: a waiting
+	// CaptureWait or the boundary wait of CaptureStop returns, and the recording records an error. Any goroutine may call it.
+	CaptureEndWaits()
 	// CaptureStop ends the recording and returns the number of recorded frames.
 	// after is the last display time (ms, on the same clock as the display time) to include in the recording, and 0 means the time of the call.
 	CaptureStop(after float64) (int, error)

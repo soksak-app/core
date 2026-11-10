@@ -21,7 +21,7 @@ test("a preparation holds the declaration of each view it leaves out until the h
   } });
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: (id) => (id === "mounted-view" ? { surfaceId: id, disposed: false } : null),
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
     holdCompositionDeclarations: (ids, place) => {
       const hold = { ids: [...ids], ended: false };
       place.then(() => { hold.ended = true; }, () => { hold.ended = true; });

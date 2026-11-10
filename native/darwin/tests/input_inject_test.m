@@ -309,6 +309,70 @@ static void checkReceipts(void) {
     webviewInputUnregister(view);
 }
 
+// The native library delivers one input.pointer of the application at a time: a request starts in the turn in which the request
+// before it answered, and a request whose window closes before it starts answers in the close turn (docs/spec/exposure.md#named-pointers).
+typedef struct { NSMutableArray<NSString *> *order; NSString *name; BOOL done; sp_input_result result; } SPQueued;
+
+static void queued(void *context, sp_input_result result, const sp_input_held *held) {
+    (void)held;
+    SPQueued *state = context;
+    state->result = result;
+    state->done = YES;
+    [state->order addObject:state->name];
+}
+
+static void checkPointerQueue(void) {
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(300, 200))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [window setReleasedWhenClosed:NO];
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
+    window.contentView = view;
+    [view loadHTMLString:@"<!doctype html><body style='margin:0;height:200px'><script>window.probe={events:[]};"
+        "for (const type of ['pointerdown','pointerup']) addEventListener(type,e=>probe.events.push({type}),true);"
+        "</script>" baseURL:nil];
+    until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+    [window orderBack:nil];
+    check(webviewInputRegister(view), @"the webview of the queue registers for pointer input");
+    pointerOutside(window);
+    NSMutableArray<NSString *> *order = [NSMutableArray array];
+
+    // The press waits for the receipt of a busy document; the request after it, whose button is refused at once, waits for it.
+    [view evaluateJavaScript:@"{const end=Date.now()+700; while(Date.now()<end){}} null" completionHandler:nil];
+    SPQueued press = {order, @"press", NO, SP_INPUT_REJECTED};
+    SPQueued refused = {order, @"refused", NO, SP_INPUT_DELIVERED};
+    SPQueued *pressState = &press, *refusedState = &refused;
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 5, queued, pressState);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 5, 0, 0, 1, 5, queued, refusedState);
+    check(!refused.done, @"a request does not start while the request before it has not answered");
+    until(^BOOL { return pressState->done && refusedState->done; });
+    check([order isEqual:@[@"press", @"refused"]] && press.result == SP_INPUT_DELIVERED && refused.result == SP_INPUT_REJECTED,
+        [NSString stringWithFormat:@"each request answers once, in the order of the requests (%@, %d, %d)", order, press.result, refused.result]);
+    pointerThen(window, view, 50, 50, 3, 5);
+    drain(view);
+
+    // A request of a window that closes while it waits for its turn answers in the close turn, before the request ahead of it.
+    NSWindow *other = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(200, 100))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    [other setReleasedWhenClosed:NO];
+    [other orderBack:nil];
+    [order removeAllObjects];
+    [view evaluateJavaScript:@"{const end=Date.now()+700; while(Date.now()<end){}} null" completionHandler:nil];
+    SPQueued ahead = {order, @"ahead", NO, SP_INPUT_REJECTED};
+    SPQueued closed = {order, @"closed", NO, SP_INPUT_DELIVERED};
+    SPQueued *aheadState = &ahead, *closedState = &closed;
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 5, queued, aheadState);
+    sp_input_pointer_then(other, SP_INPUT_POINTER_MAIN, 20, 20, 0, 0, 0, 0, 1, 5, queued, closedState);
+    [other close];
+    check(closed.done && !ahead.done && closed.result == SP_INPUT_REJECTED,
+        [NSString stringWithFormat:@"a waiting request of a closed window answers in the close turn (done %d, ahead %d, result %d)",
+            closed.done, ahead.done, closed.result]);
+    until(^BOOL { return aheadState->done; });
+    check([order isEqual:@[@"closed", @"ahead"]], [NSString stringWithFormat:@"each request answers once (%@)", order]);
+    pointerThen(window, view, 50, 50, 3, 5);
+    webviewInputUnregister(view);
+    [window close];
+}
+
 // A drag and a release must be delivered to the view that received the press, not to another view under the coordinates.
 @interface SPPointerTarget : NSView
 @property(nonatomic) NSUInteger downs;
@@ -890,6 +954,7 @@ int main(void) { @autoreleasepool {
     [window close];
     checkIndependentWindowKeys();
     checkReceipts();
+    checkPointerQueue();
     checkClickCount();
     checkButtonsReachPage(NO);
     checkButtonsReachPage(YES);

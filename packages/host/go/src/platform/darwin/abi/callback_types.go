@@ -29,7 +29,7 @@ type Callbacks struct {
 	NativeUiRun               func(uintptr)
 	NativeResponderChanged    func(uintptr)
 	NativeFullscreenDone      func(uintptr, int32, *byte)
-	SurfaceHit                func(uintptr, unsafe.Pointer) int32
+	SurfacePressed            func(uintptr, unsafe.Pointer)
 	SurfacePoint              func(uintptr, int32, float64, float64)
 	InputDelivered            func(uintptr, int32, *SpInputHeld)
 	InputActivated            func(uintptr, int32, *byte)

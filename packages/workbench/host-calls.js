@@ -83,7 +83,8 @@ export function callEvent({ name, args, micros, ok, error, code, cids }) {
 
 /**
  * Wraps call, a transport `(name, arg, {cids})`, and counts the calls in progress. settle() finishes when every call sent until then has received a reply, and calls after that are
- * not sent. A call that is not sent ends together with the document, like a call stopped by a reload, so it returns a promise that never settles.
+ * not sent: each one is refused at once with `host call <name>: the page is reloading` and recorded as a refused call, so nothing that the page asks after its end
+ * waits for an answer (docs/spec/native-host.md#page-reload).
  */
 export function settlingCalls(call) {
   let pending = 0;
@@ -95,8 +96,12 @@ export function settlingCalls(call) {
   };
   /** Sends one call; `cids` are the identifiers of the operation that the call carries out, or undefined. */
   function run(cids, name, args) {
-    if (settled) return new Promise(() => {});
     const started = performance.now();
+    if (settled) {
+      const error = new Error(`host call ${name}: the page is reloading`);
+      observed(name, args, started, false, error.message, undefined, cids);
+      return Promise.reject(error);
+    }
     for (const arg of args) {
       const found = nonFinite(arg, "");
       if (found) {

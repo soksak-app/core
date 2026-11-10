@@ -30,7 +30,7 @@ function restoreDataset(root, previous) {
 export async function createSurfaceCompositionController(
   runtimePage,
   declaration,
-  { regions = {}, overlays = {}, input } = {},
+  { regions = {}, overlays = {}, input = {} } = {},
   view = window,
   viewport = null,
 ) {
@@ -45,15 +45,15 @@ export async function createSurfaceCompositionController(
   for (const [name, element] of Object.entries({ ...regions, ...overlays })) {
     inThisDocument(element, name, view);
   }
-  // The input handler of each image region exists from its attachment, so no input event waits for a handler
-  // (docs/spec/native-surfaces.md#image-regions). A creation without input registers its handlers with on("input") of the region.
-  if (input !== undefined) {
-    const images = declaredRegions.filter((region) => region.kind !== "document").map((region) => region.name).sort();
-    const given = input !== null && typeof input === "object" ? Object.keys(input).sort() : null;
-    if (!given || given.length !== images.length || given.some((name, index) => name !== images[index] || typeof input[name] !== "function")) {
-      // default: a declaration without image regions writes the expected names as none.
-      throw new Error(`composition input must exactly match the image regions of the surface declaration (expected ${images.join(", ") || "none"})`);
-    }
+  // The input handler of each image region is given with the creation and exists from its attachment, so no input event waits for
+  // a handler (docs/spec/native-surfaces.md#image-regions). A creation without input gives no handler, which holds only for a
+  // declaration without an image region.
+  // default: a creation without input gives no handler, as the signature writes.
+  const images = declaredRegions.filter((region) => region.kind !== "document").map((region) => region.name).sort();
+  const given = input !== null && typeof input === "object" ? Object.keys(input).sort() : null;
+  if (!given || given.length !== images.length || given.some((name, index) => name !== images[index] || typeof input[name] !== "function")) {
+    // default: a declaration without image regions writes the expected names as none.
+    throw new Error(`composition input must exactly match the image regions of the surface declaration (expected ${images.join(", ") || "none"})`);
   }
 
   const viewportOf = () => typeof viewport === "function" ? viewport() : viewport;
@@ -112,7 +112,7 @@ export async function createSurfaceCompositionController(
       const element = regions[declared.name];
       const handle = declared.kind === "document"
         ? attachRegion(runtimePage.document, element, declared.name, view, { observe: false, report: runtimePage.surfaces.report })
-        : attachImage(runtimePage.image, element, declared.name, declared.sidecar, { report: runtimePage.surfaces.report, input: input?.[declared.name] });
+        : attachImage(runtimePage.image, element, declared.name, declared.sidecar, { report: runtimePage.surfaces.report, input: input[declared.name] });
       internal.set(declared.name, { declared, element, handle });
     }
 

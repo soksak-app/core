@@ -513,13 +513,47 @@ func recorder() (platformCapture, error) {
 	return platformCapture{Capturer: capturer}, nil
 }
 
+// endCaptureWaitsWith ends the waits of the recording for a frame when conn closes while its request runs, because no
+// answer reaches a closed connection (docs/spec/endpoint.md). The returned function ends the watch when the request returns.
+func endCaptureWaitsWith(conn *endpointConn) func() {
+	capture, err := recorder()
+	if conn == nil || err != nil {
+		return func() {}
+	}
+	return watchConnectionEnd(conn, capture.CaptureEndWaits)
+}
+
+// watchConnectionEnd runs onEnd when conn closes before the returned function runs. The returned function returns after the
+// watch ended, so onEnd never runs after it: an end of waits that ran late would end the waits of a later request.
+func watchConnectionEnd(conn *endpointConn, onEnd func()) func() {
+	returned := make(chan struct{})
+	watched := make(chan struct{})
+	routine.Go("capture-connection", func() {
+		defer close(watched)
+		select {
+		case <-conn.done:
+			select {
+			case <-returned:
+			default:
+				onEnd()
+			}
+		case <-returned:
+		}
+	})
+	return func() {
+		close(returned)
+		<-watched
+	}
+}
+
 // diagnosticDrag requests a drag from the page and sends the time of each step, or with native delivers it as native
 // pointer input at the boundary point that the page answers.
 //
 // The page finds the boundary and applies the input at each step. When the window is not in front, the browser
 // slows the clock of the document, so the host sends the time of each step as a diagnostics-tick event. When the page finishes the drag and
 // replies, the host waits until the last layout is displayed and then replies.
-func diagnosticDrag(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
+func diagnosticDrag(e *Endpoint, conn *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {
+	defer endCaptureWaitsWith(conn)()
 	ctx := reply.Context()
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
@@ -900,7 +934,8 @@ func debugCaptureWindows(h *Host) ([]string, error) {
 }
 
 // diagnosticCaptureStart starts the window recording and returns the frame folder.
-func diagnosticCaptureStart(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticCaptureStart(e *Endpoint, conn *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	defer endCaptureWaitsWith(conn)()
 	h, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err
@@ -1097,7 +1132,8 @@ func parseCaptureStartOptions(params json.RawMessage) (captureStartOptions, erro
 
 // diagnosticCaptureStop records up to the display time of after, ends the recording, and returns the frame folder and the number of
 // frames.
-func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+func diagnosticCaptureStop(e *Endpoint, conn *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	defer endCaptureWaitsWith(conn)()
 	_, s, err := diagnosticHost(e, params)
 	if err != nil {
 		return nil, err

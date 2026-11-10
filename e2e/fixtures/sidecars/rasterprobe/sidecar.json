@@ -1,5 +1,5 @@
 {
-  "executable": "bin/rasterprobe-service",
+  "executable": "bin/sok-rasterprobe",
   "displayName": "soksak://sidecar/rasterprobe",
   "protocol": 1,
   "transport": "persistent",

@@ -148,9 +148,6 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 				failures = append(failures, fmt.Sprintf("%s[%d]: got %v, want %v", name, i, arg.Interface(), want))
 			}
 		}
-		if name == "SurfaceHit" {
-			return []reflect.Value{reflect.ValueOf(int32(-51))}
-		}
 		if name == "CoreRootServe" {
 			*args[3].Interface().(*unsafe.Pointer) = allocateBytes()
 			*args[4].Interface().(*uint64) = 4
@@ -207,7 +204,7 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 		"NativeCommitted", "NativeTerminated", "NativeMessage", "FileDropped", "FileDropReleased", "ImageReleased", "ImageChanged",
 		"NativeStartPageReady", "NativeLayoutReady", "NativePresentationDone", "NativeJoinEnded", "NativeSettledPresent", "NativeSettledPresentEnded",
 		"NativeLayoutStarted", "NativeLayoutEnded", "NativeSettledDone", "NotificationEvent", "QuitRequest", "NativeUiRun",
-		"NativeResponderChanged", "NativeFullscreenDone", "SurfaceHit", "SurfacePoint", "InputDelivered", "InputActivated",
+		"NativeResponderChanged", "NativeFullscreenDone", "SurfacePressed", "SurfacePoint", "InputDelivered", "InputActivated",
 		"DocumentChanged", "DocumentMessage", "ViewMessage", "ViewEnded", "ViewResponsiveness", "DocumentStream", "CoreRootServe",
 		"DocumentQueried", "DocumentEvent", "MemoryPressure", "DockNewWindow", "MouseButtonsChanged", "NativeInputSourceAdopted",
 		"WindowObjectsCounted", "PageObjectsCounted", "DeliveredNotifications", "DocumentFrameIdentityDone", "InputReferenceReply", "ProcessExitAnswered",

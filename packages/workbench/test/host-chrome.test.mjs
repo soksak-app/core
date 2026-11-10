@@ -12,7 +12,7 @@ test("a view surface carries its start values in the preparation and a surface w
   const calls = [];
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => ({ surfaceId: "view" }),
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -137,21 +137,26 @@ test("the preparation carries the title bar height and the presented chrome is t
   }
 });
 
-test("native view placement waits for current-page composition readiness", async (t) => {
+// A declaration in flight is a host call that the host answers in its own step, so a placement waits for that answer and sends
+// the view (docs/spec/native-surfaces.md#view-surfaces, placement).
+test("native view placement waits for the answer of a composition declaration in flight", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;
   const calls = [];
   let releaseComposition;
+  let declared = false;
+  const answered = new Promise((resolve) => { releaseComposition = () => { declared = true; resolve(); }; });
   let waitCount = 0;
   let announceWait;
   const waitStarted = new Promise((resolve) => { announceWait = resolve; });
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => ({ surfaceId: "view-ready-barrier" }),
-    waitSurfaceCompositionDeclared: (surfaceId) => {
+    compositionState: (surfaceId) => {
       assert.equal(surfaceId, "view-ready-barrier");
+      if (declared) return { state: "declared" };
       waitCount++;
       announceWait();
-      return new Promise((resolve) => { releaseComposition = resolve; });
+      return { state: "declaring", answered };
     },
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
@@ -177,30 +182,38 @@ test("native view placement waits for current-page composition readiness", async
     await surfaces.theme({ scheme: "dark", tokens: {} });
     const placement = surfaces.place(record);
     await waitStarted;
-    assert.equal(waitCount, 1, "the view composition readiness barrier was not observed");
+    assert.equal(waitCount, 1, "the declaration in flight was not observed");
     assert.equal(calls.some(({ name }) => name === "syncSurfaces"), false,
-      "native view placement began before the current page declared its composition");
+      "native view placement began before the host answered the declaration in flight");
     releaseComposition();
-    await placement;
-    assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 1);
+    assert.deepEqual(await placement, { placements: [], deferred: [] });
+    assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").map(({ request }) => request.surfaces.map(({ id }) => id)),
+      [["view-ready-barrier"]], "the placement did not send the view after its declaration answered");
   } finally {
     dom.window.close();
   }
 });
 
-test("native view placement rejects when its surface is disposed before composition", async (t) => {
+// A declaration that the host refused, or a surface disposed before it declared, leaves no declaration in the host: the placement
+// defers that view and sends the rest of the window (docs/spec/native-surfaces.md#view-surfaces, placement).
+test("native view placement defers a view whose declaration was refused when its surface was disposed", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;
   const calls = [];
+  let refused = false;
   let rejectComposition;
+  const answered = new Promise((resolve) => { rejectComposition = () => { refused = true; resolve(); }; });
   let announceWait;
   const waitStarted = new Promise((resolve) => { announceWait = resolve; });
+  const holds = [];
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => ({ surfaceId: "view-disposed" }),
-    waitSurfaceCompositionDeclared: () => {
+    compositionState: () => {
+      if (refused) return { state: "pending" };
       announceWait();
-      return new Promise((resolve, reject) => { rejectComposition = reject; });
+      return { state: "declaring", answered };
     },
+    holdCompositionDeclarations: (ids) => { holds.push([...ids]); },
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -225,34 +238,39 @@ test("native view placement rejects when its surface is disposed before composit
     await surfaces.theme({ scheme: "dark", tokens: {} });
     const placement = surfaces.place(record);
     await waitStarted;
-    rejectComposition(new Error("surface view-disposed was disposed before declaring composition"));
-    await assert.rejects(placement, /disposed before declaring composition/);
-    assert.equal(calls.some(({ name }) => name === "syncSurfaces"), false,
-      "native placement continued after its surface was disposed");
+    rejectComposition();
+    assert.deepEqual(await placement, { placements: [], deferred: ["view-disposed"] },
+      "the placement did not defer the view whose declaration was refused");
+    assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").map(({ request }) => request.surfaces.map(({ id }) => id)),
+      [[]], "the placement sent a view that has no declaration");
+    assert.deepEqual(holds, [["view-disposed"]]);
+    assert.equal(surfaces.waitsForDeclaration("view-disposed"), true);
   } finally {
     dom.window.close();
   }
 });
 
+// A preparation defers a view that has no mount yet; the drawn commit follows the plane draw that mounts it, and a declaration
+// that is in flight then is answered before the commit sends the view (docs/spec/native-surfaces.md#view-surfaces).
 test("an initial placement defers an unmounted view until its drawn commit", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;
   const calls = [];
   const order = [];
   let mounted = { surfaceId: "view-mount-order", disposed: true };
-  let drawnCallStarted = false;
+  let declared = false;
   let announceWait;
   let releaseRegistration;
   const waitStarted = new Promise((resolve) => { announceWait = resolve; });
   const registrationReady = new Promise((resolve) => { releaseRegistration = resolve; });
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: (surfaceId) => surfaceId === "view-mount-order" ? mounted : null,
-    waitSurfaceCompositionDeclared: async (surfaceId) => {
+    compositionState: (surfaceId) => {
+      assert.equal(mounted.disposed, false, `the composition of ${surfaceId} was read before its replacement was mounted`);
+      if (declared) return { state: "declared" };
       order.push(`composition:${surfaceId}`);
       announceWait();
-      if (mounted.disposed && !drawnCallStarted) throw new Error(`surface ${surfaceId} has no current composition`);
-      await registrationReady;
-    assert.equal(mounted.disposed, false, `composition wait completed before ${surfaceId} replacement was mounted`);
+      return { state: "declaring", answered: registrationReady.then(() => { declared = true; }) };
     },
     holdCompositionDeclarations: (surfaceIds) => { order.push(`hold:${surfaceIds.join(",")}`); },
   } });
@@ -282,7 +300,6 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
   } } });
   const { surfaces } = await import("../host.js?initial-view-mount-order");
   const record = (drawn) => {
-    if (drawn) drawnCallStarted = true;
     return {
       surfaces: [{ id: "view-mount-order", dim: false, visible: true,
         surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
@@ -300,11 +317,12 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
     assert.equal(order.includes("composition:view-mount-order"), false,
       "pre-draw placement waited for a replacement mount that drawing has not started");
 
+    // The plane draw mounts the view, whose declaration is in flight when the drawn commit starts.
+    mounted = { surfaceId: "view-mount-order", disposed: false };
     const secondPending = surfaces.place(record(true));
     await waitStarted;
     assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 1,
-      "the drawn view was sent while its mount registration was pending");
-    mounted = { surfaceId: "view-mount-order", disposed: false };
+      "the drawn view was sent while its declaration was in flight");
     releaseRegistration();
     const second = await secondPending;
     assert.deepEqual(second, {
@@ -325,7 +343,7 @@ test("a release during an open preparation presents that preparation as settled 
   let ticket = 0;
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => null,
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -366,7 +384,7 @@ test("a cancelled preparation sends its ticket once and the next equal request i
   let ticket = 0;
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => null,
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -410,7 +428,7 @@ test("a handed-over preparation sends no cancel and only a failed or cancelled n
   let ticket = 0;
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: () => null,
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -472,7 +490,7 @@ test("a view preparation notifies its prepared listeners, presents each ticket o
   let fail = null;
   t.mock.module("../surface-modules.js", { namedExports: {
     mountedSurface: (surfaceId) => ({ surfaceId }),
-    waitSurfaceCompositionDeclared: async () => {},
+    compositionState: () => ({ state: "declared" }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},

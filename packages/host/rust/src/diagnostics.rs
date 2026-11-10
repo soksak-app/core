@@ -112,7 +112,22 @@ pub(crate) fn call(
     window: &Window,
     method: &str,
     params: Map<String, Value>,
+    reply: Option<&crate::endpoint::ReplyScope>,
 ) -> Result<Value, Failure> {
+    // The waits of a recording for a frame end when the connection of the request ends, because no answer reaches a closed
+    // connection (docs/spec/endpoint.md).
+    let _connection = match method {
+        "diagnostics.drag" | "diagnostics.capture.start" | "diagnostics.capture.stop" => reply
+            .and_then(|reply| {
+                let platform = platform::current().ok()?;
+                Some(
+                    reply
+                        .connection_end()
+                        .watch(move || platform.capture_end_waits()),
+                )
+            }),
+        _ => None,
+    };
     match method {
         "diagnostics.fixture" => fixture(host, window, params),
         "diagnostics.drag" => drag(host, window, params),

@@ -72,7 +72,7 @@
     "core-events.json",
     "start.mjs",
     "test-app.mjs",
-    "soksak-test-app.mjs",
+    "sok-test-app.mjs",
     "view-content.mjs",
     "view-frame-geometry.mjs",
     "view-process-footprint.mjs",
@@ -88,7 +88,7 @@
   ],
   "bin": {
     "sok-repeat": "./repeat.mjs",
-    "soksak-test-app": "./soksak-test-app.mjs"
+    "sok-test-app": "./sok-test-app.mjs"
   },
   "scripts": {
     "test": "node --test --experimental-test-module-mocks test/*.test.mjs test/platform/darwin/system/*.test.mjs"

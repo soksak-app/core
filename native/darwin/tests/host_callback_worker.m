@@ -46,7 +46,7 @@ int sp_test_worker_probe(uintptr_t token, uint64_t *record) {
         hostRunOnWorker(^{
             state->worker = sp_test_worker_thread();
             if (pthread_main_np()) { result = 2; return; }
-            if (sp_host_callback_surface_hit(token, state) != -51) { result = 3; return; }
+            sp_host_callback_surface_pressed(token, state);
             sp_host_callback_native_message(token, state->borrowed);
             void *completion = Block_copy(^(const char *failure) {
                 state->completion = sp_test_worker_thread();

@@ -480,9 +480,13 @@ type Surfaces struct {
 	// responderObservation is the first responder observation of the window, which close ends. It is read and changed only on
 	// the UI thread.
 	responderObservation unsafe.Pointer
-	// readied is the channel that waits for the next WindowReady. Host.mu protects it.
-	readied []chan struct{}
-	monitor uintptr
+	// readied holds a channel for each reload that waits for the new page: WindowReady sends nil, and the close of the window and a
+	// start of the new page that fails send the error that ends the reload. Host.mu protects it.
+	readied []chan error
+	// closeAsked tells that the window asked its page with project-close-request and the page has answered neither windowClose nor
+	// windowCloseKept, so the end of the page answers it (endPage). Host.mu protects it.
+	closeAsked bool
+	monitor    uintptr
 
 	// Protects the modal state and the theme between host calls.
 	// Views are handled only on the main thread, so no lock is needed for them, and a path that holds this lock does not wait
@@ -1620,6 +1624,42 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 		return err
 	}
 	return <-done
+}
+
+// endPage ends the generation of the main page of s in the turn of the reload request or of the end of the process of the page
+// (docs/spec/hosts.md#process-lifecycle): it answers what the page owed (answerPage), and the keys that waited for the decision of
+// the workbench go.
+func (h *Host) endPage(s *Surfaces) {
+	h.answerPage(s)
+	s.mainPageEnded()
+}
+
+// answerPage answers what the main page of s owed when its generation ends. The window is no longer ready, every request to the page
+// and to the surface documents of the window ends with 1003 and later requests to those documents are refused until the next page
+// starts, and a close question that the page left closes the window as a window whose page is not ready closes. An end that finds
+// nothing owed changes nothing.
+func (h *Host) answerPage(s *Surfaces) {
+	h.mu.Lock()
+	s.ready = false
+	asked := s.closeAsked
+	s.closeAsked = false
+	h.mu.Unlock()
+	s.pageReloading.Store(true)
+	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
+	if asked {
+		s.window.Close()
+	}
+}
+
+// endReloads ends each reload of s that waits for the new page with err, which is nil for the ready of that page.
+func (h *Host) endReloads(s *Surfaces, err error) {
+	h.mu.Lock()
+	readied := s.readied
+	s.readied = nil
+	h.mu.Unlock()
+	for _, ready := range readied {
+		ready <- err
+	}
 }
 
 // mainPageEnded gives the keys of the window that waited for the decision of its workbench, which ended with its page or its

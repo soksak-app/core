@@ -17,7 +17,7 @@ test("a cancelled layout records only the phases that the event catalog declares
     document: null, showError: () => {}, setVerify: () => {}, log: () => {},
     surfaces: { waitPresented: () => Promise.resolve() }, plane: { clear: () => {} },
     compositor: { publishAhead: () => Promise.resolve(), publish: () => {}, cancelPrepared: () => Promise.resolve() },
-    waitSurfaceCompositionDeclared: () => Promise.resolve(),
+    waitSurfaceCompositionAnswered: () => Promise.resolve(),
   });
   armLayoutFault();
   page.onLayout({}, () => {}, [], 0, () => true);

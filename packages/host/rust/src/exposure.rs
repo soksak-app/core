@@ -991,10 +991,11 @@ fn request_surface_of(
     })
 }
 
-/// Sends the reload request to a ready page and ends the requests to its surface documents. Such a request would keep
-/// the page from reloading: the page waits for its reply, and the document needs answers from the page, which sends no
-/// call after the reload request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page
-/// that receives the failure already sends no report of it.
+/// Sends the reload request to a ready page, which ends the page, and ends the requests to the page and to its surface
+/// documents (`end_page_requests`). Such a request would keep the page from reloading: the page waits for the replies of its
+/// calls, and a call that waits for an answer of the page gets none, because the page sends no call after the reload
+/// request (docs/spec/native-host.md#page-reload). The requests end after the event, so a page that receives the failure
+/// already sends no report of it.
 fn ask_page_to_reload(
     relay: &Relay,
     reloading: &AtomicBool,
@@ -1002,10 +1003,25 @@ fn ask_page_to_reload(
     emit: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     emit()?;
+    end_page_requests(relay, reloading, main);
+    Ok(())
+}
+
+/// Ends every request to the main page of the window main and to its surface documents with 1003, and refuses the later
+/// requests to those documents until the next page starts (docs/spec/hosts.md#process-lifecycle).
+fn end_page_requests(relay: &Relay, reloading: &AtomicBool, main: &str) {
     reloading.store(true, Ordering::SeqCst);
     let surfaces = format!("surface-{main}-");
-    relay.abandon_matching(|target| target.starts_with(&surfaces));
-    Ok(())
+    relay.abandon_matching(|target| target == main || target.starts_with(&surfaces));
+}
+
+/// Ends the requests to the main page of the window and to its surface documents when the process of the page ended.
+pub(crate) fn page_ended(window: &Window, data: &WindowData) {
+    end_page_requests(
+        &window.state::<Exposure>().relay,
+        &data.page_reloading,
+        window.label(),
+    );
 }
 
 /// Records that a new main page started, which accepts requests to surface documents again.
@@ -1215,8 +1231,10 @@ mod surface_closed_tests {
     }
 }
 
+/// Records that a new main page started: the requests of the page before it end (`page_ended`), and the window accepts
+/// requests to its surface documents again.
 pub(crate) fn page_reloaded(window: &Window, data: &WindowData) {
-    window.state::<Exposure>().relay.abandon(window.label());
+    page_ended(window, data);
     end_page_reload(&data.page_reloading);
     windows_changed(window.app_handle());
 }
@@ -2154,15 +2172,16 @@ fn reload(
         )
     };
     let (tx, rx) = mpsc::channel();
-    data.readied
-        .lock()
+    {
         // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
         // the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .push(tx);
-    // An end that drained the senders before this one was added is read here.
-    if let Some(ended) = data.ends.since(mark) {
-        return Err(end(&ended));
+        let mut readied = data.readied.lock().unwrap_or_else(PoisonError::into_inner);
+        // An end records itself before it drains the senders under this lock, so an end that came after the mark and
+        // before this wait is read here, and the reload that it ended adds no wait that a later ready would answer.
+        if let Some(ended) = data.ends.since(mark) {
+            return Err(end(&ended));
+        }
+        readied.push(tx);
     }
     if ready {
         // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded it,
@@ -2177,6 +2196,9 @@ fn reload(
             },
         )
         .map_err(internal)?;
+        // The event ended the page, so the rest that it owed ends in the same turn.
+        let data = window_data(window).map_err(internal)?;
+        crate::windows::page_left(window, &data).map_err(internal)?;
     } else {
         let target = window.clone();
         on_main(window, move || {
@@ -2185,10 +2207,14 @@ fn reload(
         .map_err(internal)?;
     }
     // The reload has no time limit: the ready page ends it, and so do the close of the window and the end of its page
-    // process (WindowData::end_waits), each with 1003 that names the end and the host calls that still run.
+    // process (WindowData::end_waits), each with 1003 that names the end and the host calls that still run, and a start of
+    // the new page that fails, with 1003 and its error.
     match rx.recv() {
         Ok(Ok(())) => Ok(Value::Null),
-        Ok(Err(ended)) => Err(end(&ended)),
+        Ok(Err(crate::windows::ReloadEnd::Ended(ended))) => Err(end(&ended)),
+        Ok(Err(crate::windows::ReloadEnd::NotStarted(error))) => {
+            Err(Failure::new(MISSING_DOCUMENT, error))
+        }
         // default: the senders of the readiness go with the records of a closed window.
         Err(_) => Err(end("the window closed")),
     }
@@ -2890,9 +2916,9 @@ impl Host {
                 exposure_list(&params, || self.page(window, method, page_params, reply))
             }
             #[cfg(feature = "diagnostics")]
-            _ if method.starts_with("diagnostics.") => {
-                raw(&crate::diagnostics::call(self, window, method, params)?)
-            }
+            _ if method.starts_with("diagnostics.") => raw(&crate::diagnostics::call(
+                self, window, method, params, reply,
+            )?),
             _ => {
                 let name = params
                     .get("name")

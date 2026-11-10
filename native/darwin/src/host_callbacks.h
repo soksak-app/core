@@ -34,7 +34,7 @@
     X(V, void, native_ui_run, (uintptr_t context), (context)) \
     X(V, void, native_responder_changed, (uintptr_t context), (context)) \
     X(V, void, native_fullscreen_done, (uintptr_t context, int result, char *message), (context, result, message)) \
-    X(R, int, surface_hit, (uintptr_t owner, void *view), (owner, view)) \
+    X(V, void, surface_pressed, (uintptr_t owner, void *view), (owner, view)) \
     X(V, void, surface_point, (uintptr_t owner, int phase, double x, double y), (owner, phase, x, y)) \
     X(V, void, input_delivered, (uintptr_t context, int result, sp_input_held *held), (context, result, held)) \
     X(V, void, input_activated, (uintptr_t context, int result, char *frontmost), (context, result, frontmost)) \

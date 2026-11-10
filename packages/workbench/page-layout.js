@@ -110,11 +110,11 @@ export async function placementLast() {
  *   compositor { publishAhead, publish, cancelPrepared }(compositor.js)
  *   textSize   frame scale of the current setting
  *   rendered   promise of the presentation that the last render committed (onRender of index.html)
- *   waitSurfaceCompositionDeclared  waits for the composition declaration of the surface modules (surface-modules.js)
+ *   waitSurfaceCompositionAnswered  waits until the composition of a surface is answered for a command (surface-modules.js)
  *   surfaceUnloaded  whether the memory saver holds the surface unloaded (memory-saver.js), so that no mount declares its composition
  */
 export function createPageLayout({
-  document, showError, withdrawError, setVerify, log, surfaces, plane, compositor, textSize, rendered, waitSurfaceCompositionDeclared, surfaceUnloaded,
+  document, showError, withdrawError, setVerify, log, surfaces, plane, compositor, textSize, rendered, waitSurfaceCompositionAnswered, surfaceUnloaded,
 }) {
   let failure = null;
   /* Number of layouts replaced by a newer layout before they were presented. It is written as one line to the application log
@@ -263,7 +263,9 @@ export function createPageLayout({
       const ids = [...document.querySelectorAll("[data-native-surface-id]")]
         .map((slot) => slot.dataset.nativeSurfaceId)
         .filter((id) => !surfaceUnloaded(id));
-      await Promise.all(ids.map((id) => waitSurfaceCompositionDeclared(id)));
+      // A view that has not declared its composition has an empty place in the drawn layout, so no answer waits for its declaration
+      // (docs/spec/exposure.md#registration); a declaration in flight is answered by the host in its own step.
+      await Promise.all(ids.map((id) => waitSurfaceCompositionAnswered(id)));
     },
   };
 }

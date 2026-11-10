@@ -19,6 +19,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // terminationChild is the environment variable that tells that the process is a child process.
@@ -150,14 +151,14 @@ func quitAfterTheStart(directory string) {
 }
 
 // quitFramework is the framework of the start of the host without an application. A step of the main thread is a native call that
-// needs the application, so it does not run. It names the application of the Wails host, because the start takes the identifier
-// of the application of its framework (docs/spec/projects.md#persistence).
+// needs the application, so it does not run. It names the application of the host of the linked sok command, because the start
+// takes the identifier of the application of its framework (docs/spec/projects.md#persistence).
 type quitFramework struct {
 	host.Framework
 	quit chan struct{}
 }
 
-func (quitFramework) ApplicationName() string { return "wailsv3" }
+func (quitFramework) ApplicationName() string { return sok.Application }
 func (quitFramework) MainPage() bool          { return true }
 func (quitFramework) DisplayName() string     { return "Test" }
 func (quitFramework) Step(func())             {}

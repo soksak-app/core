@@ -345,6 +345,7 @@ NATIVE_TESTS = observe_test \
   press_tracking_test \
   surface_container_test \
   surface_layout_observe_test \
+  surface_monitor_test \
   ui_queue_test \
   main_thread_test \
   signals_test \

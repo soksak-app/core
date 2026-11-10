@@ -4,8 +4,8 @@
 // tier (`verify`, `test-app:activation`, `test-app:real`, `test-app:person`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
 // registry of the core fixtures (`make build-fixture-registry`, target/fixture-registry; a candidate or prebuilt run builds it from its
-// checkout into the root with `make fixture-registry` and the `sok` of an application artifact under test) into the configuration of each application
-// with the `sok` of that application, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
+// checkout into the root with `make build-fixture-registry-from-sok` and the `sok` of an application artifact under test) into the
+// configuration of each application with the `sok` of that application, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
 // applications through the quit item of the application menu and the last one through the quit key, and fails when an application
 // ends with another status than 0 or when a process of the root or of an application artifact remains. The application artifacts,
 // the quit, the lock release wait, the native end-to-end tests, the process list and the crash reports are platform operations
@@ -96,7 +96,7 @@ export async function e2ePlan({ root, configRoot, script, native, whenIdle, cand
   return [
     { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'create-test-certificates'], env },
     ...(inputs ? [{ name: 'fixture registry', phase: 'prepare', kind: 'run', env,
-      argv: ['make', 'fixture-registry', `FIXTURE_SOK=${executables.get(APPS[0]).sok}`, `FIXTURE_REGISTRY=${registryFolder}`] }] : []),
+      argv: ['make', 'build-fixture-registry-from-sok', `FIXTURE_SOK=${executables.get(APPS[0]).sok}`, `FIXTURE_REGISTRY=${registryFolder}`] }] : []),
     ...APPS.flatMap((app) => {
       const { sok } = executables.get(app);
       const config = ['--config-dir', configDir(configRoot, app)];

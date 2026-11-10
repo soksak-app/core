@@ -3,14 +3,14 @@
 [workspace]
 
 [package]
-name = "rasterprobe-service"
+name = "sok-rasterprobe"
 version = "0.0.40"
 edition = "2024"
 publish = false
 license = "MIT"
 
 [[bin]]
-name = "rasterprobe-service"
+name = "sok-rasterprobe"
 path = "src/main.rs"
 
 [dependencies]

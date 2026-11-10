@@ -459,6 +459,8 @@ pub fn web_content_process_terminated(webview: &Webview) {
         // The requests that wait for the page end: a reload that waits for its ready page and a presented wait.
         data.end_waits("the page process ended");
         log_failure("page process", documents::main_page_process_ended(&window));
+        // The workbench ended with the process of its page, so what the page owed ends now.
+        log_failure("page end", windows::end_page(&window));
         log_failure("key wait", crate::surfaces::keys_page_ended(&window));
         log_failure(
             "surface layout cancel",

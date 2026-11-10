@@ -540,6 +540,9 @@ impl Platform for Windows {
         unsupported::capture_has_stream()
     }
     #[cfg(feature = "diagnostics")]
+    // This platform records no window, so no capture wait runs.
+    fn capture_end_waits(&self) {}
+    #[cfg(feature = "diagnostics")]
     fn document_frame_identity_start(
         &self,
         _document: Handle,

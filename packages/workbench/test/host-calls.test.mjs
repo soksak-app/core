@@ -3,9 +3,14 @@ import test from "node:test";
 
 import { callEvent, observeHostCalls, settlingCalls } from "../host-calls.js";
 
-test("settling waits for the calls already sent and sends no later call", async () => {
+// A reloading page sends no call after the reload request, and each such call ends at once with its refusal instead of
+// staying pending: nothing that the page asks after its end is swallowed without an answer (docs/spec/native-host.md#page-reload).
+// contract: workbench.page-reload.refuses-later-calls
+test("settling waits for the calls already sent and refuses every later call at once", { timeout: 1000 }, async () => {
   const sent = [];
   const answers = [];
+  const seen = [];
+  observeHostCalls((call) => seen.push(call));
   const calls = settlingCalls((name) => {
     sent.push(name);
     return new Promise((resolve, reject) => answers.push({ resolve, reject }));
@@ -15,9 +20,7 @@ test("settling waits for the calls already sent and sends no later call", async 
   await Promise.resolve();
   let settled = false;
   calls.settle().then(() => { settled = true; });
-  const later = calls.call("later");
-  let laterEnded = false;
-  later.then(() => { laterEnded = true; }, () => { laterEnded = true; });
+  await assert.rejects(calls.call("later"), { message: "host call later: the page is reloading" });
   answers[0].resolve("one");
   assert.equal(await first, "one");
   await Promise.resolve();
@@ -25,9 +28,11 @@ test("settling waits for the calls already sent and sends no later call", async 
   answers[1].reject(new Error("refused"));
   await assert.rejects(second, /refused/);
   await calls.settle();
+  observeHostCalls(null);
   assert.equal(settled, true);
   assert.deepEqual(sent, ["first", "second"], "a call after settling was sent");
-  assert.equal(laterEnded, false, "a call after settling ended");
+  assert.deepEqual(seen.filter(({ name }) => name === "later").map(({ ok, error }) => ({ ok, error })),
+    [{ ok: false, error: "host call later: the page is reloading" }], "the refused call was not recorded as refused");
 });
 
 test("settling without pending calls ends at once", async () => {

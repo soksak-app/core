@@ -3,6 +3,7 @@
 // (docs/spec/projects.md#tab-origin).
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { memoryPlacement } from "../memory-placement.js";
 import { forgetTabsLeft, recordOrigin, tabOrigin } from "../tab-reports.js";
 
@@ -32,4 +33,19 @@ test("a placement takes the seat of an unloaded surface out of its record", { ti
   const { surfaces } = await memoryPlacement(record, [shown, seat], { ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries });
   assert.deepEqual(surfaces, [shown]);
   assert.deepEqual(record.surfaces, [shown]);
+});
+
+// The start of the page settles the readiness of the memory saver on every path: each top-level wait of the start after the
+// readiness promise exists runs inside the block whose failure rejects it, so a start step that fails leaves no drawn placement
+// waiting for a readiness that never comes.
+// contract: workbench.page-start.memory-readiness-settles
+test("every wait of the page start after the memory readiness exists can reject that readiness", () => {
+  const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const lines = page.split("\n");
+  const created = lines.findIndex((line) => line.startsWith("const memoryPlacementReady = new Promise"));
+  assert.ok(created >= 0, "the page creates no memory readiness");
+  const unguarded = lines.slice(created).map((line, index) => ({ line, number: created + index + 1 }))
+    .filter(({ line }) => /^(?:if \()?await\b|^[A-Za-z_$][\w$]* = await\b|^(?:const|let) [^=]+= await\b/.test(line));
+  assert.deepEqual(unguarded.map(({ number, line }) => `${number}: ${line}`), [],
+    "a top-level wait of the start runs outside the block that rejects the memory readiness");
 });

@@ -22,6 +22,14 @@ use crate::source_origins::{ViewSourceOrigins, view_source_origin_event};
 use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
+/// The end of a reload that its new page did not report ready to: an end of the window or of its main page process, named
+/// by the end (`WindowData::end_waits`), or a start of the new page that failed, with its error.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ReloadEnd {
+    Ended(String),
+    NotStarted(String),
+}
+
 /// The state of one window.
 #[derive(Default)]
 pub struct WindowData {
@@ -44,11 +52,14 @@ pub struct WindowData {
     /// The windows that received a close request that was not blocked. These windows disappear from the runtime before
     /// Destroyed, so they are not put in the list.
     pub closing: AtomicBool,
-    /// The requests that wait for the next page to be ready. The close of the window and the end of its page process end
-    /// them with the text of that end.
-    pub readied: Mutex<Vec<std::sync::mpsc::Sender<Result<(), String>>>>,
+    /// The reloads that wait for the next page: the ready of the page sends `Ok`, and the close of the window, the end of
+    /// its page process and a start of the new page that fails send the end of the reload.
+    pub(crate) readied: Mutex<Vec<mpsc::Sender<Result<(), ReloadEnd>>>>,
     /// The ends of the window and of its main page process, which end the requests that wait in the window.
     pub(crate) ends: WindowEnds,
+    /// Set when the window asked its page with `project-close-request` and the page has answered neither `windowClose` nor
+    /// `windowCloseKept`, so the end of the page answers it (`answer_close_question`).
+    pub close_asked: AtomicBool,
     /// The items (surface, kind, name) that surface pages registered. When the main page is reloaded, the new page is
     /// notified again.
     pub registrations: Mutex<Vec<(String, String, String)>>,
@@ -121,21 +132,7 @@ impl WindowData {
         self.overlay.wake_paint_waits();
         self.images.wake_waits();
         crate::surfaces::end_settled_waits(&self.running);
-        for ready in self
-            .readied
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the readiness senders, which the end drains; the
-            // panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .drain(..)
-        {
-            if ready.send(Err(end.to_string())).is_err() {
-                crate::application_log::log_info(
-                    "window",
-                    "the end of a readiness wait arrived after its request ended",
-                );
-            }
-        }
+        end_reloads(self, Err(ReloadEnd::Ended(end.to_string())));
     }
 }
 
@@ -888,6 +885,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             if ready { "close_requested" } else { "closed" },
         );
         if ready {
+            closing_context.close_asked.store(true, Ordering::SeqCst);
             if let Err(error) = emit_window(&closing_host, "project-close-request", ()) {
                 log_error("project-close-request", error);
             }
@@ -1566,6 +1564,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
             log_error("image detach", failure);
         }
         crate::exposure::page_reloaded(window, &data);
+        answer_close_question(window, &data)?;
         reload_surface_documents(window)?;
         crate::modals::discard(window, &data.overlay)?;
         Ok(())
@@ -1621,36 +1620,75 @@ pub fn window_ready(window: &Window) -> Result<(), String> {
     responder_workbench_ready(window);
     crate::exposure::replay_registrations(window);
     crate::exposure::windows_changed(window.app_handle());
-    for ready in data
-        .readied
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the readiness senders, which the readiness drains;
-        // the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .drain(..)
-    {
-        if ready.send(Ok(())).is_err() {
+    end_reloads(&data, Ok(()));
+    crate::exposure::rewatch(window);
+    crate::deep_link::ready(window.app_handle());
+    emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
+}
+
+/// Ends each reload of the window that waits for its new page with result: `Ok` for the ready of that page, and the error
+/// that ends the reload otherwise.
+pub(crate) fn end_reloads(data: &WindowData, result: Result<(), ReloadEnd>) {
+    let readied = std::mem::take(
+        &mut *data
+            .readied
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the reloads, which this end drains; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner),
+    );
+    for ready in readied {
+        if ready.send(result.clone()).is_err() {
             crate::application_log::log_info(
                 "window",
                 "window readiness arrived after its request ended",
             );
         }
     }
-    crate::exposure::rewatch(window);
-    crate::deep_link::ready(window.app_handle());
-    emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
+}
+
+/// Ends the generation of the main page of the window in the turn of the end of the process of its page
+/// (docs/spec/hosts.md#process-lifecycle): every request to the page and to its surface documents ends with 1003 and later
+/// requests to those documents are refused until the next page starts, and the rest that the page owed ends (`page_left`).
+pub(crate) fn end_page(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    crate::exposure::page_ended(window, &data);
+    page_left(window, &data)
+}
+
+/// Ends what a page that ended owed besides its requests: the window is no longer ready, the keys that waited for the
+/// decision of its workbench go, and the close question that it left is answered (`answer_close_question`). An end that finds
+/// nothing owed changes nothing.
+pub(crate) fn page_left(window: &Window, data: &WindowData) -> Result<(), String> {
+    data.ready.store(false, Ordering::Relaxed);
+    let keys = crate::surfaces::keys_page_ended(window);
+    answer_close_question(window, data)?;
+    keys
+}
+
+/// Answers a close question that the window asked its page and that the page left unanswered: the window closes as a window
+/// whose page is not ready closes, because a page that ended keeps no tab, so a quit that asked the window continues.
+fn answer_close_question(window: &Window, data: &WindowData) -> Result<(), String> {
+    if data.close_asked.swap(false, Ordering::SeqCst) {
+        window.close().map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 /// Closes a window.
 pub fn window_close(window: &Window) -> Result<(), String> {
-    window_data(window)?.ready.store(false, Ordering::Relaxed);
+    let data = window_data(window)?;
+    data.ready.store(false, Ordering::Relaxed);
+    data.close_asked.store(false, Ordering::SeqCst);
     window.close().map_err(|e| e.to_string())
 }
 
 /// Records that the page kept a modified tab when the window was asked to close, which ends a quit that asked the
 /// window (docs/spec/hosts.md#process-lifecycle).
 pub fn window_close_kept(window: &Window) -> Result<(), String> {
-    window_data(window)?;
+    window_data(window)?
+        .close_asked
+        .store(false, Ordering::SeqCst);
     window.state::<Windows>().quit.cancel();
     *window
         .state::<Windows>()
@@ -1690,6 +1728,9 @@ pub(crate) fn quit(app: &AppHandle, api: crate::ExitRequestApi) {
     api.prevent_exit();
     for (label, window) in app.windows() {
         let result = if waiting.contains(&label) {
+            if let Ok(data) = window_data(&window) {
+                data.close_asked.store(true, Ordering::SeqCst);
+            }
             emit_window(&window, "project-close-request", ())
         } else {
             window.close()
