@@ -68,7 +68,7 @@ fn a_binding_call_that_the_policy_does_not_store_is_counted_and_a_failed_one_is_
         &["value"],
         &Err::<(), String>("the request is refused".into()),
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     use_host_event_log(None);
     let calls: Vec<&Value> = events
@@ -123,7 +123,7 @@ fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut connection = endpoint_client::connect(endpoint.address());
     for id in 1..=2u64 {
         endpoint::write_frame(
             &mut connection,
@@ -135,7 +135,7 @@ fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
             .expect("the endpoint closed the connection");
     }
     endpoint.stop();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     use_host_event_log(None);
     let stored: Vec<&Value> = events
@@ -263,7 +263,7 @@ fn the_counts_of_a_closed_gate_are_reported_each_second_and_at_a_flush() {
         reports, 0,
         "{reports} log.gated events within 400 ms; the counts are reported each second"
     );
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let counts = gated_counts(&records::read_events(&path));
     assert_eq!(counts.get("call/debug"), Some(&emitted), "{counts:?}");
 }

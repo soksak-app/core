@@ -14,7 +14,6 @@ mod records;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
@@ -68,10 +67,10 @@ fn calls_of(body: impl FnOnce(&mut Connection)) -> Vec<Value> {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut connection = endpoint_client::connect(endpoint.address());
     body(&mut connection);
     endpoint.stop();
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let calls = events_of(config.path());
     use_host_event_log(None);
     calls

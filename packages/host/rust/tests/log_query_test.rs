@@ -97,7 +97,7 @@ fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Connection) -> T) -> T
     )
     .unwrap();
     endpoint.publish("main").unwrap();
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut connection = endpoint_client::connect(endpoint.address());
     let result = body(&mut connection);
     endpoint.stop();
     result
@@ -305,7 +305,7 @@ fn the_index_covers_each_batch_the_writer_wrote() {
             std::thread::sleep(Duration::from_millis(5));
         }
     }
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let path = log.path().to_path_buf();
     // The index of the file covers the lines of the batches without a query: wait for the updates that the writes caused.
     loop {
@@ -348,7 +348,7 @@ fn an_index_built_from_the_file_is_an_event_and_an_append_is_not() {
     let config = folder::Folder::new();
     let path = write_event_file(config.path(), "host-x1.jsonl", &event_lines(6));
     let rebuilt = |log: &EventLog| -> Vec<Value> {
-        log.flush(Duration::from_secs(5)).unwrap();
+        log.flush().unwrap();
         records::read_events(&records::event_log_path(writer_config.path()))
             .into_iter()
             .filter(|event| {
@@ -400,7 +400,7 @@ fn an_index_built_from_the_file_is_an_event_and_an_append_is_not() {
     report(&path, Err("second".into()));
     report(&path, Ok(Default::default()));
     report(&path, Err("first".into()));
-    log.flush(Duration::from_secs(5)).unwrap();
+    log.flush().unwrap();
     let texts: Vec<String> = records::read_events(&records::event_log_path(writer_config.path()))
         .into_iter()
         .filter(|event| {

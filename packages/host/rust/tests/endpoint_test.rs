@@ -346,7 +346,7 @@ fn mode(path: &Path) -> u32 {
 }
 
 fn open(endpoint: &Endpoint) -> Connection {
-    endpoint_client::connect(endpoint.address(), Duration::from_secs(5))
+    endpoint_client::connect(endpoint.address())
 }
 
 fn send(connection: &mut Connection, message: Value) {
@@ -1186,7 +1186,7 @@ fn the_endpoint_records_why_a_connection_closes() {
         drop(connection);
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         loop {
-            writer.flush(Duration::from_secs(5)).unwrap();
+            writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains("connection closed: connection closed inside a frame body") {
                 break;
@@ -1213,7 +1213,7 @@ fn the_endpoint_records_why_a_connection_closes() {
             }
         }
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1312,7 +1312,7 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
         // The serve loop records the close by the peer before the page replies, so the reply meets a closed connection.
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         let wait_for = |text: &str| loop {
-            writer.flush(Duration::from_secs(5)).unwrap();
+            writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains(text) {
                 return log;
@@ -1331,7 +1331,7 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
             "the reply to a closed connection was an error: {log:?}"
         );
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1372,7 +1372,7 @@ fn the_endpoint_records_a_request_that_ended_without_its_result() {
         );
         assert_eq!(reply["error"]["code"], 1005);
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1531,7 +1531,7 @@ fn the_endpoint_records_an_accept_error() {
         // read until the record appears.
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         loop {
-            writer.flush(Duration::from_secs(5)).unwrap();
+            writer.flush().unwrap();
             let log = records::text_of(&records::read_events(&records::event_log_path(config)));
             if log.contains("error host endpoint accept: accept fault") {
                 break;
@@ -1543,7 +1543,7 @@ fn the_endpoint_records_an_accept_error() {
             std::thread::sleep(Duration::from_millis(10));
         }
         endpoint.stop();
-        writer.flush(Duration::from_secs(5)).unwrap();
+        writer.flush().unwrap();
         return;
     }
     let config = folder::Folder::new();
@@ -1616,7 +1616,7 @@ fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
     );
     *service.endpoint.lock().unwrap() = Arc::downgrade(&endpoint);
     endpoint.publish("w1").unwrap();
-    let mut client = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut client = endpoint_client::connect(endpoint.address());
     let body = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":71,"method":"command.run","params":{"window":"w1","name":"probe.terminate"}})).unwrap();
     client
         .write_all(&(body.len() as u32).to_be_bytes())

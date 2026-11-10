@@ -40,7 +40,7 @@ fn events_of(body: impl FnOnce()) -> Vec<Value> {
     let config = folder::Folder::new();
     let log = records::start_writer(config.path());
     body();
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     use_host_event_log(None);
     events
@@ -135,7 +135,7 @@ fn the_start_buffer_holds_at_most_four_mebibytes_and_the_writer_counts_the_rest(
         .unwrap(),
     );
     use_host_event_log(Some(Arc::clone(&log)));
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let path = log.path().to_path_buf();
     use_host_event_log(None);
     let events = records::read_events(&path);
@@ -217,7 +217,7 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
     )
     .unwrap();
     endpoint.publish("w1").unwrap();
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(10));
+    let mut connection = endpoint_client::connect(endpoint.address());
     let topic = json!({"window": "w1", "name": "core.layout"});
     let request = |connection: &mut Connection, id: u64, method: &str| {
         send(
@@ -254,7 +254,7 @@ fn the_subscription_changes_of_a_topic_hold_at_most_256_and_the_rest_is_refused_
         assert!(reply.get("error").is_none(), "reply {index}: {reply}");
     }
     endpoint.stop();
-    log.flush(Duration::from_secs(10)).unwrap();
+    log.flush().unwrap();
     let events = records::read_events(&records::event_log_path(config.path()));
     use_host_event_log(None);
     let drops = named(&events, "host.buffer.dropped");
@@ -303,7 +303,7 @@ fn an_unwatch_is_not_refused_by_the_bound_and_ends_the_subscription_in_its_queue
     let _serial = serial();
     let config = folder::Folder::new();
     let (endpoint, open_gate, calls) = gated_endpoint(&config, "test-unwatch-bound");
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(10));
+    let mut connection = endpoint_client::connect(endpoint.address());
     change(&mut connection, 1, "status.watch");
     assert_eq!(calls.recv().unwrap(), "status.watch");
     let pending = 256u64;
@@ -349,8 +349,8 @@ fn an_unwatch_after_no_watch_changes_nothing_and_is_answered_without_the_queue()
     let _serial = serial();
     let config = folder::Folder::new();
     let (endpoint, open_gate, calls) = gated_endpoint(&config, "test-unwatch-without-watch");
-    let mut a = endpoint_client::connect(endpoint.address(), Duration::from_secs(10));
-    let mut b = endpoint_client::connect(endpoint.address(), Duration::from_secs(10));
+    let mut a = endpoint_client::connect(endpoint.address());
+    let mut b = endpoint_client::connect(endpoint.address());
     change(&mut a, 1, "status.watch");
     assert_eq!(calls.recv().unwrap(), "status.watch");
     change(&mut a, 2, "status.unwatch");
