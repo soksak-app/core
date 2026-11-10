@@ -241,10 +241,25 @@ for (const app of Object.values(APPS)) {
     await press(child, "core.settings-modal.scope", "pick:scope:common");
     await control(child, "core.settings-modal.set", "projectOpening", () => true,
       "Global tab did not display the common-only setting");
-    await press(child, "core.settings-modal.set", "mode", "light");
-    await s.until("core.settings", (value) => value.values.mode === "light", "Global tab did not update the other project");
+    // In the Global tab a setting that the project overrides shows the project value with the mark 프로젝트 값 and writes the
+    // project scope; every other setting shows and writes the common value (docs/spec/settings.md#scope-of-a-control).
+    const projectMode = await control(child, "core.settings-modal.set", "mode");
+    assert.deepEqual({ value: projectMode.value, scope: projectMode.command.params.scope }, { value: "light", scope: "project" },
+      "the Global tab mode control must show and write the project value of mode");
+    await control(child, "core.settings-modal.applied", "applied:mode", () => true,
+      "the Global tab did not mark the project value of mode");
+    const globalWidth = commonWidth + 10;
+    await press(child, "core.settings-modal.set", "sidebarWidth", String(globalWidth));
+    await s.until("core.settings", (value) => value.values.sidebarWidth === globalWidth,
+      "Global tab did not update the other project");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
-    assert.equal(read(join(config, "settings.json")).mode, "light");
+    assert.equal(read(join(config, "settings.json")).sidebarWidth, globalWidth);
+    assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarWidth, undefined,
+      "the Global tab added a project value");
+    await press(child, "core.settings-modal.set", "sidebarWidth", String(commonWidth));
+    await s.until("core.settings", (value) => value.values.sidebarWidth === commonWidth,
+      "Global tab did not restore the common width");
+    await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     await press(child, "core.settings-modal.scope", "pick:scope:project");
     await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
       "project scope was not selected before leaving the workspace");
