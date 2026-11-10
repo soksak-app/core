@@ -204,12 +204,10 @@ type Sidecars struct {
 	// reconnection after the close writes to the log.
 	replacing map[string]replacement
 	// basenames are the basenames of the persistent sidecar executables and their sidecar names.
-	basenames   map[string]string
-	StopTimeout time.Duration // The deadline of Stop() that a test can inject. Default: 5 seconds.
-	// ReadyTimeout is the upper bound of the time until a newly started persistent service prints its endpoint. Default: 30 seconds. A test injects it.
-	ReadyTimeout time.Duration
-	// HelloTimeout is the upper bound of the time until a persistent service answers hello (docs/spec/terminal-runtime.md). Default: 5 seconds. A test injects it.
-	HelloTimeout time.Duration
+	basenames map[string]string
+	// stopSignal closes when the sidecars stop. It ends the waits of a start and of a replacement, which no time limit ends
+	// (docs/spec/persistent-services.md#service-transport).
+	stopSignal chan struct{}
 	// Now is the clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure). A test injects it; nil uses time.Now.
 	Now func() time.Time
 	// restarts holds the restart-limit record of each sidecar that has a counted failure. c.mu protects it.
@@ -245,8 +243,8 @@ var errRestartLimit = errors.New("restart limit")
 // disconnect counts at most one failure (docs/spec/persistent-services.md#service-transport).
 type revival struct{ counted bool }
 
-// serviceStartFailure is a start failure of the creation path of a persistent service that the restart limit counts: the service printed
-// no endpoint within the ready bound, ended before its endpoint, or did not answer hello within HelloTimeout.
+// serviceStartFailure is a start failure of the creation path of a persistent service that the restart limit counts: the service ended
+// before its endpoint, or its connection ended before the hello answer.
 type serviceStartFailure struct{ text string }
 
 func (e serviceStartFailure) Error() string { return e.text }
@@ -402,9 +400,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		restarts:            map[string]*restartRecord{},
 		replacing:           map[string]replacement{},
 		basenames:           map[string]string{},
-		StopTimeout:         5 * time.Second,
-		ReadyTimeout:        30 * time.Second,
-		HelloTimeout:        5 * time.Second,
+		stopSignal:          make(chan struct{}),
 	}
 	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
 	if configDirectoryProvided {
@@ -472,7 +468,7 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 	if forgot || declarationChanged {
 		c.closingInvalidated()
 	}
-	c.stopProcesses(processes, false)
+	c.stopProcesses(processes, false, false)
 	return nil
 }
 
@@ -1146,9 +1142,7 @@ func (c *Sidecars) replaceIdle() {
 		}
 		name := item.Sidecar
 		routine.Go("sidecar-replace", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
-			defer cancel()
-			if err := c.Replace(ctx, name); err != nil {
+			if err := c.Replace(context.Background(), name); err != nil {
 				LogError("replace", err)
 			}
 		})
@@ -1236,8 +1230,8 @@ func (c *Sidecars) CloseOwner(owner SidecarOwner) {
 	}
 }
 
-// Stop ends all sidecars. It closes the channels to send an EOF signal to the write goroutines,
-// waits for the process exit for at most stopTimeout, and forces termination when a process does not respond.
+// Stop ends all sidecars at the quit of the application: it closes the input of each sidecar, sends the terminate signal to its
+// process group and waits for its exit, which no time limit ends (docs/spec/sidecars.md#declaration-and-startup).
 func (c *Sidecars) Stop() { c.stop(false) }
 
 // Detach stops the sidecars as Stop does, except that a persistent service gets no close-owner and no shutdown: its
@@ -1251,6 +1245,10 @@ func (c *Sidecars) stop(detach bool) {
 	// read goroutine of a sidecar waits for it (docs/spec/sidecars.md#declaration-and-startup).
 	c.presents.refuse()
 	c.mu.Lock()
+	// A Sidecars value that NewSidecars did not build has no stop signal and no start that waits for it.
+	if !c.stopped && c.stopSignal != nil {
+		close(c.stopSignal)
+	}
 	c.stopped = true
 	// A sidecar that is starting is registered when it ends, so the running list is read after waiting for that start.
 	for len(c.starting) > 0 {
@@ -1283,7 +1281,7 @@ func (c *Sidecars) stop(detach bool) {
 	if changed {
 		c.closingInvalidated()
 	}
-	c.stopProcesses(processes, detach)
+	c.stopProcesses(processes, detach, true)
 }
 
 // detach removes a process that stops from the running list. A standard input and output sidecar ends, so its
@@ -1297,25 +1295,34 @@ func (c *Sidecars) detach(name string, process *sidecar) bool {
 	return c.forgetClosing(name)
 }
 
-// stopProcesses stops processes, which are out of the running list, by the stop rules and waits until they end
-// (docs/spec/sidecars.md#declaration-and-startup).
-func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
+// stopProcesses stops processes, which are out of the running list, by the stop rules (docs/spec/sidecars.md#declaration-and-startup):
+// each sidecar on standard input and output gets the end of its input and the terminate signal to its process group, and the
+// end of its stop is its exit. The stop of the quit waits for each exit and for the close of each persistent owner; any other
+// stop returns at once and leaves each wait to its own goroutine, which writes the exit when it comes.
+func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool) {
+	current, platformErr := platform.Current()
 	// Closes the channels of all sidecars to send an EOF signal.
 	// The write goroutine detects the closed channel and closes stdin.
 	for _, process := range processes {
-		if !process.persistent {
-			close(process.outbox)
+		if process.persistent {
+			continue
+		}
+		close(process.outbox)
+		if platformErr != nil {
+			LogError("sidecar "+process.name, fmt.Sprintf("terminate: %v", platformErr))
+			continue
+		}
+		if err := current.TerminateProcessGroup(process.cmd.Process.Pid); err != nil {
+			LogError("sidecar "+process.name, fmt.Sprintf("terminate: %v", err))
 		}
 	}
-
-	// Waits for all processes in parallel. When the deadline passes, it kills and waits for the exited channel.
-	ctx, cancel := context.WithTimeout(context.Background(), c.StopTimeout)
-	defer cancel()
-
 	var wg sync.WaitGroup
 	for _, process := range processes {
 		wg.Add(1)
 		p := process
+		if quit && !p.persistent {
+			LogInfo("sidecar "+p.name, fmt.Sprintf("the quit waits for the exit of process %d", p.cmd.Process.Pid))
+		}
 		routine.Go("sidecar-close", func() {
 			defer wg.Done()
 			if p.persistent && detach {
@@ -1327,36 +1334,28 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach bool) {
 				return
 			}
 			if p.persistent {
-				if err := c.closePersistentOwner(p, ctx); err != nil {
+				// The close ends by the answers of close-owner and shutdown or by the end of the connection.
+				if err := c.closePersistentOwner(p, context.Background()); err != nil {
 					LogError("sidecar "+p.name, fmt.Sprintf("close owner: %v", err))
 				}
 				return
 			}
-			// When the read() goroutine reads the output to the end and waits for the process, the process.exited channel closes.
-			killed := false
-			select {
-			case <-p.exited:
-			case <-ctx.Done():
-				// The deadline passed: a sidecar that runs on gives no event. The stop ends its process group.
-				err := endProcessGroup(p.cmd.Process.Pid)
-				killed = err == nil
-				if err != nil {
-					LogError("sidecar "+p.name, fmt.Sprintf("kill: %v", err))
-				}
-				// Waits until the read() goroutine ends.
-				<-p.exited
-			}
-			// An exit caused by a pipe closed after a forced termination or a violation is not reported (docs/spec/sidecars.md#declaration-and-startup).
+			// The read goroutine closes exited after the exit of the process ended its output.
+			<-p.exited
+			// The exit by the terminate signal of the stop is the stop itself, and an exit caused by a violation is not reported
+			// (docs/spec/sidecars.md#declaration-and-startup).
 			switch {
-			case killed:
-				LogError("sidecar "+p.name, "did not end within the stop timeout and was killed")
 			case p.violated:
-			case p.waitErr != nil || !p.state.Success():
+			case p.waitErr == nil && p.state.Success():
+			case p.waitErr == nil && platformErr == nil && current.ExitedByTermination(p.state):
+			default:
 				LogError("sidecar "+p.name, "exited while stopping: "+exitStatus(p.state, p.waitErr))
 			}
 		})
 	}
-	wg.Wait()
+	if quit {
+		wg.Wait()
+	}
 }
 
 // RetainedSurface is a surface sent with retain and the project root that opened that surface.
@@ -1815,9 +1814,10 @@ type persistentEndpoint struct {
 	Token    string `json:"token"`
 }
 
-// serviceEndpointLine reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends that service,
-// reaps it, returns true as timedOut, and returns the failure of that cleanup as err.
-func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (line []byte, timedOut bool, err error) {
+// serviceEndpointLine reads the first line that a newly started service prints to stdout. The read ends by the line, by the end of
+// stdout, which the exit of the service brings, or by stop: then it ends the service with the terminate signal, reaps it and
+// returns stopped (docs/spec/persistent-services.md#service-transport).
+func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, stop <-chan struct{}) (line []byte, stopped bool, err error) {
 	type result struct {
 		line []byte
 		err  error
@@ -1827,21 +1827,25 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 		line, err := bufio.NewReader(stdout).ReadBytes('\n')
 		read <- result{line, err}
 	})
-	timer := time.NewTimer(limit)
-	defer timer.Stop()
 	select {
 	case got := <-read:
 		return got.line, false, got.err
-	case <-timer.C:
+	case <-stop:
 	}
-	// When the service ends, stdout closes and the read goroutine also ends.
-	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+	// The service leads its own session, so its process group is its pid.
+	current, err := platform.Current()
+	if err != nil {
 		return nil, true, fmt.Errorf("ending the service failed: %w", err)
 	}
-	<-read
+	if err := current.TerminateProcessGroup(cmd.Process.Pid); err != nil {
+		return nil, true, fmt.Errorf("ending the service failed: %w", err)
+	}
+	// Wait closes stdout after the exit, which also ends the read goroutine.
 	var exit *exec.ExitError
-	if err := cmd.Wait(); err != nil && !errors.As(err, &exit) {
-		return nil, true, fmt.Errorf("reaping the service failed: %w", err)
+	waitErr := cmd.Wait()
+	<-read
+	if waitErr != nil && !errors.As(waitErr, &exit) {
+		return nil, true, fmt.Errorf("reaping the service failed: %w", waitErr)
 	}
 	return nil, true, nil
 }
@@ -1850,11 +1854,6 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 // it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
 // there (docs/spec/persistent-services.md#service-transport).
 func (c *Sidecars) processPersistent(name, program string, lost *revival) (*sidecar, error) {
-	// A zero HelloTimeout is a value that NewSidecars never gives. It would fail the hello of every service at once, so the start refuses it
-	// before anything is spawned.
-	if c.HelloTimeout <= 0 {
-		return nil, fmt.Errorf("sidecar %s: HelloTimeout is not set; build Sidecars with NewSidecars", name)
-	}
 	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
 	current, err := platform.Current()
 	if err != nil {
@@ -1908,13 +1907,12 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		if err := errors.Join(startErr, serviceLog.Close()); err != nil {
 			return nil, fmt.Errorf("sidecar %s: %w", name, err)
 		}
-		line, timedOut, err := serviceEndpointLine(cmd, stdout, c.ReadyTimeout)
-		if timedOut {
-			message := fmt.Sprintf("sidecar %s: the service did not print its endpoint within %v", name, c.ReadyTimeout)
+		line, stopped, err := serviceEndpointLine(cmd, stdout, c.stopSignal)
+		if stopped {
 			if err != nil {
-				return nil, serviceStartFailure{fmt.Sprintf("%s; %v", message, err)}
+				return nil, fmt.Errorf("sidecars are stopped; sidecar %s: %w", name, err)
 			}
-			return nil, serviceStartFailure{message}
+			return nil, errors.New("sidecars are stopped")
 		}
 		// When stdout closes without a line, the service ended before it printed the endpoint.
 		if errors.Is(err, io.EOF) && len(line) == 0 {
@@ -1973,23 +1971,27 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: hello: %w", name, err)
 	}
-	// The hello reply has a deadline so that a service that does not answer does not make the requests and Stop of this sidecar wait forever.
-	if err := conn.SetReadDeadline(time.Now().Add(c.HelloTimeout)); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
-	}
+	// The hello reply ends by the reply, by the end of the connection, or by the stop, which closes the connection; no time limit
+	// ends it (docs/spec/persistent-services.md#service-transport).
+	answered := make(chan struct{})
+	stoppedHello := make(chan bool, 1)
+	routine.Go("sidecar-hello-stop", func() {
+		select {
+		case <-c.stopSignal:
+			conn.Close()
+			stoppedHello <- true
+		case <-answered:
+			stoppedHello <- false
+		}
+	})
 	responseLine, err := reader.ReadBytes('\n')
-	if errors.Is(err, os.ErrDeadlineExceeded) {
-		conn.Close()
-		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service did not answer hello within %v", name, c.HelloTimeout)}
+	close(answered)
+	if <-stoppedHello {
+		return nil, errors.New("sidecars are stopped")
 	}
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("sidecar %s: hello response: %w", name, err)
-	}
-	if err := conn.SetReadDeadline(time.Time{}); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
+		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service connection ended before the hello answer", name)}
 	}
 	var response struct {
 		Operation string  `json:"operation"`
@@ -2652,9 +2654,8 @@ func (c *Sidecars) endUndeclaredReplacement(name string) bool {
 }
 
 // awaitReplacedService waits until the process of the service that Replace closed has ended, so the installed service
-// starts after it (docs/spec/persistent-services.md#updates). A process that does not end within the stop timeout fails
-// the replacement: the error line names the sidecar, and the reconnection that follows reaches the service that still
-// runs, so the sidecar stays outdated.
+// starts after it (docs/spec/persistent-services.md#updates). No time limit ends the wait; a stop of the sidecars ends it and
+// fails the replacement: the error line names the sidecar, and the sidecar stays outdated.
 func (c *Sidecars) awaitReplacedService(name string) {
 	c.mu.Lock()
 	replaced, replacing := c.replacing[name]
@@ -2673,12 +2674,12 @@ func (c *Sidecars) awaitReplacedService(name string) {
 		failed(err.Error())
 		return
 	}
-	ended, err := current.WaitServiceProcessEnd(replaced.pid, c.StopTimeout)
+	ended, err := current.WaitServiceProcessEnd(replaced.pid, c.stopSignal)
 	switch {
 	case err != nil:
 		failed(err.Error())
 	case !ended:
-		failed(fmt.Sprintf("the service process %d did not end within %v", replaced.pid, c.StopTimeout))
+		failed("sidecars are stopped")
 	}
 }
 
