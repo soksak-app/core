@@ -291,24 +291,24 @@ func TestTheFirstResponderOutsideTheWebViewsFollowsTheMainPage(t *testing.T) {
 	}
 }
 
-// pageEndPlatform records each cancel of the layout transactions of a window and each give of its keys, and runs each step of
-// the UI queue at once.
-type pageEndPlatform struct {
+// pageLayoutEndPlatform records each cancel of the layout transactions of a window and each give of its keys, and runs each
+// step of the UI queue at once.
+type pageLayoutEndPlatform struct {
 	pagelessPlatform
 	cancelled []platform.Window
 	keys      []platform.Window
 }
 
-func (p *pageEndPlatform) KeysPageEnded(window platform.Window) {
+func (p *pageLayoutEndPlatform) KeysPageEnded(window platform.Window) {
 	p.keys = append(p.keys, window)
 }
 
-func (p *pageEndPlatform) EnqueueUI(work func()) error {
+func (p *pageLayoutEndPlatform) EnqueueUI(work func()) error {
 	work()
 	return nil
 }
 
-func (p *pageEndPlatform) CancelLayout(window platform.Window) error {
+func (p *pageLayoutEndPlatform) CancelLayout(window platform.Window) error {
 	p.cancelled = append(p.cancelled, window)
 	return nil
 }
@@ -319,7 +319,7 @@ func (p *pageEndPlatform) CancelLayout(window platform.Window) error {
 func TestTheEndOfThePageProcessCancelsTheLayoutOfItsWindow(t *testing.T) {
 	window := &eventWindow{pagelessWindow: pagelessWindow{native: platform.Window(7)}, listeners: map[WindowEvent][]func(){}}
 	previousFramework, previousSystem := framework, system
-	fake := &pageEndPlatform{}
+	fake := &pageLayoutEndPlatform{}
 	framework, system = pagelessFramework{window: window}, fake
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
 	host := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, quit: &Quit{}}
