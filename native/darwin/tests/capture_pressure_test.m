@@ -8,7 +8,7 @@ static void check(BOOL ok, NSString *label) {
     if (!ok) failures++;
 }
 
-// Delivers the callback after the real 10 second limit to check the lifetime of the per-call state.
+// Holds the query callback so that it arrives after the call began to wait, to check that the call waits for it.
 static void (^heldStillReply)(SCShareableContent *, NSError *);
 static void holdStillQuery(id receiver, SEL selector, void (^reply)(SCShareableContent *, NSError *)) {
     heldStillReply = [reply copy];
@@ -237,31 +237,35 @@ int main(void) { @autoreleasepool {
         @"invalid UTF-8 has its own explicit still error");
     free(stillError);
 
-    fprintf(stderr, "START: still timeout and retained late callback\n");
+    fprintf(stderr, "START: still waits for its late callback\n");
     Method query = class_getClassMethod([SCShareableContent class],
         @selector(getCurrentProcessShareableContentWithCompletionHandler:));
     check(query != NULL, @"the still-query fault boundary is available");
     if (query != NULL) {
         IMP original = method_setImplementation(query, (IMP)holdStillQuery);
-        stillError = NULL;
-        BOOL timedOut = !sp_capture_still((long[]){-1}, 1, stillPath.UTF8String, &stillError);
-        method_setImplementation(query, original);
-        check(timedOut && stillError != NULL && strstr(stillError, "timed out") != NULL,
-            @"a held still query returns its own bounded timeout error");
-        check(heldStillReply != nil, @"the delayed still callback is retained");
         clearCaptureError(); setCaptureError(@"fixture later recording failure");
-        if (heldStillReply != nil) {
-            heldStillReply(nil, [NSError errorWithDomain:@"capture.test" code:3
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+            dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            void (^reply)(SCShareableContent *, NSError *) = heldStillReply;
+            heldStillReply = nil;
+            if (reply == nil) return;
+            reply(nil, [NSError errorWithDomain:@"capture.test" code:3
                 userInfo:@{NSLocalizedDescriptionKey: @"fixture late still failure"}]);
-            [heldStillReply release]; heldStillReply = nil;
-        }
-        check(strstr(sp_capture_error(), "fixture later recording failure") != NULL,
-            @"a late still callback cannot replace a later recording error");
-        check(stillError != NULL && strstr(stillError, "timed out") != NULL,
-            @"a returned still timeout error remains owned by its caller");
+            [reply release];
+        });
+        CFTimeInterval stillBegan = CACurrentMediaTime();
+        stillError = NULL;
+        BOOL rejected = !sp_capture_still((long[]){-1}, 1, stillPath.UTF8String, &stillError);
+        double waited = (CACurrentMediaTime() - stillBegan) * 1000;
+        method_setImplementation(query, original);
+        check(rejected && waited >= 100 && stillError != NULL && strstr(stillError, "fixture late still failure") != NULL,
+            [NSString stringWithFormat:@"a held still query returns the result of its late callback (%.1fms)", waited]);
+        check(strstr(sp_capture_error(), "fixture later recording failure") != NULL
+            && strstr(sp_capture_error(), "fixture late still failure") == NULL,
+            @"a late still callback cannot replace a recording error");
         free(stillError);
     }
-    fprintf(stderr, "END: still timeout and retained late callback\n");
+    fprintf(stderr, "END: still waits for its late callback\n");
 
     reset([directory stringByAppendingPathComponent:@"missing"], 1);
     [captureSink write:frame]; dispatch_sync(captureWriter, ^{});
@@ -280,13 +284,15 @@ int main(void) { @autoreleasepool {
     [captureAttempt release]; captureAttempt = [stopAttempt retain];
     objc_setAssociatedObject(captureStream, &captureAttemptAssociationKey, stopAttempt, OBJC_ASSOCIATION_RETAIN);
     [stopAttempt release];
+    // The stream ends before any callback meets the stop boundary, so no later callback follows and the stop ends by that end.
+    [captureSink stream:captureStream didStopWithError:nil];
     sp_capture_stop(0);
     check(!sp_capture_has_stream(), @"a stop error retires the current native stream");
     NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()] ?: @"";
     check([stopError containsString:@"not written"],
         [NSString stringWithFormat:@"stop preserves the earlier recording write error (%@)", stopError]);
-    check([stopError containsString:@"no frame arrived within 1000ms"],
-        [NSString stringWithFormat:@"stop reports its separate delivery deadline error (%@)", stopError]);
+    check([stopError containsString:@"the stream ended before a frame arrived"],
+        [NSString stringWithFormat:@"stop reports a stream that ended before its boundary (%@)", stopError]);
     check([stopError containsString:@"fixture stop failure"],
         [NSString stringWithFormat:@"stop reports the stream completion error alongside earlier failures (%@)", stopError]);
     CFRelease(frame);

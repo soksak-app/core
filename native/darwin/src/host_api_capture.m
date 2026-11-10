@@ -2,15 +2,14 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include "capture.h"
 #include "surface_layout.h"
 #include "notifications.h"
 #include "document_view.h"
 #include "main_thread.h"
 #include "host_callbacks.h"
 
-// The callbacks run their Go functions on the worker, and the native calls of this file that use AppKit, WebKit or the capture
-// state run on the main thread (main_thread.h). The capture clock and the capture error need no thread.
+// The callbacks run their Go functions on the worker, and the native calls of this file that use AppKit or WebKit run on the main
+// thread (main_thread.h). The capture functions of capture.h need no thread, and the host calls them directly.
 static void documentFrameIdentityDoneBridge(void *context, const char *json, const char *error) {
 	hostRunOnWorker(^{ sp_host_diagnostic_callback_document_frame_identity_done((uintptr_t)context, (char *)json, (char *)error); });
 }
@@ -47,20 +46,6 @@ static int windowNumbersOnMain(void* nsWindow, long* out, int max) {
     return n;
 }
 int windowNumbers(uintptr_t nsWindow, long* out, int max) { return ON_MAIN(int, windowNumbersOnMain((void *)nsWindow, out, max)); }
-bool main_sp_capture_open(long windowNumber, bool display, char **error) {
-    return ON_MAIN(bool, sp_capture_open(windowNumber, display, error));
-}
-bool main_sp_capture_start(const char *directory, bool frameIdentity, char **error) {
-    return ON_MAIN(bool, sp_capture_start(directory, frameIdentity, error));
-}
-int main_sp_capture_stop(double after) { return ON_MAIN(int, sp_capture_stop(after)); }
-bool main_sp_capture_has_stream(void) { return ON_MAIN(bool, sp_capture_has_stream()); }
-int main_sp_capture_wait(void) { return ON_MAIN(int, sp_capture_wait()); }
-bool main_sp_capture_limited(void) { return ON_MAIN(bool, sp_capture_limited()); }
-double main_sp_capture_longest_gap(void) { return ON_MAIN(double, sp_capture_longest_gap()); }
-bool main_sp_capture_still(const long *windowNumbers, int count, const char *path, char **error) {
-    return ON_MAIN(bool, sp_capture_still(windowNumbers, count, path, error));
-}
 void main_surfaceLayoutTraceStart(void) { hostRunOnMain(^{ surfaceLayoutTraceStart(); }); }
 size_t main_surfaceLayoutTraceStop(double *out, size_t capacity) {
     return ON_MAIN(size_t, surfaceLayoutTraceStop(out, capacity));

@@ -2038,9 +2038,8 @@ fn the_stop_does_not_wait_for_a_start() {
     let sidecars = &sidecars;
     let window = &window;
     thread::scope(|scope| {
-        let start = scope.spawn(move || {
-            sidecars.send(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
-        });
+        let start = scope
+            .spawn(move || sidecars.send(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#)));
         hello_received.recv_timeout(STALL).unwrap();
         let (stopped, stop_returned) = channel();
         scope.spawn(move || {

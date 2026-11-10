@@ -58,8 +58,9 @@ static void checkMissing(const char *name, void (^call)(void)) {
 }
 
 static int view;
-static int hit(uintptr_t owner, void *target) {
-    return owner == 17 && target == &view ? -37 : 0;
+static int presses;
+static void pressed(uintptr_t owner, void *target) {
+    if (owner == 17 && target == &view) presses++;
 }
 static bool receivedPoint;
 static void point(uintptr_t owner, int phase, double x, double y) {
@@ -87,7 +88,7 @@ int main(void) { @autoreleasepool {
     enum { baseCount = 0 SP_HOST_CALLBACKS(COUNT), diagnosticCount = 0 SP_HOST_DIAGNOSTIC_CALLBACKS(COUNT) };
     check(baseCount == 36 && diagnosticCount == 7, "the native ABI declares 36 base and 7 diagnostic callbacks");
     hostInstallMainThread(directly, directly);
-    checkMissing("surface_hit", ^{ hostRunOnWorker(^{ sp_host_callback_surface_hit(0, NULL); }); });
+    checkMissing("surface_pressed", ^{ hostRunOnWorker(^{ sp_host_callback_surface_pressed(0, NULL); }); });
     sp_host_callbacks callbacks = {0};
     check(sp_host_callbacks_install(NULL) != NULL, "a missing callback table is rejected");
 #define INITIALIZE(mode, result, name, parameters, arguments) callbacks.name = stub_##name;
@@ -98,14 +99,14 @@ int main(void) { @autoreleasepool {
     check(failure && strstr(failure, #name), "a missing " #name " is named and leaves registration open"); \
 }
     SP_HOST_CALLBACKS(MISSING)
-    callbacks.surface_hit = hit;
+    callbacks.surface_pressed = pressed;
     callbacks.surface_point = point;
     callbacks.image_released = image;
     callbacks.core_root_serve = serve;
     check(sp_host_callbacks_install(&callbacks) == NULL, "a complete callback table is installed");
-    callbacks.surface_hit = NULL;
-    check(ON_WORKER(int, sp_host_callback_surface_hit(17, &view)) == -37,
-          "the native owner copies the table and preserves a signed callback result");
+    callbacks.surface_pressed = NULL;
+    hostRunOnWorker(^{ sp_host_callback_surface_pressed(17, &view); });
+    check(presses == 1, "the native owner copies the table and passes the owner and pointer arguments");
     hostRunOnWorker(^{ sp_host_callback_surface_point(19, -3, 12.25, -0.5); });
     check(receivedPoint, "integer and floating callback arguments keep their values");
     hostRunOnWorker(^{ sp_host_callback_image_released(17, UINT64_C(0xf123456789abcdef), UINT64_C(0x8123456789abcdef), -7); });
@@ -122,7 +123,8 @@ int main(void) { @autoreleasepool {
     served = ON_WORKER(bool, sp_host_callback_core_root_serve(17, "missing", "/file", &bytes, &length, &contentType));
     check(!served && !bytes && length == 0 && !contentType, "a false callback result preserves its untouched output pointers");
     check(sp_host_callbacks_install(&callbacks) != NULL, "the installed callback table cannot be replaced");
-    check(ON_WORKER(int, sp_host_callback_surface_hit(17, &view)) == -37, "a rejected replacement preserves the installed callbacks");
+    hostRunOnWorker(^{ sp_host_callback_surface_pressed(17, &view); });
+    check(presses == 2, "a rejected replacement preserves the installed callbacks");
     SPHostCompletionLease *lease = [[SPHostCompletionLease alloc] init];
     __block bool completed = false;
     void *completion = Block_copy(^(const char *failure) {
@@ -151,6 +153,7 @@ int main(void) { @autoreleasepool {
     check(sp_host_diagnostic_callbacks_install(&diagnostics) != NULL, "the diagnostic callbacks cannot be replaced");
     hostRunOnWorker(^{ sp_host_diagnostic_callback_process_exit_answered(29, true); });
     check(receivedExit, "a rejected diagnostic replacement preserves its installed callback");
-    check(ON_WORKER(int, sp_host_callback_surface_hit(17, &view)) == -37, "diagnostic registration leaves the base callbacks unchanged");
+    hostRunOnWorker(^{ sp_host_callback_surface_pressed(17, &view); });
+    check(presses == 3, "diagnostic registration leaves the base callbacks unchanged");
     return failures ? 1 : 0;
 }}

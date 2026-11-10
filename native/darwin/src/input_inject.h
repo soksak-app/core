@@ -87,6 +87,8 @@ typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_in
 // timeoutSeconds, the result is SP_INPUT_UNRECEIVED. clicks is the click count of a press or a release, as in
 // sp_input_pointer_clicks. pointer is the name of the pointer; a name that is NULL or not of the form of
 // SP_INPUT_POINTER_NAME_MAX is rejected. done is called once on the main thread. Call this function on the main thread.
+// The requests of the application run one at a time in the order of the calls: a request starts in the turn in which the
+// request before it called its done, and a request whose window closes before it starts gets SP_INPUT_REJECTED in the close turn.
 void sp_input_pointer_then(void *window, const char *pointer, double x, double y, int phase, int button, double deltaX,
     double deltaY, int clicks, double timeoutSeconds, sp_input_done done, void *context);
 

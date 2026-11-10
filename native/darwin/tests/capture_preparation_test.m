@@ -1,4 +1,5 @@
-// Delivers the real preparation completion after the timeout and checks the following recording state and object ownership.
+// Delivers the real preparation completion late and checks that the caller waits for it, receives its result and releases the
+// obsolete target objects.
 #import "../src/capture.m"
 #import <objc/runtime.h>
 #include <signal.h>
@@ -48,7 +49,7 @@ static void holdQuery(id receiver, SEL selector, void (^reply)(SCShareableConten
 int main(void) { @autoreleasepool {
     signal(SIGALRM, expired); alarm(35);
     CFTimeInterval began = CACurrentMediaTime();
-    fprintf(stderr, "START: native preparation timeout isolation\n");
+    fprintf(stderr, "START: native preparation completion\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -85,14 +86,30 @@ int main(void) { @autoreleasepool {
             captureFilter = (SCContentFilter *)obsoleteFilter;
             captureConfig = (SCStreamConfiguration *)obsoleteConfig;
             IMP original = method_setImplementation(query, (IMP)holdQuery);
+            // The completion arrives on another queue while the caller waits; the wait ends by it and by nothing else.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+                void (^reply)(SCShareableContent *, NSError *) = heldReply;
+                heldReply = nil;
+                if (reply == nil) return;
+                reply(success ? content : nil, success ? nil :
+                    [NSError errorWithDomain:@"capture.test" code:1
+                        userInfo:@{NSLocalizedDescriptionKey: @"fixture late preparation failure"}]);
+                [reply release];
+            });
             char *error = NULL;
             BOOL opened = sp_capture_open(window.windowNumber, false, &error);
             method_setImplementation(query, original);
             double waited = (CACurrentMediaTime() - phase) * 1000;
-            check(waited >= 10000, [NSString stringWithFormat:
-                @"held preparation waits for its 10000ms deadline (%.3fms)", waited]);
-            check(!opened && error != NULL && strstr(error, "timed out after 10000ms") != NULL,
-                @"held preparation returns an explicit owned timeout");
+            check(waited >= 100, [NSString stringWithFormat:
+                @"a held preparation returns after its completion (%.3fms)", waited]);
+            if (success) {
+                check(opened && error == NULL && captureFilter != nil && captureConfig != nil,
+                    [NSString stringWithFormat:@"a late successful completion prepares the recording target (%s)", error ?: ""]);
+            } else {
+                check(!opened && error != NULL && strstr(error, "fixture late preparation failure") != NULL,
+                    @"a late failed completion returns its own caller-owned error");
+            }
             check(filterReleased && configReleased,
                 @"preparation releases both obsolete inactive target objects");
             // Cleans up the leak of the previous store within the test file even in the Red run.
@@ -100,30 +117,9 @@ int main(void) { @autoreleasepool {
             if (captureConfig == (SCStreamConfiguration *)obsoleteConfig) captureConfig = nil;
             if (!filterReleased) [obsoleteFilter release];
             if (!configReleased) [obsoleteConfig release];
-            SCContentFilter *laterFilter = (SCContentFilter *)[NSObject new];
-            SCStreamConfiguration *laterConfig = (SCStreamConfiguration *)[NSObject new];
-            captureFilter = laterFilter; captureConfig = laterConfig;
-            captureStream = (SCStream *)[NSObject new];
-            clearCaptureError(); setCaptureError(@"fixture later recording error");
-            check(heldReply != nil, @"the timed-out query retains its completion");
-            if (heldReply != nil) {
-                heldReply(success ? content : nil, success ? nil :
-                    [NSError errorWithDomain:@"capture.test" code:1
-                        userInfo:@{NSLocalizedDescriptionKey: @"fixture late preparation failure"}]);
-                [heldReply release]; heldReply = nil;
-            }
-            check(strcmp(sp_capture_error(), "fixture later recording error") == 0,
-                @"a late preparation completion preserves the exact later recording error");
-            check(captureFilter == laterFilter && captureConfig == laterConfig,
-                @"a late preparation completion preserves the later target and configuration");
-            check(error != NULL && strstr(error, "timed out after 10000ms") != NULL,
-                @"the returned preparation timeout remains caller-owned");
             free(error);
-            if (captureFilter != laterFilter) [captureFilter release];
-            if (captureConfig != laterConfig) [captureConfig release];
-            captureFilter = nil; captureConfig = nil;
-            [laterFilter release]; [laterConfig release];
-            [captureStream release]; captureStream = nil;
+            [captureFilter release]; captureFilter = nil;
+            [captureConfig release]; captureConfig = nil;
             fprintf(stderr, "END: late preparation %s (%.1fms)\n",
                 success ? "success" : "failure", (CACurrentMediaTime() - phase) * 1000);
         }
@@ -155,7 +151,7 @@ int main(void) { @autoreleasepool {
     }
     [content release]; [queryError release];
     [window close]; [window release];
-    fprintf(stderr, "%s: native preparation timeout isolation (%.1fms)\n",
+    fprintf(stderr, "%s: native preparation completion (%.1fms)\n",
         failures ? "FAIL" : "PASS", (CACurrentMediaTime() - began) * 1000);
     alarm(0);
     return failures ? 1 : 0;

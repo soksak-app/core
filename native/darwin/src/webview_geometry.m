@@ -558,6 +558,11 @@ static bool pressOnWorkbench(void *owner, double x, double y) {
     return !page || page == (NSView *)sp_window_main_webview(owner);
 }
 
+bool sp_surface_is_host(void *view) {
+    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
+    return [(id)view isKindOfClass:SPSurfaceHost.class];
+}
+
 void *sp_surface_create(void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface creation requires the UI thread");
     NSView *view = (NSView *)handle;

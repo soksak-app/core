@@ -26,7 +26,7 @@ extern void goHost_quit_request(int arg0, char * arg1);
 extern void goHost_native_ui_run(uintptr_t arg0);
 extern void goHost_native_responder_changed(uintptr_t arg0);
 extern void goHost_native_fullscreen_done(uintptr_t arg0);
-extern int goHost_surface_hit(uintptr_t arg0, void * arg1);
+extern void goHost_surface_pressed(uintptr_t arg0, void * arg1);
 extern void goHost_surface_point(uintptr_t arg0, int arg1, double arg2, double arg3);
 extern void goHost_input_delivered(uintptr_t arg0, int arg1, sp_input_held * arg2);
 extern void goHost_input_activated(uintptr_t arg0, int arg1, char * arg2);
@@ -124,8 +124,8 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	if callbacks.NativeFullscreenDone == nil {
 		return fmt.Errorf("native callback is missing: native_fullscreen_done")
 	}
-	if callbacks.SurfaceHit == nil {
-		return fmt.Errorf("native callback is missing: surface_hit")
+	if callbacks.SurfacePressed == nil {
+		return fmt.Errorf("native callback is missing: surface_pressed")
 	}
 	if callbacks.SurfacePoint == nil {
 		return fmt.Errorf("native callback is missing: surface_point")
@@ -193,7 +193,7 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 	native.native_ui_run = (*[0]byte)(C.goHost_native_ui_run)
 	native.native_responder_changed = (*[0]byte)(C.goHost_native_responder_changed)
 	native.native_fullscreen_done = (*[0]byte)(C.goHost_native_fullscreen_done)
-	native.surface_hit = (*[0]byte)(C.goHost_surface_hit)
+	native.surface_pressed = (*[0]byte)(C.goHost_surface_pressed)
 	native.surface_point = (*[0]byte)(C.goHost_surface_point)
 	native.input_delivered = (*[0]byte)(C.goHost_input_delivered)
 	native.input_activated = (*[0]byte)(C.goHost_input_activated)
@@ -317,9 +317,9 @@ func goHost_native_fullscreen_done(arg0 C.uintptr_t) {
 	callbackHandlers.NativeFullscreenDone(uintptr(arg0))
 }
 
-//export goHost_surface_hit
-func goHost_surface_hit(arg0 C.uintptr_t, arg1 unsafe.Pointer) C.int {
-	return C.int(callbackHandlers.SurfaceHit(uintptr(arg0), arg1))
+//export goHost_surface_pressed
+func goHost_surface_pressed(arg0 C.uintptr_t, arg1 unsafe.Pointer) {
+	callbackHandlers.SurfacePressed(uintptr(arg0), arg1)
 }
 
 //export goHost_surface_point

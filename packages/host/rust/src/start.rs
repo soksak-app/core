@@ -98,7 +98,7 @@ pub fn serve(
     owner: &str,
     path: &str,
     webview: &str,
-    start: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
+    start: impl FnOnce(&str) -> Result<Vec<u8>, String>,
 ) -> Response<Vec<u8>> {
     let failure = |status: u16, text: String| {
         Response::builder()
@@ -130,6 +130,23 @@ pub fn serve(
             failure(if error == NO_WINDOW { 400 } else { 500 }, error)
         }
     }
+}
+
+/// Answers a start document request as serve does, on a thread of its own: the framework asks for the document on the
+/// main thread, and building the document waits for later turns of that thread, so respond receives the response when the
+/// document is built (docs/spec/native-host.md#page-start).
+pub fn serve_async(
+    page_origin: &str,
+    owner: String,
+    path: String,
+    webview: String,
+    start: impl FnOnce(&str) -> Result<Vec<u8>, String> + Send + 'static,
+    respond: impl FnOnce(Response<Vec<u8>>) + Send + 'static,
+) {
+    let page_origin = page_origin.to_string();
+    crate::routine::spawn_named("start-document", move || {
+        respond(serve(&page_origin, &owner, &path, &webview, start));
+    });
 }
 
 /// Starts the main page of the window whose main webview is webview and builds the start document of that window.

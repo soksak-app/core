@@ -152,7 +152,11 @@ fn the_start_document_is_built_off_the_thread_that_asks_for_it() {
         },
         move |response| {
             answered
-                .send((std::thread::current().id(), response.status().as_u16(), response.into_body()))
+                .send((
+                    std::thread::current().id(),
+                    response.status().as_u16(),
+                    response.into_body(),
+                ))
                 .unwrap();
         },
     );
@@ -160,6 +164,9 @@ fn the_start_document_is_built_off_the_thread_that_asks_for_it() {
     let (thread, status, body) = answer
         .recv_timeout(Duration::from_secs(5))
         .expect("the start document was not answered");
-    assert_ne!(thread, asking, "the start document was built on the thread that asked for it");
+    assert_ne!(
+        thread, asking,
+        "the start document was built on the thread that asked for it"
+    );
     assert_eq!((status, body), (200, b"{}".to_vec()));
 }

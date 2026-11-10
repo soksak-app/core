@@ -1018,6 +1018,9 @@ struct State<O> {
     /// service is disconnected; a connection notice reaches only those surfaces.
     persistent_surfaces: HashMap<String, HashSet<String>>,
     stopped: bool,
+    /// The rules of the stop, its detach and its deadline, which a start that ends after the stop applies to its own
+    /// process.
+    stop_rules: (bool, Duration),
     // pending_replies: buffers the immutable image responses of each sidecar in the order of sending.
     // pending_closes: buffers the close messages of the surfaces of each sidecar (surface → close message).
     pending_replies: HashMap<String, PendingLines>,
@@ -1296,6 +1299,7 @@ impl<O: Owner> Sidecars<O> {
                     roots: HashMap::new(),
                     persistent_surfaces: HashMap::new(),
                     stopped: false,
+                    stop_rules: (false, Duration::ZERO),
                     pending_replies: HashMap::new(),
                     pending_closes: HashMap::new(),
                     unannounced_loss: std::collections::HashSet::new(),
@@ -2556,19 +2560,11 @@ impl<O: Owner> Sidecars<O> {
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             state.stopped = true;
+            state.stop_rules = (detach, self.stop_timeout);
             // The host stops before the pending image detaches are acknowledged.
             image_detach::release_image_detaches(&mut state.image_detaches, false, |_| true);
-            // A sidecar that is starting is registered when it ends, so the list of running sidecars is emptied after
-            // waiting for that start.
-            while !state.starting.is_empty() {
-                state = self
-                    .core
-                    .started
-                    .wait(state)
-                    // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the
-                    // call amends; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner);
-            }
+            // The stop waits for no start: a start that ends after this registers nothing and stops its own process
+            // (docs/spec/sidecars.md#declaration-and-startup).
             // A standard-I/O sidecar ends, so it does not answer a close. A persistent service answers a close that was
             // sent before the stop earlier than the close-owner response, so that surface is kept until the answer or
             // the end of the connection (docs/spec/sidecars.md#messages).
@@ -2843,13 +2839,31 @@ impl<O: Owner> Core<O> {
         state.starting.remove(name);
         core.started.notify_all();
         let Started { process, threads } = started?;
-        // stop empties the list of running sidecars after it waited for the starts to end, so a start that ended while
-        // stopping is also registered and stop cleans it up.
         state.running.insert(name.to_string(), process);
         for thread in threads {
             crate::routine::spawn_named("sidecar-transport", thread);
         }
+        // The stop emptied the list of running sidecars without waiting for this start, so a start that ends after the
+        // stop takes its own process out of the list again and stops it by the stop rules on this thread
+        // (docs/spec/sidecars.md#declaration-and-startup).
         if state.stopped {
+            let changed =
+                state.running[name].persistent.is_none() && detach_stdio(&mut state, name);
+            let changed = closing_notification(&state, changed);
+            let process = state
+                .running
+                .remove(name)
+                .expect("the start registered its process under the held lock");
+            let (detach, stop_timeout) = state.stop_rules;
+            drop(state);
+            if let Some(changed) = changed {
+                changed();
+            }
+            let sidecars = Sidecars {
+                core: Arc::clone(core),
+                stop_timeout,
+            };
+            sidecars.stop_processes(vec![(name.to_string(), process)], detach);
             return Err("sidecars are stopped".into());
         }
         Ok((state, true))
