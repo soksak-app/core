@@ -3,7 +3,6 @@
 package darwin
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -37,14 +36,9 @@ func TestNativeTestFacadeRequiresOneCompleteProviderAndRejectsIncompleteRecordin
 		if err != nil {
 			t.Fatal(err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		command := exec.CommandContext(ctx, executable, "-test.run=^TestNativeTestFacadeRequiresOneCompleteProviderAndRejectsIncompleteRecordings$", "-test.v")
+		command := exec.Command(executable, childArguments(t, "-test.run=^TestNativeTestFacadeRequiresOneCompleteProviderAndRejectsIncompleteRecordings$", "-test.v")...)
 		command.Env = append(os.Environ(), childFlag+"=1")
 		output, err := command.CombinedOutput()
-		if ctx.Err() != nil {
-			t.Fatalf("native facade child deadline: %v\n%s", ctx.Err(), output)
-		}
 		if err != nil {
 			t.Fatalf("native facade child: %v\n%s", err, output)
 		}
@@ -125,4 +119,13 @@ func TestNativeTestFacadeRequiresOneCompleteProviderAndRejectsIncompleteRecordin
 	if err != nil || len(activities) != 2 || activities[0].Activity != "entry" || !activities[0].HasTimer || activities[0].TimerIn != 5 || activities[0].SentInWait != 6 || activities[0].Answered != 7 {
 		t.Fatalf("complete recorder result: %+v, %v", activities, err)
 	}
+}
+
+// childArguments are the arguments of a child run of this test binary. The child takes the rest of the limit of the runner as its
+// own, so a child that does not end panics at that limit with its stacks and does not outlive its parent.
+func childArguments(t *testing.T, arguments ...string) []string {
+	if deadline, ok := t.Deadline(); ok {
+		arguments = append(arguments, "-test.timeout="+time.Until(deadline).String())
+	}
+	return arguments
 }

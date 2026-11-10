@@ -57,7 +57,7 @@ fn a_fatal_signal_writes_an_error_line_to_the_standard_error_file() {
         String::from_utf8_lossy(&output.stdout)
     );
     // The system writes a crash report of the child that ended with the signal; the test removes it.
-    reports.remove(pid, std::time::Duration::from_secs(60));
+    reports.remove(pid);
     let log = records::standard_error_text(config.path());
     // A record is `<time> <level> <layer> <where>: <text>`; the fatal record of the native library has no other text.
     let fatal: Vec<&str> = log

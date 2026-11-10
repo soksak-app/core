@@ -21,13 +21,15 @@ use std::time::Duration;
 use super::DocumentViewportMarker;
 use super::{
     CoreRootHost, CoreRootResolver, DOMOverlay, Delivery, DocumentOptions, Frame, Handle, Hit,
-    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, PersistentStream,
-    Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
+    ImagePresentation, ImageReleased, Insets, Key, Listener, NativeEventWait, OutputEnd,
+    OutputPipe, PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
 
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
 mod capture;
+#[path = "child_process.rs"]
+mod child_process;
 #[path = "clipboard.rs"]
 mod clipboard;
 #[path = "diagnostic_reports.rs"]
@@ -963,12 +965,8 @@ impl Platform for Darwin {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
         endpoint::service_process_exists(pid)
     }
-    fn wait_service_process_end(
-        &self,
-        pid: u32,
-        timeout: std::time::Duration,
-    ) -> Result<bool, String> {
-        endpoint::wait_service_process_end(pid, timeout)
+    fn wait_service_process_end(&self, pid: u32, stop: &super::StopSignal) -> Result<bool, String> {
+        endpoint::wait_service_process_end(pid, stop)
     }
     fn new_session(&self, command: &mut std::process::Command) -> Result<(), String> {
         endpoint::new_session(command);
@@ -976,6 +974,30 @@ impl Platform for Darwin {
     }
     fn exit_status(&self, status: std::process::ExitStatus) -> Result<String, String> {
         endpoint::exit_status(status)
+    }
+    fn new_process_group(&self, command: &mut std::process::Command) -> Result<(), String> {
+        child_process::new_process_group(command);
+        Ok(())
+    }
+    fn end_process_group(&self, pid: u32) -> Result<(), String> {
+        child_process::end_process_group(pid)
+    }
+    fn terminate_process_group(&self, pid: u32) -> Result<(), String> {
+        child_process::terminate_process_group(pid)
+    }
+    fn exited_by_termination(&self, status: std::process::ExitStatus) -> bool {
+        child_process::exited_by_termination(status)
+    }
+    fn wait_process_exit(&self, pid: u32) -> Result<(), String> {
+        child_process::wait_process_exit(pid)
+    }
+    fn exit_output(&self, output: OutputPipe) -> Result<(Box<dyn Read + Send>, OutputEnd), String> {
+        let descriptor = match output {
+            OutputPipe::Stdout(pipe) => std::os::fd::OwnedFd::from(pipe),
+            OutputPipe::Stderr(pipe) => std::os::fd::OwnedFd::from(pipe),
+        };
+        let (reads, end) = child_process::exit_output(descriptor)?;
+        Ok((Box::new(reads), Box::new(move || end.end())))
     }
 }
 
@@ -1007,10 +1029,6 @@ impl PersistentStream for PersistentUnixStream {
 
     fn shutdown(&self) -> std::io::Result<()> {
         self.0.shutdown(std::net::Shutdown::Both)
-    }
-
-    fn set_read_deadline(&self, timeout: Option<std::time::Duration>) -> Result<(), String> {
-        self.0.set_read_timeout(timeout).map_err(|e| e.to_string())
     }
 }
 

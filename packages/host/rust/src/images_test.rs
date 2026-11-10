@@ -294,9 +294,8 @@ fn a_page_start_returns_the_failures_of_the_ends_it_clears() {
 }
 
 mod presentation_queue {
-    use super::super::present_on_ui;
+    use super::super::{PRESENTS_REFUSED, Presents, present_on_ui};
     use std::sync::{Arc, Mutex, mpsc};
-    use std::time::Duration;
 
     // contract: images.presentation.runs-after-framework-event
     #[test]
@@ -314,9 +313,11 @@ mod presentation_queue {
                     Ok(())
                 }),
                 |work| enqueue.send(work).map_err(|error| error.to_string()),
+                &Presents::default(),
             )
         });
-        let callback = queued.recv_timeout(Duration::from_secs(2));
+        // The present enqueues its work, or its sender ends with the present.
+        let callback = queued.recv();
         drop(event);
         if let Ok(callback) = callback {
             callback();
@@ -332,9 +333,11 @@ mod presentation_queue {
     // contract: images.presentation.runs-after-framework-event
     #[test]
     fn image_enqueue_failure_reaches_the_frame_handler() {
-        let result = present_on_ui(Box::new(|| panic!("refused work ran")), |_| {
-            Err("native queue refused".into())
-        });
+        let result = present_on_ui(
+            Box::new(|| panic!("refused work ran")),
+            |_| Err("native queue refused".into()),
+            &Presents::default(),
+        );
         assert_eq!(result, Err("native queue refused".into()));
     }
 
@@ -347,8 +350,65 @@ mod presentation_queue {
                 work();
                 Ok(())
             },
+            &Presents::default(),
         );
         assert_eq!(result, Err("native presentation refused".into()));
+    }
+
+    // A present that waits for the main thread ends when the stop of the sidecars refuses the presents, and the main thread that
+    // runs the held presentation later does not wait (docs/spec/sidecars.md#declaration-and-startup).
+    // contract: images.presentation.ends-with-the-sidecar-stop
+    #[test]
+    fn a_present_that_waits_for_the_main_thread_ends_with_the_refusal_of_the_presents() {
+        let presents = Arc::new(Presents::default());
+        let (enqueue, queued) = mpsc::sync_channel::<Box<dyn FnOnce() + Send>>(1);
+        let (answered, answer) = mpsc::channel();
+        let waiting = Arc::clone(&presents);
+        std::thread::spawn(move || {
+            answered
+                .send(present_on_ui(
+                    Box::new(|| Ok(())),
+                    |work| enqueue.send(work).map_err(|error| error.to_string()),
+                    &waiting,
+                ))
+                .expect("the test holds the receiver");
+        });
+        // The main thread holds the presentation and does not run it, as the main thread that runs the stop at exit does.
+        let held = queued.recv().expect("the present enqueued no presentation");
+        presents.refuse();
+        // A present that still waits for the main thread does not answer, and the check stops at the limit of its runner.
+        assert_eq!(
+            answer.recv().expect("the present ended without an answer"),
+            Err(PRESENTS_REFUSED.to_string())
+        );
+        held();
+        assert_eq!(
+            present_on_ui(
+                Box::new(|| panic!("a refused presentation ran")),
+                |_| panic!("a refused presentation was enqueued"),
+                &presents,
+            ),
+            Err(PRESENTS_REFUSED.to_string()),
+            "a present after the refusal was not refused at once"
+        );
+    }
+
+    // A presentation that the main thread drops without running it ends its present.
+    // contract: images.presentation.ends-with-the-sidecar-stop
+    #[test]
+    fn a_presentation_that_the_main_thread_drops_ends_its_present() {
+        let result = present_on_ui(
+            Box::new(|| panic!("a dropped presentation ran")),
+            |work| {
+                drop(work);
+                Ok(())
+            },
+            &Presents::default(),
+        );
+        assert!(
+            result.is_err(),
+            "a dropped presentation answered {result:?}"
+        );
     }
 }
 
@@ -378,11 +438,12 @@ mod wait_boundary {
             .expect("image state")
             .last_sequence = 1;
         let waiter = images.clone();
-        let (started, waiting) = mpsc::sync_channel(1);
+        let (started, waiting) = mpsc::channel();
         let (ended, result) = mpsc::channel();
         std::thread::spawn(move || {
             let outcome = waiter.wait_current_observed(NO_WAIT_LIMIT, || {
-                started.send(()).expect("signal initialized wait")
+                // default: the wait reports each check that blocks, and the check reads only the first.
+                if started.send(()).is_err() {}
             });
             ended.send(outcome).expect("the check reads the outcome");
         });
@@ -420,36 +481,34 @@ mod wait_boundary {
             .get_mut(&key)
             .expect("image state")
             .last_sequence = 1;
-        let began = Instant::now();
-        let timeout = Duration::from_millis(500);
+        // The limit of the wait only ends a check that hangs: the frames that the check gives decide the end of the wait.
         let waiter = images.clone();
-        let (started, waiting) = mpsc::sync_channel(1);
+        let (blocked, blocks) = mpsc::channel();
+        let (done, outcome) = mpsc::channel();
         let worker = std::thread::spawn(move || {
-            waiter.wait_current_observed(timeout, || {
-                started.send(()).expect("signal initialized wait")
-            })
+            let result = waiter.wait_current_observed(Duration::from_secs(60), || {
+                // default: the check stopped receiving the blocks when it failed, and the wait goes on.
+                if blocked.send(()).is_err() {}
+            });
+            done.send(result)
+                .expect("the check receives the end of the wait");
         });
-        waiting
-            .recv_timeout(Duration::from_secs(2))
-            .expect("wait begins");
-        let arrival_elapsed = {
+        blocks.recv().expect("wait begins");
+        // The first frame is presented while the second is accepted, and the wait checks that state and blocks again.
+        {
             let mut inner = images.lock();
             let state = inner.states.get_mut(&key).expect("image state");
             state.presented_raster = config.raster;
             state.presented_sequence = 1;
             state.last_sequence = 2;
             images.changed();
-            began.elapsed()
-        };
-        let result = worker.join().expect("join image wait");
+        }
+        blocks
+            .recv()
+            .expect("the wait checks the presented frame and blocks again");
         assert!(
-            arrival_elapsed < timeout,
-            "controlled arrival missed the active wait deadline: {arrival_elapsed:?}"
-        );
-        assert_eq!(
-            result,
-            Err("presentationTimeout".into()),
-            "the newer accepted frame remains pending after the earlier frame completed"
+            outcome.try_recv().is_err(),
+            "the wait ended while the newer accepted frame was pending"
         );
         assert!(
             !images.current_presented(),
@@ -460,6 +519,22 @@ mod wait_boundary {
             Err("presentationTimeout".into()),
             "a new wait must require the already accepted second frame"
         );
+        // The presentation of the newer frame ends the wait.
+        {
+            let mut inner = images.lock();
+            inner
+                .states
+                .get_mut(&key)
+                .expect("image state")
+                .presented_sequence = 2;
+            images.changed();
+        }
+        assert_eq!(
+            outcome.recv().expect("the wait ends"),
+            Ok(()),
+            "the presented newer frame ends the wait"
+        );
+        worker.join().expect("join image wait");
     }
 
     #[test]

@@ -287,10 +287,8 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
     // The step names the change that the check made, so a failure states which change gave which source and detail.
     let wait = |step: &str, want: &str| {
         let (got, detail) = applied
-            .recv_timeout(Duration::from_secs(10))
-            .unwrap_or_else(|_| {
-                panic!("{step}: the policy {want:?} was not applied within 10 seconds")
-            });
+            .recv()
+            .unwrap_or_else(|_| panic!("{step}: the policy {want:?} was not applied"));
         assert_eq!(got, want, "{step}: applied {got:?} ({detail})");
     };
     // The file does not exist: the default policy, which stores only errors, is in force.
@@ -438,8 +436,8 @@ fn each_applied_policy_is_the_event_log_policy_and_a_refused_file_is_not() {
     .unwrap();
     let wait = |step: &str, want: Value| {
         let (name, payload) = sent
-            .recv_timeout(Duration::from_secs(10))
-            .unwrap_or_else(|_| panic!("{step}: no event log-policy within 10 seconds"));
+            .recv()
+            .unwrap_or_else(|_| panic!("{step}: no event log-policy"));
         assert_eq!(
             (name.as_str(), payload),
             ("log-policy", json!({"classes": want})),
@@ -491,10 +489,8 @@ fn the_policy_that_a_page_change_writes_carries_the_cids_of_the_change() {
     .unwrap();
     let wait = |step: &str, want: &str| {
         let (got, detail) = applied
-            .recv_timeout(Duration::from_secs(10))
-            .unwrap_or_else(|_| {
-                panic!("{step}: the policy {want:?} was not applied within 10 seconds")
-            });
+            .recv()
+            .unwrap_or_else(|_| panic!("{step}: the policy {want:?} was not applied"));
         assert_eq!(got, want, "{step}: applied {got:?} ({detail})");
     };
     wait("start without a file", "default");

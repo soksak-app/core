@@ -1,6 +1,5 @@
 use super::*;
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 
 enum Step {
     Native(Box<dyn FnOnce() + Send>),
@@ -35,11 +34,11 @@ fn native_menu_action_runs_after_the_framework_callback_unwinds() {
         );
         tx.send(Step::Finished(result)).unwrap();
     });
-    match rx.recv_timeout(Duration::from_secs(5)).unwrap() {
+    match rx.recv().unwrap() {
         Step::Native(task) => task(),
         Step::Finished(result) => panic!("menu bypassed the native UI queue: {result:?}"),
     }
-    match rx.recv_timeout(Duration::from_secs(5)).unwrap() {
+    match rx.recv().unwrap() {
         Step::Finished(result) => assert_eq!(result, Ok(())),
         Step::Native(_) => panic!("menu scheduled more than one native task"),
     }

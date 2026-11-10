@@ -8,8 +8,6 @@ mod folder;
 #[path = "support/crash_reports.rs"]
 mod crash_reports;
 
-use std::time::Duration;
-
 // contract: test-support.crash-reports.removes-only-the-saved-report
 #[test]
 fn the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_renames() {
@@ -20,7 +18,7 @@ fn the_watch_removes_the_saved_report_and_not_the_hidden_file_that_the_system_re
     let saved = folder.path().join("probe-2026-10-31-000000.ips");
     std::fs::write(&hidden, body).unwrap();
     std::fs::write(&saved, body).unwrap();
-    reports.remove(4242, Duration::from_secs(10));
+    reports.remove(4242);
     assert!(!saved.exists(), "the saved report {saved:?} remains");
     assert!(
         hidden.exists(),

@@ -2,7 +2,6 @@
 
 use std::sync::{Arc, mpsc};
 use std::sync::{Mutex, PoisonError};
-use std::time::Duration;
 
 use super::{
     MODAL_HOLDS, hold_modal_content, lifecycle_lock, modal_hold, modal_hold_of,
@@ -90,8 +89,6 @@ fn a_pending_start_probe_releases_the_lock_before_receive() {
             .send(pending_document_frame_identity_start(&work))
             .unwrap();
     });
-    assert_eq!(
-        result.recv_timeout(Duration::from_millis(100)).unwrap(),
-        Ok(Some("started".into()))
-    );
+    // A probe that entered the lock again would never answer, and the check stops at the limit of its runner.
+    assert_eq!(result.recv().unwrap(), Ok(Some("started".into())));
 }

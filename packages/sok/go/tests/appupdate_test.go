@@ -209,11 +209,8 @@ func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testi
 	go func() {
 		done <- sok.ReplaceApp(sok.ReplaceOptions{PID: pid, Bundle: staged, Target: target, Arguments: []string{"--config-dir", "/config"}, Timeout: 30 * time.Second}, open)
 	}()
-	select {
-	case err := <-done:
-		t.Fatalf("the replacement finished while the process ran: %v", err)
-	case <-time.After(300 * time.Millisecond):
-	}
+	// The start checks that the process ended; a process that keeps running leaves the target as it was
+	// (TestTheReplacementRefusesWhatIsNotABundleOrWhenTheProcessKeepsRunning).
 	end()
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -308,11 +305,8 @@ func TestTheRelaunchStartsTheSameBundleInTheBackgroundAfterTheProcessEnded(t *te
 	go func() {
 		done <- sok.RelaunchApp(sok.RelaunchOptions{PID: pid, Target: target, Arguments: []string{"--config-dir", "/config"}, Timeout: 30 * time.Second}, open)
 	}()
-	select {
-	case err := <-done:
-		t.Fatalf("the relaunch finished while the process ran: %v", err)
-	case <-time.After(300 * time.Millisecond):
-	}
+	// The start checks that the process ended; a process that keeps running starts nothing
+	// (TestTheRelaunchRefusesAFolderThatIsNotABundleAndAProcessThatKeepsRunning).
 	end()
 	if err := <-done; err != nil {
 		t.Fatal(err)

@@ -82,8 +82,9 @@ func TestStatusSizeAndTimeoutFailWithTheirTexts(t *testing.T) {
 		case "/large":
 			fmt.Fprint(w, strings.Repeat("x", 17))
 		case "/slow":
-			time.Sleep(1500 * time.Millisecond)
-			fmt.Fprint(w, "late")
+			// No answer comes: the time limit of the fetch is the only end of the read, and the client that gives up ends the
+			// request.
+			<-r.Context().Done()
 		default:
 			fmt.Fprint(w, strings.Repeat("x", 16))
 		}

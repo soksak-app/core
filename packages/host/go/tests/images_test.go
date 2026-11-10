@@ -78,11 +78,7 @@ func (o *fakeImageOwner) DeliverSidecarMessage(message host.SidecarMessage) {
 
 func (o *fakeImageOwner) next(t *testing.T) host.SidecarMessage {
 	t.Helper()
-	select {
-	case <-o.seen:
-	case <-time.After(support.Stall):
-		t.Fatalf("no sidecar event within %v; the test stalled", support.Stall)
-	}
+	<-o.seen
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.events[len(o.events)-1]

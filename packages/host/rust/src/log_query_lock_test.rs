@@ -3,7 +3,6 @@
 use std::collections::BTreeSet;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
 
 use super::{Pending, start_log_indexer_on};
 
@@ -42,7 +41,7 @@ fn a_poisoned_pending_lock_still_updates_the_index_and_stops() {
     });
     observe(&path, 0);
     let update = updates
-        .recv_timeout(Duration::from_secs(10))
+        .recv()
         .expect("no update of the index followed the notice while the pending lock was poisoned");
     assert_eq!(
         update,

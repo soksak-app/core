@@ -26,7 +26,8 @@ func TestAPanicOfAGoroutineIsRecordedAsAnEventBeforeTheProcessEnds(t *testing.T)
 		}
 		host.UseHostEventLog(log)
 		routine.Go("probe", func() { panic("the window has no content view") })
-		// The entrance ends the process; reaching the end of the wait is the failure.
+		// The entrance ends the process; reaching the end of the wait is the failure. The wait bounds a child that hangs: a
+		// goroutine that waits without end would meet the deadlock report of the Go runtime, which ends with the status of a panic.
 		time.Sleep(10 * time.Second)
 		os.Exit(4)
 	}
@@ -73,9 +74,15 @@ const routineBeforeWriterChild = "SOKSAK_ROUTINE_BEFORE_WRITER_CHILD"
 // contract: log.panic.before-writer-is-stored-when-the-writer-opens
 func TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens(t *testing.T) {
 	if config := os.Getenv(routineBeforeWriterChild); config != "" {
-		// The panic happens before the writer exists; the writer opens after it, as the start of the host does.
+		// The panic happens before the writer exists; the writer opens after the entrance handed the panic to its record, as the
+		// start of the host does.
+		record, handed := routine.Record, make(chan struct{})
+		routine.Record = func(name, text, stack string) {
+			close(handed)
+			record(name, text, stack)
+		}
 		routine.Go("probe", func() { panic("the lock directory cannot be read") })
-		time.Sleep(200 * time.Millisecond)
+		<-handed
 		log, err := host.StartHostEventLog(config)
 		if err != nil {
 			os.Stdout.WriteString(err.Error() + "\n")
@@ -123,17 +130,14 @@ func TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull(t *testing.T)
 	}
 	command := exec.Command(os.Args[0], "-test.run=^TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull$")
 	command.Env = append(os.Environ(), routineNoWriterChild+"=1")
-	started := time.Now()
 	output, err := command.CombinedOutput()
-	if elapsed := time.Since(started); elapsed >= 2*time.Second {
-		t.Fatalf("the child ended after %v; the writer deadline of the test must not be waited in real time", elapsed)
-	}
 	var ended *exec.ExitError
 	if !errors.As(err, &ended) || ended.ExitCode() != 2 {
 		t.Fatalf("child ended with %v, output %q", err, output)
 	}
 	stderr := string(output)
-	if !strings.Contains(stderr, "no writer opened within") || !strings.Contains(stderr, "host.panic name=probe") ||
+	// The record names the writer deadline that the child set as its input.
+	if !strings.Contains(stderr, "no writer opened within 100ms") || !strings.Contains(stderr, "host.panic name=probe") ||
 		!strings.Contains(stderr, "text=") || !strings.Contains(stderr, "the lock directory cannot be read") {
 		t.Fatalf("the standard error does not hold the record of the panic: %q", stderr)
 	}

@@ -1147,13 +1147,20 @@ fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
     let window = application().window_of(frontend.clone());
     let (ready_tx, ready_rx) = mpsc::channel();
     let (commit_tx, commit_rx) = mpsc::channel();
+    // The wait for the notice returns only after the notice calls back, and the layout commits when the presentation returns.
     let past_notice = Arc::new(AtomicBool::new(false));
     let past = Arc::clone(&past_notice);
+    let noticed = Arc::new(AtomicBool::new(false));
+    let awaited = Arc::clone(&noticed);
     let worker = thread::spawn(move || {
         commit_tx
             .send(complete_layout_presentation(
                 || ask_presentation_notice(&window, 7, ready_tx, crate::images::Images::default()),
-                || await_presentation_notice(&ready_rx),
+                || {
+                    let answer = await_presentation_notice(&ready_rx);
+                    awaited.store(true, Ordering::SeqCst);
+                    answer
+                },
                 || {
                     past.store(true, Ordering::SeqCst);
                     Ok(())
@@ -1172,6 +1179,10 @@ fn the_layout_commits_after_the_presentation_notice_of_the_frontend() {
     notice(Ok(()));
     assert_eq!(commit_rx.recv().unwrap(), Ok("prepared"));
     assert!(past_notice.load(Ordering::SeqCst));
+    assert!(
+        noticed.load(Ordering::SeqCst),
+        "the layout reached its commit before the wait for the presentation notice returned"
+    );
     worker.join().unwrap();
 }
 

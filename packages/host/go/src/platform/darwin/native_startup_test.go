@@ -3,7 +3,6 @@
 package darwin
 
 import (
-	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -32,9 +31,7 @@ func TestShowWindowInitializesNativeProviderBeforeHostStartup(t *testing.T) {
 		}
 		for _, scenario := range []string{"installed", "missing", "failure"} {
 			t.Run(scenario, func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				command := exec.CommandContext(ctx, executable, "-test.run=^TestShowWindowInitializesNativeProviderBeforeHostStartup$", "-test.v")
+				command := exec.Command(executable, childArguments(t, "-test.run=^TestShowWindowInitializesNativeProviderBeforeHostStartup$", "-test.v")...)
 				command.Env = append(os.Environ(), earlyShowChild+"="+scenario)
 				if output, err := command.CombinedOutput(); err != nil {
 					t.Fatalf("early-show %s: %v\n%s", scenario, err, output)
@@ -110,4 +107,13 @@ func TestShowWindowInitializesNativeProviderBeforeHostStartup(t *testing.T) {
 	default:
 		t.Fatalf("unknown early-show child scenario %q", mode)
 	}
+}
+
+// childArguments are the arguments of a child run of this test binary. The child takes the rest of the limit of the runner as its
+// own, so a child that does not end panics at that limit with its stacks and does not outlive its parent.
+func childArguments(t *testing.T, arguments ...string) []string {
+	if deadline, ok := t.Deadline(); ok {
+		arguments = append(arguments, "-test.timeout="+time.Until(deadline).String())
+	}
+	return arguments
 }

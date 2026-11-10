@@ -836,11 +836,7 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 	sidecars := s.sidecars
 	return HandleEnvelope(body, sidecarName, surface, s.images,
 		func(work func() error) error {
-			var err error
-			mainThreadStep(func() {
-				err = work()
-			})
-			return err
+			return sidecars.presents.present(work, mainThreadStep)
 		},
 		func(image string, response map[string]interface{}) error {
 			// Every answer to a frame, consumed or refused with its reason, is an image.frame event of the performance
@@ -1629,8 +1625,8 @@ func (h *Host) endPage(s *Surfaces) {
 
 // answerPage answers what the main page of s owed when its generation ends. The window is no longer ready, every request to the page
 // and to the surface documents of the window ends with 1003 and later requests to those documents are refused until the next page
-// starts, and a close question that the page left closes the window as a window whose page is not ready closes. An end that finds
-// nothing owed changes nothing.
+// starts, each removal that asked the page is allowed, and a close question that the page left closes the window as a window whose
+// page is not ready closes. An end that finds nothing owed changes nothing.
 func (h *Host) answerPage(s *Surfaces) {
 	h.mu.Lock()
 	s.ready = false
@@ -1639,6 +1635,8 @@ func (h *Host) answerPage(s *Surfaces) {
 	h.mu.Unlock()
 	s.pageReloading.Store(true)
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
+	// The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
+	h.removals.Abandon(s.name)
 	if asked {
 		s.window.Close()
 	}

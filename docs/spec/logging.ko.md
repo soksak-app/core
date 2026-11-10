@@ -129,7 +129,7 @@ event가 싣는 모든 buffer와 값에는 상한이 있고, 생산자는 값을
 | page writer의 큐 | event 4,096개와 4,194,304바이트(각 event의 fields와 이름의 바이트) | page는 거절한 event와 그 바이트를 세어 뒤따르는 event 앞에 `workbench.log.dropped`(`count`, `bytes`, `reason`)를, view page는 `page.log.dropped`를 저장하며, 거절한 상한마다 event 하나를 저장한다. |
 | host writer의 큐 | event 8,192개와 16 MiB | writer는 거절한 event를 세어 `log.dropped`로 저장한다. |
 | 명령줄 도구 writer의 큐 | event 1,024개와 1 MiB | writer는 거절한 event를 세어 `log.dropped`로 저장한다. |
-| sidecar의 보류 응답(256줄의 쓰기 큐가 빈 뒤에 쓴다) | 메시지 1,024개와 4,194,304바이트 | 응답은 오류 `sidecar <name>: the pending replies reached <bound>, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`를 저장한다. |
+| sidecar의 보류 응답(보낸 순서로 쓴다: 256줄의 쓰기 큐가 그보다 먼저 받아들인 줄 뒤, 그보다 나중에 받아들이는 줄 앞) | 메시지 1,024개와 4,194,304바이트 | 응답은 오류 `sidecar <name>: the pending replies reached <bound>, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`를 저장한다. |
 | sidecar의 보류 close | 메시지 1,024개와 4,194,304바이트 | close는 보내지 않고, 표면은 답을 기다리는 목록에 올리지 않으며, `host.buffer.dropped`를 저장하고, sidecar는 끝날 때까지 그 표면의 session을 가진다. |
 | relay의 만료된 요청(늦은 응답) | 요청 256개 | 가장 오래된 요청을 잊으므로 그 요청의 늦은 응답은 `exposure reply <id> has no matching request`로 답하고 `host.buffer.dropped`를 저장한다. |
 | host record의 시작 buffer | record 1,024개와 4,194,304바이트 | 거절한 record는 writer가 생기면 세어서 이유 `the start buffer was full`의 `log.dropped`로 저장한다. |

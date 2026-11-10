@@ -696,7 +696,10 @@ pub fn service_process_exists(_pid: u32) -> Result<bool, String> {
     missing("service process inspection")
 }
 
-pub fn wait_service_process_end(_pid: u32, _timeout: std::time::Duration) -> Result<bool, String> {
+pub fn wait_service_process_end(
+    _pid: u32,
+    _stop: &super::super::StopSignal,
+) -> Result<bool, String> {
     missing("service process wait")
 }
 

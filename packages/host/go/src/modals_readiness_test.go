@@ -182,15 +182,14 @@ func TestThePresentedWaitEndsAtThePaintOfTheShownModal(t *testing.T) {
 	if err := s.ModalReady("picker", s.modal.instance); err != nil {
 		t.Fatalf("ModalReady: %v", err)
 	}
-	// The revealed modal holds its first paint back: the wait of presented stands.
-	ended := make(chan bool, 1)
-	go func() { ended <- s.waitForModalPaint(time.Second) }()
-	select {
-	case waiting := <-ended:
-		t.Fatalf("the wait of presented ended without the paint of the modal with %t", waiting)
-	case <-time.After(50 * time.Millisecond):
+	// The revealed modal holds its first paint back: the wait of presented stands until its limit, which the check sets to
+	// have passed, and reports the modal as waiting for its paint.
+	if !s.waitForModalPaint(time.Nanosecond) {
+		t.Fatal("the wait of presented ended without the paint of the modal")
 	}
 	// The paint of the modal ends the wait.
+	ended := make(chan bool, 1)
+	go func() { ended <- s.waitForModalPaint(time.Second) }()
 	fake.paint()
 	if waiting := <-ended; waiting {
 		t.Fatal("the wait of presented reported a modal without its paint")

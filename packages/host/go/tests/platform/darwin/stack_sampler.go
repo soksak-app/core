@@ -285,13 +285,8 @@ func CheckStallWatch(options StallCheckOptions) (StallCheck, error) {
 		waitArmed = true
 	}
 	beatsLock.Unlock()
-	var settled int
-	select {
-	case settled = <-waited:
-	case <-time.After(10 * time.Second):
-		return StallCheck{}, fmt.Errorf("no heartbeat read a wait of the run loop within 10 s of the step; heartbeats %s",
-			stallBeats(beatsFrom(0), 0))
-	}
+	// The runner ends a check whose heartbeat never reads the wait.
+	settled := <-waited
 	var settling []string
 	for _, beat := range beatsFrom(0)[:settled+1] {
 		if beat.at.After(stepEnd) {
@@ -336,10 +331,8 @@ func CheckStallWatch(options StallCheckOptions) (StallCheck, error) {
 	if err := options.Step(1600 * time.Millisecond); err != nil {
 		return check, err
 	}
-	select {
-	case <-resumed:
-	case <-time.After(5 * time.Second):
-	}
+	// The end of the stall is the event after which the watch stores nothing more for the step.
+	<-resumed
 	if got := names(); got != "host.stall,host.stall.sampled,host.stall.resumed" {
 		return check, fmt.Errorf("the stall watch stored %q for a step of 1.6 s", got)
 	}

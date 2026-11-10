@@ -61,17 +61,90 @@ fn listed_as_alive(state: &str) -> bool {
     !state.is_empty() && !state.starts_with('Z')
 }
 
-/// Waits for the end of the service process `pid` with the kqueue notification NOTE_EXIT, for at most `timeout`. A
-/// process that does not exist has ended; the registration for it fails with ESRCH.
-pub fn wait_service_process_end(pid: u32, timeout: std::time::Duration) -> Result<bool, String> {
+/// The identifier of the user event that wakes the wait for a service process when its stop stops.
+const STOP_EVENT: libc::uintptr_t = 1;
+
+/// Waits for the end of the service process `pid` with the kqueue notification NOTE_EXIT, or for `stop`, which triggers a
+/// user event of the same queue. A process that does not exist has ended; the registration for it fails with ESRCH.
+pub fn wait_service_process_end(pid: u32, stop: &super::super::StopSignal) -> Result<bool, String> {
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
     if pid == 0 {
         return Ok(true);
     }
     let failed = |error: std::io::Error| format!("cannot wait for service process {pid}: {error}");
-    let queue = unsafe { libc::kqueue() };
-    if queue < 0 {
+    let descriptor = unsafe { libc::kqueue() };
+    if descriptor < 0 {
         return Err(failed(std::io::Error::last_os_error()));
     }
+    // The queue closes when the function returns, after the watch below is dropped, so no wake triggers a closed or reused
+    // descriptor.
+    let queue = unsafe { OwnedFd::from_raw_fd(descriptor) };
+    let wake = libc::kevent {
+        ident: STOP_EVENT,
+        filter: libc::EVFILT_USER,
+        flags: libc::EV_ADD | libc::EV_CLEAR,
+        fflags: 0,
+        data: 0,
+        udata: std::ptr::null_mut(),
+    };
+    if unsafe {
+        libc::kevent(
+            queue.as_raw_fd(),
+            &wake,
+            1,
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null(),
+        )
+    } < 0
+    {
+        return Err(format!(
+            "cannot wait for service process {pid}: stop event: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    // A trigger that fails leaves the wait to the exit of the process, and the wait returns that failure with its answer.
+    let trigger_failure = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+    let raw = queue.as_raw_fd();
+    let failure = std::sync::Arc::clone(&trigger_failure);
+    let Some(watch) = stop.watch(move || {
+        let trigger = libc::kevent {
+            ident: STOP_EVENT,
+            filter: libc::EVFILT_USER,
+            flags: 0,
+            fflags: libc::NOTE_TRIGGER,
+            data: 0,
+            udata: std::ptr::null_mut(),
+        };
+        if unsafe { libc::kevent(raw, &trigger, 1, std::ptr::null_mut(), 0, std::ptr::null()) } < 0
+        {
+            *failure
+                .lock()
+                // default: the slot holds only the text of the failure, which a panic does not tear.
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                Some(std::io::Error::last_os_error().to_string());
+        }
+    }) else {
+        return Ok(false);
+    };
+    let ended = wait_process_exit_event(raw, pid);
+    drop(watch);
+    let trigger_failure = trigger_failure
+        .lock()
+        // default: the slot holds only the text of the failure, which a panic does not tear.
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    match (ended, trigger_failure) {
+        (Ok(_), Some(error)) => Err(format!(
+            "cannot wake the wait for service process {pid}: {error}"
+        )),
+        (ended, _) => ended,
+    }
+}
+
+/// Registers the exit of pid in queue and waits for it or for the stop event of the queue.
+fn wait_process_exit_event(queue: i32, pid: u32) -> Result<bool, String> {
+    let failed = |error: std::io::Error| format!("cannot wait for service process {pid}: {error}");
     let change = libc::kevent {
         ident: pid as libc::uintptr_t,
         filter: libc::EVFILT_PROC,
@@ -80,36 +153,33 @@ pub fn wait_service_process_end(pid: u32, timeout: std::time::Duration) -> Resul
         data: 0,
         udata: std::ptr::null_mut(),
     };
-    let limit = libc::timespec {
-        tv_sec: timeout.as_secs() as libc::time_t,
-        tv_nsec: timeout.subsec_nanos() as libc::c_long,
-    };
+    let mut changes = 1;
     let mut event: libc::kevent = unsafe { std::mem::zeroed() };
-    let result = loop {
-        let count = unsafe { libc::kevent(queue, &change, 1, &mut event, 1, &limit) };
+    loop {
+        let count =
+            unsafe { libc::kevent(queue, &change, changes, &mut event, 1, std::ptr::null()) };
         if count < 0 {
             let error = std::io::Error::last_os_error();
             match error.raw_os_error() {
-                Some(libc::EINTR) => continue,
-                Some(libc::ESRCH) => break Ok(true),
-                _ => break Err(failed(error)),
+                // The kernel applied the registration before the wait; a repeated wait only reads events.
+                Some(libc::EINTR) => {
+                    changes = 0;
+                    continue;
+                }
+                Some(libc::ESRCH) => return Ok(true),
+                _ => return Err(failed(error)),
             }
-        }
-        if count == 0 {
-            break Ok(false);
         }
         if event.flags & libc::EV_ERROR != 0 {
             let code = event.data as i32;
-            break if code == libc::ESRCH {
+            return if code == libc::ESRCH {
                 Ok(true)
             } else {
                 Err(failed(std::io::Error::from_raw_os_error(code)))
             };
         }
-        break Ok(true);
-    };
-    unsafe { libc::close(queue) };
-    result
+        return Ok(event.filter != libc::EVFILT_USER);
+    }
 }
 
 /// Writes the wait status of an ended process as `exit status <code>` or `signal <number>`.

@@ -1,6 +1,6 @@
 //! Checks the rules for reading a location (docs/spec/installation.md#fetching) with a TLS server owned by the check. It uses no external network.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,7 +20,9 @@ enum Reply {
     Body(Vec<u8>),
     Status(u16),
     Redirect(String),
-    Slow(Duration, Vec<u8>),
+    /// No answer: the server reads until the client closes the connection, so the time limit of the fetch is the only end of
+    /// the read.
+    Unanswered,
 }
 
 /// The TLS server owned by the check. It uses the certificate of a certificate authority that the check created.
@@ -83,9 +85,11 @@ fn serve(handler: fn(&str) -> Reply) -> Server {
                     Reply::Body(body) => (200, None, body),
                     Reply::Status(status) => (status, None, vec![]),
                     Reply::Redirect(target) => (302, Some(target), vec![]),
-                    Reply::Slow(delay, body) => {
-                        std::thread::sleep(delay);
-                        (200, None, body)
+                    Reply::Unanswered => {
+                        let mut rest = [0u8; 64];
+                        // A server of the check. A read error is the end of the connection as well.
+                        while matches!(tls.read(&mut rest), Ok(read) if read > 0) {}
+                        return;
                     }
                 };
                 let mut head = format!(
@@ -190,7 +194,7 @@ fn status_size_and_timeout_fail_with_their_texts() {
         "/large" => Reply::Body(vec![b'x'; 17]),
         "/slow" => {
             SLOW.fetch_add(1, Ordering::SeqCst);
-            Reply::Slow(Duration::from_millis(1500), b"late".to_vec())
+            Reply::Unanswered
         }
         _ => Reply::Body(vec![b'x'; 16]),
     });

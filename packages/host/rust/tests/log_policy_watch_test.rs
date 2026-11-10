@@ -46,8 +46,8 @@ fn a_created_policy_file_is_watched_before_its_read() {
     let watch = start_log_policy(&log, None).unwrap();
     fs::write(&policy_path, r#"{"schema":9}"#).unwrap();
     let watched = reads
-        .recv_timeout(Duration::from_secs(10))
-        .expect("no notification of the created policy file within 10 seconds");
+        .recv()
+        .expect("no notification of the created policy file");
     drop(watch);
     set_log_policy_watch_hook(None);
     assert!(

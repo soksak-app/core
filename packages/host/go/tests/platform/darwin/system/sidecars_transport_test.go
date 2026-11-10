@@ -14,7 +14,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -86,7 +85,7 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := &support.HarnessOwner{Root: "/session", Seen: make(chan host.SidecarMessage, 4)}
-	if err := support.SendWithin(t, sidecars, owner, 30*time.Second); err != nil {
+	if err := support.SendOpen(sidecars, owner); err != nil {
 		t.Fatal(err)
 	}
 	if data, err := os.ReadFile(environmentPath); err != nil {

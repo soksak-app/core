@@ -17,14 +17,12 @@ use std::sync::mpsc::{Receiver, RecvError, SyncSender, TryRecvError, TrySendErro
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
-use wait_timeout::ChildExt;
-
-use crate::application_log::log_error;
-use crate::buffer_bounds::{PendingLines, record_buffer_drop};
+use crate::application_log::{log_error, log_failure};
+use crate::buffer_bounds::{HELD_LINES, PendingLines, record_buffer_drop};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::framework::Window;
-use crate::platform::{PersistentStream, current};
+use crate::platform::{OutputPipe, PersistentStream, current};
 use crate::sidecar_reply::{RequestLedger, error_of_body, record_stopped_requests};
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
@@ -254,11 +252,13 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
     SidecarStatus { closing, outdated }
 }
 
-/// Handles line when it is an answer to closed. It returns Ok(false) when it is not an answer, Ok(true) when it was
-/// handled, and the reason when the protocol was violated. The reason why it could not close is written to the log.
+/// Handles line of the process `pid` when it is an answer to closed. It returns Ok(false) when it is not an answer,
+/// Ok(true) when it was handled, and the reason when the protocol was violated. The reason why it could not close is
+/// written to the log.
 fn close_answer<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
+    pid: u32,
     line: &[u8],
 ) -> Result<bool, String> {
     let probe: CloseProbe =
@@ -282,7 +282,7 @@ fn close_answer<O: Owner>(
         let stopped = !pending
             && state
                 .stopping
-                .get_mut(sidecar)
+                .get_mut(&pid)
                 .is_some_and(|stopping| take(&mut stopping.closing, &answer.surface));
         if state
             .closing
@@ -331,7 +331,10 @@ fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bo
 /// stopping, by which its reader judges the output while it stops. The caller removes it from the running list.
 /// Returns whether closing changed.
 fn detach_stdio<O>(state: &mut State<O>, name: &str) -> bool {
-    let surfaces = state.running[name].surfaces.iter().cloned().collect();
+    let process = &state.running[name];
+    let surfaces = process.surfaces.iter().cloned().collect();
+    // default: a standard-I/O process without a child has no reader to judge its output, and no pid is 0.
+    let pid = process.child.as_ref().map_or(0, Child::id);
     let closing = state
         .closing
         .get(name)
@@ -339,7 +342,7 @@ fn detach_stdio<O>(state: &mut State<O>, name: &str) -> bool {
         // default: without an entry in closing the sidecar has no unanswered close, so none is moved.
         .unwrap_or_default();
     state.stopping.insert(
-        name.to_string(),
+        pid,
         Stopping {
             surfaces,
             closing,
@@ -364,9 +367,97 @@ struct CloseFailure {
     send_close: bool,
 }
 
+/// The quit stop: the processes that a second quit ends and whether the stop ended (docs/spec/hosts.md#process-lifecycle).
+#[derive(Default)]
+struct QuitStop {
+    targets: Mutex<Vec<QuitTarget>>,
+    ended: AtomicBool,
+}
+
+/// A process of a stop that a second quit ends, and whether its stop ended.
+struct QuitTarget {
+    name: String,
+    done: Arc<AtomicBool>,
+    end: QuitEnd,
+}
+
+/// How a second quit ends a process of the quit stop.
+enum QuitEnd {
+    /// The force-kill signal to the process group whose leader is pid; killed marks the exit as the quit itself.
+    Process { pid: u32, killed: Arc<AtomicBool> },
+    /// The end of the connection of a persistent service, which ends the close of its owner.
+    Connection(PersistentSocket),
+}
+
+/// Sets done when the thread of the stop of a process ends, also when it panics.
+struct DoneGuard(Arc<AtomicBool>);
+
+impl Drop for DoneGuard {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+
+/// The second quit: force-kills the process group of each standard-I/O sidecar of the quit stop that has not exited and
+/// ends the connection of each persistent service whose close has not ended, which ends the waits of the stop
+/// (docs/spec/hosts.md#process-lifecycle).
+fn kill_quit_stop(quit: &QuitStop) {
+    let targets = quit
+        .targets
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the targets, which are only read; the panic hook
+        // records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    for target in targets.iter() {
+        if target.done.load(Ordering::Acquire) {
+            continue;
+        }
+        let place = format!("sidecar {}", target.name);
+        match &target.end {
+            QuitEnd::Process { pid, killed } => {
+                killed.store(true, Ordering::Release);
+                crate::application_log::log_info(
+                    &place,
+                    format!("the second quit kills process {pid}"),
+                );
+                if let Err(error) = current().and_then(|platform| platform.end_process_group(*pid))
+                {
+                    log_error(&place, format!("second quit: {error}"));
+                }
+            }
+            QuitEnd::Connection(socket) => {
+                crate::application_log::log_info(
+                    &place,
+                    "the second quit ends the connection of the service",
+                );
+                let socket = socket
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the socket, which is only shut
+                    // down; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                // A connection that ended already has nothing to shut down.
+                match socket.shutdown() {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {}
+                    Err(error) => log_error(&place, format!("second quit: {error}")),
+                }
+            }
+        }
+    }
+}
+
+/// What a replacement waits on for room in the queue of the connection: the stop of the sidecars ends the wait by
+/// shutting the socket down, as the end of the connection does.
+struct RoomWait<'a> {
+    socket: &'a PersistentSocket,
+    stop: &'a crate::platform::StopSignal,
+    name: &'a str,
+}
+
 /// Closes the owner of a persistent service and tells it to shut down, once for the connection: a caller that finds
 /// the close done or running by another caller waits for it and returns `Ok(false)`, and the caller that does it
-/// returns `Ok(true)`. A failed close is not done, so the next caller tries again.
+/// returns `Ok(true)`. A failed close is not done, so the next caller tries again. Without room the close fails on a
+/// full queue, and with room it waits for room in the queue.
 fn close_persistent_owner(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
@@ -374,7 +465,8 @@ fn close_persistent_owner(
     connected: &AtomicBool,
     owner_closed: &Mutex<bool>,
     prefix: &str,
-    deadline: std::time::Instant,
+    room: Option<&RoomWait<'_>>,
+    clock: &Clock,
 ) -> Result<bool, CloseFailure> {
     // default: a lock that a panicking thread poisoned still holds the close state of the owner,
     // which the call amends; the panic hook records the panic.
@@ -388,7 +480,8 @@ fn close_persistent_owner(
         shutdown_waiters,
         connected,
         prefix,
-        deadline,
+        room,
+        clock,
     )?;
     *closed = true;
     Ok(true)
@@ -396,7 +489,7 @@ fn close_persistent_owner(
 
 /// Registers the waiter of a request of a persistent connection, unless the connection is already lost. The read thread
 /// clears `connected` under the lock of the waiters before it fails them, so a waiter registered after the loss is failed
-/// here with `lost` and does not wait for its deadline.
+/// here with `lost` and does not wait for an answer that does not come.
 fn register_waiter(
     waiters: &ReplyWaiters,
     connected: &AtomicBool,
@@ -416,15 +509,116 @@ fn register_waiter(
     Ok(())
 }
 
-/// Sends close-owner and shutdown through the outbox of a persistent service and waits for each answer until the
-/// deadline. The ids of the requests start with `prefix`.
+/// Removes the waiter of a request that was not sent.
+fn remove_waiter(waiters: &ReplyWaiters, request: &str) {
+    waiters
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the waiters of the requests, which the call
+        // amends; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(request);
+}
+
+/// Ends the transport of a persistent service without waiting for room in its queue: the Close signal goes through the
+/// queue when it has room, and a full queue ends the connection at once by shutting the socket down, which ends the
+/// writer and the reader and fails each waiting request (docs/spec/persistent-services.md#closing-and-recovery).
+fn end_transport(outbox: &SyncSender<Outgoing>, socket: &PersistentSocket, name: &str) {
+    match outbox.try_send(Outgoing::Close) {
+        Ok(()) | Err(TrySendError::Disconnected(_)) => {}
+        Err(TrySendError::Full(_)) => {
+            let socket = socket
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the socket, which is only shut down; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            match socket.shutdown() {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {}
+                Err(error) => log_error(
+                    &format!("sidecar {name}"),
+                    format!("close persistent transport: {error}"),
+                ),
+            }
+        }
+    }
+}
+
+/// Queues the close-owner or shutdown line of operation. The stop waits for no room in the queue: a full queue fails
+/// the close, and the caller ends the connection. A replacement waits for room until the connection ends or the
+/// sidecars stop, which shuts the socket down; either ends the writer, which drops the queue and ends the wait
+/// (docs/spec/persistent-services.md#closing-and-recovery). A closed queue fails with `disconnected_close` as the
+/// close of the transport.
+fn queue_close(
+    outbox: &SyncSender<Outgoing>,
+    bytes: Vec<u8>,
+    room: Option<&RoomWait<'_>>,
+    operation: &str,
+    disconnected_close: bool,
+    clock: &Clock,
+) -> Result<(), CloseFailure> {
+    let line = match outbox.try_send(Outgoing::Line(QueuedLine::new(bytes, clock()))) {
+        Ok(()) => return Ok(()),
+        Err(TrySendError::Disconnected(_)) => {
+            return Err(CloseFailure {
+                text: format!("send {operation}: sending on a closed channel"),
+                send_close: disconnected_close,
+            });
+        }
+        Err(TrySendError::Full(line)) => line,
+    };
+    let Some(room) = room else {
+        return Err(CloseFailure {
+            text: format!("{operation}: the queue of the connection is full"),
+            send_close: true,
+        });
+    };
+    let socket = Arc::clone(room.socket);
+    let name = room.name.to_string();
+    let watch = room.stop.watch(move || {
+        let socket = socket
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the socket, which is only shut down; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        // A connection that ended already has nothing to shut down.
+        match socket.shutdown() {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {}
+            Err(error) => log_error(&format!("sidecar {name}"), format!("replace stop: {error}")),
+        }
+    });
+    if watch.is_none() {
+        return Err(CloseFailure {
+            text: "sidecars are stopped".to_string(),
+            send_close: true,
+        });
+    }
+    let sent = outbox.send(line);
+    drop(watch);
+    match sent {
+        Ok(()) => Ok(()),
+        Err(_) if room.stop.stopped() => Err(CloseFailure {
+            text: "sidecars are stopped".to_string(),
+            send_close: true,
+        }),
+        Err(_) => Err(CloseFailure {
+            text: format!("{operation}: the connection ended before the queue had room"),
+            send_close: true,
+        }),
+    }
+}
+
+/// Sends close-owner and shutdown through the outbox of a persistent service and waits for each answer, which the answer
+/// or the end of the connection ends (docs/spec/persistent-services.md#closing-and-recovery). The ids of the requests
+/// start with `prefix`.
 fn send_close_owner_and_shutdown(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
     shutdown_waiters: &ReplyWaiters,
     connected: &AtomicBool,
     prefix: &str,
-    deadline: std::time::Instant,
+    room: Option<&RoomWait<'_>>,
+    clock: &Clock,
 ) -> Result<(), CloseFailure> {
     let request = format!("{prefix}-close");
     let line = serde_json::json!({"operation": "close-owner", "request": request});
@@ -437,7 +631,7 @@ fn send_close_owner_and_shutdown(
     register_waiter(
         close_waiters,
         connected,
-        request,
+        request.clone(),
         tx,
         "persistent service disconnected before close-owner ack",
     )
@@ -445,14 +639,12 @@ fn send_close_owner_and_shutdown(
         text: format!("close owner: {text}"),
         send_close: true,
     })?;
-    outbox
-        .send(Outgoing::Line(QueuedLine::new(bytes)))
-        .map_err(|error| CloseFailure {
-            text: format!("send close-owner: {error}"),
-            send_close: false,
-        })?;
-    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-    match rx.recv_timeout(remaining) {
+    if let Err(failure) = queue_close(outbox, bytes, room, "close-owner", false, clock) {
+        remove_waiter(close_waiters, &request);
+        return Err(failure);
+    }
+    // The read thread answers the waiter or fails it when the connection ends.
+    match rx.recv() {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
             return Err(CloseFailure {
@@ -476,7 +668,7 @@ fn send_close_owner_and_shutdown(
     register_waiter(
         shutdown_waiters,
         connected,
-        shutdown_request,
+        shutdown_request.clone(),
         shutdown_tx,
         "persistent service disconnected before shutdown ack",
     )
@@ -484,14 +676,11 @@ fn send_close_owner_and_shutdown(
         text: format!("shutdown: {text}"),
         send_close: true,
     })?;
-    outbox
-        .send(Outgoing::Line(QueuedLine::new(shutdown_bytes)))
-        .map_err(|error| CloseFailure {
-            text: format!("send shutdown: {error}"),
-            send_close: true,
-        })?;
-    let shutdown_remaining = deadline.saturating_duration_since(std::time::Instant::now());
-    match shutdown_rx.recv_timeout(shutdown_remaining) {
+    if let Err(failure) = queue_close(outbox, shutdown_bytes, room, "shutdown", true, clock) {
+        remove_waiter(shutdown_waiters, &shutdown_request);
+        return Err(failure);
+    }
+    match shutdown_rx.recv() {
         Ok(Ok(())) => Ok(()),
         Ok(Err(error)) => Err(CloseFailure {
             text: format!("shutdown: {error}"),
@@ -548,16 +737,6 @@ pub fn read_message_line(
     } else {
         MessageLine::Unfinished(read)
     })
-}
-
-/// Ends the deadline of the hello round trip of a persistent connection, so the read thread that follows sleeps until
-/// the service sends and a silence of the service does not end the connection. macOS rejects the SO_RCVTIMEO setting of
-/// a socket that the peer closed with EINVAL, so a failure in this step is a closed connection: a service that answers
-/// hello and closes soon is not a live connection.
-fn end_hello_deadline(stream: &dyn PersistentStream, name: &str) -> Result<(), String> {
-    stream
-        .set_read_deadline(None)
-        .map_err(|e| format!("sidecar {name}: hello deadline end: {e}"))
 }
 
 /// Records the line that a sidecar did not finish before its output ended.
@@ -654,23 +833,26 @@ impl<O: Owner> ResponseSender for ReadThreadResponseSender<O> {
             .map_err(|e| ResponseError::Failed(format!("response serialization: {e}")))?;
         line.push(b'\n');
 
+        // The send and the hold are one step under the state lock, so the writer that finds the queue empty finds the held
+        // response.
+        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the response buffer amends;
+        // the panic hook records the panic.
+        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        let queued = (state.clock)();
         match self
             .tx
-            .try_send(Outgoing::Line(QueuedLine::new(line.clone())))
+            .try_send(Outgoing::Line(QueuedLine::new(line.clone(), queued)))
         {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
                 // When the channel is full, immutable responses are kept in the order of sending.
-                // default: a lock that a panicking thread poisoned still holds the sidecar state, which the response
-                // buffer amends; the panic hook records the panic.
-                let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
                 let key = format!("{}:{}:{}", surface, image, body.get());
                 let size = line.len();
                 if let Err(limit) = state
                     .pending_replies
                     .entry(self.sidecar_name.clone())
                     .or_default()
-                    .add(line)
+                    .add(line, queued)
                 {
                     record_buffer_drop(
                         &format!("sidecar {} pending replies", self.sidecar_name),
@@ -736,33 +918,26 @@ fn write_line(
     name: &str,
     line: &QueuedLine,
     writing: &AtomicUsize,
+    terminated: &AtomicBool,
+    clock: &Clock,
 ) -> bool {
-    let started = Instant::now();
+    let started = clock();
     writing.store(line.bytes.len(), Ordering::Release);
     let written = stdin.write_all(&line.bytes);
     writing.store(0, Ordering::Release);
     if let Err(e) = written {
+        if terminated.load(Ordering::Acquire) {
+            crate::application_log::log_info(
+                &format!("sidecar {name}"),
+                "the stop ended the process before a line was written",
+            );
+            return false;
+        }
         log_error(&format!("sidecar {name}"), format!("write: {e}"));
         return false;
     }
-    record_write_wait(name, line, started, Instant::now());
+    record_write_wait(name, line, started, clock());
     true
-}
-
-fn write_pending_socket<O>(
-    state: &Mutex<State<O>>,
-    name: &str,
-    stream: &mut dyn PersistentStream,
-    writing: &AtomicUsize,
-) -> bool {
-    let held = take_held(
-        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the
-        // panic hook records the panic.
-        &mut state.lock().unwrap_or_else(PoisonError::into_inner),
-        name,
-    );
-    held.iter()
-        .all(|line| write_socket_line(stream, name, line, writing))
 }
 
 fn write_socket_line(
@@ -770,16 +945,9 @@ fn write_socket_line(
     name: &str,
     line: &QueuedLine,
     writing: &AtomicUsize,
+    clock: &Clock,
 ) -> bool {
-    let started = Instant::now();
-    if let Some(progress) = &line.progress
-        && progress.started.set(started).is_err()
-    {
-        log_error(
-            &format!("sidecar {name}"),
-            "a request line started its write twice",
-        );
-    }
+    let started = clock();
     writing.store(line.bytes.len(), Ordering::Release);
     let written = stream.write_all(&line.bytes).and_then(|_| stream.flush());
     writing.store(0, Ordering::Release);
@@ -787,59 +955,31 @@ fn write_socket_line(
         log_error(&format!("sidecar {name}"), format!("write: {error}"));
         return false;
     }
-    let ended = Instant::now();
-    if let Some(progress) = &line.progress
-        && progress.ended.set(ended).is_err()
-    {
-        log_error(
-            &format!("sidecar {name}"),
-            "a request line ended its write twice",
-        );
-    }
+    let ended = clock();
     record_write_wait(name, line, started, ended);
     true
 }
 
-/// A line for a sidecar with the moment it was queued or held.
+/// A line for a sidecar with the moment it was queued or held, on the clock of the sidecars, and its place in the order that
+/// the host accepted the lines of its sidecars.
 pub(crate) struct QueuedLine {
     pub(crate) bytes: Vec<u8>,
     queued: Instant,
-    /// The write progress of a request line whose timeout names it, and `None` for other lines.
-    progress: Option<Arc<LineProgress>>,
+    pub(crate) order: u64,
 }
+
+/// The order of the lines that the host accepts for its sidecars.
+static LINE_ORDER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 impl QueuedLine {
-    /// Stamps `bytes` with the moment it enters the write queue of a sidecar.
-    pub(crate) fn new(bytes: Vec<u8>) -> QueuedLine {
+    /// Stamps `bytes` with the moment `queued`, at which it enters the write queue of a sidecar, and with its place in the
+    /// order of acceptance.
+    pub(crate) fn new(bytes: Vec<u8>, queued: Instant) -> QueuedLine {
         QueuedLine {
             bytes,
-            queued: Instant::now(),
-            progress: None,
+            queued,
+            order: LINE_ORDER.fetch_add(1, Ordering::SeqCst) + 1,
         }
-    }
-}
-
-/// The write progress of a request line: the moments at which its write started and ended.
-#[derive(Default)]
-struct LineProgress {
-    started: std::sync::OnceLock<Instant>,
-    ended: std::sync::OnceLock<Instant>,
-}
-
-impl LineProgress {
-    /// States how far the request line went at `now`, given the moment of the last line that the host read from the service.
-    fn describe(&self, now: Instant, last_read: Instant) -> String {
-        if let Some(ended) = self.ended.get() {
-            return format!(
-                "the request line was written {} ms ago, and the last line from the service arrived {} ms ago",
-                now.duration_since(*ended).as_millis(),
-                now.duration_since(last_read).as_millis()
-            );
-        }
-        if self.started.get().is_some() {
-            return "the request line is being written".to_string();
-        }
-        "the request line is queued".to_string()
     }
 }
 
@@ -863,46 +1003,70 @@ fn record_write_wait(name: &str, line: &QueuedLine, started: Instant, ended: Ins
     );
 }
 
-/// Takes out the held items at once and writes the returns first and the closes last. A writer calls it when its queue
-/// ended; while the queue is open, `after_queue` takes the held items.
-fn write_pending<O: Owner>(
-    state: &Mutex<State<O>>,
-    name: &str,
-    stdin: &mut ChildStdin,
-    writing: &AtomicUsize,
-) -> bool {
-    let held = take_held(
+/// The held returns and closes of `name` that the host accepted before the line of `order`, in the order of acceptance, taken
+/// out of the state.
+fn take_held<O>(state: &mut State<O>, name: &str, order: u64) -> Vec<QueuedLine> {
+    let take = |lists: &mut HashMap<String, PendingLines>| {
+        let Some(held) = lists.get_mut(name) else {
+            // default: a sidecar without held items has none to write.
+            return Vec::new();
+        };
+        let taken = held.take_before(order);
+        if held.is_empty() {
+            lists.remove(name);
+        }
+        taken
+    };
+    let replies = take(&mut state.pending_replies);
+    let closes = take(&mut state.pending_closes);
+    let mut lines = Vec::with_capacity(replies.len() + closes.len());
+    let mut replies = replies.into_iter().peekable();
+    let mut closes = closes.into_iter().peekable();
+    loop {
+        let reply_first = match (replies.peek(), closes.peek()) {
+            (Some(reply), Some(close)) => reply.order < close.order,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (None, None) => break,
+        };
+        lines.extend(if reply_first {
+            replies.next()
+        } else {
+            closes.next()
+        });
+    }
+    lines
+}
+
+/// The held items of `name` that the host accepted before the line of `order`. A sender raises `HELD_LINES` before it orders
+/// a held line, so a line ordered after a held line finds the count above zero and the held line in the state.
+fn held_before<O>(state: &Mutex<State<O>>, name: &str, order: u64) -> Vec<QueuedLine> {
+    if HELD_LINES.load(Ordering::SeqCst) == 0 {
+        return Vec::new();
+    }
+    take_held(
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the
         // panic hook records the panic.
         &mut state.lock().unwrap_or_else(PoisonError::into_inner),
         name,
-    );
-    held.iter()
-        .all(|line| write_line(stdin, name, line, writing))
+        order,
+    )
 }
 
-/// The held items of `name` in the order of writing, the returns first and the closes last, taken out of the state.
-fn take_held<O>(state: &mut State<O>, name: &str) -> Vec<QueuedLine> {
-    let mut held = state
-        .pending_replies
-        .remove(name)
-        .map(|mut held| held.take())
-        // default: a sidecar without held items has no returns and closes to write.
-        .unwrap_or_default();
-    held.extend(
-        state
-            .pending_closes
-            .remove(name)
-            .map(|mut held| held.take())
-            // default: a sidecar without held items has no returns and closes to write.
-            .unwrap_or_default(),
-    );
-    held
+/// Every held item of `name`, in the order of acceptance.
+fn take_all_held<O>(state: &Mutex<State<O>>, name: &str) -> Vec<QueuedLine> {
+    take_held(
+        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the
+        // panic hook records the panic.
+        &mut state.lock().unwrap_or_else(PoisonError::into_inner),
+        name,
+        u64::MAX,
+    )
 }
 
 /// What a writer writes after it found its queue empty.
 enum AfterQueue {
-    /// A line that entered the queue after the writer found it empty. It goes out before the held items.
+    /// A line that entered the queue after the writer found it empty.
     Line(QueuedLine),
     /// The held items, which go out before the writer waits for the queue.
     Held(Vec<QueuedLine>),
@@ -910,10 +1074,10 @@ enum AfterQueue {
     End(Vec<QueuedLine>),
 }
 
-/// Takes the held items of `name` only while its queue holds no line, under the state lock. A sender queues a line or
-/// holds an item under the same lock, so every line queued before a held item is either written or still in the queue
-/// when the writer takes the item: a line still in the queue comes back as `AfterQueue::Line` and goes out first, and the
-/// held items go out after every line queued before them.
+/// Takes the held items of `name` only while its queue holds no line, under the state lock. A sender queues or holds a
+/// return or a close under the same lock, so an item held because the queue was full is in the state whenever the writer
+/// finds the queue empty: a line still in the queue comes back as `AfterQueue::Line`, and the held items go out before the
+/// writer waits for the queue.
 fn after_queue<O>(state: &Mutex<State<O>>, name: &str, queue: &Receiver<Outgoing>) -> AfterQueue {
     // default: a lock that a panicking thread poisoned still holds the sidecar state, which the writer amends; the panic
     // hook records the panic.
@@ -921,14 +1085,102 @@ fn after_queue<O>(state: &Mutex<State<O>>, name: &str, queue: &Receiver<Outgoing
     match queue.try_recv() {
         Ok(Outgoing::Line(line)) => AfterQueue::Line(line),
         Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
-            AfterQueue::End(take_held(&mut state, name))
+            AfterQueue::End(take_held(&mut state, name, u64::MAX))
         }
-        Err(TryRecvError::Empty) => AfterQueue::Held(take_held(&mut state, name)),
+        Err(TryRecvError::Empty) => AfterQueue::Held(take_held(&mut state, name, u64::MAX)),
     }
 }
 
-/// The time to wait for the service to answer retain. It includes the time it takes to close the sessions.
-const RETAIN_TIMEOUT: Duration = Duration::from_secs(10);
+/// How the writer of a sidecar ended.
+enum WriterEnd {
+    /// A write failed.
+    Failed,
+    /// The queue ended by Close or by its disconnection. `written` tells whether the held items that remained were written,
+    /// and `waiting` whether the writer was waiting for the queue when it ended.
+    Ended { written: bool, waiting: bool },
+}
+
+fn write_all(lines: &[QueuedLine], write: &mut impl FnMut(&QueuedLine) -> bool) -> bool {
+    lines.iter().all(|line| write(line))
+}
+
+/// Writes the line of the queue after the held items that the host accepted before it.
+fn write_queued<O>(
+    state: &Mutex<State<O>>,
+    name: &str,
+    line: &QueuedLine,
+    write: &mut impl FnMut(&QueuedLine) -> bool,
+) -> bool {
+    write_all(&held_before(state, name, line.order), write) && write(line)
+}
+
+/// Writes the lines of the sidecar `name` with `write` in the order that the host accepted them, until the queue ends or a
+/// write fails (docs/spec/host-contract.md, flush.buffer.written-in-the-order-of-sending). A line of the queue goes out after
+/// the held items accepted before it; when the queue is empty, the held items go out before the writer waits for the queue;
+/// when the queue ends, the held items are the last lines.
+fn write_in_order<O>(
+    state: &Mutex<State<O>>,
+    name: &str,
+    queue: &Receiver<Outgoing>,
+    mut write: impl FnMut(&QueuedLine) -> bool,
+) -> WriterEnd {
+    loop {
+        // 1. Writes the lines of the queue without blocking.
+        loop {
+            match queue.try_recv() {
+                Ok(Outgoing::Line(line)) => {
+                    if !write_queued(state, name, &line, &mut write) {
+                        return WriterEnd::Failed;
+                    }
+                }
+                Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
+                    return WriterEnd::Ended {
+                        written: write_all(&take_all_held(state, name), &mut write),
+                        waiting: false,
+                    };
+                }
+                Err(TryRecvError::Empty) => break,
+            }
+        }
+        // 2. When the queue is empty, writes the held items, or first the line that entered the queue since.
+        match after_queue(state, name, queue) {
+            AfterQueue::Line(line) => {
+                if !write_queued(state, name, &line, &mut write) {
+                    return WriterEnd::Failed;
+                }
+                continue;
+            }
+            AfterQueue::Held(held) => {
+                if !write_all(&held, &mut write) {
+                    return WriterEnd::Failed;
+                }
+            }
+            AfterQueue::End(held) => {
+                return WriterEnd::Ended {
+                    written: write_all(&held, &mut write),
+                    waiting: false,
+                };
+            }
+        }
+        // 3. Waits for the next line of the queue.
+        match queue.recv() {
+            Ok(Outgoing::Line(line)) => {
+                if !write_queued(state, name, &line, &mut write) {
+                    return WriterEnd::Failed;
+                }
+            }
+            Ok(Outgoing::Close) | Err(RecvError) => {
+                return WriterEnd::Ended {
+                    written: write_all(&take_all_held(state, name), &mut write),
+                    waiting: true,
+                };
+            }
+        }
+    }
+}
+
+/// The failure of a retain whose connection ended before its answer (docs/spec/persistent-services.md#service-transport).
+const CONNECTION_ENDED: &str = "the service connection ended before the answer";
 static RETAIN_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// The maximum number of bytes of one sidecar message line before the line feed (docs/spec/sidecars.md#messages). It
@@ -958,11 +1210,72 @@ struct Process {
     surfaces: HashSet<String>,
     /// Sessions closed after native-view removal, whose later messages are discarded while a persistent owner remains.
     closed_surfaces: HashSet<String>,
+    /// Ends when the read thread of a standard-I/O process has read the output to its end and judged it, so the stop
+    /// reads the record of that judgment after it (docs/spec/sidecars.md#declaration-and-startup).
+    read_ended: Option<Receiver<()>>,
+    /// True once the stop sent the terminate signal to the process group: a line that the writer could not write after
+    /// it is a line that the stop ended, not a failure.
+    terminated: Arc<AtomicBool>,
 }
 
 type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
+/// The clock of the sidecars.
+type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
+
+/// The clock of the sidecars of `state`.
+fn clock_of<O>(state: &Mutex<State<O>>) -> Clock {
+    Arc::clone(
+        &state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call reads; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .clock,
+    )
+}
+/// A second handle of the socket of a persistent connection, which ends the connection when its queue is full.
+type PersistentSocket = Arc<Mutex<Box<dyn PersistentStream>>>;
+
+/// The socket of a persistent connection of a test that holds no connection: it reads nothing, takes each write and shuts
+/// down without an error.
+#[cfg(test)]
+pub(crate) fn unconnected_socket() -> PersistentSocket {
+    struct Unconnected;
+    impl std::io::Read for Unconnected {
+        fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+            Ok(0)
+        }
+    }
+    impl std::io::Write for Unconnected {
+        fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+            Ok(buffer.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl PersistentStream for Unconnected {
+        fn try_clone(&self) -> Result<Box<dyn PersistentStream>, String> {
+            Ok(Box::new(Unconnected))
+        }
+        fn shutdown(&self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    Arc::new(Mutex::new(Box::new(Unconnected)))
+}
 /// Receives the result of the service for every close and shutdown request.
 type ReplyWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>;
+/// The handles of the connection of a recorded replacement: the outbox, the waiters of close-owner and shutdown,
+/// whether the connection runs, whether its owner closed, and the socket.
+type ReplaceHandles = (
+    SyncSender<Outgoing>,
+    ReplyWaiters,
+    ReplyWaiters,
+    Arc<AtomicBool>,
+    Arc<Mutex<bool>>,
+    PersistentSocket,
+);
 
 /// A check hook called with the name of a persistent service that retain has started.
 type RetainHook = Box<dyn Fn(&str) + Send + Sync>;
@@ -978,10 +1291,10 @@ struct PersistentConnection {
     /// replacement and the close of a stop run once between them.
     owner_closed: Arc<Mutex<bool>>,
     connected: Arc<AtomicBool>,
+    /// Ends the connection when its queue is full.
+    socket: PersistentSocket,
     /// The process of the service endpoint that this connection reached.
     service_pid: u32,
-    /// The moment at which the host read the last line from the service, the hello reply first.
-    last_read: Arc<Mutex<Instant>>,
 }
 
 /// The versions of a persistent service that is being replaced.
@@ -991,8 +1304,6 @@ struct Replacement {
     installed: Option<String>,
     /// The process of the service endpoint, which ends before the installed service starts.
     pid: u32,
-    /// How long the host waits for that process to end.
-    timeout: Duration,
 }
 
 struct State<O> {
@@ -1018,9 +1329,10 @@ struct State<O> {
     /// service is disconnected; a connection notice reaches only those surfaces.
     persistent_surfaces: HashMap<String, HashSet<String>>,
     stopped: bool,
-    /// The rules of the stop, its detach and its deadline, which a start that ends after the stop applies to its own
-    /// process.
-    stop_rules: (bool, Duration),
+    /// The detach of the stop, which a start that ends after the stop applies to its own process.
+    stop_detach: bool,
+    /// The stop that the quit runs before the application exits, None before it begins.
+    quit_stop: Option<Arc<QuitStop>>,
     // pending_replies: buffers the immutable image responses of each sidecar in the order of sending.
     // pending_closes: buffers the close messages of the surfaces of each sidecar (surface → close message).
     pending_replies: HashMap<String, PendingLines>,
@@ -1031,13 +1343,15 @@ struct State<O> {
     /// The persistent services that `replace` closes, with the running and the installed version, which the
     /// reconnection after the close writes to the log.
     replacing: HashMap<String, Replacement>,
-    /// For each stopping standard-I/O sidecar, the record that the read thread writes until the end of the output
-    /// (docs/spec/sidecars.md#messages).
-    stopping: HashMap<String, Stopping>,
+    /// For the process of each stopping standard-I/O sidecar, the record that its read thread writes until the end of the
+    /// output (docs/spec/sidecars.md#messages). A stop outside the quit returns before the exit, so a new process of the
+    /// same sidecar may run beside the stopping one, and the record is found by the process.
+    stopping: HashMap<u32, Stopping>,
     /// The requests with correlation identifiers that wait for a reply (sidecar_reply.rs).
     requests: RequestLedger,
-    /// The clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure). A check injects it.
-    clock: Arc<dyn Fn() -> Instant + Send + Sync>,
+    /// The clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure) and of the waits of
+    /// their lines in the write queue and the write (docs/spec/logging.md#entrances). A check injects it.
+    clock: Clock,
     /// The restart-limit record of each sidecar that has a counted failure.
     restarts: HashMap<String, RestartRecord>,
     /// The exact image detach requests waiting for supplier acknowledgements.
@@ -1069,13 +1383,14 @@ struct Core<O> {
     state: Arc<Mutex<State<O>>>,
     /// Announces every end of a start. The requests and stop of the same sidecar wait for it.
     started: Condvar,
-    /// The upper limit of the time until a newly started persistent service prints its endpoint.
-    ready_timeout: Duration,
+    /// Stops with the sidecars and ends the waits that no time limit ends: the endpoint line of a new service, the hello
+    /// and the replacement (docs/spec/sidecars.md#declaration-and-startup).
+    stop_signal: crate::platform::StopSignal,
     /// Called with the name of each persistent service after retain has started it and before retain reads the sessions to
     /// keep. A check injects a session here.
     retain_sending: Option<RetainHook>,
-    /// The upper limit of the time until a persistent service answers hello. A check gives a short limit.
-    hello_timeout: Duration,
+    /// The image presents of the sidecars that wait for the main thread, which the stop refuses.
+    presents: crate::images::Presents,
 }
 
 struct ImageDetachWaiter {
@@ -1163,8 +1478,6 @@ fn valid_sidecar_display_name(value: &str) -> bool {
 /// Manages the sidecar processes and the surface-owning windows of one application.
 pub struct Sidecars<O: Owner> {
     core: Arc<Core<O>>,
-    /// The Stop() deadline, which a test can inject. The default is 5 seconds.
-    pub stop_timeout: Duration,
 }
 
 /// The facts of a sidecar.json that passed its check.
@@ -1299,7 +1612,8 @@ impl<O: Owner> Sidecars<O> {
                     roots: HashMap::new(),
                     persistent_surfaces: HashMap::new(),
                     stopped: false,
-                    stop_rules: (false, Duration::ZERO),
+                    stop_detach: false,
+                    quit_stop: None,
                     pending_replies: HashMap::new(),
                     pending_closes: HashMap::new(),
                     unannounced_loss: std::collections::HashSet::new(),
@@ -1311,11 +1625,10 @@ impl<O: Owner> Sidecars<O> {
                     image_detaches: HashMap::new(),
                 })),
                 started: Condvar::new(),
-                ready_timeout: READY_TIMEOUT,
+                stop_signal: crate::platform::StopSignal::new(),
                 retain_sending: None,
-                hello_timeout: HELLO_TIMEOUT,
+                presents: crate::images::Presents::default(),
             }),
-            stop_timeout: Duration::from_secs(5),
         };
         sidecars.declare(declarations)?;
         Ok(sidecars)
@@ -1370,7 +1683,7 @@ impl<O: Owner> Sidecars<O> {
         if let Some(changed) = closing_changed {
             changed();
         }
-        self.stop_processes(processes, false);
+        self.stop_processes(processes, false, false, None);
         Ok(())
     }
 
@@ -1502,31 +1815,12 @@ impl<O: Owner> Sidecars<O> {
         changed
     }
 
-    /// Changes the upper limit of the time until a newly started persistent service prints its endpoint. A check gives
-    /// a short limit instead of the default 30 seconds. Call it only right after creation, before another reference
-    /// exists.
-    pub fn with_ready_timeout(mut self, limit: Duration) -> Self {
-        Arc::get_mut(&mut self.core)
-            .expect("the ready timeout is set before the sidecars are shared")
-            .ready_timeout = limit;
-        self
-    }
-
     /// Sets the hook that retain calls after it starts a persistent service and before it reads the sessions to keep.
     /// Call it only right after creation, before another reference exists.
     pub fn with_retain_sending(mut self, hook: impl Fn(&str) + Send + Sync + 'static) -> Self {
         Arc::get_mut(&mut self.core)
             .expect("the retain hook is set before the sidecars are shared")
             .retain_sending = Some(Box::new(hook));
-        self
-    }
-
-    /// Changes the upper limit of the time until a persistent service answers hello. A check gives a short limit
-    /// instead of the default 5 seconds. Call it only right after creation, before another reference exists.
-    pub fn with_hello_timeout(mut self, limit: Duration) -> Self {
-        Arc::get_mut(&mut self.core)
-            .expect("the hello timeout is set before the sidecars are shared")
-            .hello_timeout = limit;
         self
     }
 
@@ -1590,7 +1884,7 @@ impl<O: Owner> Sidecars<O> {
     /// injects a clock that it moves; the default is the monotonic clock. Call it only right after creation, before another
     /// reference exists.
     pub fn with_clock(self, clock: impl Fn() -> Instant + Send + Sync + 'static) -> Self {
-        let clock: Arc<dyn Fn() -> Instant + Send + Sync> = Arc::new(clock);
+        let clock: Clock = Arc::new(clock);
         self.core
             .state
             .lock()
@@ -1835,6 +2129,7 @@ impl<O: Owner> Sidecars<O> {
             ));
         }
         let owner_added = !state.owners.contains_key(surface);
+        let queued = (state.clock)();
         let process = state.running.get_mut(name).expect("started above");
         // New ownership or a service start changes the outdated session count. The status is enqueued under the
         // state lock, and UI invalidation runs after unlock.
@@ -1844,7 +2139,7 @@ impl<O: Owner> Sidecars<O> {
         // It sends to the channel without blocking. When the channel is full, it returns an "is not keeping up" error.
         let delivered = process
             .outbox
-            .try_send(Outgoing::Line(QueuedLine::new(line)))
+            .try_send(Outgoing::Line(QueuedLine::new(line, queued)))
             .map_err(|_| format!("sidecar {name} is not keeping up"));
         if delivered.is_ok() {
             process.closed_surfaces.remove(surface);
@@ -2017,6 +2312,7 @@ impl<O: Owner> Sidecars<O> {
                     .or_default() += 1;
                 closed_any = true;
             }
+            let queued = (state.clock)();
             // First collects the processes to which a channel send will be tried (to avoid a borrow conflict).
             let processes: Vec<(String, Result<(), TrySendError<Outgoing>>)> = names
                 .iter()
@@ -2024,7 +2320,7 @@ impl<O: Owner> Sidecars<O> {
                 .map(|(name, process)| {
                     let result = process
                         .outbox
-                        .try_send(Outgoing::Line(QueuedLine::new(line.clone())));
+                        .try_send(Outgoing::Line(QueuedLine::new(line.clone(), queued)));
                     (name.clone(), result)
                 })
                 .collect();
@@ -2038,7 +2334,7 @@ impl<O: Owner> Sidecars<O> {
                             .pending_closes
                             .entry(name.clone())
                             .or_default()
-                            .add(line.clone())
+                            .add(line.clone(), queued)
                         {
                             // The close is not sent, so no reply to it comes: the surface is not waited for. The sidecar
                             // keeps its session until it ends.
@@ -2120,7 +2416,7 @@ impl<O: Owner> Sidecars<O> {
     /// the installed executable through the creation path and notifies the surfaces that sent to the sidecar
     /// (docs/spec/persistent-services.md#updates). A sidecar without a running service of another version is refused.
     pub fn replace(&self, name: &str) -> Result<(), String> {
-        let (outbox, close_waiters, shutdown_waiters, connected, owner_closed) = {
+        let handles = {
             let mut state = self
                 .core
                 .state
@@ -2128,51 +2424,86 @@ impl<O: Owner> Sidecars<O> {
                 // default: a lock that a panicking thread poisoned still holds the sidecar state, which the replacement
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
-            let refused = || {
-                format!(
-                    "sidecar {name}: no running service of another version than the installed one"
-                )
-            };
-            if state.stopped {
-                return Err(refused());
-            }
-            let process = state.running.get(name).ok_or_else(refused)?;
-            if !is_outdated(&self.core, name, process) {
-                return Err(refused());
-            }
-            let Some(connection) = process.persistent.as_ref() else {
-                return Err(refused());
-            };
-            let handles = (
-                process.outbox.clone(),
-                Arc::clone(&connection.close_waiters),
-                Arc::clone(&connection.shutdown_waiters),
-                Arc::clone(&connection.connected),
-                Arc::clone(&connection.owner_closed),
-            );
-            let running = connection.version.clone();
-            let service_pid = connection.service_pid;
-            if state.replacing.contains_key(name) {
-                return Err(format!("sidecar {name}: a replacement is running"));
-            }
-            state.replacing.insert(
-                name.to_string(),
-                Replacement {
-                    running,
-                    installed: self.core.installed(name),
-                    pid: service_pid,
-                    timeout: self.stop_timeout,
-                },
-            );
-            handles
+            self.reserve_replacement(&mut state, name)?
         };
+        self.run_replacement(name, handles)
+    }
+
+    /// The sidecars whose replacement is recorded, sorted by name. A call that replaces records each replacement that
+    /// it decides before it returns.
+    pub fn replacing(&self) -> Vec<String> {
+        let state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let mut names: Vec<String> = state.replacing.keys().cloned().collect();
+        names.sort();
+        names
+    }
+
+    /// Records the replacement of the persistent service of the sidecar name, which a replacement that is already
+    /// recorded or a service that is not outdated refuses, and returns the handles of its connection. The caller holds
+    /// the state lock.
+    fn reserve_replacement(
+        &self,
+        state: &mut State<O>,
+        name: &str,
+    ) -> Result<ReplaceHandles, String> {
+        let refused = || {
+            format!("sidecar {name}: no running service of another version than the installed one")
+        };
+        if state.stopped {
+            return Err(refused());
+        }
+        let process = state.running.get(name).ok_or_else(refused)?;
+        if !is_outdated(&self.core, name, process) {
+            return Err(refused());
+        }
+        let Some(connection) = process.persistent.as_ref() else {
+            return Err(refused());
+        };
+        let handles = (
+            process.outbox.clone(),
+            Arc::clone(&connection.close_waiters),
+            Arc::clone(&connection.shutdown_waiters),
+            Arc::clone(&connection.connected),
+            Arc::clone(&connection.owner_closed),
+            Arc::clone(&connection.socket),
+        );
+        let running = connection.version.clone();
+        let service_pid = connection.service_pid;
+        if state.replacing.contains_key(name) {
+            return Err(format!("sidecar {name}: a replacement is running"));
+        }
+        state.replacing.insert(
+            name.to_string(),
+            Replacement {
+                running,
+                installed: self.core.installed(name),
+                pid: service_pid,
+            },
+        );
+        Ok(handles)
+    }
+
+    /// Closes the owner of the recorded replacement of name and its connection; a failed close drops the record.
+    fn run_replacement(&self, name: &str, handles: ReplaceHandles) -> Result<(), String> {
+        let (outbox, close_waiters, shutdown_waiters, connected, owner_closed, socket) = handles;
         static REPLACEMENTS: AtomicU64 = AtomicU64::new(0);
         let prefix = format!(
             "{}-replace-{}",
             std::process::id(),
             REPLACEMENTS.fetch_add(1, Ordering::Relaxed)
         );
-        let deadline = std::time::Instant::now() + self.stop_timeout;
+        let room = RoomWait {
+            socket: &socket,
+            stop: &self.core.stop_signal,
+            name,
+        };
+        let clock = clock_of(&self.core.state);
         let closed = close_persistent_owner(
             &outbox,
             &close_waiters,
@@ -2180,7 +2511,8 @@ impl<O: Owner> Sidecars<O> {
             &connected,
             &owner_closed,
             &prefix,
-            deadline,
+            Some(&room),
+            &clock,
         );
         // The caller that did not close the owner leaves the transport to the one that did.
         let send_close = match &closed {
@@ -2188,11 +2520,8 @@ impl<O: Owner> Sidecars<O> {
             Err(failure) => failure.send_close,
         };
         let failure = closed.err();
-        if send_close && let Err(error) = outbox.send(Outgoing::Close) {
-            log_error(
-                &format!("sidecar {name}"),
-                format!("close persistent transport: {error}"),
-            );
+        if send_close {
+            end_transport(&outbox, &socket, name);
         }
         match failure {
             None => Ok(()),
@@ -2217,27 +2546,31 @@ impl<O: Owner> Sidecars<O> {
         O: 'static,
     {
         for item in self.outdated() {
-            let (busy, known) = {
-                let state = self
+            let reserved = {
+                let mut state = self
                     .core
                     .state
                     .lock()
-                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only
-                    // read; the panic hook records the panic.
+                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call
+                    // amends; the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
-                (
-                    state.replacing.contains_key(&item.sidecar),
-                    state.layout.is_some(),
-                )
+                let busy = state.replacing.contains_key(&item.sidecar);
+                if item.sessions != 0 || busy || state.layout.is_none() {
+                    continue;
+                }
+                self.reserve_replacement(&mut state, &item.sidecar)
             };
-            if item.sessions != 0 || busy || !known {
-                continue;
-            }
+            let handles = match reserved {
+                Ok(handles) => handles,
+                Err(error) => {
+                    log_error("replace", error);
+                    continue;
+                }
+            };
             let core = Arc::clone(&self.core);
-            let stop_timeout = self.stop_timeout;
             crate::routine::spawn_named("sidecar-replace", move || {
-                let sidecars = Sidecars { core, stop_timeout };
-                if let Err(error) = sidecars.replace(&item.sidecar) {
+                let sidecars = Sidecars { core };
+                if let Err(error) = sidecars.run_replacement(&item.sidecar, handles) {
                     log_error("replace", error);
                 }
             });
@@ -2329,8 +2662,6 @@ impl<O: Owner> Sidecars<O> {
                 RETAIN_REQUESTS.fetch_add(1, Ordering::Relaxed)
             );
             let (waiter, answer) = sync_channel(1);
-            let progress = Arc::new(LineProgress::default());
-            let last_read;
             {
                 let mut state = self
                     .core
@@ -2406,13 +2737,20 @@ impl<O: Owner> Sidecars<O> {
                     .persistent
                     .as_ref()
                     .ok_or_else(|| format!("sidecar {name} is not a persistent service"))?;
-                connection
-                    .retain_waiters
-                    .lock()
-                    // default: a lock that a panicking thread poisoned still holds the waiters of the retain replies,
-                    // which the call amends; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .insert(request.clone(), waiter);
+                {
+                    let mut waiters = connection
+                        .retain_waiters
+                        .lock()
+                        // default: a lock that a panicking thread poisoned still holds the waiters of the retain replies,
+                        // which the call amends; the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner);
+                    // The read thread clears `connected` under this lock before it fails the waiters, so a retain of a
+                    // connection that ended fails here and does not wait.
+                    if !connection.connected.load(Ordering::Acquire) {
+                        return Err(format!("sidecar {name}: retain: {CONNECTION_ENDED}"));
+                    }
+                    waiters.insert(request.clone(), waiter);
+                }
                 let mut line = serde_json::to_vec(&serde_json::json!({
                     "operation": "retain",
                     "request": request,
@@ -2420,27 +2758,26 @@ impl<O: Owner> Sidecars<O> {
                 }))
                 .map_err(|e| e.to_string())?;
                 line.push(b'\n');
-                last_read = Arc::clone(&connection.last_read);
-                let mut queued = QueuedLine::new(line);
-                queued.progress = Some(Arc::clone(&progress));
-                process
+                if process
                     .outbox
-                    .try_send(Outgoing::Line(queued))
-                    .map_err(|_| format!("sidecar {name} is not keeping up"))?;
-            }
-            total += answer
-                .recv_timeout(RETAIN_TIMEOUT)
-                .map_err(|_| {
-                    let last_read = *last_read
+                    .try_send(Outgoing::Line(QueuedLine::new(line, (state.clock)())))
+                    .is_err()
+                {
+                    connection
+                        .retain_waiters
                         .lock()
-                        // default: a lock that a panicking thread poisoned still holds the moment, which is only read;
-                        // the panic hook records the panic.
-                        .unwrap_or_else(PoisonError::into_inner);
-                    format!(
-                        "sidecar {name}: retain was not answered within {RETAIN_TIMEOUT:?}: {}",
-                        progress.describe(Instant::now(), last_read)
-                    )
-                })?
+                        // default: a lock that a panicking thread poisoned still holds the waiters of the retain
+                        // replies, which the call amends; the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .remove(&request);
+                    return Err(format!("sidecar {name} is not keeping up"));
+                }
+            }
+            // The retain ends by its answer or by the end of its connection, which fails each waiting retain; no time
+            // limit ends it (docs/spec/persistent-services.md#service-transport).
+            total += answer
+                .recv()
+                .map_err(|_| format!("sidecar {name}: retain: {CONNECTION_ENDED}"))?
                 .map_err(|error| format!("sidecar {name}: retain: {error}"))?;
         }
         // The list may leave an outdated service without a surface.
@@ -2507,10 +2844,11 @@ impl<O: Owner> Sidecars<O> {
             .get(name)
             .ok_or_else(|| ResponseError::Ended(format!("sidecar {name} is not running")))?;
 
+        let queued = (state.clock)();
         // It sends to the channel without blocking. When the channel is full, it buffers.
         match process
             .outbox
-            .try_send(Outgoing::Line(QueuedLine::new(line.clone())))
+            .try_send(Outgoing::Line(QueuedLine::new(line.clone(), queued)))
         {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
@@ -2521,7 +2859,7 @@ impl<O: Owner> Sidecars<O> {
                     .pending_replies
                     .entry(name.to_string())
                     .or_default()
-                    .add(line)
+                    .add(line, queued)
                 {
                     record_buffer_drop(&format!("sidecar {name} pending replies"), size, &limit);
                     return Err(ResponseError::Failed(refused_reply(name, &limit, surface)));
@@ -2538,10 +2876,17 @@ impl<O: Owner> Sidecars<O> {
         }
     }
 
-    /// Terminates all sidecars. It sends the Close signal to the channel so that the write thread ends and closes
-    /// stdin, waits for the process to end, and kills it by force when the deadline passes.
+    /// Terminates all sidecars, the stop of the quit. It ends the waits of the starts and of the replacements, sends the
+    /// Close signal to the channel of each standard-I/O sidecar, so that the write thread ends and closes stdin, sends
+    /// SIGTERM to its process group and waits for its exit, which no time limit ends
+    /// (docs/spec/sidecars.md#declaration-and-startup).
     pub fn stop(&self) {
         self.stop_all(false);
+    }
+
+    /// The image presents of these sidecars that wait for the main thread.
+    pub(crate) fn presents(&self) -> &crate::images::Presents {
+        &self.core.presents
     }
 
     /// Stops the sidecars as `stop` does, except that a persistent service gets no close-owner and no shutdown: its
@@ -2551,6 +2896,84 @@ impl<O: Owner> Sidecars<O> {
     }
 
     fn stop_all(&self, detach: bool) {
+        let processes = self.stop_running(detach);
+        self.stop_processes(processes, detach, true, None);
+    }
+
+    /// The stop of the sidecars that the quit runs before the application exits, which answers whether the application
+    /// exits now (docs/spec/hosts.md#process-lifecycle). The first call begins the stop and answers true only when nothing
+    /// is left to wait for; otherwise `ended` runs on a thread of its own when the last process exited and the last close of
+    /// a persistent owner ended, and the caller asks for the quit again. A call while the stop runs is a second quit: it
+    /// force-kills the process group of each standard-I/O sidecar that has not exited and ends the connection of each
+    /// persistent service whose close runs, and answers false. A call after the end answers true.
+    pub fn quit_stop(&self, detach: bool, ended: impl FnOnce() + Send + 'static) -> bool {
+        let (quit, begun) = {
+            let mut state = self
+                .core
+                .state
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call
+                // amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            match &state.quit_stop {
+                Some(quit) => (Arc::clone(quit), true),
+                None => {
+                    let quit = Arc::new(QuitStop::default());
+                    state.quit_stop = Some(Arc::clone(&quit));
+                    (quit, false)
+                }
+            }
+        };
+        if begun {
+            if quit.ended.load(Ordering::Acquire) {
+                return true;
+            }
+            kill_quit_stop(&quit);
+            return false;
+        }
+        let processes = self.stop_running(detach);
+        if processes.is_empty() {
+            quit.ended.store(true, Ordering::Release);
+            return true;
+        }
+        let quit_end = Arc::clone(&quit);
+        let targets = self.stop_processes(
+            processes,
+            detach,
+            true,
+            Some(Box::new(move || {
+                quit_end.ended.store(true, Ordering::Release);
+                ended();
+            })),
+        );
+        *quit
+            .targets
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the targets, which the call replaces whole;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner) = targets;
+        false
+    }
+
+    /// Whether the quit stop ended, after which the application exits.
+    pub fn quit_stop_ended(&self) -> bool {
+        self.core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .quit_stop
+            .as_ref()
+            .is_some_and(|quit| quit.ended.load(Ordering::Acquire))
+    }
+
+    /// Marks the sidecars stopped, ends the waits of the starts and takes the running sidecars out of the running list, and
+    /// returns them for the stop of their processes.
+    fn stop_running(&self, detach: bool) -> Vec<(String, Process)> {
+        // The stop refuses each image present that waits for the main thread, which may be the thread that runs this stop, so
+        // no read thread of a sidecar waits for it (docs/spec/sidecars.md#declaration-and-startup).
+        self.core.presents.refuse();
         let (processes, changed): (Vec<(String, Process)>, Option<ClosingChanged>) = {
             let mut state = self
                 .core
@@ -2560,7 +2983,10 @@ impl<O: Owner> Sidecars<O> {
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             state.stopped = true;
-            state.stop_rules = (detach, self.stop_timeout);
+            state.stop_detach = detach;
+            // The stop ends the waits that no time limit ends: a start waits for the endpoint line and the hello, and a
+            // replacement for the end of the replaced process.
+            self.core.stop_signal.stop();
             // The host stops before the pending image detaches are acknowledged.
             image_detach::release_image_detaches(&mut state.image_detaches, false, |_| true);
             // The stop waits for no start: a start that ends after this registers nothing and stops its own process
@@ -2589,140 +3015,165 @@ impl<O: Owner> Sidecars<O> {
         if let Some(changed) = changed {
             changed();
         }
-        self.stop_processes(processes, detach);
+        processes
     }
 
-    /// Stops processes, which are out of the running list, by the stop rules and waits until they end
-    /// (docs/spec/sidecars.md#declaration-and-startup). With `detach` a persistent service only loses its connection.
-    fn stop_processes(&self, processes: Vec<(String, Process)>, detach: bool) {
-        // Waits for all processes in parallel.
-        let deadline = std::time::Instant::now() + self.stop_timeout;
+    /// Stops processes, which are out of the running list, by the stop rules (docs/spec/sidecars.md#declaration-and-startup).
+    /// With `detach` a persistent service only loses its connection. The stop of the quit waits until each process ends
+    /// and records each process that it waits for; any other stop returns at once, and each process is reaped and its end
+    /// written when it exits. With `ended` the stop of the quit returns at once too, and `ended` runs on a thread of its
+    /// own after the last of those waits. The answer is what a second quit ends of each process.
+    fn stop_processes(
+        &self,
+        processes: Vec<(String, Process)>,
+        detach: bool,
+        quit: bool,
+        ended: Option<Box<dyn FnOnce() + Send>>,
+    ) -> Vec<QuitTarget> {
         let mut handles = Vec::new();
+        let mut targets = Vec::new();
         for (name, process) in processes {
             let state = Arc::clone(&self.core.state);
-            let handle = crate::routine::spawn_named("sidecar-close", move || {
-                if process.child.is_none() {
-                    if let Some(persistent) = process.persistent {
-                        if detach {
-                            if let Err(error) = process.outbox.send(Outgoing::Close) {
-                                log_error(
-                                    &format!("sidecar {name}"),
-                                    format!("close persistent transport: {error}"),
-                                );
-                            }
-                            return;
-                        }
-                        let prefix = std::process::id().to_string();
-                        let closed = close_persistent_owner(
-                            &process.outbox,
-                            &persistent.close_waiters,
-                            &persistent.shutdown_waiters,
-                            &persistent.connected,
-                            &persistent.owner_closed,
-                            &prefix,
-                            deadline,
-                        );
-                        // The caller that did not close the owner leaves the transport to the one that did.
-                        let send_close = match &closed {
-                            Ok(done) => *done,
-                            Err(failure) => failure.send_close,
-                        };
-                        if let Err(failure) = closed {
-                            log_error(&format!("sidecar {name}"), failure.text);
-                        }
-                        if send_close && let Err(error) = process.outbox.send(Outgoing::Close) {
-                            log_error(
-                                &format!("sidecar {name}"),
-                                format!("close persistent transport: {error}"),
-                            );
-                        }
-                    }
-                    return;
+            let done = Arc::new(AtomicBool::new(false));
+            let done_guard = DoneGuard(Arc::clone(&done));
+            if process.child.is_none() {
+                if let Some(persistent) = &process.persistent {
+                    targets.push(QuitTarget {
+                        name: name.clone(),
+                        done,
+                        end: QuitEnd::Connection(Arc::clone(&persistent.socket)),
+                    });
                 }
-                // Sends the Close signal. When the write thread receives it, it leaves the blocking loop and closes
-                // stdin.
-                match process.outbox.try_send(Outgoing::Close) {
-                    Ok(()) => {}
-                    Err(TrySendError::Full(close)) => {
-                        // The channel is full: a blocking send is tried on a separate thread. This thread does not
-                        // block stop().
-                        let tx = process.outbox.clone();
-                        let close_name = name.clone();
-                        crate::routine::spawn_named("sidecar-close-send", move || {
-                            if let Err(e) = tx.send(close) {
-                                log_error(
-                                    &format!("sidecar {close_name}"),
-                                    format!("send close: {e}"),
-                                );
-                            }
-                        });
+                let handle = crate::routine::spawn_named("sidecar-close", move || {
+                    let _done = done_guard;
+                    let Some(persistent) = process.persistent else {
+                        return;
+                    };
+                    if detach {
+                        end_transport(&process.outbox, &persistent.socket, &name);
+                        return;
                     }
-                    Err(TrySendError::Disconnected(_)) => {
-                        // The channel is closed. The write thread has already ended, so nothing is sent.
-                    }
-                }
-
-                let Some(mut child) = process.child else {
-                    return;
-                };
-
-                // Waits based on SIGCHLD with the wait-timeout crate (no polling). The crate passes the remaining time
-                // to poll rounded down to ms, so it can return up to 1 ms before the deadline. It waits again for the
-                // time that remains until the deadline is reached, so it does not kill before the deadline.
-                let waited = loop {
-                    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-                    match child.wait_timeout(remaining) {
-                        Ok(None) if !remaining.is_zero() => continue,
-                        other => break other,
-                    }
-                };
-                // The report of the end omits an end that the pipe closed after a violation caused
-                // (docs/spec/sidecars.md#declaration-and-startup).
-                let violated = |state: &Arc<Mutex<State<O>>>| {
-                    state
-                        .lock()
-                        // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only
-                        // read; the panic hook records the panic.
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .stopping
-                        .get(&name)
-                        .is_some_and(|stopping| stopping.violated)
-                };
-                let pid = child.id();
-                // The stop ends the process in every branch below, so the sampler stops reading it here.
-                crate::performance::process_remove(pid);
-                let stop_exit = |status: &str| {
-                    crate::event_record::emit_host(
-                        crate::event_log::Level::Info,
-                        "host.sidecar.exit",
-                        serde_json::json!({"name": name, "pid": pid, "status": status, "stopping": true}),
+                    let prefix = std::process::id().to_string();
+                    let clock = clock_of(&state);
+                    // The close ends by the answers of close-owner and shutdown or by the end of the connection.
+                    let closed = close_persistent_owner(
+                        &process.outbox,
+                        &persistent.close_waiters,
+                        &persistent.shutdown_waiters,
+                        &persistent.connected,
+                        &persistent.owner_closed,
+                        &prefix,
+                        None,
+                        &clock,
                     );
-                };
+                    // The caller that did not close the owner leaves the transport to the one that did.
+                    let send_close = match &closed {
+                        Ok(done) => *done,
+                        Err(failure) => failure.send_close,
+                    };
+                    if let Err(failure) = closed {
+                        log_error(&format!("sidecar {name}"), failure.text);
+                    }
+                    if send_close {
+                        end_transport(&process.outbox, &persistent.socket, &name);
+                    }
+                });
+                handles.push(handle);
+                continue;
+            }
+            // Sends the Close signal. When the write thread receives it, it writes the held lines, leaves the blocking
+            // loop and closes stdin.
+            match process.outbox.try_send(Outgoing::Close) {
+                Ok(()) => {}
+                Err(TrySendError::Full(close)) => {
+                    // The channel is full: a blocking send is tried on a separate thread. This thread does not
+                    // block stop().
+                    let tx = process.outbox.clone();
+                    let close_name = name.clone();
+                    crate::routine::spawn_named("sidecar-close-send", move || {
+                        if let Err(e) = tx.send(close) {
+                            log_error(&format!("sidecar {close_name}"), format!("send close: {e}"));
+                        }
+                    });
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    // The channel is closed. The write thread has already ended, so nothing is sent.
+                }
+            }
+            let Process {
+                child,
+                read_ended,
+                terminated,
+                ..
+            } = process;
+            let Some(mut child) = child else {
+                continue;
+            };
+            let pid = child.id();
+            terminated.store(true, Ordering::Release);
+            let killed = Arc::new(AtomicBool::new(false));
+            targets.push(QuitTarget {
+                name: name.clone(),
+                done,
+                end: QuitEnd::Process {
+                    pid,
+                    killed: Arc::clone(&killed),
+                },
+            });
+            // The stop terminates the process group, so a sidecar that ignores the end of its input ends, and so do the
+            // processes that it started in its group.
+            match current().and_then(|platform| platform.terminate_process_group(pid)) {
+                Ok(()) => {}
+                Err(error) => log_error(&format!("sidecar {name}"), format!("terminate: {error}")),
+            }
+            if quit {
+                crate::application_log::log_info(
+                    &format!("sidecar {name}"),
+                    format!("the quit waits for the exit of process {pid}"),
+                );
+            }
+            let handle = crate::routine::spawn_named("sidecar-close", move || {
+                let _done = done_guard;
+                // The exit of the process ends the wait; no time limit ends it.
+                let waited = child.wait();
+                // The read thread reads the output to its end and judges it; the stop reads that judgment after it.
+                if let Some(read_ended) = read_ended {
+                    match read_ended.recv() {
+                        // The read thread sends nothing and drops the sender when it ends, which ends this receive.
+                        Ok(()) | Err(RecvError) => {}
+                    }
+                }
+                // The record of the stop of this process, which the read thread wrote: the report of the end omits an end
+                // that the pipe closed after a violation caused (docs/spec/sidecars.md#declaration-and-startup).
+                let violated = state
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call
+                    // amends; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .stopping
+                    .remove(&pid)
+                    .is_some_and(|stopping| stopping.violated);
+                // The stop ends the process, so the sampler stops reading it here.
+                crate::performance::process_remove(pid);
                 match waited {
-                    Ok(Some(status)) => {
-                        stop_exit(&exit_text(status));
-                        if !status.success() && !violated(&state) {
+                    Ok(status) => {
+                        crate::event_record::emit_host(
+                            crate::event_log::Level::Info,
+                            "host.sidecar.exit",
+                            serde_json::json!({"name": name, "pid": pid, "status": exit_text(status), "stopping": true}),
+                        );
+                        // The exit by the terminate signal of the stop is the stop itself.
+                        let terminated = current()
+                            .map(|platform| platform.exited_by_termination(status))
+                            // default: without a platform the end is reported, so a failure is not hidden.
+                            .unwrap_or(false);
+                        // The exit by the force-kill signal of a second quit is the quit itself.
+                        let killed = killed.load(Ordering::Acquire);
+                        if !status.success() && !terminated && !violated && !killed {
                             log_error(
                                 &format!("sidecar {name}"),
                                 format!("exited while stopping: {}", exit_text(status)),
                             );
-                        }
-                    }
-                    Ok(None) => {
-                        // The deadline passed. Kill by force.
-                        match child.kill() {
-                            Ok(()) => log_error(
-                                &format!("sidecar {name}"),
-                                "did not end within the stop timeout and was killed",
-                            ),
-                            Err(e) => log_error(&format!("sidecar {name}"), format!("kill: {e}")),
-                        }
-                        match child.wait() {
-                            Ok(status) => stop_exit(&exit_text(status)),
-                            Err(e) => log_error(
-                                &format!("sidecar {name}"),
-                                format!("wait after kill: {e}"),
-                            ),
                         }
                     }
                     Err(e) => {
@@ -2733,68 +3184,105 @@ impl<O: Owner> Sidecars<O> {
             });
             handles.push(handle);
         }
-
-        // Waits until all threads complete.
-        for handle in handles {
-            if let Err(e) = handle.join() {
-                log_error("sidecar stop", format!("thread join: {e:?}"));
+        let join = move || {
+            for handle in handles {
+                if let Err(e) = handle.join() {
+                    log_error("sidecar stop", format!("thread join: {e:?}"));
+                }
             }
+        };
+        match ended {
+            Some(ended) => {
+                crate::routine::spawn_named("sidecar-quit-stop", move || {
+                    join();
+                    ended();
+                });
+            }
+            // The quit waits until all threads complete.
+            None if quit => join(),
+            None => {}
         }
+        targets
     }
 }
 
-/// The upper limit of the time until the service answers hello (docs/spec/persistent-services.md).
-const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+/// What the start of a new persistent service receives first: the endpoint line that it read, or the stop.
+enum EndpointRead {
+    Line(std::io::Result<String>),
+    Stop,
+}
 
-/// The default upper limit of the time until a newly started persistent service prints its endpoint
-/// (docs/spec/persistent-services.md).
-const READY_TIMEOUT: Duration = Duration::from_secs(30);
+/// The end of the wait for the endpoint line of a new service.
+enum EndpointLine {
+    /// The first line that the service printed, empty when its output ended before a byte.
+    Line(String),
+    /// The stop ended the wait. It ended and reaped the service, and the text is the failure of that cleanup.
+    Stopped(Option<String>),
+}
 
-/// Reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends and
-/// reaps that service and fails, and appends the failure of that cleanup after the error. The second value of the error
-/// is true when no line arrived within limit, the start failure that the restart limit counts.
+/// Reads the first line that a newly started service prints to stdout. The line, the end of the output or the stop ends
+/// the wait, and no time limit ends it; the stop ends the process group of the service, which leads its own session, and
+/// reaps it (docs/spec/persistent-services.md#service-transport). The error is the failure of the read.
 fn service_endpoint_line(
     name: &str,
     child: &mut Child,
     stdout: std::process::ChildStdout,
-    limit: Duration,
-) -> Result<String, (String, bool)> {
-    let (sender, receiver) = sync_channel(1);
+    stop: &crate::platform::StopSignal,
+) -> Result<EndpointLine, String> {
+    // At most the line and the stop arrive, so neither send waits.
+    let (sender, receiver) = sync_channel(2);
+    let reader = sender.clone();
     let reader_name = name.to_string();
     crate::routine::spawn_named("sidecar-read-line", move || {
         let mut line = String::new();
         let read = BufReader::new(stdout).read_line(&mut line).map(|_| line);
-        // The receiving side ends when the limit passes, and that timeout is reported as the error of the start.
-        if sender.send(read).is_err() {
+        if reader.send(EndpointRead::Line(read)).is_err() {
             crate::application_log::log_info(
                 &format!("sidecar {reader_name}"),
-                "the service output ended after the ready bound",
+                "the service output ended after its start ended",
             );
         }
     });
-    match receiver.recv_timeout(limit) {
-        Ok(read) => read.map_err(|e| (format!("sidecar {name}: service startup: {e}"), false)),
-        Err(_) => {
-            let message = format!(
-                "sidecar {name}: the service did not print its endpoint within {}s",
-                limit.as_secs()
+    let stop_name = name.to_string();
+    let watch = stop.watch(move || {
+        // The receiver outlives the watch, and the channel has room for the line and the stop, so the send neither waits
+        // nor fails while the watch is registered.
+        if sender.send(EndpointRead::Stop).is_err() {
+            crate::application_log::log_info(
+                &format!("sidecar {stop_name}"),
+                "the stop arrived after the start ended",
             );
-            // When the service ends, stdout is closed and the read thread ends too.
-            if let Err(error) = child.kill() {
-                return Err((
-                    format!("{message}; ending the service failed: {error}"),
-                    true,
-                ));
+        }
+    });
+    if watch.is_some() {
+        match receiver.recv() {
+            Ok(EndpointRead::Line(read)) => {
+                return read.map(EndpointLine::Line).map_err(|e| e.to_string());
             }
-            if let Err(error) = child.wait() {
-                return Err((
-                    format!("{message}; reaping the service failed: {error}"),
-                    true,
-                ));
-            }
-            Err((message, true))
+            Ok(EndpointRead::Stop) => {}
+            Err(_) => return Err("the endpoint read ended without a result".to_string()),
         }
     }
+    drop(watch);
+    let pid = child.id();
+    if let Err(error) = current().and_then(|platform| platform.terminate_process_group(pid)) {
+        return Ok(EndpointLine::Stopped(Some(format!(
+            "ending the service failed: {error}"
+        ))));
+    }
+    if let Err(error) = child.wait() {
+        return Ok(EndpointLine::Stopped(Some(format!(
+            "reaping the service failed: {error}"
+        ))));
+    }
+    // The exit closed stdout, which also ends the read thread.
+    loop {
+        match receiver.recv() {
+            Ok(EndpointRead::Line(_)) | Err(_) => break,
+            Ok(EndpointRead::Stop) => {}
+        }
+    }
+    Ok(EndpointLine::Stopped(None))
 }
 
 impl<O: Owner> Core<O> {
@@ -2854,16 +3342,16 @@ impl<O: Owner> Core<O> {
                 .running
                 .remove(name)
                 .expect("the start registered its process under the held lock");
-            let (detach, stop_timeout) = state.stop_rules;
+            let detach = state.stop_detach;
             drop(state);
             if let Some(changed) = changed {
                 changed();
             }
             let sidecars = Sidecars {
                 core: Arc::clone(core),
-                stop_timeout,
             };
-            sidecars.stop_processes(vec![(name.to_string(), process)], detach);
+            // The stop of the quit waits for each exit, and this thread waits for the exit of its own process.
+            sidecars.stop_processes(vec![(name.to_string(), process)], detach, true, None);
             return Err("sidecars are stopped".into());
         }
         Ok((state, true))
@@ -2887,6 +3375,12 @@ impl<O: Owner> Core<O> {
         command
             .arg("--log-dir")
             .arg(core.config_directory.join("logs"));
+        let platform = current()?;
+        // The sidecar leads a process group of its own, which the host ends when the sidecar exits
+        // (docs/spec/sidecars.md#declaration-and-startup).
+        platform
+            .new_process_group(&mut command)
+            .map_err(|e| format!("sidecar {name}: {e}"))?;
         let spawned_at = Instant::now();
         let mut child = command
             .stdin(Stdio::piped())
@@ -2894,13 +3388,44 @@ impl<O: Owner> Core<O> {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("sidecar {name}: {}: {e}", program.display()))?;
+        let pid = child.id();
+        let outputs = (|| -> Result<_, String> {
+            let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
+            let stderr = child.stderr.take().ok_or("sidecar stderr is missing")?;
+            let (stdout, end_stdout) = platform.exit_output(OutputPipe::Stdout(stdout))?;
+            let (stderr, end_stderr) = platform.exit_output(OutputPipe::Stderr(stderr))?;
+            Ok((stdout, end_stdout, stderr, end_stderr))
+        })();
+        let (stdout, end_stdout, stderr, end_stderr) = match outputs {
+            Ok(outputs) => outputs,
+            Err(error) => {
+                log_failure(&format!("sidecar {name}"), platform.end_process_group(pid));
+                if let Err(wait) = child.wait() {
+                    log_error(&format!("sidecar {name}"), format!("wait: {wait}"));
+                }
+                return Err(format!("sidecar {name}: {error}"));
+            }
+        };
+        // The end of the sidecar is the exit of its process, which the operating system reports: the host then ends its
+        // process group and the reads of both outputs (docs/spec/sidecars.md#declaration-and-startup).
+        let exit_name = name.to_string();
+        crate::routine::spawn_named("sidecar-wait", move || {
+            log_failure(
+                &format!("sidecar {exit_name}"),
+                platform.wait_process_exit(pid),
+            );
+            log_failure(
+                &format!("sidecar {exit_name}"),
+                platform.end_process_group(pid),
+            );
+            end_stdout();
+            end_stderr();
+        });
         // The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
-        if let Some(stderr) = child.stderr.take() {
-            let place = name.to_string();
-            crate::routine::spawn_named("sidecar-stderr", move || {
-                write_stderr_records(stderr, &place)
-            });
-        }
+        let place = name.to_string();
+        let stderr_thread = crate::routine::spawn_named("sidecar-stderr", move || {
+            write_stderr_records(stderr, &place)
+        });
         crate::event_record::emit_host(
             crate::event_log::Level::Info,
             "host.sidecar.start",
@@ -2908,73 +3433,32 @@ impl<O: Owner> Core<O> {
         );
         crate::performance::process_add("sidecar", name, child.id());
         let mut stdin = child.stdin.take().ok_or("sidecar stdin is missing")?;
-        let stdout = child.stdout.take().ok_or("sidecar stdout is missing")?;
 
         // Creates a synchronous channel with capacity 256.
         let (tx, rx) = sync_channel::<Outgoing>(256);
 
-        // The write thread reads from the outbox channel and writes to stdin. The order is: (1) write everything in the
-        // queue without blocking, (2) when the queue is empty, write all held items, (3) then receive from the channel
-        // with blocking. In this way the held items (which arise only when the queue is full) go out after the messages
-        // that were in the queue earlier, so the order is correct. When the thread ends because the channel is closed,
-        // it also writes all held items before it closes stdin.
+        // The write thread writes the lines of the outbox channel and the held items to stdin in the order that the host
+        // accepted them (write_in_order). When the channel ends, it writes the held items that remain before it closes stdin.
         let write_name = name.to_string();
         let state_clone = Arc::clone(&core.state);
         let writing = Arc::new(AtomicUsize::new(0));
         let write_writing = Arc::clone(&writing);
+        let terminated = Arc::new(AtomicBool::new(false));
+        let write_terminated = Arc::clone(&terminated);
 
         threads.push(Box::new(move || {
-            loop {
-                loop {
-                    match rx.try_recv() {
-                        Ok(Outgoing::Line(line)) => {
-                            if !write_line(&mut stdin, &write_name, &line, &write_writing) {
-                                return;
-                            }
-                        }
-                        Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
-                            write_pending(&state_clone, &write_name, &mut stdin, &write_writing);
-                            return;
-                        }
-                        Err(TryRecvError::Empty) => break,
-                    }
-                }
-                match after_queue(&state_clone, &write_name, &rx) {
-                    AfterQueue::Line(line) => {
-                        if !write_line(&mut stdin, &write_name, &line, &write_writing) {
-                            return;
-                        }
-                        continue;
-                    }
-                    AfterQueue::Held(held) => {
-                        if !held
-                            .iter()
-                            .all(|line| write_line(&mut stdin, &write_name, line, &write_writing))
-                        {
-                            return;
-                        }
-                    }
-                    AfterQueue::End(held) => {
-                        for line in &held {
-                            if !write_line(&mut stdin, &write_name, line, &write_writing) {
-                                break;
-                            }
-                        }
-                        return;
-                    }
-                }
-                match rx.recv() {
-                    Ok(Outgoing::Line(line)) => {
-                        if !write_line(&mut stdin, &write_name, &line, &write_writing) {
-                            return;
-                        }
-                    }
-                    Ok(Outgoing::Close) | Err(RecvError) => {
-                        write_pending(&state_clone, &write_name, &mut stdin, &write_writing);
-                        return;
-                    }
-                }
-            }
+            let clock = clock_of(&state_clone);
+            // The end of the writer closes stdin when it drops it.
+            write_in_order(&state_clone, &write_name, &rx, |line| {
+                write_line(
+                    &mut stdin,
+                    &write_name,
+                    line,
+                    &write_writing,
+                    &write_terminated,
+                    &clock,
+                )
+            });
         }));
 
         // The read thread reads from stdout and passes events, and handles a failure when the output ends or the
@@ -2982,18 +3466,27 @@ impl<O: Owner> Core<O> {
         let state = Arc::clone(&core.state);
         let sidecar = name.to_string();
         let tx_clone = tx.clone();
-        let pid = child.id();
+        let (read_end, read_ended) = sync_channel::<()>(0);
         threads.push(Box::new(move || {
             let mut ready = Some(ReadyClock {
                 spawned: spawned_at,
                 pid,
             });
             let mut reader = BufReader::new(stdout);
-            let violation = relay(&mut reader, &state, &sidecar, &tx_clone, &mut ready);
+            let violation = relay(&mut reader, &state, &sidecar, pid, &tx_clone, &mut ready);
             // The read end is closed so that a process that is still writing is not blocked in a write.
             drop(reader);
             drop(tx_clone);
+            // The last record of the standard error comes before the exit record, which the judgment of the output writes
+            // or the stop writes after it (docs/spec/sidecars.md#log).
+            match stderr_thread.join() {
+                Ok(()) => {}
+                // A panic of the reader of the standard error ends its records; the panic hook records the panic.
+                Err(_panic) => {}
+            }
             fail(&state, &sidecar, pid, violation);
+            // The stop that waits for the judgment of the output receives the end of the channel.
+            drop(read_end);
         }));
 
         Ok(Started {
@@ -3004,6 +3497,8 @@ impl<O: Owner> Core<O> {
                 persistent: None,
                 surfaces: HashSet::new(),
                 closed_surfaces: HashSet::new(),
+                read_ended: Some(read_ended),
+                terminated,
             },
             threads,
         })
@@ -3109,14 +3604,19 @@ impl<O: Owner> Core<O> {
                     .stdout
                     .take()
                     .ok_or("persistent service stdout is missing")?;
-                let line = service_endpoint_line(name, &mut spawned, stdout, core.ready_timeout)
-                    .map_err(|(text, timed_out)| {
-                        if timed_out {
-                            Self::service_start_failure(core, name, lost, text)
-                        } else {
-                            text
+                let line =
+                    match service_endpoint_line(name, &mut spawned, stdout, &core.stop_signal) {
+                        Ok(EndpointLine::Line(line)) => line,
+                        Ok(EndpointLine::Stopped(None)) => {
+                            return Err("sidecars are stopped".to_string());
                         }
-                    })?;
+                        Ok(EndpointLine::Stopped(Some(error))) => {
+                            return Err(format!("sidecars are stopped; sidecar {name}: {error}"));
+                        }
+                        Err(error) => {
+                            return Err(format!("sidecar {name}: service startup: {error}"));
+                        }
+                    };
                 if line.is_empty() {
                     return Err(Self::service_start_failure(
                         core,
@@ -3150,13 +3650,6 @@ impl<O: Owner> Core<O> {
         let mut stream = current()?
             .connect_service(&endpoint.socket)
             .map_err(|e| format!("sidecar {name}: connect authenticated service: {e}"))?;
-        // The read deadline is set only for the hello round trip (V5-106). The requests and stop of the same sidecar
-        // wait for this start, so a service that accepted the socket and does not answer must not stop those requests.
-        // When the deadline passes, the connection is a failure, and the connection loss record makes the next start
-        // try the same path again. When the round trip ends, end_hello_deadline removes the deadline.
-        stream
-            .set_read_deadline(Some(core.hello_timeout))
-            .map_err(|e| format!("sidecar {name}: hello deadline: {e}"))?;
         let hello = serde_json::json!({
             "operation": "hello",
             "protocol": 1,
@@ -3174,23 +3667,41 @@ impl<O: Owner> Core<O> {
         let mut response = String::new();
         let response_stream = stream.try_clone().map_err(|e| e.to_string())?;
         let mut response_reader = BufReader::new(response_stream);
-        response_reader
-            .read_line(&mut response)
-            .map_err(|e| match e.kind() {
-                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => {
-                    Self::service_start_failure(
-                        core,
-                        name,
-                        lost,
-                        format!(
-                            "sidecar {name}: the service did not answer hello within {:?}",
-                            core.hello_timeout
-                        ),
-                    )
-                }
-                _ => format!("sidecar {name}: hello response: {e}"),
-            })?;
-        let hello_read = Instant::now();
+        // The hello answer ends by the answer, by the end of the connection, or by the stop, which shuts the connection
+        // down; no time limit ends it (docs/spec/persistent-services.md#service-transport).
+        let stopped = Arc::new(AtomicBool::new(false));
+        let waker = stream.try_clone().map_err(|e| e.to_string())?;
+        let stopping = Arc::clone(&stopped);
+        let hello_name = name.to_string();
+        let watch = core.stop_signal.watch(move || {
+            stopping.store(true, Ordering::Release);
+            // The read below returns the end of the connection, and the stop is the failure of the start; a connection
+            // that ended already has nothing to shut down.
+            match waker.shutdown() {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {}
+                Err(error) => log_error(
+                    &format!("sidecar {hello_name}"),
+                    format!("hello stop: {error}"),
+                ),
+            }
+        });
+        if watch.is_none() {
+            return Err("sidecars are stopped".to_string());
+        }
+        let read = response_reader.read_line(&mut response);
+        drop(watch);
+        if stopped.load(Ordering::Acquire) {
+            return Err("sidecars are stopped".to_string());
+        }
+        if !matches!(read, Ok(bytes) if bytes > 0) || !response.ends_with('\n') {
+            return Err(Self::service_start_failure(
+                core,
+                name,
+                lost,
+                format!("sidecar {name}: the service connection ended before the hello answer"),
+            ));
+        }
         let response: serde_json::Value = serde_json::from_str(&response)
             .map_err(|e| format!("sidecar {name}: hello response: {e}"))?;
         if response.get("operation").and_then(|v| v.as_str()) != Some("hello") {
@@ -3218,8 +3729,6 @@ impl<O: Owner> Core<O> {
             .get("version")
             .and_then(|v| v.as_str())
             .map(str::to_string);
-        // The hello succeeded, so the read thread that follows waits without a deadline.
-        end_hello_deadline(&*stream, name)?;
 
         let reader_stream = response_reader.into_inner();
         let (tx, rx) = sync_channel::<Outgoing>(256);
@@ -3232,6 +3741,11 @@ impl<O: Owner> Core<O> {
         let write_state = Arc::clone(&core.state);
         let writing = Arc::new(AtomicUsize::new(0));
         let write_writing = Arc::clone(&writing);
+        let socket: PersistentSocket = Arc::new(Mutex::new(
+            stream
+                .try_clone()
+                .map_err(|e| format!("sidecar {name}: {e}"))?,
+        ));
         let writer = stream;
         let writer_connected = Arc::clone(&connected);
         threads.push(Box::new(move || {
@@ -3243,82 +3757,22 @@ impl<O: Owner> Core<O> {
             }
             let _connection_guard = ConnectionGuard(writer_connected);
             let mut writer = writer;
-            loop {
-                loop {
-                    match rx.try_recv() {
-                        Ok(Outgoing::Line(line)) => {
-                            if !write_socket_line(&mut *writer, &write_name, &line, &write_writing)
-                            {
-                                return;
-                            }
-                        }
-                        Ok(Outgoing::Close) | Err(TryRecvError::Disconnected) => {
-                            if !write_pending_socket(
-                                &write_state,
-                                &write_name,
-                                &mut *writer,
-                                &write_writing,
-                            ) {
-                                log_error(
-                                    &format!("sidecar {write_name}"),
-                                    "the pending lines were not written before close",
-                                );
-                            }
-                            shut_down_writer(&write_name, &mut *writer);
-                            return;
-                        }
-                        Err(TryRecvError::Empty) => break,
-                    }
+            let clock = clock_of(&write_state);
+            let end = write_in_order(&write_state, &write_name, &rx, |line| {
+                write_socket_line(&mut *writer, &write_name, line, &write_writing, &clock)
+            });
+            if let WriterEnd::Ended { written, waiting } = end {
+                if !written {
+                    log_error(
+                        &format!("sidecar {write_name}"),
+                        if waiting {
+                            "the pending lines were not written before disconnect"
+                        } else {
+                            "the pending lines were not written before close"
+                        },
+                    );
                 }
-                match after_queue(&write_state, &write_name, &rx) {
-                    AfterQueue::Line(line) => {
-                        if !write_socket_line(&mut *writer, &write_name, &line, &write_writing) {
-                            return;
-                        }
-                        continue;
-                    }
-                    AfterQueue::Held(held) => {
-                        if !held.iter().all(|line| {
-                            write_socket_line(&mut *writer, &write_name, line, &write_writing)
-                        }) {
-                            return;
-                        }
-                    }
-                    AfterQueue::End(held) => {
-                        if !held.iter().all(|line| {
-                            write_socket_line(&mut *writer, &write_name, line, &write_writing)
-                        }) {
-                            log_error(
-                                &format!("sidecar {write_name}"),
-                                "the pending lines were not written before close",
-                            );
-                        }
-                        shut_down_writer(&write_name, &mut *writer);
-                        return;
-                    }
-                }
-                match rx.recv() {
-                    Ok(Outgoing::Line(line)) => {
-                        if !write_socket_line(&mut *writer, &write_name, &line, &write_writing) {
-                            return;
-                        }
-                    }
-                    Ok(Outgoing::Close) | Err(RecvError) => {
-                        if !write_pending_socket(
-                            &write_state,
-                            &write_name,
-                            &mut *writer,
-                            &write_writing,
-                        ) {
-                            log_error(
-                                &format!("sidecar {write_name}"),
-                                "the pending lines were not written before disconnect",
-                            );
-                        }
-                        shut_down_writer(&write_name, &mut *writer);
-                        return;
-                    }
-                }
+                shut_down_writer(&write_name, &mut *writer);
             }
         }));
 
@@ -3332,8 +3786,6 @@ impl<O: Owner> Core<O> {
         let reader_service_pid = endpoint.pid;
         let mut reader_ready = spawn_clock;
         let reader_connected = Arc::clone(&connected);
-        let last_read = Arc::new(Mutex::new(hello_read));
-        let reader_last_read = Arc::clone(&last_read);
         threads.push(Box::new(move || {
             struct ConnectionGuard(Arc<AtomicBool>);
             impl Drop for ConnectionGuard {
@@ -3352,11 +3804,6 @@ impl<O: Owner> Core<O> {
                 loop {
                     match read_message_line(&mut reader, MESSAGE_LIMIT, &mut line) {
                         Ok(MessageLine::Complete) => {
-                            *reader_last_read
-                                .lock()
-                                // default: a lock that a panicking thread poisoned still holds the moment, which is only
-                                // replaced; the panic hook records the panic.
-                                .unwrap_or_else(PoisonError::into_inner) = Instant::now();
                             record_ready(&mut reader_ready, &sidecar);
                         }
                         Ok(MessageLine::End) => return None,
@@ -3448,7 +3895,7 @@ impl<O: Owner> Core<O> {
                         }
                         continue;
                     }
-                    match close_answer(&state, &sidecar, &line) {
+                    match close_answer(&state, &sidecar, reader_service_pid, &line) {
                         Ok(true) => continue,
                         Ok(false) => {}
                         Err(violation) => return Some(violation),
@@ -3565,7 +4012,7 @@ impl<O: Owner> Core<O> {
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
             let error = Err("persistent service disconnected before shutdown ack".to_string());
-            // The flag is cleared under both waiter locks: a request registers its waiter under one of these locks only
+            // The flag is cleared under the waiter locks: a request registers its waiter under one of these locks only
             // while the flag is set, so every registered waiter is failed here.
             let mut close_waiters = waiters
                 .lock()
@@ -3577,7 +4024,22 @@ impl<O: Owner> Core<O> {
                 // default: a lock that a panicking thread poisoned still holds the waiters of the shutdown replies,
                 // which the reader amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
+            let mut retain_waiters = retain_waiters_for_reader
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the waiters of the retain replies, which
+                // the reader amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
             reader_connected.store(false, Ordering::Release);
+            // A retain ends by its answer or by the end of its connection (docs/spec/persistent-services.md#service-transport).
+            for (_, sender) in retain_waiters.drain() {
+                if sender.send(Err(CONNECTION_ENDED.to_string())).is_err() {
+                    crate::application_log::log_info(
+                        &format!("sidecar {sidecar}"),
+                        "the retain failure arrived after its request ended",
+                    );
+                }
+            }
+            drop(retain_waiters);
             for (_, sender) in close_waiters.drain() {
                 if sender.send(close_error.clone()).is_err() {
                     crate::application_log::log_info(
@@ -3639,6 +4101,8 @@ impl<O: Owner> Core<O> {
                 writing,
                 surfaces: HashSet::new(),
                 closed_surfaces: HashSet::new(),
+                read_ended: None,
+                terminated: Arc::default(),
                 persistent: Some(PersistentConnection {
                     version,
                     close_waiters,
@@ -3646,8 +4110,8 @@ impl<O: Owner> Core<O> {
                     shutdown_waiters,
                     owner_closed: Arc::new(Mutex::new(false)),
                     connected,
+                    socket,
                     service_pid: endpoint.pid,
-                    last_read,
                 }),
             },
             threads,
@@ -3656,28 +4120,25 @@ impl<O: Owner> Core<O> {
 }
 
 /// Waits until the process of the service that `replace` closed has ended, so the installed service starts after it
-/// (docs/spec/persistent-services.md#updates). A process that does not end within the stop timeout fails the replacement:
-/// the error line names the sidecar, and the reconnection that follows reaches the service that still runs, so the
-/// sidecar stays outdated.
+/// (docs/spec/persistent-services.md#updates). No time limit ends the wait; a stop of the sidecars ends it and fails the
+/// replacement: the error line names the sidecar, and the sidecar stays outdated.
 fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
     let replaced = {
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the panic
         // hook records the panic.
         let state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
-        state
-            .replacing
-            .get(name)
-            .map(|replaced| (replaced.pid, replaced.timeout))
+        state.replacing.get(name).map(|replaced| replaced.pid)
     };
-    let Some((pid, timeout)) = replaced else {
+    let Some(pid) = replaced else {
         return;
     };
-    let failure =
-        match current().and_then(|platform| platform.wait_service_process_end(pid, timeout)) {
-            Ok(true) => return,
-            Ok(false) => format!("the service process {pid} did not end within {timeout:?}"),
-            Err(error) => error,
-        };
+    let failure = match current()
+        .and_then(|platform| platform.wait_service_process_end(pid, &core.stop_signal))
+    {
+        Ok(true) => return,
+        Ok(false) => "sidecars are stopped".to_string(),
+        Err(error) => error,
+    };
     log_error(&format!("sidecar {name}"), format!("replace: {failure}"));
     core.state
         .lock()
@@ -3769,14 +4230,17 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
         }
         outcome = revive_attempt(core, name, &lost);
     }
-    let (replaced, stopped) = {
+    let replaced = core
+        .state
+        .lock()
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call amends; the
         // panic hook records the panic.
-        let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
-        (state.replacing.remove(name), restart_stopped(&state, name))
-    };
-    // While the restart limit stops the sidecar, no revival runs and no connection notice is written.
-    if stopped && matches!(outcome, Ok(false)) {
+        .unwrap_or_else(PoisonError::into_inner)
+        .replacing
+        .remove(name);
+    // No revival ran: another path started the sidecar again and announced it, the restart limit stops the sidecar, or
+    // the sidecars stopped. That path wrote the connection notice, or none is due, so this one writes none.
+    if matches!(outcome, Ok(false)) {
         return;
     }
     match (&outcome, replaced) {
@@ -4059,6 +4523,7 @@ fn relay<O: Owner>(
     reader: &mut impl BufRead,
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
+    pid: u32,
     tx: &SyncSender<Outgoing>,
     ready: &mut Option<ReadyClock>,
 ) -> Option<String> {
@@ -4077,7 +4542,7 @@ fn relay<O: Owner>(
             Err(error) => return Some(format!("read: {error}")),
         }
         record_ready(ready, sidecar);
-        match close_answer(state, sidecar, &line) {
+        match close_answer(state, sidecar, pid, &line) {
             Ok(true) => continue,
             Ok(false) => {}
             Err(violation) => return Some(violation),
@@ -4097,7 +4562,7 @@ fn relay<O: Owner>(
                 .is_some_and(|process| process.surfaces.contains(&event.surface))
                 || state
                     .stopping
-                    .get(sidecar)
+                    .get(&pid)
                     .is_some_and(|stopping| stopping.surfaces.contains(&event.surface));
             let closed = state
                 .running
@@ -4333,7 +4798,7 @@ fn fail<O: Owner>(
             // of the end. The requests that wait for a reply are recorded after the lock is released.
             let stopped_requests = state.requests.failed(sidecar);
             if let Some(violation) = violation {
-                if let Some(stopping) = state.stopping.get_mut(sidecar) {
+                if let Some(stopping) = state.stopping.get_mut(&pid) {
                     stopping.violated = true;
                 }
                 log_error(
@@ -4368,7 +4833,8 @@ fn fail<O: Owner>(
     let mut failures = Vec::new();
     let exit = match child {
         Some(mut child) => {
-            if let Err(error) = child.kill() {
+            // The protocol state after a failure is undefined, so the process group of the sidecar ends.
+            if let Err(error) = current().and_then(|platform| platform.end_process_group(pid)) {
                 failures.push(format!("kill: {error}"));
             }
             match child.wait() {
@@ -4623,9 +5089,11 @@ impl Owner for Window {
             surface,
             &data.images,
             |work: Box<dyn Fn() -> Result<(), String> + Send>| {
-                crate::images::present_on_ui(work, |work| {
-                    crate::platform::current()?.enqueue_ui(work)
-                })
+                crate::images::present_on_ui(
+                    work,
+                    |work| crate::platform::current()?.enqueue_ui(work),
+                    crate::framework::Manager::state::<WindowSidecars>(self).presents(),
+                )
             },
             |image, response| {
                 // Every answer to a frame, consumed or refused with its reason, is an image.frame event of the
@@ -4660,7 +5128,7 @@ impl Owner for Window {
 /// Writes each line of the standard error of the sidecar `name` as a record of level `info`, layer `sidecar` and `name`
 /// as the place. Bytes that are not UTF-8 are written as the replacement character, because a record is text. The
 /// thread ends when the sidecar closes its standard error.
-fn write_stderr_records(stderr: std::process::ChildStderr, name: &str) {
+fn write_stderr_records(stderr: Box<dyn std::io::Read + Send>, name: &str) {
     use std::io::{BufRead, BufReader};
     let mut reader = BufReader::new(stderr);
     let mut line = Vec::new();
@@ -4711,12 +5179,12 @@ mod route_test;
 mod lock_test;
 
 #[cfg(test)]
+#[path = "sidecars_stop_test.rs"]
+mod stop_test;
+
+#[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
 pub(crate) mod session_retention_test;
-
-#[cfg(all(test, unix))]
-#[path = "sidecars_read_deadline_test.rs"]
-mod read_deadline_test;
 
 /// Records a received body and returns whether native image dispatch consumes it.
 pub fn receive_sidecar_message(trace: impl FnOnce(), handle_image: impl FnOnce() -> bool) -> bool {

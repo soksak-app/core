@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use serde_json::value::RawValue;
 
@@ -119,6 +119,7 @@ fn a_poisoned_state_lock_still_answers_the_sidecar_queries() {
         close_answer(
             &sidecars.core.state,
             "missing",
+            0,
             br#"{"surface":"surf","closed":true}"#
         ),
         Err("unexpected close answer for surf".to_string()),
@@ -220,6 +221,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
             sender.send(Ok(())).unwrap();
         }
     });
+    let clock: super::Clock = Arc::new(Instant::now);
     let closed = close_persistent_owner(
         &outbox,
         &close_waiters,
@@ -227,7 +229,8 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &connected,
         &owner_closed,
         "test",
-        Instant::now() + Duration::from_secs(10),
+        None,
+        &clock,
     );
     service.join().unwrap();
     assert!(
@@ -241,7 +244,8 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &connected,
         &owner_closed,
         "test",
-        Instant::now() + Duration::from_secs(10),
+        None,
+        &clock,
     );
     assert!(
         matches!(again, Ok(false)),
@@ -267,6 +271,8 @@ fn fast_close_answer_preserves_both_closing_transitions() {
                 persistent: None,
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
+                read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.owners.insert("tab-standard".into(), owner.clone());
@@ -285,6 +291,7 @@ fn fast_close_answer_preserves_both_closing_transitions() {
                 close_answer(
                     &sidecars.core.state,
                     "fixture-standard",
+                    0,
                     br#"{"surface":"tab-standard","closed":true}"#
                 ),
                 Ok(true)
@@ -320,6 +327,8 @@ fn status_only_consumer_receives_stop_closing_removal() {
                 persistent: None,
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
+                read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.closing.insert(
@@ -362,6 +371,8 @@ fn detach_notification_contains_the_complete_final_status() {
                 persistent: None,
                 surfaces: ["tab-standard".into()].into(),
                 closed_surfaces: Default::default(),
+                read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.running.insert(
@@ -377,11 +388,13 @@ fn detach_notification_contains_the_complete_final_status() {
                     shutdown_waiters: Default::default(),
                     owner_closed: Default::default(),
                     connected: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                    socket: super::unconnected_socket(),
                     service_pid: 0,
-                    last_read: Arc::new(std::sync::Mutex::new(std::time::Instant::now())),
                 }),
                 surfaces: Default::default(),
                 closed_surfaces: Default::default(),
+                read_ended: None,
+                terminated: Default::default(),
             },
         );
         state.closing.insert(
@@ -438,11 +451,13 @@ fn outdated_fixture(
                     shutdown_waiters: Default::default(),
                     owner_closed: Default::default(),
                     connected: connected.clone(),
+                    socket: super::unconnected_socket(),
                     service_pid: 0,
-                    last_read: Arc::new(std::sync::Mutex::new(std::time::Instant::now())),
                 }),
                 surfaces: ["tab-fixture".into()].into(),
                 closed_surfaces: Default::default(),
+                read_ended: None,
+                terminated: Default::default(),
             },
         );
         state

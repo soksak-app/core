@@ -216,13 +216,9 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	// The step names the change that the check made, so a failure states which change gave which source and detail.
 	wait := func(step, want string) {
 		t.Helper()
-		select {
-		case got := <-applied:
-			if got[0] != want {
-				t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatalf("%s: the policy %q was not applied within 10 seconds", step, want)
+		got := <-applied
+		if got[0] != want {
+			t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
 		}
 	}
 	// The file does not exist: the default policy, which stores only errors, is in force.
@@ -384,13 +380,9 @@ func TestEachAppliedPolicyIsTheEventLogPolicyAndARefusedFileIsNot(t *testing.T) 
 	t.Cleanup(stop)
 	wait := func(step string, want map[string]string) {
 		t.Helper()
-		select {
-		case got := <-sent:
-			if got.name != "log-policy" || !reflect.DeepEqual(got.payload, map[string]any{"classes": want}) {
-				t.Fatalf("%s: emitted %q %v, want log-policy {classes: %v}", step, got.name, got.payload, want)
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatalf("%s: no event log-policy within 10 seconds", step)
+		got := <-sent
+		if got.name != "log-policy" || !reflect.DeepEqual(got.payload, map[string]any{"classes": want}) {
+			t.Fatalf("%s: emitted %q %v, want log-policy {classes: %v}", step, got.name, got.payload, want)
 		}
 	}
 	wait("start without a file", host.DefaultLogPolicy().Classes())
@@ -425,13 +417,9 @@ func TestThePolicyThatAPageChangeWritesCarriesTheCidsOfTheChange(t *testing.T) {
 	t.Cleanup(stop)
 	wait := func(step, want string) {
 		t.Helper()
-		select {
-		case got := <-applied:
-			if got[0] != want {
-				t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
-			}
-		case <-time.After(10 * time.Second):
-			t.Fatalf("%s: the policy %q was not applied within 10 seconds", step, want)
+		got := <-applied
+		if got[0] != want {
+			t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
 		}
 	}
 	command := func(step string, request map[string]any) {

@@ -6,7 +6,7 @@ mod folder;
 
 use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use soksak_host::debug_follow::{LogNotice, LogNotices, use_log_notices};
 use soksak_host::log_query::query_event_logs;
@@ -16,71 +16,76 @@ use soksak_sok::log_index::IndexUpdate;
 static SERIAL: Mutex<()> = Mutex::new(());
 
 fn next_notice(notices: &Receiver<LogNotice>) -> LogNotice {
-    notices
-        .recv_timeout(Duration::from_secs(5))
-        .expect("a notice did not arrive")
+    notices.recv().expect("a notice did not arrive")
 }
 
 // contract: debug.follow.coalesces-writes-into-a-notice
+//
+// The check ends each interval itself: the publisher enters the spacing after a notice and stays in it until the check lets it out, so
+// the announcements made while it is in the spacing are the ones that the bound on the rate folds into the next notice.
 #[test]
 fn log_notices_are_bounded_in_rate_and_count_what_they_coalesce() {
     let _serial = SERIAL.lock().unwrap();
-    let interval = Duration::from_millis(150);
-    let (release_sender, release_receiver) = channel::<()>();
-    let release_receiver = Mutex::new(release_receiver);
-    let (published_sender, published) = channel::<(LogNotice, Instant)>();
+    let (spaced_sender, spaced) = channel::<()>();
+    let spaced_sender = Mutex::new(spaced_sender);
+    let (ends, ends_receiver) = channel::<()>();
+    let ends_receiver = Mutex::new(ends_receiver);
+    let (published_sender, published) = channel::<LogNotice>();
     let published_sender = Mutex::new(published_sender);
-    let notices = LogNotices::start(interval, move |notice| {
-        release_receiver.lock().unwrap().recv().unwrap();
-        published_sender
-            .lock()
-            .unwrap()
-            .send((notice, Instant::now()))
-            .unwrap();
-    });
+    let notices = LogNotices::spaced_by(
+        move || {
+            spaced_sender.lock().unwrap().send(()).unwrap();
+            // The end of the check drops the sender, which also ends the spacing.
+            ends_receiver.lock().unwrap().recv().unwrap_or(());
+        },
+        move |notice| published_sender.lock().unwrap().send(notice).unwrap(),
+    );
+    let notice = |size, notices, coalesced| LogNotice {
+        path: "logs/host-b1.jsonl".into(),
+        size,
+        notices,
+        coalesced,
+    };
     assert_eq!(notices.value(), LogNotice::default());
-    let started = Instant::now();
-    for size in 1..=50 {
+    notices.observe("logs/host-b1.jsonl", 1);
+    assert_eq!(next_notice(&published), notice(1, 1, 0), "the first notice");
+    enter_spacing(&spaced);
+    // The publisher is in the spacing, so every announcement returns without waiting for it, and none is published before the interval
+    // ends.
+    for size in 2..=50 {
         notices.observe("logs/host-b1.jsonl", size);
     }
-    assert!(
-        started.elapsed() < Duration::from_secs(1),
-        "the writer waited {:?} for the notices",
-        started.elapsed()
-    );
-    // Permits for the first notice and for the notices that follow the interval; the writer announced all 50 before the first was released.
-    for _ in 0..4 {
-        release_sender.send(()).unwrap();
+    if let Ok(early) = published.try_recv() {
+        panic!("the notice {early:?} was published before the interval ended");
     }
-    let mut times = vec![];
-    let mut last = LogNotice::default();
-    while last.size != 50 {
-        let (notice, time) = published
-            .recv_timeout(Duration::from_secs(5))
-            .expect("a notice did not arrive");
-        last = notice;
-        times.push(time);
-    }
-    assert_eq!(last.path, "logs/host-b1.jsonl");
+    ends.send(()).unwrap();
+    let last = next_notice(&published);
     assert_eq!(
-        (last.notices + last.coalesced, last.notices),
-        (50, times.len() as i64),
-        "the last notice is {last:?} after {} notices, want the latest write with 50 announcements counted as published or coalesced",
-        times.len()
+        last,
+        notice(50, 2, 48),
+        "the notice after the interval, want the latest write with the 48 announcements before it coalesced"
     );
-    for pair in times.windows(2) {
-        assert!(
-            pair[1] - pair[0] >= interval,
-            "a notice came {:?} after the one before, under the bound of {interval:?}",
-            pair[1] - pair[0]
-        );
-    }
+    enter_spacing(&spaced);
     assert_eq!(notices.value(), last);
-    assert!(
-        published.recv_timeout(2 * interval).is_err(),
-        "a notice follows the latest write"
+    // No notice follows the latest write: after the interval, a new announcement is the next notice, and no announcement was folded
+    // into it.
+    ends.send(()).unwrap();
+    notices.observe("logs/host-b1.jsonl", 51);
+    assert_eq!(
+        next_notice(&published),
+        notice(51, 3, 48),
+        "the notice after the latest write, want only the new announcement"
     );
+    enter_spacing(&spaced);
+    drop(ends);
     notices.stop();
+}
+
+/// Waits until the publisher entered the spacing after a notice.
+fn enter_spacing(spaced: &Receiver<()>) {
+    spaced
+        .recv()
+        .expect("the publisher did not enter the spacing after a notice");
 }
 
 // contract: debug.follow.announces-only-changes-that-are-not-log-reads
@@ -101,10 +106,7 @@ fn an_update_of_the_index_announces_only_when_a_line_announces_a_change() {
         ..IndexUpdate::default()
     };
     notices.observe_update(&update(0, 300));
-    assert!(
-        published.recv_timeout(Duration::from_millis(300)).is_err(),
-        "an update whose lines are all log reads announced a change"
-    );
+    // An announcement of the first update would be a notice before the one of the second update or would be counted as coalesced in it.
     notices.observe_update(&update(1, 400));
     let notice = next_notice(&published);
     assert_eq!(
@@ -155,9 +157,12 @@ fn a_query_that_indexes_lines_announces_them_once() {
     );
     // The same query again finds the index current and announces nothing.
     query_event_logs(config.path(), r#"{"channel":"all"}"#).expect("the query again");
+    // An announcement of the second query would be a notice before the one that follows or would be counted as coalesced in it.
+    notices.observe("logs/after.jsonl", 1);
+    let next = next_notice(&published);
     assert!(
-        published.recv_timeout(Duration::from_millis(300)).is_err(),
-        "a query of a current index announced a change"
+        next.path == "logs/after.jsonl" && next.notices == 2 && next.coalesced == 0,
+        "a query of a current index announced a change: the next notice is {next:?}"
     );
     use_log_notices(None);
     notices.stop();

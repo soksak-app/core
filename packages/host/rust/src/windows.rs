@@ -1493,6 +1493,12 @@ pub fn window_state(window: &Window) -> Result<Option<Geometry>, String> {
     }))
 }
 
+/// Allows each removal that asked the page of window, because that page ended: its WebContent process ended or its next page
+/// starts (docs/spec/projects.md).
+pub(crate) fn removal_page_ended(window: &Window) {
+    window.state::<Windows>().removals.abandon(window.label());
+}
+
 /// Records that the main page started. Call it before the start document request answers. It leaves the window not
 /// ready, ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the
 /// modals of the previous page.
@@ -1503,6 +1509,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     crate::surfaces::end_run(&data.running);
     let cleanup = (|| {
         data.ready.store(false, Ordering::Relaxed);
+        removal_page_ended(window);
         // No page shows the failures of the cleared ends, so the host writes them.
         for failure in data.images.detach_page_starting() {
             log_error("image detach", failure);
@@ -1623,22 +1630,24 @@ pub(crate) fn end_page(window: &Window) -> Result<(), String> {
         &window.state::<crate::exposure::Exposure>().relay,
         &data,
         window.label(),
+        || removal_page_ended(window),
         || crate::surfaces::keys_page_ended(window),
         || close_window(window),
     )
 }
 
-/// Ends the page of the window data whose main page is main, as `end_page` does: keys gives the keys that waited for the
-/// decision of its workbench, and close closes the window.
+/// Ends the page of the window data whose main page is main, as `end_page` does: removals allows the removals that asked the
+/// page, keys gives the keys that waited for the decision of its workbench, and close closes the window.
 fn end_page_of(
     relay: &crate::exposure::Relay,
     data: &WindowData,
     main: &str,
+    removals: impl FnOnce(),
     keys: impl FnOnce() -> Result<(), String>,
     close: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     crate::exposure::end_page_requests(relay, &data.page_reloading, main);
-    leave_page(data, keys, close)
+    leave_page(data, removals, keys, close)
 }
 
 /// Asks the ready page of the window data whose main page is main to reload with emit (`ask_page_to_reload`). The event ends
@@ -1648,22 +1657,26 @@ pub(crate) fn reload_ready_page(
     data: &WindowData,
     main: &str,
     emit: impl FnOnce() -> Result<(), String>,
+    removals: impl FnOnce(),
     keys: impl FnOnce() -> Result<(), String>,
     close: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     crate::exposure::ask_page_to_reload(relay, &data.page_reloading, main, emit)?;
-    leave_page(data, keys, close)
+    leave_page(data, removals, keys, close)
 }
 
-/// Ends what a page that ended owed besides its requests: the window is no longer ready, the keys that waited for the
-/// decision of its workbench go (keys), and the close question that it left is answered (`answer_close_question`). An end
-/// that finds nothing owed changes nothing.
+/// Ends what a page that ended owed besides its requests: the window is no longer ready, the removals that asked it are
+/// allowed (removals), the keys that waited for the decision of its workbench go (keys), and the close question that it left
+/// is answered (`answer_close_question`). An end that finds nothing owed changes nothing.
 fn leave_page(
     data: &WindowData,
+    removals: impl FnOnce(),
     keys: impl FnOnce() -> Result<(), String>,
     close: impl FnOnce() -> Result<(), String>,
 ) -> Result<(), String> {
     data.ready.store(false, Ordering::Relaxed);
+    // The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
+    removals();
     let keys = keys();
     answer_close_question(data, close)?;
     keys
@@ -1719,7 +1732,9 @@ pub fn window_close_kept(window: &Window) -> Result<(), String> {
 }
 
 /// Handles a termination request. When a ready window exists, it blocks the termination and sends a close request to
-/// each window.
+/// each window. A quit that no ready window holds begins the quit stop of the sidecars and is blocked until that stop
+/// ends; the host then asks for the quit again, which the ended stop accepts, and a request while the stop runs is the
+/// second quit of the stop (docs/spec/hosts.md#process-lifecycle).
 pub(crate) fn quit(app: &AppHandle, api: crate::ExitRequestApi) {
     let registry = app.state::<Windows>();
     let waiting: Vec<_> = registry
@@ -1734,6 +1749,22 @@ pub(crate) fn quit(app: &AppHandle, api: crate::ExitRequestApi) {
         .collect();
     // Every termination request begins the quit state, with or without a ready window (docs/spec/hosts.md#process-lifecycle).
     if registry.quit.begin_quit_request(waiting.len()) {
+        // An application update or a relaunch keeps the persistent services running for the application that starts
+        // next.
+        let detach = registry
+            .update
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the pending update, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_some();
+        let again = app.clone();
+        if !app
+            .state::<crate::sidecars::WindowSidecars>()
+            .quit_stop(detach, move || again.quit())
+        {
+            api.prevent_exit();
+        }
         return;
     }
     api.prevent_exit();
@@ -1907,6 +1938,10 @@ mod records_test;
 #[cfg(test)]
 #[path = "page_end_test.rs"]
 mod page_end_test;
+
+#[cfg(test)]
+#[path = "windows_removal_end_test.rs"]
+mod removal_end_test;
 
 #[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]

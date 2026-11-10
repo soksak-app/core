@@ -1408,11 +1408,12 @@ struct NativeDragPlan {
 /// presented its current layout; it runs before each press, because a press goes where the last frame drew. A failed
 /// input after a press releases the button at the last point, so no press stays open in the window. The reply is {from,
 /// steps, took, asked, pressWaits}: took is the time from the first press to the last release without the waits before
-/// the presses, on the clock of the host, asked the time that the steps ask, and pressWaits the wait before each press,
+/// the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before each press,
 /// all in milliseconds.
 fn native_drag(
     plan: &NativeDragPlan,
     from: (f64, f64),
+    clock: impl Fn() -> Duration,
     mut deliver: impl FnMut(platform::Pointer) -> Result<(), Failure>,
     mut step: impl FnMut(),
     mut presented: impl FnMut() -> Result<(), Failure>,
@@ -1429,11 +1430,11 @@ fn native_drag(
         activate: false,
     };
     let at = |fraction: f64| (from.0 + plan.dx * fraction, from.1 + plan.dy * fraction);
-    let began = Instant::now();
+    let began = clock();
     let mut waited = Duration::ZERO;
     let mut press_waits = Vec::with_capacity(plan.times as usize);
     for turn in 0..plan.times {
-        let waiting = Instant::now();
+        let waiting = clock();
         presented().map_err(|error| {
             Failure::new(
                 error.code,
@@ -1444,7 +1445,7 @@ fn native_drag(
                 ),
             )
         })?;
-        let wait = waiting.elapsed();
+        let wait = clock() - waiting;
         waited += wait;
         press_waits.push(wait.as_millis() as u64);
         deliver(input(1, from)).map_err(|error| {
@@ -1495,7 +1496,7 @@ fn native_drag(
     Ok(json!({
         "from": {"x": from.0, "y": from.1},
         "steps": steps,
-        "took": (began.elapsed() - waited).as_millis() as u64,
+        "took": (clock() - began - waited).as_millis() as u64,
         "asked": steps * FRAME.as_millis() as u64,
         "pressWaits": press_waits,
     }))
@@ -1623,9 +1624,11 @@ fn drag(
             // The steps of a round trip are timed from its press, not from before the wait.
             let pressed = std::cell::Cell::new(Instant::now());
             let due = std::cell::Cell::new(0);
+            let start = Instant::now();
             native_drag(
                 &plan,
                 from,
+                || start.elapsed(),
                 |pointer| host.input_pointer(window, pointer).map(|_| ()),
                 || {
                     // Each step is delivered at its scheduled time relative to the press of its round trip, as tick
