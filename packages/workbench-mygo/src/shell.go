@@ -100,6 +100,9 @@ type metrics struct {
 	// packages/workbench/app.css).
 	gripThickness, gripLength, gripMix, gripDot, gripDotSpacing, lineCrossingMix float32
 	gripTransition                                                               time.Duration
+	// The state of the surface of the active tab in the status row of its card (.surface-status of packages/workbench/app.css).
+	surfaceStatusGap, surfaceStatusMargin, spinner, spinnerBorder float32
+	spinnerTurn                                                   time.Duration
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -224,6 +227,15 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		failed = errors.New("the chrome metric grip-transition has no time")
 	}
 	m.gripTransition = time.Duration(seconds * float64(time.Second))
+	read("surface-status-gap", &m.surfaceStatusGap)
+	read("surface-status-margin", &m.surfaceStatusMargin)
+	read("spinner", &m.spinner)
+	read("spinner-border", &m.spinnerBorder)
+	turn, ok := declared.Seconds("spinner-turn")
+	if !ok {
+		failed = errors.New("the chrome metric spinner-turn has no time")
+	}
+	m.spinnerTurn = time.Duration(turn * float64(time.Second))
 	return m, failed
 }
 
@@ -393,8 +405,12 @@ type Shell struct {
 	// frameRequests counts the frames that the shell asked for, so a command reads whether its run asked for one. A part of the
 	// shell may ask from another goroutine.
 	frameRequests atomic.Int64
-	pointer       *PointerSequence
-	verification  *Verification
+	// answering counts the commands that run and have not answered, and afterAnswering holds what waits for the last answer
+	// (afterAnswers).
+	answering      int
+	afterAnswering []func()
+	pointer        *PointerSequence
+	verification   *Verification
 	// verifying tells that the step that gives a watcher the verification waits to run, and building that a frame builds.
 	verifying, building bool
 	// framed tells that the step after a frame, which gives the watchers the statuses of that frame, waits to run, and afterFramed
