@@ -563,9 +563,11 @@ type Platform interface {
 	// CancelLayoutTicket cancels only the matching owner ticket; it does not cancel a later queued ticket.
 	CancelLayoutTicket(window Window, ticket uint64) error
 	// JoinView joins the view webview to the open layout transaction of window with ticket, so that the commit waits until the view
-	// presents. presented is called on the UI thread when the view presents. abandon ends the join without presentation and is
-	// nil when joined is false, which means that no transaction of ticket is open.
-	JoinView(window Window, ticket uint64, view unsafe.Pointer, presented func()) (abandon func() error, joined bool, err error)
+	// presents. presented is called on the worker when the view presents, and ended with its reason when the join ends without a
+	// presentation and without abandon: "input" when a press or key event ended the hold, "closed" when the view closed. Each join
+	// calls one of them at most once, and a cancel calls neither. abandon ends the join without presentation and is nil when joined
+	// is false, which means that no transaction of ticket is open (docs/spec/native-surfaces.md#layout-transaction).
+	JoinView(window Window, ticket uint64, view unsafe.Pointer, presented func(), ended func(reason string)) (abandon func() error, joined bool, err error)
 	// AfterViewPresentation calls presented on the worker after the view webview presented its next frame, and tells whether it
 	// started that wait. A view that closes before it presents calls nothing.
 	AfterViewPresentation(view unsafe.Pointer, presented func()) bool
@@ -589,6 +591,9 @@ type Platform interface {
 	// ObserveLayout registers the observer of the layout transactions of the process, in place of the earlier one: started runs on
 	// the worker when a preparation of the window starts, and ended when the transaction of the window ends. Call it on the UI thread.
 	ObserveLayout(started, ended func(window Window)) error
+	// WatchLayoutEnds calls ended on the worker each time a layout transaction of a window ends, beside the observer of
+	// ObserveLayout, so a wait inside a presentation request ends with the transaction it belongs to. Call it on the UI thread.
+	WatchLayoutEnds(ended func(window Window)) error
 	// InjectSettledFailure makes the next settled wait fail in a diagnostic build.
 	InjectSettledFailure(window Window) error
 

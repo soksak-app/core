@@ -724,15 +724,21 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Cancels only the queued or active surface placement transaction identified by ticket.
     fn cancel_layout_ticket(&self, window: Handle, ticket: u64) -> Result<(), String>;
     /// Joins the view document to the open layout transaction of window with ticket, so that the commit waits until the view
-    /// presents. presented runs on the UI thread when the view presents. The returned function ends the join without the
-    /// presentation; it is None when no transaction of ticket is open.
+    /// presents. presented runs on the UI thread when the view presents, and ended with its reason when the join ends without a
+    /// presentation and without the returned abandon: "input" when a press or key event ended the hold, "closed" when the view
+    /// closed; a cancel runs neither. The returned function ends the join without the presentation; it is None when no
+    /// transaction of ticket is open (docs/spec/native-surfaces.md#layout-transaction).
     fn join_view(
         &self,
         window: Handle,
         ticket: u64,
         view: Handle,
         presented: Box<dyn FnOnce() + Send>,
+        ended: Box<dyn FnOnce(&str) + Send>,
     ) -> Result<Option<ViewAbandon>, String>;
+    /// Calls ended on the UI thread with the window each time a layout transaction of a window ends, so a wait inside a
+    /// presentation request ends with the transaction it belongs to. Call it once, on the UI thread.
+    fn watch_layout_ends(&self, ended: Box<dyn Fn(Handle) + Send + Sync>) -> Result<(), String>;
     /// Sets the title bar of the window to height (pt) when a new page starts. A visible window is set inside the start
     /// transaction of ticket and committed together with the first presentation of the new page
     /// (surfaceLayoutStartPage). ready is called on the UI thread after the title bar is set or after a failure. Call

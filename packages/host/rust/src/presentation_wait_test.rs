@@ -73,7 +73,7 @@ fn waits_are_keyed_by_surface_generation_and_ticket() {
 #[test]
 fn each_end_without_presentation_writes_the_abandoned_event() {
     let _trace = crate::performance::test_trace();
-    for reason in ["process-ended", "hidden", "unresponsive", "timeout"] {
+    for reason in ["process-ended", "hidden", "unresponsive", "input", "closed"] {
         let wait = PresentationWait::default();
         wait.begin(EACH_END_SURFACE, GENERATION, TICKET);
         let before = abandoned_of_surface(EACH_END_SURFACE).len();
@@ -116,7 +116,7 @@ fn a_presentation_ends_the_exact_wait_without_an_abandoned_event() {
 // contract: view.presentation-wait.joins
 #[test]
 fn lifecycle_ends_abandon_only_the_matching_native_joins() {
-    for reason in ["process-ended", "hidden", "unresponsive", "timeout"] {
+    for reason in ["process-ended", "hidden", "unresponsive"] {
         let wait = PresentationWait::default();
         let abandons = Arc::new(AtomicUsize::new(0));
         let counted = abandons.clone();
@@ -295,15 +295,15 @@ fn an_invisible_placement_is_not_joinable_and_leaves_its_wait_open() {
     );
 }
 
-// contract: view.presentation-wait.ends-at-the-presentation-limit
-// A join that does not present by the presentation limit ends with timeout and abandons its native join, and its view generation
-// joins no later layout transaction; a new generation joins again.
+// contract: view.presentation-wait.ends-at-input
+// A join that has not presented when a press or key event ends the hold ends with the reason input. The native join ended by
+// itself, so the host abandons none, and the generation joins the next transaction: no wait ends by time
+// (docs/spec/native-surfaces.md#layout-transaction).
 #[test]
-fn a_join_that_does_not_present_ends_at_the_limit_and_its_generation_joins_no_later_wait() {
+fn a_join_that_does_not_present_ends_at_input_and_its_generation_joins_again() {
     let wait = PresentationWait::default();
     let abandons = Arc::new(AtomicUsize::new(0));
     let counted = abandons.clone();
-    let shown = placement([10.0, 20.0, 300.0, 200.0], true);
     assert!(wait.begin(ABANDON_SURFACE, GENERATION, TICKET));
     wait.attach_abandon(
         ABANDON_SURFACE,
@@ -315,33 +315,23 @@ fn a_join_that_does_not_present_ends_at_the_limit_and_its_generation_joins_no_la
         }),
     );
     assert_eq!(
-        wait.end(ABANDON_SURFACE, GENERATION, TICKET, "timeout"),
+        wait.end(ABANDON_SURFACE, GENERATION, TICKET, "input"),
         Ok(true)
     );
-    assert_eq!(abandons.load(Ordering::SeqCst), 1);
+    assert_eq!(abandons.load(Ordering::SeqCst), 0);
     let moved = placement([40.0, 20.0, 300.0, 200.0], true);
     assert_eq!(
         wait.joinable(&[(ABANDON_SURFACE, Some(GENERATION), moved)]),
-        Vec::<(&str, u64)>::new(),
-        "the generation whose wait ended at the limit joined a later transaction"
-    );
-    assert_eq!(
-        wait.joinable(&[(ABANDON_SURFACE, Some(GENERATION + 1), shown)]),
-        vec![(ABANDON_SURFACE, GENERATION + 1)]
+        vec![(ABANDON_SURFACE, GENERATION)]
     );
 }
 
-// contract: view.presentation-wait.ends-at-the-presentation-limit
-// The limit of a join that presented first changes nothing: its generation joins the next transaction.
+// contract: view.presentation-wait.ends-at-input
+// An input end after the presentation changes nothing.
 #[test]
-fn the_limit_of_a_presented_join_changes_nothing() {
+fn an_input_end_after_the_presentation_changes_nothing() {
     let wait = PresentationWait::default();
     assert!(wait.begin(SURFACE, GENERATION, TICKET));
     wait.mark_presented(SURFACE, GENERATION, TICKET);
-    assert_eq!(wait.end(SURFACE, GENERATION, TICKET, "timeout"), Ok(false));
-    let moved = placement([40.0, 20.0, 300.0, 200.0], true);
-    assert_eq!(
-        wait.joinable(&[(SURFACE, Some(GENERATION), moved)]),
-        vec![(SURFACE, GENERATION)]
-    );
+    assert_eq!(wait.end(SURFACE, GENERATION, TICKET, "input"), Ok(false));
 }

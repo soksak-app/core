@@ -3609,8 +3609,28 @@ pub(crate) fn join_shown_views(
                 log_error("view channel", error);
             }
         });
+        let ended_window = window.clone();
+        let ended_surface = surface.to_string();
+        // The native join ended by itself, by a press or key event that ended the hold or by the close of the view.
+        let ended: Box<dyn FnOnce(&str) + Send> = Box::new(move |reason: &str| {
+            let reason = reason.to_string();
+            let queued = platform::current().and_then(|platform| {
+                platform.enqueue_ui(Box::new(move || {
+                    end_ticket_presentation_wait(
+                        &ended_window,
+                        &ended_surface,
+                        generation,
+                        ticket,
+                        &reason,
+                    )
+                }))
+            });
+            if let Err(error) = queued {
+                log_error("view channel", error);
+            }
+        });
         let joined = with_native_owner(window, move |owner| {
-            platform.join_view(owner, ticket, view, presented)
+            platform.join_view(owner, ticket, view, presented, ended)
         });
         trace_presentation_join(
             "result",
@@ -3625,27 +3645,10 @@ pub(crate) fn join_shown_views(
                 data.documents
                     .presentation()
                     .attach_abandon(surface, generation, ticket, abandon);
-                outcome.joined.push((surface.to_string(), generation));
                 // WebKit reports a page process unresponsive only after input or a load, so a visible view whose process stops
-                // before it presents sends no end; the limit ends its wait (docs/spec/native-surfaces.md#view-surfaces).
-                let limit_window = window.clone();
-                let limit_surface = surface.to_string();
-                platform
-                    .enqueue_ui_after(
-                        crate::exposure::TIMEOUT,
-                        Box::new(move || {
-                            end_ticket_presentation_wait(
-                                &limit_window,
-                                &limit_surface,
-                                generation,
-                                ticket,
-                                "timeout",
-                            )
-                        }),
-                    )
-                    .map_err(|error| {
-                        format!("arming the presentation limit of view {surface}: {error}")
-                    })?;
+                // before it presents sends no end; the next press or key event ends the hold and the join with it, and no wait
+                // ends by time (docs/spec/native-surfaces.md#layout-transaction).
+                outcome.joined.push((surface.to_string(), generation));
             }
             Ok(None) => data
                 .documents
@@ -3738,13 +3741,10 @@ fn report_ended_presentation_waits(
 ) {
     match result {
         Ok(ended) if reason != "presented" => {
-            if reason == "timeout" && ended > 0 {
+            if reason == "input" && ended > 0 {
                 log_error(
                     "view presentation",
-                    format!(
-                        "surface {surface} did not present within {}s",
-                        crate::exposure::TIMEOUT.as_secs()
-                    ),
+                    format!("surface {surface} had not presented when input ended the hold"),
                 );
             }
             for _ in 0..ended {

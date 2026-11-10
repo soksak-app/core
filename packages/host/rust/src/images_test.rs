@@ -381,20 +381,22 @@ mod wait_boundary {
         let (started, waiting) = mpsc::sync_channel(1);
         let (ended, result) = mpsc::channel();
         std::thread::spawn(move || {
-            let outcome = waiter.wait_current_observed(Duration::from_secs(60), || {
+            let outcome = waiter.wait_current_observed(NO_WAIT_LIMIT, || {
                 started.send(()).expect("signal initialized wait")
             });
-            let _ = ended.send(outcome);
+            ended.send(outcome).expect("the check reads the outcome");
         });
-        waiting
-            .recv_timeout(Duration::from_secs(2))
-            .expect("wait begins");
+        // The wait has begun when it reports its first pending check; the end of the sidecar is sent after that, and the result
+        // is read after the end, so no check of this test depends on time.
+        waiting.recv().expect("wait begins");
         assert_eq!(images.invalidate_sidecar("sidecar"), 1);
         let outcome = result
-            .recv_timeout(Duration::from_secs(5))
+            .recv()
             .expect("the end of the sidecar did not end the raster wait");
         assert!(
-            outcome.as_ref().is_err_and(|error| error.contains("sidecar")),
+            outcome
+                .as_ref()
+                .is_err_and(|error| error.contains("sidecar")),
             "the raster wait ended without the end of its sidecar: {outcome:?}"
         );
     }

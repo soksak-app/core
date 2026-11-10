@@ -118,7 +118,18 @@ struct Inner {
     /// Whether the page is ready to receive image-detach-ended events.
     detach_page_ready: bool,
     next_generation: u64,
+    /// The ends of the layout transactions of the window, and the ends of the connections of the sidecars of its regions with the
+    /// name of the last one, so a raster wait ends with the event that ends it (docs/spec/native-surfaces.md#layout-transaction).
+    wait_ends: u64,
+    ended_sidecars: u64,
+    ended_sidecar: String,
 }
+
+/// The end of a raster wait by the end of the layout transaction that it belongs to.
+pub(crate) const LAYOUT_WAIT_ENDED: &str = "the layout transaction of the window ended";
+
+/// The time limit of a raster wait that ends only by its events (docs/spec/native-surfaces.md#layout-transaction).
+pub(crate) const NO_WAIT_LIMIT: Duration = Duration::MAX;
 
 impl Inner {
     /// Whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
@@ -729,9 +740,18 @@ impl Images {
             invalidated += 1;
         }
         if invalidated > 0 {
+            // No raster of the ended connection comes, so the end ends the raster wait of its regions.
+            inner.ended_sidecars += 1;
+            inner.ended_sidecar = sidecar.to_string();
             self.changed();
         }
         invalidated
+    }
+
+    /// Ends each raster wait of the window, because the layout transaction that it belongs to ended.
+    pub(crate) fn end_waits(&self) {
+        self.lock().wait_ends += 1;
+        self.changed();
     }
 
     /// Increases the revision when the applied native raster changed, and returns the configuration to send.
@@ -1056,7 +1076,9 @@ impl Images {
         self.wait_current_observed(timeout, || {})
     }
 
-    /// Waits for the image completion boundary selected by the layout request.
+    /// Waits for the image completion boundary selected by the layout request. With [`NO_WAIT_LIMIT`] it ends only by the
+    /// presentation of each required raster, by a presentation failure, by the end of the connection of a sidecar of the regions,
+    /// or by the end of the layout transaction ([`LAYOUT_WAIT_ENDED`]).
     pub(crate) fn wait_layout_rasters(
         &self,
         timeout: Duration,
@@ -1097,9 +1119,20 @@ impl Images {
         complete: fn(&Inner) -> bool,
     ) -> Result<(), String> {
         let mut waiting = Some(waiting);
-        let deadline = Instant::now() + timeout;
+        // NO_WAIT_LIMIT overflows the clock, so that wait has no deadline.
+        let deadline = Instant::now().checked_add(timeout);
         let mut inner = self.lock();
+        let (ends, sidecars) = (inner.wait_ends, inner.ended_sidecars);
         loop {
+            if inner.ended_sidecars != sidecars {
+                return Err(format!(
+                    "the sidecar {} of an image region ended",
+                    inner.ended_sidecar
+                ));
+            }
+            if inner.wait_ends != ends {
+                return Err(LAYOUT_WAIT_ENDED.to_string());
+            }
             if let Some(error) = inner
                 .states
                 .values()
@@ -1110,12 +1143,26 @@ impl Images {
             if complete(&inner) {
                 return Ok(());
             }
-            let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
-                return Err("presentationTimeout".to_string());
+            let remaining = match deadline {
+                Some(deadline) => match deadline.checked_duration_since(Instant::now()) {
+                    Some(remaining) => Some(remaining),
+                    None => return Err("presentationTimeout".to_string()),
+                },
+                None => None,
             };
             if let Some(waiting) = waiting.take() {
                 waiting();
             }
+            let Some(remaining) = remaining else {
+                inner = self
+                    .shared
+                    .changed
+                    .wait(inner)
+                    // default: a thread that stopped while holding the lock also changed the state only by one insert,
+                    // remove or read, so the state is consistent, and that stop was already reported as a panic report.
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                continue;
+            };
             let (next, result) = self
                 .shared
                 .changed

@@ -21,8 +21,11 @@ type Framework struct {
 	start     func(h *host.Host, window host.Frontend, shown bool) error
 	mu        sync.Mutex
 	frontends map[*mygo.Window]*Frontend
-	// transaction belongs to the main thread: whether a surface layout transaction is open.
+	// transaction belongs to the main thread: whether a surface layout transaction is open. open holds the windows whose
+	// transaction is open: each window owns its transaction, and they share one Core Animation hold, which commits when the last
+	// one ends (docs/spec/native-surfaces.md#layout-transaction).
 	transaction bool
+	open        map[platform.Window]bool
 }
 
 // NewFramework returns the framework that draws the windows with workbench.
@@ -167,6 +170,10 @@ func (f *Framework) ObserveLayout() error {
 // A transaction that the frame being built of window opens (OpenLayout) has that frame for its frame: the frame presents in it, and
 // the window holds its frames from the report of that frame (openedInFrame).
 func (f *Framework) layoutStarted(owner platform.Window) {
+	if f.open == nil {
+		f.open = map[platform.Window]bool{}
+	}
+	f.open[owner] = true
 	f.transaction = true
 	for _, frontend := range f.windows() {
 		frontend.window.TransactionOpened()
@@ -178,8 +185,13 @@ func (f *Framework) layoutStarted(owner platform.Window) {
 	}
 }
 
-// layoutEnded releases every hold when the transaction ends, before the next waiting transaction starts.
-func (f *Framework) layoutEnded(platform.Window) {
+// layoutEnded releases every hold when the last open transaction ends, because the Core Animation hold commits then, before the
+// next waiting preparation of the window starts. The end of one transaction while another window has one open releases nothing.
+func (f *Framework) layoutEnded(owner platform.Window) {
+	delete(f.open, owner)
+	if len(f.open) != 0 {
+		return
+	}
 	f.transaction = false
 	for _, frontend := range f.windows() {
 		frontend.window.TransactionCommitted()

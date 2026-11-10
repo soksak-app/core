@@ -54,6 +54,23 @@ const (
 	startHeight = 760
 )
 
+// layoutEnded ends the waits inside the presentation request of the window whose layout transaction ended. The native
+// observer calls it on the worker.
+func (h *Host) layoutEnded(window platform.Window) {
+	h.mu.Lock()
+	var ended *Surfaces
+	for _, s := range h.windows {
+		if s.window != nil && s.window.NativeWindow() == window {
+			ended = s
+			break
+		}
+	}
+	h.mu.Unlock()
+	if ended != nil {
+		ended.layoutEnded()
+	}
+}
+
 // Host selects the native state of the calling window. Wails binds the public methods of Host to the page.
 type Host struct {
 	quit *Quit

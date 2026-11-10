@@ -11,7 +11,7 @@ use crate::windows::WindowData;
 fn a_deferred_end_after_its_window_closed_ends_nothing_and_reports_no_failure() {
     let closed: Result<Arc<WindowData>, String> = Err("project window is closed".to_string());
     assert_eq!(
-        end_ticket_waits(&closed, "tab-a", 1, 7, "timeout"),
+        end_ticket_waits(&closed, "tab-a", 1, 7, "input"),
         Ok(0),
         "the close of a window abandons its presentation waits, so a deferred end that runs after it has nothing to end"
     );

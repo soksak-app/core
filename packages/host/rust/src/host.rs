@@ -235,6 +235,15 @@ pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
     let quit = app.clone();
     let state = std::sync::Arc::clone(&app.state::<windows::Windows>().quit);
     termination::on_termination(state, Box::new(move || quit.quit()))?;
+    // The end of a layout transaction ends the waits inside the presentation request of its window
+    // (docs/spec/native-surfaces.md#layout-transaction).
+    platform::current()?.enqueue_ui(Box::new(|| {
+        log_failure(
+            "surface layout",
+            platform::current()
+                .and_then(|platform| platform.watch_layout_ends(Box::new(surfaces::layout_ended))),
+        );
+    }))?;
     let directory = config_directory(app)?;
     exposure::start(app, &directory)?;
     // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes the same
@@ -447,6 +456,10 @@ pub fn web_content_process_terminated(webview: &Webview) {
     if webview.label() == window.label() && windows::window_data(&window).is_ok() {
         log_failure("page process", documents::main_page_process_ended(&window));
         log_failure("key wait", crate::surfaces::keys_page_ended(&window));
+        log_failure(
+            "surface layout cancel",
+            crate::surfaces::page_layout_ended(&window),
+        );
     } else if crate::modals::is_modal_of(webview.label(), window.label()) {
         log_failure(
             "modal key wait",

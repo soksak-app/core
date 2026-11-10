@@ -480,7 +480,7 @@ func (implementation) CancelLayoutTicket(platform.Window, uint64) error {
 	return unsupported("surface layout ticket cancel")
 }
 
-func (implementation) JoinView(platform.Window, uint64, unsafe.Pointer, func()) (func() error, bool, error) {
+func (implementation) JoinView(platform.Window, uint64, unsafe.Pointer, func(), func(string)) (func() error, bool, error) {
 	return nil, false, unsupported("view presentation wait")
 }
 
@@ -506,6 +506,11 @@ func (implementation) FunctionPresentation(func(func(error)) error) (unsafe.Poin
 
 func (implementation) ObserveLayout(_, _ func(platform.Window)) error {
 	return unsupported("native presentation")
+}
+
+// WatchLayoutEnds has nothing to watch: the platform has no layout transaction.
+func (implementation) WatchLayoutEnds(func(platform.Window)) error {
+	return nil
 }
 
 func (implementation) InjectSettledFailure(platform.Window) error {

@@ -299,6 +299,13 @@ func (s *Session) Open() error {
 	if err := framework.SetMenu(menu); err != nil {
 		return err
 	}
+	// The end of a layout transaction ends the waits inside the presentation request of its window
+	// (docs/spec/native-surfaces.md#layout-transaction).
+	mainThreadStep(func() {
+		if err := system.WatchLayoutEnds(host.layoutEnded); err != nil {
+			LogError("surface layout", err)
+		}
+	})
 	s.main = host.newWindow("main", "/")
 	return nil
 }
