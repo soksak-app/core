@@ -514,32 +514,33 @@ type headTool struct {
 // wait for the restore.
 func (s *Shell) headTools(id string) []headTool {
 	fullscreen := s.fullscreen == id
-	const held = "전체 화면에서는 배치를 바꾸지 않는다 — 먼저 카드 배치를 복원한다"
+	// The names and the refusals are those of workbench.json, which the page reads as well (docs/spec/example-model.md#card-tools).
+	names := s.options.Declared.CardTools
 	changes := func(tool headTool, can bool) headTool {
 		tool.Enabled = !fullscreen && can
 		if fullscreen {
-			tool.Title = held
+			tool.Title = names["layout-held"]
 		}
 		return tool
 	}
 	closing := headTool{Do: "close", Status: "close", Name: "core.card.close", Command: "core.card.close", Params: cardParam{Card: id},
-		Title: "이 카드를 닫는다 — 안의 탭이 몇 개든 함께 간다", Icon: "card-close"}
+		Title: names["close"], Icon: "card-close"}
 	canClose := s.plane.CanClose(id)
 	if !canClose {
-		closing.Title = "닫을 수 없다 — 어느 이웃도 이 위치를 빈틈없이 못 메운다"
+		closing.Title = names["close-refused"]
 	}
 	whole := headTool{Do: "fullscreen", Status: "fullscreen", Name: "core.card.fullscreen", Command: "core.card.fullscreen", Params: cardParam{Card: id},
-		Title: "카드 전체 화면", Icon: "card-expand", Enabled: true, Pressed: fullscreen}
+		Title: names["fullscreen"], Icon: "card-expand", Enabled: true, Pressed: fullscreen}
 	if fullscreen {
-		whole.Title, whole.Icon = "카드 배치 복원", "card-restore"
+		whole.Title, whole.Icon = names["restore"], "card-restore"
 	}
 	return []headTool{
 		changes(headTool{Do: "add", Status: "add", Name: "core.card.add", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "add"},
-			Title: "이 카드에 탭 추가 — 무엇을 띄울지 묻는다", Icon: "card-add"}, true),
+			Title: names["add"], Icon: "card-add"}, true),
 		changes(headTool{Do: "x", Status: "split-x", Name: "core.card.split-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-x"},
-			Title: "세로선으로 쪼개기 — 좌우로 나뉜다", Icon: "card-split-x"}, s.plane.CanSplit(id, "x")),
+			Title: names["split-x"], Icon: "card-split-x"}, s.plane.CanSplit(id, "x")),
 		changes(headTool{Do: "y", Status: "split-y", Name: "core.card.split-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-y"},
-			Title: "가로선으로 쪼개기 — 위아래로 나뉜다", Icon: "card-split-y"}, s.plane.CanSplit(id, "y")),
+			Title: names["split-y"], Icon: "card-split-y"}, s.plane.CanSplit(id, "y")),
 		whole,
 		changes(closing, canClose),
 	}

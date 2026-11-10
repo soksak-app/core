@@ -1735,7 +1735,7 @@ export function openCardTools(id) {
   const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled).map((b) => ({
     // A sidebar button has no data-do and points to a side with data-side.
     key: b.classList.contains("chrome__side") ? `side-${b.dataset.side}` : b.dataset.do,
-    name: b.title.split(" — ")[0],
+    name: b.title,
     mark: "",
     svg: b.querySelector("svg").innerHTML,
     viewBox: b.querySelector("svg").getAttribute("viewBox"),

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F723: The tooltip of a card tool is its name from `cardTools` of workbench.json (탭 추가, 세로로 나누기, 가로로 나누기, 카드 전체 화면, 카드 배치 복원, 카드 닫기) in both workbenches, a refusal states its reason without a dash, and the ⋯ menu takes the names uncut.
 - F717: A Go host takes the identifier of its configuration folder from the application name of its framework adapter, so the mygo application uses `app.soksak.mygo` and no longer the folder of the Wails application.
 - F716: Both hosts install the native activity observers after their writer applied the first policy, so a policy that stores the class `lifecycle` at `info` stores the `native.observe.registered` record of each activity observer from the start of the host.
 - F715-6: `soksak-test-app` of `@soksak/window-check` takes `--index <file URL or path>` of a built registry index: the run builds no check registry and installs no plugin, the sok of each bundle runs registry use of that index, and the first run of each application installs the starter pack that its embedded environment.json names. A missing or unreadable index fails the step that names it, `--index` takes no `--pack` and no `--real`, and the checks get `SOKSAK_REGISTRY_INDEX`.

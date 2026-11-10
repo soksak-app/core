@@ -498,6 +498,21 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F723",
+    implementation: [
+      { file: "packages/workbench/workbench.json", symbol: "\"cardTools\": {" },
+      { file: "packages/workbench/card-tools.js", symbol: "const names = declaration.cardTools;" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "names := s.options.Declared.CardTools" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/card-tool-names.test.mjs", id: "the tooltip of a card tool is its name and a refusal states its reason" },
+      { file: "packages/workbench-mygo/tests/split_test.go", id: "TestTheToolsOfAHeadFollowWhatTheCardCanDo" },
+      { file: "packages/workbench-mygo/tests/split_test.go", id: "TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan" },
+    ],
+    expected: "The tooltip of a card tool is its name from cardTools of workbench.json, a refusal states its reason without a dash, and the tool menu takes the names uncut, in both workbenches.",
+    levels: ["unit"],
+  },
+  {
     id: "F717",
     implementation: [
       { file: "packages/sok/go/src/identity.go", symbol: "func IdentityOf(application string) (string, error) {" },
