@@ -688,7 +688,8 @@ export const surfaces = native ? {
           if (undeclaredViews.has(id)) waitingDeclaration.add(id);
           else waitingDeclaration.delete(id);
         }
-        const deferredViews = viewRecords.map(({ id }) => id).filter((id) => unmountedViews.has(id) || undeclaredViews.has(id));
+        const isDeferred = (id) => unmountedViews.has(id) || undeclaredViews.has(id);
+        const deferredViews = viewRecords.map(({ id }) => id).filter(isDeferred);
         const deferredIds = new Set(deferredViews);
         const requestedSurfaces = surfaces.filter(({ id }) => !deferredIds.has(id));
 
