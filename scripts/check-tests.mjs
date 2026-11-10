@@ -146,7 +146,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
-  lane("window check harness", "js-ts", ["packages/window-check/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]), sharedTests: true }),
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs", "packages/window-check/platform/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]), sharedTests: true }),
   // The start probe that @soksak/window-check ships for the checks of plugin repositories.
   lane("window check start probe declaration", "declaration", ["packages/window-check/fixtures/start-probe/plugin.json"], ["packages/window-check/test/start.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("window check start probe view", "js-ts", ["packages/window-check/fixtures/start-probe/ui/app.js"], ["packages/window-check/test/start.test.mjs"], { sharedTests: true }),
@@ -378,6 +378,30 @@ const FEATURE_LINKS = [
       { file: "scripts/test/workflows.test.mjs", id: "ci keeps language host checks independent and gates release on every required job" },
     ],
     expected: "A Linux job of CI installs the locked Node dependencies of every workspace project whose os field admits Linux and runs the Node tests of scripts/test, e2e/test and packages/window-check/test outside platform/darwin/system through make test-headless-owners; every system owner placed in platform/darwin/system runs in a macOS job, and the required gate fails unless it succeeds. make check-windows-rust compiles the Rust host library for x86_64-pc-windows-msvc in the default and the diagnostic build on a host that has the target and the MSVC tools, and fails by name when the target is not installed.",
+    levels: ["unit"],
+  },
+  {
+    id: "F696-10",
+    implementation: [
+      { file: "packages/window-check/platform.mjs", symbol: "export class PlatformOperationNotImplemented extends Error {" },
+      { file: "packages/window-check/platform.mjs", symbol: "export function releasePlatform({ platform = process.platform, arch = process.arch } = {}) {" },
+      { file: "packages/window-check/platform/darwin.mjs", symbol: "export async function listProcesses(run) {" },
+      { file: "packages/window-check/test-app.mjs", symbol: "export async function cachedBundle(cache, version, host, { platform = process.platform, arch = process.arch, signal, fetchImpl," },
+      { file: "packages/window-check/test-app.mjs", symbol: "async function quit(child, sok, configDir, by, root, platform) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/platform.test.mjs", id: "the release platform of the run is the system and the architecture of the computer that runs it" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "on macOS the application of an extracted zip is its bundle, whose Contents/MacOS holds the application and sok" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "on macOS the run extracts with ditto, waits for a lock with lockf and lists processes with ps" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "an operation that the platform does not implement rejects with its name and runs nothing" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "the package ships the platform operations of the run" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the run uses the published application zip of the core release of this package for the platform that runs it" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the bundle of an application is extracted by the platform operation of the platform that runs the run" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "on a platform that declares no application artifact the run fails by the operation before any download" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the remaining processes are those whose command line names a path of the run, except this one" },
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the run module names no macOS program, bundle layout or quit key of its own" },
+    ],
+    expected: "sok-test-app names the application zip by the release platform of the computer that runs it and takes the application, its executables, the extraction, the quit keys, the lock wait and the process list from the platform operations of @soksak/window-check. macOS implements them with the bundle soksak.app, ditto, Command+Q, lockf and ps; on Linux and Windows each operation rejects with PlatformOperationNotImplemented, runs no program, and the run fails before any download.",
     levels: ["unit"],
   },
   {
