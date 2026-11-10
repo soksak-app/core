@@ -300,7 +300,7 @@ for (const app of Object.values(APPS))
         // element.rect of a control of a native modal answers the report of the modal document, which core.modal holds, so the
         // check waits until that report names the control. A host that draws its modal itself has no modal document and answers
         // element.rect at once.
-        if (MAIN_PAGE_APPS.includes(app))
+        if (MAIN_PAGE_APPS.some((candidate) => candidate.name === app.name))
           await s.until("core.modal", (modal) => (modal?.document?.elements ?? []).filter((item) => item.name === name).length > index,
             `${label}: the modal document did not report ${name} ${index}`);
         const rect = await s.rect(name, index);
