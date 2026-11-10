@@ -140,7 +140,7 @@ DOM 입력을 쓰는 그림 영역은 포인터 이벤트를 앵커로 보내고
 
 검증 상태의 검사가 현재 상태에서 잴 것이 없으면 통과가 아니다. `core.verify`는 그 검사와 이유를 `skipped`에 적고, 행으로도 실패로도 세지 않는다. 검사가 재는 대상을 가질 수 없는 host는 그 검사를 항상 skipped로 적는다.
 
-`V7a`는 compositor의 마지막 commit을 그려진 판과 비교한다. commit의 모든 표면에 그려진 slot이 있고 그려진 모든 slot이 commit에 있으며, 각 표면의 흐림이 그 slot의 흐림이고, 선언된 각 사각형의 x, y, 너비, 높이가 그려진 slot의 것과 각각 반 point 미만 차이 난다. 너비나 높이가 0인 invisible 선언은 보이는 영역이 없으므로([native surfaces](native-surfaces.ko.md)) 비교할 자리가 없다. 그 선언도 slot과 흐림에는 센다.
+`V7a`는 compositor의 마지막 commit을 그려진 판과 비교한다. commit의 모든 표면에 그려진 slot이 있고 그려진 모든 slot이 배치되었거나 배치 답이 미룬 표면으로 commit에 있으며, 각 표면의 흐림이 그 slot의 흐림이고, 선언된 각 사각형의 x, y, 너비, 높이가 그려진 slot의 것과 각각 반 point 미만 차이 난다. 너비나 높이가 0인 invisible 선언은 보이는 영역이 없으므로([native surfaces](native-surfaces.ko.md)) 비교할 자리가 없다. 그 선언도 slot과 흐림에는 센다. Composition을 아직 선언하지 않아 배치가 미룬 view는 선언이 도착해 page가 다시 배치할 때까지 자리가 빈다([native surfaces](native-surfaces.ko.md#view-표면), placement). 그래서 그 view의 그려진 slot은 미룬 표면으로 commit에 있고 비교할 자리가 없다. 이 행은 미룬 표면을 각각 밝힌다.
 
 mygo host에서는 답을 기다리는 placement가 3 s 동안 그런 상태다. 이 값은 window check가 멈춘 request로 보는 상한이다. 그때부터 host가 답할 때까지 `V7a`는 실패이고 placement가 기다린 시간을 적는다. 그래서 view가 옛 자리에 머무는데 status가 실패 없음으로 답하는 일이 없다. host가 거부한 placement는 답을 받은 것이다. presentation 실패로 나타나고, placement를 읽는 행은 skipped로 남는다.
 

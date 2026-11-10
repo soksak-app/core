@@ -403,6 +403,9 @@ export async function placeCompositorRecord(record, requestedSurfaces, send, nat
 function placementAnswer(record, answer) {
   const { placements, deferred: deferredIds } = validatePlacementAnswer(record, answer);
   const deferred = new Set(deferredIds);
+  // A deferred view keeps its place empty until the page lays it out again, so the record holds it as deferred and not as a
+  // surface with a seat (V7a in docs/spec/surface-composition.md#failure-behavior).
+  record.deferred = [...deferredIds];
   if (deferred.size) {
     record.surfaces = record.surfaces.filter(({ id }) => !deferred.has(id));
     if (record.seq === aheadSeq) {
@@ -527,7 +530,7 @@ export function publishAhead(rects, seated, titlebar) {
  * the most recent one.
  */
 function commit(mine, snapshot, final, titlebar) {
-  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, surfaces: [] };
+  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, surfaces: [], deferred: [] };
   // A drawn commit runs in the draw of a layout, which follows the acknowledgement of the presentation before it.
   if (record.drawn) writeAcknowledgedHoles();
   const kinds = app.kinds;

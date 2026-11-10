@@ -139,6 +139,7 @@ test("a deferred preparation is not recorded as an applied or predicted view", a
     new Map([["card", { id: "deferred-view", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]));
   assert.deepEqual(prepared, [], "a deferred view was reported as a native placement");
   assert.deepEqual(record.surfaces, [], "a deferred view was stored as seated geometry");
+  assert.deepEqual(record.deferred, ["deferred-view"], "the record does not hold the view that its placement deferred");
   assert.equal(compositor.seated(), record, "the answer did not settle the actual placement record");
   assert.equal(compositor.ahead(), null, "a deferred view made the predicted layout appear complete");
   assert.equal(compositor.placementPending(), false, "a completed deferred result remained pending");
@@ -149,6 +150,7 @@ test("a deferred preparation is not recorded as an applied or predicted view", a
   const drawn = await compositor.publish();
   assert.deepEqual(drawn, [{ id: "deferred-view", visible: true, scale: 2, x: 2, y: 30, w: 196, h: 100 }]);
   assert.equal(compositor.seated().surfaces.length, 1, "the drawn view did not receive its real host placement");
+  assert.deepEqual(compositor.seated().deferred, [], "a placed view is held as deferred");
   dom.window.close();
 });
 
