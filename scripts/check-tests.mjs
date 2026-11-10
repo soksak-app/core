@@ -280,8 +280,8 @@ const FEATURE_LINKS = [
   {
     id: "F718-7",
     implementation: [
-      { file: "packages/host/go/src/endpoint_presses.go", symbol: "func (e *Endpoint) releasePresses(c *endpointConn) {" },
-      { file: "packages/host/go/src/endpoint_presses.go", symbol: "func (e *Endpoint) ProducerEnded(window, surface, reason string) {" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) releasePresses(c *endpointConn) {" },
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) ProducerEnded(window, surface, reason string) {" },
       { file: "packages/host/rust/src/endpoint.rs", symbol: "pub fn ended(&self, window: &str, surface: Option<&str>, reason: &str) {" },
       { file: "native/darwin/src/webview_geometry.m", symbol: "static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {" },
       { file: "packages/plugin-api/image-region.js", symbol: "the input handler is the input of composition.create" },
@@ -298,7 +298,7 @@ const FEATURE_LINKS = [
       { file: "packages/sok/go/tests/sok_test.go", id: "TestAWatchEndsWhenItsProducerEnds" },
       { file: "packages/sok/go/tests/sok_test.go", id: "TestAGestureSendsItsStepsOnOneConnection" },
       { file: "packages/sok/go/tests/sok_test.go", id: "TestAGestureStepThatFailsEndsTheCommand" },
-      { file: "packages/sok/go/tests/watch_interrupt_test.go", id: "TestAnInterruptEndsAWatchThatWaitsInAWrite" },
+      { file: "packages/sok/go/tests/sok_test.go", id: "TestAnInterruptEndsAWatchThatWaitsInAWrite" },
       { file: "packages/sok/rust/tests/sok_test.rs", id: "a_watch_ends_at_status_ended" },
       { file: "packages/sok/rust/tests/sok_test.rs", id: "a_gesture_sends_one_press_on_one_connection" },
       { file: "packages/sok/rust/tests/sok_test.rs", id: "a_failed_gesture_step_ends_the_command" },
