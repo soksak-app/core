@@ -51,25 +51,26 @@ func SetWebview(window platform.Window, core, controller unsafe.Pointer, ended f
 	webviews[view.window] = view
 	webviewsMu.Unlock()
 	if previous != nil {
+		previous.queue.end("the window took another web view")
 		previous.release()
 	}
 	return nil
 }
 
-// EndWebview ends the WebView2 of the window. Call it on the UI thread.
+// EndWebview ends the WebView2 of the window, at the end of the window, and the inputs that wait for its DevTools calls answer that end.
+// Call it on the UI thread.
 func EndWebview(window platform.Window) {
 	webviewsMu.Lock()
 	view := webviews[uintptr(window)]
 	delete(webviews, uintptr(window))
 	webviewsMu.Unlock()
 	if view != nil {
+		view.queue.end("the window ended")
 		view.release()
 	}
 }
 
-// release ends the input of the web view and lets it go.
 func (v *nativeWebview) release() {
-	v.queue.end()
 	if v.failed != 0 {
 		comCall(v.core, webviewRemoveProcessFailed, uintptr(v.failedToken))
 		comCall(v.failed, slotRelease)
@@ -78,8 +79,8 @@ func (v *nativeWebview) release() {
 	comCall(v.core, slotRelease)
 }
 
-// watchProcessFailures subscribes to the process failures of the web view, which WebView2 raises on the UI thread. The end of its page
-// ends its input calls, which that page no longer receives.
+// watchProcessFailures subscribes to the process failures of the web view, which WebView2 raises on the UI thread. The end of the page
+// process ends its DevTools connection, so it also ends the input queue.
 func (v *nativeWebview) watchProcessFailures(ended func()) error {
 	window := v.window
 	handler := newHandler(handlerVtables().valued, func(_, args uintptr) {
@@ -90,7 +91,7 @@ func (v *nativeWebview) watchProcessFailures(ended func()) error {
 		}
 		switch processFailureOf(kind) {
 		case pageEnded:
-			v.queue.pageEnded()
+			v.queue.connectionEnded("the process of the page ended")
 			ended()
 		case pageStays:
 			fmt.Fprintf(os.Stderr, "web view process: window %#x: process failure %d\n", window, kind)

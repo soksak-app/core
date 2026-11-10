@@ -10,8 +10,8 @@ import (
 )
 
 // InjectPointer delivers a pointer input through the DevTools protocol of the web view of the window. It uses no real pointer and no
-// system focus, so a window behind others takes it. done runs when its call completes, or when the page or the web view ends first.
-// Call it on the UI thread.
+// system focus, so a window behind others takes it. The input answers when its call completes, or when the DevTools connection of the
+// web view or its window ends, so no wait limits it. Call it on the UI thread.
 func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld)) error {
 	view, err := webviewOf(uintptr(window))
 	if err != nil {

@@ -9,7 +9,8 @@ use super::webview::view_of;
 use crate::platform::devtools_input::{Answer, key_call, pointer_delivery};
 use crate::platform::{Delivery, Handle, Key, Pointer};
 
-/// Delivers a pointer input. done runs when its call completes, or when the page or the web view ends first. Call it on the UI thread.
+/// Delivers a pointer input. It answers when its call completes, or when the DevTools connection of the web view or its window ends,
+/// so no wait limits it. Call it on the UI thread.
 pub fn pointer(
     window: Handle,
     pointer: Pointer,

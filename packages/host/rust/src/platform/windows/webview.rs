@@ -19,15 +19,18 @@ use crate::platform::Handle;
 use crate::platform::devtools_input::{After, Call, Complete, InputQueue, PressState, Transport};
 use crate::platform::process_failure::{ProcessFailure, process_failure};
 
+/// The subclass of a window whose web view takes its input; the show rule of show_windows.rs is subclass 1.
+const VIEW_END_SUBCLASS: usize = 2;
+
 /// The WebView2 of a window that takes the input of the window.
 pub(super) struct View {
     pub(super) window: HWND,
-    core: ICoreWebView2,
-    /// The subscription of ProcessFailed, which ends the calls of a page that ended.
-    failed: i64,
     pub(super) controller: ICoreWebView2Controller,
     pub(super) presses: RefCell<PressState>,
     pub(super) queue: InputQueue,
+    core: ICoreWebView2,
+    /// The subscription to the process failures of the web view.
+    failed_token: i64,
 }
 
 thread_local! {
@@ -63,58 +66,16 @@ pub(super) fn after() -> After {
     Rc::new(after_on_ui_thread)
 }
 
-/// The id of the subclass that hears the end of a window with a web view.
-const WINDOW_END: usize = 2;
-
-/// Hears the end of a window: its web view ends, and so do its input calls, which no completion ends after it.
-unsafe extern "system" fn window_end(
-    window: HWND,
-    message: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-    _subclass: usize,
-    _data: usize,
-) -> LRESULT {
-    if message == WM_NCDESTROY {
-        end(window.0 as Handle);
-        if !unsafe { RemoveWindowSubclass(window, Some(window_end), WINDOW_END) }.as_bool() {
-            crate::application_log::log_error(
-                "web view",
-                format!(
-                    "the window {:#x} kept the watch of its end",
-                    window.0 as Handle
-                ),
-            );
-        }
-    }
-    unsafe { DefSubclassProc(window, message, wparam, lparam) }
-}
-
-/// Ends the web view of a window and its input calls.
-fn end(window: Handle) {
-    let Some(view) = VIEWS.with(|views| views.borrow_mut().remove(&window)) else {
-        return;
-    };
-    if let Err(e) = unsafe { view.core.remove_ProcessFailed(view.failed) } {
-        crate::application_log::log_error("web view process", error("remove_ProcessFailed", e));
-    }
-    view.queue.end();
-}
-
-/// Subscribes the queue to the process failures of its web view, which WebView2 raises on the UI thread: the end of the page ends its
-/// calls, which that page no longer receives.
+/// Subscribes to the process failures of the web view, which WebView2 raises on the UI thread. The end of the page process ends the
+/// DevTools connection of the page, so it answers the open inputs of queue.
 fn watch_process_failures(core: &ICoreWebView2, queue: InputQueue) -> Result<i64, String> {
-    let handler = ProcessFailedEventHandler::create(Box::new(move |_, args| {
-        let Some(args) = args else {
-            return Ok(());
-        };
+    let handler = ProcessFailedEventHandler::create(Box::new(move |_sender, args| {
         let mut kind = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
-        if let Err(e) = unsafe { args.ProcessFailedKind(&mut kind) } {
-            crate::application_log::log_error("web view process", error("ProcessFailedKind", e));
-            return Ok(());
+        if let Some(args) = args {
+            unsafe { args.ProcessFailedKind(&mut kind) }?;
         }
         if process_failure(kind.0) == ProcessFailure::PageEnded {
-            queue.page_ended();
+            queue.connection_ended("the process of the page ended");
         }
         Ok(())
     }));
@@ -124,9 +85,35 @@ fn watch_process_failures(core: &ICoreWebView2, queue: InputQueue) -> Result<i64
     Ok(token)
 }
 
+/// Ends the input of the web view of a window when the window is destroyed: its open inputs answer that end, and the window forgets
+/// the view.
+unsafe extern "system" fn end_view_with_window(
+    window: HWND,
+    message: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    _subclass: usize,
+    _data: usize,
+) -> LRESULT {
+    if message == WM_NCDESTROY {
+        let view = VIEWS.with(|views| views.borrow_mut().remove(&(window.0 as Handle)));
+        if let Some(view) = view {
+            view.queue.end("the window ended");
+            if let Err(failure) = unsafe { view.core.remove_ProcessFailed(view.failed_token) } {
+                crate::application_log::log_error("web view process", failure);
+            }
+        }
+        if !unsafe { RemoveWindowSubclass(window, Some(end_view_with_window), VIEW_END_SUBCLASS) }
+            .as_bool()
+        {
+            crate::application_log::log_error("web view input", "the window kept its end subclass");
+        }
+    }
+    unsafe { DefSubclassProc(window, message, wparam, lparam) }
+}
+
 /// Makes a web view take the input and the capture of its parent window. The first web view of a window is its main web view, which the
-/// host registers before any other. The end of its page and the end of its window end its input calls. Call it on the UI thread, while
-/// the controller of the view is valid.
+/// host registers before any other. Call it on the UI thread, while the controller of the view is valid.
 pub fn register(view: &PlatformWebview) -> Result<bool, String> {
     super::ui_thread::start_task_window()?;
     let controller = unsafe { ICoreWebView2Controller::from_raw_borrowed(&view.controller) }
@@ -136,31 +123,37 @@ pub fn register(view: &PlatformWebview) -> Result<bool, String> {
     let mut window = HWND::default();
     unsafe { controller.ParentWindow(&mut window) }.map_err(|e| error("web view window", e))?;
     let handle = window.0 as Handle;
-    // The first web view of a window keeps the window. The end of a window removed its entry, so a new window with its handle registers.
     if VIEWS.with(|views| views.borrow().contains_key(&handle)) {
         return Ok(true);
     }
     let queue = InputQueue::new(Box::new(ProtocolTransport(core.clone())));
-    let failed = watch_process_failures(&core, queue.clone())?;
+    let failed_token = watch_process_failures(&core, queue.clone())?;
+    // The destruction of the window removes its entry, so the system cannot give the handle of a closed window to a new one while
+    // the entry stays.
+    if !unsafe { SetWindowSubclass(window, Some(end_view_with_window), VIEW_END_SUBCLASS, 0) }
+        .as_bool()
+    {
+        if let Err(failure) = unsafe { core.remove_ProcessFailed(failed_token) } {
+            crate::application_log::log_error("web view process", failure);
+        }
+        return Err(format!(
+            "web view input: the window {handle:#x} did not take its end subclass"
+        ));
+    }
     VIEWS.with(|views| {
-        views.borrow_mut().insert(
+        let previous = views.borrow_mut().insert(
             handle,
             Rc::new(View {
                 window,
-                core,
-                failed,
                 queue,
                 controller,
                 presses: RefCell::default(),
+                core,
+                failed_token,
             }),
-        )
+        );
+        debug_assert!(previous.is_none(), "a window registers its web view once");
     });
-    if !unsafe { SetWindowSubclass(window, Some(window_end), WINDOW_END, 0) }.as_bool() {
-        end(handle);
-        return Err(format!(
-            "web view: the window {handle:#x} did not take the watch of its end"
-        ));
-    }
     Ok(true)
 }
 
