@@ -50,19 +50,41 @@ func (s *Shell) focusCard(card string) {
 // that wrote settings first waits until the host wrote them (afterSettingsWrites).
 func (s *Shell) followCommand(answer func(value any, err error)) func(value any, err error) {
 	requests, writes := s.frameRequests.Load(), s.settingsIssued
+	s.answering++
+	answered := func(value any, err error) {
+		answer(value, err)
+		s.answering--
+		if s.answering == 0 {
+			waiting := s.afterAnswering
+			s.afterAnswering = nil
+			for _, run := range waiting {
+				run()
+			}
+		}
+	}
 	return func(value any, err error) {
 		s.afterSettingsWrites(writes, func(failure error) {
 			if err == nil && failure != nil {
 				value, err = nil, failure
 			}
 			if err != nil || s.frameRequests.Load() == requests {
-				answer(value, err)
+				answered(value, err)
 				return
 			}
 			// The answer follows the statuses of that frame, so a request after it reads what the frame showed.
-			s.afterPlacement(func(error) { s.afterStatuses(func() { answer(value, nil) }) })
+			s.afterPlacement(func(error) { s.afterStatuses(func() { answered(value, nil) }) })
 		})
 	}
+}
+
+// afterAnswers runs run once every command that runs has answered, at once when none runs: a step that ends the document of the window,
+// as its close, comes after the answers that the document still owes (followCommand).
+func (s *Shell) afterAnswers(run func()) {
+	if s.answering == 0 {
+		run()
+		return
+	}
+	s.afterAnswering = append(s.afterAnswering, run)
 }
 
 // afterKeyboard gives answers of a placement that ended to the keyboard decision that follows it.
