@@ -105,7 +105,7 @@ test("the plugin names are read in the checks and harness modules of e2e and scr
 });
 
 test("the gate of a core release names no registry index URL, no plugin repository and no registry but the fixture registry", { timeout: 1000 }, () => {
-  assert.deepEqual(GATE_SOURCES, ["Makefile", "scripts/acceptance-run.mjs", "scripts/candidate-acceptance.mjs", "scripts/test-app.mjs"]);
+  assert.deepEqual(GATE_SOURCES, ["Makefile", "scripts/acceptance-run.mjs", "scripts/candidate-acceptance.mjs", "scripts/candidate-context.mjs", "scripts/test-app.mjs"]);
   const sources = {
     "Makefile": "FIXTURE_REGISTRY = target/fixture-registry\nINDEX = https://example.test/registry/index.json\n",
     "scripts/test-app.mjs": "const registry = join(root, 'target', 'fixture-registry');\nconst plugins = '../plugins/probe';\nconst old = 'target/registry/index.json';\n",
