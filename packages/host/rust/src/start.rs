@@ -157,9 +157,8 @@ pub fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, String> {
         .get_window(webview)
         .filter(|window| window.label() == webview)
         .ok_or_else(|| NO_WINDOW.to_string())?;
-    // A page whose document carries the error of the snapshot shows that error and reports no ready.
-    let mut snapshot_failure = None;
-    let started = after_page_started(
+    start_waited_page(
+        || crate::windows::window_data(&window),
         || crate::windows::page_started(&window),
         || {
             let snapshot = serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
@@ -167,28 +166,47 @@ pub fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, String> {
                 .and_then(|request| crate::workspace::handle(app, request));
             // The first draw of the page does not wait for readiness, so the title bar is first set to the height of that first
             // row, and then the controls are read (docs/spec/native-surfaces.md#title-bar-height).
-            let parts = start_parts(
+            start_parts(
                 snapshot,
                 |common| crate::windows::start_titlebar(&window, common),
                 || {
                     serde_json::to_value(crate::windows::window_chrome(&window)?)
                         .map_err(|error| error.to_string())
                 },
-            );
-            if let Ok((Err(failure), _)) = &parts {
-                snapshot_failure = Some(failure.clone());
-            }
-            parts
+            )
         },
         || {
             Ok(crate::windows::window_data(&window)?
                 .images
                 .pending_detach_surfaces())
         },
+    )
+}
+
+/// Starts a page as `after_page_started` does and ends the reloads that wait for it when it does not start: when a step
+/// fails, and when its document carries the error of the snapshot, because such a page shows that error and reports no
+/// ready. reloads gives the window data that holds those reloads.
+pub(crate) fn start_waited_page(
+    reloads: impl FnOnce() -> Result<std::sync::Arc<crate::windows::WindowData>, String>,
+    page_started: impl FnOnce() -> Result<(), String>,
+    parts: impl FnOnce() -> Result<(Result<Value, String>, Value), String>,
+    pending_surfaces: impl FnOnce() -> Result<Vec<String>, String>,
+) -> Result<Vec<u8>, String> {
+    let mut snapshot_failure = None;
+    let started = after_page_started(
+        page_started,
+        || {
+            let parts = parts();
+            if let Ok((Err(failure), _)) = &parts {
+                snapshot_failure = Some(failure.clone());
+            }
+            parts
+        },
+        pending_surfaces,
     );
     // A reload that waits for this page ends with the reason that the page did not start.
     if let Some(reason) = started.as_ref().err().cloned().or(snapshot_failure)
-        && let Ok(data) = crate::windows::window_data(&window)
+        && let Ok(data) = reloads()
     {
         crate::windows::end_reloads(
             &data,
