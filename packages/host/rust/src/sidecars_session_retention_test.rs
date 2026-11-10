@@ -304,7 +304,16 @@ fn service(config: &Path) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
 
 pub(crate) fn service_with_hello_gate(
     config: &Path,
+    hello_gate: Option<Receiver<()>>,
+) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
+    service_with(config, hello_gate, true)
+}
+
+/// The service of fixture-sidecar in config, which answers a retain only when answers_retain holds.
+fn service_with(
+    config: &Path,
     mut hello_gate: Option<Receiver<()>>,
+    answers_retain: bool,
 ) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
     let directory = config.join("services/echo");
     std::fs::create_dir_all(&directory).unwrap();
@@ -341,6 +350,7 @@ pub(crate) fn service_with_hello_gate(
                     // The service is of the installed version, so a retain replaces nothing.
                     serde_json::json!({"operation": "hello", "protocol": 1, "ok": true, "version": "0.0.1"})
                 }
+                Some("retain") if !answers_retain => continue,
                 Some("retain") => {
                     serde_json::json!({"operation": "retained", "request": request["request"], "ok": true, "closed": 0})
                 }
@@ -730,4 +740,38 @@ pub(crate) fn has_surface_session<O: Owner>(sidecars: &Sidecars<O>, surface: &st
             .running
             .values()
             .any(|process| process.surfaces.contains(surface))
+}
+
+// A retain that the service does not answer within its limit removes its request, so no waiter of it remains for a late answer
+// (docs/spec/persistent-services.md#service-transport).
+// contract: sidecars-transport.retain.limit-removes-the-request
+#[test]
+fn a_retain_past_its_limit_removes_its_request() {
+    let executable = Folder::new();
+    let config = Folder::new();
+    let (_received, thread) = service_with(config.path(), None, false);
+    let sidecars: Sidecars<SessionOwner> = declared(executable.path(), config.path());
+    let error = sidecars
+        .retain_sessions(&[RetainedSurface {
+            surface: "listed".to_string(),
+            root: "/project".to_string(),
+            plugin: "probe".to_string(),
+        }])
+        .expect_err("a retain that the service did not answer succeeded");
+    assert!(
+        error.contains("retain was not answered"),
+        "the unanswered retain failed with {error}"
+    );
+    let waiting = {
+        let state = sidecars.core.state.lock().unwrap();
+        let process = state.running.get(SIDECAR).expect("the service runs");
+        let connection = process.persistent.as_ref().expect("the service is persistent");
+        connection.retain_waiters.lock().unwrap().len()
+    };
+    assert_eq!(
+        waiting, 0,
+        "the retain ended at its limit and left the waiter of its request"
+    );
+    sidecars.stop();
+    thread.join().unwrap();
 }

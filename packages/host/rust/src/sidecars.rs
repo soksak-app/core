@@ -4697,6 +4697,10 @@ mod route_test;
 mod lock_test;
 
 #[cfg(test)]
+#[path = "sidecars_stop_test.rs"]
+mod stop_test;
+
+#[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
 pub(crate) mod session_retention_test;
 

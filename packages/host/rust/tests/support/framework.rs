@@ -22,11 +22,19 @@ pub const DISPLAY_NAME: &str = "Fixture";
 pub struct Fixture {
     queued: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     callback_guard: Mutex<Option<Arc<Mutex<()>>>>,
+    windows: Mutex<Vec<Arc<dyn Frontend>>>,
 }
 
 impl Fixture {
     pub fn hold_callback(&self, guard: Arc<Mutex<()>>) {
         *self.callback_guard.lock().unwrap() = Some(guard);
+    }
+    /// Lists frontend among the windows of the framework.
+    pub fn add_window(&self, frontend: Arc<dyn Frontend>) {
+        self.windows
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(frontend);
     }
     /// Runs task before the next post.
     pub fn queue(&self, task: impl FnOnce() + Send + 'static) {
@@ -101,7 +109,10 @@ impl Framework for Fixture {
     }
 
     fn windows(&self) -> Vec<Arc<dyn Frontend>> {
-        Vec::new()
+        self.windows
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     fn get_webview(&self, _label: &str) -> Option<(Arc<dyn Frontend>, String)> {
@@ -120,6 +131,8 @@ pub struct FixtureFrontend {
     asked: Mutex<Receiver<PresentationDone>>,
     presentation: std::result::Result<usize, String>,
     native: std::result::Result<usize, String>,
+    /// Whether a page receives the events of the window; a window without one refuses each event.
+    page: bool,
 }
 
 /// The error of a call that the window of the tests does not hold.
@@ -136,6 +149,15 @@ impl FixtureFrontend {
             asked: Mutex::new(asked),
             presentation,
             native: Ok(WINDOW),
+            page: false,
+        }
+    }
+
+    /// A window whose page receives its events and that has no native window, so no step reaches the platform.
+    pub fn with_page() -> Self {
+        Self {
+            page: true,
+            ..Self::without_native_window("the test window has no native window")
         }
     }
 
@@ -238,11 +260,11 @@ impl Frontend for FixtureFrontend {
     }
 
     fn emit(&self, _name: &str, _payload: serde_json::Value) -> Result<()> {
-        Err(absent())
+        if self.page { Ok(()) } else { Err(absent()) }
     }
 
-    fn emit_webviews(&self, _name: &str, _payload: serde_json::Value) -> Result<()> {
-        Err(absent())
+    fn emit_webviews(&self, name: &str, payload: serde_json::Value) -> Result<()> {
+        self.emit(name, payload)
     }
 
     fn on_window_event(&self, _listener: Box<dyn Fn(&WindowEvent) + Send + Sync>) {}
