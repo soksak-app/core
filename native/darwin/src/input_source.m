@@ -125,13 +125,6 @@ char *sp_input_source_current(void) {
 - (void)removeSelectionObserver:(id)observer {
     if (observer) [NSNotificationCenter.defaultCenter removeObserver:observer];
 }
-- (id)scheduleSelectionTimeout:(void (^)(void))timeout {
-    return sp_observe_timer("input_source.selection.timeout", SP_OBSERVE_RECORD, 2, NO,
-        @"key-view source adoption", ^(NSTimer *timer) { timeout(); });
-}
-- (void)cancelSelectionTimeout:(id)timer {
-    [(NSTimer *)timer invalidate];
-}
 - (void)dealloc {
     [_context release];
     [_current release];
@@ -144,16 +137,19 @@ char *sp_input_source_current(void) {
 @property(retain) id<SPInputSourceSelectionDriver> driver;
 @property(copy) void (^completion)(const char *error);
 @property(retain) id observer;
-@property(retain) id timer;
+@property const void *key;
 @property BOOL selectionReturned;
 @property BOOL selectionSucceeded;
 @property BOOL notificationSeen;
 @property BOOL finished;
 - (void)start;
 - (void)notification;
-- (void)timeout;
+- (void)end:(NSString *)reason;
 - (void)finish:(NSString *)error;
 @end
+
+// The selections that wait for the adoption of their source, which sp_input_source_selection_end ends by their key.
+static NSMutableArray<SPInputSourceSelection *> *pendingSelections;
 
 @implementation SPInputSourceSelection
 - (void)start {
@@ -182,17 +178,14 @@ char *sp_input_source_current(void) {
         return;
     }
 
-    // These callbacks own the selection until finish removes the observer and invalidates the timer.
+    // The observer callback and the pending list own the selection until finish removes both.
     self.observer = [self.driver observeSelection:^{ [self notification]; }];
     if (!self.observer) {
         [self finish:@"keyboard source selection changes cannot be observed"];
         return;
     }
-    self.timer = [self.driver scheduleSelectionTimeout:^{ [self timeout]; }];
-    if (!self.timer) {
-        [self finish:@"the input source adoption timeout could not be scheduled"];
-        return;
-    }
+    if (!pendingSelections) pendingSelections = [[NSMutableArray alloc] init];
+    [pendingSelections addObject:self];
     NSString *error = nil;
     BOOL selected = [self.driver selectGlobalSource:self.identifier error:&error];
     self.selectionReturned = YES;
@@ -211,11 +204,11 @@ char *sp_input_source_current(void) {
     if (![self.driver targetContextIsCurrent]) return;
     if ([[self.driver targetContextSource] isEqualToString:self.identifier]) [self finish:nil];
 }
-- (void)timeout {
+- (void)end:(NSString *)reason {
     if (self.finished) return;
     NSString *held = [self.driver targetContextSource] ?: @"no active key-view context";
-    [self finish:[NSString stringWithFormat:@"the key view's text input context holds %@, not %@, after 2 s",
-        held, self.identifier]];
+    [self finish:[NSString stringWithFormat:@"the key view's text input context holds %@, not %@, before %@",
+        held, self.identifier, reason]];
 }
 - (void)finish:(NSString *)error {
     [self retain];
@@ -227,9 +220,7 @@ char *sp_input_source_current(void) {
     id observer = self.observer;
     self.observer = nil;
     [self.driver removeSelectionObserver:observer];
-    id timer = self.timer;
-    self.timer = nil;
-    [self.driver cancelSelectionTimeout:timer];
+    [pendingSelections removeObjectIdenticalTo:self];
     void (^completion)(const char *) = [self.completion copy];
     self.completion = nil;
     if (completion) completion(error ? error.UTF8String : NULL);
@@ -241,13 +232,12 @@ char *sp_input_source_current(void) {
     [_driver release];
     [_completion release];
     [_observer release];
-    [_timer release];
     [super dealloc];
 }
 @end
 
-void sp_input_source_select_and_await_with_driver(const char *identifier, id<SPInputSourceSelectionDriver> driver,
-    void (^adopted)(const char *error)) {
+void sp_input_source_select_and_await_with_driver(const char *identifier, const void *key,
+    id<SPInputSourceSelectionDriver> driver, void (^adopted)(const char *error)) {
     NSCAssert(NSThread.isMainThread, @"input sources are selected on the main thread");
     if (!adopted) { sp_log_error("input source", "the adoption callback is required"); return; }
     NSString *wanted = identifier ? [NSString stringWithUTF8String:identifier] : nil;
@@ -257,7 +247,17 @@ void sp_input_source_select_and_await_with_driver(const char *identifier, id<SPI
     selection.identifier = wanted;
     selection.driver = driver;
     selection.completion = adopted;
+    selection.key = key;
     [selection start];
+}
+
+void sp_input_source_selection_end(const void *key, const char *reason) {
+    NSCAssert(NSThread.isMainThread, @"input source selections end on the main thread");
+    if (!key) return;
+    NSString *end = reason ? [NSString stringWithUTF8String:reason] : nil;
+    for (SPInputSourceSelection *selection in [[pendingSelections copy] autorelease]) {
+        if (selection.key == key) [selection end:end ?: @"its wait ended"];
+    }
 }
 
 id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, id responder,
@@ -265,10 +265,10 @@ id<SPInputSourceSelectionDriver> sp_input_source_live_driver(NSWindow *window, i
     return [[[SPLiveInputSourceSelectionDriver alloc] initWithWindow:window responder:responder current:current] autorelease];
 }
 
-void sp_input_source_select_and_await(const char *identifier, void (^adopted)(const char *error)) {
+void sp_input_source_select_and_await(const char *identifier, const void *key, void (^adopted)(const char *error)) {
     NSCAssert(NSThread.isMainThread, @"input sources are selected on the main thread");
     NSWindow *window = NSApp.keyWindow;
     id<SPInputSourceSelectionDriver> driver = sp_input_source_live_driver(window, window.firstResponder,
         ^NSTextInputContext *{ return NSTextInputContext.currentInputContext; });
-    sp_input_source_select_and_await_with_driver(identifier, driver, adopted);
+    sp_input_source_select_and_await_with_driver(identifier, key, driver, adopted);
 }

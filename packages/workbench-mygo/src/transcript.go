@@ -161,28 +161,40 @@ func (h *SurfaceReplyHold) Gate(surface string, send func(sent func())) {
 // Closed ends the hold of surface when the host removed it: it sends the held replies in the order they were held and writes the
 // observation line once the host answered each of them.
 func (h *SurfaceReplyHold) Closed(surface string) {
+	h.end(surface, fmt.Errorf("surface %q closed before it held an exposure reply", surface), "were sent after the surface closed")
+}
+
+// Released ends the hold of surface before the host removed it, when the endpoint connection that asked for the hold closed (the
+// host event diagnostics-surface-released). It sends the held replies as Closed does (docs/spec/endpoint.md).
+func (h *SurfaceReplyHold) Released(surface string) {
+	h.end(surface, fmt.Errorf("the hold of surface %q ended before it held an exposure reply", surface), "were sent after their hold ended")
+}
+
+// end ends the hold of surface: each waiter of Held fails with refusal, the held replies are sent in order, and the line
+// `held exposure replies of surface "<surface>" <ended> (<count>)` is written once the host answered each.
+func (h *SurfaceReplyHold) end(surface string, refusal error, ended string) {
 	hold := h.holds[surface]
 	if hold == nil {
 		return
 	}
 	delete(h.holds, surface)
 	for _, waiter := range hold.waiters {
-		waiter(fmt.Errorf("surface %q closed before it held an exposure reply", surface))
+		waiter(refusal)
 	}
 	count := len(hold.sends)
-	left := count
-	ended := func() {
-		left--
-		if left == 0 {
-			h.log(fmt.Sprintf("held exposure replies of surface %q were sent after the surface closed (%d)", surface, count))
-		}
-	}
+	line := fmt.Sprintf("held exposure replies of surface %q %s (%d)", surface, ended, count)
 	if count == 0 {
-		h.log(fmt.Sprintf("held exposure replies of surface %q were sent after the surface closed (0)", surface))
+		h.log(line)
 		return
 	}
+	left := count
 	for _, send := range hold.sends {
-		send(ended)
+		send(func() {
+			left--
+			if left == 0 {
+				h.log(line)
+			}
+		})
 	}
 }
 

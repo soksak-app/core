@@ -298,7 +298,7 @@ $(BUILD)/capture_cleanup_test: src/capture.m
 
 $(BUILD)/capture_preparation_test: src/capture.m
 
-$(BUILD)/capture_pressure_test: src/capture.m
+$(BUILD)/capture_pressure_test: src/capture.m src/host_api_capture.m
 
 $(BUILD)/capture_storage_test: src/capture.m
 
@@ -339,6 +339,7 @@ NATIVE_TESTS = observe_test \
   application_log_fatal_test \
   event_ring_test \
   event_gate_wait_test \
+  event_wake_early_test \
   site_cost_test \
   surface_host_test \
   surface_keyboard_test \

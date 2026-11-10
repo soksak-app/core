@@ -3,6 +3,7 @@
 #import <IOSurface/IOSurface.h>
 #import <WebKit/WebKit.h>
 #import "support/layer_contents.h"
+#import "support/run_until.h"
 #import "capture.h"
 #import "image_capture_match.h"
 #import "image_region.h"
@@ -77,7 +78,7 @@ int main(void) { @autoreleasepool {
     // Still capture: captures a window that is not activated as PNG. It is observation data; the content is checked by size and color.
     NSString *still = [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"still.png"];
     char *stillError = NULL;
-    check(!sp_capture_still((long[]){-1}, 1, still.UTF8String, &stillError) && stillError != NULL && strlen(stillError) > 0,
+    check(!sp_capture_still((long[]){-1}, 1, still.UTF8String, 0, &stillError) && stillError != NULL && strlen(stillError) > 0,
         @"a still capture of a missing window reports an error");
     free(stillError); stillError = NULL;
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 120, 200, 100)
@@ -94,12 +95,9 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!onScreen() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
+    sp_run_until("the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(onScreen(), @"the window server shows the capture window");
-    bool stillWritten = sp_capture_still((long[]){window.windowNumber}, 1, still.UTF8String, &stillError);
+    bool stillWritten = sp_capture_still((long[]){window.windowNumber}, 1, still.UTF8String, 0, &stillError);
     check(stillWritten, [NSString stringWithFormat:@"a still capture of an inactive window is written (%@)",
         [NSString stringWithUTF8String:stillError == NULL ? "" : stillError]]);
     free(stillError);
@@ -112,23 +110,18 @@ int main(void) { @autoreleasepool {
     check(centre.redComponent > 0.9 && centre.greenComponent < 0.3 && centre.blueComponent < 0.1,
         [NSString stringWithFormat:@"the still image shows the window content (centre %@)", centre]);
     check(!NSApp.isActive, @"the still capture does not activate the application");
-    // The recording target does not change long enough for the initial compositor frame to become idle.
-    NSDate *settled = [NSDate dateWithTimeIntervalSinceNow:3];
-    while (settled.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, settled.timeIntervalSinceNow)]];
-    }
-    check(sp_capture_open(window.windowNumber, false, &operationError), @"a visible inactive window opens for recording");
+    // The recording target does not change after the still capture, which shows the frame the window server composited.
+    check(sp_capture_open(window.windowNumber, false, 0, &operationError), @"a visible inactive window opens for recording");
     free(operationError); operationError = NULL;
     bool recordingStarted = sp_capture_start(directory, false, &operationError);
     check(recordingStarted, [NSString stringWithFormat:@"recording starts on an unchanged inactive window (%@)",
         [NSString stringWithUTF8String:operationError == NULL ? "" : operationError]]);
     free(operationError);
     if (recordingStarted) {
-        int firstFrame = sp_capture_wait();
+        int firstFrame = sp_capture_wait(0);
         check(firstFrame == 1, [NSString stringWithFormat:@"an unchanged inactive window produces a first frame (%@)",
             [NSString stringWithUTF8String:sp_capture_error()]]);
-        int frames = sp_capture_stop(0);
+        int frames = sp_capture_stop(0, 0);
         const char *stopError = sp_capture_error();
         check(stopError != NULL && strlen(stopError) == 0,
             [NSString stringWithFormat:@"recording stops without error (%s)", stopError]);
@@ -153,7 +146,7 @@ int main(void) { @autoreleasepool {
     check(!NSApp.isActive, @"recording an unchanged window does not activate the application");
     // The identity fixture places two side-by-side image regions. Each region needs the full reserved 192-pixel QR ROI.
     [window setContentSize:NSMakeSize(384, 192)];
-    check(sp_capture_open(window.windowNumber, false, &operationError),
+    check(sp_capture_open(window.windowNumber, false, 0, &operationError),
         @"the window reopens for an opt-in identity recording");
     free(operationError); operationError = NULL;
     bool identityRecordingStarted = sp_capture_start(directory, true, &operationError);
@@ -190,7 +183,7 @@ int main(void) { @autoreleasepool {
         NSData *rawA = nil, *rawB = nil;
         IOSurfaceRef imageA = regionsReady ? identitySurface((size_t)rasterA[0], (size_t)rasterA[1], nonceA, &rawA) : NULL;
         IOSurfaceRef imageB = regionsReady ? identitySurface((size_t)rasterB[0], (size_t)rasterB[1], nonceB, &rawB) : NULL;
-        int firstIdentityFrame = sp_capture_wait();
+        int firstIdentityFrame = sp_capture_wait(0);
         check(firstIdentityFrame == 1, [NSString stringWithFormat:@"opt-in recording produces a first frame (%s)",
             sp_capture_error()]);
         BOOL presentedA = imageA && sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
@@ -202,7 +195,7 @@ int main(void) { @autoreleasepool {
         CALayer *layerB = (CALayer *)((NSView *)regionB).layer.sublayers.firstObject;
         check(layerA.contents != NULL && layerB.contents != NULL,
             @"opt-in capture has both tagged layers before stop");
-        int identityFrames = sp_capture_stop(0);
+        int identityFrames = sp_capture_stop(0, 0);
         check(identityFrames > 0 && strlen(sp_capture_error()) == 0,
             [NSString stringWithFormat:@"opt-in recording finalizes without error (%d, %s)",
                 identityFrames, sp_capture_error()]);
@@ -220,7 +213,7 @@ int main(void) { @autoreleasepool {
             operationError == NULL ? "" : operationError]);
         free(operationError); operationError = NULL;
         if (failedCaptureStarted) {
-            check(sp_capture_wait() == 1, @"the second identity capture receives its first frame");
+            check(sp_capture_wait(0) == 1, @"the second identity capture receives its first frame");
             BOOL failedA = sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
                 rasterA[0], rasterA[1], rasterA[2], 73, 10, 1);
             BOOL failedB = sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
@@ -231,8 +224,8 @@ int main(void) { @autoreleasepool {
                 sp_capture_test_report_error("controlled identity capture failure");
                 dispatch_semaphore_signal(errorReported);
             });
-            check(dispatch_semaphore_wait(errorReported, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
-                @"a background capture failure queues its main-thread cleanup");
+            // A background capture failure queues its main-thread cleanup before it returns.
+            dispatch_semaphore_wait(errorReported, DISPATCH_TIME_FOREVER);
             dispatch_release(errorReported);
             check(!sp_image_capture_match_identity_session_active(),
                 @"capture A disables identity tagging as soon as its error is recorded");
@@ -243,7 +236,7 @@ int main(void) { @autoreleasepool {
             check(afterErrorA && afterErrorB && regionMatchesSurfaceBytes(regionA, imageA, rawA)
                 && regionMatchesSurfaceBytes(regionB, imageB, rawB),
                 @"capture A presents raw frames after failure without retagging");
-            sp_capture_stop(0);
+            sp_capture_stop(0, 0);
             check(strstr(sp_capture_error(), "controlled identity capture failure") != NULL,
                 @"capture A finalization preserves the injected failure");
 
@@ -252,7 +245,7 @@ int main(void) { @autoreleasepool {
                 operationError == NULL ? "" : operationError]);
             free(operationError); operationError = NULL;
             if (captureBStarted) {
-                check(sp_capture_wait() == 1, @"capture B receives its first frame");
+                check(sp_capture_wait(0) == 1, @"capture B receives its first frame");
                 BOOL taggedB1 = sp_region_present(regionA, IOSurfaceGetID(imageA), nonceA,
                     rasterA[0], rasterA[1], rasterA[2], 75, 10, 1);
                 BOOL taggedB2 = sp_region_present(regionB, IOSurfaceGetID(imageB), nonceB,
@@ -264,7 +257,7 @@ int main(void) { @autoreleasepool {
                 check(regionDiffersFromSurfaceBytes(regionA, imageA, rawA)
                     && regionDiffersFromSurfaceBytes(regionB, imageB, rawB),
                     @"delayed cleanup from capture A preserves both capture B tags");
-                sp_capture_stop(0);
+                sp_capture_stop(0, 0);
                 check(regionMatchesSurfaceBytes(regionA, imageA, rawA)
                     && regionMatchesSurfaceBytes(regionB, imageB, rawB),
                     @"capture B stop restores both latest raw provider byte arrays");
@@ -288,9 +281,8 @@ int main(void) { @autoreleasepool {
             sp_capture_test_report_startup_failure("controlled identity startup failure");
             dispatch_semaphore_signal(startupFailureReported);
         });
-        check(dispatch_semaphore_wait(startupFailureReported,
-            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
-            @"a background startup failure ends matcher state and queues cleanup");
+        // A background startup failure ends the matcher state and queues its cleanup before it returns.
+        dispatch_semaphore_wait(startupFailureReported, DISPATCH_TIME_FOREVER);
         dispatch_release(startupFailureReported);
         drainMainQueueThroughSentinel();
         check(regionMatchesSurfaceBytes(regionA, imageA, rawA)
@@ -308,9 +300,8 @@ int main(void) { @autoreleasepool {
             sp_capture_test_report_startup_failure("controlled delayed startup failure");
             dispatch_semaphore_signal(delayedStartupFailure);
         });
-        check(dispatch_semaphore_wait(delayedStartupFailure,
-            dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0,
-            @"a second startup failure queues cleanup before a replacement session starts");
+        // A second startup failure queues its cleanup before a replacement session starts.
+        dispatch_semaphore_wait(delayedStartupFailure, DISPATCH_TIME_FOREVER);
         dispatch_release(delayedStartupFailure);
         sp_image_capture_match_begin(NULL, NULL);
         startupIdentityError = NULL;

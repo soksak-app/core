@@ -51,7 +51,7 @@ func TestMissingCallbacksAllocateNoAddresses(t *testing.T) {
 			t.Fatalf("diagnostic field %d accepted", i)
 		}
 	}
-	diagnostics.ProcessExitAnswered = nil
+	diagnostics.CaptureAnswered = nil
 	for range 2001 {
 		if _, err := binding.BindDiagnostic(diagnostics); err == nil {
 			t.Fatal("missing last diagnostic callback accepted")
@@ -208,6 +208,7 @@ func TestNativeCallbacksPreserveTheDeclaredABI(t *testing.T) {
 		"DocumentChanged", "DocumentMessage", "ViewMessage", "ViewEnded", "ViewResponsiveness", "DocumentStream", "CoreRootServe",
 		"DocumentQueried", "DocumentEvent", "MemoryPressure", "DockNewWindow", "MouseButtonsChanged", "NativeInputSourceAdopted",
 		"WindowObjectsCounted", "PageObjectsCounted", "DeliveredNotifications", "DocumentFrameIdentityDone", "InputReferenceReply", "ProcessExitAnswered",
+		"CaptureAnswered",
 	}
 	if !reflect.DeepEqual(order, wantOrder) {
 		t.Errorf("native callback order: got %v, want %v", order, wantOrder)

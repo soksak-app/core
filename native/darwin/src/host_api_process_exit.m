@@ -10,6 +10,9 @@
 static void answered(void *context, bool exited) {
     hostRunOnWorker(^{ sp_host_diagnostic_callback_process_exit_answered((uintptr_t)context, exited); });
 }
-void whenExited(int32_t pid, double seconds, uintptr_t handle) {
-    hostRunOnMain(^{ sp_process_when_exited(pid, seconds, answered, (void *)handle); });
+void whenExited(int32_t pid, uintptr_t handle) {
+    hostRunOnMain(^{ sp_process_when_exited(pid, answered, (void *)handle); });
+}
+void endExitWait(uintptr_t handle) {
+    hostRunOnMain(^{ sp_process_exit_end((void *)handle); });
 }

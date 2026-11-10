@@ -95,7 +95,7 @@ int main(void) { @autoreleasepool {
     stopSample = idleSample();
     check(stopSample != NULL, @"the post-boundary idle sample fixture is created");
 
-    sp_capture_stop(0);
+    sp_capture_stop(0, 0);
     // sp_capture_stop releases the sample queue after draining the stop transaction.
     captureQueue = NULL;
 

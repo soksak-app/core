@@ -462,6 +462,9 @@ pub fn web_content_process_terminated(webview: &Webview) {
             "surface layout cancel",
             crate::surfaces::page_layout_ended(&window),
         );
+        // The native waits of the window end with its page (docs/spec/endpoint.md).
+        #[cfg(feature = "diagnostics")]
+        crate::diagnostics::end_native_waits(window.label(), crate::diagnostics::WAIT_END_PAGE);
     } else if crate::modals::is_modal_of(webview.label(), window.label()) {
         log_failure(
             "modal key wait",

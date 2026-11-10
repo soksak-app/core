@@ -14,3 +14,6 @@ static void referenceReply(void *context, const char *reply, const char *failure
 void inputReference(uintptr_t window, const char *action, const char *document, uintptr_t context) {
     hostRunOnMain(^{ sp_input_reference((void *)window, action, document, referenceReply, (void *)context); });
 }
+void endInputReferenceWait(uintptr_t window, const char *reason) {
+    hostRunOnMain(^{ sp_input_reference_end((void *)window, reason); });
+}

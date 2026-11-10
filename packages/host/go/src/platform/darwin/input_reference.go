@@ -28,6 +28,13 @@ func (implementation) InputReference(window platform.Window, action string, docu
 	diagnosticNative.InputReference(uintptr(window), operation, expected, uintptr(handles.NewHandle(done)))
 }
 
+// EndInputReferenceWait ends the pending wait of the reference of window, naming reason in its failure. Call it in a main-thread step.
+func (implementation) EndInputReferenceWait(window platform.Window, reason string) {
+	text := native.CString(reason)
+	defer native.Free(unsafe.Pointer(text))
+	diagnosticNative.EndInputReferenceWait(uintptr(window), text)
+}
+
 func goHost_input_reference_reply(context uintptr, value, failure *byte) {
 	handle := handles.Handle(context)
 	done := handle.Value().(func(json.RawMessage, error))

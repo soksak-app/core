@@ -232,13 +232,13 @@ int main(void) { @autoreleasepool {
     if (!created) { [window close]; return 1; }
     recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
     char *operationError = NULL;
-    BOOL opened = sp_capture_open(window.windowNumber, false, &operationError);
+    BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
     if (opened) { free(operationError); operationError = NULL; started = sp_capture_start(directory, false, &operationError); }
     check(started, [NSString stringWithFormat:@"the recording starts (%s)", operationError == NULL ? "" : operationError]);
     free(operationError);
     if (!started) { [window close]; return 1; }
-    check(sp_capture_wait() > 0, @"the recording contains its initial frame");
+    check(sp_capture_wait(0) > 0, @"the recording contains its initial frame");
     waitFrames(window.screen, kRefreshes);
 
     surfaceLayoutTraceStart();
@@ -266,7 +266,7 @@ int main(void) { @autoreleasepool {
     fprintf(stdout, "the start transaction stayed open %.1fms from the title bar change to the commit\n",
         committed - pages->set);
 
-    int count = sp_capture_stop(CACurrentMediaTime() * 1000);
+    int count = sp_capture_stop(CACurrentMediaTime() * 1000, 0);
     const char *recordingError = sp_capture_error();
     check(recordingError[0] == 0 && !sp_capture_limited(), [NSString stringWithFormat:
         @"the recording ends without error or truncation (%s)", recordingError[0] ? recordingError : "none"]);

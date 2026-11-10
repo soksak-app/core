@@ -104,7 +104,7 @@ static BOOL selectAndAwaitInputSource(NSString *source, NSDate *deadline) {
     NSString *before = currentSourceID();
     __block BOOL answered = NO;
     __block NSString *reason = nil;
-    sp_input_source_select_and_await(source.UTF8String, ^(const char *error) {
+    sp_input_source_select_and_await(source.UTF8String, NULL, ^(const char *error) {
         answered = YES;
         reason = error ? [NSString stringWithUTF8String:error] : nil;
     });

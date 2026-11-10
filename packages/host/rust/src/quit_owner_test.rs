@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicUsize;
 // contract: endpoint.response.quit-follows-the-response
 #[test]
 fn quit_during_owned_native_work_follows_the_response() {
-    let (scope, mut completion) = ReplyScope::pending_on(crate::endpoint::ConnectionEnd::default());
+    let (scope, mut completion) = ReplyScope::pending_on(crate::endpoint::ConnectionEnd::open());
     let quits = Arc::new(AtomicUsize::new(0));
     let count = || quits.load(Ordering::SeqCst);
     let quit = {

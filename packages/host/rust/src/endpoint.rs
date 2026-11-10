@@ -166,41 +166,55 @@ struct ReplyState {
     connection: ConnectionEnd,
 }
 
-/// The end of one endpoint connection, which a request that waits follows: no answer reaches a closed connection, so the
-/// end of the connection ends such a wait (docs/spec/endpoint.md).
+/// The end of one endpoint connection. A request that waits follows it: no answer reaches a closed connection, so the end of
+/// the connection ends such a wait, and a request that opened a diagnostic hold registers the end of the hold here
+/// (docs/spec/endpoint.md).
 #[derive(Clone, Default)]
 pub struct ConnectionEnd(Arc<Mutex<ConnectionEndState>>);
 
 type ConnectionEndCallback = Box<dyn FnOnce() + Send + 'static>;
+
 #[derive(Default)]
 struct ConnectionEndState {
-    ended: bool,
+    closed: bool,
     next: u64,
     watches: HashMap<u64, ConnectionEndCallback>,
+    callbacks: Vec<ConnectionEndCallback>,
 }
 
 impl ConnectionEnd {
-    /// Ends the connection and runs its watches. They run under the lock, so a watch that its request drops returns
-    /// after a run of it: an end of waits that ran late would end the waits of a later request. A watch takes no lock of
-    /// this connection.
-    fn end(&self) {
-        // default: a lock that a panicking thread poisoned still holds the watches of the connection, which the end takes
-        // once; the panic hook records the panic.
-        let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        state.ended = true;
-        for (_, on_end) in std::mem::take(&mut state.watches) {
-            on_end();
+    /// The end of a connection that is open.
+    pub fn open() -> Self {
+        Self::default()
+    }
+
+    /// Closes the connection. Its watches run under the lock, so a watch that its request drops returns after a run of it:
+    /// an end of waits that ran late would end the waits of a later request; a watch takes no lock of this connection. Then
+    /// each callback of on_close runs once, outside the lock. A later close does nothing.
+    pub fn close(&self) {
+        let callbacks = {
+            // default: a lock that a panicking thread poisoned still holds the watches and callbacks of the end, which the
+            // close takes once; the panic hook records the panic.
+            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            state.closed = true;
+            for (_, on_end) in std::mem::take(&mut state.watches) {
+                on_end();
+            }
+            std::mem::take(&mut state.callbacks)
+        };
+        for callback in callbacks {
+            callback();
         }
     }
 
-    /// Runs on_end when the connection ends before the returned watch is dropped; on a connection that already ended it
+    /// Runs on_end when the connection closes before the returned watch is dropped; on a connection that already closed it
     /// runs on_end at once.
     pub fn watch(&self, on_end: impl FnOnce() + Send + 'static) -> ConnectionWatch {
         {
             // default: a lock that a panicking thread poisoned still holds the watches of the connection, which the
             // registration extends; the panic hook records the panic.
             let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if !state.ended {
+            if !state.closed {
                 let id = state.next;
                 state.next += 1;
                 state.watches.insert(id, Box::new(on_end));
@@ -215,6 +229,25 @@ impl ConnectionEnd {
             end: self.clone(),
             id: None,
         }
+    }
+
+    /// Runs callback when the connection closes, or at once when it is already closed.
+    pub fn on_close(&self, callback: impl FnOnce() + Send + 'static) {
+        {
+            // default: a lock that a panicking thread poisoned still holds the callbacks of the end, which the
+            // registration extends; the panic hook records the panic.
+            let mut state = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            if !state.closed {
+                state.callbacks.push(Box::new(callback));
+                return;
+            }
+        }
+        callback();
+    }
+
+    /// Whether other is the end of the same connection.
+    pub fn is(&self, other: &ConnectionEnd) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -1460,7 +1493,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
             },
         );
     let mut reason = String::from("peer closed");
-    let ended = ConnectionEnd::default();
+    let ended = ConnectionEnd::open();
     loop {
         let body = match read_body(&mut connection) {
             Ok(Some(body)) => body,
@@ -1529,7 +1562,8 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         reason = String::from("the endpoint closed");
     }
     log_info("endpoint", format!("connection closed: {reason}"));
-    ended.end();
+    // The waits of the requests of this connection and the diagnostic holds that they opened end with it.
+    ended.close();
     if let Err(error) = connection.close() {
         log_error("endpoint connection close", error);
     }

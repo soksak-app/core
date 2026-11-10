@@ -533,9 +533,8 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
             1, 1000, &firstError);
         dispatch_semaphore_signal(firstReturned);
     });
-    long gateWait = dispatch_semaphore_wait(identityDecodeGateEntered,
-        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(gateWait == 0, @"the first sample reaches the controlled QR decoder boundary");
+    // The first sample reaches the controlled QR decoder boundary.
+    dispatch_semaphore_wait(identityDecodeGateEntered, DISPATCH_TIME_FOREVER);
     dispatch_async(sampleQueue, ^{
         secondEnqueued = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
@@ -543,24 +542,24 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         dispatch_semaphore_signal(secondReturned);
     });
     long secondBeforeRelease = dispatch_semaphore_wait(secondReturned, DISPATCH_TIME_NOW);
-    long firstWait = dispatch_semaphore_wait(firstReturned, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    long secondWait = secondBeforeRelease == 0 ? 0 : dispatch_semaphore_wait(secondReturned,
-        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(firstWait == 0 && firstEnqueued && firstError == NULL,
+    dispatch_semaphore_wait(firstReturned, DISPATCH_TIME_FOREVER);
+    // The later sample callback returns while the earlier QR decode remains blocked; a callback that waited for that
+    // decode would hold this wait until the runner ends the run.
+    if (secondBeforeRelease != 0) dispatch_semaphore_wait(secondReturned, DISPATCH_TIME_FOREVER);
+    check(firstEnqueued && firstError == NULL,
         @"the blocked first frame was admitted without changing its decode input");
     memset(mutableFirstSample.mutableBytes, 0, mutableFirstSample.length);
     dispatch_semaphore_t writerProgress = dispatch_semaphore_create(0);
     dispatch_async(writer, ^{ dispatch_semaphore_signal(writerProgress); });
-    long writerProgressWait = dispatch_semaphore_wait(writerProgress,
-        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(writerProgressWait == 0,
-        @"the capture artifact writer remains available while QR decoding is blocked");
+    // The capture artifact writer remains available while QR decoding is blocked.
+    dispatch_semaphore_wait(writerProgress, DISPATCH_TIME_FOREVER);
     dispatch_release(writerProgress);
-    check(secondWait == 0 && secondEnqueued && secondError == NULL,
+    check(secondEnqueued && secondError == NULL,
         @"the later sample callback returns while the earlier QR decode remains blocked");
-    long secondDecodeBeforeRelease = dispatch_semaphore_wait(identityDecodeSecondEntered,
-        dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
-    check(secondDecodeBeforeRelease == 0,
+    // The first decode is released only after this wait, so a second decode that waited for it would hold this wait until the
+    // runner ends the run.
+    dispatch_semaphore_wait(identityDecodeSecondEntered, DISPATCH_TIME_FOREVER);
+    check(atomic_load(&identityDecodeHookCount) >= 2,
         @"the second QR decode starts before the blocked first decode is released");
     BOOL acceptedThroughLimit = YES;
     for (uint64_t frame = 3; frame <= 16; frame++) {
@@ -602,13 +601,13 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         sp_image_capture_match_identity_session_end();
         dispatch_semaphore_signal(sessionEndReturned);
     });
-    dispatch_semaphore_wait(sessionEndStarted, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    dispatch_semaphore_wait(sessionEndStarted, DISPATCH_TIME_FOREVER);
     long sessionEndBeforeDecode = dispatch_semaphore_wait(sessionEndReturned, DISPATCH_TIME_NOW);
     check(sessionEndBeforeDecode != 0,
         @"ending an identity session waits for its blocked decoder work to finish");
     dispatch_semaphore_signal(identityDecodeGateRelease);
-    long sessionEndWait = dispatch_semaphore_wait(sessionEndReturned, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(sessionEndWait == 0 && !sp_image_capture_match_identity_session_active(),
+    dispatch_semaphore_wait(sessionEndReturned, DISPATCH_TIME_FOREVER);
+    check(!sp_image_capture_match_identity_session_active(),
         @"session end drains accepted decoder and artifact writes before releasing session state");
     dispatch_release(sessionEndStarted); dispatch_release(sessionEndReturned); dispatch_release(sessionEndQueue);
     NSString *decodedPath = [[NSString stringWithUTF8String:directory]
@@ -788,10 +787,10 @@ static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
         dispatch_semaphore_signal(writerEntered);
         dispatch_semaphore_wait(writerRelease, DISPATCH_TIME_FOREVER);
     });
-    long writerWait = dispatch_semaphore_wait(writerEntered, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(writerWait == 0, @"the controlled artifact writer is held before identity rows are enqueued");
+    // The controlled artifact writer is held before identity rows are enqueued.
+    dispatch_semaphore_wait(writerEntered, DISPATCH_TIME_FOREVER);
 
-    BOOL admittedEight = sessionStarted && colorSpace != NULL && writerWait == 0 && rowsSource != NULL;
+    BOOL admittedEight = sessionStarted && colorSpace != NULL && rowsSource != NULL;
     for (uint64_t frame = 1; frame <= 8 && admittedEight; frame++) {
         error = NULL;
         BOOL accepted = sp_image_capture_match_identity_enqueue_frame(sample, 4, 4, 16, colorSpace,
@@ -800,10 +799,10 @@ static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
         free(error); error = NULL;
     }
     check(admittedEight, @"eight ordered identity rows are admitted while artifact output is blocked");
-    long rowsWait = rowsSource && admittedEight
-        ? dispatch_semaphore_wait(rowsReady, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) : -1;
+    // The file watcher signals when the eighth row is written while the writer is still held.
+    if (rowsSource && admittedEight) dispatch_semaphore_wait(rowsReady, DISPATCH_TIME_FOREVER);
     NSArray<NSNumber *> *blockedWriterFrames = identityDecodedFrameNumbers(decodedPath);
-    BOOL committedWhileBlocked = rowsWait == 0 && identityFramesAreOrdered(blockedWriterFrames, 8);
+    BOOL committedWhileBlocked = rowsSource && admittedEight && identityFramesAreOrdered(blockedWriterFrames, 8);
     check(committedWhileBlocked,
         @"eight decoded JSONL rows commit in order while the shared raw/source artifact writer remains blocked");
 
@@ -815,7 +814,7 @@ static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
     sp_image_capture_match_end();
     if (rowsSource) {
         dispatch_source_cancel(rowsSource);
-        dispatch_semaphore_wait(sourceCancelled, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+        dispatch_semaphore_wait(sourceCancelled, DISPATCH_TIME_FOREVER);
         dispatch_release(rowsSource);
     }
     if (colorSpace) CGColorSpaceRelease(colorSpace);

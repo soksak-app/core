@@ -145,7 +145,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.observe.delivered" => Some(Class::Input),
         "native.observe.failed" => Some(Class::Lifecycle),
         "native.observe.registered" => Some(Class::Lifecycle),
-        "native.process.exit_timeout" => Some(Class::Lifecycle),
+        "native.process.exit_wait_ended" => Some(Class::Lifecycle),
         "native.surface.key_kept" => Some(Class::Input),
         "native.surface.keys_delivered" => Some(Class::Input),
         "native.surface.keys_dropped" => Some(Class::Input),

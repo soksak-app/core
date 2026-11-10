@@ -42,6 +42,9 @@ func BindDiagnostic(callbacks abi.DiagnosticCallbacks) (abi.DiagnosticTable, err
 	if callbacks.ProcessExitAnswered == nil {
 		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: process_exit_answered")
 	}
+	if callbacks.CaptureAnswered == nil {
+		return abi.DiagnosticTable{}, fmt.Errorf("native callback is missing: capture_answered")
+	}
 	table := abi.DiagnosticTable{
 		purego.NewCallback(callbacks.NativeInputSourceAdopted),
 		purego.NewCallback(callbacks.WindowObjectsCounted),
@@ -50,6 +53,7 @@ func BindDiagnostic(callbacks abi.DiagnosticCallbacks) (abi.DiagnosticTable, err
 		purego.NewCallback(callbacks.DocumentFrameIdentityDone),
 		purego.NewCallback(callbacks.InputReferenceReply),
 		purego.NewCallback(callbacks.ProcessExitAnswered),
+		purego.NewCallback(callbacks.CaptureAnswered),
 	}
 	diagnosticAddressesBound = true
 	return table, nil

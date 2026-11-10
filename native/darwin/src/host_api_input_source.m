@@ -11,10 +11,13 @@
 
 void inputSourceSelectAndAwait(const char *identifier, uintptr_t callback) {
     hostRunOnMain(^{
-        sp_input_source_select_and_await(identifier, ^(const char *error) {
+        sp_input_source_select_and_await(identifier, (const void *)callback, ^(const char *error) {
             hostRunOnWorker(^{ sp_host_diagnostic_callback_native_input_source_adopted(callback, (char *)error); });
         });
     });
+}
+void endInputSourceSelection(uintptr_t callback, const char *reason) {
+    hostRunOnMain(^{ sp_input_source_selection_end((const void *)callback, reason); });
 }
 char *main_sp_input_source_current(void) { return ON_MAIN(char *, sp_input_source_current()); }
 const char *inputSourceRoleIdentifier(const char *role) { return sp_input_source_role_identifier(role); }
