@@ -251,27 +251,27 @@ static void checkReceipts(void) {
         [NSString stringWithFormat:@"a press completes only after a busy document is free to receive it (%d after %.3fs)", late.result, late.took]);
     pointerThen(window, view, 50, 50, 3, 5);
 
-    // When the document is busy the receipt is late, and when the time limit passes it is reported as not received.
-    [view evaluateJavaScript:@"{const end=Date.now()+2500; while(Date.now()<end){}} null" completionHandler:nil];
-    SPTimed busy = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
+    // Without a text field in focus, a press waits for the end of the handling of WebKit and no limit: a document that is busy
+    // longer than the limit of the request still receives the press and the request answers then.
+    [view evaluateJavaScript:@"{const end=Date.now()+1500; while(Date.now()<end){}} null" completionHandler:nil];
+    SPTimed busy = {NO, SP_INPUT_REJECTED, [NSDate timeIntervalSinceReferenceDate], 0};
     SPTimed *busyState = &busy;
-    NSString *unreceived = capturedRecords(^{
-        sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 0.5, timed, busyState);
-        until(^BOOL { return busyState->done; });
-    });
-    check(busy.result == SP_INPUT_UNRECEIVED && busy.took >= 0.45 && busy.took < 2,
-        [NSString stringWithFormat:@"a press a busy document does not receive in time is reported (%d after %.3fs)", busy.result, busy.took]);
-    // The record of a press that the document did not receive names, at the level error, the web view whose receipt it awaited
-    // and the view the press reached, so a press that reached another page is told from a page that did not answer.
-    NSString *awaited = [NSString stringWithFormat:@"\"target\":{\"class\":\"WKWebView\",\"frame\":[0,0,300,200],\"hidden\":false,\"inWindow\":true,"
-        "\"loading\":false,\"url\":\"about:blank\",\"view\":\"%p\"}", view];
-    BOOL named = NO;
-    for (NSString *line in [unreceived componentsSeparatedByString:@"\n"]) {
-        if ([line containsString:@" error native input inject: {"] && [line containsString:@"\"kind\":\"unreceived\""]
-            && [line containsString:awaited]
-            && [line containsString:@"\"samePage\":true"] && [line containsString:@"\"type\":\"pointerdown\""]) named = YES;
-    }
-    check(named, [NSString stringWithFormat:@"a press the document did not receive names the awaited and the reached view (got %@)", unreceived]);
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 1, 0, 0, 0, 1, 0.5, timed, busyState);
+    until(^BOOL { return busyState->done; });
+    check(busy.result == SP_INPUT_DELIVERED && busy.took >= 1.4,
+        [NSString stringWithFormat:@"a press that a busy document receives after the limit of the request is delivered (%d after %.3fs)",
+            busy.result, busy.took]);
+    pointerThen(window, view, 50, 50, 3, 5);
+    // A scroll into a window that is not shown is refused in its turn, because that window presents nothing until it shows.
+    [window orderOut:nil];
+    SPTimed hiddenScroll = {NO, SP_INPUT_DELIVERED, [NSDate timeIntervalSinceReferenceDate], 0};
+    SPTimed *hiddenScrollState = &hiddenScroll;
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 50, 50, 4, 0, 0, 40, 1, 3, timed, hiddenScrollState);
+    until(^BOOL { return hiddenScrollState->done; });
+    check(hiddenScroll.result == SP_INPUT_UNRECEIVED && hiddenScroll.took < 1,
+        [NSString stringWithFormat:@"a scroll into a window that is not shown is refused at once (%d after %.3fs)",
+            hiddenScroll.result, hiddenScroll.took]);
+    [window orderBack:nil];
     pointerThen(window, view, 50, 50, 3, 5);
     webviewInputUnregister(view);
     [window close];

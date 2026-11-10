@@ -106,9 +106,21 @@ static void checkFailures(void) {
 
     SPStalledWebView *stalled = [[[SPStalledWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
     NSWindow *pending = makeWindow(NSWindow.class, stalled);
-    state = activate(pending, 1);
-    check(state.result == SP_ACTIVATE_PENDING,
-        [NSString stringWithFormat:@"a webview that does not apply the active state reports pending (%d)", state.result]);
+    // The webview step has no limit: a webview that does not report its active state keeps the request waiting until an event
+    // ends it, here the close of the window.
+    __block SPActivation waiting = {NO, SP_ACTIVATE_DONE, ""};
+    sp_input_activate(pending, 1, activated, &waiting);
+    NSDate *settle = [NSDate dateWithTimeIntervalSinceNow:1.5];
+    while (settle.timeIntervalSinceNow > 0) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
+    check(!waiting.done, [NSString stringWithFormat:@"the webview step of an activation has no limit (answered %d)", waiting.result]);
+    [pending close];
+    until(^BOOL { return waiting.done; });
+    check(waiting.result == SP_ACTIVATE_PENDING,
+        [NSString stringWithFormat:@"the close of the window ends the webview step with pending (%d)", waiting.result]);
 
     // A hidden document view is not an input target. While a visible window is being activated, it must not hold an explicit
     // activation request.
@@ -135,10 +147,14 @@ static void checkFailures(void) {
     state = activate(other, 5);
     check(state.result == SP_ACTIVATE_DONE,
         [NSString stringWithFormat:@"an ordinary window activates (%d, frontmost %s)", state.result, state.frontmost]);
+    // A window that cannot become key is refused in its turn: no notification would come, so no limit waits for it.
     NSWindow *unkeyable = makeWindow(SPUnkeyableWindow.class, nil);
-    state = activate(unkeyable, 1);
-    check(state.result == SP_ACTIVATE_NOT_KEY && NSApp.isActive,
-        [NSString stringWithFormat:@"an active application whose window cannot become key reports not key (%d)", state.result]);
+    NSTimeInterval unkeyableStarted = [NSDate timeIntervalSinceReferenceDate];
+    state = activate(unkeyable, 3);
+    NSTimeInterval unkeyableTook = [NSDate timeIntervalSinceReferenceDate] - unkeyableStarted;
+    check(state.result == SP_ACTIVATE_NOT_KEY && NSApp.isActive && unkeyableTook < 1,
+        [NSString stringWithFormat:@"an active application whose window cannot become key reports not key at once (%d after %.3fs)",
+            state.result, unkeyableTook]);
 
     for (NSWindow *window in @[pending, hiddenWindow, other, lost, unkeyable]) [window close];
 }
