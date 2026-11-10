@@ -32,45 +32,44 @@ fn a_service_process_of_another_user_exists() {
     assert!(exists, "process 1 of another user must exist");
 }
 
+// The wait for a service process ends by the exit of the process or by its stop, and by no time limit: the exit answers
+// ended, the stop answers not ended, and a process that does not exist has ended.
 // contract: sidecars-transport.endpoint.waits-for-the-end-of-a-service-process
 #[test]
 fn the_wait_for_the_end_of_a_service_process() {
-    use std::time::{Duration, Instant};
+    use soksak_host::platform::StopSignal;
     let platform = soksak_host::platform::current().expect("platform");
-    let mut ending = std::process::Command::new("sleep")
-        .arg("30")
-        .spawn()
-        .expect("spawn sleep");
+    // The processes read their input, whose write end the Child holds, so each runs until the check ends it and ends with
+    // the check process also when the check is killed.
+    let cat = || {
+        std::process::Command::new("cat")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn cat")
+    };
+    let mut ending = cat();
     let pid = ending.id();
-    let killer = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(150));
-        ending.kill().expect("kill sleep");
-        ending.wait().expect("reap sleep");
+    let never = StopSignal::new();
+    std::thread::scope(|scope| {
+        let waited = scope.spawn(|| platform.wait_service_process_end(pid, &never));
+        // The kill is the event that ends the wait; a wait that does not end stops at the limit of the runner.
+        ending.kill().expect("kill cat");
+        assert_eq!(waited.join().unwrap(), Ok(true), "a process that ends");
     });
-    let started = Instant::now();
-    let ended = platform
-        .wait_service_process_end(pid, Duration::from_secs(10))
-        .expect("wait for a process that ends");
-    assert!(
-        ended && started.elapsed() < Duration::from_secs(5),
-        "ended {ended} after {:?}",
-        started.elapsed()
+    ending.wait().expect("reap cat");
+    let mut running = cat();
+    let stopped = StopSignal::new();
+    stopped.stop();
+    assert_eq!(
+        platform.wait_service_process_end(running.id(), &stopped),
+        Ok(false),
+        "a process that keeps running until the stop"
     );
-    killer.join().expect("killer");
-    let mut running = std::process::Command::new("sleep")
-        .arg("30")
-        .spawn()
-        .expect("spawn sleep");
-    assert!(
-        !platform
-            .wait_service_process_end(running.id(), Duration::from_millis(200))
-            .expect("wait for a process that keeps running")
-    );
-    running.kill().expect("kill sleep");
-    running.wait().expect("reap sleep");
-    assert!(
-        platform
-            .wait_service_process_end(pid, Duration::from_secs(1))
-            .expect("wait for a process that does not exist")
+    running.kill().expect("kill cat");
+    running.wait().expect("reap cat");
+    assert_eq!(
+        platform.wait_service_process_end(pid, &never),
+        Ok(true),
+        "a process that does not exist"
     );
 }

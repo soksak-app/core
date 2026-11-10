@@ -3,14 +3,15 @@
 //! docs/spec/sidecars.md#declaration-and-startup).
 
 use std::collections::HashMap;
+use std::process::{Command, Stdio};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::thread;
 
 use super::{
-    Failure, Message, Outgoing, Owner, QueuedLine, ReplyWaiters, Sidecars,
-    send_close_owner_and_shutdown,
+    Failure, Message, Outgoing, Owner, QueuedLine, Replacement, ReplyWaiters, Sidecars,
+    await_replaced_service, send_close_owner_and_shutdown,
 };
 
 // A stop sends close-owner without waiting for room in the queue of the service: a full queue fails the close at once.
@@ -31,7 +32,6 @@ fn a_close_of_a_persistent_owner_waits_for_no_room_in_its_queue() {
         &shutdown_waiters,
         &connected,
         "fixture",
-        Instant::now() + Duration::from_secs(60),
     );
     assert!(
         result.is_err(),
@@ -69,4 +69,50 @@ fn a_stop_refuses_the_image_presents_of_its_sidecars() {
         ),
         Err(crate::images::PRESENTS_REFUSED.to_string())
     );
+}
+
+// A stop ends the wait of a replacement for the end of the process of the replaced service: the wait returns while that
+// process runs, and the replacement ends (docs/spec/persistent-services.md#updates).
+// contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
+#[test]
+fn a_stop_ends_the_wait_of_a_replacement() {
+    let folder = crate::test_folder::Folder::new();
+    let sidecars = Sidecars::<StopOwner>::new(&[], folder.path().to_path_buf()).unwrap();
+    // The process of the replaced service reads its input, whose write end the Child holds, so it runs until the check
+    // ends it and ends with the check process also when the check is killed.
+    let mut service = Command::new("cat")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    sidecars.core.state.lock().unwrap().replacing.insert(
+        "fixture".to_string(),
+        Replacement {
+            running: Some("0.0.6".to_string()),
+            installed: Some("0.0.7".to_string()),
+            pid: service.id(),
+        },
+    );
+    thread::scope(|scope| {
+        let waiting = scope.spawn(|| await_replaced_service(&sidecars.core, "fixture"));
+        // A stop that does not end the wait leaves it waiting, and the check stops at the limit of its runner.
+        sidecars.stop();
+        waiting.join().unwrap();
+    });
+    assert!(
+        !sidecars
+            .core
+            .state
+            .lock()
+            .unwrap()
+            .replacing
+            .contains_key("fixture"),
+        "the replacement that the stop ended is still recorded"
+    );
+    assert!(
+        service.try_wait().unwrap().is_none(),
+        "the wait ended by the exit of the service process and not by the stop"
+    );
+    service.kill().unwrap();
+    service.wait().unwrap();
 }

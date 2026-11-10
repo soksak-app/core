@@ -1151,7 +1151,8 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	// The first process ends by itself with a status; the second ends when the host stops it.
-	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ncat >/dev/null\n")
+	// The second process ignores the terminate signal of the stop, so it ends with its input and its status is 0.
+	sidecars, _ := support.ScriptSidecars(t, "#!/bin/sh\nif [ ! -f DIR/ran ]; then touch DIR/ran; read first; exit 3; fi\ntrap '' TERM\ncat >/dev/null\n")
 	owner := support.NewFakeOwner("/projects/a")
 	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)

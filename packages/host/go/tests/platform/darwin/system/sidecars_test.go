@@ -65,7 +65,7 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 	directory := t.TempDir()
 	// The sidecar: at start it opens ended and release for reading and writing. It echoes the lines it received, and when the input ends it writes one line to ended and
 	// stays alive until one line arrives on release. The sidecar keeps both pipes open, so the line it wrote is not discarded and the opening side
-	// does not block.
+	// does not block. It ignores the terminate signal of the stop, so it ends with its input and its release.
 	ended := filepath.Join(directory, "ended")
 	release := filepath.Join(directory, "release")
 	for _, fifo := range []string{ended, release} {
@@ -73,7 +73,7 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	script := "#!/bin/sh\nexec 3<>" + release + " 4<>" + ended + "\nwhile read line; do echo \"$line\"; done\n" +
+	script := "#!/bin/sh\ntrap '' TERM\nexec 3<>" + release + " 4<>" + ended + "\nwhile read line; do echo \"$line\"; done\n" +
 		"echo ended >&4\nread -r released <&3\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(directory, "lingering"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)

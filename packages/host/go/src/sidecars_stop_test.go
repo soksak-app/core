@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"net"
+	"os/exec"
 	"testing"
 )
 
@@ -61,5 +62,57 @@ func TestAPresentThatWaitsForTheMainThreadEndsWithTheStop(t *testing.T) {
 	}, func(func()) { t.Error("a present after the stop took a step") })
 	if refused == nil || refused.Error() != presentsRefused {
 		t.Fatalf("a present after the stop ended with %v, want %q", refused, presentsRefused)
+	}
+}
+
+// A stop ends the wait of a replacement for the end of the process of the replaced service: the wait returns while that process
+// runs, and the replacement ends (docs/spec/persistent-services.md#updates).
+// contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
+func TestAStopEndsTheWaitOfAReplacement(t *testing.T) {
+	c, err := NewSidecars(nil, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The process of the replaced service reads its input, whose write end the check holds, so it runs until the check ends it
+	// and ends with the check process also when the check is killed.
+	service := exec.Command("cat")
+	input, err := service.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan struct{})
+	go func() {
+		service.Wait()
+		close(exited)
+	}()
+	t.Cleanup(func() {
+		input.Close()
+		<-exited
+	})
+	running, installed := "0.0.6", "0.0.7"
+	c.mu.Lock()
+	c.replacing["fixture-service"] = replacement{running: &running, installed: &installed, pid: service.Process.Pid}
+	c.mu.Unlock()
+	waited := make(chan struct{})
+	go func() {
+		c.awaitReplacedService("fixture-service")
+		close(waited)
+	}()
+	// A stop that does not end the wait leaves it waiting, and the check stops at the limit of its runner.
+	c.Stop()
+	<-waited
+	c.mu.Lock()
+	_, replacing := c.replacing["fixture-service"]
+	c.mu.Unlock()
+	if replacing {
+		t.Fatal("the replacement that the stop ended is still recorded")
+	}
+	select {
+	case <-exited:
+		t.Fatal("the wait ended by the exit of the service process and not by the stop")
+	default:
 	}
 }

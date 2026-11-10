@@ -87,9 +87,6 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
 
 const ECHO: &str = "@fixture/sidecar-echo";
 
-/// The upper limit that ends a stalled check. Success is decided by the received event and not by this time.
-const STALL: Duration = Duration::from_secs(120);
-
 // contract: sidecars.display-name.is-not-injected-into-child-environment
 #[test]
 fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
@@ -115,7 +112,7 @@ fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
     .unwrap();
     let (owner, events) = owner("display-name", "/projects/display-name");
     sidecars.send(&owner, ECHO, "s1", &raw("{}")).unwrap();
-    let event = events.recv_timeout(STALL).unwrap();
+    let event = events.recv().unwrap();
     assert_eq!(event.surface, "s1");
     let environment = std::fs::read_to_string(&display_name_path).unwrap();
     assert_ne!(
@@ -250,7 +247,7 @@ fn a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let opened = events.recv_timeout(STALL).unwrap();
+    let opened = events.recv().unwrap();
     assert!(opened.body.get().contains("open"), "{}", opened.body.get());
 
     soksak_host::windows::reload_surface_sidecars(
@@ -264,7 +261,7 @@ fn a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"marker"}"#))
         .unwrap();
-    let next = events.recv_timeout(STALL).unwrap();
+    let next = events.recv().unwrap();
     assert!(
         next.body.get().contains("marker"),
         "the reload sent {} to the persistent sidecar of the surface",
@@ -364,17 +361,12 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     second
         .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
-    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
-    // The hosts stop before the service ends, so no host connects again or starts the service.
-    let stopping = std::time::Instant::now();
+    assert_eq!(first_events.recv().unwrap().surface, "s1");
+    assert_eq!(second_events.recv().unwrap().surface, "s2");
+    // The hosts stop before the service ends, so no host connects again or starts the service. The service answers
+    // close-owner and shutdown, which end the stop; a stop that waits past them stops at the limit of the runner.
     first.stop();
     second.stop();
-    let elapsed = stopping.elapsed();
-    assert!(
-        elapsed < Duration::from_secs(1),
-        "stop of both hosts took {elapsed:?}; the service answers close-owner and shutdown, so the stop must not wait its deadline"
-    );
     service.join().unwrap();
     assert!(
         !config_directory.path().join("logs").exists(),
@@ -483,8 +475,8 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     second
         .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
-    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
+    assert_eq!(first_events.recv().unwrap().surface, "s1");
+    assert_eq!(second_events.recv().unwrap().surface, "s2");
     // Make the service cut the two connections. The cut is awaited as a connection event (V5-106). The automatic
     // restart reacts only to EOF, so the arrival of the connection event of each instance is the evidence that the
     // service cut that connection.
@@ -496,7 +488,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         .unwrap();
     let await_revived = |label: &str, events: &Receiver<Message>| loop {
         let message = events
-            .recv_timeout(STALL)
+            .recv()
             .unwrap_or_else(|error| panic!("{label} connection event: {error}"));
         let body = message.body.get();
         if body.contains(r#""event":"connection""#) {
@@ -526,21 +518,13 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
             &raw(r#"{"operation":"reconnect"}"#),
         )
         .unwrap();
-    assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
-    assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
+    assert_eq!(first_events.recv().unwrap().surface, "s1");
+    assert_eq!(second_events.recv().unwrap().surface, "s2");
 
-    // The service answers close-owner with a failure. The stop ends at once without waiting for the time limit.
-    let stopping = std::time::Instant::now();
+    // The service answers close-owner with a failure. A failed close-owner reply ends the stop; a stop that waits past
+    // it stops at the limit of the runner.
     first.stop();
     second.stop();
-    let elapsed = stopping.elapsed();
-    // The failed close-owner answer ends without waiting for the deadline of stop. If it took until the deadline, it
-    // did not wait for the answer.
-    assert!(
-        elapsed < first.stop_timeout,
-        "close-owner failure was not reported before the {:?} stop deadline: {elapsed:?}",
-        first.stop_timeout
-    );
     service.join().unwrap();
 }
 
@@ -726,7 +710,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     sidecars
         .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "surface");
+    assert_eq!(events.recv().unwrap().surface, "surface");
     assert!(
         !service_directory.join("endpoint.json").exists(),
         "stale endpoint was not removed before the replacement path"
@@ -1121,10 +1105,7 @@ fn persistent_stop_answers_a_discarded_image_before_service_shutdown() {
     sidecars
         .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        events.recv_timeout(STALL).unwrap().body.get(),
-        r#"{"event":"opened"}"#
-    );
+    assert_eq!(events.recv().unwrap().body.get(), r#"{"event":"opened"}"#);
     sidecars.retain(&window, &|_| false).unwrap();
     sidecars.stop();
     assert_eq!(
@@ -1165,10 +1146,7 @@ fn stdio_stop_cancels_an_image_emitted_after_stdin_eof() {
     sidecars
         .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        events.recv_timeout(STALL).unwrap().body.get(),
-        r#"{"event":"opened"}"#
-    );
+    assert_eq!(events.recv().unwrap().body.get(), r#"{"event":"opened"}"#);
 
     sidecars
         .close_owned(&window, &|surface| surface == "surface")
@@ -1268,7 +1246,7 @@ fn persistent_retain_sends_only_layout_surfaces() {
         2,
         "the service's closed count"
     );
-    let empty = received.recv_timeout(STALL).unwrap();
+    let empty = received.recv().unwrap();
     assert_eq!(empty["surfaces"], serde_json::json!([]), "no kept surface");
     let (owner, _events) = owner("retain", "/live");
     sidecars
@@ -1282,7 +1260,7 @@ fn persistent_retain_sends_only_layout_surfaces() {
         }])
         .unwrap();
     assert_eq!(closed, 2, "the service's closed count");
-    let request = received.recv_timeout(STALL).unwrap();
+    let request = received.recv().unwrap();
     assert_eq!(
         request["surfaces"],
         serde_json::json!([
@@ -1527,11 +1505,11 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
+    assert_eq!(events.recv().unwrap().surface, "s1");
 
     // When the connection is cut, it must be matched again without a send: the connection event is the evidence
     // (V5-106).
-    let revived = events.recv_timeout(STALL).unwrap();
+    let revived = events.recv().unwrap();
     assert_eq!(revived.surface, "s1");
     let notice: serde_json::Value = serde_json::from_str(revived.body.get()).unwrap();
     assert_eq!(notice["event"], "connection");
@@ -1541,7 +1519,7 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
-    let echoed = events.recv_timeout(STALL).unwrap();
+    let echoed = events.recv().unwrap();
     assert_eq!(echoed.surface, "s1");
     assert!(echoed.body.get().contains(r#""operation":"input""#));
 
@@ -1603,11 +1581,11 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "s1");
+    assert_eq!(events.recv().unwrap().surface, "s1");
     service.join().unwrap();
 
     // When the restart fails, the connection loss and its reason are reported to the surface (V5-106).
-    let failure = events.recv_timeout(STALL).unwrap();
+    let failure = events.recv().unwrap();
     assert_eq!(failure.surface, "s1");
     let notice: serde_json::Value = serde_json::from_str(failure.body.get()).unwrap();
     assert_eq!(notice["event"], "connection");
@@ -1698,10 +1676,7 @@ fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
     sidecars
         .send(&sender, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(
-        sender_events.recv_timeout(STALL).unwrap().surface,
-        "surface-1"
-    );
+    assert_eq!(sender_events.recv().unwrap().surface, "surface-1");
     sidecars
         .send(
             &other,
@@ -1710,14 +1685,14 @@ fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
             &raw(r#"{"operation":"open"}"#),
         )
         .unwrap();
-    let echoed = other_events.recv_timeout(STALL).unwrap();
+    let echoed = other_events.recv().unwrap();
     assert_eq!(
         (echoed.sidecar.as_str(), echoed.surface.as_str()),
         ("@fixture/sidecar-stdio", "surface-2")
     );
     close.send(()).unwrap();
     service.join().unwrap();
-    let failure = sender_events.recv_timeout(STALL).unwrap();
+    let failure = sender_events.recv().unwrap();
     assert!(
         failure.surface == "surface-1" && is_connection_notice(&failure),
         "the failed revival was not announced to the surface that sent: {} {}",
@@ -1761,7 +1736,7 @@ fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
         .send(&sender, ECHO, "surface-1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     let announced = (0..2)
-        .map(|_| sender_events.recv_timeout(STALL).unwrap())
+        .map(|_| sender_events.recv().unwrap())
         .filter(|message| message.surface == "surface-1" && is_connection_notice(message))
         .count();
     assert!(
@@ -1854,7 +1829,7 @@ fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let failure = failures
-        .recv_timeout(STALL)
+        .recv()
         .expect("no sidecar failure; the test stalled");
     assert_eq!(
         (failure.sidecar.as_str(), failure.surface.as_str()),
@@ -1946,12 +1921,11 @@ fn persistent_start_does_not_delay_other_sidecars() {
             r#"{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}"#.to_string(),
         ),
     ];
-    let mut sidecars = Sidecars::new(
+    let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
     .unwrap();
-    sidecars.stop_timeout = Duration::from_millis(100);
     let (window, _events) = owner("start", "/projects/start");
     sidecars
         .send(
@@ -1970,7 +1944,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
                 &raw(r#"{"operation":"open"}"#),
             )
         });
-        hello_received.recv_timeout(STALL).unwrap();
+        hello_received.recv().unwrap();
         let begin = std::time::Instant::now();
         sidecars
             .send(
@@ -1988,33 +1962,47 @@ fn persistent_start_does_not_delay_other_sidecars() {
         waited < Duration::from_millis(50),
         "a send to another sidecar waited {waited:?} for the service start, want < 50ms"
     );
+    // The service discards close-owner and shutdown and ends with the connection, which ends the stop; a stop that waits
+    // past it stops at the limit of the runner.
     sidecars.stop();
     server.join().unwrap();
 }
 
-/// Sends to the sidecar and returns the result within limit. If it does not return, the check fails.
-fn send_within(
-    sidecars: Sidecars<FakeOwner>,
-    window: FakeOwner,
-    limit: Duration,
-) -> Result<(), String> {
-    let (result, answer) = channel();
-    thread::spawn(move || {
-        let sent = sidecars.send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#));
-        let _ = result.send(sent);
-    });
-    answer
-        .recv_timeout(limit)
-        .unwrap_or_else(|_| panic!("the send did not return within {limit:?}"))
+/// Sends an open request to the sidecar and returns the result of the send.
+fn send_open(sidecars: &Sidecars<FakeOwner>, window: &FakeOwner) -> Result<(), String> {
+    sidecars.send(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
 }
 
-// A start with a service that receives hello and does not answer fails after 5 seconds with the defined text.
-// contract: sidecars-transport.hello.times-out
-#[test]
-fn persistent_start_fails_when_hello_is_not_answered() {
-    let executable_directory = folder::Folder::new();
-    let config_directory = folder::Folder::new();
-    let service_directory = config_directory.path().join("services/echo");
+/// Makes the FIFO path and holds its write end until the returned file is dropped. A fixture process that reads it ends
+/// at the end of the check, also when the check is killed, because the kernel then closes the write end.
+fn hold_pipe(path: &Path) -> std::fs::File {
+    let name = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+    assert_eq!(
+        unsafe { libc::mkfifo(name.as_ptr(), 0o600) },
+        0,
+        "mkfifo {}: {}",
+        path.display(),
+        std::io::Error::last_os_error()
+    );
+    // A read-write open does not wait for a reader, and the check holds the only writer.
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .unwrap()
+}
+
+/// A service endpoint whose one connection reads the hello and does not answer it.
+struct UnansweredHello {
+    /// Receives when the service has read the hello.
+    read: Receiver<()>,
+    /// Dropping it makes the service close the connection.
+    end: Sender<()>,
+    server: thread::JoinHandle<()>,
+}
+
+fn unanswered_hello_service(config_directory: &Path) -> UnansweredHello {
+    let service_directory = config_directory.join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("hello.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
@@ -2029,14 +2017,27 @@ fn persistent_start_fails_when_hello_is_not_answered() {
         serde_json::to_vec(&endpoint).unwrap(),
     )
     .unwrap();
-    let (release, released) = channel::<()>();
+    let (read_sender, read) = channel();
+    let (end, ended) = channel::<()>();
     let server = thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
         let mut reader = BufReader::new(stream);
         let mut hello = String::new();
         reader.read_line(&mut hello).unwrap();
-        let _ = released.recv();
+        read_sender.send(()).unwrap();
+        // The receive ends when the check drops the sender; the connection closes with the stream.
+        let _ = ended.recv();
     });
+    UnansweredHello { read, end, server }
+}
+
+// A start whose service reads the hello and does not answer waits past any time limit and fails when the connection ends.
+// contract: sidecars-transport.hello.ends-by-its-reply-its-connection-or-the-stop
+#[test]
+fn an_unanswered_hello_ends_with_its_connection() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = unanswered_hello_service(config_directory.path());
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
@@ -2044,34 +2045,77 @@ fn persistent_start_fails_when_hello_is_not_answered() {
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
-    .unwrap()
-    .with_hello_timeout(Duration::from_millis(100));
+    .unwrap();
     let (window, _events) = owner("hello", "/projects/hello");
-    let begun = std::time::Instant::now();
-    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
-    let elapsed = begun.elapsed();
-    assert!(
-        elapsed < Duration::from_secs(1),
-        "the start failed after {elapsed:?}; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply"
-    );
+    let error = thread::scope(|scope| {
+        let sent = scope.spawn(|| send_open(&sidecars, &window));
+        service.read.recv().unwrap();
+        assert!(
+            !sent.is_finished(),
+            "the start ended while the connection of its hello was open"
+        );
+        drop(service.end);
+        // A start that waits past the end of its connection stops at the limit of the runner.
+        sent.join().unwrap().unwrap_err()
+    });
     assert_eq!(
         error,
-        "sidecar @fixture/sidecar-echo: the service did not answer hello within 100ms"
+        "sidecar @fixture/sidecar-echo: the service connection ended before the hello answer"
     );
-    release.send(()).unwrap();
-    server.join().unwrap();
+    service.server.join().unwrap();
+    sidecars.stop();
 }
 
-// If a newly started service does not print an endpoint, the start fails with the defined text after the ready upper
-// limit, and the host ends and reaps that service. The check gives 1 second instead of the default 30 seconds. The
-// service starts its work later than the upper limit, so it ends as soon as it starts regardless of the load, and the
-// check looks at whether a running process remains on its unique path.
-// contract: sidecars-transport.startup.times-out
+// A stop ends a start whose hello the service does not answer: the start fails with "sidecars are stopped" and the stop
+// returns.
+// contract: sidecars-transport.hello.ends-by-its-reply-its-connection-or-the-stop
 #[test]
-fn persistent_start_fails_when_the_service_prints_no_endpoint() {
+fn a_stop_ends_a_start_whose_hello_is_not_answered() {
     let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = unanswered_hello_service(config_directory.path());
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, _events) = owner("hello", "/projects/hello");
+    let error = thread::scope(|scope| {
+        let sent = scope.spawn(|| send_open(&sidecars, &window));
+        service.read.recv().unwrap();
+        // A stop that waits for the hello does not return, and the check stops at the limit of its runner.
+        sidecars.stop();
+        sent.join().unwrap().unwrap_err()
+    });
+    assert_eq!(error, "sidecars are stopped");
+    drop(service.end);
+    service.server.join().unwrap();
+}
+
+// A newly started service that prints no endpoint keeps its start waiting past any time limit: a stop ends and reaps the
+// service and fails the start with "sidecars are stopped".
+// contract: sidecars-transport.startup.ends-by-the-line-the-exit-or-the-stop
+#[test]
+fn a_stop_ends_a_start_whose_service_prints_no_endpoint() {
+    let executable_directory = folder::Folder::new();
+    let started = executable_directory.path().join("started");
+    let started_name = std::ffi::CString::new(started.to_str().unwrap()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(started_name.as_ptr(), 0o600) }, 0);
+    let hold = executable_directory.path().join("hold");
+    let _hold = hold_pipe(&hold);
     let service = executable_directory.path().join("echo");
-    std::fs::write(&service, "#!/bin/sh\nsleep 2\nwhile :; do sleep 1; done\n").unwrap();
+    std::fs::write(
+        &service,
+        format!(
+            "#!/bin/sh\necho $$ > '{}'\nexec cat '{}'\n",
+            started.display(),
+            hold.display()
+        ),
+    )
+    .unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = folder::Folder::new();
     let fixture = files(
@@ -2081,22 +2125,35 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
-    .unwrap()
-    .with_ready_timeout(Duration::from_secs(1));
+    .unwrap();
     let (window, _events) = owner("startup", "/projects/startup");
-    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    let (error, pid) = thread::scope(|scope| {
+        let sent = scope.spawn(|| send_open(&sidecars, &window));
+        // The read ends when the service wrote its pid.
+        let pid: i32 = std::fs::read_to_string(&started)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert!(
+            !sent.is_finished(),
+            "the start ended while the service ran without an endpoint"
+        );
+        // A stop that waits for the endpoint does not return, and the check stops at the limit of its runner.
+        sidecars.stop();
+        (sent.join().unwrap().unwrap_err(), pid)
+    });
+    assert_eq!(error, "sidecars are stopped");
+    // The start reaped the service before it failed, so no process has its pid.
     assert_eq!(
-        error,
-        "sidecar @fixture/sidecar-echo: the service did not print its endpoint within 1s"
+        unsafe { libc::kill(pid, 0) },
+        -1,
+        "the service {pid} is not reaped"
     );
-    let running = Command::new("pgrep")
-        .args(["-f", service.to_str().unwrap()])
-        .output()
-        .unwrap();
-    assert!(
-        !running.status.success(),
-        "the silent service still runs: {}",
-        String::from_utf8_lossy(&running.stdout)
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::ESRCH),
+        "the service {pid} is not reaped"
     );
 }
 
@@ -2155,7 +2212,7 @@ fn a_message_of_a_persistent_service_reaches_its_owner_with_the_identifiers_of_i
             &["view-a.1".to_string()],
         )
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().cids, ["view-a.1"]);
+    assert_eq!(events.recv().unwrap().cids, ["view-a.1"]);
 }
 
 // The standard error of a newly started service accumulates in the log of the executable name in the configuration
@@ -2177,7 +2234,7 @@ fn persistent_service_writes_its_standard_error_to_its_log() {
     )
     .unwrap();
     let (window, _events) = owner("exit", "/projects/exit");
-    send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    send_open(&sidecars, &window).unwrap_err();
     assert_eq!(
         std::fs::read_to_string(config_directory.path().join("logs").join("echo.log")).unwrap(),
         "service line\n"
@@ -2264,7 +2321,7 @@ fn persistent_service_starts_in_a_new_session() {
     sidecars
         .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    assert_eq!(events.recv_timeout(STALL).unwrap().surface, "surface");
+    assert_eq!(events.recv().unwrap().surface, "surface");
     let environment = std::fs::read_to_string(&display_name_path).unwrap();
     assert_ne!(
         environment, "soksak://sidecar/probe",
@@ -2318,7 +2375,7 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
     )
     .unwrap();
     let (window, _events) = owner("exit", "/projects/exit");
-    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    let error = send_open(&sidecars, &window).unwrap_err();
     let want = "sidecar @fixture/sidecar-echo: service log: create logs directory: ";
     assert!(
         error.starts_with(want),
@@ -2345,7 +2402,7 @@ fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
     )
     .unwrap();
     let (window, _events) = owner("exit", "/projects/exit");
-    let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    let error = send_open(&sidecars, &window).unwrap_err();
     assert_eq!(
         error,
         "sidecar @fixture/sidecar-echo: service exited before endpoint"
@@ -2430,7 +2487,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
         sidecars
             .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
             .unwrap();
-        events.recv_timeout(STALL).unwrap();
+        events.recv().unwrap();
         assert_eq!(sidecars.outdated(), want, "hello version {version:?}");
         sidecars.stop();
     }
@@ -2543,11 +2600,12 @@ fn serve_replace_service(
     std::fs::create_dir_all(&service_directory).unwrap();
     let socket_path = service_directory.join("replace.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
-    // The endpoint names a process that stands for the service and ends after the shutdown answer. Its output is not
-    // inherited: a process that holds the output of the test keeps the runner waiting after the test ends.
-    let process = std::process::Command::new("sleep")
-        .arg("60")
-        .stdin(std::process::Stdio::null())
+    // The endpoint names a process that stands for the service and ends after the shutdown answer. It reads its input,
+    // whose write end the Child holds, so it runs until the fixture ends it and ends with the test process also when the
+    // check is killed. Its output is not inherited: a process that holds the output of the test keeps the runner waiting
+    // after the test ends.
+    let process = std::process::Command::new("cat")
+        .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
@@ -2721,7 +2779,7 @@ fn an_outdated_service_is_replaced() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     assert_eq!(
         sidecars.outdated(),
         vec![OutdatedSidecar {
@@ -2733,14 +2791,14 @@ fn an_outdated_service_is_replaced() {
     );
     sidecars.replace(ECHO).unwrap();
     // The surface that sent to the sidecar receives the connection notice of the new service.
-    let notice = events.recv_timeout(STALL).unwrap();
+    let notice = events.recv().unwrap();
     assert_eq!(notice.surface, "surface-1");
     let event: serde_json::Value = serde_json::from_str(notice.body.get()).unwrap();
     assert_eq!(
         (event["event"].as_str(), event["connected"].as_bool()),
         (Some("connection"), Some(true))
     );
-    service.second.recv_timeout(STALL).unwrap();
+    service.second.recv().unwrap();
     assert!(sidecars.outdated().is_empty());
     assert_eq!(
         *service.operations.lock().unwrap(),
@@ -2769,7 +2827,7 @@ fn a_service_that_is_not_outdated_is_not_replaced() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     let error = sidecars.replace(ECHO).unwrap_err();
     assert!(error.contains(ECHO), "{error}");
     assert_eq!(*service.operations.lock().unwrap(), ["hello", ""]);
@@ -2794,14 +2852,14 @@ fn a_service_of_an_undeclared_sidecar_is_ended() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     sidecars.declare(&[]).unwrap();
     assert_eq!(
         serde_json::to_string(&sidecars.outdated()).unwrap(),
         format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1}}]"#)
     );
     sidecars.replace(ECHO).unwrap();
-    let notice = events.recv_timeout(STALL).unwrap();
+    let notice = events.recv().unwrap();
     assert_eq!(notice.surface, "surface-1");
     let event: serde_json::Value = serde_json::from_str(notice.body.get()).unwrap();
     assert_eq!(
@@ -2844,9 +2902,9 @@ fn an_outdated_service_is_replaced_when_its_sessions_end() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     sidecars.retain_sessions(&[]).unwrap();
-    service.second.recv_timeout(STALL).unwrap();
+    service.second.recv().unwrap();
     let operations = service.operations.lock().unwrap().clone();
     assert_eq!(
         &operations[operations.len() - 2..],
@@ -2877,7 +2935,7 @@ fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     sidecars.retain(&owner, &|_| false).unwrap();
     // The hidden section has not sent in this process, so only the layout says that its session is recoverable.
     let layout = [hidden];
@@ -2890,7 +2948,7 @@ fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
     assert_eq!(sidecars.outdated()[0].sessions, 1);
     // A layout surface leaves the count and the service is replaced.
     sidecars.retain_sessions(&[]).unwrap();
-    service.second.recv_timeout(STALL).unwrap();
+    service.second.recv().unwrap();
     let operations = service.operations.lock().unwrap().clone();
     assert_eq!(
         &operations[operations.len() - 2..],
@@ -2916,7 +2974,7 @@ fn a_layout_surface_of_another_plugin_does_not_hold_an_outdated_service() {
     let mut other = layout_surface("tab-other");
     other.plugin = "other".to_string();
     sidecars.retain_sessions(&[other]).unwrap();
-    service.second.recv_timeout(STALL).unwrap();
+    service.second.recv().unwrap();
     let operations = service.operations.lock().unwrap().clone();
     assert_eq!(
         &operations[operations.len() - 2..],
@@ -2943,7 +3001,7 @@ fn an_outdated_service_waits_for_the_first_layout_list() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     sidecars.retain(&owner, &|_| false).unwrap();
     thread::sleep(Duration::from_millis(200));
     let operations = service.operations.lock().unwrap().clone();
@@ -2974,10 +3032,10 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     sidecars.replace(ECHO).unwrap();
-    let second = service.second.recv_timeout(STALL).unwrap();
-    let ended = service.ended.recv_timeout(STALL).unwrap();
+    let second = service.second.recv().unwrap();
+    let ended = service.ended.recv().unwrap();
     assert!(
         second > ended,
         "the installed service started {:?} before its predecessor ended",
@@ -3046,8 +3104,8 @@ fn the_hello_carries_the_configuration_directory_as_client() {
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
-    let request = hello.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
+    let request = hello.recv().unwrap();
     // The configuration directory is the host-resolved one, with symlinks resolved (docs/spec/performance-trace.md).
     let resolved = std::fs::canonicalize(config_directory.path()).unwrap();
     assert_eq!(
@@ -3058,12 +3116,11 @@ fn the_hello_carries_the_configuration_directory_as_client() {
     sidecars.stop();
 }
 
-// contract: sidecars-transport.hello.deadline-ends-with-its-answer
-// The deadline of the hello ends with its answer: a service may stay silent for longer, and what it sends then arrives.
+// contract: sidecars-transport.hello.silence-keeps-the-connection
+// The host reads a connection without a deadline: a service may stay silent after its hello answer, and what it sends then
+// arrives.
 #[test]
 fn a_persistent_connection_has_no_deadline_after_its_hello() {
-    const DEADLINE: Duration = Duration::from_millis(50);
-    let silence = DEADLINE * 4;
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
@@ -3081,6 +3138,8 @@ fn a_persistent_connection_has_no_deadline_after_its_hello() {
         .unwrap(),
     )
     .unwrap();
+    // The service holds each echo until the check ends its silence.
+    let (end_silence, silence) = channel::<()>();
     std::thread::spawn(move || {
         let Ok((mut stream, _)) = listener.accept() else {
             return;
@@ -3092,7 +3151,8 @@ fn a_persistent_connection_has_no_deadline_after_its_hello() {
             let reply = if request["operation"] == "hello" {
                 serde_json::json!({"operation": "hello", "protocol": 1, "ok": true}).to_string()
             } else {
-                std::thread::sleep(silence);
+                // The receive ends when the check sends or drops the sender.
+                let _ = silence.recv();
                 line.trim_end().to_string()
             };
             if writeln!(stream, "{reply}").is_err() {
@@ -3108,19 +3168,20 @@ fn a_persistent_connection_has_no_deadline_after_its_hello() {
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
-    .unwrap()
-    .with_hello_timeout(DEADLINE);
+    .unwrap();
     let (owner, events) = owner("silence", "/projects/silence");
-    let begun = std::time::Instant::now();
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
-    assert!(
-        begun.elapsed() >= silence,
-        "the message arrived after {:?}, before the silence of {silence:?} ended",
-        begun.elapsed()
-    );
+    if let Ok(early) = events.try_recv() {
+        panic!(
+            "a message of {} arrived while the service was silent",
+            early.surface
+        );
+    }
+    end_silence.send(()).unwrap();
+    events.recv().unwrap();
+    drop(end_silence);
     sidecars.stop();
 }
 
@@ -3208,7 +3269,7 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
     };
     // The replacement has sent its close-owner when the service has read it.
     loop {
-        if seen.recv_timeout(STALL).unwrap() == "close-owner" {
+        if seen.recv().unwrap() == "close-owner" {
             break;
         }
     }
@@ -3216,15 +3277,18 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
         let sidecars = Arc::clone(&sidecars);
         thread::spawn(move || sidecars.stop())
     };
-    // The stop leaves the close of the owner to the replacement: the service reads no second close-owner while it
-    // holds the first answer.
-    if let Ok(operation) = seen.recv_timeout(Duration::from_millis(300)) {
-        panic!("the stop sent {operation} while the replacement closed the owner");
-    }
     release.send(()).unwrap();
     stopping.join().unwrap();
     replacing.join().unwrap().unwrap();
     service.join().unwrap();
+    // The stop leaves the close of the owner to the replacement: of the lines that the service read after the first
+    // close-owner until its connection ended, none is a second close-owner. The service thread held the sender, so the
+    // iteration ends with it.
+    let later: Vec<String> = seen.iter().collect();
+    assert!(
+        !later.iter().any(|operation| operation == "close-owner"),
+        "the stop closed the owner again while the replacement closed it: {later:?}"
+    );
 }
 
 // contract: sidecars-transport.detach.closes-the-connection-without-closing-the-owner
@@ -3245,10 +3309,10 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
     sidecars
         .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    events.recv_timeout(STALL).unwrap();
+    events.recv().unwrap();
     sidecars.detach();
     // The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
-    service.first_ended.recv_timeout(STALL).unwrap();
+    service.first_ended.recv().unwrap();
     let operations = service.operations.lock().unwrap().clone();
     assert!(
         !operations
@@ -3360,8 +3424,8 @@ fn persistent_connections_are_recorded_as_events() {
         sidecars
             .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
-        events.recv_timeout(STALL).unwrap(); // the echo
-        events.recv_timeout(STALL).unwrap(); // the notice of the reconnection
+        events.recv().unwrap(); // the echo
+        events.recv().unwrap(); // the notice of the reconnection
         // The sampler names the service while it is connected and not after the connection ended.
         soksak_host::performance::sample();
         sidecars.stop();
@@ -3474,7 +3538,7 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
         sidecars
             .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
-        events.recv_timeout(STALL).unwrap(); // the echo
+        events.recv().unwrap(); // the echo
         sidecars.stop();
         service.join().unwrap();
         soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();
@@ -3550,7 +3614,7 @@ fn require_connection_notice(
     reason: Option<&str>,
 ) {
     let message = messages
-        .recv_timeout(STALL)
+        .recv()
         .expect("no sidecar message; the test stalled");
     let notice: serde_json::Value = serde_json::from_str(message.body.get()).unwrap();
     assert!(
@@ -3657,7 +3721,7 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
             }
         });
         send("s1", 30).unwrap();
-        messages.recv_timeout(STALL).unwrap(); // the echo of the open request
+        messages.recv().unwrap(); // the echo of the open request
         // The first connection ended and the revival reattached the live service: no failure is counted.
         require_connection_notice(&messages, "s1", true, None);
 
@@ -3805,7 +3869,7 @@ fn persistent_protocol_violations_stop_the_restarts() {
             .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         let failure = failures
-            .recv_timeout(STALL)
+            .recv()
             .expect("no sidecar failure; the test stalled");
         assert!(
             failure.reason.starts_with("invalid message: "),
@@ -3852,7 +3916,7 @@ fn image_detach_acknowledgements_are_not_delivered_as_surface_messages() {
         )
         .unwrap();
 
-    let event = events.recv_timeout(STALL).unwrap();
+    let event = events.recv().unwrap();
     let body: serde_json::Value = serde_json::from_str(event.body.get()).unwrap();
     assert_eq!(
         body["event"], "after-detach",
@@ -3924,7 +3988,7 @@ fn a_page_reload_returns_before_the_image_detach_acknowledgement() {
     sidecars
         .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
-    let opened = events.recv_timeout(STALL).unwrap();
+    let opened = events.recv().unwrap();
     assert!(opened.body.get().contains("open"), "{}", opened.body.get());
 
     let target = soksak_host::images::DetachTarget {
@@ -3945,7 +4009,7 @@ fn a_page_reload_returns_before_the_image_detach_acknowledgement() {
         Ok(()),
         "the reload waited for the image detach acknowledgement"
     );
-    let detach = events.recv_timeout(STALL).unwrap();
+    let detach = events.recv().unwrap();
     assert!(
         detach.body.get().contains(r#""detach""#) && detach.body.get().contains("image-a"),
         "the reload sent {} instead of the image detach",

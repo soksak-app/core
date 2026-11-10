@@ -3552,8 +3552,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_hello_deadline(stream: &dyn PersistentStream, name: &str) -> Result<(), String> {" },
     ],
     tests: [
-      { file: "packages/host/rust/src/sidecars_read_deadline_test.rs", id: "a_connection_after_its_hello_has_no_read_deadline" },
-      { file: "packages/host/rust/src/sidecars_read_deadline_test.rs", id: "a_read_after_the_hello_deadline_waits_past_that_deadline" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAPersistentConnectionHasNoDeadlineAfterItsHello" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_persistent_connection_has_no_deadline_after_its_hello" },
     ],
     expected: "A persistent connection of the Rust host has no read deadline after its hello, so a silence neither wakes its read thread nor ends the connection.",
     levels: ["unit"],
@@ -6636,7 +6636,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAStopEndsAStartWhoseServicePrintsNoEndpoint" },
-      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_start_fails_when_the_service_prints_no_endpoint" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_stop_ends_a_start_whose_service_prints_no_endpoint" },
     ],
     expected: "A persistent service that prints no endpoint keeps its start waiting until a stop, which ends and reaps it and fails the start, whenever the service starts.",
     levels: ["unit"],
@@ -8999,7 +8999,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/tests/sidecars_test.go", id: "TestSlowSidecarDoesNotBlockOtherSends" },
       { file: "packages/host/go/tests/sidecars_test.go", id: "TestAStopTerminatesASidecarThatIgnoresItsInput" },
       { file: "packages/host/rust/tests/sidecars_test.rs", id: "slow_sidecar_does_not_block_other_sends" },
-      { file: "packages/host/rust/tests/sidecars_test.rs", id: "stop_forced_kill" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_stop_terminates_a_sidecar_that_ignores_its_input" },
     ],
     expected: "A sidecar that does not read its input fills its channel and ends at the terminate signal of the stop on any machine.",
     levels: ["unit"],
