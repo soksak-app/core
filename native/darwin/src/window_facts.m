@@ -146,7 +146,8 @@ static NSArray *pagelessProcesses(WKWebView *any) {
             [pageProcesses removeObject:process];
             continue;
         }
-        [rows addObject:@{ @"pid": process, @"ending": @(!cache) }];
+        // `!cache` is an int, which boxes as a number; the fact is a boolean.
+        [rows addObject:@{ @"pid": process, @"ending": cache ? @NO : @YES }];
     }
     [pageProcesses unionSet:current];
     return rows;

@@ -245,7 +245,9 @@ int main(void) { @autoreleasepool {
     NSArray *pageless = withoutPage[@"pagelessProcesses"];
     // The process may have exited before this reading, which then reports nothing for it.
     check(closingExited || kill(closingProcess, 0) != 0
-            || (pageless.count == 1 && [pageless[0][@"pid"] intValue] == closingProcess && [pageless[0][@"ending"] boolValue]),
+            || (pageless.count == 1 && [pageless[0][@"pid"] intValue] == closingProcess && [pageless[0][@"ending"] boolValue]
+               // The hosts read ending as a JSON boolean, so a number is a wrong fact.
+               && CFGetTypeID((CFTypeRef)pageless[0][@"ending"]) == CFBooleanGetTypeID()),
         [NSString stringWithFormat:@"the process whose page closed is reported without a page and ending: %@", pageless]);
     sp_run_until("the process of the closed page exits", ^BOOL { return closingExited; });
     dispatch_source_cancel(exitSource);
