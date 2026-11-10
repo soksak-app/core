@@ -69,7 +69,10 @@ fn process_wait_ends_by_a_signal() {
             let answer = run_wait(Box::new(move |_pid: i32| {
                 began_tx.send(()).expect("notice that the wait began");
                 // The test drops the sender after the answer, which lets the wait return.
-                let _ = release_rx.recv();
+                assert!(
+                    release_rx.recv().is_err(),
+                    "the test releases the wait by dropping the sender"
+                );
                 Ok(())
             }));
             answer_tx.send(answer).expect("send the answer");

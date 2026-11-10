@@ -368,3 +368,67 @@ func TestTheRelaunchRefusesAFolderThatIsNotABundleAndWaitsForTheExit(t *testing.
 		t.Fatal(err)
 	}
 }
+
+// beganPlatform is a platform whose process wait signals that it began and then waits until the test releases it.
+func beganPlatform(t *testing.T) (began, release chan struct{}) {
+	t.Helper()
+	previous, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	began, release = make(chan struct{}), make(chan struct{})
+	platform.Register(processWaitPlatform{Platform: previous, wait: func(int) error {
+		close(began)
+		<-release
+		return nil
+	}})
+	t.Cleanup(func() { platform.Register(previous) })
+	return began, release
+}
+
+// The update and the relaunch give the platform wait only the PID, so they take no time limit. When the wait began the
+// operation has not ended; the test checks that at that point, then ends the wait, and the operation then starts the
+// application.
+// contract: app-update.replace.refuses-before-it-changes-anything
+// contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-waits-for-the-exit
+func TestTheUpdateAndTheRelaunchWaitForTheEndOfTheWaitOfThePlatform(t *testing.T) {
+	requireBundles(t)
+	for _, operation := range []string{"update", "relaunch"} {
+		t.Run(operation, func(t *testing.T) {
+			parent := t.TempDir()
+			target := fakeBundle(t, parent, "soksak.app", "old")
+			staged := fakeBundle(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
+			began, release := beganPlatform(t)
+			var waitEnded bool
+			done := make(chan error, 1)
+			go func() {
+				if operation == "update" {
+					done <- sok.ReplaceApp(sok.ReplaceOptions{PID: 1234, Bundle: staged, Target: target}, func(string, []string) error {
+						if !waitEnded {
+							t.Error("the application started before the wait ended")
+						}
+						return nil
+					})
+					return
+				}
+				done <- sok.RelaunchApp(sok.RelaunchOptions{PID: 1234, Target: target}, func(string, []string, bool) error {
+					if !waitEnded {
+						t.Error("the application started before the wait ended")
+					}
+					return nil
+				})
+			}()
+			<-began
+			select {
+			case err := <-done:
+				t.Fatalf("the %s ended before the wait of the platform ended: %v", operation, err)
+			default:
+			}
+			waitEnded = true
+			close(release)
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
