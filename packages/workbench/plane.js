@@ -184,6 +184,43 @@ function standingSet(place) {
   return link === null ? null : linkedSet(link.place, link.plugin);
 }
 
+/* The kept sets of the window sidebars that their switches hide, by side: hidden elements of the plane that hold their sections, so
+   the commit keeps their section surfaces hidden and a show places them again without a new view (docs/spec/plugins.md#sections). */
+const keptSets = new Map();
+
+/** Keeps the sections of each window sidebar of a side with a set that the plane does not hold, and releases the kept set of a side
+ * that the plane holds again or that lost its set. It runs after the cards of a draw, so a sidebar that comes back holds its sections first. */
+function keepHiddenSidebars() {
+  const descriptors = windowSidebarCards(pluginUnits(), value("links"), focusedPlugin());
+  for (const side of [...keptSets.keys()]) if (!descriptors.some((item) => item.id === side)) releaseKept(side);
+  for (const { id: side, plugin: kind } of descriptors) {
+    const set = !grid || grid.card(side) || heldSpace === null ? null : standingSet(side);
+    if (!set) {
+      if (keptSets.has(side)) releaseKept(side);
+      continue;
+    }
+    let holder = keptSets.get(side);
+    if (!holder) {
+      holder = document.createElement("div");
+      holder.className = "kept-sidebar";
+      holder.hidden = true;
+      holder.innerHTML = '<div class="set"></div>';
+      plane.appendChild(holder);
+      keptSets.set(side, holder);
+    }
+    // default: a focused card without a tab has no surface to follow (null).
+    const owner = kind === null ? { card: null, surface: null } : { card: focusedId, surface: activeTab(grid.card(focusedId))?.id ?? null };
+    drawSet(holder.querySelector(".set"), side, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side, hidden: true });
+  }
+}
+
+function releaseKept(side) {
+  const holder = keptSets.get(side);
+  keptSets.delete(side);
+  clearSet(holder.querySelector(".set"));
+  holder.remove();
+}
+
 /** It builds the layout of a new space from workspace.grid of environment.json. Tab ids are issued anew. */
 function initial() {
   const { grid: declared } = environment().workspace;
@@ -1493,6 +1530,7 @@ function build(kept) {
       for (const divider of plane.querySelectorAll(".sp-divider:not([data-expose])")) {
         divider.dataset.expose = "core.divider";
       }
+      keepHiddenSidebars();
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
       for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
@@ -1643,6 +1681,8 @@ export const fresh = () => ({
 
 export function clear() {
   keepCardScope(() => false);
+  // A space that is not shown holds no section surface (docs/spec/plugins.md#sections).
+  for (const side of [...keptSets.keys()]) releaseKept(side);
   heldSpace = null;
   view?.destroy();
   view = null;

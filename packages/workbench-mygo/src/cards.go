@@ -77,6 +77,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 				}
 				s.drawCard(c, card.ID, data, rect, inset, originX, originY)
 			}
+			s.keepHiddenSidebars(c)
 			if s.fullscreen == "" {
 				grips = s.drawDividers(c, inset)
 			}
