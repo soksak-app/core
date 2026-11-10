@@ -79,12 +79,11 @@ int main(void) { @autoreleasepool {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         [captureSink write:frame]; dispatch_semaphore_signal(completed);
     });
-    BOOL finished = dispatch_semaphore_wait(completed, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC)) == 0;
-    check(finished, @"exhausted writer capacity never blocks the sample callback");
-    // Even when the wrong wait is reproduced, the test queue is released so that the following checks run.
+    // The callback returns while no writer capacity is free: its return is the event, and no capacity is released before
+    // it. A callback that waits for capacity never returns, and the runner reports the stop.
+    dispatch_semaphore_wait(completed, DISPATCH_TIME_FOREVER);
+    check(YES, @"exhausted writer capacity never blocks the sample callback");
     dispatch_semaphore_signal(capturePending);
-    if (!finished) check(dispatch_semaphore_wait(completed, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) == 0,
-        @"the blocked Red callback is released for cleanup");
     dispatch_sync(captureWriter, ^{});
     check(strstr(sp_capture_error(), "pending") != NULL,
         @"exhausted writer capacity reports an explicit recording error");

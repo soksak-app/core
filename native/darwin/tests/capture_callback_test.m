@@ -519,7 +519,7 @@ int main(void) { @autoreleasepool {
             // stop request, regardless of which side observes the completion first.
             [starts removeAllObjects];
             NSArray *onTimeStartEvents = capturedEvents(^{ check(start(directory),
-                @"the bounded-start attempt starts"); });
+                @"the on-time start attempt starts"); });
             NSDictionary *onTimeRequest = lifecycleEvent(onTimeStartEvents, @"start-request", nil);
             captureSink.latestCallbackSeen = YES;
             captureSink.latestCallbackStatusPresent = YES;
@@ -529,16 +529,13 @@ int main(void) { @autoreleasepool {
             stopRequests = 0;
             stopRequestedBeforeStartCompletion = NO;
             stopReplyError = nil;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC),
-                dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
-                    if (starts.count == 1) {
-                        void (^complete)(NSError *) = starts[0];
-                        complete(nil);
-                    }
-                });
+            // The start hook held the completion when the start returned; it arrives on another queue, before or while the
+            // stop waits for it, and the one stop request follows it in either order.
+            void (^onTimeStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{ if (onTimeStart != nil) onTimeStart(nil); });
             sp_capture_stop(0);
             check(onTimeRequest != nil && stopRequests == 1 && !stopRequestedBeforeStartCompletion,
-                @"a start completing inside the existing bound receives exactly one later stop request");
+                @"a start completing around the stop receives exactly one later stop request");
 
             [starts removeAllObjects];
             NSArray *pendingEvents = capturedEvents(^{ check(start(directory),

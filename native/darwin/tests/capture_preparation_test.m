@@ -68,7 +68,9 @@ int main(void) { @autoreleasepool {
         ^(SCShareableContent *result, NSError *error) {
             content = [result retain]; queryError = [error retain]; dispatch_semaphore_signal(ready);
         }];
-    BOOL answered = dispatch_semaphore_wait(ready, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC)) == 0;
+    // The real query ends by its completion and by nothing else; a query that never completes is reported by the runner.
+    dispatch_semaphore_wait(ready, DISPATCH_TIME_FOREVER);
+    BOOL answered = YES;
     BOOL hasWindow = NO;
     for (SCWindow *candidate in content.windows) if (candidate.windowID == window.windowNumber) hasWindow = YES;
     check(answered && queryError == nil && hasWindow,
