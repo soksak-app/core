@@ -32,12 +32,19 @@ function target() {
   };
 }
 
-/** A fake view window with the start values start. */
-function fakeView(start, { width = 640, height = 400 } = {}) {
+/**
+ * A fake view window with the start values start. Its document scrolls a content of `content` ({width, height}) or, without it, of
+ * the size of the view.
+ */
+function fakeView(start, { width = 640, height = 400, content = null } = {}) {
   const view = target();
   const document = target();
   document.visibilityState = "visible";
-  document.documentElement = { style: { colorScheme: "dark" } };
+  document.documentElement = {
+    style: { colorScheme: "dark" },
+    get scrollWidth() { return content?.width ?? view.innerWidth; },
+    get scrollHeight() { return content?.height ?? view.innerHeight; },
+  };
   document.body = { style: {}, background: "rgb(30, 30, 30)" };
   const element = { getBoundingClientRect: () => ({ left: 8, top: 8, width: view.innerWidth - 16, height: view.innerHeight - 16 }) };
   document.getElementById = (id) => (id === "document" ? element : null);
@@ -272,7 +279,7 @@ test("the follow section follows the surface of core.sidebars and watches the vi
       section: { id: "layoutprobe.follow", sidebar: "right", card: null } }, { width: 190, height: 72 }) });
   const status = served.get("layoutprobe.section");
   assert.deepEqual(status.read(), { id: "layoutprobe.follow", sidebar: "right", card: null, width: 190, height: 72,
-    follows: true, surface: null, view: null });
+    overflows: false, follows: true, surface: null, view: null });
   const sidebars = (surface) => [{ sidebar: "right", sections: [{ surfaceId: sectionSurface, surface }] }];
   const watch = (name, surface) => fake.watches.get(JSON.stringify([name, surface ?? null]));
   watch("core.surfaces", null)([{ surface: "tab-1", plugin: "layoutprobe" }, { surface: "tab-2", plugin: "layoutprobe2" }]);
@@ -297,6 +304,28 @@ test("a section that does not follow watches no status", { timeout: 1000 }, asyn
       section: { id: "layoutprobe.fill", sidebar: "card-2:left", card: "card-2" } }) });
   assert.equal(fake.watches.size, 0);
   assert.equal(served.get("layoutprobe.section").read().follows, false);
+});
+
+test("a section view reports whether its document overflows its view, which shows a scroll bar under the classic scroller style", { timeout: 1000 }, async () => {
+  const start = { surface: "spc-1/left/layoutprobe.alpha", params: null, origin: { directory: null }, project: null,
+    section: { id: "layoutprobe.alpha", sidebar: "left", card: null } };
+  const fitting = fakeExpose();
+  await startProbeSection({ bridge: fakeBridge().bridge, expose: fitting.expose, view: fakeView(start, { width: 190, height: 96 }) });
+  assert.equal(fitting.served.get("layoutprobe.section").read().overflows, false);
+
+  const content = { width: 190, height: 100 };
+  const view = fakeView(start, { width: 190, height: 96, content });
+  const overflowing = fakeExpose();
+  await startProbeSection({ bridge: fakeBridge().bridge, expose: overflowing.expose, view });
+  const status = overflowing.served.get("layoutprobe.section");
+  assert.equal(status.read().overflows, true, "a content 4 points taller than the view overflows it");
+  assert.ok(matchesSchema(schemaOf(probe, "layoutprobe.section"), status.read()));
+  view.innerHeight = 100;
+  view.dispatch("resize");
+  assert.deepEqual([status.read().height, status.read().overflows], [100, false]);
+  content.width = 200;
+  view.dispatch("resize");
+  assert.equal(status.read().overflows, true, "a content wider than the view overflows it");
 });
 
 test("the region document reports its scheme, visibility, stored value and color, and applies the posts of the view", { timeout: 1000 }, () => {

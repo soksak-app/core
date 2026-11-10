@@ -581,6 +581,17 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F735",
+    implementation: [
+      { file: "e2e/fixtures/layout-probe/layoutprobe/ui/layout-probe.js", symbol: "overflows: root.scrollWidth > view.innerWidth || root.scrollHeight > view.innerHeight," },
+    ],
+    tests: [
+      { file: "e2e/test/layout-probe-fixture.test.mjs", id: "a section view reports whether its document overflows its view, which shows a scroll bar under the classic scroller style" },
+    ],
+    expected: "A section view of the layout probe reports whether its document overflows its view, so the section check measures an empty point of a section body only where no scroll bar of the classic scroller style can stand.",
+    levels: ["unit"],
+  },
+  {
     id: "F732",
     implementation: [
       { file: "native/darwin/src/window_facts.m", symbol: "static BOOL lives(pid_t process) {" },

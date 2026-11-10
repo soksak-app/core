@@ -19,7 +19,11 @@ function sample(frame, point) {
     Math.floor(frame.content.y * frame.scale + point.y * scale));
 }
 
-/** An empty point of the body of each shown section of the sidebar: 8 points inside the lower right corner of the section. */
+/**
+ * An empty point of the body of each shown section of the sidebar: 8 points inside the lower right corner of the section. The point is
+ * empty only while the document of the section does not overflow its view, because an overflowing view shows a scroll bar at its edge
+ * under the classic scroller style of the system.
+ */
 async function sectionPoints(s, sidebar) {
   const sidebars = await s.until("core.sidebars", (value) => {
     const bar = value.find((item) => item.sidebar === sidebar);
@@ -33,6 +37,9 @@ async function sectionPoints(s, sidebar) {
     if (section.folded || (sidebars[at].layout === "tabs" && section.id !== sidebars[at].tab)) continue;
     const rect = await s.rect("core.sidebar.section", first + offset);
     assert.ok(rect.width > 16 && rect.height > 16, `section ${section.id} has no body to measure`);
+    const view = await s.until("layoutprobe.section", (value) => value?.id === section.id,
+      `section ${section.id} did not report its view`, { surface: section.surfaceId });
+    assert.equal(view.overflows, false, `the document of section ${section.id} overflows its view, which shows a scroll bar at its edge`);
     points.push({ id: section.id, x: rect.x + rect.width - 8, y: rect.y + rect.height - 8 });
   }
   assert.ok(points.length > 0, `sidebar ${sidebar} has no unfolded section`);
