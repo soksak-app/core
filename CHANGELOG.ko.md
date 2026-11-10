@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F718-9: `composition.create` 는 선언된 image region 마다 `input` handler 를 받고, image region 위에서 그것이 없는 생성은 attach 전에 실패한다. 영역의 `on("input")` 은 거부되며, 어떤 입력 event 도 handler 를 기다리지 않는다. 이 변경을 담은 release 에는 생성에서 handler 를 주는 plugin-term P32 와 plugin-terminal P139 의 release 가 함께 필요하다.
 - F718-7: 두 host 에서 누름은 그 `down` 을 전달한 endpoint connection 의 것이고, 그 connection 이 닫히면 마지막 점에서 해제된다. button 이 눌려 있어 거부된 해제는 button 이 올라갈 때, 다른 누름 때문에 거부된 해제는 그 누름이 끝날 때 다시 전달된다. surface 나 창이 닫힌 watch 는 `status.ended` 로 끝나고, `sok status --watch` 는 exit 1 과 `status <name> ended: <reason>` 으로, `@soksak/client` 는 `ENDED` 로 끝낸다. `sok input gesture` 는 누름 하나를 connection 하나로 보내고, signal 은 write 중인 watch 도 끝낸다. content 가 아래까지 이어지는 곳을 포함해 title bar 위 press 는 더는 창의 키를 기다리게 하지 않고, press 뒤 키보드 이동은 tracking loop 나 다른 application 이 release 를 가져가도 끝나므로 창 막대의 double click 이 키보드를 멈추지 않는다. down 과 up 은 문서의 receipt 에서 반환한다. 거부된 `overlayShow` 는 modal 을 닫고, throw 한 view channel message 는 기록되고 다음 message 가 이어지며, surface page 의 첫 status watch 는 읽기가 끝날 때 답하고, `composition.create` 는 image region 마다 `input` handler 를 받는다. `input` 없는 생성은 설치된 terminal plugin 을 위해 `on("input")` 을 유지한다.
 - F719: 두 workbench 에서 switch 나 fullscreen card 가 숨긴 window sidebar 는 그 section surface 를 숨긴 view 로 유지한다. 그래서 보이기는 web content process 를 다시 시작하지 않고 그것을 다시 놓으며, 재배치는 남는 sidebar 의 section 을 유지한다.
 - F720: window chrome 의 변 switch 와 mode switch, window sidebar 의 접기 control 은 적용 값이 나온 scope 에 쓰므로 더는 project 값을 더하지 않는다. 설정 창의 전역 탭은 project 가 덮어쓴 설정의 project 값을 보이고 쓰며 프로젝트 값으로 표시하고, project 값을 더하거나 없애는 것은 project 탭만 한다.
