@@ -62,7 +62,7 @@ fn reload(data: &Arc<WindowData>) -> mpsc::Receiver<Result<Value, Failure>> {
             |end| {
                 Failure::new(
                     MISSING_DOCUMENT,
-                    format!("{end} before the reloaded page reported ready"),
+                    crate::running_calls::reload_end_text(end, "none"),
                 )
             },
         );

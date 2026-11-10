@@ -1286,12 +1286,6 @@ static void observeCaptureWindows(void) {
     });
 }
 
-    if (stream == nil) return;
-    reportCaptureStreamFailure(stream, @"the request that waits for the capture ended", nil);
-    endCaptureStream(stream);
-    [stream release];
-}
-
 static bool hasCaptureError(void) {
     @synchronized([SPCapture class]) { return captureError != nil; }
 }

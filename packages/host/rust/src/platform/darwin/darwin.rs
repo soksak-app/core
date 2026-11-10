@@ -676,7 +676,7 @@ impl Platform for Darwin {
     fn capture_stop(&self, after: f64, token: u64) -> Result<i32, String> {
         capture::stop(after, token)
     }
-
+    #[cfg(feature = "diagnostics")]
     fn capture_end_wait(&self, token: u64, reason: &str) {
         capture::end_wait(token, reason);
     }

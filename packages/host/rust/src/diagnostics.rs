@@ -1302,7 +1302,7 @@ fn input_source(
                         platform.restore_input_source(&source, adopted)
                     }
                 };
-                Ok(Box::new(move |reason| end(reason)) as NativeEnd)
+                Ok(Box::new(end) as NativeEnd)
             })
             .map_err(|failure| failure.message)?;
             result

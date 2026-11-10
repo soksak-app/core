@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
@@ -17,8 +16,6 @@ use soksak_host::event_log::EventLog;
 use soksak_host::event_record::use_host_event_log;
 use soksak_host::exposure::{self, Relay};
 use soksak_host::windows::{ListStep, list_entries, window_entry};
-
-const WAIT: Duration = Duration::from_secs(5);
 
 /// The response text that a document sends.
 fn text(value: Value) -> Box<RawValue> {

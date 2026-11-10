@@ -25,7 +25,8 @@ fn poison<T>(lock: &Mutex<T>) {
 #[test]
 fn a_poisoned_hold_lock_still_holds_and_releases_the_modal_reply() {
     poison(&MODAL_HOLDS);
-    modal_hold("lock-test", true);
+    let connection = crate::endpoint::ConnectionEnd::open();
+    modal_hold("lock-test", true, &connection);
     let hold = modal_hold_of("lock-test")
         .expect("the hold was not registered while the hold lock was poisoned");
     poison(&hold.state);
@@ -39,7 +40,7 @@ fn a_poisoned_hold_lock_still_holds_and_releases_the_modal_reply() {
                 .unwrap_or_else(PoisonError::into_inner);
         }
     }
-    modal_hold("lock-test", false);
+    modal_hold("lock-test", false, &connection);
     held.join()
         .expect("the held reply panicked while the hold lock was poisoned");
     assert!(

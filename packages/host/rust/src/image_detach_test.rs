@@ -1,7 +1,6 @@
 use std::os::unix::fs::PermissionsExt;
 use std::sync::mpsc::{self, Receiver, Sender, sync_channel};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
 
 use serde_json::value::RawValue;
 

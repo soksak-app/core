@@ -472,7 +472,7 @@ fn origin_ended(origin: u64) -> String {
     format!("the origin request {origin} has ended")
 }
 
-#[cfg(feature = "diagnostics")]
+#[cfg(any(test, feature = "diagnostics"))]
 impl Relay {
     /// Returns the number of requests that wait for a reply from target.
     pub fn pending_count(&self, target: &str) -> usize {
@@ -961,6 +961,7 @@ pub struct Forward {
 /// Sends a request to the document of a surface and waits for its reply. A request of a page that the host asked to
 /// reload is refused, because that page no longer answers the calls that the document needs to reply. The check runs
 /// after the relay holds the request, so `ask_page_to_reload` ends the request when it runs before the check.
+#[cfg(test)]
 fn request_surface(
     relay: &Relay,
     reloading: &AtomicBool,
@@ -2240,39 +2241,52 @@ fn reload(
 }
 
 /// Holds a reload of the window data until its new page reports ready: the reload takes its place among the reloads of the
-/// window before begin asks for the new page, so an end that comes in the turn of begin reaches it. An end of the window that
-/// came after mark and before the reload took its place ends the reload at once. The ready of the page answers it, an end
-/// of the window (`WindowData::end_waits`) ends it with end of that end, and a start of the new page that fails ends it with
-/// 1003 and its error (`end_reloads`).
+/// window before begin asks for the new page, so an end that comes in the turn of begin reaches it. The reload has no time
+/// limit: the ready of the page answers it, an end of the window after mark (`WindowData::end_waits`), the close of the window
+/// or the end of its page process, ends it with the failure that ended gives for the end, and a start of the new page that
+/// fails ends it with 1003 and its error (`end_reloads`).
 pub(crate) fn await_reload(
     data: &WindowData,
     mark: u64,
     begin: impl FnOnce() -> Result<(), Failure>,
-    end: impl Fn(&str) -> Failure,
+    ended: impl Fn(&str) -> Failure,
 ) -> Result<Value, Failure> {
     let (tx, rx) = mpsc::channel();
+    let wait = RELOAD_WAITS.fetch_add(1, Ordering::Relaxed);
     {
         // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
         // the panic hook records the panic.
         let mut readied = data.readied.lock().unwrap_or_else(PoisonError::into_inner);
         // An end records itself before it drains the senders under this lock, so an end that came after the mark and
         // before this wait is read here, and the reload that it ended adds no wait that a later ready would answer.
-        if let Some(ended) = data.ends.since(mark) {
-            return Err(end(&ended));
+        if let Some(end) = data.ends.since(mark) {
+            return Err(ended(&end));
         }
-        readied.push(tx);
+        readied.push((wait, tx));
     }
-    begin()?;
+    if let Err(failure) = begin() {
+        // The reload ended, so a later ready of the window answers no ended reload.
+        data.readied
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the reloads, from which this one is removed;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|(held, _)| *held != wait);
+        return Err(failure);
+    }
     match rx.recv() {
         Ok(Ok(())) => Ok(Value::Null),
-        Ok(Err(crate::windows::ReloadEnd::Ended(ended))) => Err(end(&ended)),
+        Ok(Err(crate::windows::ReloadEnd::Ended(end))) => Err(ended(&end)),
         Ok(Err(crate::windows::ReloadEnd::NotStarted(error))) => {
             Err(Failure::new(MISSING_DOCUMENT, error))
         }
         // default: the senders of the readiness go with the records of a closed window.
-        Err(_) => Err(end("the window closed")),
+        Err(_) => Err(ended("the window closed")),
     }
 }
+
+/// The number of the next reload, which names it among the reloads of its window.
+static RELOAD_WAITS: AtomicU64 = AtomicU64::new(0);
 
 /// Changes the window to full screen or back, and returns once with the native result: the end of the transition, a
 /// refusal with 1006, the close of the window with 1003 and the failure of a started transition with 1005, each with the

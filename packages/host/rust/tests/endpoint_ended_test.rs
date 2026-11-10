@@ -11,7 +11,6 @@ use endpoint_client::Connection;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
@@ -81,7 +80,7 @@ fn a_watch_ends_with_its_producer() {
     let page = Arc::new(Page::default());
     let endpoint = start(config.path(), "test-ended", page.clone());
     let notifier = endpoint.notifier();
-    let mut connection = endpoint_client::connect(endpoint.address(), Duration::from_secs(5));
+    let mut connection = endpoint_client::connect(endpoint.address());
     let surface = json!({"window": "w1", "name": "core.view", "surface": "tab-1"});
     let plain = json!({"window": "w1", "name": "core.view"});
     assert_eq!(
