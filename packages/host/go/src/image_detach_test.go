@@ -185,8 +185,8 @@ func imageDetachFixture(t *testing.T, names ...string) (*Surfaces, map[string]*s
 	return surfaces, services
 }
 
-// contract: images.detach.timeout-keeps-waiting
-func TestATimedOutImageDetachIsRecordedOnceAndALateAcknowledgementEndsIt(t *testing.T) {
+// contract: images.detach.limit-ends-the-detach
+func TestTheLimitOfAnImageDetachEndsItAndALateAcknowledgementSettlesNothing(t *testing.T) {
 	isolateTraceRecords(t)
 	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
 	c := surfaces.sidecars
@@ -197,32 +197,30 @@ func TestATimedOutImageDetachIsRecordedOnceAndALateAcknowledgementEndsIt(t *test
 		t.Fatalf("begin image detach: %v", err)
 	}
 	request := sentImageDetachRequest(t, services["fixture-sidecar"])
-	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view generation 7 request %s timed out", request)
-	entry := pendingImageDetachOf(t, surfaces, target)
-	waitClosed(t, entry.timedOut, "the image detach timeout")
-	if err := surfaces.pendingImageDetachError("surface-a"); err == nil {
-		t.Fatal("the surface stopped waiting at the timeout")
-	}
-	if err := surfaces.beginImageDetaches([]imageDetachTarget{target}); err != nil {
-		t.Fatalf("begin image detach on the next page start: %v", err)
-	}
+	want := fmt.Sprintf("image detach sidecar fixture-sidecar surface surface-a image view generation 7 request %s timed out: the supplier sent no acknowledgement within 10ms", request)
 	select {
-	case line := <-services["fixture-sidecar"].outbox:
-		t.Fatalf("a page start sent a second detach for a pending image: %s", line.bytes)
-	default:
+	case data := <-ends:
+		if fmt.Sprint(data) != endedEvent("surface-a", want) {
+			t.Fatalf("ended event data %v, want surface-a with %q", data, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the limit of the detach did not end it")
+	}
+	if err := surfaces.pendingImageDetachError("surface-a"); err != nil {
+		t.Fatalf("the surface still waits after the limit of its detach: %v", err)
 	}
 	acknowledgeImageDetach(t, c, surfaces, target, request, map[string]any{"ok": true, "result": "detached"})
 	select {
 	case data := <-ends:
-		if fmt.Sprint(data) != endedEvent("surface-a", nil) {
-			t.Fatalf("ended event data %v, want surface-a without error", data)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("a late acknowledgement sent no ended event")
+		t.Fatalf("an acknowledgement after the limit sent another ended event: %v", data)
+	case <-time.After(50 * time.Millisecond):
 	}
-	errors := bufferedTraces(t, "host.record.error")
-	if len(errors) != 1 || errors[0]["where"] != "image detach" || errors[0]["text"] != want {
-		t.Fatalf("error records %v, want one timeout record %q", errors, want)
+	if errors := bufferedTraces(t, "host.record.error"); len(errors) != 0 {
+		t.Fatalf("error records %v, want none: the ended event carries the failure", errors)
+	}
+	late := bufferedTraces(t, "host.trace.image.detach.late")
+	if len(late) != 1 || late[0]["request"] != request || late[0]["surface"] != "surface-a" || late[0]["name"] != "view" {
+		t.Fatalf("late acknowledgement traces %v, want one for request %s", late, request)
 	}
 }
 

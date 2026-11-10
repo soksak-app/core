@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 // A connection that starts watching host.window after its earlier watch ended receives the next status of the window,
@@ -266,4 +267,37 @@ func TestABurstOfWindowChangesIsOneMoreReadingAfterTheLastChange(t *testing.T) {
 	if len(seen) != 2 || seen[0] != 0 || seen[1] != 100 {
 		t.Fatalf("the readings of the burst saw %v, want [0 100]", seen)
 	}
+}
+
+// contract: exposure.relay.surface-process-end-ends-its-requests
+func TestTheEndOfTheProcessOfASurfacePageEndsTheRequestsToThatSurface(t *testing.T) {
+	s, other := reloadFixture()
+	s.streams = NewDocumentStreams()
+	handle := unsafe.Pointer(new(int))
+	s.named = map[uintptr]string{uintptr(handle): "tab"}
+	const viewID = 987654
+	nativeViews[viewID] = &nativeWebview{owner: s, id: viewID, handle: handle}
+	t.Cleanup(func() { delete(nativeViews, viewID) })
+	mine := pendingSurface(t, s, "tab")
+	sibling := pendingSurface(t, s, "other-tab")
+	theirs := pendingSurface(t, other, "tab")
+	s.surfaceTerminated(viewID)
+	select {
+	case reply := <-mine:
+		if reply.Error == nil || reply.Error.Code != codeNoWindow {
+			t.Fatalf("reply %+v, want %d", reply, codeNoWindow)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the request to the surface whose page process ended is still waiting")
+	}
+	for name, reply := range map[string]<-chan ExposureResult{"another surface": sibling, "another window": theirs} {
+		select {
+		case got := <-reply:
+			t.Fatalf("the request to %s ended: %+v", name, got)
+		default:
+		}
+	}
+	s.host.relay.Abandon(func(relayTarget) bool { return true })
+	<-sibling
+	<-theirs
 }

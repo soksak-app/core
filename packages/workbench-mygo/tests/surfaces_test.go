@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1242,25 +1243,45 @@ func TestAPlacementThatKeepsFailingKeepsItsError(t *testing.T) {
 	}
 }
 
-// While a surface has not presented, the placement of another change leaves the failure, because it is still true. When the surface
-// presents, the next wait withdraws it.
+// While a surface has not presented, the placement of another change leaves the failure, because it is still true. A wait for the
+// presentation that fails withdraws nothing and no timer asks again; the next placement that succeeds asks again and withdraws it
+// (core.workbench.error in docs/spec/exposure.md).
 func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
-	f, stored := surfaceShell(t)
+	var asks atomic.Int32
+	var presented atomic.Value
+	presented.Store(errors.New("the current image raster did not present"))
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
+	stored.calls = map[string]workbench.HostCall{"waitPresented": func(context.Context, json.RawMessage) (any, error) {
+		asks.Add(1)
+		if err, _ := presented.Load().(error); err != nil && err.Error() != "" {
+			return 0, err
+		}
+		return 0, nil
+	}}
+	f := surfaceShellOn(t, installedDocument, stored)
 	stored.presentFailure = errors.New("the current image raster did not present")
 	f.tester.SetSize(1160, 800)
 	f.shownErrors()
 	stored.presentFailure = nil
-	stored.presentedFailure = errors.New("the current image raster did not present")
 	f.tester.SetSize(1100, 800)
 	f.settle()
 	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
 		t.Fatalf("while the surface has not presented the banner holds %s", got)
 	}
-	stored.presentedFailure = nil
+	asked := asks.Load()
+	presented.Store(errors.New(""))
 	time.Sleep(1100 * time.Millisecond)
 	f.settle()
+	if got := asks.Load(); got != asked {
+		t.Fatalf("a timer asked the host for the presentation %d more times after a failed wait", got-asked)
+	}
+	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
+		t.Fatalf("without a later placement the banner holds %s", got)
+	}
+	f.tester.SetSize(1160, 800)
+	f.settle()
 	if got := f.status("core.workbench.error"); got != "null" {
-		t.Fatalf("after the surface presented the banner holds %s", got)
+		t.Fatalf("after the next placement that succeeded the banner holds %s", got)
 	}
 }
 

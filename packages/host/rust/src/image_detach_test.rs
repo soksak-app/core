@@ -757,3 +757,76 @@ fn a_malformed_detach_acknowledgement_names_its_member() {
         assert!(has_waiter(&sidecars, "request-a"));
     }
 }
+
+/// Joins each wait on another thread and tells whether all ended within the bound of the check.
+fn ended_within(waits: Vec<DetachWait>, bound: Duration) -> bool {
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        join(waits);
+        let _ = sender.send(());
+    });
+    receiver.recv_timeout(bound).is_ok()
+}
+
+// contract: images.detach.limit-ends-the-detach
+#[test]
+fn the_detach_limit_ends_the_detach_with_its_failure_and_a_late_acknowledgement_settles_nothing() {
+    let fixture = fixture(silent_supplier(), &["@fixture/sidecar-one"]);
+    let images = images_with(&[("@fixture/sidecar-one", "region-limit")]);
+    let targets = images.begin_reload("surface-a");
+    let (ended_event, ended_events) = ended_events();
+
+    let waits = begin_image_detaches(
+        &fixture.sidecars,
+        &fixture.owner,
+        &images,
+        targets.clone(),
+        Duration::from_millis(20),
+        ended_event,
+    )
+    .unwrap();
+    let request = pending_request(&fixture.sidecars, "region-limit");
+    assert!(
+        ended_within(waits, Duration::from_secs(2)),
+        "the detach kept waiting after its limit"
+    );
+    let text = format!(
+        "image detach sidecar @fixture/sidecar-one surface surface-a image region-limit generation {} request {request} timed out: the supplier sent no acknowledgement within {:?}",
+        targets[0].generation,
+        Duration::from_millis(20)
+    );
+    assert_eq!(ended_events.try_recv().unwrap(), ended(Some(text)));
+    assert!(
+        images.pending_detach_error("surface-a").is_ok(),
+        "the surface stays pending after the limit ended its detach"
+    );
+    assert!(
+        errors_naming(&request).is_empty(),
+        "the limit wrote a record besides the ended event"
+    );
+
+    let late = fixture.sidecars.acknowledge_image_detach(
+        "@fixture/sidecar-one",
+        "surface-a",
+        &ack(serde_json::json!({"image":{"detached":{
+            "request": request, "name": "region-limit", "generation": targets[0].generation,
+            "ok": true, "result": "detached"
+        }}})),
+    );
+    let _ = late;
+    assert!(
+        ended_events.try_recv().is_err(),
+        "a late acknowledgement sent a second ended event"
+    );
+    assert!(
+        buffered_fields("host.trace.image.detach.late")
+            .iter()
+            .any(|fields| fields["request"] == request.as_str()
+                && fields["sidecar"] == "@fixture/sidecar-one"
+                && fields["surface"] == "surface-a"
+                && fields["name"] == "region-limit"
+                && fields["generation"] == targets[0].generation),
+        "a late acknowledgement wrote no host.trace.image.detach.late"
+    );
+    fixture.sidecars.stop();
+}

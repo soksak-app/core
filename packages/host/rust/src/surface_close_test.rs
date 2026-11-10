@@ -48,3 +48,30 @@ fn a_surface_that_closes_in_an_open_window_ends_its_view_source_for_the_page() {
         "the page of an open window learns that the view source ended"
     );
 }
+
+// contract: view.presentation-wait.surface-close-ends-it
+#[test]
+fn the_close_of_a_surface_ends_the_presentation_wait_of_its_view_with_the_reason_closed() {
+    let surface = "tab-close-ends-presentation";
+    let (data, generation) = records_with_view(surface, "probe");
+    assert!(data.documents.presentation().begin(surface, generation, 41));
+    let open = Ok(Arc::clone(&data));
+
+    let close = end_closed_surface(&data, &open, surface);
+
+    assert_eq!(close.abandoned, 1, "the close ends the one open wait of the view");
+    assert!(
+        !data.documents.presentation().waits(surface, generation, 41),
+        "the wait of the view stays open after the close of its surface"
+    );
+    let reasons: Vec<_> =
+        crate::event_record::buffered_fields_of("host.trace.view.presentation-abandoned", surface)
+            .into_iter()
+            .map(|fields| fields["reason"].clone())
+            .collect();
+    assert_eq!(
+        reasons,
+        [serde_json::json!("closed")],
+        "the close of the documents of a surface ends the wait with the reason closed"
+    );
+}
