@@ -880,6 +880,12 @@ export async function closeVerifiedRecordedViewGroup(views, closeGroup) {
   return closeGroup();
 }
 
+/** The document rows of a `host.window` reply. */
+function requireHostDocumentRows(host) {
+  assert.ok(host && Array.isArray(host.documents), "host.window must include document rows");
+  return host.documents;
+}
+
 /** Runs the three initial-only process-group reclamation samples for opened view surfaces. */
 export async function collectViewReclaimMeasurements(t, s, descriptor, views, evidence = { events: [], recordings: [] }) {
   assert.ok(Array.isArray(views) && views.length > 0, "reclaim requires opened view evidence");
@@ -940,8 +946,14 @@ export async function collectViewLifecycleMeasurements(t, s, descriptor) {
   };
 }
 
-/** Closes every view in a shared process group and preserves live/dead PID rows. */
-export async function closeViewGroup(t, s, { placement, surfaces, beforeProcesses, closedViews }) {
+/**
+ * Closes every view in a shared process group and preserves live/dead PID rows. The close is part of the measurement, so it ends
+ * with the close requests and the exit events of the processes that they closed: once `host.window` no longer lists a
+ * document of the closed views, its value names the processes that still hold a page of the application, which are read live
+ * with their footprint, and only each other process, whose pages the closes ended, is awaited until it exits.
+ */
+export async function closeViewGroup(t, s, { placement, surfaces, beforeProcesses, closedViews,
+  measureFootprint = physicalFootprintBytes }) {
   requirePlacement(placement, "view close");
   assert.ok(Array.isArray(surfaces) && surfaces.length > 0, "view close requires nonempty surfaces");
   assert.ok(Array.isArray(beforeProcesses) && beforeProcesses.length > 0, "view close requires the complete pre-close process group");
@@ -962,16 +974,18 @@ export async function closeViewGroup(t, s, { placement, surfaces, beforeProcesse
   }
   const began = await monotonicTimeMs(s);
   for (const surface of surfaces) await placement.close(s, surface, { cleanup: false });
+  const closedSurfaces = new Set(surfaces);
+  const closed = await s.until("host.window",
+    (value) => !requireHostDocumentRows(value).some((row) => closedSurfaces.has(row.surface)),
+    `host.window still lists a document of the closed views ${surfaces.join(", ")}`);
+  const held = new Set(requireHostDocumentRows(closed).filter((row) => row.process > 0).map((row) => row.process));
   const afterProcesses = await Promise.all(beforeProcesses.map(async ({ pid }) => {
-    try {
-      await s.request("diagnostics.process.exit", { pid });
-      return { pid, footprintBytes: 0 };
-    } catch (error) {
-      const expectedTimeout = new RegExp(`^process ${pid} did not exit within 10s$`).test(error.message);
-      if (!expectedTimeout) throw error;
-      t.diagnostic(`view process ${pid} remained alive after the 10 second exit wait: ${error.message}`);
-      return { pid, footprintBytes: physicalFootprintBytes(pid) };
+    if (held.has(pid)) {
+      t.diagnostic(`view process ${pid} still holds a page after its views closed`);
+      return { pid, footprintBytes: await measureFootprint(pid) };
     }
+    await s.request("diagnostics.process.exit", { pid });
+    return { pid, footprintBytes: 0 };
   }));
   const ended = await monotonicTimeMs(s);
   const elapsedMs = ended.timeMs - began.timeMs;
