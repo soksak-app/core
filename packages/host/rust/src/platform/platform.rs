@@ -887,6 +887,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     /// Registers a webview in the common pointer routing and returns whether it was registered.
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String>;
+    /// Ends the input registration of a webview that register_input registered: the pointer routing forgets the webview and
+    /// the objects attached to the registration are released in this turn, not when the webview is released. Call it on the
+    /// main thread.
+    fn unregister_input(&self, view: &PlatformWebview) -> Result<(), String>;
     /// Keeps the page of a webview from moving the keyboard focus of the window, and returns whether it was applied.
     fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String>;
     /// Watches the input of the window and returns the address of the monitor.

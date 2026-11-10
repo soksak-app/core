@@ -200,9 +200,42 @@ impl Overlay {
             .take();
         if let Some(view) = view {
             set_background(&view.window(), false)?;
-            view.close().map_err(|e| e.to_string())?;
+            close_view(
+                || end_input(&view),
+                || view.close().map_err(|e| e.to_string()),
+            )?;
         }
         Ok(())
+    }
+}
+
+/// Ends the input registration of the modal webview on the main thread, before the webview is closed.
+fn end_input(view: &Webview) -> Result<(), String> {
+    let platform = platform::current()?;
+    exposure::with_view(view, move |native| platform.unregister_input(native))
+}
+
+/// Closes a modal webview after its input registration ended. The registration is attached to the native webview, which the
+/// framework releases after the close at a time of its own, so a registration that only that release ended would outlive the
+/// closed modal; the Wails host ends it in the same step of its native close (`nativeWebviewCloseOnMain`). The webview is
+/// closed also when the end failed, and the failures are answered.
+fn close_view(
+    end_input: impl FnOnce() -> Result<(), String>,
+    close: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let failures: Vec<String> = [
+        end_input().map_err(|error| {
+            format!("ending the input registration of the modal web view failed: {error}")
+        }),
+        close(),
+    ]
+    .into_iter()
+    .filter_map(Result::err)
+    .collect();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
     }
 }
 
@@ -489,7 +522,11 @@ fn show_modal(window: &Window, state: &Overlay, request: OverlayRequest) -> Resu
     *state.view.lock().unwrap_or_else(PoisonError::into_inner) = Some(view.clone());
     state.paint_changed.notify_all();
     if let Err(error) = view.navigate(target) {
-        let close_error = view.close().err();
+        let close_error = close_view(
+            || end_input(&view),
+            || view.close().map_err(|e| e.to_string()),
+        )
+        .err();
         // default: a lock that a panicking thread poisoned still holds the modal webview, which this removal clears;
         // the panic hook records the panic.
         *state.view.lock().unwrap_or_else(PoisonError::into_inner) = None;

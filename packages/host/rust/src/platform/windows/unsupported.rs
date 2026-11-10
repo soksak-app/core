@@ -407,6 +407,10 @@ pub fn ignore_page_focus(_view: &PlatformWebview) -> Result<bool, String> {
     missing("webview focus isolation")
 }
 
+pub fn unregister_input(_view: &PlatformWebview) -> Result<(), String> {
+    missing("webview input unregistration")
+}
+
 #[cfg(feature = "diagnostics")]
 pub fn capture_open(_window_number: isize, _display: bool) -> Result<(), String> {
     missing("window capture")

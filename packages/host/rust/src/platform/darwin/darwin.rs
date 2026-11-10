@@ -615,6 +615,10 @@ impl Platform for Darwin {
     fn register_input(&self, view: &PlatformWebview) -> Result<bool, String> {
         Ok(input::register(view))
     }
+    fn unregister_input(&self, view: &PlatformWebview) -> Result<(), String> {
+        input::unregister(view);
+        Ok(())
+    }
     fn ignore_page_focus(&self, view: &PlatformWebview) -> Result<bool, String> {
         Ok(input::ignore_page_focus(view))
     }
