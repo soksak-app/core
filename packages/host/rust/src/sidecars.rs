@@ -3478,14 +3478,7 @@ impl<O: Owner> Core<O> {
             // The read end is closed so that a process that is still writing is not blocked in a write.
             drop(reader);
             drop(tx_clone);
-            // The last record of the standard error comes before the exit record, which the judgment of the output writes
-            // or the stop writes after it (docs/spec/sidecars.md#log).
-            match stderr_thread.join() {
-                Ok(()) => {}
-                // A panic of the reader of the standard error ends its records; the panic hook records the panic.
-                Err(_panic) => {}
-            }
-            fail(&state, &sidecar, pid, violation);
+            fail(&state, &sidecar, pid, violation, stderr_thread);
             // The stop that waits for the judgment of the output receives the end of the channel.
             drop(read_end);
         }));
@@ -4782,7 +4775,16 @@ fn fail<O: Owner>(
     sidecar: &str,
     pid: u32,
     violation: Option<String>,
+    stderr: std::thread::JoinHandle<()>,
 ) {
+    // The last record of the standard error comes before the exit record, which this judgment or the stop writes
+    // (docs/spec/sidecars.md#log). The standard error ends with the exit of the process, so the join follows the end of the
+    // process: a sidecar that violated the protocol and still runs keeps it open until the host ends its process group.
+    let join_stderr = || match stderr.join() {
+        Ok(()) => {}
+        // A panic of the reader of the standard error ends its records; the panic hook records the panic.
+        Err(_panic) => {}
+    };
     let (process, owned, changed, stop) = {
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call amends; the
         // panic hook records the panic.
@@ -4809,6 +4811,8 @@ fn fail<O: Owner>(
             }
             drop(state);
             record_stopped_requests(sidecar, stopped_requests);
+            // The stop ends the process and writes its exit record after this judgment.
+            join_stderr();
             return;
         }
         let process = state.running.remove(sidecar).expect("checked by pid above");
@@ -4848,6 +4852,7 @@ fn fail<O: Owner>(
         }
         None => "no child process".to_string(),
     };
+    join_stderr();
     crate::event_record::emit_host(
         crate::event_log::Level::Info,
         "host.sidecar.exit",
