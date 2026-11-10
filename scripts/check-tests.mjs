@@ -294,6 +294,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/endpoint_ended_test.go", id: "TestTheCloseOfAWindowEndsEveryWatchOfIt" },
       { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_close_of_a_connection_releases_its_presses" },
       { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_release_refused_while_a_button_is_held_waits_for_mask_zero" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_release_refused_for_another_pointer_is_delivered_at_the_end_of_a_press" },
       { file: "packages/host/rust/tests/endpoint_ended_test.rs", id: "a_watch_ends_with_its_producer" },
       { file: "packages/sok/go/tests/sok_test.go", id: "TestAWatchEndsWhenItsProducerEnds" },
       { file: "packages/sok/go/tests/sok_test.go", id: "TestAGestureSendsItsStepsOnOneConnection" },

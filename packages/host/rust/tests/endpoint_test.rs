@@ -1648,3 +1648,53 @@ fn a_release_refused_while_a_button_is_held_waits_for_mask_zero() {
     assert_eq!(ups, 2, "the release was not delivered once after mask 0: {:?}", fake.calls());
     endpoint.stop();
 }
+
+// A release refused with 1011 is delivered at the next end of a press, and not at an input that ends no press.
+// contract: endpoint.input.close-releases-presses
+#[test]
+fn a_release_refused_for_another_pointer_is_delivered_at_the_end_of_a_press() {
+    let config = folder::Folder::new();
+    let (fake, seen) = Fake::new();
+    let endpoint = start(config.path(), "test-press-pointer-held", fake.clone());
+    let mut owner = open(&endpoint);
+    let mut other = open(&endpoint);
+    request(
+        &mut owner,
+        1,
+        "input.pointer",
+        json!({"window": "w1", "x": 7, "y": 8, "phase": "down"}),
+    );
+    *fake.refusing.lock().unwrap() = Some(("up".into(), endpoint::POINTER_HELD));
+    while seen.try_recv().is_ok() {}
+    drop(owner);
+    next_pointer(&seen, "up");
+    *fake.refusing.lock().unwrap() = None;
+    // A move of the other pointer ends no press, so the refused release is not delivered before it.
+    let second = |phase: &str| json!({"window": "w1", "pointer": "second", "x": 0, "y": 0, "phase": phase});
+    request(&mut other, 1, "input.pointer", second("move"));
+    loop {
+        let (_, method, params) = seen
+            .recv()
+            .expect("the page ended before the move of the other pointer reached it");
+        if method != "input.pointer" {
+            continue;
+        }
+        assert_ne!(
+            params["phase"], "up",
+            "the refused release was delivered before a press ended: {params}"
+        );
+        if params["phase"] == "move" {
+            break;
+        }
+    }
+    // The up of the other pointer ends a press, which lifts the refusal.
+    request(&mut other, 2, "input.pointer", second("up"));
+    let ended = next_pointer(&seen, "up");
+    assert_eq!(ended["pointer"], "second");
+    let released = next_pointer(&seen, "up");
+    assert_eq!(
+        released,
+        json!({"pointer": "main", "x": 7.0, "y": 8.0, "phase": "up", "button": "left", "clicks": 1})
+    );
+    endpoint.stop();
+}
