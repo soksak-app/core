@@ -76,15 +76,10 @@ impl Service for Fake {
         _reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let plain = params.get("name").and_then(Value::as_str) == Some("core.plain");
-        let refused = self
-            .refusing
-            .lock()
-            .unwrap()
-            .clone()
-            .filter(|(phase, _)| {
-                method == "input.pointer"
-                    && params.get("phase").and_then(Value::as_str) == Some(phase.as_str())
-            });
+        let refused = self.refusing.lock().unwrap().clone().filter(|(phase, _)| {
+            method == "input.pointer"
+                && params.get("phase").and_then(Value::as_str) == Some(phase.as_str())
+        });
         let call = (
             window.to_string(),
             method.to_string(),
@@ -1559,9 +1554,9 @@ fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
 /// the call itself; a release that never comes leaves the test to the limit of its runner, which reports the stall.
 fn next_pointer(seen: &Receiver<(String, String, Value)>, phase: &str) -> Value {
     loop {
-        let (window, method, params) = seen
-            .recv()
-            .unwrap_or_else(|_| panic!("the page ended before an input.pointer {phase} reached it"));
+        let (window, method, params) = seen.recv().unwrap_or_else(|_| {
+            panic!("the page ended before an input.pointer {phase} reached it")
+        });
         if method == "input.pointer" && params["phase"] == phase {
             assert_eq!(window, "w1");
             return params;
@@ -1578,9 +1573,7 @@ fn the_close_of_a_connection_releases_its_presses() {
     let (fake, seen) = Fake::new();
     let endpoint = start(config.path(), "test-press", fake.clone());
     let mut first = open(&endpoint);
-    let pointer = |phase: &str, x: i64, y: i64| {
-        json!({"window": "w1", "pointer": "second", "x": x, "y": y, "phase": phase, "button": "right"})
-    };
+    let pointer = |phase: &str, x: i64, y: i64| json!({"window": "w1", "pointer": "second", "x": x, "y": y, "phase": phase, "button": "right"});
     assert_eq!(
         request(&mut first, 1, "input.pointer", pointer("down", 10, 20))["result"],
         Value::Null
@@ -1645,7 +1638,12 @@ fn a_release_refused_while_a_button_is_held_waits_for_mask_zero() {
         .iter()
         .filter(|(_, method, params)| method == "input.pointer" && params["phase"] == "up")
         .count();
-    assert_eq!(ups, 2, "the release was not delivered once after mask 0: {:?}", fake.calls());
+    assert_eq!(
+        ups,
+        2,
+        "the release was not delivered once after mask 0: {:?}",
+        fake.calls()
+    );
     endpoint.stop();
 }
 
@@ -1670,7 +1668,8 @@ fn a_release_refused_for_another_pointer_is_delivered_at_the_end_of_a_press() {
     next_pointer(&seen, "up");
     *fake.refusing.lock().unwrap() = None;
     // A move of the other pointer ends no press, so the refused release is not delivered before it.
-    let second = |phase: &str| json!({"window": "w1", "pointer": "second", "x": 0, "y": 0, "phase": phase});
+    let second =
+        |phase: &str| json!({"window": "w1", "pointer": "second", "x": 0, "y": 0, "phase": phase});
     request(&mut other, 1, "input.pointer", second("move"));
     loop {
         let (_, method, params) = seen
