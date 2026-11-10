@@ -44,6 +44,9 @@ int main(void) { @autoreleasepool {
                 CGRectMake(20, 30, width, height), 1, "kCGColorSpaceSRGB");
             check(retained, @"the source snapshot is accepted while the frame writer is held");
 
+            // Queued behind the hold, so it runs only once the frame writer is released.
+            __block BOOL frameWriterRan = NO;
+            dispatch_async(captureWriter, ^{ frameWriterRan = YES; });
             dispatch_async(manifestQueue, ^{
                 @autoreleasepool {
                     manifestWritten = sp_image_capture_match_write_manifest(directoryPath.fileSystemRepresentation);
@@ -55,6 +58,7 @@ int main(void) { @autoreleasepool {
             fprintf(stderr, "waiting: the manifest finishes while the frame writer is held\n");
             dispatch_semaphore_wait(manifestFinished, DISPATCH_TIME_FOREVER);
             fprintf(stderr, "reached: the manifest finishes while the frame writer is held\n");
+            check(!frameWriterRan, @"source artifacts and their manifest finish before the held frame writer is released");
         }
     } @finally {
         dispatch_semaphore_signal(releaseWriter);
