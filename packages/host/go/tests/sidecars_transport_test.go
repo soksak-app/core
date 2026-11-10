@@ -22,6 +22,7 @@ import (
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	testplatform "github.com/soksak-app/core/packages/host/go/tests/platform"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
@@ -1647,7 +1648,7 @@ func TestTheStopDoesNotWaitForAStart(t *testing.T) {
 // of the check, also when the check is killed, because the kernel then closes the write end.
 func holdPipe(t *testing.T, path string) {
 	t.Helper()
-	if err := makeFifo(path); err != nil {
+	if err := testplatform.MakeFifo(path); err != nil {
 		t.Fatal(err)
 	}
 	// A read-write open does not wait for a reader, and the check holds the only writer.
@@ -1745,7 +1746,7 @@ func TestAStopEndsAStartWhoseHelloIsNotAnswered(t *testing.T) {
 func TestAStopEndsAStartWhoseServicePrintsNoEndpoint(t *testing.T) {
 	folder := t.TempDir()
 	started := filepath.Join(folder, "started")
-	if err := makeFifo(started); err != nil {
+	if err := testplatform.MakeFifo(started); err != nil {
 		t.Fatal(err)
 	}
 	hold := filepath.Join(folder, "hold")
@@ -1784,7 +1785,7 @@ func TestAStopEndsAStartWhoseServicePrintsNoEndpoint(t *testing.T) {
 		t.Fatalf("the start ended with %v, want sidecars are stopped", err)
 	}
 	// The start reaped the service before it failed, so no process has its pid.
-	if err := processAbsent(pid); err != nil {
+	if err := testplatform.ProcessAbsent(pid); err != nil {
 		t.Fatalf("the service %d is not reaped: %v", pid, err)
 	}
 }

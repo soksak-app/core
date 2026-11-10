@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	sok "github.com/soksak-app/core/packages/sok/go/src"
+	testplatform "github.com/soksak-app/core/packages/sok/go/tests/platform"
 )
 
 // contract: cli.plugin.writing-commands-own-the-configuration
@@ -66,7 +67,7 @@ func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing
 		t.Fatal(err)
 	}
 	defer owner.Close()
-	if err := holdLock(owner); err != nil {
+	if err := testplatform.HoldLock(owner); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr := run("plugin", "disable", "probe", "--config-dir", config)

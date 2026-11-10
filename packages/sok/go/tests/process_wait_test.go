@@ -12,6 +12,7 @@ import (
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/darwin"
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/linux"
+	testplatform "github.com/soksak-app/core/packages/sok/go/tests/platform"
 )
 
 type processWaitPlatform struct {
@@ -96,7 +97,7 @@ func TestProcessWaitEndsByASignal(t *testing.T) {
 				t.Fatalf("the wait answered before the process ended: %+v", got)
 			default:
 			}
-			if err := signalSelf(c.signal); err != nil {
+			if err := testplatform.SignalSelf(c.signal); err != nil {
 				t.Fatal(err)
 			}
 			got := <-answered
