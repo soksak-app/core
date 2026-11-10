@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F726: `document_throttle_test` 는 숨긴 document region 과 덮인 document region 을 page 의 `visibilitychange` event 로 판정한다. 각 hidden 상태는 다음 visible 상태까지 animation frame 을 실행하지 않고, timer turn 은 보고만 하며 판정하지 않는다. 검사의 모든 대기는 고정 시간 동안의 속도 대신 그 event 로 끝난다.
 - F718-10: window 의 어떤 배치도 view 를 기다리지 않는다. 배치는 composition 을 선언한 view 를 보내고, 진행 중인 선언은 host 의 답을 기다리며, 선언하지 않은 view 는 deferred 로 둔다. 그 view 의 선언이 page 를 다시 layout 한다. core 명령의 drawn 대기는 진행 중인 선언에 대한 host 의 답만 기다린다.
 - F718-11: Rust host test 가 release 를 `POINTER_HELD` 로 거절하고, 다음 press 의 끝에서 그것이 전달됨을 Go test 옆에서 확인한다.
 - F727: virtual key window 와 가려진 capture 의 native 검사는 자기 process 가 앞으로 오지 않았다는 것만 판정하므로, run 중에 다른 애플리케이션이 앞으로 와도 더는 실패하지 않는다.

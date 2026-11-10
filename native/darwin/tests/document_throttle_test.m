@@ -1,14 +1,23 @@
-// Measures whether a document region slows down while it is hidden (placed as not visible) or covered by another window.
-// The document counts the iterations of a setTimeout(0) loop and the animation frames it runs. Each state is measured for
-// three seconds, and the rates are compared with the rates of the shown region (docs/features.md F196.9.1). The check
-// does not activate the application and does not focus any window: the covering window is ordered front without activation.
+// Judges whether the document of a region is hidden while the region is placed as not visible or its window is covered by
+// another window, by the events of the page and not by rates over a fixed time (docs/spec/native-surfaces.md, document
+// regions). The page counts the turns of a setTimeout(0) loop and the animation frames it runs, and records each
+// visibilitychange with its state and both counts. The check waits for each change, holds each hidden state for display
+// refreshes of the screen, and judges that no animation frame ran between a hidden state and the next visible state. The
+// timer throttle has no event of WebKit, so its turns are reported and not judged. Every wait ends by its event: the ready
+// state of the listener, the load state of the document, the completion handler of a page script, a display refresh and
+// NSWindowDidChangeOcclusionStateNotification. The check does not activate the application and does not focus any window:
+// the covering window is ordered front without activation.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+
+// The display refreshes for which the check holds each hidden state: a shown document runs an animation frame on each.
+static const int kHiddenRefreshes = 60;
 
 static int failures = 0;
 
@@ -22,27 +31,37 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Runs the application event queue and the run loop for the given time.
-static void pump(NSTimeInterval seconds) {
-    NSDate *end = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    do {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
+// Ends the wait of the event loop after a callback changed what a wait looks at.
+static void wake(void) {
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0
+        timestamp:0 windowNumber:0 context:nil subtype:0 data1:0 data2:0] atStart:NO];
+}
+
+// Runs the event loop until done holds. Each callback that a wait depends on calls wake, so the loop waits for events only.
+static void until(BOOL (^done)(void)) {
+    while (!done()) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:NSDate.distantFuture
             inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    } while ([end timeIntervalSinceNow] > 0);
+        if (event && event.type != NSEventTypeApplicationDefined) [NSApp sendEvent:event];
+    }
 }
 
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) pump(0.01);
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
-}
-
-// The page runs a setTimeout(0) loop and an animation frame loop, and counts the iterations of each.
+// The page runs a setTimeout(0) loop and an animation frame loop and records each visibilitychange with its state and the
+// turns of both loops; each answer also names the number of changes so far. throttle.change(n) answers the change with
+// index n once it happened; throttle.frames(n) answers after n more animation frames.
 static NSString *const kPage = @"<!doctype html><title>Throttle</title><body>throttle"
-    "<script>window.counts={timer:0,frame:0};"
-    "(function timerLoop(){window.counts.timer++;setTimeout(timerLoop,0);})();"
-    "(function frameLoop(){window.counts.frame++;requestAnimationFrame(frameLoop);})();"
+    "<script>window.throttle=(()=>{"
+    "const counts={timer:0,frame:0};const changes=[];const waiting=[];"
+    "const mark=()=>({state:document.visibilityState,timer:counts.timer,frame:counts.frame,changes:changes.length});"
+    "(function timerLoop(){counts.timer++;setTimeout(timerLoop,0);})();"
+    "(function frameLoop(){counts.frame++;requestAnimationFrame(frameLoop);})();"
+    "document.addEventListener('visibilitychange',()=>{changes.push(mark());"
+    "for(const w of waiting.splice(0)){if(changes.length>w.index)w.resolve(changes[w.index]);else waiting.push(w);}});"
+    "return{"
+    "change:(index)=>new Promise((resolve)=>{if(changes.length>index)resolve(changes[index]);else waiting.push({index,resolve});}),"
+    "frames:(n)=>new Promise((resolve)=>{const end=counts.frame+n;"
+    "(function next(){if(counts.frame>=end)resolve(mark());else requestAnimationFrame(next);})();}),"
+    "};})();"
     "</script></body>";
 
 // An HTTP server that answers every request with the page and closes the connection.
@@ -66,62 +85,95 @@ static nw_listener_t serve(void) {
             });
         });
     });
-    __block BOOL ready = NO;
+    __block nw_listener_state_t listenerState = nw_listener_state_invalid;
     nw_listener_set_state_changed_handler(listener, ^(nw_listener_state_t state, nw_error_t error) {
-        if (state == nw_listener_state_ready) ready = YES;
+        listenerState = state;
+        wake();
     });
     nw_listener_start(listener);
-    until(@"the test server did not start", ^BOOL { return ready; });
+    until(^BOOL { return listenerState == nw_listener_state_ready || listenerState == nw_listener_state_failed
+        || listenerState == nw_listener_state_cancelled; });
+    check(listenerState == nw_listener_state_ready, @"the test server is ready");
     return listener;
 }
 
-static id evaluate(WKWebView *view, NSString *script) {
+// Runs an async function body in the page and returns its answer once its promise settles; a failed script is a failure.
+static NSDictionary *callPage(WKWebView *view, NSString *body) {
     __block BOOL done = NO;
     __block id result = nil;
-    [view evaluateJavaScript:script completionHandler:^(id value, NSError *error) {
-        result = [value retain];
-        done = YES;
-    }];
-    until(@"JavaScript did not answer", ^BOOL { return done; });
+    __block NSError *failure = nil;
+    [view callAsyncJavaScript:body arguments:nil inFrame:nil inContentWorld:WKContentWorld.pageWorld
+        completionHandler:^(id value, NSError *error) {
+            result = [value retain];
+            failure = [error retain];
+            done = YES;
+            wake();
+        }];
+    until(^BOOL { return done; });
+    check(failure == nil && [result isKindOfClass:NSDictionary.class],
+        [NSString stringWithFormat:@"the page answers %@ (%@)", body, failure.localizedDescription ?: @"no error"]);
+    [failure release];
+    if (![result isKindOfClass:NSDictionary.class]) {
+        [result release];
+        return nil;
+    }
     return [result autorelease];
 }
 
-// The counts of the page now, or nil when the page has not started its loops.
-static NSDictionary *counts(WKWebView *view) {
-    NSString *json = [evaluate(view, @"typeof window.counts === 'object' ? JSON.stringify(window.counts) : null") description];
-    if (![json isKindOfClass:NSString.class] || [json isEqual:@"<null>"]) return nil;
-    return [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+// The visibilitychange of the page with the index, once it happened.
+static NSDictionary *change(WKWebView *view, long index) {
+    return callPage(view, [NSString stringWithFormat:@"return await window.throttle.change(%ld);", index]);
 }
 
-static void changed(void *context, const char *text) {}
+// Counts display refreshes of a screen.
+@interface SPRefreshes : NSObject
+@property int left;
+- (void)tick:(CADisplayLink *)link;
+@end
+@implementation SPRefreshes
+- (void)tick:(CADisplayLink *)link {
+    if (--self.left == 0) [link invalidate];
+    wake();
+}
+@end
 
-typedef struct {
-    double timerRate;
-    double frameRate;
-    NSString *visibility;
-} Measurement;
+static void waitRefreshes(NSScreen *screen, int count) {
+    SPRefreshes *refreshes = [[SPRefreshes new] autorelease];
+    refreshes.left = count;
+    [[screen displayLinkWithTarget:refreshes selector:@selector(tick:)]
+        addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    until(^BOOL { return refreshes.left == 0; });
+}
 
-// Measures the rates of the page over three seconds. The rates use the elapsed time that the check measures.
-static Measurement measure(NSString *name, WKWebView *view) {
-    NSDictionary *first = counts(view);
-    NSDate *start = [NSDate date];
-    while ([start timeIntervalSinceNow] > -3) pump(0.05);
-    NSDate *end = [NSDate date];
-    NSDictionary *last = counts(view);
-    NSTimeInterval seconds = [end timeIntervalSinceDate:start];
-    Measurement result = {0, 0, nil};
-    if (first && last) {
-        result.timerRate = ([last[@"timer"] doubleValue] - [first[@"timer"] doubleValue]) / seconds;
-        result.frameRate = ([last[@"frame"] doubleValue] - [first[@"frame"] doubleValue]) / seconds;
-    }
-    result.visibility = [evaluate(view, @"document.visibilityState") description];
-    printf("%s: timer loop %.1f per second, animation frames %.1f per second over %.2f seconds, document visibility %s\n",
-        name.UTF8String, result.timerRate, result.frameRate, seconds, result.visibility.UTF8String);
+// Judges one hidden state: the change into it, the change out of it, and the animation frames between them.
+static void judgeHidden(NSString *name, NSDictionary *hidden, NSDictionary *visible) {
+    check([hidden[@"state"] isEqual:@"hidden"],
+        [NSString stringWithFormat:@"a %@ region receives visibilitychange with hidden (%@)", name, hidden[@"state"]]);
+    check([visible[@"state"] isEqual:@"visible"],
+        [NSString stringWithFormat:@"a %@ region that shows again receives visibilitychange with visible (%@)", name,
+            visible[@"state"]]);
+    long frames = [visible[@"frame"] longValue] - [hidden[@"frame"] longValue];
+    long turns = [visible[@"timer"] longValue] - [hidden[@"timer"] longValue];
+    check(hidden != nil && visible != nil && frames == 0,
+        [NSString stringWithFormat:@"a %@ region runs no animation frame between its hidden and its visible state (%ld frames)",
+            name, frames]);
+    // The timer throttle has no event of WebKit, so its turns are reported and not judged.
+    printf("%s: %ld timer turns during %d display refreshes while hidden\n", name.UTF8String, turns, kHiddenRefreshes);
     if (fflush(stdout) != 0) {
         perror("fflush measurement");
         failures++;
     }
-    return result;
+}
+
+static NSDictionary *latestState;
+
+// Keeps the last load state that the document reports.
+static void changed(void *context, const char *json) {
+    (void)context;
+    NSData *data = [NSData dataWithBytes:json length:strlen(json)];
+    [latestState release];
+    latestState = [[NSJSONSerialization JSONObjectWithData:data options:0 error:nil] retain];
+    wake();
 }
 
 int main(void) { @autoreleasepool {
@@ -139,7 +191,14 @@ int main(void) { @autoreleasepool {
     WKWebView *main = [[[WKWebView alloc] initWithFrame:window.contentView.bounds] autorelease];
     main.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [window.contentView addSubview:main];
+    __block BOOL windowVisible = NO;
+    id occlusion = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidChangeOcclusionStateNotification
+        object:window queue:nil usingBlock:^(NSNotification *notification) {
+            windowVisible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
+            wake();
+        }];
     [window orderFrontRegardless];
+    windowVisible = (window.occlusionState & NSWindowOcclusionStateVisible) != 0;
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"a logical surface is created for the document");
     webviewSetFrame(surface, 0, 0, 500, 400);
@@ -150,50 +209,58 @@ int main(void) { @autoreleasepool {
     void *document = sp_document_create(surface, [stores stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
         NULL, NULL, NULL, NULL, changed, NULL);
     check(document != NULL, @"a document view is created inside the surface");
+    if (!document) return 1;
     WKWebView *view = (WKWebView *)document;
     sp_document_place(document, 10, 20, 30, 40, true);
     check(sp_document_load(document, address.UTF8String), @"the local page address is accepted");
-    until(@"the page did not start its loops", ^BOOL { return counts(view) != nil; });
+    until(^BOOL { return [latestState[@"url"] isEqual:address] && ![latestState[@"loading"] boolValue]; });
+    until(^BOOL { return windowVisible; });
 
-    // Shown: the region is visible in a window that nothing covers.
-    Measurement shown = measure(@"shown", view);
-    check(window.occlusionState & NSWindowOcclusionStateVisible, @"the window is visible before the shown measurement");
-    check(shown.frameRate > 0, [NSString stringWithFormat:@"the shown document runs animation frames (%.1f per second)", shown.frameRate]);
+    // Shown: the region is visible in a window that nothing covers and runs animation frames.
+    NSDictionary *shown = callPage(view, @"return await window.throttle.frames(3);");
+    check([shown[@"state"] isEqual:@"visible"] && [shown[@"frame"] longValue] >= 3,
+        [NSString stringWithFormat:@"the shown document runs animation frames (%@, %@ frames)", shown[@"state"], shown[@"frame"]]);
 
-    // Hidden: the region is placed as not visible while the window stays visible.
+    // Hidden: the region is placed as not visible while the window stays visible, and shown again after the refreshes.
+    // A change of the window before this point, such as its first show, is counted before the first index.
+    long next = [shown[@"changes"] longValue];
     sp_document_place(document, 10, 20, 30, 40, false);
-    Measurement hidden = measure(@"hidden", view);
-    check(hidden.frameRate <= 0.1 * shown.frameRate,
-        [NSString stringWithFormat:@"a hidden region runs at most 10%% of the shown animation frame rate (%.1f against %.1f)",
-            hidden.frameRate, shown.frameRate]);
-    check(hidden.timerRate < shown.timerRate,
-        [NSString stringWithFormat:@"a hidden region runs the timer loop slower than shown (%.1f against %.1f)",
-            hidden.timerRate, shown.timerRate]);
-
-    // Covered: the region is shown again, and another opaque window that this check creates covers the window.
+    NSDictionary *hidden = change(view, next);
+    waitRefreshes(window.screen, kHiddenRefreshes);
     sp_document_place(document, 10, 20, 30, 40, true);
-    NSWindow *cover = [[[NSWindow alloc] initWithContentRect:NSInsetRect(window.frame, -40, -40)
-        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO] autorelease];
+    NSDictionary *placedVisible = change(view, next + 1);
+    judgeHidden(@"hidden", hidden, placedVisible);
+    NSDictionary *again = callPage(view, @"return await window.throttle.frames(1);");
+    check([again[@"state"] isEqual:@"visible"], @"a region that shows again runs animation frames");
+    next = [again[@"changes"] longValue];
+
+    // Covered: another opaque window that this check creates covers the window, and goes after the refreshes.
+    NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSInsetRect(window.frame, -40, -40)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     [cover setReleasedWhenClosed:NO];
     cover.backgroundColor = NSColor.blackColor;
     [cover orderFrontRegardless];
-    until(@"the covering window did not occlude the test window",
-        ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) == 0; });
-    Measurement covered = measure(@"covered", view);
-    check(covered.frameRate <= 0.1 * shown.frameRate,
-        [NSString stringWithFormat:@"a covered region runs at most 10%% of the shown animation frame rate (%.1f against %.1f)",
-            covered.frameRate, shown.frameRate]);
-    check(covered.timerRate < shown.timerRate,
-        [NSString stringWithFormat:@"a covered region runs the timer loop slower than shown (%.1f against %.1f)",
-            covered.timerRate, shown.timerRate]);
+    until(^BOOL { return !windowVisible; });
+    NSDictionary *covered = change(view, next);
+    waitRefreshes(window.screen, kHiddenRefreshes);
+    [cover orderOut:nil];
+    NSDictionary *uncovered = change(view, next + 1);
+    judgeHidden(@"covered", covered, uncovered);
+    until(^BOOL { return windowVisible; });
+    again = callPage(view, @"return await window.throttle.frames(1);");
+    check([again[@"state"] isEqual:@"visible"], @"a region whose cover goes runs animation frames");
     check(!NSApp.isActive, @"the application stays inactive");
 
+    [NSNotificationCenter.defaultCenter removeObserver:occlusion];
     [cover close];
+    [cover release];
     sp_document_close(document);
     sp_surface_close(surface);
     nw_listener_cancel(listener);
     [window close];
     [window release];
+    [latestState release];
+    latestState = nil;
     printf("%s\n", failures ? "FAIL: document_throttle_test" : "PASS: document_throttle_test");
     return failures ? 1 : 0;
 }}
