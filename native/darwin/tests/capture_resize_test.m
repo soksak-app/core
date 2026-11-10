@@ -22,12 +22,12 @@ static void check(BOOL condition, NSString *message) {
 }
 @end
 
-static void spin(NSTimeInterval seconds) {
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (until.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, until.timeIntervalSinceNow)]];
-    }
+// Runs the run loop until done holds; each turn waits for a source of the run loop, and every condition it judges changes in a
+// display link callback, a block on the main queue or a notification on the main thread. what names the wait in the record of a
+// run that the runner ends.
+static void until(NSString *what, BOOL (^done)(void)) {
+    while (!done()) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:NSDate.distantFuture];
+    fprintf(stderr, "reached: %s\n", what.UTF8String);
 }
 
 int main(void) { @autoreleasepool {
@@ -47,11 +47,10 @@ int main(void) { @autoreleasepool {
             (CGWindowID)window.windowNumber) autorelease];
         return info.count == 1 && [info[0][(id)kCGWindowIsOnscreen] boolValue];
     };
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!onScreen() && deadline.timeIntervalSinceNow > 0) spin(0.01);
+    // Does not change the window until the window server has composited its first frame, when its occlusion state becomes
+    // visible (same as capture_cycles_test).
+    until(@"the window is visible", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0; });
     check(onScreen(), @"the window server shows the capture window");
-    // Does not change the window until the first composited frame is stable (same as capture_cycles_test).
-    spin(3);
     double scale = window.backingScaleFactor;
 
     // A changed window is committed at the next screen update and presented at the update after that. Returns the target
@@ -60,10 +59,8 @@ int main(void) { @autoreleasepool {
         SPPresentation *presentation = [[SPPresentation new] autorelease];
         CADisplayLink *link = [window.contentView displayLinkWithTarget:presentation selector:@selector(tick:)];
         [link addToRunLoop:NSRunLoop.currentRunLoop forMode:NSDefaultRunLoopMode];
-        NSDate *presented = [NSDate dateWithTimeIntervalSinceNow:10];
-        while (presentation.ticks < 2 && presented.timeIntervalSinceNow > 0) spin(0.005);
+        until(@"the second display link callback", ^BOOL { return presentation.ticks >= 2; });
         [link invalidate];
-        check(presentation.ticks >= 2, [NSString stringWithFormat:@"the display link reports the next presentation (%d ticks)", presentation.ticks]);
         return presentation.target;
     };
     // Checks that the index-th (from 1) frame of a recording holds the window size points in device pixels. Frame numbers continue
@@ -163,8 +160,7 @@ int main(void) { @autoreleasepool {
         [asyncStopSink stopDisplayLinkObservation];
         [asyncStopSink release];
     });
-    NSDate *invalidationDeadline = [NSDate dateWithTimeIntervalSinceNow:2];
-    while (!captureSink.displayLinkInvalidated && invalidationDeadline.timeIntervalSinceNow > 0) spin(0.005);
+    until(@"the display link invalidation on the main queue", ^BOOL { return captureSink.displayLinkInvalidated; });
     check(captureSink.displayLink == nil && captureSink.displayLinkStopped && captureSink.displayLinkInvalidated,
         @"background capture stop completes main-run-loop display-link invalidation without blocking the window thread");
     check(!NSApp.isActive, @"recording does not activate the application");
