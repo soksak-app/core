@@ -11,6 +11,7 @@
 #import <objc/runtime.h>
 #import "input_inject.h"
 #import "input_press_context.h"
+#import "support/event_wait.h"
 #import "webview_input.h"
 
 static int failures;
@@ -18,14 +19,59 @@ static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-static void spin(double seconds) { [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:seconds]]; }
-static void until(BOOL (^done)(void)) { for (int i = 0; i < 500 && !done(); i++) spin(0.01); }
 static id evaluate(WKWebView *view, NSString *script) {
     __block id out = nil;
     __block BOOL done = NO;
     [view evaluateJavaScript:script completionHandler:^(id result, NSError *error) { out = [(error ? error.localizedDescription : result) retain]; done = YES; }];
-    until(^BOOL { return done; });
+    eventWait([@"JavaScript answers " stringByAppendingString:script], ^BOOL { return done; });
     return [out autorelease];
+}
+// The navigation delegate of a page that a check loads. It is kept on its web view, which does not retain its delegate.
+@interface SPPageLoad : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPPageLoad
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
+static char pageLoadKey;
+
+// Loads html into view and keeps a navigation delegate that hears when the navigation finishes.
+static void loadPage(WKWebView *view, NSString *html) {
+    SPPageLoad *load = [[[SPPageLoad alloc] init] autorelease];
+    objc_setAssociatedObject(view, &pageLoadKey, load, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    view.navigationDelegate = load;
+    [view loadHTMLString:html baseURL:nil];
+}
+
+// Waits until the navigation that loadPage started on view finishes, so the scripts of the document have run.
+static void awaitLoad(WKWebView *view) {
+    SPPageLoad *load = objc_getAssociatedObject(view, &pageLoadKey);
+    eventWait(@"the navigation of the page finishes", ^BOOL { return load.finished; });
+    view.navigationDelegate = nil;
+}
+
+// Waits until the page of view holds condition, a JavaScript expression. The page judges condition at once and again at each
+// event of one of types that reaches its window. A listener of the capture phase runs after the capture listeners that the
+// page added before; a listener of the bubble phase runs after every capture listener and after the bubble listeners of the
+// window that the page added before. So the wait ends at the event of the page that makes condition hold.
+static void awaitPage(WKWebView *view, NSString *what, NSArray<NSString *> *types, BOOL capture, NSString *condition) {
+    NSString *body = [NSString stringWithFormat:@"if (%@) return true;"
+        "await new Promise(resolve => {"
+        " const heard = () => { if (%@) { for (const type of eventTypes) removeEventListener(type, heard, capture); resolve(); } };"
+        " for (const type of eventTypes) addEventListener(type, heard, capture); });"
+        "return true;", condition, condition];
+    __block BOOL done = NO;
+    [view callAsyncJavaScript:body arguments:@{ @"eventTypes": types, @"capture": @(capture) } inFrame:nil
+        inContentWorld:WKContentWorld.pageWorld completionHandler:^(id value, NSError *error) {
+            (void)value;
+            if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+            done = YES;
+        }];
+    eventWait(what, ^BOOL { return done; });
 }
 
 // The answer of one input: its result and, for SP_INPUT_POINTER_HELD, the pointer that holds the press and the reason.
@@ -42,13 +88,15 @@ static void answered(void *context, sp_input_result result, const sp_input_held 
     if (result == SP_INPUT_POINTER_HELD && held && held->pointer) snprintf(answer->holder, sizeof answer->holder, "%s", held->pointer);
     if (result == SP_INPUT_POINTER_HELD && held && held->reason) snprintf(answer->reason, sizeof answer->reason, "%s", held->reason);
     answer->done = YES;
+    // The answer can come from the timer of the receipt limit, which does not end a turn of the run loop.
+    eventWake();
 }
 static SPAnswer lastAnswer;
 static sp_input_result input(NSWindow *window, const char *pointer, double x, double y, int phase, int button) {
     lastAnswer = (SPAnswer){0};
     sp_input_pointer_then(window, pointer, x, y, phase, button, 0, 0, 1, 2, answered, &lastAnswer);
-    until(^BOOL { return lastAnswer.done; });
-    sp_input_result result = lastAnswer.done ? lastAnswer.result : (sp_input_result)-1;
+    eventWait(@"the pointer input answers", ^BOOL { return lastAnswer.done; });
+    sp_input_result result = lastAnswer.result;
     // Each answer is written, so a failing check shows the results that led to it.
     printf("input of %s, phase %d, button %d at %g,%g: result %d %s %s\n", pointer ? pointer : "(null)", phase, button, x, y,
         result, lastAnswer.holder, lastAnswer.reason);
@@ -216,7 +264,7 @@ static void checkWindowEndsItsPress(void) {
         [gone close];
         [gone release];
     }
-    until(^BOOL { return NSEvent.pressedMouseButtons == 2; });
+    eventWait(@"the window that went away ends the press of its pointer", ^BOOL { return NSEvent.pressedMouseButtons == 2; });
     check(NSEvent.pressedMouseButtons == 2, @"a window that goes away ends the press of its pointer");
     check(input(kept, "b", 20, 20, 1, 0) == SP_INPUT_POINTER_HELD && heldBy("a"),
         @"the pointer of the window that went away presses again, and the view that pointer a holds rejects it");
@@ -237,8 +285,8 @@ static WKWebView *makePage(CGFloat shift) {
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)] autorelease];
     window.contentView = view;
     check(webviewInputRegister(view), @"the page registers for pointer input");
-    [view loadHTMLString:PAGE baseURL:nil];
-    until(^BOOL { return [evaluate(view, @"Boolean(window.ready)") boolValue]; });
+    loadPage(view, PAGE);
+    awaitLoad(view);
     [window orderBack:nil];
     return view;
 }
@@ -259,7 +307,8 @@ static void checkTwoPages(void) {
         @"both pointers drag");
     check(input(one, "a", 90, 110, 3, 0) == SP_INPUT_DELIVERED, @"the first page receives the release of pointer a while pointer b holds its press");
     check(input(two, "b", 120, 130, 3, 0) == SP_INPUT_DELIVERED, @"the second page receives the release of pointer b");
-    until(^BOOL { return seen(first).count >= 3 && seen(second).count >= 3; });
+    awaitPage(first, @"the first page receives the gesture of pointer a", @[@"pointerup"], YES, @"seen.length >= 3");
+    awaitPage(second, @"the second page receives the gesture of pointer b", @[@"pointerup"], YES, @"seen.length >= 3");
     NSArray<NSString *> *wantFirst = @[@"pointerdown 50,100 1", @"pointermove 90,110 1", @"pointerup 90,110 0"];
     NSArray<NSString *> *wantSecond = @[@"pointerdown 80,120 1", @"pointermove 120,130 1", @"pointerup 120,130 0"];
     check([seen(first) isEqualToArray:wantFirst], [NSString stringWithFormat:@"the first page sees the gesture of pointer a: %@",
@@ -272,7 +321,10 @@ static void checkTwoPages(void) {
     // buttons of its own pointer while the other pointer holds a press.
     check(input(one, "a", 50, 25, 1, 0) == SP_INPUT_DELIVERED && input(one, "a", 50, 25, 3, 0) == SP_INPUT_DELIVERED,
         @"pointer a focuses the field of the first page");
-    until(^BOOL { return [evaluate(first, @"document.activeElement.id") isEqual:@"field"] && first.inputContext != nil; });
+    awaitPage(first, @"the field of the first page takes the focus", @[@"focus"], YES,
+        @"document.activeElement && document.activeElement.id === 'field'");
+    // The editor state of the focused field reaches the view in a message of WebContent, which gives the view its input context.
+    eventWait(@"the web view of the focused field has an input context", ^BOOL { return first.inputContext != nil; });
     check(first.inputContext != nil, @"the page of the focused field has an input context");
     evaluate(first, @"seen=[]; null");
     check(input(two, "b", 80, 120, 1, 0) == SP_INPUT_DELIVERED, @"pointer b presses the second page");
@@ -280,7 +332,7 @@ static void checkTwoPages(void) {
         && input(one, "a", 70, 25, 3, 0) == SP_INPUT_DELIVERED,
         @"pointer a presses, drags and releases the focused field while pointer b holds its press");
     check(input(two, "b", 80, 120, 3, 0) == SP_INPUT_DELIVERED, @"pointer b releases");
-    until(^BOOL { return seen(first).count >= 3; });
+    awaitPage(first, @"the page of the focused field receives the gesture of pointer a", @[@"pointerup"], YES, @"seen.length >= 3");
     NSArray<NSString *> *wantField = @[@"pointerdown 60,25 1", @"pointermove 70,25 1", @"pointerup 70,25 0"];
     check([seen(first) isEqualToArray:wantField], [NSString stringWithFormat:@"the page of the focused field sees the gesture of pointer a: %@",
         [seen(first) componentsJoinedByString:@"; "]]);
@@ -296,13 +348,13 @@ static NSString *const POINTER_AUDIT = @"window.audit=[];window.counts=[0,0,0,0]
     "addEventListener('pointermove',e=>{if(pressed&&e.buttons===1)counts[1]++;else if(e.buttons!==(pressed?1:0))counts[3]++;audit.push([e.type,e.clientX,e.clientY,e.buttons,...counts]);});"
     "addEventListener('pointerup',e=>{counts[2]++;pressed=false;if(e.buttons!==0)counts[3]++;audit.push([e.type,e.clientX,e.clientY,e.buttons,...counts]);});null;";
 
+// The audit listeners are listeners of the bubble phase of the window, so the wait listens in the bubble phase after them.
 static void checkPageCounts(WKWebView *view, int downs, int drags, int ups, NSString *stage) {
     NSArray *want = @[@(downs), @(drags), @(ups), @0];
-    until(^BOOL {
-        NSArray *counts = evaluate(view, @"counts");
-        return [counts isKindOfClass:NSArray.class] && counts.count == 4 &&
-            ([counts isEqualToArray:want] || [counts[3] intValue] > 0);
-    });
+    awaitPage(view, [NSString stringWithFormat:@"the same-window page counts the %@", stage],
+        @[@"pointerdown", @"pointermove", @"pointerup"], NO,
+        [NSString stringWithFormat:@"Array.isArray(window.counts) && counts.length === 4 && "
+            "((counts[0] === %d && counts[1] === %d && counts[2] === %d && counts[3] === 0) || counts[3] > 0)", downs, drags, ups]);
     id counts = evaluate(view, @"counts");
     id transcript = evaluate(view, @"audit");
     check([counts isEqual:want], [NSString stringWithFormat:@"same-window %@ counts %@ want %@; all page events %@", stage, counts, want, transcript]);
@@ -318,8 +370,8 @@ static void checkTwoPagesInOneWindow(void) {
     WKWebView *right = [[[WKWebView alloc] initWithFrame:NSMakeRect(300, 0, 300, 200)] autorelease];
     [root addSubview:left]; [root addSubview:right];
     check(webviewInputRegister(left) && webviewInputRegister(right), @"same-window pages register pointer input");
-    [left loadHTMLString:PAGE baseURL:nil]; [right loadHTMLString:PAGE baseURL:nil];
-    until(^BOOL { return [evaluate(left, @"Boolean(window.ready)") boolValue] && [evaluate(right, @"Boolean(window.ready)") boolValue]; });
+    loadPage(left, PAGE); loadPage(right, PAGE);
+    awaitLoad(left); awaitLoad(right);
     [window orderBack:nil];
     evaluate(right, POINTER_AUDIT);
     check(input(window, "a", 50, 100, 0, 0) == SP_INPUT_DELIVERED, @"same-window first pointer enters");
@@ -328,8 +380,8 @@ static void checkTwoPagesInOneWindow(void) {
     check(input(window, "a", 50, 100, 3, 0) == SP_INPUT_DELIVERED, @"same-window preflight release");
     // The E2E reloads the first page after its held-hover rejection probe.
     evaluate(left, @"window.ready=false;null;");
-    [left loadHTMLString:PAGE baseURL:nil];
-    until(^BOOL { return [evaluate(left, @"Boolean(window.ready)") boolValue]; });
+    loadPage(left, PAGE);
+    awaitLoad(left);
     evaluate(left, POINTER_AUDIT);
     check(input(window, "a", 50, 100, 1, 0) == SP_INPUT_DELIVERED, @"same-window first page press");
     checkPageCounts(left, 1, 0, 0, @"first press");

@@ -10,8 +10,7 @@
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
 #import <string.h>
-
-static const NSTimeInterval stepLimit = 20;
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -20,20 +19,10 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    return done();
-}
-
-static void failStep(NSString *step, NSString *reason) {
-    fprintf(stderr, "FAIL: step %s: %s\n", step.UTF8String, reason.UTF8String);
-    exit(1);
-}
-
 static int framePort;
+
+// The frame tells its parent that it listens once its script runs, and answers each message with the identifier of the message and
+// the value of its field, so the parent tells the answer of a question from an earlier message.
 
 static void respond(nw_connection_t connection, NSString *request) {
     NSArray<NSString *> *parts = [request componentsSeparatedByString:@" "];
@@ -49,8 +38,9 @@ static void respond(nw_connection_t connection, NSString *request) {
             "<script>window.addEventListener('message', (event) => {"
             "  const field = document.getElementById('field');"
             "  if (event.data.type) { field.value = event.data.type; field.dispatchEvent(new Event('input', {bubbles: true})); }"
-            "  event.source.postMessage({value: field.value}, '*');"
-            "});</script></body>";
+            "  event.source.postMessage({id: event.data.id, value: field.value}, '*');"
+            "});"
+            "parent.postMessage({id: 'ready'}, '*');</script></body>";
     } else if ([path isEqualToString:@"/other"]) {
         body = @"<!doctype html><title>Other</title><body>other</body>";
     } else {
@@ -86,7 +76,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(server);
-    if (!pumpUntil(10, ^BOOL { return ready; })) failStep(@"serve", @"the test server did not start within 10 seconds");
+    eventWait(@"the test server starts", ^BOOL { return ready; });
     return server;
 }
 
@@ -134,25 +124,25 @@ static id evaluate(WKWebView *view, NSString *script) {
             result = [value retain];
             done = YES;
         }];
-    if (!pumpUntil(10, ^BOOL { return done; })) failStep(@"evaluate", @"JavaScript did not answer within 10 seconds");
+    eventWait(@"JavaScript answers", ^BOOL { return done; });
     return [result autorelease];
 }
 
-// Waits until the web view shows the title with its frame loaded and returns the four field values.
+// Waits until the web view shows the title with its frame loaded and returns the four field values. The page learns that the
+// frame listens from the first ready message: the one that the frame sends when its script runs, or the answer of the frame to
+// the ready question when the script ran before the page listened.
 static NSDictionary *fields(WKWebView *view, NSString *step, NSString *type) {
-    if (!pumpUntil(stepLimit, ^BOOL { return [view.title isEqual:@"Form"] && !view.loading; })) {
-        failStep(step, [NSString stringWithFormat:@"the web view did not show the form (title %@)", view.title]);
-    }
+    eventWait([NSString stringWithFormat:@"the web view shows the form at the %@ step", step], ^BOOL {
+        return [view.title isEqual:@"Form"] && !view.loading;
+    });
     NSString *typeLiteral = type ? [NSString stringWithFormat:@"'%@'", type] : @"null";
     NSString *script = [NSString stringWithFormat:
         @"const type = %@;"
         "const frame = document.getElementById('frame');"
-        "if (!frame.contentWindow || frame.dataset.ready !== '1') await new Promise((resolve) => {"
-        "  const ask = () => { frame.contentWindow.postMessage({}, '*'); };"
-        "  const timer = setInterval(ask, 50);"
-        "  window.addEventListener('message', function first() { clearInterval(timer); window.removeEventListener('message', first);"
-        "    frame.dataset.ready = '1'; resolve(); });"
-        "  ask();"
+        "if (frame.dataset.ready !== '1') await new Promise((resolve) => {"
+        "  window.addEventListener('message', function first(event) { if (event.data.id !== 'ready') return;"
+        "    window.removeEventListener('message', first); frame.dataset.ready = '1'; resolve(); });"
+        "  frame.contentWindow.postMessage({id: 'ready'}, '*');"
         "});"
         "const field = document.getElementById('field');"
         "const area = document.getElementById('area');"
@@ -163,9 +153,9 @@ static NSDictionary *fields(WKWebView *view, NSString *step, NSString *type) {
         "  editable.textContent = type + ' editable'; editable.dispatchEvent(new Event('input', {bubbles: true}));"
         "}"
         "const frameValue = await new Promise((resolve) => {"
-        "  window.addEventListener('message', function answer(event) { window.removeEventListener('message', answer);"
-        "    resolve(event.data.value); });"
-        "  frame.contentWindow.postMessage(type ? {type: type + ' frame'} : {}, '*');"
+        "  window.addEventListener('message', function answer(event) { if (event.data.id !== 'value') return;"
+        "    window.removeEventListener('message', answer); resolve(event.data.value); });"
+        "  frame.contentWindow.postMessage(type ? {id: 'value', type: type + ' frame'} : {id: 'value'}, '*');"
         "});"
         "return {input: field.value, area: area.value, editable: editable.textContent, frame: frameValue};", typeLiteral];
     NSDictionary *values = evaluate(view, script);
@@ -175,9 +165,9 @@ static NSDictionary *fields(WKWebView *view, NSString *step, NSString *type) {
 }
 
 static void waitForTitle(WKWebView *view, NSString *step, NSString *title) {
-    if (!pumpUntil(stepLimit, ^BOOL { return [view.title isEqual:title] && !view.loading; })) {
-        failStep(step, [NSString stringWithFormat:@"the web view did not show %@ (title %@)", title, view.title]);
-    }
+    eventWait([NSString stringWithFormat:@"the web view shows %@ at the %@ step", title, step], ^BOOL {
+        return [view.title isEqual:title] && !view.loading;
+    });
 }
 
 int main(void) { @autoreleasepool {

@@ -8,6 +8,7 @@
 #import "input_inject.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -21,15 +22,6 @@ static NSDictionary *latest;
 static void changed(void *context, const char *text) {
     (void)context;
     latest = [[NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:text length:strlen(text)] options:0 error:nil] retain];
-}
-
-/** Runs the main run loop until done returns true; returns false after 10 seconds. */
-static BOOL until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    return done();
 }
 
 int main(void) { @autoreleasepool {
@@ -61,7 +53,7 @@ int main(void) { @autoreleasepool {
     void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
     sp_document_place(document, 0, 0, 0, 0, true);
     check(sp_document_load(document, [NSURL fileURLWithPath:page].absoluteString.UTF8String), @"the region loads the page");
-    check(until(^BOOL{ return [latest[@"title"] isEqual:@"press"] && [latest[@"loading"] isEqual:@NO]; }), @"the page loads");
+    eventWait(@"the page loads", ^BOOL{ return [latest[@"title"] isEqual:@"press"] && [latest[@"loading"] isEqual:@NO]; });
 
     // The main webview holds the keyboard focus, as the page of the surface does before a press in the region.
     [window makeFirstResponder:main];
@@ -71,9 +63,9 @@ int main(void) { @autoreleasepool {
         && sp_input_pointer(window, 120, 10, 2, 0, 0, 0) == SP_INPUT_DELIVERED
         && sp_input_pointer(window, 40, 10, 2, 0, 0, 0) == SP_INPUT_DELIVERED
         && sp_input_pointer(window, 40, 10, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"a native press, drag and release are delivered");
-    BOOL selected = until(^BOOL{ return [latest[@"title"] hasPrefix:@"downs:1 selected:"]
-        && [latest[@"title"] length] > [@"downs:1 selected:" length]; });
-    check(selected, [NSString stringWithFormat:@"the first press reaches the page and the drag selects text: %@", latest[@"title"]]);
+    eventWait(@"the release reaches the page", ^BOOL{ return [latest[@"title"] hasPrefix:@"downs:"]; });
+    check([latest[@"title"] hasPrefix:@"downs:1 selected:"] && [latest[@"title"] length] > [@"downs:1 selected:" length],
+        [NSString stringWithFormat:@"the first press reaches the page and the drag selects text: %@", latest[@"title"]]);
 
     sp_document_close(document);
     sp_surface_close(surface);

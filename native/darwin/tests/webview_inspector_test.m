@@ -11,23 +11,13 @@
 #import "window_facts.h"
 #import "private/webkit.h"
 #import "support/surface_view.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-// Waits while it takes app events and handles them. This check activates the app, and the activation and inspector
-// window events arrive as events.
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
 }
 
 // The surface frame in window coordinates.
@@ -65,7 +55,7 @@ int main(void) { @autoreleasepool {
     [main loadHTMLString:@"<body style='margin:0'>main</body>" baseURL:nil];
     [view loadHTMLString:@"<body style='margin:0'>surface</body>" baseURL:nil];
     [window makeKeyAndOrderFront:nil];
-    until(^BOOL { return !main.loading && !view.loading; });
+    eventWait(@"both documents finish loading", ^BOOL { return !main.loading && !view.loading; });
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL, @"the main webview creates the surface");
     check(SPPlaceSurfaceView(surface, view), @"the surface webview is placed in the surface");
@@ -79,17 +69,19 @@ int main(void) { @autoreleasepool {
     id<SPInspector> inspector = view._inspector;
     check(inspector != nil, @"the surface webview has an inspector");
     [NSApp activateIgnoringOtherApps:YES];
-    until(^BOOL { return NSApp.isActive && window.isKeyWindow; });
+    eventWait(@"the application becomes active with the test window as key window", ^BOOL {
+        return NSApp.isActive && window.isKeyWindow;
+    });
     check(NSApp.isActive && window.isKeyWindow, @"the test window becomes the key window of the active application");
     [inspector connect];
-    until(^BOOL { return inspector.connected; });
+    eventWait(@"the inspector connects", ^BOOL { return inspector.connected; });
     [inspector show];
-    until(^BOOL { return inspector.visible; });
+    eventWait(@"the inspector becomes visible", ^BOOL { return inspector.visible; });
     check(inspector.visible, @"the inspector opens");
 
     // Attaches the inspector to the window. A user does this with the dock button of the inspector.
     [inspector attach];
-    until(^BOOL { return inspector.inspectorWebView.window == window; });
+    eventWait(@"the inspector attaches to the test window", ^BOOL { return inspector.inspectorWebView.window == window; });
     check(inspector.inspectorWebView.window == window, [NSString stringWithFormat:
         @"the inspector attaches to the window (inspector window %@, test window %@, app active %d, key %d)",
         inspector.inspectorWebView.window, window, NSApp.isActive, window.isKeyWindow]);
@@ -98,7 +90,7 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the attached inspector leaves the surface at its place (%@)", describe(attached)]);
 
     [inspector close];
-    until(^BOOL { return !inspector.visible; });
+    eventWait(@"the inspector closes", ^BOOL { return !inspector.visible; });
     NSRect closed = frameOf(surface);
     check(NSEqualRects(closed, placed),
         [NSString stringWithFormat:@"closing the inspector leaves the surface at its place (%@)", describe(closed)]);

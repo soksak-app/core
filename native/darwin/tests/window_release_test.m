@@ -10,6 +10,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "image_region.h"
@@ -27,16 +28,6 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
-}
-
 // Manual reference counting cannot use __weak, so the check uses the weak reference slot of the runtime. The slot
 // becomes nil when the object is released.
 enum { kTracked = 32 };
@@ -44,11 +35,60 @@ static id weakSlots[kTracked];
 static const char *weakNames[kTracked];
 static int trackedCount;
 
+// A tracked object holds a release wake, which the runtime releases when it releases the object. Its release wakes the wait,
+// because a timer or another thread may release the object, and neither of them ends a turn of the run loop.
+@interface ReleaseWake : NSObject
+@end
+
+@implementation ReleaseWake
+- (void)dealloc {
+    eventWake();
+    [super dealloc];
+}
+@end
+
+static char releaseWakeKey;
+
 static void track(const char *name, id object) {
     if (!object) { check(NO, [NSString stringWithFormat:@"%s exists before the window closes", name]); return; }
     weakNames[trackedCount] = name;
     objc_storeWeak(&weakSlots[trackedCount], object);
+    objc_setAssociatedObject(object, &releaseWakeKey, [[ReleaseWake new] autorelease], OBJC_ASSOCIATION_RETAIN);
     trackedCount++;
+}
+
+// The event loop of AppKit drains an autorelease pool at the end of each of its turns. The wait for the release runs the run
+// loop itself, so these observers drain a pool for each run of the run loop: a pool opens when the run loop is entered and
+// drains when it exits, and an object that a source autoreleased in that run is released before the wait judges again.
+enum { kPoolDepth = 64 };
+static NSAutoreleasePool *turnPools[kPoolDepth];
+static int turnDepth;
+
+static void drainEachTurn(CFRunLoopObserverRef *entry, CFRunLoopObserverRef *leave) {
+    *entry = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, kCFRunLoopEntry, true, LONG_MIN,
+        ^(CFRunLoopObserverRef observer, CFRunLoopActivity activity) {
+            (void)observer;
+            (void)activity;
+            if (turnDepth < kPoolDepth) turnPools[turnDepth] = [[NSAutoreleasePool alloc] init];
+            turnDepth++;
+        });
+    *leave = CFRunLoopObserverCreateWithHandler(kCFAllocatorDefault, kCFRunLoopExit, true, LONG_MAX,
+        ^(CFRunLoopObserverRef observer, CFRunLoopActivity activity) {
+            (void)observer;
+            (void)activity;
+            if (turnDepth == 0) return;
+            turnDepth--;
+            if (turnDepth < kPoolDepth) [turnPools[turnDepth] drain];
+        });
+    CFRunLoopAddObserver(CFRunLoopGetMain(), *entry, kCFRunLoopCommonModes);
+    CFRunLoopAddObserver(CFRunLoopGetMain(), *leave, kCFRunLoopCommonModes);
+}
+
+static void endDrain(CFRunLoopObserverRef entry, CFRunLoopObserverRef leave) {
+    CFRunLoopRemoveObserver(CFRunLoopGetMain(), entry, kCFRunLoopCommonModes);
+    CFRunLoopRemoveObserver(CFRunLoopGetMain(), leave, kCFRunLoopCommonModes);
+    CFRelease(entry);
+    CFRelease(leave);
 }
 
 // objc_loadWeak extends the lifetime by putting the object in the autorelease pool, so the check drains the pool
@@ -118,8 +158,8 @@ int main(void) { @autoreleasepool {
         check(webviewInputRegister(main), @"the main webview registers for input");
         [main loadHTMLString:@"<!doctype html><body>main</body>" baseURL:nil];
         [window orderFrontRegardless];
-        until(@"the main page did not load", ^BOOL { return navigation.finished; });
-        until(@"the window was not revealed after the first page", ^BOOL { return window.alphaValue == 1; });
+        eventWait(@"the navigation of the main page finishes", ^BOOL { return navigation.finished; });
+        eventWait(@"the window is revealed after the first page", ^BOOL { return window.alphaValue == 1; });
         releasedReceivers = [[NSMutableArray alloc] init];
         check(sp_window_file_drop(main, fileDropped, fileDropReleased, @"first"), @"the window receives file drops");
         check(sp_window_file_drop(main, fileDropped, fileDropReleased, @"second"), @"the window replaces its file drop receiver");
@@ -158,7 +198,7 @@ int main(void) { @autoreleasepool {
         check(surfaceLayoutCommit(window, 1), @"the layout transaction commits");
         __block BOOL settled = NO;
         surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double displayed, const char *failure) { settled = YES; });
-        until(@"the main page did not settle", ^BOOL { return settled; });
+        eventWait(@"the main page settles", ^BOOL { return settled; });
 
         NSView *composition = main.superview;
         NSView *coordinates = subviewOfClass(composition, @"SPSurfaceCoordinates");
@@ -198,12 +238,10 @@ int main(void) { @autoreleasepool {
         [window close];
         [window release];
     }
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!allReleased() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
-    }
+    CFRunLoopObserverRef poolEntry, poolExit;
+    drainEachTurn(&poolEntry, &poolExit);
+    eventWait(@"the closed window and its native objects are released", ^BOOL { return allReleased(); });
+    endDrain(poolEntry, poolExit);
     check([releasedReceivers isEqualToArray:@[@"first", @"second"]],
         [NSString stringWithFormat:@"the closed window releases its file drop receiver once (released %@)", releasedReceivers]);
     for (int i = 0; i < trackedCount; i++) {

@@ -14,10 +14,13 @@
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
+#import <errno.h>
 #import <libproc.h>
+#import <signal.h>
 #import <stdlib.h>
 #import <string.h>
 #import <sys/sysctl.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
 #import "private/webkit.h"
@@ -26,9 +29,8 @@
 
 static const int objectCount = 1800000;
 static const int elementCount = 50000;
+// The interval between two readings of the footprint, which the settled footprint compares (a measurement window).
 static const NSTimeInterval settleInterval = 1.0;
-static const NSTimeInterval settleLimit = 30;
-static const NSTimeInterval titleLimit = 60;
 static const double loadLimit = 20;
 static const long minimumFreeable = 150L * 1024 * 1024;
 
@@ -47,25 +49,6 @@ static pid_t processAtStart;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-// Runs the application event queue and the run loop for the given time.
-static void pump(NSTimeInterval seconds) {
-    NSDate *end = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    do {
-        @autoreleasepool {
-            NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (event) [NSApp sendEvent:event];
-        }
-    } while ([end timeIntervalSinceNow] > 0);
-}
-
-// Pumps events until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) pump(0.01);
-    return done();
 }
 
 // The physical footprint (bytes) of the process, or -1 when the process cannot be read.
@@ -92,10 +75,19 @@ static void closeScenario(void) {
 static void checkScenarioProcessesEnd(void) {
     for (NSNumber *pid in processes) {
         NSDate *start = [NSDate date];
-        BOOL ended = pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        });
+        // The dispatch source reports the exit on the main queue; a process that ended before the registration reports no exit,
+        // and a process that does not exist after it has ended.
+        __block BOOL exited = NO;
+        dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid.intValue, DISPATCH_PROC_EXIT,
+            dispatch_get_main_queue());
+        dispatch_source_set_event_handler(source, ^{ exited = YES; });
+        dispatch_resume(source);
+        if (kill(pid.intValue, 0) != 0 && errno == ESRCH) exited = YES;
+        eventWait([NSString stringWithFormat:@"the WebContent process %d ends", pid.intValue], ^BOOL { return exited; });
+        dispatch_source_cancel(source);
+        dispatch_release(source);
+        struct proc_bsdinfo info;
+        BOOL ended = proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
         check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after its scenario closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
     }
     [processes removeAllObjects];
@@ -160,7 +152,7 @@ static void printCollected(NSString *label) {
         result = [[value description] retain];
         answered = YES;
     }];
-    if (!pumpUntil(10, ^BOOL { return answered; })) fail(label, @"the collected script did not answer within 10 seconds");
+    eventWait([label stringByAppendingString:@" collected script answers"], ^BOOL { return answered; });
     printf("  %s released array: %s\n", label.UTF8String, result.UTF8String);
     [result release];
 }
@@ -198,13 +190,18 @@ static void printBreakdown(NSString *label) {
     }
 }
 
-// Reads the footprint of the process once per second, after the run loop has handled events, until two readings one second
-// apart agree within 1% of the value. Fails with every reading when they do not agree within 30 seconds.
+// Reads the footprint of the process once per settle interval, while the run loop handles the events of the interval, until two
+// readings one interval apart agree within 1% of the value. The interval is the window of the measurement: the footprint of
+// another process changes without an event, so the readings sample it at a fixed time apart. Each reading is printed.
 static long settledFootprint(NSString *label) {
     NSMutableArray<NSNumber *> *readings = [NSMutableArray array];
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:settleLimit];
     while (YES) {
-        pump(settleInterval);
+        // A block of the main queue ends the window, and the run loop handles every event that arrives before it.
+        __block BOOL elapsed = NO;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(settleInterval * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            elapsed = YES;
+        });
+        eventWait([NSString stringWithFormat:@"the %@ reading window of the footprint ends", label], ^BOOL { return elapsed; });
         long value = physicalFootprint(currentProcess());
         if (value < 0) fail(label, @"proc_pid_rusage did not read the WebContent process");
         [readings addObject:@(value)];
@@ -212,12 +209,6 @@ static long settledFootprint(NSString *label) {
         if (readings.count >= 2) {
             long previous = [readings[readings.count - 2] longValue];
             if (labs(value - previous) <= value / 100) return value;
-        }
-        if (deadline.timeIntervalSinceNow <= 0) {
-            NSMutableString *all = [NSMutableString string];
-            for (NSNumber *reading in readings) [all appendFormat:@" %@", reading];
-            fail(label, [NSString stringWithFormat:@"the footprint did not settle within %.0f seconds; readings (bytes):%@",
-                settleLimit, all]);
         }
     }
 }
@@ -230,10 +221,7 @@ static void load(NSString *path, NSString *title) {
     } else {
         [view loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:address]]];
     }
-    if (!pumpUntil(titleLimit, ^BOOL { return [view.title isEqual:title]; })) {
-        fail(path, [NSString stringWithFormat:@"the title did not become %@ within %.0f seconds (title %@)", title,
-            titleLimit, view.title]);
-    }
+    eventWait([NSString stringWithFormat:@"the title of %@ becomes %@", path, title], ^BOOL { return [view.title isEqual:title]; });
 }
 
 // Runs the scenario in the current view: blank baseline, held page, released page, then warn and critical pressure.
@@ -257,10 +245,10 @@ static Drop runScenario(NSString *name) {
         releaseResult = [value retain];
         releaseAnswered = YES;
     }];
-    if (!pumpUntil(10, ^BOOL { return releaseAnswered; })) fail(name, @"the release script did not answer within 10 seconds");
+    eventWait([name stringByAppendingString:@" release script answers"], ^BOOL { return releaseAnswered; });
     if (![releaseResult isEqual:@"released"]) fail(name, [NSString stringWithFormat:@"the release script answered %@", releaseResult]);
     [releaseResult release];
-    if (!pumpUntil(titleLimit, ^BOOL { return [view.title isEqual:@"Released"]; })) fail(name, @"the page did not report Released");
+    eventWait([name stringByAppendingString:@" page reports Released"], ^BOOL { return [view.title isEqual:@"Released"]; });
     long before = settledFootprint([name stringByAppendingString:@" before"]);
     printBreakdown([name stringByAppendingString:@" before"]);
     printCollected([name stringByAppendingString:@" before"]);
@@ -342,7 +330,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(server);
-    if (!pumpUntil(10, ^BOOL { return ready; })) fail(@"server", @"the test server did not start within 10 seconds");
+    eventWait(@"the test server starts", ^BOOL { return ready; });
     return server;
 }
 

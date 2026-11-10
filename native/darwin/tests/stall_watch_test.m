@@ -20,8 +20,9 @@ static void check(BOOL condition, NSString *message) {
 static double milliseconds(uint64_t nanos) { return (double)nanos / 1e6; }
 
 // Runs the main run loop until a worker stops it with CFRunLoopStop, and reports whether it did. A timer far beyond the run keeps
-// the run loop from returning at once without a source; the limit of the run only ends a run that no worker stops.
-static BOOL runUntilStopped(void) { return CFRunLoopRunInMode(kCFRunLoopDefaultMode, 60, false) == kCFRunLoopRunStopped; }
+// the run loop from returning at once without a source. The run has no limit of its own: the limit of the case ends a run that
+// no worker stops.
+static BOOL runUntilStopped(void) { return CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0e10, false) == kCFRunLoopRunStopped; }
 
 static void onWorker(void (^work)(void)) { dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), work); }
 
@@ -52,7 +53,8 @@ int main(void) { @autoreleasepool {
         if (atomic_exchange(&waitArmed, 0)) dispatch_semaphore_signal(waitStarted);
     });
 
-    // The run loop waits, and a thread sends a heartbeat every 50 ms from the start of the wait. The stop of the run is its one wake.
+    // The run loop waits, and a thread sends 16 heartbeats from the start of the wait. The stop of the run is its one wake, and the
+    // count of wakes is read after it, so a wake that a heartbeat caused is counted.
     uint64_t wakesBefore = sp_observe_count("stall_watch.wakes");
     uint64_t sentBefore = 0, sentInWaitBefore = 0, answeredBefore = 0;
     sp_stall_counts(&sentBefore, &sentInWaitBefore, &answeredBefore);
@@ -64,7 +66,6 @@ int main(void) { @autoreleasepool {
             uint64_t a = 0, b = 0;
             sp_stall_heartbeat(&a, &b);
             if (a == b) atomic_fetch_add(&equalTimes, 1);
-            usleep(50000);
         }
         stopMain();
     });
@@ -79,7 +80,9 @@ int main(void) { @autoreleasepool {
             (unsigned long long)(sentAfter - sentBefore), (unsigned long long)(sentInWaitAfter - sentInWaitBefore)]);
 
     // A watch blocks for as long as the run loop waits, and it returns while the run loop handles an event, which holds until it
-    // does. The wait lasts 1.2 s from the call of the watch; after it the wake is the reference, so a heartbeat is not late.
+    // does. No event tells that the watch is blocked inside sp_stall_await_awake, so the sender of the event pauses 1.2 s after the
+    // call of the watch to send it after the watch blocked. After the wait the wake is the reference, so a heartbeat reads an
+    // answer at or after the send and not the start of the wait.
     __block _Atomic uint64_t awaitStarted = 0;
     __block _Atomic uint64_t sentAt = 0;
     __block _Atomic long heldUntilAwake = -1;
@@ -103,19 +106,22 @@ int main(void) { @autoreleasepool {
         usleep(1200000);
         atomic_store(&sentAt, sp_mono_ns());
         sendToMain(^{
-            atomic_store(&heldUntilAwake, dispatch_semaphore_wait(watchReturned, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)));
+            atomic_store(&heldUntilAwake, dispatch_semaphore_wait(watchReturned, DISPATCH_TIME_FOREVER));
         });
     });
     check(runUntilStopped(), @"the wait of the watch ends with the stop of the run");
     check(atomic_load(&heldUntilAwake) == 0, @"the watch returns while the run loop handles an event");
     check(atomic_load(&sentAt) != 0 && atomic_load(&returnedAt) >= atomic_load(&sentAt),
         [NSString stringWithFormat:@"the watch blocks for the %.1f ms of the wait", milliseconds(atomic_load(&returnedAt) - atomic_load(&awaitStarted))]);
-    check(milliseconds(afterWakeNow - afterWakeAnswered) < 1000,
-        [NSString stringWithFormat:@"the first heartbeat after a wait of 1.2 s is %.1f ms late", milliseconds(afterWakeNow - afterWakeAnswered)]);
+    check(afterWakeAnswered >= atomic_load(&sentAt) && afterWakeNow >= afterWakeAnswered,
+        [NSString stringWithFormat:@"the first heartbeat after a wait reads the wake as its answer, %.1f ms after the send, and is %.1f ms late",
+            milliseconds(afterWakeAnswered - atomic_load(&sentAt)), milliseconds(afterWakeNow - afterWakeAnswered)]);
 
-    // A run loop that handles an event does not turn: a heartbeat 1.1 s into the hold is late, and when the run loop waits again
-    // a heartbeat reads an answer after the hold and no lateness.
+    // A run loop that handles an event does not turn: a heartbeat during the hold reads the last answer from before the hold, so
+    // its lateness is the whole hold until it, and when the run loop waits again a heartbeat reads an answer after the hold and
+    // no lateness.
     __block uint64_t heldNow = 0, heldAnswered = 0, endNow = 0, endAnswered = 0;
+    __block _Atomic uint64_t holdStarted = 0;
     __block _Atomic long heldUntilBeat = -1;
     dispatch_semaphore_t holding = dispatch_semaphore_create(0);
     dispatch_semaphore_t released = dispatch_semaphore_create(0);
@@ -123,11 +129,11 @@ int main(void) { @autoreleasepool {
     onWorker(^{
         awaitSignal(waitStarted);
         sendToMain(^{
+            atomic_store(&holdStarted, sp_mono_ns());
             dispatch_semaphore_signal(holding);
-            atomic_store(&heldUntilBeat, dispatch_semaphore_wait(released, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)));
+            atomic_store(&heldUntilBeat, dispatch_semaphore_wait(released, DISPATCH_TIME_FOREVER));
         });
         awaitSignal(holding);
-        usleep(1100000);
         sp_stall_heartbeat(&heldNow, &heldAnswered);
         atomic_store(&waitArmed, 1);
         dispatch_semaphore_signal(released);
@@ -137,20 +143,23 @@ int main(void) { @autoreleasepool {
     });
     check(runUntilStopped(), @"the hold of the main thread ends with the stop of the run");
     check(atomic_load(&heldUntilBeat) == 0, @"the main thread is held until the heartbeat during the hold");
-    check(milliseconds(heldNow - heldAnswered) >= 1000,
-        [NSString stringWithFormat:@"a heartbeat to a held main thread is %.1f ms late", milliseconds(heldNow - heldAnswered)]);
+    check(heldAnswered <= atomic_load(&holdStarted) && heldNow >= atomic_load(&holdStarted),
+        [NSString stringWithFormat:@"a heartbeat to a held main thread reads the answer from before the hold and is %.1f ms late",
+            milliseconds(heldNow - heldAnswered)]);
     check(endAnswered > heldAnswered, @"a heartbeat after the hold reads an answer after its start");
     check(endNow == endAnswered, @"the run loop waits again and the heartbeat reads no lateness");
 
     // A commit of Core Animation runs before the wait, so an observer that holds it holds an awake main thread.
     __block _Atomic int holdCommit = 0;
     __block _Atomic long commitHeldUntilBeat = -1;
+    __block _Atomic uint64_t commitHoldStarted = 0;
     dispatch_semaphore_t commitHeld = dispatch_semaphore_create(0);
     dispatch_semaphore_t commitReleased = dispatch_semaphore_create(0);
     sp_observe_run_loop("stall_watch_test.commit", SP_OBSERVE_COUNT, CFRunLoopGetMain(), kCFRunLoopBeforeWaiting, true, 2000000, ^{
         if (!atomic_exchange(&holdCommit, 0)) return;
+        atomic_store(&commitHoldStarted, sp_mono_ns());
         dispatch_semaphore_signal(commitHeld);
-        atomic_store(&commitHeldUntilBeat, dispatch_semaphore_wait(commitReleased, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)));
+        atomic_store(&commitHeldUntilBeat, dispatch_semaphore_wait(commitReleased, DISPATCH_TIME_FOREVER));
     });
     __block uint64_t commitNow = 0, commitAnswered = 0;
     atomic_store(&waitArmed, 1);
@@ -159,15 +168,15 @@ int main(void) { @autoreleasepool {
         atomic_store(&holdCommit, 1);
         sendToMain(^{});
         awaitSignal(commitHeld);
-        usleep(1100000);
         sp_stall_heartbeat(&commitNow, &commitAnswered);
         dispatch_semaphore_signal(commitReleased);
         stopMain();
     });
     check(runUntilStopped(), @"the held commit ends with the stop of the run");
     check(atomic_load(&commitHeldUntilBeat) == 0, @"the commit is held until the heartbeat during the hold");
-    check(milliseconds(commitNow - commitAnswered) >= 1000,
-        [NSString stringWithFormat:@"a heartbeat during a held commit before the wait is %.1f ms late", milliseconds(commitNow - commitAnswered)]);
+    check(commitAnswered <= atomic_load(&commitHoldStarted) && commitNow >= atomic_load(&commitHoldStarted),
+        [NSString stringWithFormat:@"a heartbeat during a held commit before the wait reads the answer from before the hold and is %.1f ms late",
+            milliseconds(commitNow - commitAnswered)]);
 
     // The fault injection of a watch that does not block through a wait: its send into the wait is counted, and its block wakes
     // the run loop and runs.

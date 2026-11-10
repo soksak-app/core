@@ -8,21 +8,10 @@
 #import "input_inject.h"
 #import "webview_input.h"
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 static void require(BOOL condition, NSString *message) {
     if (!condition) { fprintf(stderr, "FAIL: %s\n", message.UTF8String); exit(1); }
-}
-
-// The activation notification arrives as an application event, so the check waits while it takes events and handles
-// them.
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
-            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
-    require(done(), @"WebKit did not answer within 10 seconds");
 }
 
 static id evaluate(WKWebView *view, NSString *script) {
@@ -33,7 +22,7 @@ static id evaluate(WKWebView *view, NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    until(^BOOL { return done; });
+    eventWait(@"the page answers the evaluation", ^BOOL { return done; });
     return [result autorelease];
 }
 
@@ -41,7 +30,7 @@ static void drain(WKWebView *view) {
     __block BOOL done = NO;
     require([view respondsToSelector:@selector(_doAfterProcessingAllPendingMouseEvents:)], @"WebKit has no native mouse-event barrier");
     [view _doAfterProcessingAllPendingMouseEvents:^{ done = YES; }];
-    until(^BOOL { return done; });
+    eventWait(@"WebKit processes all pending mouse events", ^BOOL { return done; });
 }
 
 typedef struct { BOOL done; sp_activate_result result; char frontmost[256]; } SPActivation;
@@ -80,7 +69,8 @@ static void deliver(NSWindow *window, NSArray *views, NSPoint point, BOOL baseli
     // event to the topmost registered WebKit observer at that point. Delivering to every observer would bypass the
     // native z-order and count overlapping pages twice.
     [NSApp postEvent:event atStart:NO];
-    NSEvent *posted = [NSApp nextEventMatchingMask:NSEventMaskMouseMoved untilDate:[NSDate dateWithTimeIntervalSinceNow:1]
+    // The posted event is in the queue, so taking it waits for no other event.
+    NSEvent *posted = [NSApp nextEventMatchingMask:NSEventMaskMouseMoved untilDate:NSDate.distantFuture
         inMode:NSDefaultRunLoopMode dequeue:YES];
     require(posted != nil, @"AppKit did not dequeue the test mouse event");
     [NSApp sendEvent:posted];
@@ -114,7 +104,7 @@ static void expectMoves(NSArray *views, NSArray *expected, NSString *stage) {
 static void settle(WKWebView *view) {
     __block BOOL done = NO;
     [view _doAfterActivityStateUpdate:^{ done = YES; }];
-    until(^BOOL { return done; });
+    eventWait(@"WebKit sends the activity state of the view", ^BOOL { return done; });
 }
 
 static void reset(NSArray *views) {
@@ -132,6 +122,18 @@ static NSEvent *crossed(NSWindow *window, NSEventType type, NSPoint point) {
 }
 
 static int orderFailures = 0;
+
+// Notes when the navigation of the document finishes; the script of the document has run then.
+@interface SPLoaded : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@end
+@implementation SPLoaded
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    (void)view;
+    (void)navigation;
+    self.finished = YES;
+}
+@end
 
 static void expectHover(NSArray *views, NSArray *expected, NSString *stage) {
     NSMutableArray *actual = [NSMutableArray array];
@@ -224,23 +226,32 @@ int main(int argc, const char **argv) { @autoreleasepool {
     NSArray *views = @[bottom, top];
     NSString *html = @"<!doctype html><style>html,body{margin:0;width:100%;height:100%;user-select:none}</style>"
         "<input id='field'><script>window.probe={moves:0};addEventListener('mousemove',()=>probe.moves++);</script>";
+    NSMutableArray<SPLoaded *> *loads = [NSMutableArray array];
     for (WKWebView *view in views) {
         [window.contentView addSubview:view];
         if (!baseline) require(webviewInputRegister(view), @"required webview pointer-input API is unavailable");
+        SPLoaded *loaded = [[SPLoaded new] autorelease];
+        [loads addObject:loaded];
+        view.navigationDelegate = loaded;
         [view loadHTMLString:html baseURL:nil];
     }
     [window orderFront:nil];
-    for (WKWebView *view in views) until(^BOOL { return [evaluate(view, @"Boolean(window.probe)") boolValue]; });
+    for (NSUInteger i = 0; i < views.count; i++) {
+        SPLoaded *loaded = loads[i];
+        eventWait(@"the navigation of the document finishes", ^BOOL { return loaded.finished; });
+        [views[i] setNavigationDelegate:nil];
+        require([evaluate(views[i], @"Boolean(window.probe)") boolValue], @"the document defines its probe");
+    }
     __block SPActivation activation = {NO, SP_ACTIVATE_DONE, ""};
     sp_input_activate(window, 5, activated, &activation);
-    until(^BOOL { return activation.done; });
+    eventWait(@"the activation of the window ends", ^BOOL { return activation.done; });
     require(activation.result == SP_ACTIVATE_DONE, [NSString stringWithFormat:
         @"the window did not become the key window of the active application (%d, frontmost %s)",
         activation.result, activation.frontmost]);
     for (WKWebView *view in views) {
         __block BOOL painted = NO;
         [view _doAfterNextPresentationUpdate:^{ painted = YES; }];
-        until(^BOOL { return painted; });
+        eventWait(@"the next presentation of the view", ^BOOL { return painted; });
     }
     reset(views);
     move(window, views, NSMakePoint(300,150), baseline, nil);
@@ -283,11 +294,25 @@ int main(int argc, const char **argv) { @autoreleasepool {
         move(window, views, NSMakePoint(400,150), baseline, nil);
         require(window.firstResponder == top || [(NSView *)window.firstResponder isDescendantOf:top], @"pointer movement stole keyboard focus");
         printf("PASS: pointer movement preserves keyboard focus\n");
+        // The page answers at the input event of the field. The listener is sent to the web process before the key, so it
+        // is in place when the key arrives.
+        __block BOOL typed = NO;
+        __block id typedValue = nil;
+        [top callAsyncJavaScript:@"const field = document.getElementById('field');"
+            "if (field.value !== 'a') await new Promise(resolve => field.addEventListener('input', resolve, {once: true}));"
+            "return field.value;"
+            arguments:nil inFrame:nil inContentWorld:WKContentWorld.pageWorld completionHandler:^(id value, NSError *error) {
+                if (error) fprintf(stderr, "JavaScript: %s\n", error.localizedDescription.UTF8String);
+                typedValue = [value retain];
+                typed = YES;
+            }];
         NSEvent *key = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
             timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil
             characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0];
         [window sendEvent:key];
-        until(^BOOL { return [evaluate(top, @"document.getElementById('field').value") isEqual:@"a"]; });
+        eventWait(@"the field of the page receives the key", ^BOOL { return typed; });
+        require([typedValue isEqual:@"a"], [NSString stringWithFormat:@"the key reaches the field (got %@)", typedValue]);
+        [typedValue release];
         printf("PASS: pointer on another view does not block keyboard input\n");
 
         top.frame = NSMakeRect(200,50,250,250);

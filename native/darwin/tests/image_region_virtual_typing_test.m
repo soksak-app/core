@@ -13,6 +13,7 @@
 #import "input_virtual.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static int failures;
 static void check(BOOL ok, NSString *message) {
@@ -62,23 +63,36 @@ static BOOL choose(NSString *identifier) {
     return chosenSource != NULL;
 }
 
+// The subtype of the application event that marks the end of the turns of a key in the event queue of the application.
+static const short turnMarkSubtype = 0x7471;
+static long turnMarksSent, turnMarksSeen;
+
+// The monitor that sees each turn mark when the application sends it, and ends it there.
+static id watchTurnMarks(void) {
+    return [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskApplicationDefined handler:^NSEvent *(NSEvent *event) {
+        if (event.subtype != turnMarkSubtype) return event;
+        turnMarksSeen = event.data1;
+        return nil;
+    }];
+}
+
 static void type(NSWindow *window, const char *key, const char *text) {
     [transactions removeAllObjects];
     BOOL down = sp_input_key(window, key, text, 0, true) == SP_INPUT_DELIVERED;
     BOOL up = sp_input_key(window, key, text, 0, false) == SP_INPUT_DELIVERED;
     check(down && up, [NSString stringWithFormat:@"the key %s is delivered", key]);
-    // A key takes its turn of the event queue of the application.
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.2];
-    while (until.timeIntervalSinceNow > 0) {
-        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01]
-            inMode:NSDefaultRunLoopMode dequeue:YES];
-        if (event) [NSApp sendEvent:event];
-    }
+    // A key takes its turn of the event queue of the application. A mark posted after the key comes out of the queue after
+    // every turn that the key put in it, so what the key typed or refused is known when the application sends the mark.
+    long mark = ++turnMarksSent;
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0
+        timestamp:0 windowNumber:0 context:nil subtype:turnMarkSubtype data1:mark data2:0] atStart:NO];
+    eventWait(@"the application sends the mark that follows the turns of the key", ^BOOL { return turnMarksSeen == mark; });
 }
 
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     transactions = [NSMutableArray array];
+    id turnMarks = watchTurnMarks();
     // The correlation identifiers of the inputs are <boot>.<n>; the host gives the boot identifier of its run.
     check(sp_event_set_boot("test-native"), @"the boot identifier of the run is accepted");
     Method method = class_getInstanceMethod(NSClassFromString(@"SPImageRegion"), @selector(copyVirtualInputSource));
@@ -97,7 +111,6 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(surface, false);
     void *region = sp_region_create(surface, "view", regionEvent, NULL);
     sp_region_place(region, 0, 0, 0, 0, true);
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
     sp_region_focus(region);
     check(window.firstResponder == (NSResponder *)region, @"the region holds the keyboard of the window");
 
@@ -121,7 +134,6 @@ int main(void) { @autoreleasepool {
     sp_region_close(region);
     region = sp_region_create(surface, "view", regionEvent, NULL);
     sp_region_place(region, 0, 0, 0, 0, true);
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
     sp_region_focus(region);
     if (choose(@"com.apple.keylayout.ABC")) {
         type(window, "q", NULL);
@@ -142,6 +154,7 @@ int main(void) { @autoreleasepool {
     }
 
     sp_region_close(region);
+    [NSEvent removeMonitor:turnMarks];
     [window close];
     [window release];
     return failures == 0 ? 0 : 1;

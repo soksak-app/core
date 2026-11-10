@@ -13055,9 +13055,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-95",
-    implementation: [{ file: "native/darwin/tests/view_focus_test.m", symbol: "static BOOL waitFor(" }],
-    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "waitFor dispatches a queued AppKit application event" }],
-    expected: "The view-focus wait dispatches queued AppKit application events while waiting.",
+    implementation: [{ file: "native/darwin/tests/support/event_wait.m", symbol: "void eventWait(NSString *what, BOOL (^done)(void)) {" }],
+    tests: [{ file: "native/darwin/tests/view_focus_test.m", id: "the wait dispatches a queued AppKit application event" }],
+    expected: "The wait of the native checks dispatches queued AppKit application events while waiting.",
     levels: ["native"],
   },
   {

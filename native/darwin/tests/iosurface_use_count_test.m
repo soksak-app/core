@@ -7,6 +7,7 @@
 #import <CoreVideo/CoreVideo.h>
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
+#import "support/event_wait.h"
 
 static int failures = 0;
 
@@ -15,16 +16,36 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Pumps the run loop, one pool per turn, until done() holds or the limit passes. Returns done().
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
-        }
-    }
-    return done();
+// Waits until done() holds, with an autorelease pool for each turn of the run loop: the condition drains the pool of the turn
+// before it judges, so the objects that a turn autoreleases are released at its end, as a turn of NSApp run does.
+static void waitTurns(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *turn = [[NSAutoreleasePool alloc] init];
+    eventWait(what, ^BOOL {
+        [turn drain];
+        turn = [[NSAutoreleasePool alloc] init];
+        return done();
+    });
+    [turn drain];
 }
+
+// Counts the refreshes of the display. Each refresh is a source of the main run loop, so a wait for a mark that the window
+// server sets or clears, which no source of this process reports, judges the mark again at each refresh.
+@interface SPRefreshes : NSObject
+@property(nonatomic) NSUInteger ticks;
+- (void)tick:(CADisplayLink *)link;
+@end
+
+@implementation SPRefreshes
+- (void)tick:(CADisplayLink *)link {
+    (void)link;
+    self.ticks++;
+}
+@end
+
+// The refreshes after the replacing surface is in use during which the mark of the replaced surface is watched without a
+// later presentation. The window server presents at most one frame per refresh, so these refreshes show whether the
+// replacement alone clears the mark.
+static const NSUInteger kReplacedRefreshes = 60;
 
 static IOSurfaceRef createSurface(size_t width, size_t height, uint32_t color) {
     IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{
@@ -70,8 +91,11 @@ int main(int argc, char **argv) { @autoreleasepool {
     layer.frame = view.bounds;
     [view.layer addSublayer:layer];
     [window orderBack:nil];
-    check(pumpUntil(5, ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0 || window.isVisible; }),
-        @"the window is on screen");
+    waitTurns(@"the window is on screen", ^BOOL { return (window.occlusionState & NSWindowOcclusionStateVisible) != 0 || window.isVisible; });
+    check(window.isVisible, @"the window is on screen");
+    SPRefreshes *refreshes = [[SPRefreshes alloc] init];
+    CADisplayLink *link = [[window.screen displayLinkWithTarget:refreshes selector:@selector(tick:)] retain];
+    [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 
     size_t width = (size_t)(240 * window.backingScaleFactor);
     IOSurfaceRef first = createSurface(width, width, 0xFF2060A0);
@@ -87,25 +111,34 @@ int main(int argc, char **argv) { @autoreleasepool {
 
     NSDate *start = [NSDate date];
     present(layer, held);
-    BOOL shown = pumpUntil(5, ^BOOL { return IOSurfaceIsInUse(first); });
-    check(shown, [NSString stringWithFormat:@"the window server marks the presented surface in use (%.3f s)", [NSDate.date timeIntervalSinceDate:start]]);
+    waitTurns(@"the window server marks the presented surface in use", ^BOOL { return IOSurfaceIsInUse(first); });
+    check(IOSurfaceIsInUse(first), [NSString stringWithFormat:@"the window server marks the presented surface in use (%.3f s)", [NSDate.date timeIntervalSinceDate:start]]);
 
     // Another surface replaces it and the host drops its reference, as a lease ends at a committed swap.
     start = [NSDate date];
     present(layer, second);
     CFRelease(held);
-    check(pumpUntil(5, ^BOOL { return IOSurfaceIsInUse(second); }), @"the replacing surface is in use while presented");
-    BOOL clearedByOne = pumpUntil(1, ^BOOL { return !IOSurfaceIsInUse(first); });
-    printf("MEASURE: one replacement %s the mark of the replaced surface within %.3f s\n",
-        clearedByOne ? "cleared" : "did not clear", [NSDate.date timeIntervalSinceDate:start]);
+    waitTurns(@"the window server marks the replacing surface in use", ^BOOL { return IOSurfaceIsInUse(second); });
+    check(IOSurfaceIsInUse(second), @"the replacing surface is in use while presented");
+    NSUInteger replacedAt = refreshes.ticks;
+    waitTurns(@"the mark of the replaced surface clears or the refreshes of the replacement pass", ^BOOL {
+        return !IOSurfaceIsInUse(first) || refreshes.ticks - replacedAt >= kReplacedRefreshes;
+    });
+    BOOL clearedByOne = !IOSurfaceIsInUse(first);
+    printf("MEASURE: one replacement %s the mark of the replaced surface after %lu of %lu refreshes (%.3f s)\n",
+        clearedByOne ? "cleared" : "did not clear", (unsigned long)(refreshes.ticks - replacedAt),
+        (unsigned long)kReplacedRefreshes, [NSDate.date timeIntervalSinceDate:start]);
 
     // A later surface replaces the second one, as the next frame of a supplier does.
     start = [NSDate date];
     present(layer, third);
-    BOOL cleared = pumpUntil(5, ^BOOL { return !IOSurfaceIsInUse(first); });
-    check(cleared, [NSString stringWithFormat:@"the window server clears the mark of a replaced surface once a later surface is presented (%.3f s)",
+    waitTurns(@"the window server clears the mark of the replaced surface", ^BOOL { return !IOSurfaceIsInUse(first); });
+    check(!IOSurfaceIsInUse(first), [NSString stringWithFormat:@"the window server clears the mark of a replaced surface once a later surface is presented (%.3f s)",
         [NSDate.date timeIntervalSinceDate:start]]);
 
+    [link invalidate];
+    [link release];
+    [refreshes release];
     [window orderOut:nil];
     present(layer, NULL);
     CFRelease(first);

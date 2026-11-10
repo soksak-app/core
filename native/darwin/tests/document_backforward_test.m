@@ -18,8 +18,8 @@
 #import "support/records.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
-static const NSTimeInterval stepLimit = 20;
 static const double hiddenDelay = 0.5;
 
 static int failures = 0;
@@ -29,14 +29,47 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static BOOL pumpUntil(NSTimeInterval limit, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        @autoreleasepool {
-            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-        }
+// Waits as eventWait does and drains the references that the turns autoreleased before each judgment, as each turn of the run
+// loop of an application does, so an object that a turn releases ends during the wait.
+static void waitDrained(NSString *what, BOOL (^done)(void)) {
+    __block NSAutoreleasePool *pool = [NSAutoreleasePool new];
+    eventWait(what, ^BOOL {
+        [pool drain];
+        pool = [NSAutoreleasePool new];
+        return done();
+    });
+    [pool drain];
+}
+
+// Waits for the exit of a process that is not a child of the test: a dispatch source of the main queue reports the exit, and a
+// process that ended before the source was registered is absent after the registration.
+static void waitForExit(pid_t pid) {
+    __block BOOL exited = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    if (!source) {
+        fprintf(stderr, "FAIL: the exit observation of the process %d cannot start\n", pid);
+        exit(1);
     }
-    return done();
+    dispatch_source_set_event_handler(source, ^{ exited = YES; });
+    dispatch_resume(source);
+    struct proc_bsdinfo info;
+    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info) exited = YES;
+    waitDrained([NSString stringWithFormat:@"the WebContent process %d exits", pid], ^BOOL { return exited; });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
+}
+
+// Waits until the hidden clear delay that a hide of the region started has ended. The region ends its delay with a block that
+// the main queue runs after the delay; a block that starts after the hide with the same delay runs at that block or after it,
+// and the block that it queues runs after every block of the same turn, so the wait ends after the region judged its delay.
+// Call it right after the hide.
+static void waitForHiddenDelay(void) {
+    __block BOOL ended = NO;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(hiddenDelay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        dispatch_async(dispatch_get_main_queue(), ^{ ended = YES; });
+    });
+    waitDrained(@"the hidden clear delay of the region ends", ^BOOL { return ended; });
 }
 
 static NSDictionary *latest;
@@ -67,16 +100,16 @@ static id evaluate(NSString *script) {
         result = [value retain];
         done = YES;
     }];
-    if (!pumpUntil(10, ^BOOL { return done; })) failStep(@"evaluate", @"JavaScript did not answer within 10 seconds");
+    waitDrained(@"JavaScript answers", ^BOOL { return done; });
     return [result autorelease];
 }
 
 // Waits until the region shows the page and has ended loading, and returns the load identifier of the page.
 static NSString *waitForPage(NSString *step, int page) {
     NSString *title = [NSString stringWithFormat:@"Page %d", page];
-    if (!pumpUntil(stepLimit, ^BOOL { return [latest[@"title"] isEqual:title] && ![latest[@"loading"] boolValue]; })) {
-        failStep(step, [NSString stringWithFormat:@"the region did not show %@ within %.0f seconds", title, stepLimit]);
-    }
+    waitDrained([NSString stringWithFormat:@"step %@: the region shows %@", step, title], ^BOOL {
+        return [latest[@"title"] isEqual:title] && ![latest[@"loading"] boolValue];
+    });
     NSString *identifier = evaluate(@"window.loadId");
     fprintf(stdout, "%s: page %d load identifier %s\n", step.UTF8String, page, identifier.UTF8String);
     return identifier;
@@ -138,10 +171,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(server);
-    if (!pumpUntil(10, ^BOOL { return ready; })) {
-        fprintf(stderr, "FAIL: the test server did not start within 10 seconds\n");
-        exit(1);
-    }
+    waitDrained(@"the test server is ready", ^BOOL { return ready; });
     return server;
 }
 
@@ -200,25 +230,25 @@ int main(void) { @autoreleasepool {
     waitForPage(@"forward to page 2", 2);
     NSArray<NSDictionary *> *hiddenEvents = capturedEvents(^{
         sp_document_place(document, 10, 20, 30, 40, false);
-        pumpUntil(hiddenDelay * 4, ^BOOL { return NO; });
+        waitForHiddenDelay();
     });
     NSArray<NSString *> *hiddenReasons = clearReasons(hiddenEvents);
     check([hiddenReasons isEqualToArray:@[ @"hidden" ]], [NSString stringWithFormat:
-        @"the region hidden for %.1f seconds records one clear with the reason hidden (%@)", hiddenDelay, hiddenReasons]);
+        @"the region hidden for the delay records one clear with the reason hidden (%@)", hiddenReasons]);
     sp_document_place(document, 10, 20, 30, 40, true);
     go(@"back after hidden", 0);
     NSString *afterHidden = waitForPage(@"back after hidden", 1);
     check(![afterHidden isEqualToString:restored], [NSString stringWithFormat:
         @"going back after the hidden clear loads page 1 again (identifier %@, cached %@)", afterHidden, restored]);
 
-    // A region shown for less than the delay keeps the cache.
+    // A region shown again before the delay ends keeps the cache. The show comes in the turn of the hide, so it is before the end
+    // of the delay, and the clear is judged after the delay that the hide started has ended.
     go(@"forward before short hide", 1);
     waitForPage(@"forward before short hide", 2);
     NSArray<NSDictionary *> *shortEvents = capturedEvents(^{
         sp_document_place(document, 10, 20, 30, 40, false);
-        pumpUntil(hiddenDelay / 4, ^BOOL { return NO; });
         sp_document_place(document, 10, 20, 30, 40, true);
-        pumpUntil(hiddenDelay * 2, ^BOOL { return NO; });
+        waitForHiddenDelay();
     });
     check(clearReasons(shortEvents).count == 0, @"a region shown again before the delay records no clear");
     go(@"back after short hide", 0);
@@ -265,11 +295,8 @@ int main(void) { @autoreleasepool {
     // the processes of the back-forward cache included.
     for (NSNumber *pid in processes) {
         NSDate *start = [NSDate date];
-        BOOL ended = pumpUntil(30, ^BOOL {
-            struct proc_bsdinfo info;
-            return proc_pidinfo(pid.intValue, PROC_PIDTBSDINFO, 0, &info, sizeof info) != (int)sizeof info;
-        });
-        check(ended, [NSString stringWithFormat:@"the WebContent process %d ends after the document closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
+        waitForExit(pid.intValue);
+        check(YES, [NSString stringWithFormat:@"the WebContent process %d ends after the document closes (%.3f s)", pid.intValue, -start.timeIntervalSinceNow]);
     }
     nw_listener_cancel(listener);
     printf("%s\n", failures ? "FAIL: document_backforward_test" : "PASS: document_backforward_test");

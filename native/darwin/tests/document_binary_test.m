@@ -12,20 +12,13 @@
 #import "document_view.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 static NSDictionary *latest;
@@ -56,7 +49,7 @@ static NSDictionary *ask(void *document, NSDictionary *command) {
     NSData *json = [NSJSONSerialization dataWithJSONObject:command options:0 error:nil];
     NSString *text = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
     check(sp_document_post(document, text.UTF8String), [NSString stringWithFormat:@"the page receives the command %@", text]);
-    until([NSString stringWithFormat:@"the page answers %@", text], ^BOOL{ return messages.count >= index + 2; });
+    eventWait([NSString stringWithFormat:@"the page answers %@", text], ^BOOL{ return messages.count >= index + 2; });
     return messages[index + 1];
 }
 
@@ -257,7 +250,7 @@ int main(void) { @autoreleasepool {
         sp_document_set_message(document, message, NULL);
         sp_document_place(document, 0, 0, 0, 0, true);
         check(sp_document_load(document, "soksak://probe/ui/binary/index.html"), @"a region loads the binary page");
-        until(@"the binary page runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
+        eventWait(@"the binary page runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
 
         // A 1 MiB upload returns its id and length, and the download returns the same bytes once.
         NSDictionary *uploaded = ask(document, @{ @"run": @"upload", @"size": @(kMiB) });
@@ -364,7 +357,7 @@ int main(void) { @autoreleasepool {
     }
     // The store ends before the check removes its folder, so the network process writes nothing into it afterward.
     sp_document_store_close(store.fileSystemRepresentation, recordStoreClosed, NULL);
-    until(@"the data store ends", ^BOOL{ return storeClosed; });
+    eventWait(@"the data store ends", ^BOOL{ return storeClosed; });
     check(storeError == nil, [NSString stringWithFormat:@"the data store ends without an error: %@", storeError]);
     sp_surface_close(surface);
     [window close];

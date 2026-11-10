@@ -4,20 +4,13 @@
 // headers that WebKit sends. The assertions state the observed behavior that the core root depends on.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
 }
 
 // The page posts its result once: {imported: bool, value | error: string}.
@@ -137,7 +130,7 @@ static BOOL runCase(NSString *label, NSString *corsValue, NSString *page) {
     WKWebView *web = [[[WKWebView alloc] initWithFrame:window.contentView.bounds configuration:configuration] autorelease];
     [window.contentView addSubview:web];
     [web loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[@"soksak://probe/" stringByAppendingString:page]]]];
-    until([NSString stringWithFormat:@"the %@ page posts its result", label], ^BOOL{ return probeResult != nil; });
+    eventWait([NSString stringWithFormat:@"the %@ page posts its result", label], ^BOOL{ return probeResult != nil; });
 
     NSString *moduleOrigin = nil;
     NSString *moduleHeaders = @"none";

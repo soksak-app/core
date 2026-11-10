@@ -1,21 +1,25 @@
 // Checks the contract of sp_document_store_close (native/darwin/src/document_view.h): after the store has ended, no WebKit
 // process writes into its directory, so the folder stays removed. A page loads cacheable resources over HTTP and plays media, the
-// document closes and the store ends at once, while the network cache still holds writes. The check removes the folder and
-// watches it for longer than the network cache delays a write. Before the removal it watches the entries of the folder, which the
-// media cache of the closed document would change. An absent event has no notification, so this check observes
-// for a fixed time and judges only whether the folder came back. A child that leaves its store to the removal of its
-// temporary folder shows that the removal ends the store first, and a child that leaves its document open fails.
+// document closes and the store ends at once, while the network cache still holds writes. The WebContent process of the document,
+// the network process that keeps the network cache and the GPU process that keeps the media cache are the processes that write
+// into the folder. An absent write has no notification, so the check judges the folder after each of those processes has ended:
+// a process that ended writes nothing more. It judges that the entries of the folder stayed the same, which the media cache of
+// the closed document would change, and that the removed folder did not come back. A child that leaves its store to the removal
+// of its temporary folder shows that the removal ends the store first, and a child that leaves its document open fails.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
 #import <WebKit/WebKit.h>
+#include <errno.h>
 #include <removefile.h>
+#include <signal.h>
+#import "support/event_wait.h"
 #import "support/temporary_folder.h"
 #import "document_view.h"
+#import "private/webkit.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 
 static const int resourceCount = 40;
-static const NSTimeInterval observation = 3;
 
 static int failures = 0;
 
@@ -24,15 +28,34 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static void until(NSString *what, BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:20];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
-    if (!done()) {
-        fprintf(stderr, "FAIL: %s within 20 seconds\n", what.UTF8String);
-        exit(1);
-    }
+// The processes of a document that write into the folder of its store; 0 names a process that does not exist, such as the GPU
+// process of a system that plays media in the WebContent process.
+typedef struct {
+    pid_t content;
+    pid_t network;
+    pid_t gpu;
+} Writers;
+
+// Waits for the exit of the process pid, which its dispatch source reports on the main queue.
+static void awaitExit(pid_t pid, NSString *name) {
+    if (pid <= 0) return;
+    __block BOOL ended = NO;
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid, DISPATCH_PROC_EXIT,
+        dispatch_get_main_queue());
+    dispatch_source_set_event_handler(source, ^{ ended = YES; });
+    dispatch_resume(source);
+    // A process that ended before the registration reports no exit, and a process that does not exist after it has ended.
+    if (kill(pid, 0) != 0 && errno == ESRCH) ended = YES;
+    eventWait([NSString stringWithFormat:@"the %@ process %d ends", name, pid], ^BOOL { return ended; });
+    dispatch_source_cancel(source);
+    dispatch_release(source);
+}
+
+// Waits until every process that wrote into the folder of the store has ended, so none of them writes anything more.
+static void awaitWriters(Writers writers) {
+    awaitExit(writers.content, @"WebContent");
+    awaitExit(writers.network, @"network");
+    awaitExit(writers.gpu, @"GPU");
 }
 
 static NSDictionary *latest;
@@ -114,7 +137,7 @@ static nw_listener_t serve(void) {
         if (state == nw_listener_state_ready) ready = YES;
     });
     nw_listener_start(server);
-    until(@"the test server starts", ^BOOL { return ready; });
+    eventWait(@"the test server starts", ^BOOL { return ready; });
     return server;
 }
 
@@ -137,22 +160,24 @@ static void *prepareSurface(void) {
     return surface;
 }
 
-static void *loadPage(void *surface, nw_listener_t listener, NSString *store) {
+// Loads the page, which plays its media, and stores the processes that the loaded document writes with.
+static void *loadPage(void *surface, nw_listener_t listener, NSString *store, Writers *writers) {
     void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
     check(document != NULL, @"a document region is created");
     sp_document_place(document, 0, 0, 0, 0, true);
     NSString *address = [NSString stringWithFormat:@"http://127.0.0.1:%d/page", nw_listener_get_port(listener)];
     check(sp_document_load(document, address.UTF8String), @"the page starts to load");
-    until(@"the page loads its resources", ^BOOL { return [latest[@"title"] isEqual:@"loaded"]; });
+    eventWait(@"the page loads its resources", ^BOOL { return [latest[@"title"] isEqual:@"loaded"]; });
+    WKWebView *view = (WKWebView *)document;
+    *writers = (Writers){ .content = view._webProcessIdentifier, .network = view._networkProcessIdentifier, .gpu = view._gpuProcessIdentifier };
+    check(writers->content > 0 && writers->network > 0,
+        [NSString stringWithFormat:@"the loaded document names its WebContent and network processes (GPU %d): %d %d %d", writers->gpu,
+            writers->content, writers->network, writers->gpu]);
     return document;
 }
 
-// Watches a path for the observation time and returns the entries under it, or nil while it stays absent.
-static NSArray<NSString *> *observeAbsent(NSString *path) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:observation];
-    while (deadline.timeIntervalSinceNow > 0 && ![NSFileManager.defaultManager fileExistsAtPath:path]) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
-    }
+// The entries under a path, or nil while it is absent.
+static NSArray<NSString *> *present(NSString *path) {
     return [NSFileManager.defaultManager fileExistsAtPath:path] ? ([NSFileManager.defaultManager subpathsAtPath:path] ?: @[]) : nil;
 }
 
@@ -167,18 +192,8 @@ static NSDictionary<NSString *, NSDate *> *entries(NSString *path) {
     return found;
 }
 
-// Watches a path for the observation time and returns its entries at the first change, or nil while they stay the same.
-static NSDictionary<NSString *, NSDate *> *observeUnchanged(NSString *path, NSDictionary<NSString *, NSDate *> *before) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:observation];
-    while (deadline.timeIntervalSinceNow > 0) {
-        NSDictionary<NSString *, NSDate *> *now = entries(path);
-        if (![now isEqualToDictionary:before]) return now;
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
-    }
-    return nil;
-}
-
-// A child prints its folder and returns from main with its store open, or with its document also open.
+// A child prints its folder and then the processes of its document, and returns from main with its store open, or with its
+// document also open.
 static int child(BOOL leaveOpen) {
     void *surface = prepareSurface();
     nw_listener_t listener = serve();
@@ -186,13 +201,16 @@ static int child(BOOL leaveOpen) {
     printf("%s\n", temporary.fileSystemRepresentation);
     fflush(stdout);
     @autoreleasepool {
-        void *document = loadPage(surface, listener, [temporary stringByAppendingPathComponent:@"store"]);
+        Writers writers = {0};
+        void *document = loadPage(surface, listener, [temporary stringByAppendingPathComponent:@"store"], &writers);
+        printf("%d %d %d\n", writers.content, writers.network, writers.gpu);
+        fflush(stdout);
         if (!leaveOpen) sp_document_close(document);
     }
     return 0;
 }
 
-static void runChild(const char *self, NSString *mode, int *status, NSString **folder, NSString **message) {
+static void runChild(const char *self, NSString *mode, int *status, NSString **folder, Writers *writers, NSString **message) {
     NSTask *task = [[NSTask new] autorelease];
     task.executableURL = [NSURL fileURLWithPath:@(self)];
     task.arguments = @[ mode ];
@@ -209,7 +227,11 @@ static void runChild(const char *self, NSString *mode, int *status, NSString **f
     [task waitUntilExit];
     *status = task.terminationStatus;
     NSString *printed = [[[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding] autorelease];
-    *folder = [printed componentsSeparatedByString:@"\n"].firstObject;
+    NSArray<NSString *> *lines = [printed componentsSeparatedByString:@"\n"];
+    *folder = lines.firstObject;
+    NSArray<NSString *> *pids = lines.count > 1 ? [lines[1] componentsSeparatedByString:@" "] : @[];
+    *writers = pids.count == 3 ? (Writers){ .content = pids[0].intValue, .network = pids[1].intValue, .gpu = pids[2].intValue }
+        : (Writers){0};
     *message = [[[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding] autorelease];
 }
 
@@ -221,23 +243,29 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSString *temporary = temporaryFolder(@"soksak-document-store-end-");
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
 
+    Writers writers = {0};
     // The document and every autoreleased reference to it live in this pool, so the closed document and its data store are
     // released before the store ends.
     @autoreleasepool {
-        sp_document_close(loadPage(surface, listener, store));
+        sp_document_close(loadPage(surface, listener, store, &writers));
     }
     sp_document_store_close(store.fileSystemRepresentation, recordStoreClosed, NULL);
-    until(@"the data store ends", ^BOOL { return storeClosed; });
+    eventWait(@"the data store ends", ^BOOL { return storeClosed; });
     check(storeError == nil, [NSString stringWithFormat:@"the data store ends without an error: %@", storeError]);
+    // The entries are read at the end of the store and judged again after every process that wrote them has ended.
     NSDictionary<NSString *, NSDate *> *ended = entries(store);
-    NSDictionary<NSString *, NSDate *> *changedEntries = observeUnchanged(store, ended);
-    check(changedEntries == nil, [NSString stringWithFormat:@"no process changes the folder of an ended store: %@ became %@", ended, changedEntries]);
+    awaitWriters(writers);
+    NSDictionary<NSString *, NSDate *> *afterWriters = entries(store);
+    check([afterWriters isEqualToDictionary:ended],
+        [NSString stringWithFormat:@"no process changes the folder of an ended store: %@ became %@", ended, afterWriters]);
     check(removefile(store.fileSystemRepresentation, NULL, REMOVEFILE_RECURSIVE) == 0, @"the folder of the ended store is removed");
-    NSArray<NSString *> *written = observeAbsent(store);
+    NSArray<NSString *> *written = present(store);
     check(written == nil, [NSString stringWithFormat:@"no process writes into the folder of an ended store: %@", written]);
 
     // A document that loads nothing starts the network process of its store, which creates the network cache after the store
-    // ended when the end did not know the process yet.
+    // ended when the end did not know the process yet. The end starts that process itself, so the check cannot name it before
+    // the end: the end reports an error when it cannot name the process, and it reports only after the exit of the network
+    // process and of the GPU process, so the folder is judged at that report.
     NSString *unloaded = [temporaryFolder(@"soksak-document-store-unloaded-") stringByAppendingPathComponent:@"store"];
     void *unloadedSurface = prepareSurface();
     @autoreleasepool {
@@ -247,23 +275,31 @@ int main(int argc, char **argv) { @autoreleasepool {
     }
     sp_surface_close(unloadedSurface);
     storeClosed = NO;
+    [storeError release];
+    storeError = nil;
     sp_document_store_close(unloaded.fileSystemRepresentation, recordStoreClosed, NULL);
-    until(@"the data store of a document that loaded nothing ended", ^{ return storeClosed; });
+    eventWait(@"the data store of a document that loaded nothing ends", ^BOOL { return storeClosed; });
+    check(storeError == nil, [NSString stringWithFormat:@"the data store of a document that loaded nothing ends without an error: %@", storeError]);
     check(removefile(unloaded.fileSystemRepresentation, NULL, REMOVEFILE_RECURSIVE) == 0, @"the folder of a store that loaded nothing is removed");
-    NSArray<NSString *> *unloadedWritten = observeAbsent(unloaded);
+    NSArray<NSString *> *unloadedWritten = present(unloaded);
     check(unloadedWritten == nil, [NSString stringWithFormat:@"no process writes into the folder of a store that loaded nothing: %@", unloadedWritten]);
 
     // The removal of a temporary folder ends the store under it, so the folder stays removed.
     int status = 0;
     NSString *folder = nil, *message = nil;
-    runChild(argv[0], @"--store-open", &status, &folder, &message);
+    Writers childWriters = {0};
+    runChild(argv[0], @"--store-open", &status, &folder, &childWriters, &message);
     check(status == 0 && folder.length > 0, [NSString stringWithFormat:@"a child that leaves its store open ends with 0: %d, %@", status, message]);
-    written = observeAbsent(folder);
+    check(childWriters.content > 0 && childWriters.network > 0,
+        [NSString stringWithFormat:@"the child names the processes of its document: %d %d %d", childWriters.content,
+            childWriters.network, childWriters.gpu]);
+    awaitWriters(childWriters);
+    written = present(folder);
     check(written == nil, [NSString stringWithFormat:@"the removal at exit ends the store first, so no process writes into the folder: %@", written]);
     [NSFileManager.defaultManager removeItemAtPath:folder error:nil];
 
     // A document that stays open keeps its store, so the removal names it instead of racing with its writes.
-    runChild(argv[0], @"--document-open", &status, &folder, &message);
+    runChild(argv[0], @"--document-open", &status, &folder, &childWriters, &message);
     check(status == 1 && [message containsString:@"a document of the directory is open"],
         [NSString stringWithFormat:@"a child that leaves its document open fails and names the cause: %d, %@", status, message]);
     [NSFileManager.defaultManager removeItemAtPath:folder error:nil];

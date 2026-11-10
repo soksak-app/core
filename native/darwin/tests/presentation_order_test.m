@@ -6,19 +6,12 @@
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import "private/webkit.h"
+#import "support/event_wait.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void spin(NSTimeInterval seconds) {
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:seconds];
-    while (until.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
-            [NSDate dateWithTimeIntervalSinceNow:MIN(0.005, until.timeIntervalSinceNow)]];
-    }
 }
 
 // On receiving a "drawn" message, records the receipt time and registers a presentation acknowledgement. When the acknowledgement arrives, records its time.
@@ -72,8 +65,8 @@ int main(void) { @autoreleasepool {
     CADisplayLink *link = [window.contentView displayLinkWithTarget:receiver selector:@selector(refresh:)];
     [link addToRunLoop:NSRunLoop.currentRunLoop forMode:NSRunLoopCommonModes];
 
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:30];
-    while ((int)receiver.waits.count < draws && deadline.timeIntervalSinceNow > 0) spin(0.01);
+    // Each acknowledgement arrives in the completion of a presentation update on the main queue.
+    eventWait(@"the presentation of every draw is acknowledged", ^BOOL { return (int)receiver.waits.count >= draws; });
     check((int)receiver.waits.count == draws,
         [NSString stringWithFormat:@"every draw was confirmed (%lu of %d)", (unsigned long)receiver.waits.count, draws]);
 

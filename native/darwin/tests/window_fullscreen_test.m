@@ -3,19 +3,13 @@
 // so the check activates the application.
 #import <Cocoa/Cocoa.h>
 #import "window_fullscreen.h"
+#import "support/event_wait.h"
 
 static int failures = 0;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static void until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:20];
-    while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
-    }
 }
 
 static BOOL fullscreen(NSWindow *window) {
@@ -38,24 +32,26 @@ int main(void) { @autoreleasepool {
     [window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
 
+    // The answers come from the notifications of the transition, which AppKit may post outside a source of the run loop, so
+    // each answer wakes the wait.
     __block BOOL entered = NO;
-    check(sp_window_fullscreen(window, true, ^{ entered = YES; }), @"the window accepts a full screen request");
-    until(^BOOL { return entered; });
+    check(sp_window_fullscreen(window, true, ^{ entered = YES; eventWake(); }), @"the window accepts a full screen request");
+    eventWait(@"the window enters full screen", ^BOOL { return entered; });
     check(entered && fullscreen(window), @"entering full screen answers after the transition");
 
     // A request that arrives during the transition. macOS ignores -toggleFullScreen: at that moment, so it must be
     // handled after the transition ends.
     __block int answers = 0;
     __block BOOL back = NO;
-    sp_window_fullscreen(window, false, ^{ answers++; });
-    sp_window_fullscreen(window, true, ^{ answers++; back = YES; });
-    until(^BOOL { return back; });
+    sp_window_fullscreen(window, false, ^{ answers++; eventWake(); });
+    sp_window_fullscreen(window, true, ^{ answers++; back = YES; eventWake(); });
+    eventWait(@"the request made during the transition is applied", ^BOOL { return back; });
     check(back && fullscreen(window), @"a request during the transition is applied after it");
     check(answers == 2, [NSString stringWithFormat:@"every request is answered (%d of 2)", answers]);
 
     __block BOOL done = NO;
-    sp_window_fullscreen(window, false, ^{ done = YES; });
-    until(^BOOL { return done; });
+    sp_window_fullscreen(window, false, ^{ done = YES; eventWake(); });
+    eventWait(@"the window leaves full screen", ^BOOL { return done; });
     check(done && !fullscreen(window), @"leaving full screen answers after the transition");
 
     __block BOOL already = NO;

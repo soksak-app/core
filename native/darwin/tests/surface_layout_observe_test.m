@@ -7,19 +7,13 @@
 #import "surface_layout.h"
 #import "host_api_webview.h"
 #import "main_thread.h"
+#import "support/event_wait.h"
 
 static int failures;
 
 static void check(BOOL ok, NSString *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message.UTF8String);
     if (!ok) failures++;
-}
-
-// Runs the main run loop until the awaited event has arrived, with no time limit of its own; a check whose start failed does
-// not wait.
-static void until(NSString *what, BOOL (^done)(void)) {
-    while (!done()) [NSRunLoop.mainRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
-    check(done(), what);
 }
 
 // A web view that holds the completion of its next presentation until the check releases it.
@@ -134,7 +128,7 @@ static void checkSettledWithBlock(NSWindow *window) {
     check(presented != nil, @"the wait asked the block before the check presents it");
     if (presented) presented(NULL);
     check(!settled, @"the callback of the block does not end the wait before the next display refresh");
-    until(@"the wait ends after the next display refresh", ^BOOL { return settled; });
+    eventWait(@"the settled wait ends at the next display refresh", ^BOOL { return settled; });
     check(displayed >= called, [NSString stringWithFormat:@"the wait reports the display refresh after the block called back (%f, called %f)", displayed, called]);
     [presented release];
     presented = nil;
@@ -166,7 +160,7 @@ static void checkSettledWithBlock(NSWindow *window) {
     if (presented) presented(NULL);
     [presented release];
     presented = nil;
-    if (askedAgain) until(@"the wait ends after the block presents the newer transaction", ^BOOL { return settled; });
+    if (askedAgain) eventWait(@"the settled wait ends after the block presents the newer transaction", ^BOOL { return settled; });
     surfaceLayoutCancel(firstWindow);
     surfaceLayoutCancel(window);
 

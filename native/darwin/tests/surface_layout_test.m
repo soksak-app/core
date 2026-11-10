@@ -5,13 +5,12 @@
 #import "surface_layout.h"
 #import "capture.h"
 #import "support/capture_frame.m"
+#import "support/event_wait.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "private/webkit.h"
 #import "support/surface_view.h"
 #import "support/temporary_folder.h"
-
-static const NSTimeInterval kBusy = 3;
 
 static int failures = 0;
 
@@ -20,19 +19,19 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// Runs the main run loop until the awaited event has arrived. It has no time limit of its own: each call waits for an event that
-// the check has already started, and a check whose start failed does not wait (docs/spec/native-surfaces.md#layout-transaction).
-static void until(BOOL (^done)(void)) {
-    while (!done()) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
-    }
-}
-
-// Returns the same empty document for every requested address. The host of the address sets the origin.
+// Returns the same empty document for every requested address. The host of the address sets the origin. It holds a
+// request of the path /hold, which a busy script makes synchronously, so the web process of that script stays busy until
+// the check answers it.
 @interface SPPageScheme : NSObject <WKURLSchemeHandler>
+@property(retain) id<WKURLSchemeTask> held;
+- (void)answerHeld;
 @end
 @implementation SPPageScheme
 - (void)webView:(WKWebView *)view startURLSchemeTask:(id<WKURLSchemeTask>)task {
+    if ([task.request.URL.path isEqualToString:@"/hold"]) {
+        self.held = task;
+        return;
+    }
     NSData *body = [@"<!doctype html><body style='margin:0'></body>" dataUsingEncoding:NSUTF8StringEncoding];
     NSURLResponse *response = [[[NSURLResponse alloc] initWithURL:task.request.URL MIMEType:@"text/html"
         expectedContentLength:(NSInteger)body.length textEncodingName:@"utf-8"] autorelease];
@@ -40,36 +39,62 @@ static void until(BOOL (^done)(void)) {
     [task didReceiveData:body];
     [task didFinish];
 }
-- (void)webView:(WKWebView *)view stopURLSchemeTask:(id<WKURLSchemeTask>)task {}
-@end
-
-// Receives the message that the busy script has started.
-@interface SPBusySignal : NSObject <WKScriptMessageHandler>
-@property BOOL started;
-@end
-@implementation SPBusySignal
-- (void)userContentController:(WKUserContentController *)controller didReceiveScriptMessage:(WKScriptMessage *)message {
-    self.started = YES;
+- (void)webView:(WKWebView *)view stopURLSchemeTask:(id<WKURLSchemeTask>)task {
+    if (task == self.held) self.held = nil;
+}
+// Answers the held request, which ends the busy script.
+- (void)answerHeld {
+    id<WKURLSchemeTask> task = [[self.held retain] autorelease];
+    self.held = nil;
+    NSData *body = [@"released" dataUsingEncoding:NSUTF8StringEncoding];
+    NSURLResponse *response = [[[NSURLResponse alloc] initWithURL:task.request.URL MIMEType:@"text/plain"
+        expectedContentLength:(NSInteger)body.length textEncodingName:@"utf-8"] autorelease];
+    [task didReceiveResponse:response];
+    [task didReceiveData:body];
+    [task didFinish];
+}
+- (void)dealloc {
+    [_held release];
+    [super dealloc];
 }
 @end
 
-// Counts a fixed number of display refreshes.
+// Counts a fixed number of display refreshes and calls done, when it is set, with the target time (ms) of the last one.
 @interface SPFrames : NSObject
 @property int left;
+@property (copy) void (^done)(double target);
 - (void)tick:(CADisplayLink *)link;
 @end
 @implementation SPFrames
 - (void)tick:(CADisplayLink *)link {
-    if (--self.left == 0) [link invalidate];
+    if (--self.left != 0) return;
+    // The link releases its target when it is invalidated, so the block is kept until it has run.
+    void (^done)(double) = [[self.done retain] autorelease];
+    double target = link.targetTimestamp * 1000;
+    [link invalidate];
+    if (done) done(target);
+}
+- (void)dealloc {
+    [_done release];
+    [super dealloc];
 }
 @end
 
-static void waitFrames(NSScreen *screen, int count) {
+// Calls done on the main thread after count refreshes of screen.
+static SPFrames *afterFrames(NSScreen *screen, int count, void (^done)(double target)) {
     SPFrames *frames = [[SPFrames new] autorelease];
     frames.left = count;
+    frames.done = done;
+    // A link retains its target until it is invalidated.
     [[screen displayLinkWithTarget:frames selector:@selector(tick:)]
         addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
-    until(^BOOL { return frames.left == 0; });
+    return frames;
+}
+
+static void waitFrames(NSScreen *screen, int count) {
+    SPFrames *frames = [afterFrames(screen, count, nil) retain];
+    eventWait([NSString stringWithFormat:@"the display refreshes %d times", count], ^BOOL { return frames.left == 0; });
+    [frames release];
 }
 
 // Runs the run loop until the next presentation of view that comes after every earlier presentation request of view. A check that
@@ -78,7 +103,7 @@ static void waitFrames(NSScreen *screen, int count) {
 static void untilMarker(WKWebView *view) {
     __block BOOL marked = NO;
     surfaceLayoutAfterPresentation(view, ^{ marked = YES; });
-    until(^BOOL { return marked; });
+    eventWait(@"the presentation of the view after its earlier presentation requests", ^BOOL { return marked; });
 }
 
 // A display that finishes while the layout transaction of the window is open does not end the wait. If a newer
@@ -98,7 +123,7 @@ static void checkSettledWaitsForLayout(NSWindow *window, WKWebView *main) {
     check(settledAt == 0, @"a presentation inside the open layout transaction does not end the settled wait");
     check(surfaceLayoutCommit(window, 102), @"the newest request commits the layout transaction");
     int committedAt = ++order;
-    until(^BOOL { return settledAt != 0; });
+    eventWait(@"the settled wait ends after the layout transaction commits", ^BOOL { return settledAt != 0; });
     check(settledAt > committedAt,
         [NSString stringWithFormat:@"the settled wait ends after the open layout transaction commits (settled %d, committed %d)",
             settledAt, committedAt]);
@@ -124,10 +149,10 @@ static void checkSettledWaitsForModal(NSWindow *window, WKWebView *main, WKWebVi
         check(error == NULL, @"the settled wait with a shown modal has no error");
         settled = YES;
     });
-    until(^BOOL { return settled || modal.held != nil; });
+    eventWait(@"the settled wait ends or asks the shown modal for its presentation", ^BOOL { return settled || modal.held != nil; });
     check(!settled && modal.held != nil, @"the settled wait does not end before a shown modal has presented");
     if (modal.held) modal.held();
-    until(^BOOL { return settled; });
+    eventWait(@"the settled wait ends after the shown modal presents", ^BOOL { return settled; });
     check(settled, @"the settled wait ends when the shown modal has presented");
 
     modal.held = nil;
@@ -137,7 +162,7 @@ static void checkSettledWaitsForModal(NSWindow *window, WKWebView *main, WKWebVi
         check(error == NULL, @"the settled wait with a hidden modal has no error");
         settled = YES;
     });
-    until(^BOOL { return settled; });
+    eventWait(@"the settled wait with a hidden modal ends", ^BOOL { return settled; });
     check(modal.held == nil, @"the settled wait does not ask a hidden modal for its presentation");
     [modal removeFromSuperview];
 }
@@ -156,7 +181,7 @@ static WKWebView *page(NSWindow *window, WKWebViewConfiguration *configuration, 
     SPLoaded *loaded = [[SPLoaded new] autorelease];
     view.navigationDelegate = loaded;
     [view loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:address]]];
-    until(^BOOL { return loaded.finished; });
+    eventWait(@"the navigation of the page finishes", ^BOOL { return loaded.finished; });
     view.navigationDelegate = nil;
     return view;
 }
@@ -223,7 +248,7 @@ static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
         completionHandler:^(id value, NSError *error) {
             check(error == nil, @"the root resize fixture installs a right-anchored marker"); installed = YES;
         }];
-    until(^BOOL { return installed; });
+    eventWait(@"the root resize fixture installs its marker", ^BOOL { return installed; });
     __block BOOL fixtureStateRead = NO;
     [view evaluateJavaScript:@"({viewport:[innerWidth,innerHeight],marker:(()=>{const r=document.querySelector('#marker').getBoundingClientRect(),s=getComputedStyle(document.querySelector('#marker'));return {rect:[r.x,r.y,r.width,r.height],background:s.backgroundColor}})()})"
         completionHandler:^(id value, NSError *error) {
@@ -235,10 +260,10 @@ static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
                 [NSString stringWithFormat:@"the root resize fixture reports its expected viewport and marker geometry (%@, %@)", value, error]);
             fixtureStateRead = YES;
         }];
-    until(^BOOL { return fixtureStateRead; });
+    eventWait(@"the script reads the state of the root resize fixture", ^BOOL { return fixtureStateRead; });
     __block BOOL initialPresented = NO;
     surfaceLayoutAfterPresentation(view, ^{ initialPresented = YES; });
-    until(^BOOL { return initialPresented; });
+    eventWait(@"the root view presents", ^BOOL { return initialPresented; });
     __block BOOL initialSnapshotFinished = NO;
     __block BOOL initialPixels = NO;
     WKSnapshotConfiguration *initialSnapshotConfiguration = [[[WKSnapshotConfiguration alloc] init] autorelease];
@@ -247,7 +272,7 @@ static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
         initialPixels = error == nil && image != nil && snapshotShowsMarkerAtX(image, 396);
         initialSnapshotFinished = YES;
     }];
-    until(^BOOL { return initialSnapshotFinished; });
+    eventWait(@"the snapshot of the root view before the resize finishes", ^BOOL { return initialSnapshotFinished; });
     check(initialPixels, @"the initial root snapshot contains the marker at its original right edge");
 
     __block BOOL presented = NO;
@@ -271,13 +296,15 @@ static void checkRootViewResizeJoin(WKWebViewConfiguration *configuration) {
                 resizedPixels = error == nil && image != nil && snapshotShowsMarkerAtX(image, 316);
                 snapshotFinished = YES;
             }];
-        until(^BOOL { return snapshotFinished; });
+        eventWait(@"the snapshot of the resized root view finishes", ^BOOL { return snapshotFinished; });
         presented = YES;
     }), @"the resized root view joins its open layout transaction");
     BOOL deferred = surfaceLayoutCommit(window, 309);
     check(deferred, @"the root resize commit defers until its presentation callback");
     check(surfaceLayoutIsPreparing(window), @"the root resize transaction stays open for resized root pixels");
-    if (deferred) until(^BOOL { return presented && !surfaceLayoutIsPreparing(window); });
+    if (deferred) eventWait(@"the resized root presents and its transaction commits", ^BOOL {
+        return presented && !surfaceLayoutIsPreparing(window);
+    });
     surfaceLayoutCancel(window);
     check(blockedAtPresentation, @"the resized root pixels arrive before the transaction commits");
     check(blockedDuringSnapshot, @"the transaction stays open while the resized snapshot completes");
@@ -307,7 +334,7 @@ static void checkViewJoin(WKWebViewConfiguration *configuration) {
     check(otherStarted, @"a transaction of another window starts while the transaction of the window is open");
     BOOL committed = surfaceLayoutCommit(window, 301);
     check(committed, @"the transaction with a joined view commits");
-    if (committed) until(^BOOL { return presented != 0; });
+    if (committed) eventWait(@"the joined view presents", ^BOOL { return presented != 0; });
     check(presented == 1, @"the joined view reports its presentation once");
     check(surfaceLayoutCommit(&otherOwner, 302), @"the transaction of the other window commits");
 
@@ -420,13 +447,13 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
         completionHandler:^(id value, NSError *error) {
             check(error == nil, @"the composition fixture installs its DOM border"); loaded = YES;
         }];
-    until(^BOOL { return loaded; });
+    eventWait(@"the composition fixture installs its DOM border", ^BOOL { return loaded; });
     [window orderFrontRegardless];
     __block double shown = 0;
     surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
         check(error == NULL, @"the initial composition fixture is presented"); shown = at;
     });
-    until(^BOOL { return shown != 0; });
+    eventWait(@"the settled wait of the initial composition ends", ^BOOL { return shown != 0; });
     const char *directory = temporaryFolder(@"soksak-composition-test-").fileSystemRepresentation;
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
@@ -445,7 +472,7 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
                 check(error == nil, @"the composition DOM border moves during preparation");
                 surfaceLayoutAfterPresentation(main, ^{ ready = YES; });
             }];
-        until(^BOOL { return ready; });
+        eventWait(@"the app DOM presents the moved border", ^BOOL { return ready; });
         waitFrames(window.screen, 1);
         __block BOOL clipped = NO;
         [main evaluateJavaScript:@"document.styleSheets[0].cssRules[1].style.clipPath='path(\"M0,0H400V200H0ZM40,40v120h250v-120Z\")'"
@@ -453,14 +480,14 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration) {
                 check(error == nil, @"the composition paint clip changes while the native transaction is pending");
                 surfaceLayoutAfterPresentation(main, ^{ clipped = YES; });
             }];
-        until(^BOOL { return clipped; });
+        eventWait(@"the app DOM presents the changed paint clip", ^BOOL { return clipped; });
         waitFrames(window.screen, 5);
         check(surfaceLayoutCommit(window, 107), @"the controlled composition transaction commits");
         shown = 0;
         surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
             check(error == NULL, @"the final composition fixture is presented"); shown = at;
         });
-        until(^BOOL { return shown != 0; });
+        eventWait(@"the settled wait of the final composition ends", ^BOOL { return shown != 0; });
         int count = sp_capture_stop(shown, 0);
         const char *captureError = sp_capture_error();
         check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0', [NSString stringWithFormat:
@@ -538,7 +565,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         completionHandler:^(id value, NSError *error) {
             check(error == nil, @"the first-show marker loads before its surface is revealed"); markerLoaded = YES;
         }];
-    until(^BOOL { return markerLoaded; });
+    eventWait(@"the first-show marker loads", ^BOOL { return markerLoaded; });
     check(SPPlaceSurfaceView(compositionSurface, root), @"the first-show root is placed in its hidden surface");
     webviewSetFrame(compositionSurface, 40, 40, 180, 100);
     __block BOOL fixtureStateRead = NO;
@@ -553,7 +580,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
                 [NSString stringWithFormat:@"the hidden root reports its target viewport and marker geometry (%@, %@)", value, error]);
             fixtureStateRead = YES;
         }];
-    until(^BOOL { return fixtureStateRead; });
+    eventWait(@"the script reads the state of the first-show fixture", ^BOOL { return fixtureStateRead; });
     [window makeFirstResponder:main];
     check(window.firstResponder == main, @"the app DOM owns keyboard focus before the first show");
     [window orderFrontRegardless];
@@ -561,7 +588,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
         check(error == NULL, @"the first-show baseline is presented"); shown = at;
     });
-    until(^BOOL { return shown != 0; });
+    eventWait(@"the settled wait of the first-show baseline ends", ^BOOL { return shown != 0; });
     const char *directory = temporaryFolder(@"soksak-first-show-test-").fileSystemRepresentation;
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
@@ -587,7 +614,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         __block BOOL appDOMBarrierPending = YES;
         __block BOOL appDOMPresented = NO;
         surfaceLayoutAfterPresentation(main, ^{ appDOMPresented = YES; });
-        until(^BOOL { return rootPresented && appDOMPresented; });
+        eventWait(@"the root view and the app DOM present", ^BOOL { return rootPresented && appDOMPresented; });
         untilMarker(main);
         check(appDOMBarrierPending && surfaceLayoutIsPreparing(window),
             @"the controlled app-DOM barrier remains pending after both presentation callbacks");
@@ -611,7 +638,7 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
         surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
             check(error == NULL, @"the first-show marker is displayed after commit"); shown = at;
         });
-        until(^BOOL { return shown != 0; });
+        eventWait(@"the settled wait after the first-show commit ends", ^BOOL { return shown != 0; });
         int count = sp_capture_stop(shown, 0);
         const char *captureError = sp_capture_error();
         check(count >= 2 && !sp_capture_limited() && captureError[0] == '\0',
@@ -658,38 +685,62 @@ static void checkFirstShowPublication(WKWebViewConfiguration *configuration) {
     [window close]; [window release];
 }
 
-typedef struct { NSTimeInterval took; BOOL beforeRelease; double requested; double finished; double displayed; } SPWait;
+typedef struct {
+    NSTimeInterval took;
+    BOOL heldAtEnd;
+    double requested;
+    double finished;
+    double displayed;
+    double nextRefresh;
+} SPWait;
 
-// Holds the web process of busy, resizes the main webview, and returns the time until the display wait ends and
-// whether that wait ended before the script of busy ended. The result is decided by order, so it does not depend on
-// machine load.
-static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPBusySignal *signal) {
-    signal.started = NO;
+// Holds the web process of busy in a synchronous request that the scheme holds, resizes the main webview, and returns the
+// time until the display wait ends, whether busy was still held when that wait ended, and the target time of the refresh
+// after the one that ended the wait. The result is decided by order, so it does not depend on machine load. A wait that
+// busy does not own ends while busy is held, and the request is answered when the wait ends. When busy owns the wait
+// (ownsWait), the wait cannot end while busy is held, so the request is answered at a later event after which a wait that
+// did not need busy would have ended: probe, a web view that is not held, presents after the wait started, a block of the
+// main queue sent then runs after the blocks that the presentations of that update sent, and the screen refreshes twice
+// after it, which is after the refresh at which such a wait ends.
+static SPWait waitWhileBusy(WKWebView *main, WKWebView *busy, SPPageScheme *scheme, BOOL ownsWait, WKWebView *probe) {
     __block BOOL released = NO;
     __block BOOL presented = NO;
-    __block BOOL beforeRelease = NO;
-    [busy evaluateJavaScript:[NSString stringWithFormat:
-        @"webkit.messageHandlers.busy.postMessage(0); {const end=Date.now()+%d; while(Date.now()<end){}} true",
-        (int)(kBusy * 1000)] completionHandler:^(id value, NSError *error) { beforeRelease = presented; released = YES; }];
-    until(^BOOL { return signal.started; });
+    [busy evaluateJavaScript:@"{const request = new XMLHttpRequest(); request.open('GET', '/hold', false); request.send();} true"
+        completionHandler:^(id value, NSError *error) { (void)value; (void)error; released = YES; }];
+    eventWait(@"the busy script holds its web process in its synchronous request", ^BOOL { return scheme.held != nil; });
     NSRect frame = main.frame;
     frame.size.width -= 1;
     main.frame = frame;
-    NSDate *start = [NSDate date];
     __block NSTimeInterval took = 0;
     __block double displayed = 0;
     __block double finished = 0;
+    __block double nextRefresh = 0;
+    __block BOOL heldAtEnd = NO;
     // The request, completion, and display times are all measured with the same clock (CACurrentMediaTime).
     double requested = CACurrentMediaTime() * 1000;
     surfaceLayoutAfterSettled(main.window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
         check(error == NULL, @"a displayed frame has no DOM error");
-        took = -start.timeIntervalSinceNow;
         finished = CACurrentMediaTime() * 1000;
+        took = (finished - requested) / 1000;
         displayed = at;
+        heldAtEnd = scheme.held != nil;
         presented = YES;
+        afterFrames(main.window.screen ?: NSScreen.mainScreen, 1, ^(double target) { nextRefresh = target; });
     });
-    until(^BOOL { return presented && released; });
-    return (SPWait){ took, beforeRelease, requested, finished, displayed };
+    if (ownsWait) {
+        __block BOOL later = NO;
+        [probe _doAfterNextPresentationUpdate:^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                afterFrames(main.window.screen ?: NSScreen.mainScreen, 2, ^(double target) { (void)target; later = YES; });
+            });
+        }];
+        eventWait(@"two refreshes after a later presentation of a document that is not held", ^BOOL { return later; });
+    } else {
+        eventWait(@"the settled wait ends while the busy script is held", ^BOOL { return presented; });
+    }
+    [scheme answerHeld];
+    eventWait(@"the busy script ends and the settled wait ends", ^BOOL { return presented && released && nextRefresh != 0; });
+    return (SPWait){ took, heldAtEnd, requested, finished, displayed, nextRefresh };
 }
 
 int main(void) { @autoreleasepool {
@@ -701,10 +752,8 @@ int main(void) { @autoreleasepool {
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];
     SPPageScheme *scheme = [[SPPageScheme new] autorelease];
-    SPBusySignal *signal = [[SPBusySignal new] autorelease];
     WKWebViewConfiguration *configuration = [[WKWebViewConfiguration new] autorelease];
     [configuration setURLSchemeHandler:scheme forURLScheme:@"sptest"];
-    [configuration.userContentController addScriptMessageHandler:signal name:@"busy"];
     // Creates documents of the same origin as separate configurations so that each webview uses its own web process.
     WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 200, 300), @"sptest://app/main");
     WKWebView *sameOrigin = page(window, [[configuration copy] autorelease], NSMakeRect(200, 0, 200, 300), @"sptest://app/document");
@@ -717,7 +766,7 @@ int main(void) { @autoreleasepool {
     [window orderBack:nil];
     __block BOOL painted = NO;
     [main _doAfterNextPresentationUpdate:^{ painted = YES; }];
-    until(^BOOL { return painted; });
+    eventWait(@"the main page presents", ^BOOL { return painted; });
 
     checkRecordedComposition([[configuration copy] autorelease]);
     checkFirstShowPublication([[configuration copy] autorelease]);
@@ -741,7 +790,7 @@ int main(void) { @autoreleasepool {
         check(error == nil, @"the main DOM changes during preparation");
         surfaceLayoutAfterPresentation(main, ^{ mainReady = YES; });
     }];
-    until(^BOOL { return mainReady; });
+    eventWait(@"the app DOM presents its new layout", ^BOOL { return mainReady; });
     check(surfaceLayoutCommit(window, 103), @"the app DOM confirms its new layout before native commit");
     double traceEnded = CACurrentMediaTime() * 1000;
     double trace[4 * SURFACE_LAYOUT_TRACE_STAGES];
@@ -776,28 +825,29 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the trace records one other pair open at a nested commit (%zu records: ticket %.0f, "
             "path %.0f, open %.0f)", nestedCount, trace[0], trace[5], trace[6]]);
 
-    SPWait externalWait = waitWhileBusy(main, external, signal);
-    check(externalWait.beforeRelease,
+    SPWait externalWait = waitWhileBusy(main, external, scheme, NO, nil);
+    check(externalWait.heldAtEnd,
         [NSString stringWithFormat:@"a busy external document does not delay the presentation wait (%.3fs)", externalWait.took]);
 
-    SPWait visibleWait = waitWhileBusy(main, sameOrigin, signal);
-    check(visibleWait.beforeRelease,
+    SPWait visibleWait = waitWhileBusy(main, sameOrigin, scheme, NO, nil);
+    check(visibleWait.heldAtEnd,
         [NSString stringWithFormat:@"a same-origin document does not own the app DOM presentation wait (%.3fs)", visibleWait.took]);
-    // The display time is later than the request and within one display refresh of the moment the wait ended. The
-    // display time is the target time of a display link tick. If the main thread is late, the tick arrives after its
-    // target time, so the display time can precede the completion time. Being later than the completion is not
-    // guaranteed.
-    check(visibleWait.displayed > visibleWait.requested && visibleWait.displayed < visibleWait.finished + 100,
-        [NSString stringWithFormat:@"the wait reports the display time of the presented frame (requested %.1fms, finished %.1fms, displayed %.1fms)",
-            visibleWait.requested, visibleWait.finished, visibleWait.displayed]);
+    // The display time is later than the request and is not later than the target time of the first refresh after the wait
+    // ended, so it is the refresh that ended the wait. The display time is the target time of a display link tick. If the
+    // main thread is late, the tick arrives after its target time, so the display time can precede the completion time.
+    // Being later than the completion is not guaranteed.
+    check(visibleWait.displayed > visibleWait.requested && visibleWait.displayed <= visibleWait.nextRefresh,
+        [NSString stringWithFormat:@"the wait reports the display time of the presented frame (requested %.1fms, finished %.1fms, "
+            "displayed %.1fms, next refresh %.1fms)", visibleWait.requested, visibleWait.finished, visibleWait.displayed,
+            visibleWait.nextRefresh]);
 
     sameOrigin.hidden = YES;
-    SPWait hiddenWait = waitWhileBusy(main, sameOrigin, signal);
-    check(hiddenWait.beforeRelease,
+    SPWait hiddenWait = waitWhileBusy(main, sameOrigin, scheme, NO, nil);
+    check(hiddenWait.heldAtEnd,
         [NSString stringWithFormat:@"a hidden document of the main origin does not delay the wait (%.3fs)", hiddenWait.took]);
 
-    SPWait mainWait = waitWhileBusy(main, main, signal);
-    check(!mainWait.beforeRelease, @"the app DOM must still confirm its own presentation");
+    SPWait mainWait = waitWhileBusy(main, main, scheme, YES, external);
+    check(!mainWait.heldAtEnd, @"the app DOM must still confirm its own presentation");
 
     [window close];
     [window release];
