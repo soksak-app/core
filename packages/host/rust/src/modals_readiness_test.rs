@@ -196,3 +196,74 @@ fn the_end_of_a_modal_document_process_is_told_from_the_end_of_the_main_page() {
     assert!(!is_modal_of("modal-main-", "main"));
     assert!(!is_modal_of("modal-main-3x", "main"));
 }
+
+/// Runs the first-frame wait of host.window.presented on its own thread and returns the channel of its end. `ended` is the
+/// end of the request that the wait checks at each wake: the close of the window, the end of the main page process, the
+/// end of the WebContent process of the modal or the end of the endpoint connection of the request.
+fn paint_wait(
+    overlay: &std::sync::Arc<Overlay>,
+    ended: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+) -> std::sync::mpsc::Receiver<Result<(), String>> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let overlay = overlay.clone();
+    std::thread::spawn(move || {
+        let end = overlay.wait_for_paint(&|| ended.lock().unwrap().clone());
+        tx.send(end).expect("the test holds the receiver");
+    });
+    rx
+}
+
+// The first-frame wait of the shown modal takes no time limit: the first frame of the modal ends it, and so does the close
+// of the modal. Each end is recorded in the state that the wait reads, so an end before the wait reads it ends the wait
+// the same way.
+// contract: exposure.window-presented.ends-by-events
+#[test]
+fn the_first_frame_or_the_close_of_the_modal_ends_its_paint_wait() {
+    let none = || std::sync::Arc::new(std::sync::Mutex::new(None));
+    let overlay = std::sync::Arc::new(Overlay::default());
+    assert_eq!(
+        overlay.wait_for_paint(&|| None),
+        Ok(()),
+        "no open modal holds no paint wait"
+    );
+
+    open(&overlay, "picker", 3);
+    let ended = paint_wait(&overlay, none());
+    overlay.mark_painted("picker", 3);
+    assert_eq!(
+        ended.recv().unwrap(),
+        Ok(()),
+        "the first frame ends the wait"
+    );
+
+    open(&overlay, "picker", 4);
+    let ended = paint_wait(&overlay, none());
+    overlay.discard().unwrap();
+    assert_eq!(
+        ended.recv().unwrap(),
+        Ok(()),
+        "the close of the modal ends the wait"
+    );
+}
+
+// The end of the request ends the wait with its reason: the test records the end and wakes the waits, as the close of the
+// window, the end of a page process and the end of the endpoint connection do.
+// contract: exposure.window-presented.ends-by-events
+#[test]
+fn the_end_of_the_request_ends_the_paint_wait_of_the_modal() {
+    let overlay = std::sync::Arc::new(Overlay::default());
+    open(&overlay, "picker", 5);
+    let reason = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let ended = paint_wait(&overlay, reason.clone());
+    *reason.lock().unwrap() = Some("the window closed".to_string());
+    overlay.wake_paint_waits();
+    assert_eq!(
+        ended.recv().unwrap(),
+        Err("the window closed".to_string()),
+        "the end of the request ends the wait with its reason"
+    );
+    assert!(
+        overlay.open_state().is_some(),
+        "the end of the request leaves the modal open"
+    );
+}

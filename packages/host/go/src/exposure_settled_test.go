@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
@@ -63,7 +64,7 @@ func TestSettledWaitBringsTheContentThroughTheFrontend(t *testing.T) {
 	var brought int
 	window := &settledFrontend{window: native, present: func() { brought++ }}
 	fake := &settledPlatform{window: native, displayed: 12.5}
-	displayed, err := settledSurfaces(t, window, fake).presented()
+	displayed, err := settledSurfaces(t, window, fake).presented(context.Background())
 	if err != nil {
 		t.Fatalf("the settled wait failed: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestSettledWaitBringsTheContentThroughTheFrontend(t *testing.T) {
 func TestSettledWaitEndsWithTheFailureOfTheFrontend(t *testing.T) {
 	refused := errors.New("the main web view is gone")
 	fake := &settledPlatform{}
-	_, err := settledSurfaces(t, &settledFrontend{presented: refused}, fake).presented()
+	_, err := settledSurfaces(t, &settledFrontend{presented: refused}, fake).presented(context.Background())
 	if !errors.Is(err, refused) {
 		t.Fatalf("the settled wait ended with %v, want the error of the Frontend", err)
 	}
@@ -95,7 +96,7 @@ func TestSettledWaitEndsWithTheFailureOfThePresentation(t *testing.T) {
 	native := platform.Window(1)
 	failed := errors.New("the document did not finish")
 	window := &settledFrontend{window: native, present: func() {}}
-	_, err := settledSurfaces(t, window, &settledPlatform{window: native, failure: failed}).presented()
+	_, err := settledSurfaces(t, window, &settledPlatform{window: native, failure: failed}).presented(context.Background())
 	if !errors.Is(err, failed) {
 		t.Fatalf("the settled wait ended with %v, want the failure of the block", err)
 	}

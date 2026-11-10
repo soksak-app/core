@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"unsafe"
@@ -22,9 +23,15 @@ func (p pendingSettledPlatform) AfterSettled(platform.Window, unsafe.Pointer, fu
 
 // presentedResult runs host.window.presented of s and returns the channel of its result.
 func presentedResult(s *Surfaces) <-chan error {
+	return presentedResultOf(context.Background(), s)
+}
+
+// presentedResultOf runs host.window.presented of s for a request of the endpoint connection ctx and returns the channel
+// of its result.
+func presentedResultOf(ctx context.Context, s *Surfaces) <-chan error {
 	result := make(chan error, 1)
 	go func() {
-		_, err := s.presented()
+		_, err := s.presented(ctx)
 		result <- err
 	}()
 	return result
@@ -80,6 +87,50 @@ func TestTheEndOfTheProcessOfAnOpenModalEndsItsPaintWait(t *testing.T) {
 	result := presentedResult(s)
 	terminatedNative(viewID)
 	expectRPCCode(t, result, codeHandler, "the presented wait of a modal whose process ended")
+}
+
+// unpaintedModalSurfaces returns surfaces of a window whose settled screen presents at once and whose shown modal has
+// not presented its first frame.
+func unpaintedModalSurfaces(t *testing.T) *Surfaces {
+	t.Helper()
+	native := platform.Window(1)
+	s := settledSurfaces(t, &settledFrontend{window: native, present: func() {}}, &settledPlatform{window: native, displayed: 4})
+	s.modalPaintChange = make(chan struct{})
+	handle := unsafe.Pointer(new(int))
+	const viewID = 876544
+	view := &nativeWebview{owner: s, id: viewID, handle: handle}
+	nativeViews[viewID] = view
+	t.Cleanup(func() { delete(nativeViews, viewID) })
+	s.modal = &modal{id: "modal-b", instance: 4, shown: true, visible: true, view: view}
+	return s
+}
+
+// The close of the window and the end of the process of its main page fail host.window.presented with 1003 while it waits
+// for the first frame of the shown modal, and the end of the endpoint connection of the request ends it with an error.
+// Each end is recorded in the window, so an end before the wait reaches the modal ends it the same way.
+// contract: exposure.window-presented.ends-by-events
+func TestTheWindowThePageAndTheConnectionEndThePaintWaitOfPresented(t *testing.T) {
+	t.Run("window close", func(t *testing.T) {
+		s := unpaintedModalSurfaces(t)
+		result := presentedResult(s)
+		s.endWindow()
+		expectRPCCode(t, result, codeNoWindow, "the presented wait of a closed window with an unpainted modal")
+	})
+	t.Run("main page process end", func(t *testing.T) {
+		s := unpaintedModalSurfaces(t)
+		result := presentedResult(s)
+		s.pageProcessEnded()
+		expectRPCCode(t, result, codeNoWindow, "the presented wait of an ended main page with an unpainted modal")
+	})
+	t.Run("connection end", func(t *testing.T) {
+		s := unpaintedModalSurfaces(t)
+		ctx, end := context.WithCancel(context.Background())
+		result := presentedResultOf(ctx, s)
+		end()
+		if err := <-result; err == nil {
+			t.Fatal("the presented wait whose connection ended answered a result")
+		}
+	})
 }
 
 // fullscreenPlatform is the platform of a full screen test: its change answers result and message at once.
