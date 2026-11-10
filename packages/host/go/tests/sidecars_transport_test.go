@@ -1520,8 +1520,9 @@ func TestPersistentTransportFailsTheConnectionOnAnOversizeLine(t *testing.T) {
 	expectConnectionFailure(t, bytes.Repeat([]byte("x"), support.MessageLimit+2), fmt.Sprintf("message exceeds %d bytes", support.MessageLimit))
 }
 
-// The start of a persistent sidecar (the service connection and hello) does not make the send to another sidecar wait. The service replies to hello
-// 500 ms late, and meanwhile it sends to another sidecar that is already running.
+// The start of a persistent sidecar (the service connection and hello) does not make the send to another sidecar wait. The service holds
+// its answer to hello until the send to another sidecar that is already running returned, so a send that waits for the start does not
+// return, and the check stops at the limit of its runner.
 // contract: sidecars.send.start-does-not-block-other-sidecars
 func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	root := t.TempDir()
@@ -1534,6 +1535,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	defer listener.Close()
 	writeHarnessEndpoint(t, root, socket)
 	helloSeen := make(chan struct{})
+	release := make(chan struct{})
 	go func() {
 		connection, err := listener.Accept()
 		if err != nil {
@@ -1545,7 +1547,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 			return
 		}
 		close(helloSeen)
-		time.Sleep(500 * time.Millisecond)
+		<-release
 		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
 		// The service answers close-owner and shutdown, so that Stop ends without its deadline.
 		for {
@@ -1595,16 +1597,12 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		started <- sidecars.Send(owner, "fixture-service", "service-surface", json.RawMessage(`{"operation":"open"}`))
 	}()
 	<-helloSeen
-	begin := time.Now()
 	if err := sidecars.Send(owner, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"during"}`)); err != nil {
 		t.Fatalf("fast send during the service start: %v", err)
 	}
-	waited := time.Since(begin)
+	close(release)
 	if err := <-started; err != nil {
 		t.Fatalf("service start: %v", err)
-	}
-	if waited > 50*time.Millisecond {
-		t.Fatalf("a send to another sidecar waited %v for the service start, want < 50ms", waited)
 	}
 	// The service answers close-owner and shutdown, which end the stop; a stop that waits past them stops at the limit of the runner.
 	sidecars.Stop()
@@ -2400,15 +2398,14 @@ func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
 	}
 }
 
-// awaitNoReplacement checks that the service keeps running: a retain that the service answers comes after the lines of what the
-// close started, and a replacement runs on its own routine, so the check also gives that routine time to send.
-func awaitNoReplacement(t *testing.T, service *replaceService, sidecars *host.Sidecars, layout []host.RetainedSurface) {
+// requireNoReplacement checks that the service keeps running after the calls that may replace it returned: each such call
+// records the replacement that it decides before it returns, and a replacement sends close-owner only after that record, so no
+// record and no close-owner mean that no replacement runs.
+func requireNoReplacement(t *testing.T, service *replaceService, sidecars *host.Sidecars) {
 	t.Helper()
-	time.Sleep(200 * time.Millisecond)
-	if _, err := sidecars.Retain(layout); err != nil {
-		t.Fatal(err)
+	if replacing := sidecars.Replacing(); len(replacing) != 0 {
+		t.Fatalf("the host replaces %v", replacing)
 	}
-	time.Sleep(200 * time.Millisecond)
 	if got := service.received(); slices.Contains(got, "close-owner") || slices.Contains(got, "shutdown") {
 		t.Fatalf("the service with a session that a layout holds received %v", got)
 	}
@@ -2439,7 +2436,7 @@ func TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds(t *testing.T) {
 	}
 	// A close of any other surface asks for the replacement as well.
 	sidecars.NativeViewRemoved("tab-of-another-plugin")
-	awaitNoReplacement(t, service, sidecars, layout)
+	requireNoReplacement(t, service, sidecars)
 	got := sidecars.Outdated()
 	if len(got) != 1 || got[0].Sessions != 1 {
 		t.Fatalf("outdated with a section that a layout holds: %+v", got)
@@ -2479,7 +2476,10 @@ func TestAnOutdatedServiceWaitsForTheFirstLayoutList(t *testing.T) {
 	}
 	receiveSidecarMessage(t, owner.Seen)
 	sidecars.Close("surface-1")
-	time.Sleep(200 * time.Millisecond)
+	// The close decided before it returned, and it records each replacement that it decides.
+	if replacing := sidecars.Replacing(); len(replacing) != 0 {
+		t.Fatalf("the host replaces %v before the first layout list", replacing)
+	}
 	if got := service.received(); slices.Contains(got, "close-owner") || slices.Contains(got, "shutdown") {
 		t.Fatalf("the service before the first layout list received %v", got)
 	}

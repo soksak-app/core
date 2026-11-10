@@ -643,9 +643,7 @@ fn slow_sidecar_does_not_block_other_sends() {
     let sidecars = create(&files, directory.path()).unwrap();
     let (owner, _events) = owner("a", "/projects/test");
 
-    // The first send to the fast sidecar starts that process. The start time is unrelated to property 1, so it is
-    // started first and only recorded.
-    let started = std::time::Instant::now();
+    // The first send to the fast sidecar starts that process, so the send of property 1 goes to a running process.
     sidecars
         .send(
             &owner,
@@ -654,10 +652,6 @@ fn slow_sidecar_does_not_block_other_sends() {
             &raw(r#"{"data":"start"}"#),
         )
         .unwrap();
-    println!(
-        "the first fast send, which starts the process, took {:?}",
-        started.elapsed()
-    );
 
     // Send to the slow sidecar until its channel is full.
     let large_body = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
@@ -679,9 +673,9 @@ fn slow_sidecar_does_not_block_other_sends() {
         last_err
     );
 
-    // Property 1: even when the channel of the slow sidecar is full, send() to the fast sidecar does not block. send()
-    // only puts into the channel of the already started process and returns at once, so it must take less than 50 ms.
-    let start = std::time::Instant::now();
+    // Property 1: even when the channel of the slow sidecar is full, send() to the fast sidecar does not block. The slow
+    // sidecar reads nothing until the stop, so a send that waits for its channel does not return, and the check stops at
+    // the limit of its runner.
     sidecars
         .send(
             &owner,
@@ -690,12 +684,6 @@ fn slow_sidecar_does_not_block_other_sends() {
             &raw(r#"{"data":"test"}"#),
         )
         .unwrap();
-    let send_elapsed = start.elapsed();
-    assert!(
-        send_elapsed < Duration::from_millis(50),
-        "fast send took {:?}, want < 50ms",
-        send_elapsed
-    );
 
     // The slow sidecar does not read its input and ends at the terminate signal of the stop.
     sidecars.stop();
@@ -2330,8 +2318,8 @@ fn standard_io_sidecar_first_answer_after_spawn_is_recorded() {
 }
 
 /// The failing restart script: each request gets an invalid message, unless the file ok exists in the folder; then the
-/// process runs without failing.
-const RESTART_SCRIPT: &str = "#!/bin/sh\nread request\nif [ -f DIR/ok ]; then exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n";
+/// process answers its first request with that request and runs without failing.
+const RESTART_SCRIPT: &str = "#!/bin/sh\nread -r request\nif [ -f DIR/ok ]; then printf '%s\\n' \"$request\"; exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n";
 
 /// A clock that a restart-limit check moves. Its time is the base plus the offset that the check set.
 #[derive(Clone)]
@@ -2424,7 +2412,7 @@ fn require_restart_limit(result: Result<(), String>, offset: Duration) {
 fn restarts_after_three_failures_within_the_window() {
     let clock = RestartClock::new();
     let (sidecars, directory) = restart_sidecars(&clock);
-    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    let (window, events, failures) = failing_owner("a", "/projects/a");
     for seconds in [0, 10, 20] {
         let offset = Duration::from_secs(seconds);
         send_at(&clock, &sidecars, &window, "s1", offset).unwrap();
@@ -2433,10 +2421,10 @@ fn restarts_after_three_failures_within_the_window() {
     // After three failures within 300 seconds the next send starts a process, which runs without failing.
     std::fs::write(directory.path().join("ok"), b"").unwrap();
     send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(30)).unwrap();
-    assert!(
-        failures.recv_timeout(Duration::from_millis(200)).is_err(),
-        "the restarted sidecar failed"
-    );
+    // The answer comes after the check of the file, so the restarted process writes no invalid message after it, and a
+    // failure that its start caused is delivered before it.
+    events.recv().unwrap();
+    assert!(failures.try_recv().is_err(), "the restarted sidecar failed");
     // The restarted sidecar does not read its input and ends at the terminate signal of the stop.
     sidecars.stop();
 }

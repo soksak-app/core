@@ -419,12 +419,10 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 
 	owner := support.NewFakeOwner("/projects/test")
 
-	// The first Send to the fast sidecar launches that process. The start time is unrelated to property 1, so it is launched first and only recorded.
-	started := time.Now()
+	// The first Send to the fast sidecar launches that process, so the send of property 1 goes to a running process.
 	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"start"}`)); err != nil {
 		t.Fatalf("fast start: %v", err)
 	}
-	t.Logf("the first fast send, which starts the process, took %v", time.Since(started))
 
 	// Sends to the slow sidecar until the channel is full.
 	// Each message is made large to fill the pipe buffer (64KB) quickly.
@@ -450,18 +448,11 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 
 	err = lastErr
 
-	// Property 1: even when the channel of the slow sidecar is full, Send() to the fast sidecar does not block.
-	// Send() only puts into the channel of the process that is already launched and returns immediately, so it must take less than 50ms.
-	start := time.Now()
-
-	// Sends to the fast sidecar (this is the ordinary case).
+	// Property 1: even when the channel of the slow sidecar is full, Send() to the fast sidecar does not block. The slow sidecar
+	// reads nothing until the stop, so a send that waits for its channel does not return, and the check stops at the limit of its
+	// runner.
 	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"test"}`)); err != nil {
 		t.Fatalf("fast send: %v", err)
-	}
-
-	sendElapsed := time.Since(start)
-	if sendElapsed > 50*time.Millisecond {
-		t.Errorf("fast send took %v, want < 50ms", sendElapsed)
 	}
 
 	// The slow sidecar does not read its input and ends at the terminate signal of the stop.
@@ -1418,8 +1409,9 @@ func (c *restartClock) read() time.Time {
 	return c.now
 }
 
-// restartScript is a sidecar that fails on each request with an invalid message, unless the file ok exists in its folder; then it runs.
-const restartScript = "#!/bin/sh\nread request\nif [ -f DIR/ok ]; then exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n"
+// restartScript is a sidecar that fails on each request with an invalid message, unless the file ok exists in its folder; then it
+// answers its first request with that request and runs.
+const restartScript = "#!/bin/sh\nread -r request\nif [ -f DIR/ok ]; then printf '%s\\n' \"$request\"; exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n"
 
 // restartSidecars declares the restartScript sidecar, which plugin-a lists in dependencies, with an injected clock.
 func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
@@ -1485,17 +1477,16 @@ func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 	if err := sendAt(t, clock, sidecars, owner, "s1", 30*time.Second); err != nil {
 		t.Fatalf("send after three failures: %v", err)
 	}
+	// The answer comes after the check of the file, so the restarted process writes no invalid message after it, and a failure
+	// that its start caused is delivered before it.
+	owner.Next(t)
 	select {
 	case value := <-owner.Failures:
 		t.Fatalf("the restarted sidecar failed: %+v", value)
-	case <-time.After(200 * time.Millisecond):
+	default:
 	}
-	// The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
-	stopping := time.Now()
+	// The restarted sidecar does not read its input and ends at the terminate signal of the stop.
 	sidecars.Stop()
-	if elapsed := time.Since(stopping); elapsed > time.Second {
-		t.Fatalf("the stop took %v", elapsed)
-	}
 }
 
 // contract: sidecars.restart.fourth-failure-stops
@@ -1584,12 +1575,8 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	if err := sendAt(t, clock, sidecars, owner, "s1", 43*time.Second); err != nil {
 		t.Fatalf("send of the refused surface after the reset: %v", err)
 	}
-	// The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
-	stopping := time.Now()
+	// The restarted sidecar does not read its input and ends at the terminate signal of the stop.
 	sidecars.Stop()
-	if elapsed := time.Since(stopping); elapsed > time.Second {
-		t.Fatalf("the stop took %v", elapsed)
-	}
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}

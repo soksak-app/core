@@ -1994,14 +1994,17 @@ fn persistent_start_does_not_delay_other_sidecars() {
         serde_json::to_vec(&endpoint).unwrap(),
     )
     .unwrap();
+    // The service holds its answer to hello until the send to the other sidecar returned, so a send that waits for the
+    // start does not return, and the check stops at the limit of its runner.
     let (hello_seen, hello_received) = channel();
+    let (release, released) = channel::<()>();
     let server = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         let mut reader = BufReader::new(stream.try_clone().unwrap());
         let mut hello = String::new();
         reader.read_line(&mut hello).unwrap();
         hello_seen.send(()).unwrap();
-        thread::sleep(Duration::from_millis(500));
+        released.recv().unwrap();
         writeln!(
             stream,
             "{{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}}"
@@ -2038,7 +2041,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
             &raw(r#"{"data":"start"}"#),
         )
         .unwrap();
-    let waited = thread::scope(|scope| {
+    thread::scope(|scope| {
         let service = scope.spawn(|| {
             sidecars.send(
                 &window,
@@ -2048,7 +2051,6 @@ fn persistent_start_does_not_delay_other_sidecars() {
             )
         });
         hello_received.recv().unwrap();
-        let begin = std::time::Instant::now();
         sidecars
             .send(
                 &window,
@@ -2057,14 +2059,9 @@ fn persistent_start_does_not_delay_other_sidecars() {
                 &raw(r#"{"data":"during"}"#),
             )
             .unwrap();
-        let waited = begin.elapsed();
+        release.send(()).unwrap();
         service.join().unwrap().unwrap();
-        waited
     });
-    assert!(
-        waited < Duration::from_millis(50),
-        "a send to another sidecar waited {waited:?} for the service start, want < 50ms"
-    );
     // The service discards close-owner and shutdown and ends with the connection, which ends the stop; a stop that waits
     // past it stops at the limit of the runner.
     sidecars.stop();
@@ -2927,16 +2924,12 @@ fn layout_surface(surface: &str) -> RetainedSurface {
     }
 }
 
-/// Checks that the service keeps running: a retain that the service answers comes after the lines of what the close
-/// started, and a replacement runs on its own thread, so the check also gives that thread time to send.
-fn assert_no_replacement(
-    service: &ReplaceService,
-    sidecars: &Sidecars<FakeOwner>,
-    layout: &[RetainedSurface],
-) {
-    thread::sleep(Duration::from_millis(200));
-    sidecars.retain_sessions(layout).unwrap();
-    thread::sleep(Duration::from_millis(200));
+/// Checks that the service keeps running after the calls that may replace it returned: each such call records the
+/// replacement that it decides before it returns, and a replacement sends close-owner only after that record, so no
+/// record and no close-owner mean that no replacement runs.
+fn assert_no_replacement(service: &ReplaceService, sidecars: &Sidecars<FakeOwner>) {
+    let replacing = sidecars.replacing();
+    assert!(replacing.is_empty(), "the host replaces {replacing:?}");
     let operations = service.operations.lock().unwrap().clone();
     assert!(
         !operations
@@ -3129,7 +3122,7 @@ fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
     sidecars
         .native_views_removed(&owner, &["tab-of-another-plugin".to_string()].into())
         .unwrap();
-    assert_no_replacement(&service, &sidecars, &layout);
+    assert_no_replacement(&service, &sidecars);
     assert_eq!(sidecars.outdated()[0].sessions, 1);
     // A layout surface leaves the count and the service is replaced.
     sidecars.retain_sessions(&[]).unwrap();
@@ -3188,7 +3181,12 @@ fn an_outdated_service_waits_for_the_first_layout_list() {
         .unwrap();
     events.recv().unwrap();
     sidecars.retain(&owner, &|_| false).unwrap();
-    thread::sleep(Duration::from_millis(200));
+    // The close decided before it returned, and it records each replacement that it decides.
+    let replacing = sidecars.replacing();
+    assert!(
+        replacing.is_empty(),
+        "the host replaces {replacing:?} before the first layout list"
+    );
     let operations = service.operations.lock().unwrap().clone();
     assert!(
         !operations
