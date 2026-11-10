@@ -218,14 +218,13 @@ func TestAFailedCommandOfAViewKeepsItsCode(t *testing.T) {
 	}
 }
 
-func TestAViewThatDoesNotReplyEndsItsCommandAtTheDeclaredLimit(t *testing.T) {
-	r := newViewRelay(t)
-	surface := r.surface()
-	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.close"})
-	r.ask(9, "command.run", `{"name": "textprobe.close", "params": {}}`)
-	failure := r.answer(9)["error"].(map[string]any)
-	if failure["code"] != float64(workbench.Failed) || failure["message"] != "command textprobe.close did not reply within 40ms" {
-		t.Fatalf("the reply is %v", failure)
+// A command of a view has no time limit (docs/spec/exposure.md, command `timeout`), so the registry keeps no limit to give it.
+func TestTheRegistryKeepsNoTimeLimitOfACommand(t *testing.T) {
+	registry := reflect.TypeOf(&workbench.Registry{})
+	for _, name := range []string{"CommandTimeout"} {
+		if _, present := registry.MethodByName(name); present {
+			t.Errorf("the registry has the method %s, which gives a command a time limit", name)
+		}
 	}
 }
 

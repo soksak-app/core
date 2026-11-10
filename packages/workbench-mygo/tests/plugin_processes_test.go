@@ -1,6 +1,10 @@
 package workbench_test
 
-import "testing"
+import (
+	"reflect"
+	"slices"
+	"testing"
+)
 
 type openCallRead struct {
 	Plugin          string   `json:"plugin"`
@@ -12,7 +16,6 @@ type lossRead struct {
 	Plugin      string `json:"plugin"`
 	Abandoned   int    `json:"abandoned"`
 	LateReplies int    `json:"lateReplies"`
-	Timeouts    int    `json:"timeouts"`
 	PeerLost    int    `json:"peerLost"`
 }
 
@@ -43,23 +46,77 @@ func TestACommandOfAViewIsAnOpenCallUntilItsReply(t *testing.T) {
 	}
 }
 
-// The limit of a command counts a timeout, and the reply that follows it counts a late reply.
-func TestATimeoutAndALateReplyCountAsLosses(t *testing.T) {
+// A command has no time limit (docs/spec/exposure.md, command `timeout`): a view that has not replied keeps its command open
+// after every step that the request started, and the reply ends it.
+func TestACommandOfAViewWaitsForItsReplyWithoutALimit(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
 	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.close"})
 	r.ask(9, "command.run", `{"name": "textprobe.close", "params": {}}`)
 	request := r.request(0)
-	r.answer(9)
-	got := status[[]lossRead](t, r.f, "core.plugin.losses")
-	if len(got) != 1 || got[0] != (lossRead{Plugin: "textprobe", Timeouts: 1}) {
+	// The view received the request, and the steps that the request started ran: nothing but the reply is left to end it.
+	r.f.pending.drain(t)
+	r.mu.Lock()
+	answered := r.answers[9]
+	r.mu.Unlock()
+	if answered != nil {
+		t.Fatalf("the command ended before the reply of its view: %v", answered)
+	}
+	if got := status[[]openCallRead](t, r.f, "core.plugin.open-calls"); len(got) != 1 || got[0].Count != 1 {
+		t.Fatalf("the open calls are %+v", got)
+	}
+	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "textprobe", "id": request["id"], "result": "closed"})
+	if reply := r.answer(9); reply["result"] != "closed" {
+		t.Fatalf("the reply is %v", reply)
+	}
+	if got := status[[]lossRead](t, r.f, "core.plugin.losses"); len(got) != 0 {
 		t.Fatalf("the losses are %+v", got)
+	}
+}
+
+// A post that settles the command of a replaced view ends it, and the reply that follows counts a late reply.
+func TestAReplyAfterTheCommandEndedCountsALateReply(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.close"})
+	r.post = func(map[string]any) (any, error) {
+		return map[string]any{"cancelled": true, "sourceGeneration": 1}, nil
+	}
+	r.ask(9, "command.run", `{"name": "textprobe.close", "params": {}}`)
+	request := r.request(0)
+	r.answer(9)
+	if got := status[[]lossRead](t, r.f, "core.plugin.losses"); len(got) != 0 {
+		t.Fatalf("the losses before the reply are %+v", got)
 	}
 	r.emit("view-reply", map[string]any{"surface": surface, "plugin": "textprobe", "id": request["id"], "result": nil})
 	r.f.pending.drain(t)
-	got = status[[]lossRead](t, r.f, "core.plugin.losses")
-	if len(got) != 1 || got[0] != (lossRead{Plugin: "textprobe", Timeouts: 1, LateReplies: 1}) {
+	got := status[[]lossRead](t, r.f, "core.plugin.losses")
+	if len(got) != 1 || got[0] != (lossRead{Plugin: "textprobe", LateReplies: 1}) {
 		t.Fatalf("the losses after the late reply are %+v", got)
+	}
+}
+
+// A row of core.plugin.losses holds the plugin and the three kinds of loss, as the JavaScript workbench reports them: a command
+// that has no time limit counts no timeout.
+func TestALossRowHoldsThePluginAndThreeKindsOfLoss(t *testing.T) {
+	r := newViewRelay(t)
+	surface := r.surface()
+	r.call(surface, "runtime.command.register", map[string]any{"name": "textprobe.input"})
+	r.ask(9, "command.run", `{"name": "textprobe.input", "params": {}}`)
+	r.request(0)
+	r.f.run("core.tab.close", map[string]string{"tab": surface})
+	r.f.pending.drain(t)
+	rows := status[[]map[string]any](t, r.f, "core.plugin.losses")
+	if len(rows) != 1 {
+		t.Fatalf("the losses are %v", rows)
+	}
+	var keys []string
+	for key := range rows[0] {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	if want := []string{"abandoned", "lateReplies", "peerLost", "plugin"}; !reflect.DeepEqual(keys, want) {
+		t.Fatalf("a loss row has the keys %v, not %v", keys, want)
 	}
 }
 

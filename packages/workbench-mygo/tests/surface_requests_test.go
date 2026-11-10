@@ -19,7 +19,7 @@ import (
 func terminalExposes() workbench.Exposes {
 	return workbench.Exposes{
 		Status:   []json.RawMessage{json.RawMessage(`{"name": "textprobe.screen"}`)},
-		Commands: []json.RawMessage{json.RawMessage(`{"name": "textprobe.input"}`), json.RawMessage(`{"name": "textprobe.close", "timeout": 2500}`)},
+		Commands: []json.RawMessage{json.RawMessage(`{"name": "textprobe.input"}`), json.RawMessage(`{"name": "textprobe.close"}`)},
 		Element:  []json.RawMessage{json.RawMessage(`{"name": "textprobe.view"}`)},
 	}
 }
@@ -227,17 +227,17 @@ func TestARequestChoosesTheSurfaceOfItsName(t *testing.T) {
 	f.refuses(input, workbench.Unregistered, "command textprobe.input is not registered")
 }
 
-func TestAForwardCarriesTheDeclaredTimeoutAndTheReplyOfTheSurface(t *testing.T) {
+// A forward carries no time limit: it ends by the reply of the surface.
+func TestAForwardCarriesNoTimeoutAndTheReplyOfTheSurface(t *testing.T) {
 	f := newSurfaceRequests(t)
 	f.register("tab-a", "command", "textprobe.input")
 	f.register("tab-a", "command", "textprobe.close")
 	f.ask("command.run", `{"name": "textprobe.input", "params": {}}`)
-	if _, present := f.forwards[0]["timeout"]; present {
-		t.Fatalf("a command without a timeout forwarded %v", f.forwards[0])
-	}
 	f.ask("command.run", `{"name": "textprobe.close", "params": {}}`)
-	if f.forwards[1]["timeout"] != float64(2500) {
-		t.Fatalf("the forward is %v", f.forwards[1])
+	for _, forward := range f.forwards {
+		if _, present := forward["timeout"]; present {
+			t.Fatalf("a forward carries a time limit: %v", forward)
+		}
 	}
 	if f.forwards[0]["id"] == f.forwards[1]["id"] {
 		t.Fatal("two forwards have one id")
@@ -614,5 +614,26 @@ func TestTheRegistryHoldsNoCopyOfTheDeclarations(t *testing.T) {
 	runtime.KeepAlive(exposes)
 	if n > uint64(written) {
 		t.Errorf("the registry holds %d kB for %d kB of declarations", n>>10, written>>10)
+	}
+}
+
+// A command declaration with timeout is refused, and nothing of its declarations is added.
+func TestACommandDeclarationWithATimeoutIsRefused(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, timeout := range []string{"1", "10000", "600000", "0", `"100"`} {
+		registry := workbench.NewRegistry(declared)
+		err := registry.Declare("textprobe", workbench.Exposes{
+			Status:   []json.RawMessage{json.RawMessage(`{"name": "textprobe.screen"}`)},
+			Commands: []json.RawMessage{json.RawMessage(`{"name": "textprobe.close", "timeout": ` + timeout + `}`)},
+		})
+		if err == nil || err.Error() != "textprobe exposes textprobe.close: timeout is not a member of a command declaration" {
+			t.Fatalf("a declaration with timeout %s gave %v", timeout, err)
+		}
+		if err := registry.Declare("textprobe", workbench.Exposes{Status: []json.RawMessage{json.RawMessage(`{"name": "textprobe.screen"}`)}}); err != nil {
+			t.Fatalf("the refused declaration with timeout %s kept a status: %v", timeout, err)
+		}
 	}
 }
