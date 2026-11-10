@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -457,4 +458,104 @@ func TestATabDrawnDuringAPlacementTakesTheKeyboardAfterItsOwnPlacement(t *testin
 	if tab == "" || !ok || target == nil || *target != tab {
 		t.Fatalf("the keyboard is in %s, not in the new tab %q", describeTarget(target), tab)
 	}
+}
+
+// keyboardHoldPlacement starts a placement whose presentSurfaces waits until the returned channel closes, so the window draws and
+// takes input while the placement runs.
+func keyboardHoldPlacement(t *testing.T, f *shellFixture, stored *surfaceHost) chan struct{} {
+	t.Helper()
+	gate := make(chan struct{})
+	stored.orderMu.Lock()
+	stored.presentGate = gate
+	stored.orderMu.Unlock()
+	// A new size moves the surfaces, so a placement starts and waits in presentSurfaces.
+	f.tester.SetSize(1100, 800)
+	f.tester.Frame()
+	f.pending.drain(t)
+	stored.orderMu.Lock()
+	stored.presentGate, stored.keyboard, stored.decided = nil, nil, nil
+	stored.orderMu.Unlock()
+	return gate
+}
+
+// keyboardRelease presses and releases the element name and runs the steps that follow, without a frame of their own.
+func keyboardRelease(t *testing.T, f *shellFixture, name string) {
+	t.Helper()
+	node, ok := exposedNode(f.tester.ElementTree(), name, "")
+	if !ok {
+		t.Fatalf("the workbench shows no %s", name)
+	}
+	f.tester.ClickAt(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+node.Bounds.H/2)
+	f.pending.drain(t)
+}
+
+// keyboardCalls returns the targets of the keyboard calls that the host had and whether each carried decided.
+func (h *surfaceHost) keyboardCalls() ([]*string, []bool) {
+	h.orderMu.Lock()
+	defer h.orderMu.Unlock()
+	return slices.Clone(h.keyboard), slices.Clone(h.decided)
+}
+
+// A release while a placement runs answers in its turn: its decided call reaches the host before the placement answers
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+func TestAReleaseDuringAPlacementSendsItsDecisionAtOnce(t *testing.T) {
+	f, stored := surfaceShell(t)
+	_, active := keyboardRing(t, f)
+	gate := keyboardHoldPlacement(t, f, stored)
+	keyboardRelease(t, f, "core.chrome.bar")
+	keyboard, decided := stored.keyboardCalls()
+	close(gate)
+	f.settle()
+	if len(decided) != 1 || !decided[0] || keyboard[0] == nil || *keyboard[0] != *active {
+		t.Fatalf("while the placement ran the release sent the keyboard calls %v decided %v, not one decided call to %s", describeTargets(keyboard), decided, *active)
+	}
+}
+
+// A release while the ring is on a surface that the host does not hold yet decides for the workbench in its turn, and the
+// placement that gives the host the surface moves the keyboard to it without decided (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+func TestAReleaseOnASurfaceThatTheHostDoesNotHoldDecidesForTheWorkbench(t *testing.T) {
+	f, stored := surfaceShell(t)
+	cards, _ := keyboardCards(t, f)
+	f.run("core.card.focus", map[string]string{"card": cards[0]})
+	gate := keyboardHoldPlacement(t, f, stored)
+	raw, err := json.Marshal(map[string]string{"card": cards[0], "plugin": "textprobe"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tab string
+	f.shell.Registry().RunLater("core.card.add-tab", raw, func(value any, err error) {
+		if err != nil {
+			t.Errorf("core.card.add-tab failed: %v", err)
+			return
+		}
+		tab = value.(map[string]string)["tab"]
+	})
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.pending.drain(t)
+	keyboardRelease(t, f, "core.chrome.bar")
+	keyboard, decided := stored.keyboardCalls()
+	if len(decided) != 1 || !decided[0] || keyboard[0] != nil {
+		close(gate)
+		t.Fatalf("the release on a surface that the host does not hold sent the keyboard calls %v decided %v, not one decided call to the workbench", describeTargets(keyboard), decided)
+	}
+	close(gate)
+	f.settle()
+	f.settle()
+	keyboard, decided = stored.keyboardCalls()
+	last := len(keyboard) - 1
+	if tab == "" || keyboard[last] == nil || *keyboard[last] != tab || decided[last] {
+		t.Fatalf("after the placement of %q the keyboard calls are %v decided %v", tab, describeTargets(keyboard), decided)
+	}
+	if slices.Contains(decided[1:], true) {
+		t.Fatalf("the placement sent a second decided call: %v", decided)
+	}
+}
+
+func describeTargets(targets []*string) []string {
+	described := make([]string, len(targets))
+	for i, target := range targets {
+		described[i] = describeTarget(target)
+	}
+	return described
 }

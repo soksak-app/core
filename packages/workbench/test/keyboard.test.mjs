@@ -35,7 +35,7 @@ async function page() {
   const decisions = [];
   /* held: a promise that the next keyboard calls answer with, null to answer at once. */
   const focusAnswer = { held: null };
-  // The decided calls, each the surface of a decided surfaceFocus or "modal" for keyboardDecided.
+  // The surface of each decided surfaceFocus.
   const ends = [];
   const modal = { open: null, listeners: new Set() };
   const actualHost = await import("../host.js");
@@ -43,8 +43,7 @@ async function page() {
     ...actualHost,
     report: (line) => assert.fail(`the page reported: ${line}`),
     surfaces: { ...actualHost.surfaces,
-      focus: (surface, decided) => { calls.push(surface); if (decided) ends.push(surface); return focusAnswer.held ?? Promise.resolve(); },
-      keyboardDecided: () => { ends.push("modal"); return Promise.resolve(); } },
+      focus: (surface, decided) => { calls.push(surface); if (decided) ends.push(surface); return focusAnswer.held ?? Promise.resolve(); } },
     modalState: () => modal.open,
     onModalState: (fn) => { modal.listeners.add(fn); return () => modal.listeners.delete(fn); },
   } });
@@ -245,8 +244,8 @@ test("each decision of the keyboard is recorded with its cause", { timeout: 5000
   assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "responder", target: added, sent: added, owed: true, decided: false, decision: "send" });
 });
 
-// The host holds the input of the window from the release of a press on the workbench until a decided call, so every press of the
-// page, on any element, is answered by one decided call after its handlers ran (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+// Each release of a left press on the workbench asks for one decided call, which the page sends in the dispatch of the release, from
+// what the press changed, on any element (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
 const pressTargets = {
   "a hidden tab": (b) => tabElement(b.plane.currentGrid().card(b.plane.focused()).data.tabs.map(({ id }) => id).find((id) => id !== b.ringSurface())),
   "the active tab": (b) => tabElement(b.ringSurface()),
@@ -268,12 +267,66 @@ for (const [name, element] of Object.entries(pressTargets)) {
     b.ends.length = 0;
     press(target, "pointerdown");
     press(target, "pointerup");
+    assert.deepEqual(b.ends, [b.ringSurface()], "the release did not send its decided call to the ring in its dispatch");
     await new Promise((done) => setTimeout(done, 10));
     await b.placed();
     assert.equal(b.ends.length, 1, `the decided calls of the press: ${JSON.stringify(b.ends)}`);
-    assert.equal(b.ends[0], b.ringSurface(), "the decided call and the ring disagree");
   });
 }
+
+test("a release while the ring is on a surface that the host does not hold decides for the workbench", { timeout: 5000 }, async () => {
+  await b.reset();
+  const before = b.ringSurface();
+  b.plane.addTabTo(b.plane.focused(), pluginId, null);
+  await b.flush();
+  const added = b.ringSurface();
+  b.ends.length = 0;
+  b.calls.length = 0;
+  press(document.body, "pointerdown");
+  press(document.body, "pointerup");
+  assert.deepEqual(b.ends, [null], "the release did not send one decided call for the workbench in its dispatch");
+  assert.deepEqual(b.decisions.at(-1), { level: "debug", cause: "press", target: null, sent: before, owed: true, decided: true, decision: "send" });
+  await b.placed();
+  assert.equal(b.calls.at(-1), added, "the placement that gave the host the surface did not move the keyboard to it");
+  assert.deepEqual(b.ends, [null], "the placement sent a second decided call");
+});
+
+test("a release while a keyboard call has no answer sends its decided call", { timeout: 5000 }, async () => {
+  await b.reset();
+  const release = holdFocus();
+  b.plane.focusCard(otherCard(b));
+  await b.flush();
+  b.ends.length = 0;
+  press(document.body, "pointerdown");
+  press(document.body, "pointerup");
+  assert.deepEqual(b.ends, [b.ringSurface()], "the decided call waited for the answer of the earlier keyboard call");
+  release();
+  await b.placed();
+});
+
+test("a release while a modal is open decides for the ring and the modal keeps the keyboard", { timeout: 5000 }, async () => {
+  await b.reset();
+  b.modal.open = { id: "pickerLayer" };
+  for (const fn of b.modal.listeners) fn();
+  await b.flush();
+  b.ends.length = 0;
+  b.calls.length = 0;
+  press(document.body, "pointerdown");
+  press(document.body, "pointerup");
+  assert.deepEqual(b.ends, [b.ringSurface()], "the release in a modal did not send one decided call for the ring");
+  assert.equal(b.decisions.at(-1).decision, "modal");
+  b.modal.open = null;
+  for (const fn of b.modal.listeners) fn();
+  await b.flush();
+  assert.equal(b.calls.at(-1), b.ringSurface(), "the close of the modal did not give the keyboard back to the ring");
+});
+
+test("the page never holds the input of the window", () => {
+  const folder = new URL("../", import.meta.url);
+  const sources = readdirSync(folder).filter((name) => name.endsWith(".js") || name.endsWith(".html"));
+  const holds = sources.filter((file) => /keyboardHold|keyboardDecided/.test(readFileSync(new URL(file, folder), "utf8")));
+  assert.deepEqual(holds, [], "a source sends a hold of the input or its end");
+});
 
 test("a modal keeps the keyboard until it closes", { timeout: 5000 }, async () => {
   await b.reset();
