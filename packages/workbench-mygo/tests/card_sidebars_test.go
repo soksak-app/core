@@ -75,6 +75,33 @@ func TestACardShowsItsSetBesideItsContent(t *testing.T) {
 	f.audit()
 }
 
+// The rect of a sidebar in core.sidebars is the rect of its set, as the page reports the box of `.set`: a card side stops before its
+// inner border and grip, and no sidebar holds its status line (docs/spec/example-model.md).
+func TestTheStatusOfASidebarNamesTheRectOfItsSet(t *testing.T) {
+	f, card := cardSidebar(t, "left")
+	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "right", "set": "set-install"})
+	var sidebars []struct {
+		Sidebar string `json:"sidebar"`
+		Rect    struct{ X, Y, W, H float32 }
+	}
+	if err := json.Unmarshal([]byte(f.status("core.sidebars")), &sidebars); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, drawn := range sidebars {
+		set := f.box("core.sidebar", drawn.Sidebar)
+		if got := (ui.Rect{X: drawn.Rect.X, Y: drawn.Rect.Y, W: drawn.Rect.W, H: drawn.Rect.H}); got != set {
+			t.Errorf("core.sidebars names %s at %+v, and its set stands at %+v", drawn.Sidebar, got, set)
+		}
+		seen[drawn.Sidebar] = true
+	}
+	for _, want := range []string{"left", card + ":left", card + ":right"} {
+		if !seen[want] {
+			t.Errorf("core.sidebars has no %s: %+v", want, sidebars)
+		}
+	}
+}
+
 func TestATopSideLiesInTheContentColumn(t *testing.T) {
 	f, card := cardSidebar(t, "top")
 	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "left", "set": "set-install"})
