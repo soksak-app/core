@@ -486,6 +486,7 @@ fn invalid_json_closes_connection() {
 | `flush.buffer.closes-delivered-after-drain` | 대기열이 가득 찬 동안 버퍼에 넣은 표면 닫기 알림이 사이드카에 도착한다. | all |
 | `flush.buffer.consumed-acks-not-coalesced` | 버퍼에 넣은 consumed 응답은 같은 이미지의 두 응답을 포함해 각각 한 번 도착한다. | all |
 | `flush.buffer.delivered-after-queued-bodies` | 버퍼에 넣은 응답과 닫기 알림은 이미 대기열에 있던 본문 뒤에 도착한다. | all |
+| `flush.buffer.written-in-the-order-of-sending` | 호스트는 사이드카의 줄을 받아들인 순서로 쓴다: 대기열이 가득 찬 동안 버퍼에 넣은 응답이나 닫기 알림은 그 뒤에 대기열이 받아들이는 모든 줄보다 먼저 사이드카에 도착한다. | all |
 | `verification.flush-fixture.receives-before-cleanup` | Tauri drain scenario는 cleanup callback보다 먼저 receive callback을 호출한다. 이 test-only case는 child process나 sidecar queue를 검증하지 않는다. | tauriv2 only: 이 fixture는 Tauri sidecar test harness에 속한다 |
 | `verification.trace-switch.requires-the-test-switch` | test switch를 쥐지 않고 performance trace를 전환하는 test는 첫 호출에서 실패한다. 이 test-only case는 전환 자체를 검증하지 않는다. | tauriv2 only: 이 guard는 Rust host의 lib test에 속한다 |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | all |

@@ -484,6 +484,7 @@ Items:
 | `flush.buffer.closes-delivered-after-drain` | Surface close notices buffered while the queue is full reach the sidecar. | all |
 | `flush.buffer.consumed-acks-not-coalesced` | Each buffered consumed acknowledgement arrives once, including two for the same image. | all |
 | `flush.buffer.delivered-after-queued-bodies` | Buffered replies and close notices arrive after the bodies already queued. | all |
+| `flush.buffer.written-in-the-order-of-sending` | The host writes the lines of a sidecar in the order that it accepted them: a reply or close notice buffered while the queue is full reaches the sidecar before every line that the queue accepts after it. | all |
 | `verification.flush-fixture.receives-before-cleanup` | The Tauri drain scenario invokes its receive callback before its cleanup callback; this test-only case does not exercise a child process or sidecar queue. | tauriv2 only: the fixture belongs to the Tauri sidecar test harness |
 | `verification.trace-switch.requires-the-test-switch` | A test that switches the performance trace without holding the test switch fails on its first call; this test-only case does not exercise the switch itself. | tauriv2 only: the guard belongs to the lib tests of the Rust host |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | Invalidating a sidecar's images re-sends its configure at the same size and leaves other sidecars' images untouched. | all |
