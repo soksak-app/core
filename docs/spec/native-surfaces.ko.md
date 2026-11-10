@@ -218,7 +218,7 @@ Tauri host는 현재 view-message envelope를 한 번 decode하고 reply, call �
 
 ### 섹션 자리
 
-컴포지터는 그려진 사이드바의 각 섹션 본문을 그 [section](plugins.ko.md#섹션) surface의 자리로 잰다. 이 자리는 section surface id로 구분하며, 카드 자리와 나란히 두고 카드 사이드바와 창 사이드바 모두에 적용한다. 모든 section 자리를 잰 뒤에만 배치가 완전하다. 숨겨진 섹션, 접힌 섹션, 선택되지 않은 탭의 섹션, 꺼진 사이드바나 표시되지 않는 공간의 섹션은 측정되지 않은 탭 surface와 같이 `visible`이 false이고 frame이 0인 자리를 가진다. 따라서 모든 section surface는 배치마다 자리를 가진다. Section view는 탭 view와 같은 배치 순서로 놓이고, 잘리고, 보인다.
+컴포지터는 그려진 사이드바의 각 섹션 본문을 그 [section](plugins.ko.md#섹션) surface의 자리로 잰다. 이 자리는 section surface id로 구분하며, 카드 자리와 나란히 두고 카드 사이드바와 창 사이드바 모두에 적용한다. 모든 section 자리를 잰 뒤에만 배치가 완전하다. 숨겨진 섹션, 곧 접힌 섹션, 선택되지 않은 탭의 섹션, 스위치나 전체화면 카드가 숨긴 창 사이드바의 섹션은 측정되지 않은 탭 surface와 같이 `visible`이 false이고 frame이 0인 자리를 가진다. 따라서 모든 section surface는 배치마다 자리를 가진다. 보이지 않는 공간은 section surface를 갖지 않는다([섹션](plugins.ko.md#섹션)). Section view는 탭 view와 같은 배치 순서로 놓이고, 잘리고, 보인다.
 
 ## Surface host container
 

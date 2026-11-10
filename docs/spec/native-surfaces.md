@@ -217,7 +217,7 @@ The Tauri host decodes one current view-message envelope once and dispatches it 
 
 ### Section seats
 
-The compositor measures the body of each section of a drawn sidebar as the seat of its section surface, keyed by the section surface id, beside the card seats, for card sidebars and window sidebars, and a layout is complete only when every section seat is measured. A hidden section, folded, of an unselected tab, of a sidebar that is turned off or of a space that is not shown, has a seat with `visible` false and a zero frame, as an unmeasured tab surface has, so every section surface has a seat in each placement. A section view is placed, clipped and shown by the same placement sequence as a tab view.
+The compositor measures the body of each section of a drawn sidebar as the seat of its section surface, keyed by the section surface id, beside the card seats, for card sidebars and window sidebars, and a layout is complete only when every section seat is measured. A hidden section, folded, of an unselected tab or of a window sidebar that its switch or a fullscreen card hides, has a seat with `visible` false and a zero frame, as an unmeasured tab surface has, so every section surface has a seat in each placement. A space that is not shown holds no section surface ([sections](plugins.md#sections)). A section view is placed, clipped and shown by the same placement sequence as a tab view.
 
 ## Surface host container
 
