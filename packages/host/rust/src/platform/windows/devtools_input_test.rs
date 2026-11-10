@@ -221,7 +221,7 @@ fn a_key_that_is_no_name_and_no_character_is_not_sent() {
     }
 }
 
-/// Holds the calls of a queue, which end when the test completes them, and the waits of a capture.
+/// Holds the calls of a queue, which end when the test completes them, and the waits of a queue.
 #[derive(Default)]
 struct Fake {
     methods: RefCell<Vec<&'static str>>,
@@ -267,7 +267,6 @@ impl Transport for FakeTransport {
     }
 }
 
-/// The wait of a capture.
 const WAIT: Duration = Duration::from_secs(1);
 const FOCUS: &str = "Emulation.setFocusEmulationEnabled";
 
@@ -280,7 +279,11 @@ fn call(method: &'static str) -> Call {
 
 fn queue() -> (InputQueue, Rc<Fake>) {
     let fake = Rc::new(Fake::default());
-    (InputQueue::new(Box::new(FakeTransport(fake.clone()))), fake)
+    let after = fake.after();
+    (
+        InputQueue::new(Box::new(FakeTransport(fake.clone())), after),
+        fake,
+    )
 }
 
 /// A queue whose focus emulation already completed, so that the next call is the first one of the fake after its index 0.
@@ -307,8 +310,8 @@ fn answers() -> (Answers, impl Fn() -> Answer) {
 fn a_queue_sends_one_call_at_a_time() {
     let (queue, fake) = queue();
     let (got, answer) = answers();
-    queue.push(call("a"), Some(answer())).unwrap();
-    queue.push(call("b"), Some(answer())).unwrap();
+    queue.push(call("a"), WAIT, Some(answer())).unwrap();
+    queue.push(call("b"), WAIT, Some(answer())).unwrap();
     assert_eq!(*fake.methods.borrow(), [FOCUS]);
     fake.complete(0, Ok(()));
     assert_eq!(*fake.methods.borrow(), [FOCUS, "a"]);
@@ -322,14 +325,14 @@ fn a_queue_sends_one_call_at_a_time() {
 #[test]
 fn a_queue_emulates_the_focus_before_its_first_input_only() {
     let (queue, fake) = queue();
-    queue.push(call("a"), None).unwrap();
+    queue.push(call("a"), WAIT, None).unwrap();
     assert_eq!(
         serde_json::from_str::<Value>(&fake.params.borrow()[0]).unwrap(),
         json!({"enabled": true})
     );
     fake.complete(0, Ok(()));
     fake.complete(1, Ok(()));
-    queue.push(call("b"), None).unwrap();
+    queue.push(call("b"), WAIT, None).unwrap();
     assert_eq!(*fake.methods.borrow(), [FOCUS, "a", "b"]);
 }
 
@@ -338,7 +341,7 @@ fn a_queue_emulates_the_focus_before_its_first_input_only() {
 fn a_call_that_fails_answers_its_failure() {
     let (queue, fake) = focused_queue();
     let (got, answer) = answers();
-    queue.push(call("a"), Some(answer())).unwrap();
+    queue.push(call("a"), WAIT, Some(answer())).unwrap();
     fake.complete(0, Err("refused".to_string()));
     assert_eq!(
         *got.borrow(),
@@ -350,11 +353,11 @@ fn a_call_that_fails_answers_its_failure() {
 #[test]
 fn the_failure_of_a_call_with_no_answer_goes_to_the_next_input() {
     let (queue, fake) = focused_queue();
-    queue.push(call("a"), None).unwrap();
+    queue.push(call("a"), WAIT, None).unwrap();
     fake.complete(0, Err("refused".to_string()));
-    let failure = queue.push(call("b"), None).unwrap_err();
+    let failure = queue.push(call("b"), WAIT, None).unwrap_err();
     assert!(failure.contains("refused"), "{failure}");
-    queue.push(call("c"), None).unwrap();
+    queue.push(call("c"), WAIT, None).unwrap();
 }
 
 // contract: platform.windows.input.call-that-cannot-start-answers-and-next-runs
@@ -363,73 +366,39 @@ fn a_call_that_cannot_start_answers_its_failure_and_the_next_one_runs() {
     let (queue, fake) = focused_queue();
     let (got, answer) = answers();
     *fake.refuse.borrow_mut() = Some("no call".to_string());
-    queue.push(call("a"), Some(answer())).unwrap();
+    queue.push(call("a"), WAIT, Some(answer())).unwrap();
     assert_eq!(
         *got.borrow(),
         [Err(InputFailure::Failed("no call".to_string()))]
     );
     *fake.refuse.borrow_mut() = None;
-    queue.push(call("b"), None).unwrap();
+    queue.push(call("b"), WAIT, None).unwrap();
     assert_eq!(*fake.methods.borrow(), ["b"]);
 }
 
-/// A call may never complete, and no limit ends its wait: a later input waits behind it and is sent after its completion.
-// contract: platform.windows.input.call-waits-for-its-completion
+// contract: platform.windows.input.incomplete-call-ends-wait-and-stops-queue
 #[test]
-fn a_call_waits_for_its_completion() {
+fn a_call_that_does_not_complete_ends_its_wait_and_stops_the_queue() {
     let (queue, fake) = focused_queue();
     let (got, answer) = answers();
-    queue.push(call("a"), Some(answer())).unwrap();
-    queue.push(call("b"), None).unwrap();
-    assert_eq!(*fake.methods.borrow(), ["a"]);
-    assert!(got.borrow().is_empty());
-    fake.complete(0, Ok(()));
-    assert_eq!(*got.borrow(), [Ok(())]);
-    assert_eq!(*fake.methods.borrow(), ["a", "b"]);
-}
-
-/// The end of the DevTools connection answers the open call and every waiting call with that end, a late completion answers nothing,
-/// and the next input goes to the new connection with the focus emulation first.
-// contract: platform.windows.input.connection-end-answers-open-calls
-#[test]
-fn the_end_of_the_connection_answers_the_open_calls() {
-    let (queue, fake) = queue();
-    let (got, answer) = answers();
-    queue.push(call("a"), Some(answer())).unwrap();
-    queue.push(call("b"), Some(answer())).unwrap();
-    queue.connection_ended("the process of the page ended");
-    assert_eq!(got.borrow().len(), 2);
-    for result in got.borrow().iter() {
-        let Err(InputFailure::Ended(text)) = result else {
-            panic!("the end answered {result:?}");
-        };
-        assert!(text.contains("the process of the page ended"), "{text}");
-    }
-    fake.complete(0, Ok(()));
-    assert_eq!(got.borrow().len(), 2);
-    queue.push(call("c"), Some(answer())).unwrap();
-    assert_eq!(*fake.methods.borrow(), [FOCUS, FOCUS]);
-    fake.complete(1, Ok(()));
-    assert_eq!(*fake.methods.borrow(), [FOCUS, FOCUS, "c"]);
-}
-
-/// The end of the window answers the open call with that end and refuses every later input with it.
-// contract: platform.windows.input.window-end-ends-queue
-#[test]
-fn the_end_of_the_window_ends_the_queue() {
-    let (queue, fake) = focused_queue();
-    let (got, answer) = answers();
-    queue.push(call("a"), Some(answer())).unwrap();
-    queue.end("the window ended");
-    let Some(Err(InputFailure::Ended(text))) = got.borrow().first().cloned() else {
-        panic!("the end answered {:?}", got.borrow());
-    };
-    assert!(text.contains("the window ended"), "{text}");
-    let failure = queue.push(call("b"), None).unwrap_err();
-    assert!(failure.contains("the window ended"), "{failure}");
+    queue.push(call("a"), WAIT, Some(answer())).unwrap();
+    fake.fire(0);
+    assert_eq!(*got.borrow(), [Err(InputFailure::TimedOut)]);
+    let failure = queue.push(call("b"), WAIT, None).unwrap_err();
+    assert!(failure.contains("did not complete"), "{failure}");
     fake.complete(0, Ok(()));
     assert_eq!(got.borrow().len(), 1);
-    assert_eq!(*fake.methods.borrow(), ["a"]);
+    queue.push(call("c"), WAIT, None).unwrap();
+    assert_eq!(*fake.methods.borrow(), ["a", "c"]);
+}
+
+// contract: platform.windows.input.completed-call-ends-its-wait
+#[test]
+fn a_completed_call_ends_its_wait() {
+    let (queue, fake) = focused_queue();
+    queue.push(call("a"), WAIT, None).unwrap();
+    fake.complete(0, Ok(()));
+    assert!(fake.timers.borrow()[0].is_none());
 }
 
 // contract: platform.windows.input.call-answer-becomes-pointer-result
@@ -437,14 +406,12 @@ fn the_end_of_the_window_ends_the_queue() {
 fn an_answer_of_a_call_becomes_the_pointer_result() {
     assert_eq!(pointer_delivery(&Ok(())), Delivery::Delivered);
     assert_eq!(
-        pointer_delivery(&Err(InputFailure::Failed("refused".to_string()))),
-        Delivery::Rejected
+        pointer_delivery(&Err(InputFailure::TimedOut)),
+        Delivery::Unreceived
     );
     assert_eq!(
-        pointer_delivery(&Err(InputFailure::Ended(
-            "the input of the web view ended: the window ended".to_string()
-        ))),
-        Delivery::Unreceived
+        pointer_delivery(&Err(InputFailure::Failed("refused".to_string()))),
+        Delivery::Rejected
     );
 }
 

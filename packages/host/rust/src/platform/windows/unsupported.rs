@@ -8,8 +8,8 @@ use crate::framework::Window;
 use serde_json::Value;
 
 use super::super::{
-    ClipboardValue, CoreRootResolver, DOMOverlay, DocumentOptions, Frame, FullscreenResult, Handle,
-    Hit, ImagePresentation, ImageReleased, Insets, Listener, NativeEventWait, PersistentStream,
+    ClipboardValue, CoreRootResolver, DOMOverlay, DocumentOptions, Frame, Handle, Hit,
+    ImagePresentation, ImageReleased, Insets, Listener, NativeEventWait, PersistentStream,
     ProcessFootprint, Raster, WindowOverlay,
 };
 
@@ -38,7 +38,7 @@ pub fn set_main_appearance(_view: &PlatformWebview, _dark: bool) -> Result<(), S
 pub fn fullscreen(
     _window: Handle,
     _on: bool,
-    _done: Box<dyn Fn(FullscreenResult, String)>,
+    _done: Box<dyn Fn(super::super::FullscreenResult, String)>,
 ) -> Result<(), String> {
     missing("full screen")
 }

@@ -10,6 +10,8 @@ use crate::framework::PlatformWebview;
 use crate::framework::Window;
 use serde_json::Value;
 
+use std::time::Duration;
+
 #[cfg(feature = "diagnostics")]
 use super::DocumentViewportMarker;
 use super::{
@@ -17,6 +19,11 @@ use super::{
     FullscreenResult, Handle, Hit, ImagePresentation, ImageReleased, Insets, Key, Listener,
     NativeEventWait, PersistentStream, Platform, Pointer, ProcessFootprint, Raster, WindowOverlay,
 };
+
+/// The time that a press or a release waits for the web view to receive it, and the time that an activation waits for the
+/// foreground. They are time limits of the Windows host, which no Windows machine verifies (F584-6).
+const RECEIVE_WAIT: Duration = Duration::from_secs(2);
+const ACTIVATE_WAIT: Duration = Duration::from_secs(5);
 
 #[cfg(feature = "diagnostics")]
 #[path = "capture.rs"]
@@ -500,7 +507,7 @@ impl Platform for Windows {
         pointer: Pointer,
         done: Box<dyn FnOnce(Delivery) + Send>,
     ) -> Result<(), String> {
-        input::pointer(window, pointer, done)
+        input::pointer(window, pointer, RECEIVE_WAIT, done)
     }
     fn input_activate(
         &self,
@@ -509,7 +516,7 @@ impl Platform for Windows {
         _y: f64,
         done: Box<dyn FnOnce(Result<(), String>) + Send>,
     ) -> Result<(), String> {
-        input::activate(window, done)
+        input::activate(window, ACTIVATE_WAIT, done)
     }
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         input::key(window, key)
