@@ -602,7 +602,6 @@ static BOOL leftPressOpen(NSWindow *window) {
 
 static char keyboardPendingKey, keyboardMonitorKey, keyboardClosedKey;
 
-
 // Ends the wait for the release of the press of window and returns the keyboard move that waited.
 static void (^takeKeyboardWait(NSWindow *window))(void) {
     id monitor = objc_getAssociatedObject(window, &keyboardMonitorKey);
