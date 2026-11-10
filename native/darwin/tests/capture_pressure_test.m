@@ -10,8 +10,10 @@ static void check(BOOL ok, NSString *label) {
 
 // Holds the query callback so that it arrives after the call began to wait, to check that the call waits for it.
 static void (^heldStillReply)(SCShareableContent *, NSError *);
+static dispatch_semaphore_t stillQueryHeld;
 static void holdStillQuery(id receiver, SEL selector, void (^reply)(SCShareableContent *, NSError *)) {
     heldStillReply = [reply copy];
+    dispatch_semaphore_signal(stillQueryHeld);
 }
 
 @interface CaptureStopFixture : NSObject
@@ -244,8 +246,9 @@ int main(void) { @autoreleasepool {
     if (query != NULL) {
         IMP original = method_setImplementation(query, (IMP)holdStillQuery);
         clearCaptureError(); setCaptureError(@"fixture later recording failure");
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
-            dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+        stillQueryHeld = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            dispatch_semaphore_wait(stillQueryHeld, DISPATCH_TIME_FOREVER);
             void (^reply)(SCShareableContent *, NSError *) = heldStillReply;
             heldStillReply = nil;
             if (reply == nil) return;
@@ -253,13 +256,12 @@ int main(void) { @autoreleasepool {
                 userInfo:@{NSLocalizedDescriptionKey: @"fixture late still failure"}]);
             [reply release];
         });
-        CFTimeInterval stillBegan = CACurrentMediaTime();
         stillError = NULL;
         BOOL rejected = !sp_capture_still((long[]){-1}, 1, stillPath.UTF8String, &stillError);
-        double waited = (CACurrentMediaTime() - stillBegan) * 1000;
         method_setImplementation(query, original);
-        check(rejected && waited >= 100 && stillError != NULL && strstr(stillError, "fixture late still failure") != NULL,
-            [NSString stringWithFormat:@"a held still query returns the result of its late callback (%.1fms)", waited]);
+        dispatch_release(stillQueryHeld); stillQueryHeld = NULL;
+        check(rejected && stillError != NULL && strstr(stillError, "fixture late still failure") != NULL,
+            @"a held still query returns the result of its late callback");
         check(strstr(sp_capture_error(), "fixture later recording failure") != NULL
             && strstr(sp_capture_error(), "fixture late still failure") == NULL,
             @"a late still callback cannot replace a recording error");

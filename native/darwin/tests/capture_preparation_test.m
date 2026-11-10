@@ -30,6 +30,8 @@ static void check(BOOL condition, NSString *message) {
 @end
 
 static void (^heldReply)(SCShareableContent *, NSError *);
+// Signaled by the held query when the call has handed its completion over and goes on to wait for it.
+static dispatch_semaphore_t queryHeld;
 static SCShareableContent *collisionContent;
 static SCContentFilter *collisionFilter;
 static SCStreamConfiguration *collisionConfig;
@@ -44,6 +46,7 @@ static void holdQuery(id receiver, SEL selector, void (^reply)(SCShareableConten
         return;
     }
     heldReply = [reply copy];
+    if (queryHeld) dispatch_semaphore_signal(queryHeld);
 }
 
 int main(void) { @autoreleasepool {
@@ -86,9 +89,11 @@ int main(void) { @autoreleasepool {
             captureFilter = (SCContentFilter *)obsoleteFilter;
             captureConfig = (SCStreamConfiguration *)obsoleteConfig;
             IMP original = method_setImplementation(query, (IMP)holdQuery);
-            // The completion arrives on another queue while the caller waits; the wait ends by it and by nothing else.
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
-                dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            // The completion arrives on another queue after the call handed it over; the wait ends by it and by nothing else.
+            queryHeld = dispatch_semaphore_create(0);
+            dispatch_semaphore_t held = queryHeld;
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+                dispatch_semaphore_wait(held, DISPATCH_TIME_FOREVER);
                 void (^reply)(SCShareableContent *, NSError *) = heldReply;
                 heldReply = nil;
                 if (reply == nil) return;
@@ -100,9 +105,7 @@ int main(void) { @autoreleasepool {
             char *error = NULL;
             BOOL opened = sp_capture_open(window.windowNumber, false, &error);
             method_setImplementation(query, original);
-            double waited = (CACurrentMediaTime() - phase) * 1000;
-            check(waited >= 100, [NSString stringWithFormat:
-                @"a held preparation returns after its completion (%.3fms)", waited]);
+            dispatch_release(queryHeld); queryHeld = NULL;
             if (success) {
                 check(opened && error == NULL && captureFilter != nil && captureConfig != nil,
                     [NSString stringWithFormat:@"a late successful completion prepares the recording target (%s)", error ?: ""]);

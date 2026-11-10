@@ -182,6 +182,7 @@
     "scheduleDocumentFrameIdentityRemove",
     "scheduleDocumentFrameIdentityStart",
     "sp_capture_clock",
+    "sp_capture_end_waits",
     "sp_capture_error",
     "sp_capture_has_stream",
     "sp_capture_limited",

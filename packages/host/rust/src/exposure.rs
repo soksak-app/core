@@ -2909,9 +2909,9 @@ impl Host {
                 exposure_list(&params, || self.page(window, method, page_params, TIMEOUT))
             }
             #[cfg(feature = "diagnostics")]
-            _ if method.starts_with("diagnostics.") => {
-                raw(&crate::diagnostics::call(self, window, method, params)?)
-            }
+            _ if method.starts_with("diagnostics.") => raw(&crate::diagnostics::call(
+                self, window, method, params, reply,
+            )?),
             _ => {
                 let name = params
                     .get("name")

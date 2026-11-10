@@ -192,6 +192,16 @@ func DiagnosticFunctions(library uintptr) (abi.DiagnosticFunctions, error) {
 		purego.RegisterFunc(&functions.SpCaptureClock, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "sp_capture_end_waits")
+		if err != nil {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_end_waits: %w", err)
+		}
+		if address == 0 {
+			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_end_waits: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpCaptureEndWaits, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "sp_capture_error")
 		if err != nil {
 			return abi.DiagnosticFunctions{}, fmt.Errorf("native API sp_capture_error: %w", err)

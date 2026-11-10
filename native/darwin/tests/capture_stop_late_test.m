@@ -18,7 +18,8 @@ static void check(BOOL condition, NSString *message) {
 @implementation HeldStopFixture
 - (void)stopCaptureWithCompletionHandler:(void (^)(NSError *))completion {
     self.completion = completion;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+    // The stop has handed its completion over and goes on to wait for it; the completion arrives on another queue.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
         self.completion([NSError errorWithDomain:@"capture.test" code:1
             userInfo:@{NSLocalizedDescriptionKey: @"fixture late stop failure"}]);
     });
@@ -52,14 +53,8 @@ int main(void) { @autoreleasepool {
     attempt.startCompletionSeen = YES;
     objc_setAssociatedObject(held, &captureAttemptAssociationKey, attempt, OBJC_ASSOCIATION_RETAIN);
     clearCaptureError();
-    __block double waited = 0;
-    NSString *observed = capturedRecords(^{
-        CFTimeInterval stopBegan = CACurrentMediaTime();
-        sp_capture_stop(0);
-        waited = (CACurrentMediaTime() - stopBegan) * 1000;
-    });
-    check(held.completion != nil && waited >= 100,
-        [NSString stringWithFormat:@"the stop returns after its late completion (%.1fms)", waited]);
+    NSString *observed = capturedRecords(^{ sp_capture_stop(0); });
+    check(held.completion != nil, @"the stop returns after its late completion");
     check(strstr(sp_capture_error(), "fixture late stop failure") != NULL,
         [NSString stringWithFormat:@"the late stop error belongs to the stopped recording (%s)", sp_capture_error()]);
     check(strstr(sp_capture_error(), "within") == NULL, @"the stop reports no deadline");

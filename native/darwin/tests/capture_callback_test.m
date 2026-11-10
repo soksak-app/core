@@ -391,7 +391,22 @@ int main(void) { @autoreleasepool {
                 @"the first sample trace explicitly preserves missing status and display time");
         }
         discard();
+        // No frame arrives and the request that waits ends: the end of its endpoint connection ends the first-frame wait,
+        // in either order with the wait, and the wait fails by that end and by nothing else.
+        [starts removeAllObjects];
         method_setImplementation(method, (IMP)holdStart);
+        check(start(directory), @"the connection-end attempt starts");
+        void (^connectionStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
+        check(connectionStart != nil, @"the connection-end attempt holds its start completion");
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            sp_capture_end_waits();
+            if (connectionStart != nil) connectionStart(nil);
+        });
+        int connectionWaited = sp_capture_wait();
+        check(connectionWaited == 0 && strstr(sp_capture_error(), "the request that waits for the capture ended") != NULL,
+            [NSString stringWithFormat:@"the end of the connection ends the first-frame wait (%s)", sp_capture_error()]);
+        discard();
+        [starts removeAllObjects];
         NSArray *timeoutStartEvents = capturedEvents(^{ check(start(directory),
             @"the no-first-sample attempt starts"); });
         NSDictionary *timeoutRequest = lifecycleEvent(timeoutStartEvents, @"start-request", nil);
@@ -402,8 +417,9 @@ int main(void) { @autoreleasepool {
         // completes; the wait ends by that close and by nothing else.
         void (^heldStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
         check(heldStart != nil, @"the no-first-sample attempt holds its start completion");
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
-            dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+        // The close and the completion arrive on another queue in either order with the wait; the end of the stream stays
+        // recorded, so the wait ends by it whichever comes first.
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
             [NSNotificationCenter.defaultCenter postNotificationName:NSWindowWillCloseNotification object:window];
             if (heldStart != nil) heldStart(nil);
         });
@@ -537,17 +553,14 @@ int main(void) { @autoreleasepool {
             stopRequests = 0;
             stopRequestedBeforeStartCompletion = NO;
             stopReplyError = fault(@"fixture pending-start stop failure");
-            // The start completion arrives on another queue while the stop waits for it; the stop has no deadline.
+            // The start completion arrives on another queue, before or while the stop waits for it; the stop returns only
+            // after it, and the one stop request follows it in either order.
             void (^pendingStart)(NSError *) = starts.count == 1 ? [[starts[0] retain] autorelease] : nil;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
-                dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{ if (pendingStart != nil) pendingStart(nil); });
-            CFTimeInterval stopBegan = CACurrentMediaTime();
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{ if (pendingStart != nil) pendingStart(nil); });
             NSArray *pendingStopEvents = capturedEvents(^{ sp_capture_stop(0); });
-            double stopElapsed = CACurrentMediaTime() - stopBegan;
             check(pendingStart != nil && stopRequests == 1 && !stopRequestedBeforeStartCompletion,
                 @"a pending start receives exactly one stop request after its completion");
-            check(stopElapsed >= 0.1 && strstr(sp_capture_error(), "within") == NULL,
-                [NSString stringWithFormat:@"the stop waits for the pending start and has no deadline (%.3fs)", stopElapsed]);
+            check(strstr(sp_capture_error(), "within") == NULL, @"the stop waits for the pending start and has no deadline");
             check(strstr(sp_capture_error(), "fixture pending-start stop failure") != NULL,
                 @"the stop error of the pending start belongs to the stopped recording");
             BOOL pendingStopReported = NO;

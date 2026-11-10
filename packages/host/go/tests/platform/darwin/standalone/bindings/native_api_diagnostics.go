@@ -55,6 +55,7 @@ func DiagnosticFunctions() abi.DiagnosticFunctions {
 			return bool(C.scheduleDocumentFrameIdentityStart(a0, C.uint64_t(a1), C.uintptr_t(a2)))
 		},
 		SpCaptureClock:      func() float64 { return float64(C.sp_capture_clock()) },
+		SpCaptureEndWaits:   func() { C.sp_capture_end_waits() },
 		SpCaptureError:      func() *byte { return (*byte)(unsafe.Pointer(C.sp_capture_error())) },
 		SpCaptureHasStream:  func() bool { return bool(C.sp_capture_has_stream()) },
 		SpCaptureLimited:    func() bool { return bool(C.sp_capture_limited()) },

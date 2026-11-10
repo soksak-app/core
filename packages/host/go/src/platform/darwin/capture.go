@@ -93,6 +93,8 @@ func (implementation) CaptureWait() (bool, error) {
 	return false, captureError("wait")
 }
 
+func (implementation) CaptureEndWaits() { diagnosticNative.SpCaptureEndWaits() }
+
 func (implementation) CaptureLimited() bool { return bool(diagnosticNative.SpCaptureLimited()) }
 
 func (implementation) CaptureLongestGap() float64 {

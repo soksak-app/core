@@ -27,6 +27,7 @@ type DiagnosticFunctions struct {
 	ScheduleDocumentFrameIdentityRemove func(uint64, uintptr) bool
 	ScheduleDocumentFrameIdentityStart  func(unsafe.Pointer, uint64, uintptr) bool
 	SpCaptureClock                      func() float64
+	SpCaptureEndWaits                   func()
 	SpCaptureError                      func() *byte
 	SpCaptureHasStream                  func() bool
 	SpCaptureLimited                    func() bool
@@ -94,6 +95,9 @@ func (functions DiagnosticFunctions) Validate() error {
 	}
 	if functions.SpCaptureClock == nil {
 		return fmt.Errorf("native API function is missing: sp_capture_clock")
+	}
+	if functions.SpCaptureEndWaits == nil {
+		return fmt.Errorf("native API function is missing: sp_capture_end_waits")
 	}
 	if functions.SpCaptureError == nil {
 		return fmt.Errorf("native API function is missing: sp_capture_error")
