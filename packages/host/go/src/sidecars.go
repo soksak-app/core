@@ -1720,7 +1720,7 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		closeWaiters: make(map[string]chan error),
 		surfaces:     make(map[string]bool),
 	}
-	stdoutOutput, stderrOutput := &sidecarOutput{file: stdout}, &sidecarOutput{file: stderr}
+	stdoutOutput, stderrOutput := &exitPipe{file: stdout}, &exitPipe{file: stderr}
 	// The end of the sidecar is the exit of its process, which the wait reports: the host then ends its process group and the
 	// reads of both outputs (docs/spec/sidecars.md#declaration-and-startup).
 	routine.Go("sidecar-wait", func() {
@@ -1729,7 +1729,7 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		if err := current.EndProcessGroup(cmd.Process.Pid); err != nil {
 			LogError("sidecar "+name, err)
 		}
-		for _, output := range []*sidecarOutput{stdoutOutput, stderrOutput} {
+		for _, output := range []*exitPipe{stdoutOutput, stderrOutput} {
 			if err := output.end(); err != nil {
 				LogError("sidecar "+name, fmt.Sprintf("end output: %v", err))
 			}
@@ -1755,16 +1755,16 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 	return process, nil
 }
 
-// sidecarOutput is an output pipe of a sidecar that the exit of the sidecar ends and its reader closes. The lock orders the two,
+// exitPipe is an output pipe of a sidecar that the exit of the sidecar ends and its reader closes. The lock orders the two,
 // so the end never reaches a closed pipe and an end after the close ends nothing more.
-type sidecarOutput struct {
+type exitPipe struct {
 	file   *os.File
 	mu     sync.Mutex
 	closed bool
 }
 
 // end makes the reads of the output take what the pipe holds and end (exitOutput).
-func (o *sidecarOutput) end() error {
+func (o *exitPipe) end() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
@@ -1774,7 +1774,7 @@ func (o *sidecarOutput) end() error {
 }
 
 // Close closes the read end of the output after its reads.
-func (o *sidecarOutput) Close() error {
+func (o *exitPipe) Close() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.closed = true
