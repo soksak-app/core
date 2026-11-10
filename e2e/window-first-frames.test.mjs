@@ -51,6 +51,10 @@ async function firstFrames(t, s, label, opening, ready) {
   const list = await s.windows(2, `${label}: the window did not open`);
   const child = s.on(list.find((w) => w.window !== s.window).window);
   const card = await ready(child);
+  // A host shows a new window only after its first screen (docs/spec/native-host.md#page-start), so the workbench can be ready while
+  // the window is still off the screen, and the presented time of a window on no screen is the time of the call. The recording ends
+  // after the window is on the screen; the presented time of a window that waits for its reveal is the frame after the reveal.
+  await child.until("host.window", (value) => value.occluded === false, `${label}: the new window did not show on the screen`);
   const shown = await child.presented();
   const stop = await recording.stop({ after: Math.max(displayed, shown.displayed) + 100 });
   assert.equal(stop.limited, false, `${label}: the recording reached its frame cap`);
