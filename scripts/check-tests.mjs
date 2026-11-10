@@ -795,7 +795,7 @@ const FEATURE_LINKS = [
   {
     id: "F721",
     implementation: [
-      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "ui.Text(c, row.value).NoWrap().FontSize(s.textControl()).TextColor(s.palette.Fg)" },
+      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "ui.Text(c, row.value).NoWrap().FontSize(s.textBody()).TextColor(s.palette.Fg)" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting" },
