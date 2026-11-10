@@ -113,7 +113,10 @@ type SidebarFrame struct {
 	// Tab is the selected section of a `tabs` set.
 	Tab string
 	// Side is `left` or `right` for a window sidebar and empty for a card sidebar.
-	Side     string
+	Side string
+	// Scope is the scope that the applied value of the side comes from, which the fold control writes
+	// (docs/spec/settings.md#scope-of-a-control).
+	Scope    string
 	Status   string
 	Sections []SidebarSection
 	// Set is the id of the set that the sidebar shows, and empty for a sidebar without a set.
@@ -237,6 +240,7 @@ type sectionSizeParam struct {
 // settingsPatchParam is the parameter of core.settings.set.
 type settingsPatchParam struct {
 	Patch map[string]any `json:"patch"`
+	Scope string         `json:"scope,omitempty"`
 }
 
 // seatDrawer draws what stands on a seat. It runs for every section of the sidebar, so a seat that is not visible stays known.
@@ -530,7 +534,7 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 			return
 		}
 		icon, title := foldIcon(foldPaths[frame.Side], metrics.IconStroke), sideNames[frame.Side]+" 창 사이드바 접기"
-		fold := binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}}).Label(title).Size(metrics.FoldButton, metrics.FoldButton).
+		fold := binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}, frame.Scope}).Label(title).Size(metrics.FoldButton, metrics.FoldButton).
 			Radius(float32(math.Round(float64(theme.Radius * metrics.FoldRadiusRatio))))
 		color := theme.TextMuted
 		if fold.Hovered() {

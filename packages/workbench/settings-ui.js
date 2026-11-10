@@ -25,7 +25,7 @@ import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
-  CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, overridden,
+  CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, overridden, sourceScope,
   settingDefinitions,
 } from "./settings.js";
 
@@ -45,7 +45,15 @@ let chosen = null;
 let query = "";
 /** The id of the set being edited in the sidebar section. null when there is none. */
 let editing = null;
-const value = (key) => scopedValue(key, scope);
+/** The setting of the key of a control: links for a link, sets for a control of the set editor, and the key itself otherwise. */
+const settingOf = (key) => key.startsWith("link:") ? "links"
+  : ["title:", "layout:", "row:"].some((prefix) => key.startsWith(prefix)) ? "sets" : key;
+/**
+ * The scope that a control of the key shows and writes: the project in the project tab, and in the common tab the scope that the applied
+ * value of its setting comes from (docs/spec/settings.md#scope-of-a-control).
+ */
+const scopeOf = (key) => (scope === "project" ? "project" : sourceScope(settingOf(key)));
+const value = (key) => scopedValue(key, scopeOf(key));
 const themeName = () => value("theme");
 const modeName = () => value("mode");
 const gapSetting = () => value("gap");
@@ -61,12 +69,30 @@ function row(label, control) {
   const field = control.matches("[data-set]") ? control : control.querySelector("[data-set]");
   // default: a row without a setting control (a row with only a button) has no key.
   const key = field?.dataset.set;
-  if (scope === "project" && key && overridden(key)) {
-    const resetButton = press(`reset:${key}`, "전역값 사용");
-    resetButton.classList.add("set-reset");
-    el.append(resetButton);
-  }
+  if (key) el.append(...rowOverrideControls(key));
   return el;
+}
+
+/**
+ * The controls of a setting that the selected project overrides: the button that removes the project value in the project tab, and the
+ * mark that the project value applies in the common tab (docs/spec/settings.md#scope-of-a-control).
+ */
+/** The override controls of the row of a setting, whose reset button takes the size of a caption (.set-reset). */
+function rowOverrideControls(key) {
+  const controls = overrideControls(key, "전역값 사용");
+  for (const item of controls) if (item.tagName === "BUTTON") item.classList.add("set-reset");
+  return controls;
+}
+
+function overrideControls(key, label) {
+  if (!settingProject() || !overridden(key)) return [];
+  if (scope === "project") return [press(`reset:${key}`, label)];
+  const applied = document.createElement("span");
+  applied.className = "set-applied";
+  applied.dataset.key = `applied:${key}`;
+  applied.dataset.expose = "core.settings-modal.applied";
+  applied.textContent = "프로젝트 값";
+  return [applied];
 }
 
 /**
@@ -98,8 +124,8 @@ function group(name, text, children) {
 function valueCommand(el, key) {
   const [kind, place, plugin] = key.split(":");
   // default: a key such as link:left: whose plugin part is empty is a general choice, so plugin is null (docs/spec/settings.md).
-  if (kind === "link") mark(el, "core.settings.link", { place, plugin: plugin || null, scope }, "set");
-  else mark(el, "core.settings.change", { key, scope });
+  if (kind === "link") mark(el, "core.settings.link", { place, plugin: plugin || null, scope: scopeOf(key) }, "set");
+  else mark(el, "core.settings.change", { key, scope: scopeOf(key) });
 }
 
 /** Creates a select box. The caller connects the command. Throws when the current value is not among the choices. */
@@ -223,7 +249,7 @@ function swatch(theme) {
   el.type = "button";
   el.dataset.key = `theme:${theme.name}`;
   el.dataset.expose = "core.settings-modal.theme";
-  mark(el, "core.settings.theme", { name: theme.name, scope });
+  mark(el, "core.settings.theme", { name: theme.name, scope: scopeOf("theme") });
   el.dataset.on = String(theme.name === themeName());
   const c = theme[modeName()];
   const gap = parseFloat(theme.shape.gap);
@@ -255,7 +281,7 @@ function drawGeneral() {
   if (scope === "common") body.append(group("프로젝트", "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다.", [
     row("열기 방식", choose("projectOpening", named("projectOpening", { tabs: "현재 창", windows: "별도 창" }), value("projectOpening"))),
   ]));
-  if (scope === "project" && overridden("theme")) grid.append(press("reset:theme", "전역 테마 사용"));
+  grid.append(...overrideControls("theme", "전역 테마 사용"));
   body.append(group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", [
     grid,
     row("모드", choose("mode", named("mode", { dark: "어두움", light: "밝음" }), modeName())),
@@ -276,7 +302,7 @@ function drawGeneral() {
   body.append(group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", [
     ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 보이기`, toggle(side, value(side)))),
     ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 세트`, choose(`link:${side}:`, generalOptions(), choiceOf(side, null)))),
-    ...(scope === "project" && overridden("links") ? [row("", press("reset:links", "전역 연결 사용"))] : []),
+    ...(overridden("links") && settingProject() ? [row("", ...overrideControls("links", "전역 연결 사용"))] : []),
     ...orderRows("sidebarOrder", "사이드바 순서", SIDE_NAMES),
   ]));
 
@@ -333,26 +359,30 @@ function button(key, name, label, command, params, on = null) {
  */
 function orderRows(key, label, names) {
   const now = value(key);
+  const writes = scopeOf(key);
   return now.map((item, index) => {
     const acts = document.createElement("span");
     acts.className = "set-seg";
     const act = (direction, mark, other) => {
       const next = [...now];
       [next[index], next[other]] = [next[other], next[index]];
-      acts.append(button(`order:${key}:${index}:${direction}`, "core.settings-modal.order", mark, "core.settings.change", { key, value: next, scope }));
+      acts.append(button(`order:${key}:${index}:${direction}`, "core.settings-modal.order", mark, "core.settings.change", { key, value: next, scope: writes }));
     };
     if (index > 0) act("up", "▲", index - 1);
     if (index < now.length - 1) act("down", "▼", index + 1);
     const line = document.createElement("span");
     line.className = "set-seg";
     line.append(names[item], acts);
-    return row(index === 0 ? label : "", line);
+    const el = row(index === 0 ? label : "", line);
+    if (index === 0) el.append(...rowOverrideControls(key));
+    return el;
   });
 }
 
 /** The set entries of the set select box. The value is the set id. */
 // default: a set without sections is shown as having no section.
-const setItems = () => value("sets").map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
+// A link control takes the sets of the scope of the links as its options (docs/spec/settings.md#scope-of-a-control).
+const setItems = () => scopedValue("sets", scopeOf("links")).map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
 /** The entries of a general choice: not used and every set. */
 const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
 /** The current choice to show in the select box: a set id or off. */
@@ -469,7 +499,7 @@ function sectionSelect(s, index, now) {
   const el = document.createElement("select");
   el.dataset.set = `row:${s.id}:${index}`;
   el.dataset.expose = "core.settings-modal.row";
-  mark(el, "core.settings.sets.row", { id: s.id, action: "choose", index, scope }, "section");
+  mark(el, "core.settings.sets.row", { id: s.id, action: "choose", index, scope: scopeOf("sets") }, "section");
   for (const u of pluginUnits().filter((item) => item.sections.length)) {
     const optgroup = document.createElement("optgroup");
     optgroup.label = u.name;
@@ -500,22 +530,23 @@ function sectionSelect(s, index, now) {
 
 /** Set editing: the name, the layout, the section rows (a select box and the buttons up, down and remove), and one add button. */
 function setEditor(s) {
+  const writes = scopeOf("sets");
   const title = document.createElement("input");
   title.type = "text";
   title.className = "text-field";
   title.dataset.set = `title:${s.id}`;
   title.dataset.expose = "core.settings-modal.set";
-  mark(title, "core.settings.sets.update", { id: s.id, scope }, "title");
+  mark(title, "core.settings.sets.update", { id: s.id, scope: writes }, "title");
   title.maxLength = 40;
   title.setAttribute("value", s.title);
   const layout = selectBox(`layout:${s.id}`, [["list", "목록"], ["tabs", "탭"]], s.layout);
-  mark(layout.firstChild, "core.settings.sets.update", { id: s.id, scope }, "layout");
+  mark(layout.firstChild, "core.settings.sets.update", { id: s.id, scope: writes }, "layout");
   const rows = [row("이름", title), row("배치", layout)];
   s.sections.forEach((id, index) => {
     const acts = document.createElement("span");
     acts.className = "set-seg";
     const act = (action, label) => button(`${action}:${s.id}:${index}`, "core.settings-modal.row-act", label,
-      "core.settings.sets.row", { id: s.id, action, index, scope });
+      "core.settings.sets.row", { id: s.id, action, index, scope: writes });
     if (index > 0) acts.append(act("up", "▲"));
     if (index < s.sections.length - 1) acts.append(act("down", "▼"));
     acts.append(act("remove", "−"));
@@ -524,12 +555,13 @@ function setEditor(s) {
     line.append(sectionSelect(s, index, id), acts);
     rows.push(row(`섹션 ${index + 1}`, line));
   });
-  rows.push(row("", button(`add:${s.id}`, "core.settings-modal.add", "+", "core.settings.sets.row", { id: s.id, action: "add", scope })));
+  rows.push(row("", button(`add:${s.id}`, "core.settings-modal.add", "+", "core.settings.sets.row", { id: s.id, action: "add", scope: writes })));
   rows.push(row("", button("edit:", "core.settings-modal.edit", "완료", "core.settings-modal.edit", { set: null })));
   return group(`세트 편집: ${s.title}`, "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.", rows);
 }
 
 function drawSidebars() {
+  const writes = scopeOf("sets");
   const sets = value("sets");
   if (!sets.some((s) => s.id === editing)) editing = null;
   const rows = sets.map((s) => {
@@ -541,15 +573,15 @@ function drawSidebars() {
     acts.className = "set-seg";
     acts.append(
       button(`edit:${s.id}`, "core.settings-modal.edit", "편집", "core.settings-modal.edit", { set: s.id }, s.id === editing),
-      button(`delete:${s.id}`, "core.settings-modal.delete", "삭제", "core.settings.sets.delete", { id: s.id, scope }),
+      button(`delete:${s.id}`, "core.settings-modal.delete", "삭제", "core.settings.sets.delete", { id: s.id, scope: writes }),
     );
     const el = document.createElement("div");
     el.className = "set-row";
     el.append(line, acts);
     return el;
   });
-  rows.push(row("", button("sets:create", "core.settings-modal.create", "새 세트", "core.settings.sets.create", { scope })));
-  if (scope === "project" && overridden("sets")) rows.push(row("", press("reset:sets", "전역 세트 사용")));
+  rows.push(row("", button("sets:create", "core.settings-modal.create", "새 세트", "core.settings.sets.create", { scope: writes })));
+  if (settingProject() && overridden("sets")) rows.push(row("", ...overrideControls("sets", "전역 세트 사용")));
   body.append(group("세트", "사이드바에 보여 줄 섹션 묶음. 어느 사이드바에 보일지는 일반과 플러그인 페이지에서 고른다.", rows));
   const edited = sets.find((s) => s.id === editing);
   if (edited) body.append(setEditor(edited));

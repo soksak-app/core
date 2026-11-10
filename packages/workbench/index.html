@@ -44,7 +44,7 @@ import { installTheme } from "soksak";
 /* Values outside the plane belong to settings. This document recreates the plane when a value changes.
    If settings called the plane directly, a function to call would have to be chosen for each added setting. */
 import {
-  halfGap, install, installTokens, modeName, onSettingsChange, value, connectSettings,
+  appliedPatch, halfGap, install, installTokens, modeName, onSettingsChange, value, connectSettings,
 } from "./settings.js";
 
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
@@ -516,13 +516,14 @@ const layoutButtons = [
   // Keeps the layout and gives the cards a fair share (packages/soksak/docs/layout.md#balancing).
   act("columns-3", "카드 자동 정렬", false, "core.layout.balance", {}, "core.chrome.balance"),
 ];
-// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls).
+// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls),
+// and writes the scope that the applied value of the side comes from (docs/spec/settings.md#scope-of-a-control).
 const sidebarSwitches = chromeSwitches().map(({ side, icon: name, title, expose }) =>
-  ({ side, button: act(name, title, value(side), "core.settings.set", () => ({ patch: { [side]: !value(side) } }), expose) }));
+  ({ side, button: act(name, title, value(side), "core.settings.set", () => appliedPatch(side, !value(side)), expose) }));
 // The same path as the mode segment of the modal. The theme command also applies the shape values of the theme
 // again, so calling it would revert the passage and corners that the user set.
 const modeButton = act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
-  "core.settings.set", () => ({ patch: { mode: modeName() === "dark" ? "light" : "dark" } }), "core.chrome.mode");
+  "core.settings.set", () => appliedPatch("mode", modeName() === "dark" ? "light" : "dark"), "core.chrome.mode");
 modeButton.dataset.icon = modeName() === "dark" ? "sun" : "moon";
 // While the modal is open, the overlay covers this button, so it cannot be pressed again. The on
 // state is not shown either. This is the same as settings-toggle of the former project.

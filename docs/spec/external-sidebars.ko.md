@@ -26,7 +26,7 @@ workbench는 사이드바를 순서의 역순으로 배치한다. 각 사이드�
 
 ## 창 컨트롤
 
-창 chrome에는 변마다 스위치가 하나 있고 순서는 `left`, `right`, `top`, `bottom`으로 고정이다. element는 `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, 아이콘은 `panel-left`, `panel-right`, `panel-top`, `panel-bottom`, tooltip은 왼쪽 사이드바 보이기, 오른쪽 사이드바 보이기, 위 사이드바 보이기, 아래 사이드바 보이기다. 스위치는 `scope` 없이 `core.settings.set {patch: {<side>: <현재 값의 반대>}}`를 실행하므로, 변경은 프로젝트가 선택된 동안 프로젝트 범위로, 아니면 전역 범위로 가고, 스위치는 그 설정이 true인 동안 눌린 상태다. 창 사이드바는 변을 밝히는 상태 줄로 끝나고, 그 줄은 같은 범위로 `core.settings.set {patch: {<side>: false}}`를 실행하는 접기 컨트롤 `core.sidebar.fold`로 끝난다.
+창 chrome에는 변마다 스위치가 하나 있고 순서는 `left`, `right`, `top`, `bottom`으로 고정이다. element는 `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, 아이콘은 `panel-left`, `panel-right`, `panel-top`, `panel-bottom`, tooltip은 왼쪽 사이드바 보이기, 오른쪽 사이드바 보이기, 위 사이드바 보이기, 아래 사이드바 보이기다. 스위치는 자기 변의 적용 값을 보이고, 그 적용 값이 나온 범위를 `scope`로 해서 `core.settings.set {patch: {<side>: <적용 값의 반대>}, scope}`를 실행한다. 범위는 선택된 프로젝트가 그 변을 덮어쓴 동안 `project`, 아니면 `common`이다. 그래서 누르면 스위치가 보이는 값이 바뀌고 프로젝트 값은 더해지지 않으며([컨트롤의 범위](settings.ko.md#컨트롤의-범위)), 스위치는 적용 값이 true인 동안 눌린 상태다. 창 사이드바는 변을 밝히는 상태 줄로 끝나고, 그 줄은 접기 컨트롤 `core.sidebar.fold`로 끝난다. 접기 컨트롤은 자기 변의 적용 값이 나온 범위를 `scope`로 해서 `core.settings.set {patch: {<side>: false}, scope}`를 실행한다.
 
 ## 오버라이드 컨텍스트와 레일 보더
 

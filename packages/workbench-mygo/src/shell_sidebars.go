@@ -33,6 +33,7 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 		DrawError(c, s.errors, id)
 		return
 	}
+	frame.Scope = s.settings.Source(id)
 	// The border takes its width from every edge of the card, so the set with its status line stands in what lies inside it.
 	edge := float64(s.palette.BorderWidth)
 	box := layout.Rect{X: rect.X + float64(originX) + edge, Y: rect.Y + float64(originY) + edge, W: rect.W - 2*edge, H: rect.H - 2*edge}

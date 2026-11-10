@@ -536,6 +536,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F720",
+    implementation: [
+      { file: "packages/workbench-mygo/src/settings_store.go", symbol: "func (s *SettingsStore) Source(key string) string {" },
+      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) controlScope(key string) string {" },
+      { file: "packages/workbench/settings.js", symbol: "export const sourceScope = (key) =>" },
+      { file: "packages/workbench/settings-ui.js", symbol: "const scopeOf = (key) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_scope_test.go", id: "TestAControlChangesTheValueThatItShowsInTheScopeThatTheValueComesFrom" },
+      { file: "packages/workbench/test/settings-control-scope.test.mjs", id: "a control of a setting changes the value that it shows in the scope that the value comes from" },
+    ],
+    expected: "The window chrome switches, the fold control and every control of the common tab show the applied value and write the scope that it comes from, the common tab marks a project value, and only the project tab adds or removes one.",
+    levels: ["unit"],
+  },
+  {
     id: "F717",
     implementation: [
       { file: "packages/sok/go/src/identity.go", symbol: "func IdentityOf(application string) (string, error) {" },

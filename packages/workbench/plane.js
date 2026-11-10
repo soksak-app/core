@@ -5,7 +5,7 @@
 //
 // It does not know that verification exists. It only announces that rendering finished, and the document decides what follows.
 import { Soksak, SoksakView, outline, sliceTree } from "soksak";
-import { borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
+import { appliedPatch, borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { alignPlane, gridScale } from "./device-grid.js";
@@ -292,7 +292,8 @@ function updateCard(el, card, rect) {
       fold.title = `${SIDE_NAMES[side]} 창 사이드바 접기`;
       fold.setAttribute("aria-label", fold.title);
       fold.innerHTML = icon(FOLD_ICONS[side]);
-      bind(fold, "core.settings.set", { patch: { [side]: false } });
+      // The fold writes the scope that the applied value of the side comes from (docs/spec/settings.md#scope-of-a-control).
+      bind(fold, "core.settings.set", () => appliedPatch(side, false));
       status.appendChild(fold);
     }
     return;

@@ -261,7 +261,9 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	}
 	// A row that wraps stacks its lines at its start, so a control stands in the middle of its row only in a row that does not.
 	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
-	if slices.ContainsFunc(row.controls, func(control *SettingsControl) bool { return strings.HasPrefix(control.item(), "reset:") }) {
+	if slices.ContainsFunc(row.controls, func(control *SettingsControl) bool {
+		return strings.HasPrefix(control.item(), "reset:") || control.kind == controlMark
+	}) {
 		line.Wrap()
 	}
 	line.Children(func() {
@@ -301,6 +303,11 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 	case controlCaption:
 		s.exposedBox(c, control.Name, "", "").Grow(1).Basis(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 			ui.Text(c, control.Label).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
+		})
+	case controlMark:
+		// The mark that the project value applies, the .set-applied of packages/workbench/app.css (docs/spec/settings.md#scope-of-a-control).
+		s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+			ui.Text(c, control.Label).NoWrap().FontSize(s.textCaption()).TextColor(s.palette.Focus)
 		})
 	}
 }

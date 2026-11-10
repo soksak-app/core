@@ -4531,6 +4531,11 @@
         "many": true
       },
       {
+        "name": "core.settings-modal.applied",
+        "description": "The marks of the common tab, in workbench order, that the project value of a setting applies: each stands where the project tab has the button that removes that value, and its key is applied:<setting>.",
+        "many": true
+      },
+      {
         "name": "core.settings-modal.plugin",
         "description": "The rows of the loaded plugin list in id order, filtered by the search text; each shows the plugin name.",
         "many": true

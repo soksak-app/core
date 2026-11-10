@@ -412,6 +412,10 @@ export const scopedValue = (key, scope) => scope === "common"
   // default: a setting without a stored common value takes its default value.
   ? (common[key] ?? defaults[key]) : settings[key];
 export const overridden = (key) => Object.hasOwn(overrides, key);
+/** The scope that the applied value of key comes from: the project while the selected project overrides key, and otherwise the common scope (docs/spec/settings.md#scope-of-a-control). */
+export const sourceScope = (key) => (projectId && overridden(key) ? "project" : "common");
+/** The parameters of core.settings.set that write value of key to the scope that the applied value of key comes from. */
+export const appliedPatch = (key, next) => ({ patch: { [key]: next }, scope: sourceScope(key) });
 export const flushSettings = () => writing;
 export const reset = (key, actor) => set({ [key]: undefined }, "project", actor);
 
