@@ -678,6 +678,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.successful-handle-replies-consumed` | 주 스레드 표시에 성공한 봉투를 처리하면 consumed로 응답한다. | all |
 | `images.wait.newer-sequence-rearms-wait` | 같은 raster의 새 sequence를 결정하면 settled presentation wait가 다시 대기한다. | all |
 | `images.wait.continuous-raster-snapshot` | Continuous layout 대기는 후속 같은 raster sequence가 수락되더라도 현재 generation과 raster에 positive presented sequence가 설치되면 완료된다. Generation 또는 raster 변경은 설치된 snapshot을 지우고, presentation error는 대기를 실패시키며, 숨긴 영역은 대기를 막지 않는다. Settled 대기는 최신 accepted sequence를 계속 요구한다. | all |
+| `images.presentation.ends-with-the-sidecar-stop` | 사이드카의 중지는 main thread를 기다리는 image present와 그 뒤의 image present를 모두 `the host is stopping its sidecars`로 거부한다. main thread가 거부 뒤에 실행하거나 버리는 presentation은 기다리지 않는다. | all |
 | `images.presentation.runs-after-framework-event` | Tauri image presentation은 framework event가 lock을 놓은 뒤 commit하며, queue enqueue와 native presentation 오류를 frame handler에 그대로 전달한다. | tauriv2 only: Tauri UI callback adapter의 lock 및 오류 경계를 검증한다 |
 | `images.wait.reconfigure-clears-presented` | raster를 다시 구성하면 표시 상태를 지운다. | all |
 | `images.wait.hidden-image-does-not-block` | 숨긴 이미지는 표시 대기를 막지 않고, 다시 보이면 다시 막는다. | all |
@@ -737,7 +738,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.sends-authoritative-layout` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다 authoritative layout 표면과 request preparation 중 허용된 session을 담은 요청을 보낸다. 이전에 알려진 일반 surface 중 layout에 없는 항목은 제외하며 남은 항목이 없으면 빈 keep 목록을 보낸다. 서비스가 닫은 수를 반환한다. | all |
 | `sidecars.retain.reports-service-failure` | `ok: false`인 `retained` 응답은 서비스의 사유를 담은 오류로 반환한다. | all |
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | all |
-| `sidecars.retain.timeout-names-the-request-stage` | service가 읽고 답하지 않은 retain은 10초 뒤 요청 줄의 stage, 즉 쓰인 뒤의 시간과 service에서 마지막 줄이 도착한 뒤의 시간으로 실패한다. | all |
+| `sidecars.retain.ends-by-its-answer-or-its-connection` | 서비스가 읽고 답하지 않은 retain은 어떤 시간 limit도 넘어 기다리고 그 연결이 끝날 때 `retain: the service connection ended before the answer`로 실패하며 waiter를 남기지 않는다. | all |
 | `sidecars.retain.keeps-surface-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 일반 surface session도 해당 retain에 포함된다. | all |
 | `sidecars.send.page-needs-a-project-root` | project를 보여 주지 않는 window에서 root가 기록되지 않은 surface로 보내는 page 요청은 실패하고, 어떤 sidecar에도 가지 않으며, 진행 중인 retain은 계속된다. root가 기록된 surface는 그 root로 계속 보낸다. | all |
 | `sidecars.send.host-send-leaves-no-session-without-a-root` | project를 보여 주지 않는 window에서 host의 send는 sidecar에 도달하되 root를 기록하지 않아, 어떤 retain도 그 surface를 유지하지 않는다. | all |
@@ -1040,7 +1041,6 @@ fn invalid_json_closes_connection() {
 | `project-removal.ask.ends-with-the-owner-page` | 제거 요청은 요청받은 창의 페이지가 끝나면(WebContent process가 끝나거나 다음 페이지가 시작하면) 끝난다. host는 그 끝의 turn에 제거해도 된다고 답한다. | all |
 | `sidecars.end.is-the-process-exit` | 표준 입출력 사이드카는 새 프로세스 그룹의 leader로 시작한다. 그 종료가 프로세스 그룹과 읽기를 끝내므로, 출력을 열어 둔 프로세스가 실행 중인 사이드카의 실패나 중지를 붙잡지 않는다. | all |
 | `sidecars-transport.stop.waits-for-no-room` | 중지는 영속 서비스의 `close-owner`와 `shutdown`을 그 queue에 자리를 기다리지 않고 보낸다. 가득 찬 queue는 닫기를 그 자리에서 실패시키고 연결을 끝낸다. | all |
-| `sidecars-transport.retain.limit-removes-the-request` | 서비스가 limit 안에 답하지 않은 retain은 그 요청을 지우므로, 그 요청의 waiter와 개수가 남지 않는다. | all |
 | `project.open-ready-shown-order` | project를 열 때 workbench가 새 project를 선택하기 전까지 이전에 commit된 project를 유지하며, 선택 전에는 staged project를 게시하지 않는다. | all |
 | `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 workbench가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | all |
 | `project.open.registers-owner-without-commit` | 새 project를 열 때 owner는 등록하지만 workbench가 표시된 project를 알릴 때까지 기존 commit 상태를 유지하고 project를 게시하지 않는다. | all |
