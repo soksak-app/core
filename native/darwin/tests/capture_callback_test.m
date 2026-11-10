@@ -408,7 +408,7 @@ int main(void) { @autoreleasepool {
             @"the no-first-sample attempt starts"); });
         NSDictionary *timeoutRequest = lifecycleEvent(timeoutStartEvents, @"start-request", nil);
         NSString *timeoutSession = timeoutRequest[@"fields"][@"session"];
-        check([[NSFileManager defaultManager] createDirectoryAtPath:[NSString stringWithUTF8String:path]
+        check([[NSFileManager defaultManager] createDirectoryAtPath:directory
             withIntermediateDirectories:YES attributes:nil error:NULL], @"the failed-attempt folder exists before wait");
         // No frame arrives. The recorded window closes while the wait runs, which ends the stream, and the held start then
         // completes; the wait ends by that close and by nothing else.
