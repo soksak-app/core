@@ -813,6 +813,9 @@ fn invalid_json_closes_connection() {
 | `sidecars.stop.reports-exit-status` | 멈추는 동안 종료 상태 3이나 신호 1로 끝난 표준 입출력 사이드카는 오류 줄 "error host sidecar <name>: exited while stopping: exit status 3"이나 "error host sidecar <name>: exited while stopping: signal 1"을 쓴다. 중지 자체의 종료 신호는 그런 끝이 아니다. | all |
 | `sidecars.stop.returns-at-once-outside-the-quit` | 실행 중인 사이드카를 없애는 선언처럼 quit이 아닌 중지는 process가 종료하기 전에 반환한다. 호스트는 그 process를 종료 때 회수하고 그때 종료 줄을 쓰며, 그사이 같은 사이드카의 시작은 멈추는 process의 출력을 받지 않는 새 process를 실행한다. | all |
 | `sidecars.stop.records-what-the-quit-waits-for` | quit의 중지는 기다리는 각 process에 대해 "info host sidecar <name>: the quit waits for the exit of process <pid>"를 쓴다. | all |
+| `sidecars.stop.quit-exits-after-its-sidecars` | quit 중지는 멈추는 표준 입출력 사이드카가 실행되는 동안 exit를 거절하고, 그 사이드카의 종료로 끝나며(그 뒤 호스트는 quit을 다시 요청한다), 그다음 exit를 받아들인다. 멈출 사이드카가 없으면 exit를 바로 받아들인다. | all |
+| `sidecars.stop.second-quit-kills-what-remains` | quit 중지가 실행되는 동안의 quit 요청은 아직 종료하지 않은 표준 입출력 사이드카마다 그 프로세스 그룹에 SIGKILL을 보내고 "info host sidecar <name>: the second quit kills process <pid>"를 쓴다. 그 뒤 중지는 그 종료로 끝난다. | all |
+| `sidecars.stop.second-quit-ends-service-connections` | quit 중지가 persistent owner의 close를 기다리는 동안의 quit 요청은 그 서비스의 연결을 끝내고 "info host sidecar <name>: the second quit ends the connection of the service"를 쓴다. 그 뒤 중지는 연결의 끝으로 끝난다. | all |
 | `sidecars.stop.records-open-requests` | host가 sidecar를 멈추거나 떼어낼 때 응답을 기다리는 식별자 있는 요청은 `host.sidecar.reply` 오류 기록을 얻는다. 기록은 그 surface, sidecar, 식별자를 밝히며, 이유는 `the host stopped before the sidecar replied`다. surface는 이 요청에 대해 `sidecar-failure` event를 받지 않는다. | all |
 | `sidecars.reply.error-text-cut-is-marked` | 1,024바이트 한도에서 잘린 오류 글을 가진 `host.sidecar.reply`는 `truncated: true`를 가지며, 잘리지 않은 오류 글은 `truncated` member가 없다. | all |
 | `debug.rows.out-of-range-number-is-refused` | float64 범위 밖의 수를 가진 debug 로그 줄은 파일, 줄, 원문과 함께 `not JSON`으로 거부되며, 어떤 행도 그 수에 `undefined`를 보이지 않는다. | all |
