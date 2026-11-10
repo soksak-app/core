@@ -131,8 +131,12 @@ static NSMutableSet<NSNumber *> *processesWithPages(void) {
 static NSArray *pagelessProcesses(WKWebView *any) {
     NSMutableSet<NSNumber *> *current = processesWithPages();
     if (!pageProcesses) pageProcesses = [[NSMutableSet alloc] init];
-    // A window without a web view reads the pool of a new configuration, which WebKit gives the one pool of the application.
+    // A window without a web view reads the pool of a new configuration, which WebKit gives the one pool of the application. The
+    // deprecation notice of WKProcessPool means that creating several pools has no effect; the cache capacity exists only in this class.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     WKProcessPool *pool = any ? any.configuration.processPool : [[[WKWebViewConfiguration alloc] init] autorelease].processPool;
+#pragma clang diagnostic pop
     // A pool that does not answer the capacity may keep a process, so no process of it is reported ending.
     BOOL cache = !pool || ![pool respondsToSelector:@selector(_processCacheCapacity)] || pool._processCacheCapacity > 0;
     NSMutableArray *rows = [NSMutableArray array];
