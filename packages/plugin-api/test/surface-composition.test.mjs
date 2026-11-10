@@ -121,6 +121,7 @@ test("creation attaches declared regions and submits one complete ordered snapsh
   const composition = await createSurfaceCompositionController(r.page, declaration, {
     regions: { image: f.image, page: f.page },
     overlays: { badge: f.badge, toolbar: f.toolbar },
+    input: { image: () => {} },
   }, f.window);
 
   assert.equal(composition.kind, "view");
@@ -148,6 +149,7 @@ test("an observed overlay change submits every region and overlay through compos
   await createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: f.image },
     overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: () => {} },
   }, f.window);
   r.placements.length = 0;
   f.setRect("toolbar", { left: 25, top: 35, right: 145, bottom: 75, width: 120, height: 40 });
@@ -175,6 +177,7 @@ test("a same-size move caught by an observer still submits a complete snapshot",
   await createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: f.image },
     overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: () => {} },
   }, f.window);
   r.placements.length = 0;
   f.setRect("page", { left: 40, top: 20, right: 340, bottom: 220, width: 300, height: 200 });
@@ -194,6 +197,7 @@ test("a size change with unchanged insets still submits a new full snapshot", as
   await createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: f.image },
     overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: () => {} },
   }, f.window);
   r.placements.length = 0;
   Object.defineProperty(f.window, "innerWidth", { value: 1000, configurable: true });
@@ -216,6 +220,7 @@ test("a failed placement does not poison the next higher complete revision", asy
   const composition = await createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: f.image },
     overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: () => {} },
   }, f.window);
   const originalError = console.error;
   console.error = () => {};
@@ -241,6 +246,7 @@ test("disposal waits for an in-flight placement before detaching regions", async
   const composition = await createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: f.image },
     overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: () => {} },
   }, f.window);
 
   const errors = [];
@@ -286,6 +292,7 @@ test("an attachment failure rolls back successful attachments and the DOM mode m
     await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
       regions: { page: f.page, image: f.image },
       overlays: { toolbar: f.toolbar, badge: f.badge },
+      input: { image: () => {} },
     }, f.window), /image attach failed/);
   } finally {
     console.error = originalError;
@@ -309,6 +316,7 @@ test("an initial snapshot failure detaches every attached region", async () => {
     await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
       regions: { page: f.page, image: f.image },
       overlays: { toolbar: f.toolbar, badge: f.badge },
+      input: { image: () => {} },
     }, f.window), /initial snapshot failed/);
   } finally {
     console.error = originalError;
@@ -330,6 +338,7 @@ test("a creation failure reports each cleanup failure once and the composition f
     await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
       regions: { page: f.page, image: f.image },
       overlays: { toolbar: f.toolbar, badge: f.badge },
+      input: { image: () => {} },
     }, f.window), /initial snapshot failed/);
   } finally {
     console.error = originalError;
@@ -344,11 +353,11 @@ test("declaration keys and document ownership are validated before attachment", 
   const f = fixture();
   const r = runtime();
   await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
-    regions: { page: f.page }, overlays: { toolbar: f.toolbar, badge: f.badge },
+    regions: { page: f.page }, overlays: { toolbar: f.toolbar, badge: f.badge }, input: { image: () => {} },
   }, f.window), /composition regions must exactly match/);
   const foreign = new JSDOM("<div id=foreign></div>").window.document.getElementById("foreign");
   await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
-    regions: { page: f.page, image: foreign }, overlays: { toolbar: f.toolbar, badge: f.badge },
+    regions: { page: f.page, image: foreign }, overlays: { toolbar: f.toolbar, badge: f.badge }, input: { image: () => {} },
   }, f.window), /must be an element in this document/);
   assert.deepEqual(r.documentCalls, []);
   assert.deepEqual(r.imageCalls, []);
@@ -377,11 +386,12 @@ test("the input of the creation receives each input event of its image region in
     { message: "image image: the input handler is the input of composition.create" });
 });
 
+// A creation without input over an image region is one of these: its region would take keys that no handler receives.
 test("a creation input that does not match the image regions fails before attachment", async () => {
   const f = fixture();
   const r = runtime();
   const expected = { message: "composition input must exactly match the image regions of the surface declaration (expected image)" };
-  for (const input of [{}, { image: () => {}, page: () => {} }, { image: "handler" }, null]) {
+  for (const input of [undefined, {}, { image: () => {}, page: () => {} }, { image: "handler" }, null]) {
     await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
       regions: { page: f.page, image: f.image }, overlays: { toolbar: f.toolbar, badge: f.badge }, input,
     }, f.window), expected);
@@ -450,6 +460,7 @@ test("the document region handle loads a session history entry by its offset", a
   const composition = await createSurfaceCompositionController(r.page, declaration, {
     regions: { image: f.image, page: f.page },
     overlays: { badge: f.badge, toolbar: f.toolbar },
+    input: { image: () => {} },
   }, f.window);
   assert.equal(await composition.region("page").entry(-1), true);
   assert.deepEqual(r.documentCalls.at(-1), ["go", "page", "entry", -1]);
@@ -464,6 +475,7 @@ test("the controller starts observing at the next animation frame, before that f
   await createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: f.image },
     overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: () => {} },
   }, f.window);
   assert.deepEqual(f.observed, [], "an element was observed before the next animation frame");
   f.frame();
@@ -510,6 +522,7 @@ test("an observed placement equal to the last one is not sent again, and a faile
   const composition = await createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: f.image },
     overlays: { toolbar: f.toolbar, badge: f.badge },
+    input: { image: () => {} },
   }, f.window);
   const first = r.placements.length;
 

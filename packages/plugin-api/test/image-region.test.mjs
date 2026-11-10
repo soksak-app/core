@@ -62,7 +62,7 @@ function port() {
 test("attach calls with correct name and sidecar", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   assert.equal(p.calls[0][0], "attach");
   assert.equal(p.calls[0][1], "preview");
@@ -75,7 +75,7 @@ test("attach calls with correct name and sidecar", async () => {
 test("a resize of the element sends no place call, and the region has no placement method", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   p.calls.length = 0;
   f.resize({ left: 20, top: 40, right: 420, bottom: 340, width: 400, height: 300 });
@@ -88,7 +88,7 @@ test("a resize of the element sends no place call, and the region has no placeme
 test("on() receives only events for this image", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   const received = [];
   image.on("key", (event) => received.push(event));
@@ -102,7 +102,7 @@ test("on() receives only events for this image", async () => {
 test("on() filters by event type", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   const keyEvents = [];
   const insertEvents = [];
@@ -119,7 +119,7 @@ test("on() filters by event type", async () => {
 test("focus() calls the focus method", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   p.calls.length = 0;
   await image.focus();
@@ -130,7 +130,7 @@ test("focus() calls the focus method", async () => {
 test("setCaret() calls caret with coordinates", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   p.calls.length = 0;
   await image.setCaret({ x: 10, y: 20, width: 2, height: 24 });
@@ -147,7 +147,7 @@ test("a caret equal to the last one is not sent again, and a refused caret is se
     await caret(...args);
     if (refuse) throw new Error("refused");
   };
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   p.calls.length = 0;
   const rect = { x: 10, y: 20, width: 2, height: 24 };
@@ -166,7 +166,7 @@ test("a caret equal to the last one is not sent again, and a refused caret is se
 test("an equal caret after detach reports the detached region", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   const rect = { x: 10, y: 20, width: 2, height: 24 };
   await image.setCaret(rect);
   await image.detach();
@@ -176,7 +176,7 @@ test("an equal caret after detach reports the detached region", async () => {
 test("setAccessibleText() calls text with string", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   p.calls.length = 0;
   await image.setAccessibleText("hello");
@@ -187,7 +187,7 @@ test("setAccessibleText() calls text with string", async () => {
 test("detach stops observation and rejects later calls", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const image = attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   await image.detach();
   await settle();
@@ -209,47 +209,40 @@ test("invalid names are rejected", async () => {
 test("an event of a type without handlers is reported as an error, not dropped", async () => {
   const f = fixture();
   const p = port();
-  attachImage(p, f.element, "preview", "writer", { report: f.report });
+  attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   p.send("preview", { type: "unknownType", data: "test" });
   await settle();
   assert.deepEqual(f.reported, ["image preview: no handlers for event type unknownType"]);
 });
 
-// A region takes the first responder as soon as it shows, which can come before the module of the surface registers its handler.
-test("an input transaction before the first input handler reaches that handler in order", async () => {
+// The input handler of an image region is given at its attachment, so each input event reaches it in its dispatch and none waits
+// for a registration (docs/spec/native-surfaces.md#image-regions).
+test("each input event reaches the input handler of the attachment in its dispatch", async () => {
   const f = fixture();
   const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
+  const received = [];
+  attachImage(p, f.element, "preview", "writer", { report: f.report, input: (event) => received.push(event.actions[0].type) });
   await settle();
   p.send("preview", { type: "input", actions: [{ type: "focus", focused: true }], preedit: null, errors: [] });
+  assert.deepEqual(received, ["focus"], "an input event waited for a handler");
   p.send("preview", { type: "input", actions: [{ type: "insert", text: "a" }], preedit: null, errors: [] });
-  await settle();
-  const received = [];
-  image.on("input", (event) => received.push(event.actions[0].type));
-  assert.deepEqual(received, [], "the handler ran inside its own registration");
-  p.send("preview", { type: "input", actions: [{ type: "insert", text: "b" }], preedit: null, errors: [] });
-  await settle();
-  assert.deepEqual(received, ["focus", "insert", "insert"]);
+  assert.deepEqual(received, ["focus", "insert"]);
   assert.deepEqual(f.reported, []);
 });
 
-test("an input transaction that no handler ever takes is reported at the detach", async () => {
+test("an image region requires its input handler and refuses a later input handler", async () => {
   const f = fixture();
-  const p = port();
-  const image = attachImage(p, f.element, "preview", "writer", { report: f.report });
-  await settle();
-  p.send("preview", { type: "input", actions: [{ type: "focus", focused: true }], preedit: null, errors: [] });
-  await settle();
-  assert.deepEqual(f.reported, []);
-  await image.detach();
-  assert.deepEqual(f.reported, ["image preview: no handlers for event type input (1 held until the detach)"]);
+  assert.throws(() => attachImage(port(), f.element, "preview", "writer", { report: f.report }),
+    { message: "image preview requires an input handler" });
+  const image = attachImage(port(), f.element, "preview", "writer", { report: f.report, input: () => {} });
+  assert.throws(() => image.on("input", () => {}), { message: "image preview: the input handler is the input of composition.create" });
 });
 
 test("an event without a type is reported as an error, not dropped", async () => {
   const f = fixture();
   const p = port();
-  attachImage(p, f.element, "preview", "writer", { report: f.report });
+  attachImage(p, f.element, "preview", "writer", { report: f.report, input: () => {} });
   await settle();
   p.send("preview", { data: "test" }); // no type field
   await settle();
