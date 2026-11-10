@@ -646,8 +646,10 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     }
 
     let received = directory.path().join("received");
+    // The sidecar ignores the terminate signal of the stop and takes the end of its input as its stop
+    // (docs/spec/sidecars.md#declaration-and-startup), so it reads every line that the stop writes before it closes the input.
     let script = format!(
-        "#!/bin/sh\nread _ < {}\nexec cat > {}\n",
+        "#!/bin/sh\ntrap '' TERM\nread _ < {}\nexec cat > {}\n",
         fifo_str,
         received.display()
     );
