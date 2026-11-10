@@ -517,6 +517,9 @@ type Surfaces struct {
 	// rejects the reply of an earlier display.
 	nextModal uint64
 	modal     *modal
+	// modalPaintChange closes and is replaced at every change of the modal state (modals.go), which wakes the waits of
+	// host.window.presented for the first paint of the open modal.
+	modalPaintChange chan struct{}
 	// workbenchDialog is true while a dialog that the workbench draws itself is open (SetDialogBackground).
 	workbenchDialog bool
 	shapes          map[string]*nativeShape
@@ -555,6 +558,7 @@ type Surfaces struct {
 func NewSurfaces(win Frontend, sidecars *Sidecars) *Surfaces {
 	s := &Surfaces{
 		window: win, titles: win, fronts: win, projects: map[string]string{}, sidecars: sidecars,
+		modalPaintChange:     make(chan struct{}),
 		views:                map[string]*nativeWebview{},
 		compositions:         map[string]SurfaceComposition{},
 		surfacePlugins:       map[string]string{},

@@ -481,6 +481,10 @@ func (implementation) JoinView(platform.Window, uint64, unsafe.Pointer, func()) 
 	return nil, false, unsupported("view presentation wait")
 }
 
+func (implementation) AfterViewPresentation(unsafe.Pointer, func()) bool {
+	return false
+}
+
 func (implementation) StartPageTitlebar(platform.Window, uint64, float64, func(error)) error {
 	return unsupported("start title bar")
 }

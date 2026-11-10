@@ -114,6 +114,7 @@
     "modalViewFocus",
     "nativeFunctionPresentation",
     "nativeLayoutObserve",
+    "nativeWebviewAfterPresentation",
     "nativeWebviewBackground",
     "nativeWebviewBounds",
     "nativeWebviewClose",

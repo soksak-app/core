@@ -1152,6 +1152,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.NativeLayoutObserve, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "nativeWebviewAfterPresentation")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWebviewAfterPresentation: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWebviewAfterPresentation: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.NativeWebviewAfterPresentation, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "nativeWebviewBackground")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API nativeWebviewBackground: %w", err)

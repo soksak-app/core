@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F714-16: `host.window.presented`가 보고하는 시각은 열린 modal이 화면에 있는 시각이다. 이전에는 메인 페이지, 보이는 app 문서, 보이는 그림 영역의 표시 뒤에 완료되었지만 드러난 modal web view가 첫 frame을 표시한 뒤에는 완료되지 않아, 보고된 시각의 frame 캡처에 설정 창의 scrim이 없었다. 두 host가 정착 대기 전에 열린 modal의 첫 표시를 기다리므로 보고하는 표시 시각은 modal의 페인트와 같거나 그 뒤이고, 표시하지 못하는 modal은 명령의 제한에서 대기를 끝낸다. 명령 선언이 명세가 이미 밝힌 modal을 이름 짓는다.
 - F714-15: native modal web view 위의 press 뒤에도 창의 입력이 계속 흐른다. press의 대상이 child web view일 때 workbench 위의 press로 세면 release가 키보드 결정 hold를 열었고, decided 호출에 응답하지 않는 modal 문서가 그 창의 이후 모든 pointer·key 입력을 영원히 기다리게 했다. 설정 modal 안의 클릭 한 번이 Wails와 Tauri에서 app을 멈췄다. press는 이제 창의 main web view 문서 안에 있을 때만 workbench 위의 press로 센다. 다른 모든 web view, 곧 modal과 surface의 page 위의 press는 hold를 열지 않는다. `native/darwin/tests/surface_keyboard_test.m`의 case가 이 계약을 지킨다.
 - F714-14: 저장 크기가 콘텐츠 카드에 방을 남기지 않는 창 사이드바의 dock이 두 workbench에서 자기 변 경계선 삽입이 담는 가장 큰 크기로 서고 기록이 그 크기를 따르며, 어떤 크기도 담지 못하는 변은 건너뛰고 그 변을 밝히는 오류를 내며 다른 변은 그대로 서고, 같은 plane 상태가 이미 거부한 배치를 다시 시도하지 않는다. 이전에는 JavaScript dock이 거부된 사이드바를 말 없이 버려 스위치가 켜진 채 사라지고 매 settle이 모든 사이드바를 다시 배치했고, Go dock은 오류와 함께 배치가 중간에 멈췄다.
 - F714-13: `core.settings-modal`이 두 workbench에서 `card` 옆에 설정 창이 굴러가는 상자 `pane`을 보고하고, native modal 루트 안 요소의 `element.rect`가 굴러가지 않는 메인 문서 사본의 사각형 대신 모달 문서가 보고한 사각형(사본의 스크롤을 따르는)을 답하며, 모달 문서가 내용이 굴러갈 때도 자기 상태를 보고한다. 카드의 고정 head가 스크롤이 잘라 낸 내용을 덮으므로, 창 컨트롤은 pane 안에서만 눌러 닿을 수 있다.

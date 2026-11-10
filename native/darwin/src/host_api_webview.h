@@ -9,6 +9,8 @@ void *nativeWebviewCreate(uintptr_t window, unsigned long long identifier, const
     double x, double y, double width, double height, bool hidden, bool transparent);
 bool nativeWebviewNavigate(void *view, const char *url);
 void nativeWebviewBounds(void *view, double x, double y, double width, double height);
+// Runs the presentation callback after the view presented its next frame; false when the view is gone.
+bool nativeWebviewAfterPresentation(void *view, uintptr_t callback);
 void nativeWebviewHidden(void *view, bool hidden);
 void nativeWebviewBackground(void *view, bool enabled);
 void nativeWebviewEval(void *view, const char *script);

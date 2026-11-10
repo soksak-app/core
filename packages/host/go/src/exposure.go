@@ -181,7 +181,7 @@ var hostCommands = map[string]hostEntry{
 	"host.dock.select": {Description: "Performs the Dock menu item with the title.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
 	"host.window.reload":    {Description: "Starts the workbench of the window again.", Params: emptyObject, Result: nullSchema},
-	"host.window.presented": {Description: "Resolves after the main page, visible application documents, and visible image regions have presented their current geometry and raster, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
+	"host.window.presented": {Description: "Resolves after the main page and the shown modal have presented their current geometry and every visible image region has presented its exact current raster, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
 	"host.hit": {Description: "Returns the owner and native hit-view class and frame of a point in window coordinates.",
 		Params: map[string]any{"type": "object", "properties": map[string]any{
 			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
@@ -1730,6 +1730,12 @@ func (s *Surfaces) presented() (float64, error) {
 		}
 	}
 
+	// An open modal is on the screen at the time this reports only after its revealed web view presented its first frame, so
+	// the wait ends at the paint of the modal, at a change of the modal state, or at the limit (modals.go). It runs before the
+	// settled wait, so the display time that the settled wait reports is at or after the paint of the modal.
+	if waiting := s.waitForModalPaint(time.Until(deadline)); waiting {
+		return 0, rpcError(codeTimeout, "the open modal did not present within %s", pageTimeout)
+	}
 	if _, err := waitFrame(); err != nil {
 		return 0, err
 	}
