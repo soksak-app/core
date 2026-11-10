@@ -209,6 +209,8 @@ fn invalid_json_closes_connection() {
 | `diagnostics.crash.folder-that-cannot-be-read-is-an-error` | 나열할 수 없는 crash report 경로는 그 경로를 밝힌 오류다. | all |
 | `diagnostics.crash.folder-is-named-by-the-platform` | platform은 crash report 폴더를 `Library/Logs/DiagnosticReports`로 끝나는 절대 경로로 알린다. | all |
 | `diagnostics.stderr.leaves-out-asset-request-lines` | host가 프레임워크 logger에 준 level에서 logger는 asset server의 `Handling request` 줄을 쓰지 않고 warning과 error는 남긴다. | wailsv3 only: Tauri host는 그런 줄을 쓰지 않는다 |
+| `endpoint.input.close-releases-presses` | Endpoint connection이 닫히면 그 connection의 `down`이 열고 어떤 `up`도 끝내지 않은 각 누름의 `up`을 그 누름이 마지막으로 전달된 입력의 점에서 전달하므로 다른 connection의 `down`이 전달된다. 1007로 거부된 뗌은 다음 `host.buttons` mask 0에서 전달한다. | all |
+| `endpoint.status.ended-ends-a-watch` | Watch의 surface나 창이 닫히면 그 watch를 가진 각 connection은 앞선 `status.changed` 뒤에 `status.ended {window, name, surface?, reason}`를 한 번 받고 그 뒤 `status.changed`는 받지 않으며, page는 그 watch의 `status.unwatch`를 받지 않는다. | all |
 | `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | all |
 | `endpoint.record.failure-names-the-error` | 실패한 요청은 level `warn`이고 `ok: false`와 client가 받는 코드와 메시지인 `error` `<code>: <message>`를 가진 event `host.endpoint.call`이다. | all |
 | `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | all |

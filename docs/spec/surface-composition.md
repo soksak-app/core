@@ -81,11 +81,12 @@ A view creates its composition once through the composition of its view bridge (
 const composition = await bridge.composition.create({
   regions: { view: document.querySelector("[data-region=view]") },
   overlays: {},
+  input: { view: (event) => receive(event) },
 });
 const view = composition.region("view");
 ```
 
-The keys must exactly equal the manifest declarations, and every value must be an element in the calling document. Creation attaches every region and submits one complete layout snapshot. It fails without attaching anything if any declaration or element is missing or extra.
+The keys must exactly equal the manifest declarations, and every value must be an element in the calling document. `input`, when the creation gives it, holds one function for each declared image region and no other key, the handler of the `input` events of that region ([image regions](native-surfaces.md#image-regions)); a missing, extra or non-function entry fails the creation with `composition input must exactly match the image regions of the surface declaration (expected <names>)`. Creation attaches every region and submits one complete layout snapshot. It fails without attaching anything if any declaration or element is missing or extra.
 
 `composition.update(change)` applies a code-driven DOM change, measures all declared anchors and overlays, and submits one complete snapshot. The controller observes every anchor, overlay, and ancestor for resize, viewport resize, scroll, and DOM mutation; every observed change submits the same complete snapshot. Every detected change submits the same complete snapshot. No observer or caller can submit one region independently. Individual public `attach`, `place`, and raw region ports do not exist.
 
