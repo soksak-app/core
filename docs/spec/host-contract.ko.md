@@ -457,7 +457,8 @@ fn invalid_json_closes_connection() {
 | `exposure.host-window.reads-during-surface-close` | 네이티브 surface view는 닫는 단계가 id를 잊을 때까지 surface id를 유지하므로, view가 열려 있는 동안 window status 읽기는 surface id가 없는 네이티브 view를 만나지 않는다. | all |
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | all |
 | `exposure.command.ends-by-reply-or-peer-end` | command.run에는 시간 제한이 없다. 그 답, 그것을 실행하는 문서의 끝, 그것을 보낸 endpoint 연결의 끝으로 끝난다. | all |
-| `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 요청과 `origin`이 그 요청 중 하나인 `exposureForward`를 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. `origin`이 없는 전달은 어떤 연결의 끝으로도 끝나지 않는다. | all |
+| `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 요청을 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. | all |
+| `exposure.relay.forward-lives-while-its-origin-is-open` | `origin`이 있는 `exposureForward`는 그 origin 요청이 메인 페이지의 답, 1003, 또는 그 endpoint 연결의 끝으로 끝날 때 결과 없이 끝나고, 그 뒤의 답은 끝난 요청의 관찰로 쓴다. `origin`이 열린 요청을 가리키지 않는 전달은 표면에 보내지 않고 곧바로 1003 `the origin request <origin> has ended`로 거절한다. `origin`이 없는 전달은 어떤 연결의 끝으로도 끝나지 않는다. | all |
 | `exposure.command.declaration-refuses-a-time-limit` | `timeout`을 가진 명령 선언은 manifest 검사와 registry가 `<where>: timeout is not a member of a command declaration`로 거절한다. | all |
 | `exposure.relay.reply-resolves-request` | 대상 문서에서 온 같은 id의 응답은 그 결과로 요청을 완료한다. | all |
 | `exposure.relay.keeps-value-text` | workbench 응답은 workbench가 보낸 텍스트 그대로 중계되므로 값의 key 순서가 유지된다(`{"zeta":1,"alpha":{"b":2,"a":1}}`는 보낸 그대로다). | all |
@@ -800,7 +801,7 @@ fn invalid_json_closes_connection() {
 | `buffers.sidecar-replies.bounded-by-messages` | sidecar의 보류 응답은 최대 1,024개이며, 다음 응답은 `sidecar <name>: the pending replies reached 1024 messages, so a reply of surface <surface> is dropped`로 거절되고 `host.buffer.dropped`(`buffer` `sidecar <name> pending replies`, `count` 1, `bytes`, `reason` `the buffer holds 1024 messages`)를 저장한다. | all |
 | `buffers.sidecar-replies.bounded-by-bytes` | sidecar의 보류 응답은 최대 4,194,304바이트이며, 이를 넘게 되는 응답은 `...reached 4194304 bytes...`로 거절되고 `reason`이 `the buffer holds 4194304 bytes`인 `host.buffer.dropped`를 저장한다. | all |
 | `buffers.sidecar-closes.bounded-and-forgotten` | sidecar의 보류 close는 최대 1,024개와 4,194,304바이트이며, 이를 넘는 close는 보내지 않고 `host.buffer.dropped`(`buffer` `sidecar <name> pending closes`)를 저장하며, 그 표면은 답을 기다리는 표면 목록에 없다. | all |
-| `buffers.relay-expired.bounded-and-counted` | relay는 만료된 요청을 최대 256개 기억하며, 가장 오래된 것을 잊을 때 `host.buffer.dropped`(`buffer` `relay expired requests`, `count` 1, `bytes` 0, `reason` `the buffer holds 256 requests`)를 저장하고, 그 요청의 늦은 응답에는 `exposure reply <id> has no matching request`로 답한다. | all |
+| `buffers.relay-ended.bounded-and-counted` | relay는 늦은 답을 관찰로 다루기 위해 문서의 답 없이 끝난 요청(닫힘, 페이지 끝, 연결 끝)을 최대 256개 기억하며, 가장 오래된 것을 잊을 때 `host.buffer.dropped`(`buffer` `relay ended requests`, `count` 1, `bytes` 0, `reason` `the buffer holds 256 requests`)를 저장하고, 그 요청의 늦은 응답에는 `exposure reply <id> has no matching request`로 답한다. | all |
 | `log.writer.event-over-size-bound-is-cut` | writer가 받을 때 fields 글이 1,048,576바이트를 넘는 event는 최대 4,096바이트의 `fields` `{"head": ...}`와 자르기 전 크기인 `truncated`로 저장하고, 상한 아래의 event에는 `truncated`가 없으며 `seq`는 연속이다. | all |
 | `sidecars.close.buffered-close-is-recorded` | 사이드카의 큐가 가득 차서 기다리는 closed 알림은 `info host sidecar <name>: close <surface>: outbox full, buffered`를 쓴다. | all |
 | `sidecars.close.room-has-no-buffered-record` | sidecar의 queue에 자리가 있는 closed notice는 바로 전송되고 `outbox full, buffered` 기록을 쓰지 않는다. writer는 찬 queue에서 언제든 한 줄을 꺼낼 수 있으므로, send를 거부한 queue에도 다음 close가 들어갈 자리가 생길 수 있다. | all |
