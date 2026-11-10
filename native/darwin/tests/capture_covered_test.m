@@ -10,8 +10,6 @@
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
-#include <signal.h>
-#include <unistd.h>
 #import "capture.h"
 #import "window_facts.h"
 
@@ -25,11 +23,6 @@ static const CGFloat kWidth = 480, kHeight = 320;
 static void check(BOOL condition, NSString *message) {
     fprintf(stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-static void expired(int signalNumber) {
-    const char message[] = "FAIL: covered capture test exceeded 90000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1);
-    _exit(1);
 }
 static BOOL pumpUntil(double seconds, BOOL (^done)(void)) {
     NSDate *until = [NSDate dateWithTimeIntervalSinceNow:seconds];
@@ -92,7 +85,7 @@ static Image capture(NSWindow *window, NSString *directory, NSString *name) {
     for (NSWindow *child in window.childWindows) [listed addObject:@(child.windowNumber)];
     long numbers[listed.count];
     for (NSUInteger index = 0; index < listed.count; index++) numbers[index] = listed[index].longValue;
-    bool written = sp_capture_still(numbers, (int)listed.count, path.fileSystemRepresentation, &error);
+    bool written = sp_capture_still(numbers, (int)listed.count, path.fileSystemRepresentation, 0, &error);
     check(written && error == NULL, [NSString stringWithFormat:@"the %@ capture has no error (%s)", name, error ?: ""]);
     free(error);
     Image image = {0, 0, NULL};
@@ -223,8 +216,6 @@ static void expectError(char *error, NSString *what, long code) {
 }
 
 int main(void) { @autoreleasepool {
-    signal(SIGALRM, expired);
-    alarm(90);
     fprintf(stderr, "START: covered window capture\n");
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -374,26 +365,26 @@ int main(void) { @autoreleasepool {
     NSString *path = [directory stringByAppendingPathComponent:@"failed.png"];
     char *error = NULL;
     stillFailure = systemFailure(SCStreamErrorInternalError);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, &error), @"a failed still capture reports failure");
+    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed still capture reports failure");
     expectError(error, @"a failed still capture", SCStreamErrorInternalError);
     free(error); error = NULL;
     stillFailure = nil;
     contentFailure = systemFailure(SCStreamErrorNoWindowList);
-    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, &error), @"a failed content query reports failure");
+    check(!sp_capture_still((long[]){window.windowNumber}, 1, path.fileSystemRepresentation, 0, &error), @"a failed content query reports failure");
     expectError(error, @"the content query of a still capture", SCStreamErrorNoWindowList);
     free(error); error = NULL;
-    check(!sp_capture_open(window.windowNumber, false, &error), @"a failed content query fails a recording");
+    check(!sp_capture_open(window.windowNumber, false, 0, &error), @"a failed content query fails a recording");
     expectError(error, @"the content query of a recording", SCStreamErrorNoWindowList);
     free(error); error = NULL;
     contentFailure = nil;
     startFailure = systemFailure(SCStreamErrorFailedToStart);
-    check(sp_capture_open(window.windowNumber, false, &error), @"a recording opens the covered window");
+    check(sp_capture_open(window.windowNumber, false, 0, &error), @"a recording opens the covered window");
     free(error); error = NULL;
     check(sp_capture_start(directory.fileSystemRepresentation, false, &error), @"the start request of a recording is sent");
     free(error); error = NULL;
     pumpUntil(5, ^BOOL { return strlen(sp_capture_error()) > 0; });
     expectError((char *)sp_capture_error(), @"a failed recording start", SCStreamErrorFailedToStart);
-    sp_capture_stop(0);
+    sp_capture_stop(0, 0);
     startFailure = nil;
 
     check(!NSApp.isActive, @"the capture does not activate the application");

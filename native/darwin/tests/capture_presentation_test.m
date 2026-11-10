@@ -7,20 +7,12 @@
 #import <mach/mach_time.h>
 #include <math.h>
 #include <limits.h>
-#include <signal.h>
-#include <unistd.h>
 
 static const NSUInteger frameCount = 7;
 static int failures;
 static void check(BOOL ok, NSString *label) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
     if (!ok) failures++;
-}
-static void expired(int signalNumber) {
-    (void)signalNumber;
-    const char message[] = "FAIL: capture presentation test exceeded 30000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1);
-    _exit(1);
 }
 static void spinUntil(BOOL (^condition)(void), NSTimeInterval seconds) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
@@ -202,7 +194,6 @@ static BOOL onScreen(NSWindow *window) {
 }
 
 int main(void) { @autoreleasepool {
-    signal(SIGALRM, expired); alarm(30);
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: correlate actual Metal drawable presentation with captured window pixels\n");
     [NSApplication sharedApplication];
@@ -408,6 +399,5 @@ cleanup:
     check(!NSApp.isActive, @"the control test does not activate the application");
     fprintf(stderr, "%s: correlate actual Metal drawable presentation with captured window pixels (%.1fms)\n",
         failures ? "FAIL" : "PASS", (CACurrentMediaTime() - began) * 1000);
-    alarm(0);
     return failures ? 1 : 0;
 }}

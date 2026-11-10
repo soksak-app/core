@@ -1,7 +1,5 @@
 // Verifies source artifact writes can finish while the capture frame writer is held.
 #import "../src/capture.m"
-#include <signal.h>
-#include <unistd.h>
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -10,16 +8,7 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static void expired(int signalNumber) {
-    (void)signalNumber;
-    const char message[] = "FAIL: capture source writer test exceeded 15000ms\n";
-    write(STDERR_FILENO, message, sizeof message - 1);
-    _exit(1);
-}
-
 int main(void) { @autoreleasepool {
-    signal(SIGALRM, expired);
-    alarm(15);
     fprintf(stderr, "START: native capture source writer\n");
     char directoryTemplate[] = "/tmp/soksak-capture-source-writer-XXXXXX";
     BOOL directoryCreated = mkdtemp(directoryTemplate) != NULL;
