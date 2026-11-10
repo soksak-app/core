@@ -1590,13 +1590,30 @@ bool sp_capture_open(long windowNumber, bool display, uint64_t token, char **err
             } else {
                 filter = [[[SCContentFilter alloc] initWithDesktopIndependentWindow:window] autorelease];
             }
+            CGSize points = filter.contentRect.size;
+            CGRect bounds = CGRectNull;
+            if (!display) {
+                // The shareable content is a snapshot that can still hold the frame of the window before its last
+                // setFrame. The window server answers on the connection of the process that changed the frame, after
+                // that change, so the output size is the window size at this call.
+                NSArray *info = [(NSArray *)CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow,
+                    (CGWindowID)windowNumber) autorelease];
+                NSDictionary *bound = info.count == 1 ? info[0][(id)kCGWindowBounds] : nil;
+                if (![bound isKindOfClass:NSDictionary.class]
+                    || !CGRectMakeWithDictionaryRepresentation((CFDictionaryRef)bound, &bounds)) {
+                    [result completeWithFilter:nil configuration:nil error:
+                        [NSString stringWithFormat:@"window %ld has no bounds in the window server", windowNumber]];
+                    return;
+                }
+                points = bounds.size;
+            }
             SCStreamConfiguration *config = recordingConfiguration(
-                (size_t)(filter.contentRect.size.width * filter.pointPixelScale),
-                (size_t)(filter.contentRect.size.height * filter.pointPixelScale));
-            // Keeps the window frame that was read and the output size that was prepared so that the cause can be
+                (size_t)(points.width * filter.pointPixelScale),
+                (size_t)(points.height * filter.pointPixelScale));
+            // Keeps the window frames that were read and the output size that was prepared so that the cause can be
             // identified when the recording size differs from the window.
-            sp_log_info("capture", [NSString stringWithFormat:@"prepared window %ld frame %@ filter %@ scale %g output %zux%zu",
-                windowNumber, NSStringFromRect(NSRectFromCGRect(window.frame)),
+            sp_log_info("capture", [NSString stringWithFormat:@"prepared window %ld frame %@ bounds %@ filter %@ scale %g output %zux%zu",
+                windowNumber, NSStringFromRect(NSRectFromCGRect(window.frame)), NSStringFromRect(NSRectFromCGRect(bounds)),
                 NSStringFromRect(NSRectFromCGRect(filter.contentRect)), filter.pointPixelScale,
                 config.width, config.height].UTF8String);
             [result completeWithFilter:filter configuration:config error:nil];

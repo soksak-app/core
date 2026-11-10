@@ -4,7 +4,7 @@
 // recording. Both completion errors are reported to the diagnostic output instead of being dropped.
 #import "../src/capture.m"
 #import "support/records.h"
-#include <errno.h>
+#import "support/temporary_folder.h"
 #include <stdlib.h>
 
 static int failures;
@@ -31,15 +31,10 @@ static void check(BOOL condition, NSString *message) {
 @end
 
 // Prepares a recording of held whose callback at the stop boundary has already arrived, so its stop waits only for the stop
-// completion. It returns the attempt, or nil when the capture directory cannot be created.
+// completion, and returns its attempt.
 static SPCaptureAttempt *prepareStop(HeldStopFixture *held, NSString *session) {
-    char directoryPath[] = "/tmp/soksak-capture-stop-late-XXXXXX";
-    BOOL directoryCreated = mkdtemp(directoryPath) != NULL;
-    check(directoryCreated, directoryCreated ? @"the late-stop capture directory is created" :
-        [NSString stringWithFormat:@"the late-stop capture directory cannot be created: %s", strerror(errno)]);
-    if (!directoryCreated) return nil;
     captureSink = [[SPCapture alloc] init];
-    captureSink.directory = [NSString stringWithUTF8String:directoryPath];
+    captureSink.directory = temporaryFolder(@"soksak-capture-stop-late-");
     static int statuses[6];
     memset(statuses, 0, sizeof(statuses));
     captureSink.statuses = statuses;
@@ -59,12 +54,6 @@ static SPCaptureAttempt *prepareStop(HeldStopFixture *held, NSString *session) {
     return attempt;
 }
 
-static void removeCaptureDirectory(void) {
-    NSError *removeError = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:captureSink.directory error:&removeError],
-        [NSString stringWithFormat:@"the late-stop capture directory is removed (%@)", removeError]);
-}
-
 int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: late stop completion\n");
@@ -72,7 +61,6 @@ int main(void) { @autoreleasepool {
     HeldStopFixture *delivered = [HeldStopFixture new];
     delivered.delivers = YES;
     SPCaptureAttempt *deliveredAttempt = prepareStop(delivered, @"capture-stop-late");
-    if (!deliveredAttempt) return 1;
     NSString *observed = capturedRecords(^{ sp_capture_stop(0, 1); });
     check(delivered.completion != nil, @"the stop returns after its late completion");
     check(strstr(sp_capture_error(), "fixture late stop failure") != NULL,
@@ -82,12 +70,10 @@ int main(void) { @autoreleasepool {
     check([observed containsString:@"fixture late stop failure"], @"the late stop error is reported instead of discarded");
     [delivered release];
     [deliveredAttempt release];
-    removeCaptureDirectory();
 
     // A stop whose wait ended returns with that end, and its later completion leaves the next recording unchanged.
     HeldStopFixture *held = [HeldStopFixture new];
     SPCaptureAttempt *attempt = prepareStop(held, @"capture-stop-late-ended");
-    if (!attempt) return 1;
     // The end comes before the stop waits, so the waits for the boundary and for the held completion end without a race.
     sp_capture_end_wait(2, "the fixture ended the stop");
     sp_capture_stop(0, 2);
@@ -111,7 +97,6 @@ int main(void) { @autoreleasepool {
         @"the stop completion after the end of its wait is reported instead of discarded");
     [held release];
     [attempt release];
-    removeCaptureDirectory();
     fprintf(stderr, "%s: late stop completion (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

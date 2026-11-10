@@ -39,8 +39,9 @@ static void writeRemainingEntries(const char *folder) {
     fts_close(walk);
 }
 
-// The folders that the process created, removed at exit in the order of creation.
+// The folders that the process created, removed at exit in the order of creation, and whether a check keeps each one.
 static char *folders[64];
+static BOOL keptFolders[64];
 static int folderCount;
 
 // Writes each path whose removal failed with the error number of its system call. removefile reports the entry itself,
@@ -107,11 +108,40 @@ static BOOL endDocumentStores(void) {
     return ended;
 }
 
+// Moves a kept folder into the evidence folder that NATIVE_TEST_EVIDENCE names and writes its new path. Returns NO with the
+// failure written when the folder cannot be moved; the folder is then removed with the others.
+static BOOL keepFolder(const char *folder) {
+    const char *evidence = getenv("NATIVE_TEST_EVIDENCE");
+    if (evidence == NULL || evidence[0] == '\0') {
+        fprintf(stderr, "FAIL: NATIVE_TEST_EVIDENCE is not set, so the kept folder %s is removed\n", folder);
+        return NO;
+    }
+    NSError *error = nil;
+    if (![NSFileManager.defaultManager createDirectoryAtPath:[NSString stringWithUTF8String:evidence]
+            withIntermediateDirectories:YES attributes:nil error:&error]) {
+        fprintf(stderr, "FAIL: the evidence folder %s is not created: %s\n", evidence, error.localizedDescription.UTF8String);
+        return NO;
+    }
+    // The name of the folder is unique in TMPDIR (mkdtemp), and rename refuses a target that holds entries.
+    NSString *target = [[NSString stringWithUTF8String:evidence]
+        stringByAppendingPathComponent:[NSString stringWithUTF8String:folder].lastPathComponent];
+    if (rename(folder, target.fileSystemRepresentation) != 0) {
+        fprintf(stderr, "FAIL: the kept folder %s is not moved to %s: %s\n", folder, target.fileSystemRepresentation, strerror(errno));
+        return NO;
+    }
+    fprintf(stderr, "KEPT %s\n", target.fileSystemRepresentation);
+    return YES;
+}
+
 static void removeFolders(void) {
     BOOL failed = !endDocumentStores();
     for (int i = 0; i < folderCount; i++) {
         struct stat info;
         if (lstat(folders[i], &info) != 0 && errno == ENOENT) continue;
+        if (keptFolders[i]) {
+            if (keepFolder(folders[i])) continue;
+            failed = YES;
+        }
         removefile_state_t state = removefile_state_alloc();
         removefile_state_set(state, REMOVEFILE_STATE_ERROR_CALLBACK, writeRefusedEntry);
         int result = removefile(folders[i], state, REMOVEFILE_RECURSIVE);
@@ -149,4 +179,14 @@ NSString *temporaryFolder(NSString *prefix) {
     if (folderCount == 0) atexit(removeFolders);
     folders[folderCount++] = path;
     return [NSString stringWithUTF8String:path];
+}
+
+void keepTemporaryFolder(NSString *folder) {
+    for (int i = 0; i < folderCount; i++) {
+        if (strcmp(folders[i], folder.fileSystemRepresentation) != 0) continue;
+        keptFolders[i] = YES;
+        return;
+    }
+    fprintf(stderr, "FAIL: the kept folder %s is not a folder of temporaryFolder\n", folder.fileSystemRepresentation);
+    exit(1);
 }

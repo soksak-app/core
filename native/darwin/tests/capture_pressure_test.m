@@ -1,6 +1,7 @@
 // Injects queue capacity and file write faults into the real sample handler. Capture internal state is accessed only by the ownership check.
 #import "../src/capture.m"
 #import "../src/host_api_capture.m"
+#import "support/temporary_folder.h"
 #import <objc/runtime.h>
 #import "support/run_until.h"
 
@@ -93,9 +94,7 @@ int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: capture pressure and still-result isolation\n");
     [NSApplication sharedApplication];
-    char path[] = "/tmp/soksak-capture-pressure-XXXXXX";
-    check(mkdtemp(path) != NULL, @"a private fault-injection directory is created");
-    NSString *directory = [NSString stringWithUTF8String:path];
+    NSString *directory = temporaryFolder(@"soksak-capture-pressure-");
     captureWriter = dispatch_queue_create("capture.test.writer", DISPATCH_QUEUE_SERIAL);
     CMSampleBufferRef frame = sample();
     reset(directory, 0);
@@ -435,9 +434,6 @@ int main(void) { @autoreleasepool {
     check([stopError containsString:@"fixture stop failure"],
         [NSString stringWithFormat:@"the stop of an ended stream reports the stream completion error (%@)", stopError]);
     CFRelease(frame);
-    NSError *error = nil;
-    check([[NSFileManager defaultManager] removeItemAtPath:directory error:&error],
-        [NSString stringWithFormat:@"fault-injection files are removed (%@)", error]);
     fprintf(stderr, "%s: capture pressure and still-result isolation (%.1fms)\n",
         failures ? "FAIL" : "PASS", (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

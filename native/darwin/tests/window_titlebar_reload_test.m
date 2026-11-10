@@ -14,6 +14,7 @@
 #import "private/webkit.h"
 #import "capture.h"
 #import "support/capture_frame.m"
+#import "support/temporary_folder.h"
 
 static const int kRefreshes = 12;
 // The previous page draws a 40pt first row at scale 1, and the new page draws a 72pt first row at scale 2. Each page
@@ -28,15 +29,6 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static NSString *recordingDirectory;
-static void cleanupRecording(void) {
-    if (recordingDirectory == nil) return;
-    NSError *error = nil;
-    if (![[NSFileManager defaultManager] removeItemAtPath:recordingDirectory error:&error])
-        fprintf(stderr, "FAIL: title bar reload recording cleanup: %s\n", error.localizedDescription.UTF8String);
-    [recordingDirectory release]; recordingDirectory = nil;
-}
-
 // Waits for the condition for up to 10 seconds. Returns the waited time (ms); if the limit is exceeded, reports what
 // as a failure and ends.
 static double until(NSString *what, BOOL (^done)(void)) {
@@ -46,7 +38,7 @@ static double until(NSString *what, BOOL (^done)(void)) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
                                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
     }
-    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); cleanupRecording(); exit(1); }
+    if (!done()) { fprintf(stderr, "FAIL: %s within 10 seconds\n", what.UTF8String); exit(1); }
     return CACurrentMediaTime() * 1000 - start;
 }
 
@@ -184,7 +176,6 @@ static double measure(NSData *data, double *displayed, SPShown *shown, uint8_t s
 }
 
 int main(void) { @autoreleasepool {
-    atexit(cleanupRecording);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -226,11 +217,8 @@ int main(void) { @autoreleasepool {
     waitFrames(window.screen, kRefreshes);
     pid_t before = webview._webProcessIdentifier;
 
-    char directory[] = "/tmp/soksak-titlebar-reload-XXXXXX";
-    BOOL created = mkdtemp(directory) != NULL;
-    check(created, @"the recording directory is created");
-    if (!created) { [window close]; return 1; }
-    recordingDirectory = [[NSString stringWithUTF8String:directory] copy];
+    NSString *recordingDirectory = temporaryFolder(@"soksak-titlebar-reload-");
+    const char *directory = recordingDirectory.fileSystemRepresentation;
     char *operationError = NULL;
     BOOL opened = sp_capture_open(window.windowNumber, false, 0, &operationError);
     BOOL started = NO;
@@ -303,7 +291,6 @@ int main(void) { @autoreleasepool {
         oldHeld, newShown, newBeforeCommit);
     check(oldHeld > 0, @"the recording has old-page frames displayed while the start transaction is open");
     check(newShown > 0, @"the recording has new-page frames");
-    cleanupRecording();
     [window close];
     return failures ? 1 : 0;
 }}
