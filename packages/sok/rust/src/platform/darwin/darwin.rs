@@ -9,6 +9,10 @@ use super::Connection;
 #[path = "process.rs"]
 mod process;
 
+#[cfg(test)]
+#[path = "process_wait_signal_test.rs"]
+mod process_wait_signal_test;
+
 /// The macOS implementation.
 pub struct Darwin;
 
